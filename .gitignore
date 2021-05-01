@@ -1,0 +1,5 @@
+.vs
+.vscode/compile_commands.json
+build
+vscode-cmake-build
+log.txt

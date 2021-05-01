@@ -1,0 +1,455 @@
+#include "renderers/forward_renderer.hpp"
+#include "renderers/shadow_renderer.hpp"
+#include "scene/scene_manager.hpp"
+
+#include "erhe/geometry/shapes/cone.hpp"
+#include "erhe/graphics/buffer.hpp"
+#include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/opengl_state_tracker.hpp"
+#include "erhe/graphics/shader_stages.hpp"
+#include "erhe/graphics/shader_resource.hpp"
+#include "erhe/graphics/state/vertex_input_state.hpp"
+#include "erhe/graphics/vertex_format.hpp"
+#include "erhe/primitive/primitive.hpp"
+#include "erhe/scene/camera.hpp"
+#include "erhe/scene/light.hpp"
+#include "erhe/gl/gl.hpp"
+#include "erhe/gl/strong_gl_enums.hpp"
+#include "erhe/toolkit/math_util.hpp"
+
+#include "erhe_tracy.hpp"
+
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
+namespace sample
+{
+
+using namespace erhe::toolkit;
+using namespace erhe::graphics;
+using namespace erhe::primitive;
+using namespace erhe::scene;
+using namespace gl;
+using namespace glm;
+using namespace std;
+
+Forward_renderer::Forward_renderer()
+    : Component("Forward_renderer")
+{
+}
+
+void Forward_renderer::connect(std::shared_ptr<OpenGL_state_tracker> pipeline_state_tracker,
+                               shared_ptr<Shadow_renderer>           shadow_renderer,
+                               shared_ptr<Scene_manager>             scene_manager,
+                               shared_ptr<Programs>                  programs)
+{
+    base_connect(programs);
+
+    m_pipeline_state_tracker = pipeline_state_tracker;
+    m_scene_manager          = scene_manager;
+    m_shadow_renderer        = shadow_renderer;
+
+    initialization_depends_on(scene_manager);
+    initialization_depends_on(programs);
+}
+
+static constexpr const char* c_forward_renderer_initialize_component = "Forward_renderer::initialize_component()";
+void Forward_renderer::initialize_component()
+{
+    ZoneScoped;
+
+    gl::push_debug_group(gl::Debug_source::debug_source_application,
+                         0,
+                         static_cast<GLsizei>(strlen(c_forward_renderer_initialize_component)),
+                         c_forward_renderer_initialize_component);
+
+    create_frame_resources(256, 256, 32, 1000, 1000);
+
+    m_vertex_input = std::make_unique<Vertex_input_state>(programs()->attribute_mappings,
+                                                          *m_scene_manager->vertex_format(),
+                                                          m_scene_manager->vertex_buffer(),
+                                                          m_scene_manager->index_buffer());
+
+    m_pipeline_fill.shader_stages  = programs()->standard.get();
+    m_pipeline_fill.vertex_input   = m_vertex_input.get();
+    m_pipeline_fill.input_assembly = &Input_assembly_state::triangles;
+    m_pipeline_fill.rasterization  = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_fill.depth_stencil  = &Depth_stencil_state::depth_test_enabled_stencil_test_disabled;
+    m_pipeline_fill.color_blend    = &Color_blend_state::color_blend_disabled;
+    m_pipeline_fill.viewport       = nullptr;
+
+    m_depth_stencil_tool_set_hidden = Depth_stencil_state{
+        true,                     // depth test enabled
+        false,                    // depth writes disabled
+        Maybe_reversed::greater,  // where depth is further
+        true,                     // enable stencil operation
+        {
+            gl::Stencil_op::keep,         // on stencil test fail, do nothing
+            gl::Stencil_op::keep,         // on depth test fail, do nothing
+            gl::Stencil_op::replace,      // on depth test pass, set stencil to 1
+            gl::Stencil_function::always, // stencil test always passes
+            1u,
+            0xffffu,
+            0xffffu
+        },
+        {
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_op::replace,
+            gl::Stencil_function::always,
+            1u,
+            0xffffu,
+            0xffffu
+        },
+    };
+
+    m_depth_stencil_tool_set_visible = Depth_stencil_state{
+        true,                   // depth test enabled
+        false,                  // depth writes disabled
+        Maybe_reversed::lequal, // where depth is closer
+        true,                   // enable stencil operation
+        {
+            gl::Stencil_op::keep,         // on stencil test fail, do nothing
+            gl::Stencil_op::keep,         // on depth test fail, do nothing
+            gl::Stencil_op::replace,      // on depth test pass, set stencil 
+            gl::Stencil_function::always, // stencil test always passes
+            2u,
+            0xffffu,
+            0xffffu
+        },
+        {
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_op::replace,
+            gl::Stencil_function::always,
+            2u,
+            0xffffu,
+            0xffffu
+        },
+    };
+
+    m_depth_stencil_tool_test_for_hidden = Depth_stencil_state{
+        true,                     // depth test enabled
+        true,                     //
+        Maybe_reversed::lequal,   //
+        true,                     // enable stencil operation
+        {
+            gl::Stencil_op::keep,        // on stencil test fail, do nothing
+            gl::Stencil_op::keep,        // on depth test fail, do nothing
+            gl::Stencil_op::keep,        // on depth test pass, do nothing
+            gl::Stencil_function::equal, // stencil test requires exact value 1
+            1u,
+            0xffffu,
+            0xffffu
+        },
+        {
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_op::replace,
+            gl::Stencil_function::always,
+            1u,
+            0xffffu,
+            0xffffu
+        },
+    };
+
+    m_depth_stencil_tool_test_for_visible = Depth_stencil_state{
+        true,                     // depth test enabled
+        true,                     //
+        Maybe_reversed::lequal,   //
+        true,                     // enable stencil operation
+        {
+            gl::Stencil_op::keep,        // on stencil test fail, do nothing
+            gl::Stencil_op::keep,        // on depth test fail, do nothing
+            gl::Stencil_op::keep,        // on depth test pass, do nothing
+            gl::Stencil_function::equal, // stencil test requires exact value 2
+            2u,
+            0xffffu,
+            0xffffu
+        },
+        {
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_function::equal,
+            2u,
+            0xffffu,
+            0xffffu
+        },
+    };
+
+    m_color_blend_constant_point_six = Color_blend_state {
+        true,
+        {
+            gl::Blend_equation_mode::func_add,
+            gl::Blending_factor::constant_alpha,
+            gl::Blending_factor::one_minus_constant_alpha
+        },
+        {
+            gl::Blend_equation_mode::func_add,
+            gl::Blending_factor::constant_alpha,
+            gl::Blending_factor::one_minus_constant_alpha
+        },
+        glm::vec4{0.0f, 0.0f, 0.0f, 0.6f},
+        true,
+        true,
+        true,
+        true
+    };
+
+    m_color_blend_constant_point_two = Color_blend_state {
+        true,
+        {
+            gl::Blend_equation_mode::func_add,
+            gl::Blending_factor::constant_alpha,
+            gl::Blending_factor::one_minus_constant_alpha
+        },
+        {
+            gl::Blend_equation_mode::func_add,
+            gl::Blending_factor::constant_alpha,
+            gl::Blending_factor::one_minus_constant_alpha
+        },
+        glm::vec4{0.0f, 0.0f, 0.0f, 0.2f},
+        true,
+        true,
+        true,
+        true
+    };
+
+    m_depth_hidden = Depth_stencil_state{
+        true,                     // depth test enabled
+        false,                    // depth writes disabled
+        Maybe_reversed::greater,  // where depth is further
+        false,                    // no stencil test
+        {
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_function::always,
+            0u,
+            0xffffu,
+            0xffffu
+        },
+        {
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_function::always,
+            0u,
+            0xffffu,
+            0xffffu
+        },
+    };
+
+    // Tool pass one: For hidden tool parts, set stencil to 1.
+    // Only reads depth buffer, only writes stencil buffer.
+    m_pipeline_tool_hidden_stencil_pass.shader_stages  = programs()->tool.get();
+    m_pipeline_tool_hidden_stencil_pass.vertex_input   = m_vertex_input.get();
+    m_pipeline_tool_hidden_stencil_pass.input_assembly = &Input_assembly_state::triangles;
+    m_pipeline_tool_hidden_stencil_pass.rasterization  = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_tool_hidden_stencil_pass.depth_stencil  = &m_depth_stencil_tool_set_hidden;
+    m_pipeline_tool_hidden_stencil_pass.color_blend    = &Color_blend_state::color_writes_disabled;
+    m_pipeline_tool_hidden_stencil_pass.viewport       = nullptr;
+
+    // Tool pass two: For visible tool parts, set stencil to 2.
+    // Only reads depth buffer, only writes stencil buffer.
+    m_pipeline_tool_visible_stencil_pass.shader_stages  = programs()->tool.get();
+    m_pipeline_tool_visible_stencil_pass.vertex_input   = m_vertex_input.get();
+    m_pipeline_tool_visible_stencil_pass.input_assembly = &Input_assembly_state::triangles;
+    m_pipeline_tool_visible_stencil_pass.rasterization  = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_tool_visible_stencil_pass.depth_stencil  = &m_depth_stencil_tool_set_visible;
+    m_pipeline_tool_visible_stencil_pass.color_blend    = &Color_blend_state::color_writes_disabled;
+    m_pipeline_tool_visible_stencil_pass.viewport       = nullptr;
+
+    // Tool pass three: Set depth to fixed value (with depth range)
+    // Only writes depth buffer, depth test always.
+    m_pipeline_tool_depth_clear_pass.shader_stages      = programs()->tool.get();
+    m_pipeline_tool_depth_clear_pass.vertex_input       = m_vertex_input.get();
+    m_pipeline_tool_depth_clear_pass.input_assembly     = &Input_assembly_state::triangles;
+    m_pipeline_tool_depth_clear_pass.rasterization      = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_tool_depth_clear_pass.depth_stencil      = &Depth_stencil_state::depth_test_always_stencil_test_disabled;
+    m_pipeline_tool_depth_clear_pass.color_blend        = &Color_blend_state::color_writes_disabled;
+    m_pipeline_tool_depth_clear_pass.viewport           = nullptr;
+
+    // Tool pass four: Set depth to proper tool depth
+    // Normal depth buffer update with depth test.
+    m_pipeline_tool_depth_pass.shader_stages            = programs()->tool.get();
+    m_pipeline_tool_depth_pass.vertex_input             = m_vertex_input.get();
+    m_pipeline_tool_depth_pass.input_assembly           = &Input_assembly_state::triangles;
+    m_pipeline_tool_depth_pass.rasterization            = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_tool_depth_pass.depth_stencil            = &Depth_stencil_state::depth_test_enabled_stencil_test_disabled;
+    m_pipeline_tool_depth_pass.color_blend              = &Color_blend_state::color_writes_disabled;
+    m_pipeline_tool_depth_pass.viewport                 = nullptr;
+
+    // Tool pass five: Render visible tool parts
+    // Normal depth test, stencil test require 1, color writes enabled, no blending
+    m_pipeline_tool_visible_color_pass.shader_stages    = programs()->tool.get();
+    m_pipeline_tool_visible_color_pass.vertex_input     = m_vertex_input.get();
+    m_pipeline_tool_visible_color_pass.input_assembly   = &Input_assembly_state::triangles;
+    m_pipeline_tool_visible_color_pass.rasterization    = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_tool_visible_color_pass.depth_stencil    = &m_depth_stencil_tool_test_for_visible;
+    m_pipeline_tool_visible_color_pass.color_blend      = &Color_blend_state::color_blend_disabled;
+    m_pipeline_tool_visible_color_pass.viewport         = nullptr;
+
+    // Tool pass six: Render hidden tool parts
+    // Normal depth test, stencil test requires 2, color writes enabled, blending
+    m_pipeline_tool_hidden_color_pass.shader_stages     = programs()->tool.get();
+    m_pipeline_tool_hidden_color_pass.vertex_input      = m_vertex_input.get();
+    m_pipeline_tool_hidden_color_pass.input_assembly    = &Input_assembly_state::triangles;
+    m_pipeline_tool_hidden_color_pass.rasterization     = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_tool_hidden_color_pass.depth_stencil     = &m_depth_stencil_tool_test_for_hidden;
+    m_pipeline_tool_hidden_color_pass.color_blend       = &m_color_blend_constant_point_six;
+    m_pipeline_tool_hidden_color_pass.viewport          = nullptr;
+
+    //m_pipeline_edge_lines.shader_stages  = programs()->edge_lines.get();
+    m_pipeline_edge_lines.shader_stages  = programs()->wide_lines.get();
+    m_pipeline_edge_lines.vertex_input   = m_vertex_input.get();
+    m_pipeline_edge_lines.input_assembly = &Input_assembly_state::lines;
+    m_pipeline_edge_lines.rasterization  = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_edge_lines.depth_stencil  = &Depth_stencil_state::depth_test_enabled_stencil_test_disabled;
+    m_pipeline_edge_lines.color_blend    = &Color_blend_state::color_blend_premultiplied;
+    m_pipeline_edge_lines.viewport       = nullptr;
+
+    m_pipeline_points.shader_stages  = programs()->points.get();
+    m_pipeline_points.vertex_input   = m_vertex_input.get();
+    m_pipeline_points.input_assembly = &Input_assembly_state::points;
+    m_pipeline_points.rasterization  = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_points.depth_stencil  = &Depth_stencil_state::depth_test_enabled_stencil_test_disabled;
+    m_pipeline_points.color_blend    = &Color_blend_state::color_blend_disabled;
+    m_pipeline_points.viewport       = nullptr;
+
+    m_pipeline_line_hidden_blend.shader_stages  = programs()->wide_lines.get();
+    m_pipeline_line_hidden_blend.vertex_input   = m_vertex_input.get();
+    m_pipeline_line_hidden_blend.input_assembly = &Input_assembly_state::lines;
+    m_pipeline_line_hidden_blend.rasterization  = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_line_hidden_blend.depth_stencil  = &m_depth_hidden;
+    m_pipeline_line_hidden_blend.color_blend    = &m_color_blend_constant_point_two;
+    m_pipeline_line_hidden_blend.viewport       = nullptr;
+
+    gl::pop_debug_group();
+}
+
+auto Forward_renderer::select_pipeline(Pass pass) const -> const erhe::graphics::Pipeline*
+{
+    switch (pass)
+    {
+        case Pass::polygon_fill                              : return &m_pipeline_fill;
+        case Pass::edge_lines                                : return &m_pipeline_edge_lines;
+        case Pass::polygon_centroids                         : return &m_pipeline_points;
+        case Pass::corner_points                             : return &m_pipeline_points;
+        case Pass::tag_depth_hidden_with_stencil             : return &m_pipeline_tool_hidden_stencil_pass;
+        case Pass::tag_depth_visible_with_stencil            : return &m_pipeline_tool_visible_stencil_pass;
+        case Pass::clear_depth                               : return &m_pipeline_tool_depth_clear_pass;
+        case Pass::depth_only                                : return &m_pipeline_tool_depth_pass;
+        case Pass::require_stencil_tag_depth_visible         : return &m_pipeline_tool_visible_color_pass;
+        case Pass::require_stencil_tag_depth_hidden_and_blend: return &m_pipeline_tool_hidden_color_pass;
+        case Pass::hidden_line_with_blend                    : return &m_pipeline_line_hidden_blend;
+        default:
+            FATAL("bad pass\n");
+    }
+}
+
+auto Forward_renderer::select_primitive_mode(Pass pass) const -> erhe::primitive::Primitive_geometry::Mode
+{
+    switch (pass)
+    {
+        case Pass::polygon_fill                              : return Primitive_geometry::Mode::polygon_fill;
+        case Pass::edge_lines                                : return Primitive_geometry::Mode::edge_lines;
+        case Pass::polygon_centroids                         : return Primitive_geometry::Mode::polygon_centroids;
+        case Pass::corner_points                             : return Primitive_geometry::Mode::corner_points;
+        case Pass::tag_depth_hidden_with_stencil             : return Primitive_geometry::Mode::polygon_fill;
+        case Pass::tag_depth_visible_with_stencil            : return Primitive_geometry::Mode::polygon_fill;
+        case Pass::clear_depth                               : return Primitive_geometry::Mode::polygon_fill;
+        case Pass::depth_only                                : return Primitive_geometry::Mode::polygon_fill;
+        case Pass::require_stencil_tag_depth_visible         : return Primitive_geometry::Mode::polygon_fill;
+        case Pass::require_stencil_tag_depth_hidden_and_blend: return Primitive_geometry::Mode::polygon_fill;
+        case Pass::hidden_line_with_blend                    : return Primitive_geometry::Mode::edge_lines;
+        default:
+            FATAL("bad pass\n");
+    }
+}
+
+static constexpr const char* c_forward_renderer_render = "Forward_renderer::render()";
+void Forward_renderer::render(Viewport                    viewport,
+                              ICamera&                    camera,
+                              Layer_collection&           layers,
+                              const Material_collection&  materials,
+                              std::initializer_list<Pass> passes,
+                              uint64_t                    visibility_mask)
+{
+    ZoneScoped;
+
+    gl::push_debug_group(gl::Debug_source::debug_source_application,
+                         0,
+                         static_cast<GLsizei>(strlen(c_forward_renderer_render)),
+                         c_forward_renderer_render);
+    unsigned int shadow_texture_unit = 0;
+    unsigned int shadow_texture_name = m_shadow_renderer->texture()->gl_name();
+    gl::bind_sampler (shadow_texture_unit, programs()->nearest_sampler->gl_name());
+    gl::bind_textures(shadow_texture_unit, 1, &shadow_texture_name);
+    gl::viewport     (viewport.x, viewport.y, viewport.width, viewport.height);
+    for (auto& pass : passes)
+    {
+        auto* pipeline = select_pipeline(pass);
+        if (pipeline == nullptr)
+        {
+            return;
+        }
+
+        auto primitive_mode = select_primitive_mode(pass);
+
+        if (pass == Pass::clear_depth)
+        {
+            gl::depth_range(0.0f, 0.0f);
+        }
+
+        const char* pass_name = c_pass_strings[static_cast<size_t>(pass)];
+        gl::push_debug_group(gl::Debug_source::debug_source_application,
+                             0,
+                             static_cast<GLsizei>(strlen(pass_name)),
+                             pass_name);
+
+        m_pipeline_state_tracker->execute(pipeline);
+        gl::program_uniform_1i(pipeline->shader_stages->gl_name(),
+                               programs()->shadow_sampler_location,
+                               shadow_texture_unit);
+        update_material_buffer(materials);
+        update_camera_buffer  (camera, viewport);
+        bind_material_buffer();
+        bind_camera_buffer();
+        for (auto layer : layers)
+        {
+            TracyGpuZone(c_forward_renderer_render)
+
+            update_light_buffer    (layer->lights, m_shadow_renderer->viewport(), layer->ambient_light);
+            update_primitive_buffer(layer->meshes, visibility_mask);
+            auto draw_indirect_buffer_range = update_draw_indirect_buffer(layer->meshes, primitive_mode, visibility_mask);
+
+            bind_light_buffer();
+            bind_primitive_buffer();
+            bind_draw_indirect_buffer();
+
+            gl::multi_draw_elements_indirect(pipeline->input_assembly->primitive_topology,
+                                             m_scene_manager->index_type(),
+                                             reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
+                                             static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
+                                             static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command)));
+        }
+
+        if (pass == Pass::clear_depth)
+        {
+            gl::depth_range(0.0f, 1.0f);
+        }
+
+        gl::pop_debug_group();
+    }
+    gl::pop_debug_group();
+
+    // state leak insurance
+    unsigned int zero{0};
+    gl::bind_sampler(shadow_texture_unit, 0);
+    gl::bind_textures(shadow_texture_unit, 1, &zero);
+}
+
+} // namespace sample

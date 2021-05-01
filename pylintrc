@@ -1,0 +1,10 @@
+[FORMAT]
+max-line-length=120
+
+no-space-check=trailing-comma,dict-separator
+
+disable=C0326
+
+[DESIGN]
+max-attributes=12
+

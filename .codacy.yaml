@@ -1,0 +1,6 @@
+---
+engines:
+  cppcheck:
+    language: c++
+exclude_paths:
+  - "build/**"

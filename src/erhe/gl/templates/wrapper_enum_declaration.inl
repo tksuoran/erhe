@@ -1,0 +1,4 @@
+enum class {WRAPPER_ENUM_TYPE_NAME} : unsigned int
+{{
+{WRAPPER_ENUM_VALUE_DEFINITIONS}
+}};

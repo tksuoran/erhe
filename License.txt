@@ -1,0 +1,63 @@
+Licenses for erhe and other parts:
+----------------------------------
+
+Original work developed by Timo Suoranta:
+
+ * src
+        Origin:     <https://github.com/tksuoran/erhe>
+        Contact:    Timo Suoranta <tksuoran@gmail.com>
+        License:    MIT (src/erhe/LICENSE, src/editor/LICENSE)
+
+External dependencies:
+
+ * freetype (fetched by CMake)
+        Origin:     <https://www.freetype.org/>
+        Git:        <https://gitlab.freedesktop.org/freetype/freetype.git>
+        Contact:    <https://www.freetype.org/contact.html>
+        License:    Freetype License (docs/FTL.TXT)
+
+ * harfbuzz (fetched by CMake)
+        Origin:     <https://harfbuzz.github.io/>
+        Git:        <https://github.com/harfbuzz/harfbuzz.git>
+        Contact:    https://lists.freedesktop.org/mailman/listinfo/harfbuzz
+        License:    MIT (COPYING)
+
+ * Mango (fecthed by CMake)
+        Origin:     <https://github.com/tksuoran/mango>
+        Git:        <git@github.com:tksuoran/mango.git>
+        Contact:    https://lists.freedesktop.org/mailman/listinfo/harfbuzz
+        License:    ZLib (license)
+
+ * ImGui (copied to src/imgui)
+        Origin:     <https://github.com/ocornut/imgui>
+        Contact:    https://github.com/ocornut/imgui/issues
+        License:    MIT (License.txt)
+
+ * fmt (fetched by CMake)
+        Origin:     <https://github.com/fmtlib/fmt>
+        Git:        <https://github.com/fmtlib/fmt.git>
+        License:    MIT (LICENSE.rst)
+
+ * glm (fetched by CMake)
+        Origin:     <https://glm.g-truc.net>
+        Git:        <https://github.com/g-truc/glm>
+        Contact:    Christophe Riccio <glm@g-truc.net>
+        License:    MIT (copying.TXT)
+
+ * Microsoft GSL (fetched by CMake)
+        Origin:     <https://github.com/Microsoft/GSL>
+        Git:        <https://github.com/microsoft/GSL.git>
+        Contact:    <https://github.com/Microsoft/GSL/issues>
+        License:    MIT (LICENSE)
+
+  * RectangleBinPack (fetched by CMake)
+        Origin:     <https://github.com/juj/RectangleBinPack>
+        Git:        <https://github.com/juj/RectangleBinPack.git>
+        Contact:    Jukka Jylänki <jujjyl@gmail.com>
+        License:    Public Domain
+
+  * OpenGL-Registry (subset, gl.xml copied to src/erhe/gl)
+        Origin:     <https://github.com/KhronosGroup/OpenGL-Registry>
+        Git:        <https://github.com/KhronosGroup/OpenGL-Registry.git>
+        Contact:    <https://github.com/KhronosGroup/OpenGL-Registry/issues>
+        License:    Apache License, Version 2.0 <http://www.apache.org/licenses/LICENSE-2.0>

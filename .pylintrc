@@ -1,0 +1,8 @@
+[FORMAT]
+max-line-length=120
+
+no-space-check=trailing-comma,dict-separator
+
+[DESIGN]
+max-attributes=12
+

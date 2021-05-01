@@ -1,0 +1,43 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "args": ["${workspaceFolder}/vscode-cmake-build/src/erhe/gl"],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "editor VS Ninja",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/vscode-cmake-build/src/editor/editor",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/src/editor",
+            "externalConsole": false
+        },
+        {
+            "name": "editor MSVC",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/editor/Debug/editor",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/src/editor",
+            "externalConsole": false
+        },
+        {
+            "name": "editor Ninja",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/src/editor/Debug/editor",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/src/editor",
+            "externalConsole": false
+        }
+    ]
+}
