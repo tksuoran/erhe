@@ -9,6 +9,8 @@ set(source_list
     mikktspace.h
     operation/catmull_clark_subdivision.cpp
     operation/catmull_clark_subdivision.hpp
+    operation/conway_ambo_operator.hpp
+    operation/conway_ambo_operator.cpp
     operation/conway_dual_operator.hpp
     operation/conway_dual_operator.cpp
     operation/sqrt3_subdivision.cpp

@@ -10,18 +10,7 @@ Conway_dual_operator::Conway_dual_operator(Geometry& src, Geometry& destination)
 {
     ZoneScoped;
 
-    {
-        ZoneScopedN("Polygon centroids");
-
-        // New point from old face centroid
-        for (Polygon_id src_polygon_id = 0,
-             polygon_end = m_source.polygon_count();
-             src_polygon_id < polygon_end;
-             ++src_polygon_id)
-        {
-            make_new_point_from_polygon_centroid(src_polygon_id);
-        }
-    }
+    make_polygon_centroids();
 
     {
         ZoneScopedN("Subdivide");

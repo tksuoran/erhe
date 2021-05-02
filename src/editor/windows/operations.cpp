@@ -1,13 +1,9 @@
 #include "windows/operations.hpp"
 #include "editor.hpp"
 #include "operations/operation_stack.hpp"
-#include "operations/catmull_clark_subdivision_operation.hpp"
+#include "operations/geometry_operations.hpp"
 #include "scene/scene_manager.hpp"
 #include "tools/selection_tool.hpp"
-#include "erhe/geometry/operation/catmull_clark_subdivision.hpp"
-#include "erhe/geometry/operation/sqrt3_subdivision.hpp"
-#include "erhe/geometry/operation/triangulate.hpp"
-#include "erhe/geometry/operation/subdivide.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
 
@@ -81,6 +77,11 @@ void Operations::window(Pointer_context&)
     if (ImGui::Button("Dual"))
     {
         auto op = std::make_shared<Dual_operator>(context);
+        m_operation_stack->push(op);
+    }
+    if (ImGui::Button("Ambo"))
+    {
+        auto op = std::make_shared<Ambo_operator>(context);
         m_operation_stack->push(op);
     }
     ImGui::End();

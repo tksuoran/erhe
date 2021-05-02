@@ -1,6 +1,6 @@
 set(source_list
-    operations/catmull_clark_subdivision_operation.cpp
-    operations/catmull_clark_subdivision_operation.hpp
+    operations/geometry_operations.cpp
+    operations/geometry_operations.hpp
     operations/insert_operation.cpp
     operations/insert_operation.hpp
     operations/ioperation.hpp

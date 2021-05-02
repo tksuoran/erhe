@@ -10,29 +10,8 @@ Triangulate::Triangulate(Geometry& src, Geometry& destination)
 {
     ZoneScoped;
 
-    {
-        ZoneScopedN("Points");
-
-        for (Point_id src_point_id = 0,
-             point_end = m_source.point_count();
-             src_point_id < point_end;
-             ++src_point_id)
-        {
-            make_new_point_from_point(src_point_id);
-        }
-    }
-
-    {
-        ZoneScopedN("Polygon centroids");
-
-        for (Polygon_id src_polygon_id = 0,
-             polygon_end = m_source.polygon_count();
-             src_polygon_id < polygon_end;
-             ++src_polygon_id)
-        {
-            make_new_point_from_polygon_centroid(src_polygon_id);
-        }
-    }
+    make_points_from_points();
+    make_polygon_centroids();
 
     {
         ZoneScopedN("Subdivide");

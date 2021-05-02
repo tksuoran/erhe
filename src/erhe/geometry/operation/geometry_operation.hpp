@@ -34,6 +34,16 @@ protected:
     std::vector<std::vector<std::pair<float, Polygon_id>>> m_new_polygon_sources;
     std::vector<std::vector<std::pair<float, Edge_id   >>> m_new_edge_sources;
 
+    std::vector<Point_id> m_old_edge_to_new_midpoints;
+
+    void make_points_from_points();
+
+    void make_polygon_centroids();
+
+    void make_edge_midpoints();
+
+    auto get_edge_midpoint(Point_id a, Point_id b) const -> Point_id;
+
     // Creates a new point to Destination from old point.
     // The new point is linked to the old point in Source.
     // Old point is set as source for the new point with specified weight.

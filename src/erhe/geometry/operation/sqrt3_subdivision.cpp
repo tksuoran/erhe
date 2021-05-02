@@ -41,17 +41,7 @@ Sqrt3_subdivision::Sqrt3_subdivision(Geometry& src, Geometry& destination)
         }
     }
 
-    {
-        ZoneScopedN("Polygon centroids");
-
-        for (Polygon_id src_polygon_id = 0,
-             polygon_end = m_source.polygon_count();
-             src_polygon_id < polygon_end;
-             ++src_polygon_id)
-        {
-            make_new_point_from_polygon_centroid(src_polygon_id);
-        }
-    }
+    make_polygon_centroids();
 
     {
         ZoneScopedN("Subdivide");
