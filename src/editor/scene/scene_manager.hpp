@@ -33,7 +33,7 @@ namespace erhe::scene
     class Mesh;
 }
 
-namespace sample
+namespace editor
 {
 
 class Programs;
@@ -198,4 +198,4 @@ private:
     static constexpr bool s_single_mesh{false};
 };
 
-} // namespace sample
+} // namespace editor

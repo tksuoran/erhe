@@ -10,7 +10,7 @@ namespace erhe::geometry
     class Geometry;
 }
 
-namespace sample
+namespace editor
 {
 
 class Mesh_operation

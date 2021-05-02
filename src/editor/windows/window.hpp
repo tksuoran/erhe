@@ -2,7 +2,7 @@
 
 #include <memory>
 
-namespace sample
+namespace editor
 {
 
 struct Pointer_context;
@@ -14,4 +14,4 @@ public:
     virtual void window(Pointer_context& pointer_context) = 0;
 };
 
-} // namespace sample
+} // namespace editor

@@ -3,7 +3,7 @@
 
 #include "erhe/log/log.hpp"
 
-namespace sample {
+namespace editor {
 
 extern erhe::log::Log::Category log_startup;
 extern erhe::log::Log::Category log_programs;

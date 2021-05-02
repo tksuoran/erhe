@@ -13,7 +13,7 @@
 
 #include "imgui.h"
 
-namespace sample
+namespace editor
 {
 
 Operations::Operations(Editor&                                 editor,
@@ -86,4 +86,4 @@ void Operations::window(Pointer_context&)
     ImGui::End();
 }
 
-} // namespace sample
+} // namespace editor

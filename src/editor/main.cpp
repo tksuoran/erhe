@@ -4,7 +4,7 @@
 #if __unix__
 #   include <dlfcn.h>
 #endif
-using namespace sample;
+using namespace editor;
 
 #include "renderdoc_app.h"
 

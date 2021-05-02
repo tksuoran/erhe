@@ -22,7 +22,7 @@ namespace erhe::scene
     class Mesh;
 }
 
-namespace sample
+namespace editor
 {
 
 class Brushes
@@ -71,4 +71,4 @@ private:
     float                              m_scale{1.0f};
 };
 
-} // namespace sample
+} // namespace editor

@@ -48,7 +48,7 @@
 
 #include <chrono>
 
-namespace sample {
+namespace editor {
 
 using namespace std;
 using namespace erhe::geometry;

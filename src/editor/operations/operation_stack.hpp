@@ -5,7 +5,7 @@
 #include <memory>
 #include <stack>
 
-namespace sample
+namespace editor
 {
 
 class IOperation;

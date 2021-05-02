@@ -2,7 +2,7 @@
 
 #include "tools/tool.hpp"
 
-namespace sample
+namespace editor
 {
 
 class Line_renderer;
@@ -32,4 +32,4 @@ private:
     int   m_cell_count{20};
 };
 
-} // namespace sample
+} // namespace editor

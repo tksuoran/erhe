@@ -22,7 +22,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-namespace sample
+namespace editor
 {
 
 using namespace erhe::toolkit;
@@ -170,4 +170,4 @@ void Shadow_renderer::render(Layer_collection& layers,
     gl::pop_debug_group();
 }
 
-} // namespace sample
+} // namespace editor

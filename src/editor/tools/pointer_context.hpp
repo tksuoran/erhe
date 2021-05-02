@@ -16,7 +16,7 @@ namespace erhe::scene
     class Mesh;
 }
 
-namespace sample
+namespace editor
 {
 
 class Tool;
@@ -67,4 +67,4 @@ struct Pointer_context
     bool                               hover_content    {false};
 };
 
-} // namespace sample
+} // namespace editor

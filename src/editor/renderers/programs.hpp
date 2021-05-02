@@ -14,7 +14,7 @@ class Shader_stages;
 
 } // namespace erhe::graphics
 
-namespace sample {
+namespace editor {
 
 struct Primitive_struct
 {

@@ -4,7 +4,7 @@
 
 #include <memory>
 
-namespace sample
+namespace editor
 {
 
 class Scene_manager;
@@ -23,4 +23,4 @@ private:
     std::shared_ptr<Scene_manager> m_scene_manager;
 };
 
-} // namespace sample
+} // namespace editor

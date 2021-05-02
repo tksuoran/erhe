@@ -4,7 +4,7 @@
 
 #include "imgui.h"
 
-namespace sample
+namespace editor
 {
 
 Light_properties::Light_properties(const std::shared_ptr<Scene_manager>& scene_manager)
@@ -67,4 +67,4 @@ void Light_properties::window(Pointer_context&)
     ImGui::End();
 }
 
-} // namespace sample
+} // namespace editor

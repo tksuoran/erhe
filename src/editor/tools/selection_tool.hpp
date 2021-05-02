@@ -13,7 +13,7 @@ namespace erhe::scene {
     class Mesh;
 }
 
-namespace sample
+namespace editor
 {
 
 class Scene_manager;
@@ -111,4 +111,4 @@ private:
     bool                               m_hover_tool    {false};
 };
 
-} // namespace sample
+} // namespace editor

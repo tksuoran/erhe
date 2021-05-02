@@ -1,7 +1,7 @@
 #include "operations/operation_stack.hpp"
 #include "operations/ioperation.hpp"
 
-namespace sample
+namespace editor
 {
 
 void Operation_stack::push(std::shared_ptr<IOperation> operation)

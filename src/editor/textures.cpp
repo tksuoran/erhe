@@ -2,7 +2,7 @@
 #include "erhe/graphics_experimental/image_transfer.hpp"
 #include "erhe/graphics/png_loader.hpp"
 
-namespace sample {
+namespace editor {
 
 using erhe::graphics::Texture;
 using erhe::graphics::PNG_loader;

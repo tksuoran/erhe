@@ -29,7 +29,7 @@
 
 #include <future>
 
-namespace sample {
+namespace editor {
 
 using erhe::graphics::Configuration;
 using erhe::graphics::Shader_monitor;

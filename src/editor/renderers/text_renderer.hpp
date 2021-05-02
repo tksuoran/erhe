@@ -40,7 +40,7 @@ namespace erhe::ui
     class Font;
 }
 
-namespace sample
+namespace editor
 {
 
 class Text_renderer

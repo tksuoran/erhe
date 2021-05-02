@@ -1,6 +1,6 @@
 #include "log.hpp"
 
-namespace sample {
+namespace editor {
 
 using erhe::log::Log;
 

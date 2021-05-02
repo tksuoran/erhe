@@ -29,7 +29,7 @@ class Style;
 class Text_buffer;
 } // namespace erhe::ui
 
-namespace sample {
+namespace editor {
 
 class Application;
 class Programs;

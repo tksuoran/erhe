@@ -25,7 +25,7 @@ namespace erhe::scene
     class Mesh;
 }
 
-namespace sample
+namespace editor
 {
 
 class Scene_manager;

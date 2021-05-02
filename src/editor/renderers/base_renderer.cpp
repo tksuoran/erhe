@@ -28,7 +28,7 @@
 
 #include "imgui.h"
 
-namespace sample
+namespace editor
 {
 
 using namespace erhe::toolkit;
@@ -423,4 +423,4 @@ void Base_renderer::debug_properties_window()
     ImGui::End();
 }
 
-} // namespace sample
+} // namespace editor

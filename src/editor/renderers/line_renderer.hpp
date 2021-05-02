@@ -42,7 +42,7 @@ namespace erhe::ui
     class Font;
 }
 
-namespace sample
+namespace editor
 {
 
 struct Line

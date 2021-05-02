@@ -4,7 +4,7 @@
 
 #include "imgui.h"
 
-namespace sample
+namespace editor
 {
 
 Material_properties::Material_properties(const std::shared_ptr<Scene_manager>&  scene_manager,

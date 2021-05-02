@@ -14,7 +14,7 @@ namespace erhe::graphics
     class Framebuffer;
 }
 
-namespace sample
+namespace editor
 {
 
 class Framebuffer_capture

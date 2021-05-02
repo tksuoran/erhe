@@ -1,6 +1,6 @@
 #pragma once
 
-namespace sample
+namespace editor
 {
 
 class Controller
@@ -71,4 +71,4 @@ private:
     float m_current_value  { 0.000f};
 };
 
-} // namespace sample
+} // namespace editor

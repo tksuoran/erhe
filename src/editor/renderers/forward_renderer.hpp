@@ -25,7 +25,7 @@ namespace erhe::scene
     class Node;
 }
 
-namespace sample
+namespace editor
 {
 
 class Programs;
@@ -118,4 +118,4 @@ private:
     std::unique_ptr<erhe::graphics::Vertex_input_state>   m_vertex_input;
 };
 
-} // namespace sample
+} // namespace editor

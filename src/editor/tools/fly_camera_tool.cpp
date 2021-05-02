@@ -5,7 +5,7 @@
 
 #include "imgui.h"
 
-namespace sample
+namespace editor
 {
 
 using namespace std;

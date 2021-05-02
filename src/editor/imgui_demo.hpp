@@ -9,7 +9,7 @@
 #include "imgui.h"
 
 
-namespace sample {
+namespace editor {
 
 class Application;
 

@@ -16,7 +16,7 @@ namespace erhe::scene
     class Light;
 }
 
-namespace sample
+namespace editor
 {
 
 class Programs;
@@ -49,4 +49,4 @@ private:
     int                                 m_light_cone_sides;
 };
 
-} // namespace sample
+} // namespace editor

@@ -24,7 +24,7 @@ namespace erhe::scene
     struct Viewport;
 }
 
-namespace sample
+namespace editor
 {
 
 class Line_renderer;
@@ -252,4 +252,4 @@ private:
     Debug_info m_debug_info;
 };
 
-} // namespace sample
+} // namespace editor

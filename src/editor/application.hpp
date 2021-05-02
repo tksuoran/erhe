@@ -5,7 +5,7 @@
 
 #include "renderdoc_app.h"
 
-namespace sample {
+namespace editor {
 
 class Programs;
 class Textures;

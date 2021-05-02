@@ -8,7 +8,7 @@
 
 using namespace erhe::geometry;
 
-namespace sample
+namespace editor
 {
 
 auto Mesh_properties::state() const -> State

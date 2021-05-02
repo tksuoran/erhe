@@ -24,7 +24,7 @@
 #include <iomanip>
 #include <cstdarg>
 
-namespace sample
+namespace editor
 {
 
 using namespace erhe::graphics;

@@ -3,7 +3,7 @@
 #include "windows/window.hpp"
 #include "erhe/scene/viewport.hpp"
 
-namespace sample
+namespace editor
 {
 
 struct Pointer_context;
@@ -53,4 +53,4 @@ public:
     virtual void cancel_ready() {}
 };
 
-} // namespace sample
+} // namespace editor

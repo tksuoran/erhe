@@ -3,7 +3,7 @@
 
 #include "imgui.h"
 
-namespace sample
+namespace editor
 {
 
 Viewport_config::Viewport_config()

@@ -3,7 +3,7 @@
 #include "scene/frame_controller.hpp"
 #include "tools/tool.hpp"
 
-namespace sample
+namespace editor
 {
 
 class Scene_manager;
@@ -54,4 +54,4 @@ private:
     float                          m_sensitivity{1.0f};
 };
 
-} // namespace sample
+} // namespace editor

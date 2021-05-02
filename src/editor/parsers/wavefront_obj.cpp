@@ -10,7 +10,7 @@
 #include <glm/glm.hpp>
 #include <string>
 
-namespace sample {
+namespace editor {
 
 using namespace glm;
 using namespace erhe::geometry;
@@ -321,4 +321,4 @@ Geometry parse_obj_geometry(const std::filesystem::path& path)
     return geometry;
 }
 
-} // namespace sample
+} // namespace editor

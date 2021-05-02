@@ -2,7 +2,7 @@
 #include "tools/selection_tool.hpp"
 #include "scene/scene_manager.hpp"
 
-namespace sample
+namespace editor
 {
 
 void Mesh_operation::execute()
@@ -57,4 +57,4 @@ void Mesh_operation::add_entry(Entry&& entry)
     m_entries.emplace_back(entry);
 }
 
-} // namespace sample
+} // namespace editor

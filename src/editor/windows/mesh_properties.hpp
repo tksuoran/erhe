@@ -12,7 +12,7 @@ namespace erhe::scene {
     class Mesh;
 }
 
-namespace sample
+namespace editor
 {
 
 class Scene_manager;
@@ -46,4 +46,4 @@ private:
     bool m_show_edges     {false};
 };
 
-} // namespace sample
+} // namespace editor

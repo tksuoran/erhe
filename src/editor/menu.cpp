@@ -21,7 +21,7 @@
 
 #include <cmath>
 
-namespace sample {
+namespace editor {
 
 using glm::mat4;
 using glm::vec2;

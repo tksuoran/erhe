@@ -2,7 +2,7 @@
 
 #include <memory>
 
-namespace sample
+namespace editor
 {
 
 class Scene_manager;
@@ -15,4 +15,4 @@ public:
     virtual void undo() = 0;
 };
 
-} // namespace sample
+} // namespace editor

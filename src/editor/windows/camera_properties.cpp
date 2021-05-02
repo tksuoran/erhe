@@ -4,7 +4,7 @@
 
 #include "imgui.h"
 
-namespace sample
+namespace editor
 {
 
 Camera_properties::Camera_properties(const std::shared_ptr<Scene_manager>& scene_manager)
@@ -112,4 +112,4 @@ void Camera_properties::window(Pointer_context&)
     ImGui::End();
 }
 
-} // namespace sample
+} // namespace editor

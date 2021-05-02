@@ -5,7 +5,7 @@
 
 #include <glm/glm.hpp>
 
-namespace sample
+namespace editor
 {
 
 class Viewport_config
@@ -35,4 +35,4 @@ public:
     glm::vec4 clear_color          {0.02f, 0.02f, 0.02f, 1.0f};
 };
 
-} // namespace sample
+} // namespace editor

@@ -10,7 +10,7 @@
 
 #include <glm/glm.hpp>
 
-namespace sample
+namespace editor
 {
 
 using namespace erhe::toolkit;

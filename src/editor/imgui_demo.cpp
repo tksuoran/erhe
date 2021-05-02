@@ -14,7 +14,7 @@
 #include <cmath>
 #include <memory>
 
-namespace sample {
+namespace editor {
 
 Imgui_demo::Imgui_demo()
     : erhe::components::Component{"ImGui Demo"}

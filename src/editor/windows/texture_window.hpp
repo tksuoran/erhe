@@ -11,7 +11,7 @@ namespace erhe::graphics
     class Texture;
 }
 
-namespace sample
+namespace editor
 {
 
 class Scene_manager;
@@ -63,4 +63,4 @@ private:
     bool                                          m_can_present{false};
 };
 
-} // namespace sample
+} // namespace editor

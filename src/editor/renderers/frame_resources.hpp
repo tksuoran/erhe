@@ -15,7 +15,7 @@ namespace erhe::graphics
     class Shader_stages;
 }
 
-namespace sample
+namespace editor
 {
 
 struct Frame_resources
@@ -78,4 +78,4 @@ struct Frame_resources
     erhe::graphics::Buffer draw_indirect_buffer;
 };
 
-} // namespace sample
+} // namespace editor

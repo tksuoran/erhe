@@ -37,7 +37,7 @@ namespace erhe::scene
     struct Viewport;
 }
 
-namespace sample
+namespace editor
 {
 
 
@@ -218,4 +218,4 @@ private:
     int                          m_max_index_count{256};
 };
 
-} // namespace sample
+} // namespace editor

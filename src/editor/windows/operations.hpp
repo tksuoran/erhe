@@ -5,7 +5,7 @@
 
 #include <memory>
 
-namespace sample
+namespace editor
 {
 
 class Operation_stack;
@@ -33,4 +33,4 @@ private:
     Editor::Action                   m_action{Editor::Action::select};
 };
 
-} // namespace sample
+} // namespace editor

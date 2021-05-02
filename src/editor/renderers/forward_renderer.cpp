@@ -23,7 +23,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-namespace sample
+namespace editor
 {
 
 using namespace erhe::toolkit;
@@ -452,4 +452,4 @@ void Forward_renderer::render(Viewport                    viewport,
     gl::bind_textures(shadow_texture_unit, 1, &zero);
 }
 
-} // namespace sample
+} // namespace editor

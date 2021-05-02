@@ -9,7 +9,7 @@ namespace erhe::graphics {
     class ImageTransfer;
 } // namespace erhe::graphics
 
-namespace sample {
+namespace editor {
 
 class Textures
     : public erhe::components::Component

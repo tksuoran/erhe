@@ -6,7 +6,7 @@
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics_experimental/shader_monitor.hpp"
 
-namespace sample {
+namespace editor {
 
 using erhe::graphics::Configuration;
 using erhe::graphics::Shader_stages;

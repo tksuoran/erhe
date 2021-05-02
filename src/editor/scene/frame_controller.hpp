@@ -11,7 +11,7 @@ namespace erhe::scene
     class Node;
 }
 
-namespace sample
+namespace editor
 {
 
 class Frame_controller
@@ -66,4 +66,4 @@ private:
     glm::vec3          m_position       {0.0f};
 };
 
-} // namespace sample
+} // namespace editor

@@ -8,7 +8,7 @@
 
 #include "imgui.h"
 
-namespace sample
+namespace editor
 {
 
 using namespace erhe::graphics;
@@ -338,4 +338,4 @@ glm::vec2 Viewport_window::to_scene_content(glm::vec2 position_in_root)
     return { content_x, content_flip_y };
 }
 
-} // namespace sample
+} // namespace editor

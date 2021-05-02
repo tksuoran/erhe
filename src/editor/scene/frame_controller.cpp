@@ -8,7 +8,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
-namespace sample
+namespace editor
 {
 
 using namespace glm;
@@ -240,4 +240,4 @@ void Frame_controller::update_fixed_step()
 #endif
 }
 
-} // namespace sample
+} // namespace editor

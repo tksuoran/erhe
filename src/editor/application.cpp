@@ -2,7 +2,7 @@
 #include "log.hpp"
 #include "erhe/toolkit/window.hpp"
 
-namespace sample {
+namespace editor {
 
 using std::shared_ptr;
 using View = erhe::toolkit::View;

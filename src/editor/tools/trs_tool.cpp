@@ -16,7 +16,7 @@
 
 #include "imgui.h"
 
-namespace sample
+namespace editor
 {
 
 using namespace std;
@@ -942,4 +942,4 @@ void Trs_tool::Visualization::update_transforms()
     z_rotate_ring_mesh   ->node->update();
 }
 
-} // namespace sample
+} // namespace editor

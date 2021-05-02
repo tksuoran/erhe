@@ -4,7 +4,7 @@
 
 #include "imgui.h"
 
-namespace sample
+namespace editor
 {
 
 auto Grid_tool::state() const -> Tool::State
@@ -73,4 +73,4 @@ void Grid_tool::toolbar()
 {
 }
 
-} // namespace sample
+} // namespace editor

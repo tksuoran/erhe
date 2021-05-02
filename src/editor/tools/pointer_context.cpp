@@ -4,7 +4,7 @@
 
 #include <gsl/gsl>
 
-namespace sample
+namespace editor
 {
 
 auto Pointer_context::position_in_world() const -> glm::vec3
@@ -57,4 +57,4 @@ auto Pointer_context::position_in_world(glm::vec3 position_in_window) const -> g
                                     static_cast<float>(viewport.height));
 }
 
-} // namespace sample
+} // namespace editor

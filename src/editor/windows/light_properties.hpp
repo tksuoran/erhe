@@ -4,7 +4,7 @@
 
 #include <memory>
 
-namespace sample
+namespace editor
 {
 
 class Scene_manager;
@@ -25,4 +25,4 @@ private:
     int                            m_light_index{0};
 };
 
-} // namespace sample
+} // namespace editor

@@ -1,6 +1,6 @@
 #include "scene/controller.hpp"
 
-namespace sample
+namespace editor
 {
 
 auto Controller::damp() const -> float
@@ -235,4 +235,4 @@ void Controller::set_damp_and_max_delta(float damp, float max_delta)
     m_max_delta = max_delta;
 }
 
-} // namespace sample
+} // namespace editor

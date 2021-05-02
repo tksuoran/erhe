@@ -24,7 +24,7 @@
 
 #include <algorithm>
 
-namespace sample
+namespace editor
 {
 
 using namespace erhe::toolkit;

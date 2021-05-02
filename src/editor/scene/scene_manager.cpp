@@ -25,7 +25,7 @@
 
 #include "glm/gtx/color_space.hpp"
 
-namespace sample
+namespace editor
 {
 
 using namespace erhe::graphics;
@@ -743,4 +743,4 @@ auto Scene_manager::scene() -> erhe::scene::Scene&
 }
 
 
-} // namespace sample
+} // namespace editor

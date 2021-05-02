@@ -21,7 +21,7 @@ namespace erhe::scene
     class Mesh;
 }
 
-namespace sample
+namespace editor
 {
 
 class Programs;
@@ -69,4 +69,4 @@ private:
     std::vector<std::unique_ptr<erhe::graphics::Framebuffer>> m_framebuffers;
 };
 
-} // namespace sample
+} // namespace editor

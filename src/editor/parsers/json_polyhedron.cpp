@@ -11,7 +11,7 @@
 #include <sstream>
 #include <string>
 
-namespace sample {
+namespace editor {
 
 using namespace glm;
 using namespace erhe::geometry;
@@ -71,4 +71,4 @@ Geometry make_json_polyhedron(const std::filesystem::path& path)
     return geometry;
 }
 
-} // namespace sample
+} // namespace editor
