@@ -40,7 +40,7 @@ protected:
 
     void make_polygon_centroids();
 
-    void make_edge_midpoints();
+    void make_edge_midpoints(const std::initializer_list<float> relative_positions = { 0.5f } );
 
     auto get_edge_midpoint(Point_id a, Point_id b) const -> Point_id;
 

@@ -84,6 +84,11 @@ void Operations::window(Pointer_context&)
         auto op = std::make_shared<Ambo_operator>(context);
         m_operation_stack->push(op);
     }
+    if (ImGui::Button("Truncate"))
+    {
+        auto op = std::make_shared<Truncate_operator>(context);
+        m_operation_stack->push(op);
+    }
     ImGui::End();
 }
 

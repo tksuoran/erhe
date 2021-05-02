@@ -35,13 +35,17 @@ void Geometry_operation::make_polygon_centroids()
     }
 }
 
-void Geometry_operation::make_edge_midpoints()
+void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> relative_positions)
 {
     ZoneScoped;
 
+    size_t split_count = relative_positions.size();
+
     uint32_t point_count = m_source.point_count();
-    m_old_edge_to_new_midpoints.resize(point_count * point_count);
-    std::fill(begin(m_old_edge_to_new_midpoints), end(m_old_edge_to_new_midpoints), std::numeric_limits<uint32_t>::max());
+    m_old_edge_to_new_midpoints.resize(static_cast<size_t>(point_count) * static_cast<size_t>(point_count));
+    std::fill(begin(m_old_edge_to_new_midpoints),
+              end(m_old_edge_to_new_midpoints),
+              std::numeric_limits<uint32_t>::max());
 
     for (Polygon_id src_polygon_id = 0,
          polygon_end = m_source.polygon_count();
@@ -57,15 +61,22 @@ void Geometry_operation::make_edge_midpoints()
             Corner_id         src_next_corner_id         = m_source.polygon_corners[src_polygon_next_corner_id];
             Corner&           src_corner                 = m_source.corners[src_corner_id];
             Corner&           src_next_corner            = m_source.corners[src_next_corner_id];
-            Point_id          a                          = src_corner.point_id;
-            Point_id          b                          = src_next_corner.point_id;
-            uint32_t          edge_key = std::min(a, b) * point_count + std::max(a, b);
+            bool              in_order                   = src_corner.point_id < src_next_corner.point_id;
+            Point_id          point_a                    = std::min(src_corner.point_id, src_next_corner.point_id);
+            Point_id          point_b                    = std::max(src_corner.point_id, src_next_corner.point_id);
+            Corner_id         corner_a                   = in_order ? src_corner_id : src_next_corner_id;
+            Corner_id         corner_b                   = in_order ? src_next_corner_id : src_corner_id;
+            uint32_t          edge_key                   = point_a * point_count + point_b;
 
             Point_id new_midpoint;
             if (m_old_edge_to_new_midpoints[edge_key] == std::numeric_limits<uint32_t>::max())
             {
                 new_midpoint = m_destination.make_point();
                 m_old_edge_to_new_midpoints[edge_key] = new_midpoint;
+                for (size_t i = 0; i < split_count - 1; ++i)
+                {
+                    m_destination.make_point();
+                }
                 //log_subdivide.trace("created midpoint {} on edge {} {}\n", new_midpoint, std::min(a, b), std::max(a, b));
             }
             else
@@ -73,10 +84,16 @@ void Geometry_operation::make_edge_midpoints()
                 new_midpoint = m_old_edge_to_new_midpoints[edge_key];
                 //log_subdivide.trace("using midpoint {} on edge {} {}\n", new_midpoint, std::min(a, b), std::max(a, b));
             }
-            add_point_source(new_midpoint, 0.5f, a);
-            add_point_source(new_midpoint, 0.5f, b);
-            add_point_corner_source(new_midpoint, 0.5f, src_corner_id);
-            add_point_corner_source(new_midpoint, 0.5f, src_next_corner_id);
+            for (auto t : relative_positions)
+            {
+                float weight_a = t;
+                float weight_b = 1.0f - t;
+                add_point_source(new_midpoint, weight_a, point_a); // TODO only add these once per edge
+                add_point_source(new_midpoint, weight_b, point_b); // TODO only add these once per edge
+                add_point_corner_source(new_midpoint, weight_a, corner_a);
+                add_point_corner_source(new_midpoint, weight_b, corner_b);
+                new_midpoint++;
+            }
         }
     }
 }

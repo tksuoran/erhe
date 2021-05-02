@@ -5,13 +5,13 @@
 namespace erhe::geometry::operation
 {
 
-class Conway_dual_operator
+class Conway_truncate_operator
     : public Geometry_operation
 {
 public:
-    Conway_dual_operator(Geometry& src, Geometry& destination);
+    Conway_truncate_operator(Geometry& src, Geometry& destination);
 };
 
-auto dual(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+auto truncate(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation
