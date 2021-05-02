@@ -64,6 +64,11 @@ void Selection_tool::window(Pointer_context&)
     ImGui::End();
 }
 
+void Selection_tool::cancel_ready()
+{
+    m_state = State::passive;
+}
+
 auto Selection_tool::update(Pointer_context& pointer_context) -> bool
 {
     if (!pointer_context.scene_view_focus ||

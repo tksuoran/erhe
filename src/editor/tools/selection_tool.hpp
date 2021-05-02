@@ -35,6 +35,8 @@ public:
 
     auto state() const -> State override;
 
+    void cancel_ready() override;
+
     // Window
     void window(Pointer_context& pointer_context) override;
 
