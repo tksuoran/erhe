@@ -70,8 +70,6 @@ void Scene_manager::initialize_component()
 
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 
-    //size_t vertex_byte_count = 16 * 1024 * 1024;
-    //size_t index_byte_count  =  4 * 1024 * 1024;
     size_t vertex_byte_count = 256 * 1024 * 1024;
     size_t index_byte_count  =  64 * 1024 * 1024;
     m_buffer_info.index_type    = gl::Draw_elements_type::unsigned_int;
@@ -164,6 +162,7 @@ auto Scene_manager::make_mesh_node(const std::string&             name,
     node->parent = parent;
     node->transforms.parent_from_node.set(transform);
     node->update();
+    m_scene.nodes.push_back(node);
 
     auto* layer = target_layer.get();
     if (layer == nullptr)
@@ -171,11 +170,10 @@ auto Scene_manager::make_mesh_node(const std::string&             name,
         layer = m_content_layer.get();
     }
     VERIFY(layer != nullptr);
-    m_scene.nodes.push_back(node);
 
-    auto mesh = make_shared<Mesh>(name);
+    auto mesh = make_shared<Mesh>(name, node);
     mesh->primitives.emplace_back(primitive_geometry, material);
-    mesh->node = node.get();
+    mesh->node->reference_count++;
     layer->meshes.push_back(mesh);
 
     return mesh;
@@ -268,15 +266,12 @@ void Scene_manager::make_geometries()
         }
 
         float scale = 1.0f;
-        make_geometry(shapes::make_dodecahedron(scale), Primitive_geometry::Normal_style::polygon_normals);
-        make_geometry(shapes::make_icosahedron(scale),  Primitive_geometry::Normal_style::polygon_normals);
-        make_geometry(shapes::make_octahedron(scale),   Primitive_geometry::Normal_style::polygon_normals);
-        make_geometry(shapes::make_tetrahedron(scale),  Primitive_geometry::Normal_style::polygon_normals);
-        make_geometry(shapes::make_cube(scale),         Primitive_geometry::Normal_style::polygon_normals);
-
-        //make_geometry(shapes::make_cone(-1.0f, 1.0f, 1.0f, true, 4, 4));
-        //make_geometry(shapes::make_box(vec3(1.0f, 1.0f, 1.0f), ivec3(1, 1, 1), 1.0f), Primitive_geometry::Normal_style::polygon_normals);
-        //make_geometry(shapes::make_tetrahedron(1.0), Primitive_geometry::Normal_style::polygon_normals);
+        make_geometry(shapes::make_dodecahedron(scale),  Primitive_geometry::Normal_style::polygon_normals);
+        make_geometry(shapes::make_icosahedron(scale),   Primitive_geometry::Normal_style::polygon_normals);
+        make_geometry(shapes::make_octahedron(scale),    Primitive_geometry::Normal_style::polygon_normals);
+        make_geometry(shapes::make_tetrahedron(scale),   Primitive_geometry::Normal_style::polygon_normals);
+        make_geometry(shapes::make_cube(scale),          Primitive_geometry::Normal_style::polygon_normals);
+        make_geometry(shapes::make_cuboctahedron(scale), Primitive_geometry::Normal_style::polygon_normals);
     }
 
     if constexpr (false) // test scene for anisotropy debugging
@@ -340,13 +335,21 @@ void Scene_manager::make_geometries()
 
 void Scene_manager::make_materials()
 {
-    float z = 0.0f; /// XXX Only one material for debugging
-    //for (float z = -15.0f; z < 15.1f; z += 5.0f)
+    if constexpr (true) // White default material
     {
-        //float rel = (z + 15.0f) / 30.0f;
-        //rel       = 0.7f * rel + 0.3f;
-        //float r   = 0.1f + 0.8f * rel;
-        float h   = 0.0f; //rel * 360.0f;
+        auto m = make_shared<Material>(fmt::format("Default Material", m_materials.size()),
+                                       vec4(1.0f, 1.0f, 1.0f, 1.0f),
+                                       0.50f,
+                                       0.00f,
+                                       0.50f);
+        add(m);
+        return;
+    }
+
+    for (float z = -15.0f; z < 15.1f; z += 5.0f)
+    {
+        float rel = (z + 15.0f) / 30.0f;
+        float h   = rel * 360.0f;
         float s   = 0.9f;
         float v   = 1.0f;
         float R, G, B;
@@ -455,8 +458,9 @@ auto Scene_manager::make_directional_light(const std::string&  name,
                                            vec3(0.0f,  0.0f, 1.0f)); // up
     node->transforms.parent_from_node.set(m);
     node->update();
+    node->reference_count++;
 
-    auto l = make_shared<Light>(name, node.get());
+    auto l = make_shared<Light>(name, node);
     l->type                          = Light::Type::directional;
     l->color                         = color;
     l->intensity                     = intensity;
@@ -489,8 +493,9 @@ auto Scene_manager::make_spot_light(const std::string& name,
     mat4 m = erhe::toolkit::create_look_at(position, target, vec3(0.0f, 0.0f, 1.0f));
     node->transforms.parent_from_node.set(m);
     node->update();
+    node->reference_count++;
 
-    auto l = make_shared<Light>(name, node.get());
+    auto l = make_shared<Light>(name, node);
     l->type                          = Light::Type::spot;
     l->color                         = color;
     l->intensity                     = intensity;
@@ -541,7 +546,7 @@ void Scene_manager::make_punctual_light_nodes()
                                intensity);
     }
 
-    int spot_light_count = 30;
+    int spot_light_count = 4;
     for (int i = 0; i < spot_light_count; ++i)
     {
         float rel   = static_cast<float>(i) / static_cast<float>(spot_light_count);
@@ -658,8 +663,9 @@ void Scene_manager::initialize_cameras()
                                                 glm::vec3(0.0f, 1.0f, 0.0f));
     node->transforms.parent_from_node.set(m);
     node->update();
+    node->reference_count++;
 
-    m_camera = make_shared<Camera>("camera", node.get());
+    m_camera = make_shared<Camera>("camera", node);
     m_camera->projection()->fov_y           = erhe::toolkit::degrees_to_radians(35.0f);
     m_camera->projection()->projection_type = Projection::Type::perspective_vertical;
     m_camera->projection()->z_near          = 0.03f;
@@ -673,7 +679,7 @@ auto Scene_manager::add(shared_ptr<Material> material)
     VERIFY(material);
     material->index = m_materials.size();
     m_materials.push_back(material);
-    log_materials.info("material {} is {}\n", material->index, material->name);
+    log_materials.trace("material {} is {}\n", material->index, material->name);
     return material;
 }
 

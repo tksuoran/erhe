@@ -55,7 +55,7 @@ public:
         return m_viewport;
     }
 
-    static constexpr size_t s_max_light_count    = 40;
+    static constexpr size_t s_max_light_count    = 8;
     static constexpr size_t s_texture_resolution = 4 * 1024;
     static constexpr bool   s_enable             = true;
 

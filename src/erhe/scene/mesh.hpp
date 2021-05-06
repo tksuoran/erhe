@@ -16,13 +16,15 @@ class Mesh
 public:
     Mesh() = default;
 
-    explicit Mesh(const std::string& name)
+    explicit Mesh(const std::string&           name,
+                  const std::shared_ptr<Node>& node = {})
         : name{name}
+        , node{node}
     {}
 
-    Mesh(const std::string&         name,
-         Node*                      node,
-         erhe::primitive::Primitive primitive);
+    Mesh(const std::string&           name,
+         const std::shared_ptr<Node>& node,
+         erhe::primitive::Primitive   primitive);
 
     ~Mesh() = default;
 
@@ -37,7 +39,7 @@ public:
     static constexpr const uint64_t c_visibility_all         = ~uint64_t(0);
 
     std::string                             name;
-    Node*                                   node           {nullptr};
+    std::shared_ptr<Node>                   node;
     std::vector<erhe::primitive::Primitive> primitives;    
     glm::vec4                               wireframe_color{0.0f, 0.0f, 0.0f, 1.0f};
     float                                   point_size     {3.0f};

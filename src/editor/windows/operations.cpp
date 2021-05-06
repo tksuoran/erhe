@@ -89,6 +89,11 @@ void Operations::window(Pointer_context&)
         auto op = std::make_shared<Truncate_operator>(context);
         m_operation_stack->push(op);
     }
+    if (ImGui::Button("Snub"))
+    {
+        auto op = std::make_shared<Snub_operator>(context);
+        m_operation_stack->push(op);
+    }
     ImGui::End();
 }
 

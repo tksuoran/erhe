@@ -63,6 +63,7 @@ public:
 
     std::string name;
     Node*       parent{nullptr};
+    int         reference_count{0};
 
     struct Transforms
     {

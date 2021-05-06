@@ -58,7 +58,7 @@ void dump_fbo_attachment(int fbo_name, gl::Framebuffer_attachment attachment)
             gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_internal_format, &internal_format);
             gl::get_texture_level_parameter_iv(name,
                                                level,
-//                                               gl::Get_texture_parameter::texture_samples,
+//                                             gl::Get_texture_parameter::texture_samples,  Missing from gl.xml :/
                                                static_cast<gl::Get_texture_parameter>(GL_TEXTURE_SAMPLES),
                                                &samples);
         }
@@ -95,42 +95,6 @@ void Viewport_window::window(Pointer_context& pointer_context)
     ZoneScoped;
 
     ImGui::Begin("Scene");
-
-    if constexpr (false)
-    {
-        // Transform tools
-        ImGui::BeginGroup();
-        ImGui::Button("Translate");
-        ImGui::SameLine();
-        ImGui::Button("Rotate");
-        ImGui::SameLine();
-        ImGui::EndGroup();
-
-        ImGui::SameLine();
-        ImGui::Button("Foobar");
-        ImGui::SameLine();
-
-        // Coordinate system
-        static bool local = true;
-        if (ImGui::Button(local ? "Local" : "World"))
-        {
-            ImGui::OpenPopup("transform_coordinate_system");
-        }
-        if (ImGui::BeginPopup("transform_coordinate_system"))
-        {
-            if (ImGui::Selectable("Local")) {
-                local = true;
-            }
-            if (ImGui::Selectable("World")) {
-                local = false;
-            }
-            ImGui::EndPopup();
-        }
-
-        // Grid snapping
-        // Rotation snapping
-        // Camera speed
-    }
 
     if (m_can_present &&
         m_color_texture_resolved_for_present &&
@@ -201,7 +165,7 @@ void Viewport_window::multisample_resolve()
                          c_multisample_resolve);
 
     gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_framebuffer_multisample->gl_name());
-    if (true)
+    if constexpr (true)
     {
         auto status = gl::check_named_framebuffer_status(m_framebuffer_multisample->gl_name(), gl::Framebuffer_target::draw_framebuffer);
         if (status != gl::Framebuffer_status::framebuffer_complete)
@@ -212,7 +176,7 @@ void Viewport_window::multisample_resolve()
     }
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer_resolved->gl_name());
-    if (true)
+    if constexpr (true)
     {
         auto status = gl::check_named_framebuffer_status(m_framebuffer_multisample->gl_name(), gl::Framebuffer_target::draw_framebuffer);
         if (status != gl::Framebuffer_status::framebuffer_complete)
@@ -222,7 +186,7 @@ void Viewport_window::multisample_resolve()
         VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
     }
 
-    if (true)
+    if constexpr (false)
     {
         log_framebuffer.trace("Read framebuffer:\n");
         dump_fbo(m_framebuffer_multisample->gl_name());
@@ -274,8 +238,6 @@ void Viewport_window::update_framebuffer()
         m_color_texture_multisample->set_debug_label("Viewport Window Multisample Color");
         float clear_value[4] = {1.0f, 0.0f, 1.0f, 1.0f };
         gl::clear_tex_image(m_color_texture_multisample->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
-        //gl::bind_texture(gl::Texture_target::texture_2d_multisample, m_color_texture_multisample->gl_name());
-        //gl::bind_texture(gl::Texture_target::texture_2d_multisample, 0);
     }
 
     {
@@ -312,8 +274,8 @@ void Viewport_window::update_framebuffer()
         gl::named_framebuffer_draw_buffers(m_framebuffer_multisample->gl_name(), 1, &draw_buffers[0]);
         gl::named_framebuffer_read_buffer (m_framebuffer_multisample->gl_name(), gl::Color_buffer::color_attachment0);
 
-        //log_framebuffer.trace("Multisample framebuffer:\n");
-        //dump_fbo(m_framebuffer_multisample->gl_name());
+        log_framebuffer.trace("Multisample framebuffer:\n");
+        dump_fbo(m_framebuffer_multisample->gl_name());
     }
 
     {
@@ -325,8 +287,8 @@ void Viewport_window::update_framebuffer()
         gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0};
         gl::named_framebuffer_draw_buffers(m_framebuffer_resolved->gl_name(), 1, &draw_buffers[0]);
 
-        //log_framebuffer.trace("Multisample resolved framebuffer:\n");
-        //dump_fbo(m_framebuffer_resolved->gl_name());
+        log_framebuffer.trace("Multisample resolved framebuffer:\n");
+        dump_fbo(m_framebuffer_resolved->gl_name());
     }
 }
 

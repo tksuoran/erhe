@@ -109,7 +109,11 @@ public:
         "Remove",
     };
 
+    auto get_priority_action() const -> Action;
     void set_priority_action(Action action);
+
+private:
+    Action m_priority_action{Action::select};
 
 private:
     auto get_action_tool(Action action) -> Tool*;

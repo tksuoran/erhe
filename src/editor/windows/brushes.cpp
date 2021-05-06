@@ -1,6 +1,9 @@
 #include "windows/brushes.hpp"
-#include "tools/pointer_context.hpp"
+#include "editor.hpp"
+#include "operations/operation_stack.hpp"
+#include "operations/insert_operation.hpp"
 #include "scene/scene_manager.hpp"
+#include "tools/pointer_context.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -19,8 +22,12 @@ auto Brushes::state() const -> Tool::State
     return m_state;
 }
 
-Brushes::Brushes(const shared_ptr<Scene_manager>& scene_manager)
-    : m_scene_manager(scene_manager)
+Brushes::Brushes(Editor&                                 editor,
+                 const std::shared_ptr<Operation_stack>& operation_stack,
+                 const shared_ptr<Scene_manager>&        scene_manager)
+    : m_editor         {editor}
+    , m_operation_stack{operation_stack}
+    , m_scene_manager  {scene_manager}
 {
     const auto& materials = scene_manager->materials();
     for (auto material : materials)
@@ -51,8 +58,26 @@ void Brushes::add_material(const shared_ptr<Material>& material)
     m_material_names.push_back(material->name.c_str());
 }
 
+void Brushes::cancel_ready()
+{
+    m_state = State::passive;
+    if (m_brush_mesh)
+    {
+        remove_hover_mesh();
+    }
+}
+
 auto Brushes::update(Pointer_context& pointer_context) -> bool
 {
+    if (m_editor.get_priority_action() != Editor::Action::add)
+    {
+        if (m_brush_mesh)
+        {
+            remove_hover_mesh();
+        }
+        return false;
+    }
+
     m_hover_content  = pointer_context.hover_content;
     m_hover_tool     = pointer_context.hover_tool;
     m_hover_position = m_hover_content && pointer_context.hover_valid ? pointer_context.position_in_world() : std::optional<glm::vec3>{};
@@ -73,8 +98,10 @@ auto Brushes::update(Pointer_context& pointer_context) -> bool
 
     if (pointer_context.mouse_button[Mouse_button_left].released && m_brush_mesh)
     {
-        m_brush_mesh->visibility_mask |= erhe::scene::Mesh::c_visibility_id;
-        m_brush_mesh.reset();
+        //m_brush_mesh->visibility_mask |= erhe::scene::Mesh::c_visibility_id;
+        //m_brush_mesh.reset();
+        do_insert_operation();
+        remove_hover_mesh();
         m_state = State::passive;
         return true;
     }
@@ -85,17 +112,6 @@ auto Brushes::update(Pointer_context& pointer_context) -> bool
 void Brushes::render(Render_context& render_context)
 {
     static_cast<void>(render_context);
-//    ZoneScoped;
-//
-//    if (m_selected_brush == 0)
-//    {
-//        return;
-//    }
-//
-//    if (m_hover_content && m_hover_position.has_value() && m_hover_normal.has_value())
-//    {
-//        const auto& meshes = m_scene_manager->content_layer()->meshes;
-//    }
 }
 
 void Brushes::render_update()
@@ -103,19 +119,8 @@ void Brushes::render_update()
     update_mesh();
 }
 
-void Brushes::update_mesh_node_transform()
+auto Brushes::get_brush_transform() const -> glm::mat4
 {
-    if (!m_hover_position.has_value())
-    {
-        return;
-    }
-    auto node = m_brush_mesh->node;
-    if (node == nullptr)
-    {
-        // unexpected
-        return;
-    }
-
     glm::vec3 N = m_hover_normal.has_value() ? m_hover_normal.value() : glm::vec3(0.0f, 1.0f, 0.0f);
     glm::vec3 T = erhe::toolkit::min_axis(N);
     glm::vec3 B = glm::normalize(glm::cross(T, N));
@@ -135,37 +140,94 @@ void Brushes::update_mesh_node_transform()
     rotate = glm::transpose(rotate);
     glm::mat4 translate_to_world = create_translation(P);
 
-    node->transforms.parent_from_node.set(translate_to_world * rotate * scale * translate);
+    return translate_to_world * rotate * scale * translate;
+}
+
+void Brushes::update_mesh_node_transform()
+{
+    if (!m_hover_position.has_value())
+    {
+        return;
+    }
+    auto node = m_brush_mesh->node;
+    if (node == nullptr)
+    {
+        // unexpected
+        return;
+    }
+
+    auto transform = get_brush_transform();
+    node->transforms.parent_from_node.set(transform);
+}
+
+void Brushes::do_insert_operation()
+{
+    if (!m_hover_position.has_value())
+    {
+        return;
+    }
+
+    auto transform          = get_brush_transform();
+    auto primitive_geometry = m_brushes[m_selected_brush];
+    auto material           = m_materials[m_selected_material];
+
+    auto node = make_shared<erhe::scene::Node>();
+    node->parent = nullptr; // TODO
+    node->transforms.parent_from_node.set(transform);
+    node->update();
+
+    auto mesh = make_shared<erhe::scene::Mesh>(primitive_geometry->source_geometry->name(), node);
+    node->reference_count++;
+    mesh->primitives.emplace_back(primitive_geometry, material);
+    mesh->node->reference_count++;
+
+    Mesh_insert_remove_operation::Context context;
+    context.item          = mesh;
+    context.mode          = Scene_item_operation::Mode::insert;
+    context.scene_manager = m_scene_manager;
+
+    auto op = std::make_shared<Mesh_insert_remove_operation>(context);
+    m_operation_stack->push(op);
+}
+
+void Brushes::add_hover_mesh()
+{
+    if ((m_selected_brush == 0) || !m_hover_position.has_value())
+    {
+        return;
+    }
+    std::string name = m_brush_names[m_selected_brush];
+    auto material = m_materials[m_selected_material];
+    auto primitive_geometry = m_brushes[m_selected_brush];
+    m_brush_mesh = m_scene_manager->make_mesh_node(name, primitive_geometry, material);
+    m_brush_mesh->visibility_mask &= ~(erhe::scene::Mesh::c_visibility_id);// |
+                                        //erhe::scene::Mesh::c_visibility_shadow_cast);
+    update_mesh_node_transform();
+}
+
+void Brushes::remove_hover_mesh()
+{
+    auto layer = m_scene_manager->content_layer();
+    auto& meshes = layer->meshes;
+    auto i = std::remove(meshes.begin(), meshes.end(), m_brush_mesh);
+    if (i != meshes.end())
+    {
+        meshes.erase(i, meshes.end());
+    }
+    m_brush_mesh.reset();
 }
 
 void Brushes::update_mesh()
 {
-    auto primitive_geometry = m_brushes[m_selected_brush];
     if (!m_brush_mesh)
     {
-        if ((m_selected_brush == 0) || !m_hover_position.has_value())
-        {
-            return;
-        }
-        std::string name = m_brush_names[m_selected_brush];
-        auto material = m_materials[m_selected_material];
-        m_brush_mesh = m_scene_manager->make_mesh_node(name, primitive_geometry, material);
-        m_brush_mesh->visibility_mask &= ~(erhe::scene::Mesh::c_visibility_id);// |
-                                           //erhe::scene::Mesh::c_visibility_shadow_cast);
-        update_mesh_node_transform();
+        add_hover_mesh();
         return;
     }
 
-    auto layer = m_scene_manager->content_layer();
-    auto& meshes = layer->meshes;
     if ((m_selected_brush == 0) || !m_hover_position.has_value())
     {
-        auto i = std::remove(meshes.begin(), meshes.end(), m_brush_mesh);
-        if (i != meshes.end())
-        {
-            meshes.erase(i, meshes.end());
-        }
-        m_brush_mesh.reset();
+        remove_hover_mesh();
         return;
     }
 

@@ -20,7 +20,7 @@ Fly_camera_tool::Fly_camera_tool(const shared_ptr<Scene_manager>& scene_manager)
     : m_scene_manager(scene_manager)
 {
     auto& camera = m_scene_manager->camera();
-    m_camera_controller.set_frame(camera.node());
+    m_camera_controller.set_frame(camera.node().get());
 }
 
 void Fly_camera_tool::x_pos_control(bool pressed)

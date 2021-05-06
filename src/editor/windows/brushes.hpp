@@ -25,13 +25,18 @@ namespace erhe::scene
 namespace editor
 {
 
+class Editor;
+class Operation_stack;
+
 class Brushes
     : public Tool
 {
 public:
     auto name() -> const char* override { return "Brushes"; }
 
-    explicit Brushes(const std::shared_ptr<Scene_manager>& scene_manager);
+    explicit Brushes(Editor&                                 editor,
+                     const std::shared_ptr<Operation_stack>& operation_stack,
+                     const std::shared_ptr<Scene_manager>&   scene_manager);
 
     virtual ~Brushes() = default;
 
@@ -45,6 +50,8 @@ public:
 
     auto state() const -> State override;
 
+    void cancel_ready() override;
+
     void add_brush(const std::shared_ptr<erhe::primitive::Primitive_geometry>& geometry);
 
     void add_material(const std::shared_ptr<erhe::primitive::Material>& material);
@@ -52,8 +59,18 @@ public:
 private:
     void update_mesh();
 
+    auto get_brush_transform() const -> glm::mat4;
+
+    void do_insert_operation();
+
+    void add_hover_mesh();
+
+    void remove_hover_mesh();
+
     void update_mesh_node_transform();
 
+    Editor&                                                           m_editor;
+    std::shared_ptr<Operation_stack>                                  m_operation_stack;
     std::shared_ptr<Scene_manager>                                    m_scene_manager;
     std::vector<std::shared_ptr<erhe::primitive::Primitive_geometry>> m_brushes;
     std::vector<std::shared_ptr<erhe::primitive::Material>>           m_materials;

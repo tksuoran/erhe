@@ -18,7 +18,7 @@ class ICamera
 {
 public:
     virtual void update         (Viewport viewport) = 0;
-    virtual auto node           () const -> Node* = 0;
+    virtual auto node           () const -> const std::shared_ptr<Node>& = 0;
     virtual auto projection     () -> Projection* = 0;
     virtual auto projection     () const -> const Projection* = 0;
     virtual auto clip_from_node () const -> glm::mat4 = 0;
@@ -31,8 +31,8 @@ class Camera
     : public ICamera
 {
 public:
-    Camera(const std::string& name, 
-           Node*              node)
+    Camera(const std::string&           name, 
+           const std::shared_ptr<Node>& node)
         : m_name(name)
         , m_node(node)
     {
@@ -47,7 +47,7 @@ public:
         return m_name;
     }
 
-    auto node() const -> Node* override
+    auto node() const -> const std::shared_ptr<Node>& override
     {
         return m_node;
     }
@@ -82,9 +82,9 @@ public:
         return m_transforms.clip_from_world.inverse_matrix();
     }
 
-    std::string m_name;
-    Node*       m_node{nullptr};
-    Projection  m_projection;
+    std::string           m_name;
+    std::shared_ptr<Node> m_node;
+    Projection            m_projection;
 
     struct Transforms
     {

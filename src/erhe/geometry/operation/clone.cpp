@@ -7,7 +7,7 @@ Clone::Clone(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
     for (Point_id src_point_id = 0,
-         point_end = m_source.point_count();
+         point_end = source.point_count();
          src_point_id < point_end;
          ++src_point_id)
     {
@@ -15,7 +15,7 @@ Clone::Clone(Geometry& src, Geometry& destination)
     }
 
     for (Polygon_id src_polygon_id = 0,
-         polygon_end = m_source.polygon_count();
+         polygon_end = source.polygon_count();
          src_polygon_id < polygon_end;
          ++src_polygon_id)
     {

@@ -27,6 +27,7 @@ namespace erhe::scene
 namespace editor
 {
 
+class Operation_stack;
 class Line_renderer;
 class Scene_manager;
 class Text_renderer;
@@ -49,8 +50,9 @@ public:
         "World"
     };
 
-    Trs_tool(const std::shared_ptr<Scene_manager>&  scene_manager,
-             const std::shared_ptr<Selection_tool>& selection_tool);
+    Trs_tool(const std::shared_ptr<Operation_stack>& operation_stack,
+             const std::shared_ptr<Scene_manager>&   scene_manager,
+             const std::shared_ptr<Selection_tool>&  selection_tool);
 
     virtual ~Trs_tool() = default;
 
@@ -151,6 +153,7 @@ private:
         return m_visualization.root;
     }
 
+    std::shared_ptr<Operation_stack>           m_operation_stack;
     std::shared_ptr<Scene_manager>             m_scene_manager;
     State                                      m_state        {State::passive};
     Handle                                     m_active_handle{Handle::e_handle_none};
@@ -162,6 +165,7 @@ private:
     bool                                       m_rotate_snap_enable   {false};
     float                                      m_translate_snap       {0.1f};
     float                                      m_rotate_snap          {15.0f};
+    erhe::scene::Node::Transforms              m_before;
 
     // These are for debug rendering
     struct Debug_rendering

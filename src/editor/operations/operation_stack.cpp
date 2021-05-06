@@ -30,7 +30,7 @@ void Operation_stack::redo()
     }
     auto operation = m_undone.top();
     m_undone.pop();
-    operation->undo();
+    operation->execute();
     m_executed.push(operation);
 }
 

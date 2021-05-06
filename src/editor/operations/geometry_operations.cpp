@@ -8,6 +8,7 @@
 #include "erhe/geometry/operation/conway_dual_operator.hpp"
 #include "erhe/geometry/operation/conway_ambo_operator.hpp"
 #include "erhe/geometry/operation/conway_truncate_operator.hpp"
+#include "erhe/geometry/operation/conway_snub_operator.hpp"
 
 namespace editor
 {
@@ -45,6 +46,11 @@ Ambo_operator::Ambo_operator(Context& context)
 Truncate_operator::Truncate_operator(Context& context)
 {
     make_entries(context, erhe::geometry::operation::truncate);
+}
+
+Snub_operator::Snub_operator(Context& context)
+{
+    make_entries(context, erhe::geometry::operation::snub);
 }
 
 } // namespace editor

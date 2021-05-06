@@ -26,11 +26,11 @@ Subdivide::Subdivide(Geometry& src, Geometry& destination)
         ZoneScopedN("Subdivide");
 
         for (Polygon_id src_polygon_id = 0,
-             polygon_end = m_source.polygon_count();
+             polygon_end = source.polygon_count();
              src_polygon_id < polygon_end;
              ++src_polygon_id)
         {
-            Polygon& src_polygon = m_source.polygons[src_polygon_id];
+            Polygon& src_polygon = source.polygons[src_polygon_id];
 
             if (src_polygon.corner_count == 3)
             {
@@ -44,18 +44,18 @@ Subdivide::Subdivide(Geometry& src, Geometry& destination)
                 Polygon_corner_id src_polygon_next_corner_id     = src_polygon.first_polygon_corner_id + (src_polygon.corner_count + i - 1) % src_polygon.corner_count;
                 Polygon_corner_id src_polygon_corner_id          = src_polygon.first_polygon_corner_id + i;
                 Polygon_corner_id src_polygon_previous_corner_id = src_polygon.first_polygon_corner_id + (i + 1) % src_polygon.corner_count;
-                Corner_id         src_previous_corner_id         = m_source.polygon_corners[src_polygon_previous_corner_id];
-                Corner_id         src_corner_id                  = m_source.polygon_corners[src_polygon_corner_id];
-                Corner_id         src_next_corner_id             = m_source.polygon_corners[src_polygon_next_corner_id];
-                Corner&           src_previous_corner            = m_source.corners[src_previous_corner_id];
-                Corner&           src_corner                     = m_source.corners[src_corner_id];
-                Corner&           src_next_corner                = m_source.corners[src_next_corner_id];
+                Corner_id         src_previous_corner_id         = source.polygon_corners[src_polygon_previous_corner_id];
+                Corner_id         src_corner_id                  = source.polygon_corners[src_polygon_corner_id];
+                Corner_id         src_next_corner_id             = source.polygon_corners[src_polygon_next_corner_id];
+                Corner&           src_previous_corner            = source.corners[src_previous_corner_id];
+                Corner&           src_corner                     = source.corners[src_corner_id];
+                Corner&           src_next_corner                = source.corners[src_next_corner_id];
                 Point_id          a                              = src_previous_corner.point_id;
                 Point_id          b                              = src_corner.point_id;
                 Point_id          c                              = src_next_corner.point_id;
                 Polygon_id        new_polygon_id                 = make_new_polygon_from_polygon(src_polygon_id);
-                Point_id          previous_edge_midpoint         = get_edge_midpoint(a, b);
-                Point_id          next_edge_midpoint             = get_edge_midpoint(b, c);
+                Point_id          previous_edge_midpoint         = get_edge_new_point(a, b);
+                Point_id          next_edge_midpoint             = get_edge_new_point(b, c);
                 if (previous_edge_midpoint == std::numeric_limits<uint32_t>::max())
                 {
                     log_subdivide.warn("midpoint for edge {} {} not found\n", std::min(a, b), std::max(a, b));
@@ -74,22 +74,12 @@ Subdivide::Subdivide(Geometry& src, Geometry& destination)
         }
     }
 
-    {
-        ZoneScopedN("post-processing");
-
-        destination.make_point_corners();
-        destination.build_edges();
-        interpolate_all_property_maps();
-        destination.compute_point_normals(c_point_normals_smooth);
-        destination.compute_polygon_centroids();
-        destination.generate_polygon_texture_coordinates();
-        destination.compute_tangents();
-    }
+    post_processing();
 }
 
-auto subdivide(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry
+auto subdivide(Geometry& source) -> Geometry
 {
-    erhe::geometry::Geometry result(fmt::format("subdivide({})", source.name()));
+    Geometry result(fmt::format("subdivide({})", source.name()));
     Subdivide operation(source, result);
     return result;
 }

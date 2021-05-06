@@ -17,11 +17,11 @@ Triangulate::Triangulate(Geometry& src, Geometry& destination)
         ZoneScopedN("Subdivide");
 
         for (Polygon_id src_polygon_id = 0,
-             polygon_end = m_source.polygon_count();
+             polygon_end = source.polygon_count();
              src_polygon_id < polygon_end;
              ++src_polygon_id)
         {
-            Polygon& src_polygon = m_source.polygons[src_polygon_id];
+            Polygon& src_polygon = source.polygons[src_polygon_id];
 
             if (src_polygon.corner_count == 3)
             {
@@ -34,9 +34,9 @@ Triangulate::Triangulate(Geometry& src, Geometry& destination)
             {
                 Polygon_corner_id src_polygon_corner_id      = src_polygon.first_polygon_corner_id + i;
                 Polygon_corner_id src_polygon_next_corner_id = src_polygon.first_polygon_corner_id + (i + 1) % src_polygon.corner_count;
-                Corner_id         src_corner_id              = m_source.polygon_corners[src_polygon_corner_id];
-                Corner_id         src_next_corner_id         = m_source.polygon_corners[src_polygon_next_corner_id];
-                Polygon_id        new_polygon_id             = m_destination.make_polygon();
+                Corner_id         src_corner_id              = source.polygon_corners[src_polygon_corner_id];
+                Corner_id         src_next_corner_id         = source.polygon_corners[src_polygon_next_corner_id];
+                Polygon_id        new_polygon_id             = destination.make_polygon();
                 make_new_corner_from_polygon_centroid(new_polygon_id, src_polygon_id);
                 make_new_corner_from_corner(new_polygon_id, src_corner_id);
                 make_new_corner_from_corner(new_polygon_id, src_next_corner_id);
@@ -44,22 +44,12 @@ Triangulate::Triangulate(Geometry& src, Geometry& destination)
         }
     }
 
-    {
-        ZoneScopedN("post-processing");
-
-        destination.make_point_corners();
-        destination.build_edges();
-        interpolate_all_property_maps();
-        destination.compute_point_normals(c_point_normals_smooth);
-        destination.compute_polygon_centroids();
-        destination.generate_polygon_texture_coordinates();
-        destination.compute_tangents();
-    }
+    post_processing();
 }
 
-auto triangulate(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry
+auto triangulate(Geometry& source) -> Geometry
 {
-    erhe::geometry::Geometry result(fmt::format("triangulate({})", source.name()));
+    Geometry result(fmt::format("triangulate({})", source.name()));
     Triangulate operation(source, result);
     return result;
 }

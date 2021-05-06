@@ -102,7 +102,8 @@ void Editor::initialize_component()
     if (m_scene_manager)
     {
         m_selection_tool      = make_shared<Selection_tool     >(m_scene_manager);
-        m_brushes             = make_shared<Brushes            >(m_scene_manager);
+        m_operation_stack     = make_shared<Operation_stack    >();
+        m_brushes             = make_shared<Brushes            >(*this, m_operation_stack, m_scene_manager);
         m_camera_properties   = make_shared<Camera_properties  >(m_scene_manager);
         m_hover_tool          = make_shared<Hover_tool         >(m_scene_manager);
         m_fly_camera_tool     = make_shared<Fly_camera_tool    >(m_scene_manager);
@@ -110,9 +111,8 @@ void Editor::initialize_component()
         m_material_properties = make_shared<Material_properties>(m_scene_manager, m_selection_tool);
         m_mesh_properties     = make_shared<Mesh_properties    >(m_scene_manager, m_selection_tool);
         m_node_properties     = make_shared<Node_properties    >(m_scene_manager, m_selection_tool);
-        m_trs_tool            = make_shared<Trs_tool           >(m_scene_manager, m_selection_tool);
+        m_trs_tool            = make_shared<Trs_tool           >(m_operation_stack, m_scene_manager, m_selection_tool);
         m_viewport_window     = make_shared<Viewport_window    >();
-        m_operation_stack     = make_shared<Operation_stack    >();
         m_operations          = make_shared<Operations         >(*this, m_operation_stack, m_selection_tool, m_scene_manager);
         register_background_tool(m_hover_tool.get());
         register_tool  (m_trs_tool.get());
@@ -711,23 +711,46 @@ auto Editor::get_action_tool(Action action) -> Tool*
         case Action::select:    return m_selection_tool.get();
         case Action::add:       return m_brushes.get();
         case Action::remove:    return m_brushes.get();
-        case Action::translate:
-            m_trs_tool->set_rotate(false);
-            m_trs_tool->set_translate(true);
-            return m_trs_tool.get();
-        case Action::rotate:
-            m_trs_tool->set_rotate(false);
-            m_trs_tool->set_translate(true);
-            return m_trs_tool.get();
+        case Action::translate: return m_trs_tool.get();
+        case Action::rotate:    return m_trs_tool.get();
         default:
             return nullptr;
     }
 }
 
+auto Editor::get_priority_action() const -> Action
+{
+    return m_priority_action;
+}
+
 void Editor::set_priority_action(Action action)
 {
     log_tools.trace("set_priority_action(action = {})\n", c_action_strings[static_cast<int>(action)]);
+    m_priority_action = action;
     auto* tool = get_action_tool(action);
+
+    switch (action)
+    {
+        case Action::translate:
+        {
+            m_trs_tool->set_rotate(false);
+            m_trs_tool->set_translate(true);
+            break;
+        }
+        case Action::rotate:
+        {
+            m_trs_tool->set_rotate(true);
+            m_trs_tool->set_translate(false);
+            break;
+        }
+        default:
+        {
+            m_trs_tool->set_rotate(false);
+            m_trs_tool->set_translate(false);
+            break;
+        }
+    }
+
     if (tool == nullptr)
     {
         log_tools.trace("tool not found\n");

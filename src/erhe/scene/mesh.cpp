@@ -3,9 +3,9 @@
 namespace erhe::scene
 {
 
-Mesh::Mesh(const std::string&         name,
-           Node*                      node,
-           erhe::primitive::Primitive primitive)
+Mesh::Mesh(const std::string&           name,
+           const std::shared_ptr<Node>& node,
+           erhe::primitive::Primitive   primitive)
     : name{name}
     , node{node}
 {

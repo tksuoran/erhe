@@ -327,7 +327,7 @@ void main() {
     }
     //out_color.rgb = srgb_to_linear(0.5 * n + vec3(0.5));
     //out_color.rgb = srgb_to_linear(0.5 * t + vec3(0.5));
-    out_color.rgb = srgb_to_linear(0.5 * b + vec3(0.5));
+    //out_color.rgb = srgb_to_linear(0.5 * b + vec3(0.5));
     //out_color.rgb = vec3(v_tangent_scale * 0.5 + 0.5);
     //out_color.r = srgb_to_linear(v_texcoord.x * 1.0);
     //out_color.g = srgb_to_linear(v_texcoord.y * 1.0);

@@ -117,9 +117,8 @@ auto Programs::make_program(const std::string&              name,
 {
     ZoneScoped;
 
-    log_programs.info("Programs::make_program({})\n", name);
-
-    log_programs.info("current directory is {}\n", std::filesystem::current_path().string());
+    log_programs.trace("Programs::make_program({})\n", name);
+    log_programs.trace("current directory is {}\n", std::filesystem::current_path().string());
 
     std::filesystem::path vs_path = m_shader_path / std::filesystem::path(name + ".vert");
     std::filesystem::path gs_path = m_shader_path / std::filesystem::path(name + ".geom");

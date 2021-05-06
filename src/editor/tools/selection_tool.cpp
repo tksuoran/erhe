@@ -54,7 +54,7 @@ void Selection_tool::window(Pointer_context&)
             continue;
         }
         ImGui::Text("Mesh: %s", mesh->name.c_str());
-        auto* node = mesh->node;
+        auto* node = mesh->node.get();
         if (node != nullptr)
         {
             ImGui::Text("Node: %s", node->name.c_str());

@@ -13,6 +13,8 @@ set(source_list
     operation/conway_ambo_operator.cpp
     operation/conway_dual_operator.hpp
     operation/conway_dual_operator.cpp
+    operation/conway_snub_operator.hpp
+    operation/conway_snub_operator.cpp
     operation/conway_truncate_operator.hpp
     operation/conway_truncate_operator.cpp
     operation/sqrt3_subdivision.cpp

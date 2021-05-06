@@ -147,7 +147,7 @@ void Hover_tool::window(Pointer_context&)
     if (m_hover_mesh != nullptr)
     {
         ImGui::Text("Mesh: %s", m_hover_mesh->name.c_str());
-        auto* node = m_hover_mesh->node;
+        auto* node = m_hover_mesh->node.get();
         if (node != nullptr)
         {
             ImGui::Text("Node: %s", node->name.c_str());

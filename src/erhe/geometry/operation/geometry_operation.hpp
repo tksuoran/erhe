@@ -14,35 +14,43 @@ class Geometry_operation
 {
 public:
     explicit Geometry_operation(Geometry& source, Geometry& destination)
-        : m_source{source}
-        , m_destination{destination}
+        : source{source}
+        , destination{destination}
     {
     }
 
-protected:
     static constexpr const size_t s_grow_size = 4096;
-    Geometry&                                              m_source;
-    Geometry&                                              m_destination;
-    std::vector<Point_id  >                                m_point_old_to_new;
-    std::vector<Polygon_id>                                m_polygon_old_to_new;
-    std::vector<Corner_id >                                m_corner_old_to_new;
-    std::vector<Edge_id   >                                m_edge_old_to_new;
-    std::vector<Point_id  >                                m_old_polygon_centroid_to_new_points;
-    std::vector<std::vector<std::pair<float, Point_id  >>> m_new_point_sources;
-    std::vector<std::vector<std::pair<float, Corner_id >>> m_new_point_corner_sources;
-    std::vector<std::vector<std::pair<float, Corner_id >>> m_new_corner_sources;
-    std::vector<std::vector<std::pair<float, Polygon_id>>> m_new_polygon_sources;
-    std::vector<std::vector<std::pair<float, Edge_id   >>> m_new_edge_sources;
+    Geometry&                                              source;
+    Geometry&                                              destination;
+    std::vector<Point_id  >                                point_old_to_new;
+    std::vector<Polygon_id>                                polygon_old_to_new;
+    std::vector<Corner_id >                                corner_old_to_new;
+    std::vector<Edge_id   >                                edge_old_to_new;
+    std::vector<Point_id  >                                old_polygon_centroid_to_new_points;
+    std::vector<std::vector<std::pair<float, Point_id  >>> new_point_sources;
+    std::vector<std::vector<std::pair<float, Corner_id >>> new_point_corner_sources;
+    std::vector<std::vector<std::pair<float, Corner_id >>> new_corner_sources;
+    std::vector<std::vector<std::pair<float, Polygon_id>>> new_polygon_sources;
+    std::vector<std::vector<std::pair<float, Edge_id   >>> new_edge_sources;
 
-    std::vector<Point_id> m_old_edge_to_new_midpoints;
+private:
+    static constexpr const size_t s_max_edge_point_slots = 300;
+    std::vector<Point_id> m_old_edge_to_new_points;
+
+public:
+    void post_processing();
 
     void make_points_from_points();
 
     void make_polygon_centroids();
 
+    void reserve_edge_to_new_points();
+
+    auto find_or_make_point_from_edge(Point_id a, Point_id b, size_t count = 1) -> Point_id;
+
     void make_edge_midpoints(const std::initializer_list<float> relative_positions = { 0.5f } );
 
-    auto get_edge_midpoint(Point_id a, Point_id b) const -> Point_id;
+    auto get_edge_new_point(Point_id a, Point_id b) const -> Point_id;
 
     // Creates a new point to Destination from old point.
     // The new point is linked to the old point in Source.
@@ -103,18 +111,6 @@ protected:
     void build_destination_edges_with_sourcing();
 
     void interpolate_all_property_maps();
-
-    auto destination()
-    -> Geometry&
-    {
-        return m_destination;
-    }
-
-    auto destination() const
-    -> const Geometry&
-    {
-        return m_destination;
-    }
 };
 
 } // namespace namespace geometry

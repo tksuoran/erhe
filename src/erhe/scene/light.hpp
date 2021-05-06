@@ -31,7 +31,8 @@ public:
         "Spot"
     };
 
-    Light(const std::string& name, gsl::not_null<Node*> node)
+    Light(const std::string&           name,
+          const std::shared_ptr<Node>& node)
         : m_name(name)
         , m_node(node)
     {
@@ -54,7 +55,7 @@ public:
         return m_name;
     }
 
-    auto node() const -> Node* override
+    auto node() const -> const std::shared_ptr<Node>& override
     {
         return m_node;
     }
@@ -100,9 +101,9 @@ public:
     }
 
 
-    std::string m_name;
-    Node*       m_node{nullptr};
-    Projection  m_projection;
+    std::string           m_name;
+    std::shared_ptr<Node> m_node;
+    Projection            m_projection;
 
     struct Transforms
     {

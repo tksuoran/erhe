@@ -210,10 +210,12 @@ Trs_tool::Visualization::Visualization(Scene_manager* scene_manager)
     update_transforms();
 }
 
-Trs_tool::Trs_tool(const std::shared_ptr<Scene_manager>&  scene_manager,
-                   const std::shared_ptr<Selection_tool>& selection_tool)
-    : m_scene_manager(scene_manager)
-    , m_visualization(scene_manager.get())
+Trs_tool::Trs_tool(const std::shared_ptr<Operation_stack>& operation_stack,
+                   const std::shared_ptr<Scene_manager>&   scene_manager,
+                   const std::shared_ptr<Selection_tool>&  selection_tool)
+    : m_operation_stack{operation_stack}
+    , m_scene_manager{scene_manager}
+    , m_visualization{scene_manager.get()}
 {
     ZoneScoped;
 
@@ -239,7 +241,7 @@ Trs_tool::Trs_tool(const std::shared_ptr<Scene_manager>&  scene_manager,
             {
                 if (mesh)
                 {
-                    auto* node = mesh->node;
+                    auto* node = mesh->node.get();
                     if (node != nullptr)
                     {
                         node_found = true;
