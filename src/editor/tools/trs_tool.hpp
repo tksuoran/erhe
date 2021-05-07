@@ -82,7 +82,7 @@ private:
 
     auto end(Pointer_context& pointer_context) -> bool;
 
-    void set_node(erhe::scene::Node* node);
+    void set_node(std::shared_ptr<erhe::scene::Node> node);
 
     auto is_x_translate_active() const -> bool;
     auto is_y_translate_active() const -> bool;
@@ -90,7 +90,7 @@ private:
 
     auto is_rotate_active() const -> bool;
 
-    enum class Handle : int
+    enum class Handle : unsigned int
     {
         e_handle_none         = 0,
         e_handle_translate_x  = 1,
@@ -104,7 +104,7 @@ private:
         e_handle_rotate_z     = 9,
     };
 
-    enum class Handle_type : int
+    enum class Handle_type : unsigned int
     {
         e_handle_type_none            = 0,
         e_handle_type_translate_axis  = 1,
@@ -115,8 +115,6 @@ private:
     void update_axis_translate(Pointer_context& pointer_context);
 
     void update_plane_translate(Pointer_context& pointer_context);
-
-    auto rotation_angle(glm::vec3 p) -> float;
 
     void update_rotate(Pointer_context& pointer_context);
 
@@ -142,13 +140,26 @@ private:
 
     auto get_axis_color(Handle handle) const -> uint32_t;
 
-    auto angle_of_rotation_for_point(glm::vec3 q) -> float;
-
     // Casts ray from current pointer context position
     // and intersects it to plane of current handle;
     auto project_pointer_to_plane(Pointer_context& pointer_context, glm::vec3 p, glm::vec3& q) -> bool;
 
-    auto root() -> erhe::scene::Node&
+    void update_transforms()
+    {
+        if (root() == nullptr)
+        {
+            return;
+        }
+        root()->update();
+        m_visualization.update_transforms();
+    }
+
+    void update_visibility()
+    {
+        m_visualization.update_visibility(m_target_node != nullptr, m_active_handle);
+    }
+
+    auto root() -> erhe::scene::Node*
     {
         return m_visualization.root;
     }
@@ -159,8 +170,9 @@ private:
     Handle                                     m_active_handle{Handle::e_handle_none};
     std::optional<Selection_tool::Subcription> m_selection_subscription;
     std::map<erhe::scene::Mesh*, Handle>       m_handles;
-    erhe::scene::Node*                         m_host_original_parent {nullptr};
-    erhe::scene::Node*                         m_host_node            {nullptr};
+    //erhe::scene::Node*                         m_host_original_parent {nullptr};
+    std::shared_ptr<erhe::scene::Node>         m_target_node;
+    std::shared_ptr<erhe::scene::Node>         m_tool_node;
     bool                                       m_translate_snap_enable{false};
     bool                                       m_rotate_snap_enable   {false};
     float                                      m_translate_snap       {0.1f};
@@ -193,6 +205,7 @@ private:
         glm::vec3 position_in_root         {0.0f, 0.0f, 0.0f};
         glm::vec3 world_direction          {1.0f, 0.0f, 0.0f};
         float     initial_window_depth     {0.0f};
+        erhe::scene::Node::Transforms initial_transforms;
     };
     Drag m_drag;
 
@@ -228,8 +241,8 @@ private:
         bool  hide_inactive {true};
         float scale         {2.0f}; // 6.6 for debug
 
-        erhe::scene::Node                          root;
-        erhe::scene::Node                          scale_node;
+        erhe::scene::Node*                         root{nullptr};
+        erhe::scene::Node                          tool_node;
         std::shared_ptr<erhe::primitive::Material> x_material;
         std::shared_ptr<erhe::primitive::Material> y_material;
         std::shared_ptr<erhe::primitive::Material> z_material;

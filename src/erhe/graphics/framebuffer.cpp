@@ -58,7 +58,7 @@ void Framebuffer::create()
     {
         if (attachment.texture != nullptr)
         {
-#if 0 // Workaround suspected NVIDIA driver bug.
+#if 1 // Workaround suspected NVIDIA driver bug.
             if (attachment.texture->sample_count() > 0)
             {
                 auto target = attachment.texture->target();

@@ -82,11 +82,11 @@ private:
         static constexpr gl::Map_buffer_access_mask access_mask{gl::Map_buffer_access_mask::map_coherent_bit   |
                                                                 gl::Map_buffer_access_mask::map_persistent_bit |
                                                                 gl::Map_buffer_access_mask::map_read_bit};
-        enum class State
+        enum class State : unsigned int
         {
-            unused           = 0,
-            waiting_for_read = 1,
-            read_complete    = 2
+            unused = 0,
+            waiting_for_read,
+            read_complete
         };
 
         Id_frame_resources()

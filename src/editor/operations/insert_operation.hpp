@@ -38,7 +38,7 @@ class Scene_item_operation
     : public IOperation
 {
 public:
-    enum class Mode
+    enum class Mode : unsigned int
     {
         insert = 0,
         remove

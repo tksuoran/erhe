@@ -50,18 +50,17 @@ void Node_properties::window(Pointer_context&)
             {
                 ImGui::BeginGroup();
                 ImGui::Text("Transform Matrix");
-                if (ImGui::BeginTable("transform", 4))
+                for (int row = 0; row < 4; row++)
                 {
-                    for (int row = 0; row < 4; row++)
-                    {
-                        ImGui::TableNextRow();
-                        for (int column = 0; column < 4; column++)
-                        {
-                            ImGui::TableSetColumnIndex(column);
-                            ImGui::InputFloat("", &transform[column][row], 0.0f, 0.0f, "%.2f", 0);
-                        }
-                    }
-                    ImGui::EndTable();
+                    std::string label = fmt::format("M{}", row);
+                    glm::vec4 rowVector = glm::vec4(transform[0][row], transform[1][row], transform[2][row], transform[3][row]);
+                    ImGui::InputFloat4(label.c_str(), &rowVector.x, "%.3f");
+                    //for (int column = 0; column < 4; column++)
+                    //{
+                    //    std::string label = fmt::format("M{}{}", row, column);
+                    //    ImGui::TableSetColumnIndex(column);
+                    //    ImGui::InputFloat(label.c_str(), &transform[row][column], 0.0f, 0.0f, "%.2f", 0);
+                    //}
                 }
                 ImGui::EndGroup();
             }
@@ -71,9 +70,9 @@ void Node_properties::window(Pointer_context&)
                 ImGui::Text("Translation");
                 float range_min = -20.0f;
                 float range_max =  20.0f;
-                ImGui::InputFloat("X", &translation.x); //ImGui::SameLine(); ImGui::SliderFloat(nullptr, &translation.x, range_min, range_max, "%.2f");
-                ImGui::InputFloat("Y", &translation.y); //ImGui::SameLine(); ImGui::SliderFloat(nullptr, &translation.y, range_min, range_max, "%.2f");
-                ImGui::InputFloat("Z", &translation.z); //ImGui::SameLine(); ImGui::SliderFloat(nullptr, &translation.z, range_min, range_max, "%.2f");
+                ImGui::InputFloat("T.X", &translation.x); //ImGui::SameLine(); ImGui::SliderFloat(nullptr, &translation.x, range_min, range_max, "%.2f");
+                ImGui::InputFloat("T.Y", &translation.y); //ImGui::SameLine(); ImGui::SliderFloat(nullptr, &translation.y, range_min, range_max, "%.2f");
+                ImGui::InputFloat("T.Z", &translation.z); //ImGui::SameLine(); ImGui::SliderFloat(nullptr, &translation.z, range_min, range_max, "%.2f");
                 ImGui::EndGroup();
             }
             
@@ -82,9 +81,9 @@ void Node_properties::window(Pointer_context&)
                 ImGui::Text("Rotation");
                 float range_min = -glm::pi<float>();
                 float range_max =  glm::pi<float>();
-                ImGui::InputFloat("X", &euler_angles.x); // ImGui::SameLine(); ImGui::SliderFloat(nullptr, &euler_angles.x, range_min, range_max, "%.2f");
-                ImGui::InputFloat("Y", &euler_angles.y); // ImGui::SameLine(); ImGui::SliderFloat(nullptr, &euler_angles.y, range_min, range_max, "%.2f");
-                ImGui::InputFloat("Z", &euler_angles.z); // ImGui::SameLine(); ImGui::SliderFloat(nullptr, &euler_angles.z, range_min, range_max, "%.2f");
+                ImGui::InputFloat("R.X", &euler_angles.x); // ImGui::SameLine(); ImGui::SliderFloat(nullptr, &euler_angles.x, range_min, range_max, "%.2f");
+                ImGui::InputFloat("R.Y", &euler_angles.y); // ImGui::SameLine(); ImGui::SliderFloat(nullptr, &euler_angles.y, range_min, range_max, "%.2f");
+                ImGui::InputFloat("R.Z", &euler_angles.z); // ImGui::SameLine(); ImGui::SliderFloat(nullptr, &euler_angles.z, range_min, range_max, "%.2f");
                 ImGui::EndGroup();
             }
 

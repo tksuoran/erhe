@@ -92,13 +92,14 @@ public:
 
     void on_mouse_click(erhe::toolkit::Mouse_button button, int count) override;
 
-    enum class Action
+    enum class Action : unsigned int
     {
         select = 0,
         translate,
         rotate,
         add,
         remove,
+        count
     };
     static constexpr const char* c_action_strings[] =
     {

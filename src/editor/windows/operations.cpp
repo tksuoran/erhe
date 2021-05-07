@@ -33,13 +33,24 @@ void Operations::window(Pointer_context&)
 
     ImGui::Begin("Operations");
 
-    auto old_action = m_action;
-    int action_int = static_cast<int>(m_action);
-    ImGui::Combo("Action", &action_int, Editor::c_action_strings, IM_ARRAYSIZE(Editor::c_action_strings));
-    m_action = static_cast<Editor::Action>(action_int);
-    if (old_action != m_action)
+    auto activeAction = m_editor.get_priority_action();
+    for (unsigned int i = 0; i < static_cast<unsigned int>(Editor::Action::count); ++i)
     {
-        m_editor.set_priority_action(m_action);
+        auto buttonAction = static_cast<Editor::Action>(i);
+        bool isActive = buttonAction == activeAction;
+        if (isActive)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.3f, 0.4, 0.8f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.5, 0.9f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.5f, 0.6, 1.0f, 1.0f));
+        }
+        if (ImGui::Button(Editor::c_action_strings[i]) && (activeAction != buttonAction)) {
+            m_editor.set_priority_action(buttonAction);
+        }
+        if (isActive)
+        {
+            ImGui::PopStyleColor(3);
+        }
     }
 
     Mesh_operation::Context context;

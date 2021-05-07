@@ -15,7 +15,7 @@ namespace editor {
 using namespace glm;
 using namespace erhe::geometry;
 
-enum class Command
+enum class Command : unsigned int
 {
     Unknown = 0,
     Material_library,

@@ -33,6 +33,15 @@ public:
         return transforms.world_from_node.inverse_matrix();
     }
 
+    auto world_from_parent() const -> glm::mat4
+    {
+        if (parent != nullptr)
+        {
+            return parent->world_from_node();
+        }
+        return glm::mat4(1);
+    }
+
     auto position_in_world() const -> glm::vec4
     {
         return world_from_node() * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);

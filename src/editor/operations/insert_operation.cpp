@@ -12,6 +12,7 @@ Node_transform_operation::Node_transform_operation(Context context)
 void Node_transform_operation::execute()
 {
     m_context.node->transforms = m_context.after;
+    // TODO update, handling trs tool node
 }
 
 void Node_transform_operation::undo()

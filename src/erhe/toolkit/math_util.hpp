@@ -90,11 +90,6 @@ inline auto min_axis(glm::vec3 v)
     return vec3_unit_z;
 }
 
-constexpr glm::mat4 mat4_identity{1.0f, 0.0f, 0.0f, 0.0f,
-                                  0.0f, 1.0f, 0.0f, 0.0f,
-                                  0.0f, 0.0f, 1.0f, 0.0f,
-                                  0.0f, 0.0f, 0.0f, 1.0f};
-
 constexpr glm::mat4 mat4_swap_xy{0.0f, 1.0f, 0.0f, 0.0f,
                                  1.0f, 0.0f, 0.0f, 0.0f,
                                  0.0f, 0.0f, 1.0f, 0.0f,

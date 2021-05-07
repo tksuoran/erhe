@@ -30,7 +30,6 @@ private:
     std::shared_ptr<Operation_stack> m_operation_stack;
     std::shared_ptr<Selection_tool>  m_selection_tool;
     std::shared_ptr<Scene_manager>   m_scene_manager;
-    Editor::Action                   m_action{Editor::Action::select};
 };
 
 } // namespace editor

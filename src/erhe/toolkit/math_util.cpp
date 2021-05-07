@@ -405,7 +405,7 @@ auto create_look_at(vec3 eye, vec3 center, vec3 up0)
 #else
     if (eye == center)
     {
-        return mat4_identity;
+        return mat4(1);
     }
 
     vec3 back = glm::normalize(eye - center);

@@ -297,7 +297,7 @@ void Scene_manager::make_geometries()
         auto y_rotate_ring_mesh = make_mesh_node("Y ring", rotate_ring_pg, y_material, {}, nullptr, pos);
         auto z_rotate_ring_mesh = make_mesh_node("Z ring", rotate_ring_pg, z_material, {}, nullptr, pos);
 
-        x_rotate_ring_mesh->node->transforms.parent_from_node.set         (erhe::toolkit::mat4_identity);
+        x_rotate_ring_mesh->node->transforms.parent_from_node.set         ( glm::mat4(1));
         y_rotate_ring_mesh->node->transforms.parent_from_node.set_rotation( glm::pi<float>() / 2.0f, glm::vec3(0.0f, 0.0f, 1.0f));
         z_rotate_ring_mesh->node->transforms.parent_from_node.set_rotation(-glm::pi<float>() / 2.0f, glm::vec3(0.0f, 1.0f, 0.0f));
         return;
