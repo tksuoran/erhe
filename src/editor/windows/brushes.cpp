@@ -22,14 +22,15 @@ auto Brushes::state() const -> Tool::State
     return m_state;
 }
 
-Brushes::Brushes(Editor&                                 editor,
-                 const std::shared_ptr<Operation_stack>& operation_stack,
-                 const shared_ptr<Scene_manager>&        scene_manager)
-    : m_editor         {editor}
-    , m_operation_stack{operation_stack}
-    , m_scene_manager  {scene_manager}
+void Brushes::connect()
 {
-    const auto& materials = scene_manager->materials();
+    m_operation_stack = get<Operation_stack>();
+    m_scene_manager   = require<Scene_manager>();
+}
+
+void Brushes::initialize_component()
+{
+    const auto& materials = m_scene_manager->materials();
     for (auto material : materials)
     {
         add_material(material);
@@ -37,7 +38,7 @@ Brushes::Brushes(Editor&                                 editor,
 
     m_brushes.push_back({});
     m_brush_names.push_back("-");
-    const auto& primitive_geometries = scene_manager->primitive_geometries();
+    const auto& primitive_geometries = m_scene_manager->primitive_geometries();
     for (auto primitive_geometry : primitive_geometries)
     {
         add_brush(primitive_geometry);
@@ -69,7 +70,7 @@ void Brushes::cancel_ready()
 
 auto Brushes::update(Pointer_context& pointer_context) -> bool
 {
-    if (m_editor.get_priority_action() != Editor::Action::add)
+    if (pointer_context.priority_action != Action::add)
     {
         if (m_brush_mesh)
         {
@@ -249,6 +250,8 @@ void Brushes::window(Pointer_context&)
                      m_material_names.data(), static_cast<int>(m_material_names.size()));
     }
     ImGui::SliderFloat("Scale", &m_scale, 0.0f, 2.0f);
+    ImGui::Checkbox("Snap to Polygon", &m_snap_to_hover_polygon);
+    ImGui::Checkbox("Snap to Grid", &m_snap_to_grid);
     ImGui::End();
 }
 

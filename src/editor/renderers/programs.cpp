@@ -13,11 +13,9 @@ using erhe::graphics::Shader_stages;
 using erhe::graphics::Vertex_attribute;
 using erhe::log::Log;
 
-void Programs::connect(std::shared_ptr<erhe::graphics::Shader_monitor> shader_monitor)
+void Programs::connect()
 {
-    m_shader_monitor = shader_monitor;
-
-    initialization_depends_on(shader_monitor);
+    m_shader_monitor = require<erhe::graphics::Shader_monitor>();
 }
 
 

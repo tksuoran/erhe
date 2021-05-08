@@ -16,8 +16,12 @@ auto Fly_camera_tool::state() const -> Tool::State
     return m_state;
 }
 
-Fly_camera_tool::Fly_camera_tool(const shared_ptr<Scene_manager>& scene_manager)
-    : m_scene_manager(scene_manager)
+void Fly_camera_tool::connect()
+{
+    m_scene_manager = require<Scene_manager>();
+}
+
+void Fly_camera_tool::initialize_component()
 {
     auto& camera = m_scene_manager->camera();
     m_camera_controller.set_frame(camera.node().get());

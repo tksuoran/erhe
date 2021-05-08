@@ -48,10 +48,8 @@ public:
 
     virtual ~Id_renderer() = default;
 
-    void connect(std::shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker,
-                 std::shared_ptr<Scene_manager>                        scene_manager,
-                 std::shared_ptr<Programs>                             programs);
-
+    // Implements Component
+    void connect() override;
     void initialize_component() override;
 
     void render(erhe::scene::Viewport   viewport,

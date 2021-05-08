@@ -8,17 +8,20 @@ namespace editor
 class Line_renderer;
 
 class Grid_tool
-    : public Tool
+    : public erhe::components::Component
+    , public Tool
+    , public Window
 {
 public:
-    Grid_tool();
-
+    static constexpr const char* c_name = "Grid_tool";
+    Grid_tool() : erhe::components::Component(c_name) {}
     virtual ~Grid_tool() = default;
 
-    auto name() -> const char* override { return "Grid_tool"; }
-
+    // Implements Tool
     void render(Render_context& render_context) override;
+    auto description() -> const char* override { return c_name; }
 
+    // Implements Window
     void window(Pointer_context& pointer_context) override;
 
     void toolbar();

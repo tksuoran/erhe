@@ -9,14 +9,20 @@ namespace editor
 class Scene_manager;
 
 class Fly_camera_tool
-    : public Tool
+    : public erhe::components::Component
+    , public Tool
+    , public Window
 {
 public:
-    explicit Fly_camera_tool(const std::shared_ptr<Scene_manager>& scene_manager);
-
+    static constexpr const char* c_name = "Fly_camera_tool";
+    Fly_camera_tool() : erhe::components::Component(c_name) {}
     virtual ~Fly_camera_tool() = default;
 
-    auto name() -> const char* override { return "Fly_camera_tool"; }
+    // Implements Component
+    void connect() override;
+    void initialize_component() override;
+
+    auto description() -> const char* override { return c_name; }
 
     // Tool
     auto update(Pointer_context& pointer_context) -> bool override;

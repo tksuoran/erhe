@@ -46,9 +46,9 @@ Text_renderer::~Text_renderer()
 {
 }
 
-void Text_renderer::connect(std::shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker)
+void Text_renderer::connect()
 {
-    m_pipeline_state_tracker = pipeline_state_tracker;
+    m_pipeline_state_tracker = get<OpenGL_state_tracker>();
 }
 
 static constexpr const char* c_text_renderer_initialize_component = "Text_renderer::initialize_component()";

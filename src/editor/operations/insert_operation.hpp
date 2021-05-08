@@ -25,7 +25,7 @@ public:
         erhe::scene::Node::Transforms      after;
     };
 
-    Node_transform_operation(Context context);
+    explicit Node_transform_operation(Context context);
 
     void execute() override;
     void undo() override;
@@ -67,7 +67,7 @@ public:
         Mode                               mode;
     };
 
-    Mesh_insert_remove_operation(Context& context);
+    explicit Mesh_insert_remove_operation(Context& context);
 
     void execute() override;
     void undo() override;
@@ -89,7 +89,7 @@ public:
         Mode                                mode;
     };
 
-    Light_insert_remove_operation(Context& context);
+    explicit Light_insert_remove_operation(Context& context);
 
     void execute() override;
     void undo() override;

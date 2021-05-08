@@ -22,7 +22,6 @@ struct Render_context
 };
 
 class Tool
-    : public Window
 {
 public:
     enum class State : unsigned int
@@ -33,7 +32,7 @@ public:
         active
     };
 
-    virtual auto name() -> const char* = 0;
+    virtual auto description() -> const char* = 0;
 
     // Interaction with pointer
     virtual auto update(Pointer_context&) -> bool

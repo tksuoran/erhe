@@ -11,14 +11,18 @@ class Scene_manager;
 class Selection_tool;
 
 class Node_properties
-    : public Window
+    : public erhe::components::Component
+    , public Window
 {
 public:
-    Node_properties(const std::shared_ptr<Scene_manager>&  scene_manager,
-                    const std::shared_ptr<Selection_tool>& selection_tool);
-
+    static constexpr const char* c_name = "Node_properties";
+    Node_properties() : erhe::components::Component(c_name) {}
     virtual ~Node_properties() = default;
 
+    // Implements Component
+    void connect() override;
+
+    // Implements Window
     void window(Pointer_context& pointer_context) override;
 
 private:

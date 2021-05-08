@@ -40,9 +40,9 @@ using namespace gl;
 using namespace glm;
 using namespace std;
 
-void Base_renderer::base_connect(shared_ptr<Programs> programs)
+void Base_renderer::base_connect(erhe::components::Component* component)
 {
-    m_programs = programs;
+    m_programs = component->get<Programs>();
 }
 
 void Base_renderer::create_frame_resources(size_t material_count,

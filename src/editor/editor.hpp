@@ -50,34 +50,26 @@ class Viewport_window;
 class Window;
 
 class Editor
-    : public erhe::toolkit::View
-    , public erhe::components::Component
+    : public erhe::components::Component
+    , public erhe::toolkit::View
 {
 public:
+    static constexpr const char* c_name = "Editor";
     Editor();
 
     virtual ~Editor() = default;
 
-    void connect(std::shared_ptr<Application>                          application,
-                 std::shared_ptr<Forward_renderer>                     forward_renderer,
-                 std::shared_ptr<Id_renderer>                          id_renderer,
-                 std::shared_ptr<Scene_manager>                        scene_manager,
-                 std::shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker,
-                 std::shared_ptr<erhe::graphics::Shader_monitor>       shader_monitor,
-                 std::shared_ptr<Shadow_renderer>                      shadow_renderer,
-                 std::shared_ptr<Text_renderer>                        text_renderer,
-                 std::shared_ptr<Line_renderer>                        line_renderer);
+    // Implements Component
+    void connect() override;
+    void initialize_component() override;
 
     void disconnect();
 
-    void initialize_component() override;
-
+    // Implements View
     void update() override;
-
-    void render();
-
     void on_enter() override;
-
+    void on_mouse_move(double x, double y) override;
+    void on_mouse_click(erhe::toolkit::Mouse_button button, int count) override;
     void on_key_press(erhe::toolkit::Keycode code, uint32_t modifier_mask) override
     {
         on_key(true, code, modifier_mask);
@@ -88,30 +80,16 @@ public:
         on_key(false, code, modifier_mask);
     }
 
-    void on_mouse_move(double x, double y) override;
-
-    void on_mouse_click(erhe::toolkit::Mouse_button button, int count) override;
-
-    enum class Action : unsigned int
-    {
-        select = 0,
-        translate,
-        rotate,
-        add,
-        remove,
-        count
-    };
-    static constexpr const char* c_action_strings[] =
-    {
-        "Select",
-        "Translate",
-        "Rotate",
-        "Add",
-        "Remove",
-    };
+    void render();
 
     auto get_priority_action() const -> Action;
     void set_priority_action(Action action);
+
+    void register_tool(Tool* tool);
+
+    void register_background_tool(Tool* tool);
+
+    void register_window(Window* window);
 
 private:
     Action m_priority_action{Action::select};
@@ -144,12 +122,6 @@ private:
     void gui_begin_frame();
 
     void gui_render();
-
-    void register_tool(Tool* tool);
-
-    void register_background_tool(Tool* tool);
-
-    void register_window(Window* window);
 
     // Rendering
     auto is_primary_scene_output_framebuffer_ready() -> bool;

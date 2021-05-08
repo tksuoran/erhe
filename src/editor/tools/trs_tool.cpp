@@ -126,7 +126,7 @@ void Trs_tool::Visualization::update_visibility(bool visible, Handle active_hand
     z_rotate_ring_mesh   ->primitives.front().material = (active_handle == Handle::e_handle_rotate_z    ) ? highlight_material : z_material;
 }
 
-Trs_tool::Visualization::Visualization(Scene_manager* scene_manager)
+void Trs_tool::Visualization::initialize(Scene_manager* scene_manager)
 {
     if (scene_manager == nullptr)
     {
@@ -197,15 +197,18 @@ Trs_tool::Visualization::Visualization(Scene_manager* scene_manager)
     update_transforms();
 }
 
-Trs_tool::Trs_tool(const std::shared_ptr<Operation_stack>& operation_stack,
-                   const std::shared_ptr<Scene_manager>&   scene_manager,
-                   const std::shared_ptr<Selection_tool>&  selection_tool)
-    : m_operation_stack{operation_stack}
-    , m_scene_manager{scene_manager}
-    , m_visualization{scene_manager.get()}
+void Trs_tool::connect()
+{
+    m_operation_stack = get<Operation_stack>();
+    m_scene_manager   = require<Scene_manager>();
+    m_selection_tool  = require<Selection_tool>();
+}
+
+void Trs_tool::initialize_component()      
 {
     ZoneScoped;
 
+    m_visualization.initialize(m_scene_manager.get());
     m_handles[m_visualization.x_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_x;
     m_handles[m_visualization.x_arrow_cone_mesh    .get()] = Handle::e_handle_translate_x;
     m_handles[m_visualization.y_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_y;
@@ -219,7 +222,7 @@ Trs_tool::Trs_tool(const std::shared_ptr<Operation_stack>& operation_stack,
     m_handles[m_visualization.y_rotate_ring_mesh   .get()] = Handle::e_handle_rotate_y;
     m_handles[m_visualization.z_rotate_ring_mesh   .get()] = Handle::e_handle_rotate_z;
 
-    if (selection_tool)
+    if (m_selection_tool)
     {
         auto lambda = [this](const Selection_tool::Mesh_collection& meshes)
         {
@@ -242,7 +245,7 @@ Trs_tool::Trs_tool(const std::shared_ptr<Operation_stack>& operation_stack,
                 set_node({});
             }
         };
-        m_selection_subscription = selection_tool->subscribe_mesh_selection_change_notification(lambda);
+        m_selection_subscription = m_selection_tool->subscribe_mesh_selection_change_notification(lambda);
     }
 }
 

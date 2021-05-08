@@ -46,13 +46,10 @@ Line_renderer::~Line_renderer()
 {
 }
 
-void Line_renderer::connect(std::shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker,
-                            std::shared_ptr<erhe::graphics::Shader_monitor>       shader_monitor)
+void Line_renderer::connect()
 {
-    m_pipeline_state_tracker = pipeline_state_tracker;
-    m_shader_monitor = shader_monitor;
-
-    initialization_depends_on(shader_monitor);
+    m_pipeline_state_tracker = get<OpenGL_state_tracker>();
+    m_shader_monitor         = require<Shader_monitor>();
 }
 
 static constexpr const char* c_line_renderer_initialize_component = "Line_renderer::initialize_component()";

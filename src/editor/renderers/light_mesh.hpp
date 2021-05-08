@@ -28,8 +28,8 @@ public:
 
     virtual ~Light_mesh() = default;
 
-    void connect(std::shared_ptr<Programs> programs);
-
+    // Implements Component
+    void connect() override;
     void initialize_component() override;
 
     auto get_light_transform(erhe::scene::Light& light) -> glm::mat4;

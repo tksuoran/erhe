@@ -9,13 +9,15 @@ namespace editor
 {
 
 class Viewport_config
-    : public Window
+    : public erhe::components::Component
+    , public Window
 {
 public:
-    Viewport_config();
-
+    static constexpr const char* c_name = "Viewport_config";
+    Viewport_config() : erhe::components::Component(c_name) {}
     virtual ~Viewport_config() = default;
 
+    // Implements Window
     void window(Pointer_context& pointer_context) override;
 
     bool      polygon_fill         {true};

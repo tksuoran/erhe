@@ -21,6 +21,24 @@ namespace editor
 
 class Tool;
 
+enum class Action : unsigned int
+{
+    select = 0,
+    translate,
+    rotate,
+    add,
+    remove,
+    count
+};
+static constexpr const char* c_action_strings[] =
+{
+    "Select",
+    "Translate",
+    "Rotate",
+    "Add",
+    "Remove",
+};
+
 struct Pointer_context
 {
     auto position_in_world() const -> glm::vec3;
@@ -51,6 +69,7 @@ struct Pointer_context
         bool pressed {false};
         bool released{false};
     };
+    Action                priority_action{Action::select};
     Mouse_button          mouse_button[static_cast<int>(erhe::toolkit::Mouse_button_count)];
     bool                  mouse_moved     {false};
     double                mouse_x         {0.0f};

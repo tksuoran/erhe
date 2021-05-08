@@ -54,11 +54,9 @@ Scene_manager::Scene_manager()
 {
 }
 
-void Scene_manager::connect(std::shared_ptr<Programs> programs)
+void Scene_manager::connect()
 {
-    m_programs = programs;
-
-    initialization_depends_on(programs);
+    m_programs = require<Programs>();
 }
 
 void Scene_manager::initialize_component()

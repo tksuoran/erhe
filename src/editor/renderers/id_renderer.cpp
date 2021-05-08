@@ -42,17 +42,15 @@ Id_renderer::Id_renderer()
 {
 }
 
-void Id_renderer::connect(std::shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker,
-                          shared_ptr<Scene_manager>                             scene_manager,
-                          shared_ptr<Programs>                                  programs)
+void Id_renderer::connect()
 {
-    base_connect(programs);
+    base_connect(this);
 
-    m_pipeline_state_tracker = pipeline_state_tracker;
-    m_scene_manager          = scene_manager;
+    m_pipeline_state_tracker = erhe::components::Component::get<OpenGL_state_tracker>();
+    m_scene_manager          = require<Scene_manager>();
 
-    initialization_depends_on(scene_manager);
-    initialization_depends_on(programs);
+    initialization_depends_on(m_scene_manager);
+    initialization_depends_on(programs());
 }
 
 static constexpr const char* c_id_renderer_initialize_component = "Id_renderer::initialize_component()";

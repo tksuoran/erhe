@@ -39,19 +39,15 @@ Forward_renderer::Forward_renderer()
 {
 }
 
-void Forward_renderer::connect(std::shared_ptr<OpenGL_state_tracker> pipeline_state_tracker,
-                               shared_ptr<Shadow_renderer>           shadow_renderer,
-                               shared_ptr<Scene_manager>             scene_manager,
-                               shared_ptr<Programs>                  programs)
+void Forward_renderer::connect()
 {
-    base_connect(programs);
+    base_connect(this);
 
-    m_pipeline_state_tracker = pipeline_state_tracker;
-    m_scene_manager          = scene_manager;
-    m_shadow_renderer        = shadow_renderer;
+    m_pipeline_state_tracker = get<OpenGL_state_tracker>();
+    m_scene_manager          = require<Scene_manager>();
+    m_shadow_renderer        = get<Shadow_renderer>();
 
-    initialization_depends_on(scene_manager);
-    initialization_depends_on(programs);
+    initialization_depends_on(programs());
 }
 
 static constexpr const char* c_forward_renderer_initialize_component = "Forward_renderer::initialize_component()";

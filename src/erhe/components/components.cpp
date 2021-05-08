@@ -1,4 +1,5 @@
 #include "erhe/components/components.hpp"
+#include "erhe/components/component.hpp"
 #include <sstream>
 
 namespace erhe::components
@@ -7,29 +8,37 @@ namespace erhe::components
 using std::set;
 using std::shared_ptr;
 
-void Components::add(const shared_ptr<Component>& component)
+auto Components::add(const shared_ptr<Component>& component)
+-> const std::shared_ptr<erhe::components::Component>&
 {
     // Silently ignores nullptr Components
     if (component)
     {
-        component->register_as_component();
-        m_components.insert(component);
+        component->register_as_component(this);
+        components.insert(component);
     }
+    return component;
 }
 
 void Components::cleanup_components()
 {
-    for (const auto& component : m_components)
+    for (const auto& component : components)
     {
         component->unregister();
     }
 
-    m_components.clear();
+    components.clear();
 }
 
 void Components::initialize_components()
 {
-    set<shared_ptr<Component>> uninitialized(m_components);
+    log_components.info("Connecting {} Components:\n", components.size());
+    for (auto const& component : components)
+    {
+        component->connect();
+    }
+
+    set<shared_ptr<Component>> uninitialized(components);
     set<shared_ptr<Component>> remove_set;
 
     size_t total_count         = uninitialized.size();
@@ -87,7 +96,7 @@ void Components::initialize_components()
 
 void Components::on_thread_exit()
 {
-    for (const auto& component : m_components)
+    for (const auto& component : components)
     {
         component->on_thread_exit();
     }
@@ -95,11 +104,10 @@ void Components::on_thread_exit()
 
 void Components::on_thread_enter()
 {
-    for (const auto& component : m_components)
+    for (const auto& component : components)
     {
         component->on_thread_enter();
     }
 }
-
 
 } // namespace erhe::components

@@ -26,16 +26,17 @@ public:
 
         void calculate_level_count();
 
-        gl::Texture_target  target         {gl::Texture_target::texture_2d};
-        gl::Internal_format internal_format{gl::Internal_format::rgba8};
-        bool                use_mipmaps    {false};
-        int                 sample_count   {0};
-        int                 width          {1};
-        int                 height         {1};
-        int                 depth          {1};
-        int                 level_count    {1};
-        int                 row_stride     {0};
-        Buffer*             buffer         {nullptr};
+        gl::Texture_target  target                {gl::Texture_target::texture_2d};
+        gl::Internal_format internal_format       {gl::Internal_format::rgba8};
+        bool                use_mipmaps           {false};
+        bool                fixed_sample_locations{true};
+        int                 sample_count          {0};
+        int                 width                 {1};
+        int                 height                {1};
+        int                 depth                 {1};
+        int                 level_count           {1};
+        int                 row_stride            {0};
+        Buffer*             buffer                {nullptr};
     };
 
     static auto storage_dimensions(gl::Texture_target target)
@@ -119,14 +120,15 @@ public:
 private:
     Gl_texture          m_handle;
     std::string         m_debug_label;
-    gl::Texture_target  m_target         {gl::Texture_target::texture_2d};
-    gl::Internal_format m_internal_format{gl::Internal_format::rgba8};
-    int                 m_sample_count   {0};
-    int                 m_level_count    {0};
-    int                 m_width          {0};
-    int                 m_height         {0};
-    int                 m_depth          {0};
-    Buffer*             m_buffer         {nullptr};
+    gl::Texture_target  m_target                {gl::Texture_target::texture_2d};
+    gl::Internal_format m_internal_format       {gl::Internal_format::rgba8};
+    bool                m_fixed_sample_locations{true};
+    int                 m_sample_count          {0};
+    int                 m_level_count           {0};
+    int                 m_width                 {0};
+    int                 m_height                {0};
+    int                 m_depth                 {0};
+    Buffer*             m_buffer                {nullptr};
 };
 
 struct Texture_hash

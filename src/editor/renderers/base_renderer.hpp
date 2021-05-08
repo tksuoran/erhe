@@ -104,7 +104,7 @@ public:
 
     void next_frame();
 
-    void base_connect(std::shared_ptr<Programs> programs);
+    void base_connect(erhe::components::Component* component);
 
     auto update_primitive_buffer(const Mesh_collection& meshes,
                                  uint64_t               visibility_mask = erhe::scene::Mesh::c_visibility_all)
@@ -128,7 +128,7 @@ public:
                                      uint64_t                                  visibility_mask = erhe::scene::Mesh::c_visibility_all)
     -> Draw_indirect_buffer_range;
 
-    auto programs() -> std::shared_ptr<Programs>
+    auto programs() -> const std::shared_ptr<Programs>&
     {
         return m_programs;
     }

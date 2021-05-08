@@ -56,31 +56,37 @@ using namespace erhe::graphics;
 using namespace erhe::toolkit;
 
 Editor::Editor()
-    : erhe::components::Component{"Scene view"}
+    : erhe::components::Component{c_name}
 {
 }
 
-void Editor::connect(shared_ptr<Application>          application,
-                     shared_ptr<Forward_renderer>     forward_renderer,
-                     shared_ptr<Id_renderer>          id_renderer,
-                     std::shared_ptr<Scene_manager>   scene_manager,
-                     shared_ptr<OpenGL_state_tracker> pipeline_state_tracker,
-                     shared_ptr<Shader_monitor>       shader_monitor,
-                     shared_ptr<Shadow_renderer>      shadow_renderer,
-                     shared_ptr<Text_renderer>        text_renderer,
-                     shared_ptr<Line_renderer>        line_renderer)
+void Editor::connect()
 {
-    m_application            = application;
-    m_forward_renderer       = forward_renderer;
-    m_id_renderer            = id_renderer;
-    m_scene_manager          = scene_manager;
-    m_shader_monitor         = shader_monitor;
-    m_shadow_renderer        = shadow_renderer;
-    m_text_renderer          = text_renderer;
-    m_line_renderer          = line_renderer;
-    m_pipeline_state_tracker = pipeline_state_tracker;
+    m_application            = get<Application         >();
+    m_forward_renderer       = get<Forward_renderer    >();
+    m_id_renderer            = get<Id_renderer         >();
+    m_scene_manager          = require<Scene_manager   >();
+    m_shader_monitor         = get<Shader_monitor      >();
+    m_shadow_renderer        = get<Shadow_renderer     >();
+    m_text_renderer          = get<Text_renderer       >();
+    m_line_renderer          = get<Line_renderer       >();
+    m_pipeline_state_tracker = get<OpenGL_state_tracker>();
 
-    initialization_depends_on(scene_manager);
+    m_selection_tool         = require<Selection_tool  >();
+    m_operation_stack        = get<Operation_stack     >();
+    m_brushes                = get<Brushes             >();
+    m_camera_properties      = get<Camera_properties   >();
+    m_hover_tool             = get<Hover_tool          >();
+    m_fly_camera_tool        = get<Fly_camera_tool     >();
+    m_light_properties       = get<Light_properties    >();
+    m_material_properties    = get<Material_properties >();
+    m_mesh_properties        = get<Mesh_properties     >();
+    m_node_properties        = get<Node_properties     >();
+    m_trs_tool               = get<Trs_tool            >();
+    m_viewport_window        = get<Viewport_window     >();
+    m_operations             = get<Operations          >();
+    m_grid_tool              = get<Grid_tool           >();
+    m_viewport_config        = get<Viewport_config     >();
 }
 
 void Editor::disconnect()
@@ -99,34 +105,18 @@ void Editor::initialize_component()
 {
     ZoneScoped;
 
-    if (m_scene_manager)
-    {
-        m_selection_tool      = make_shared<Selection_tool     >(m_scene_manager);
-        m_operation_stack     = make_shared<Operation_stack    >();
-        m_brushes             = make_shared<Brushes            >(*this, m_operation_stack, m_scene_manager);
-        m_camera_properties   = make_shared<Camera_properties  >(m_scene_manager);
-        m_hover_tool          = make_shared<Hover_tool         >(m_scene_manager);
-        m_fly_camera_tool     = make_shared<Fly_camera_tool    >(m_scene_manager);
-        m_light_properties    = make_shared<Light_properties   >(m_scene_manager);
-        m_material_properties = make_shared<Material_properties>(m_scene_manager, m_selection_tool);
-        m_mesh_properties     = make_shared<Mesh_properties    >(m_scene_manager, m_selection_tool);
-        m_node_properties     = make_shared<Node_properties    >(m_scene_manager, m_selection_tool);
-        m_trs_tool            = make_shared<Trs_tool           >(m_operation_stack, m_scene_manager, m_selection_tool);
-        m_viewport_window     = make_shared<Viewport_window    >();
-        m_operations          = make_shared<Operations         >(*this, m_operation_stack, m_selection_tool, m_scene_manager);
-        register_background_tool(m_hover_tool.get());
-        register_tool  (m_trs_tool.get());
-        register_tool  (m_selection_tool.get());
-        register_tool  (m_fly_camera_tool.get());
-        register_window(m_camera_properties.get());
-        register_window(m_light_properties.get());
-        register_window(m_material_properties.get());
-        register_tool  (m_mesh_properties.get());
-        register_window(m_node_properties.get());
-        register_window(m_viewport_window.get());
-        register_window(m_operations.get());
-        register_tool  (m_brushes.get());
-    }
+    register_background_tool(m_hover_tool.get());
+    register_tool  (m_trs_tool.get());
+    register_tool  (m_selection_tool.get());
+    register_tool  (m_fly_camera_tool.get());
+    register_window(m_camera_properties.get());
+    register_window(m_light_properties.get());
+    register_window(m_material_properties.get());
+    register_tool  (m_mesh_properties.get());
+    register_window(m_node_properties.get());
+    register_window(m_viewport_window.get());
+    register_window(m_operations.get());
+    register_tool  (m_brushes.get());
 
     if (m_selection_tool)
     {
@@ -142,8 +132,6 @@ void Editor::initialize_component()
         m_selection_layer_update_subscription = m_selection_tool->subscribe_mesh_selection_change_notification(lambda);
     }
 
-    m_grid_tool       = make_unique<Grid_tool      >();
-    m_viewport_config = make_unique<Viewport_config>();
     register_background_tool(m_grid_tool.get());
     register_window(m_viewport_config.get());
 
@@ -151,6 +139,9 @@ void Editor::initialize_component()
     m_imgui_context = ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    //io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    //io.ConfigResizeWindowsFromEdges = true;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
     io.Fonts->AddFontFromFileTTF("res/fonts/ProximaNova-Regular.otf", 16.0f);
     //io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 18.0f);
@@ -536,6 +527,7 @@ void Editor::render()
 
     if (m_enable_gui)
     {
+        m_pointer_context.priority_action = m_priority_action;
         for (auto* window : m_windows)
         {
             window->window(m_pointer_context);
@@ -544,6 +536,10 @@ void Editor::render()
         if (m_forward_renderer)
         {
             m_forward_renderer->debug_properties_window();
+        }
+        if (m_priority_action != m_pointer_context.priority_action)
+        {
+            set_priority_action(m_pointer_context.priority_action);
         }
         gui_render();
     }
@@ -697,7 +693,7 @@ void Editor::cancel_ready_tools(Tool* keep)
         }
         if (tool->state() == Tool::State::ready)
         {
-            log_input_events.trace("Canceling ready tool {}\n", tool->name());
+            log_input_events.trace("Canceling ready tool {}\n", tool->description());
             tool->cancel_ready();
             return;
         }
@@ -777,7 +773,7 @@ void Editor::on_pointer()
     {
         if ((tool->state() == Tool::State::active) && tool->update(m_pointer_context))
         {
-            log_input_events.trace("Active tool {} consumed pointer event\n", tool->name());
+            log_input_events.trace("Active tool {} consumed pointer event\n", tool->description());
             cancel_ready_tools(nullptr);
             return;
         }
@@ -788,7 +784,7 @@ void Editor::on_pointer()
     {
         if ((tool->state() == Tool::State::ready) && tool->update(m_pointer_context))
         {
-            log_input_events.trace("Ready tool {} consumed pointer event\n", tool->name());
+            log_input_events.trace("Ready tool {} consumed pointer event\n", tool->description());
             cancel_ready_tools(nullptr);
             return;
         }
@@ -799,7 +795,7 @@ void Editor::on_pointer()
     {
         if ((tool->state() == Tool::State::passive) && tool->update(m_pointer_context))
         {
-            log_input_events.trace("Passive tool {} consumed pointer event\n", tool->name());
+            log_input_events.trace("Passive tool {} consumed pointer event\n", tool->description());
             cancel_ready_tools(tool);
             return;
         }
@@ -832,13 +828,21 @@ void Editor::end_primary_framebuffer()
 void Editor::register_tool(Tool* tool)
 {
     m_tools.emplace_back(tool);
-    m_windows.emplace_back(tool);
+    Window* window = dynamic_cast<Window*>(tool);
+    if (window != nullptr)
+    {
+        m_windows.emplace_back(window);
+    }
 }
 
 void Editor::register_background_tool(Tool* tool)
 {
     m_background_tools.emplace_back(tool);
-    m_windows.emplace_back(tool);
+    Window* window = dynamic_cast<Window*>(tool);
+    if (window != nullptr)
+    {
+        m_windows.emplace_back(window);
+    }
 }
 
 void Editor::register_window(Window* window)

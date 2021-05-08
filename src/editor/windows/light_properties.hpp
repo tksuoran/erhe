@@ -10,13 +10,18 @@ namespace editor
 class Scene_manager;
 
 class Light_properties
-    : public Window
+    : public erhe::components::Component
+    , public Window
 {
 public:
-    explicit Light_properties(const std::shared_ptr<Scene_manager>& scene_manager);
-
+    static constexpr const char* c_name = "Light_properties";
+    Light_properties() : erhe::components::Component(c_name) {}
     virtual ~Light_properties() = default;
 
+    // Implements Component
+    void connect() override;
+
+    // Implements Window
     void window(Pointer_context& pointer_context) override;
 
 private:

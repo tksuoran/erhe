@@ -38,17 +38,12 @@ Shadow_renderer::Shadow_renderer()
 {
 }
 
-void Shadow_renderer::connect(shared_ptr<OpenGL_state_tracker> pipeline_state_tracker,
-                              shared_ptr<Scene_manager>        scene_manager,
-                              shared_ptr<Programs>             programs)
+void Shadow_renderer::connect()
 {
-    base_connect(programs);
+    base_connect(this);
 
-    m_pipeline_state_tracker = pipeline_state_tracker;
-    m_scene_manager          = scene_manager;
-
-    initialization_depends_on(scene_manager);
-    initialization_depends_on(programs);
+    m_pipeline_state_tracker = require<OpenGL_state_tracker>();
+    m_scene_manager          = require<Scene_manager>();
 }
 
 static constexpr const char* c_shadow_renderer_initialize_component = "Shadow_renderer::initialize_component()";

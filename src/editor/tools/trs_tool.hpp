@@ -33,7 +33,9 @@ class Scene_manager;
 class Text_renderer;
 
 class Trs_tool
-    : public Tool
+    : public erhe::components::Component
+    , public Tool
+    , public Window
 {
 public:
     enum class Reference_mode : unsigned int
@@ -50,27 +52,24 @@ public:
         "World"
     };
 
-    Trs_tool(const std::shared_ptr<Operation_stack>& operation_stack,
-             const std::shared_ptr<Scene_manager>&   scene_manager,
-             const std::shared_ptr<Selection_tool>&  selection_tool);
-
+    static constexpr const char* c_name = "Trs_tool";
+    Trs_tool() : erhe::components::Component(c_name) {}
     virtual ~Trs_tool() = default;
 
-    auto name() -> const char* override { return "Trs_tool"; }
+    // Implements Component
+    void connect() override;
+    void initialize_component() override;
 
-    // Window
-    void window(Pointer_context& pointer_context) override;
-
-    // Tool
+    // Implements Tool
     auto update(Pointer_context& pointer_context) -> bool override;
-
     void render_update() override;
-
     void render(Render_context& render_context) override;
-
     auto state() const -> State override;
-
     void cancel_ready() override;
+    auto description() -> const char* override { return c_name; }
+
+    // Implements Window
+    void window(Pointer_context& pointer_context) override;
 
     void set_translate(bool enabled);
     void set_rotate(bool enabled);
@@ -166,11 +165,11 @@ private:
 
     std::shared_ptr<Operation_stack>           m_operation_stack;
     std::shared_ptr<Scene_manager>             m_scene_manager;
+    std::shared_ptr<Selection_tool>            m_selection_tool;
     State                                      m_state        {State::passive};
     Handle                                     m_active_handle{Handle::e_handle_none};
     std::optional<Selection_tool::Subcription> m_selection_subscription;
     std::map<erhe::scene::Mesh*, Handle>       m_handles;
-    //erhe::scene::Node*                         m_host_original_parent {nullptr};
     std::shared_ptr<erhe::scene::Node>         m_target_node;
     std::shared_ptr<erhe::scene::Node>         m_tool_node;
     bool                                       m_translate_snap_enable{false};
@@ -230,8 +229,7 @@ private:
     {
         Visualization() = default;
 
-        Visualization(Scene_manager* scene_manager);
-            
+        void initialize(Scene_manager* scene_manager);
         void update_visibility(bool show, Handle active_handle);
         void update_scale(glm::vec3 view_position_in_world);
         void update_transforms();

@@ -29,28 +29,30 @@ class Editor;
 class Operation_stack;
 
 class Brushes
-    : public Tool
+    : public erhe::components::Component
+    , public Tool
+    , public Window
 {
 public:
-    auto name() -> const char* override { return "Brushes"; }
-
-    explicit Brushes(Editor&                                 editor,
-                     const std::shared_ptr<Operation_stack>& operation_stack,
-                     const std::shared_ptr<Scene_manager>&   scene_manager);
-
+    static constexpr const char* c_name = "Brushes";
+    Brushes() : erhe::components::Component(c_name) {}
     virtual ~Brushes() = default;
 
+    // Implements Component
+    void connect() override;
+    void initialize_component() override;
+
+    // Implements Tool
     auto update(Pointer_context& pointer_context) -> bool override;
-
     void render(Render_context& render_context) override;
+    auto state() const -> State override;
+    void cancel_ready() override;
+    auto description() -> const char* override { return c_name; }
 
+    // Implements Window
     void window(Pointer_context& pointer_context) override;
 
     void render_update() override;
-
-    auto state() const -> State override;
-
-    void cancel_ready() override;
 
     void add_brush(const std::shared_ptr<erhe::primitive::Primitive_geometry>& geometry);
 
@@ -69,13 +71,15 @@ private:
 
     void update_mesh_node_transform();
 
-    Editor&                                                           m_editor;
+    std::shared_ptr<Editor>                                           m_editor;
     std::shared_ptr<Operation_stack>                                  m_operation_stack;
     std::shared_ptr<Scene_manager>                                    m_scene_manager;
     std::vector<std::shared_ptr<erhe::primitive::Primitive_geometry>> m_brushes;
     std::vector<std::shared_ptr<erhe::primitive::Material>>           m_materials;
     int                                                               m_selected_brush{0};
     int                                                               m_selected_material{0};
+    bool                     m_snap_to_hover_polygon{false};
+    bool                     m_snap_to_grid         {false};
     std::vector<const char*> m_brush_names;
     std::vector<const char*> m_material_names;
     bool                     m_hover_content{false};

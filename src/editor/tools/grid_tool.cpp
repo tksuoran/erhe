@@ -12,10 +12,6 @@ auto Grid_tool::state() const -> Tool::State
     return State::passive;
 }
 
-Grid_tool::Grid_tool()
-{
-}
-
 void Grid_tool::render(Render_context& render_context)
 {
     ZoneScoped;

@@ -75,8 +75,8 @@ public:
 
     virtual ~Programs() = default;
 
-    void connect(std::shared_ptr<erhe::graphics::Shader_monitor> shader_monitor);
-
+    // Implements Component
+    void connect() override;
     void initialize_component() override;
 
 private:

@@ -24,11 +24,11 @@ Light_mesh::Light_mesh()
 {
 }
 
-void Light_mesh::connect(shared_ptr<Programs> programs)
+void Light_mesh::connect()
 {
-    m_programs = programs;
+    m_programs = require<Programs>();
 
-    initialization_depends_on(programs);
+    initialization_depends_on(m_programs);
 }
 
 void Light_mesh::initialize_component()

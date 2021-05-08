@@ -58,19 +58,6 @@ void Framebuffer::create()
     {
         if (attachment.texture != nullptr)
         {
-#if 1 // Workaround suspected NVIDIA driver bug.
-            if (attachment.texture->sample_count() > 0)
-            {
-                auto target = attachment.texture->target();
-                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_name());
-                gl::framebuffer_texture_2d(gl::Framebuffer_target::draw_framebuffer,
-                                           attachment.attachment_point,
-                                           target,
-                                           attachment.texture->gl_name(),
-                                           attachment.texture_level);
-            }
-            else
-#endif
             if (attachment.texture->is_layered())
             {
                 gl::named_framebuffer_texture_layer(gl_name(),
@@ -81,10 +68,6 @@ void Framebuffer::create()
             }
             else
             {
-                // configuration::s_glNamedFramebufferTextureEXT(gl_name(),
-                //                                               static_cast<GLenum>(attachment.attachment_point),
-                //                                               attachment.texture->gl_name(),
-                //                                               attachment.texture_level);
                 gl::named_framebuffer_texture(gl_name(),
                                               attachment.attachment_point,
                                               attachment.texture->gl_name(),

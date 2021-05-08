@@ -15,25 +15,7 @@ Application::Application(RENDERDOC_API_1_1_2* renderdoc_api)
 
 Application::~Application()
 {
-    //m_menu.reset();
-    m_imgui_demo.reset();
-
     m_components.cleanup_components();
-}
-
-// void Application::connect(shared_ptr<Menu> menu)
-// {
-//     m_menu = menu;
-// }
-
-void Application::connect(shared_ptr<Imgui_demo> imgui_demo)
-{
-    m_imgui_demo = imgui_demo;
-}
-
-void Application::connect(shared_ptr<Editor> scene_view)
-{
-    m_scene_view = scene_view;
 }
 
 void Application::begin_renderdoc_capture()

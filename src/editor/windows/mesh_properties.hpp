@@ -19,21 +19,25 @@ class Scene_manager;
 class Selection_tool;
 
 class Mesh_properties
-    : public Tool
+    : public erhe::components::Component
+    , public Tool
+    , public Window
 {
 public:
-    Mesh_properties(const std::shared_ptr<Scene_manager>&  scene_manager,
-                    const std::shared_ptr<Selection_tool>& selection_tool);
-
+    static constexpr const char* c_name = "Mesh_properties";
+    Mesh_properties() : erhe::components::Component(c_name) {}
     virtual ~Mesh_properties() = default;
 
-    auto name() -> const char* override { return "Mesh Debug"; }
+    // Implements Component
+    void connect() override;
 
-    void window(Pointer_context& pointer_context) override;
-
+    // Implements Tool
+    auto description() -> const char* override { return c_name; }
     void render(Render_context& render_context) override;
-
     auto state() const -> State override;
+
+    // Implements Window
+    void window(Pointer_context& pointer_context) override;
 
 private:
     std::shared_ptr<Scene_manager>  m_scene_manager;

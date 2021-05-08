@@ -3,6 +3,7 @@
 #include "tools/trs_tool.hpp"
 #include "renderers/line_renderer.hpp"
 #include "renderers/text_renderer.hpp"
+#include "editor.hpp"
 #include "scene/scene_manager.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/primitive/primitive.hpp"
@@ -23,14 +24,19 @@ auto Hover_tool::state() const -> Tool::State
     return State::passive;
 }
 
-Hover_tool::Hover_tool(const std::shared_ptr<Scene_manager>& scene_manager)
+void Hover_tool::connect()
+{
+    m_scene_manager = require<Scene_manager>();
+    require<Editor>();
+}
 
-    : m_scene_manager{scene_manager}
+void Hover_tool::initialize_component()
 {
     m_hover_material = std::make_shared<erhe::primitive::Material>();
     m_hover_material->name = "hover";
-    scene_manager->add(m_hover_material);
+    m_scene_manager->add(m_hover_material);
     m_hover_material_index = m_hover_material->index;
+    get<Editor>()->register_background_tool(this);
 }
 
 auto Hover_tool::update(Pointer_context& pointer_context) -> bool

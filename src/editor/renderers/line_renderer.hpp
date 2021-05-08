@@ -59,9 +59,8 @@ public:
 
     virtual ~Line_renderer();
 
-    void connect(std::shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker,
-                 std::shared_ptr<erhe::graphics::Shader_monitor>       shader_monitor);
-
+    // Implements Component
+    void connect() override;
     void initialize_component() override;
 
     void render(erhe::scene::Viewport       camera_viewport,

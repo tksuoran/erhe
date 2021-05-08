@@ -1,7 +1,8 @@
-#ifndef components_hpp_erhe_components
-#define components_hpp_erhe_components
+#pragma once
 
-#include "erhe/components/component.hpp"
+//#include "erhe/components/component.hpp"
+#include <memory>
+#include <set>
 
 namespace erhe::components
 {
@@ -17,6 +18,7 @@ namespace erhe::components
 ///    This will call Component::initialize() for each component, in order which respects
 ///    all declared dependencies. If there are circular dependencies, initialize_components()
 ///    will abort.
+class Component;
 
 class Components
 {
@@ -25,7 +27,8 @@ public:
 
     ~Components() = default;
 
-    void add(const std::shared_ptr<erhe::components::Component>& component);
+    auto add(const std::shared_ptr<erhe::components::Component>& component)
+    -> const std::shared_ptr<erhe::components::Component>&;
 
     void cleanup_components();
 
@@ -35,10 +38,7 @@ public:
 
     void on_thread_enter();
 
-private:
-    std::set<std::shared_ptr<erhe::components::Component>> m_components;
+    std::set<std::shared_ptr<erhe::components::Component>> components;
 };
 
 } // namespace erhe::components
-
-#endif

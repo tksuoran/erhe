@@ -1,11 +1,13 @@
-#ifndef component_hpp_erhe_components
-#define component_hpp_erhe_components
+#pragma once
 
+#include "erhe/components/components.hpp"
 #include "erhe/components/log.hpp"
 #include <set>
 
 namespace erhe::components
 {
+
+class Components;
 
 class Component
 {
@@ -20,40 +22,49 @@ protected:
     auto operator=(Component&& other)
     -> Component& = delete;
 
-    explicit Component(std::string name);
+    explicit Component(const char* name);
 
     virtual ~Component() = default;
 
 public:
-    void initialization_depends_on(std::shared_ptr<Component> a)
+    virtual void connect() {};
+
+    void initialization_depends_on(const std::shared_ptr<Component>& a);
+
+    template<typename T>
+    auto get() -> std::shared_ptr<T>
     {
-        if (a)
+        if (m_components == nullptr)
         {
-            if (!a->is_registered())
-            {
-                log_components.error("Component {} dependency {} has not been registered as a Component",
-                                     name(),
-                                     a->name());
-                FATAL("Dependency has not been registered");
-            }
-            m_dependencies.insert(a);
+            return nullptr;
         }
+        for (const auto& component : m_components->components)
+        {
+            auto typed_component = dynamic_pointer_cast<T>(component);
+            if (typed_component)
+            {
+                return typed_component;
+            }
+        }
+        return {};
     }
 
-    virtual void initialize_component()
+    template<typename T>
+    auto require() -> std::shared_ptr<T>
     {
+        auto component = get<T>();
+        initialization_depends_on(component);
+        return component;
     }
 
-    virtual void on_thread_exit()
-    {
-    }
+    virtual void initialize_component() {}
 
-    virtual void on_thread_enter()
-    {
-    }
+    virtual void on_thread_exit() {}
+
+    virtual void on_thread_enter() {}
 
     auto name() const
-    -> const std::string&
+    -> const char*
     {
         return m_name;
     }
@@ -64,17 +75,17 @@ public:
     auto is_registered() const
     -> bool
     {
-        return m_is_registered;
+        return m_components != nullptr;
     }
 
-    void register_as_component()
+    void register_as_component(erhe::components::Components* components)
     {
-        m_is_registered = true;
+        m_components = components;
     }
 
     void unregister()
     {
-        m_is_registered = false;
+        m_components = nullptr;
     }
 
     void initialize();
@@ -91,12 +102,10 @@ public:
     }
 
 private:
-    std::string                          m_name;
+    const char*                          m_name{nullptr};
     bool                                 m_initialized{false};
-    bool                                 m_is_registered{false};
     std::set<std::shared_ptr<Component>> m_dependencies;
+    Components*                          m_components{nullptr};
 };
 
 } // namespace erhe::components
-
-#endif

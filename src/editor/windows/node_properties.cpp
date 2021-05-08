@@ -14,11 +14,10 @@
 namespace editor
 {
 
-Node_properties::Node_properties(const std::shared_ptr<Scene_manager>&  scene_manager,
-                                 const std::shared_ptr<Selection_tool>& selection_tool)
-    : m_scene_manager {scene_manager}
-    , m_selection_tool{selection_tool}
+void Node_properties::connect()
 {
+    m_scene_manager  = get<Scene_manager>();
+    m_selection_tool = get<Selection_tool>();
 }
 
 void Node_properties::window(Pointer_context&)

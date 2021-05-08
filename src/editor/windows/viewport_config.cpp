@@ -6,10 +6,6 @@
 namespace editor
 {
 
-Viewport_config::Viewport_config()
-{
-}
-
 void Viewport_config::window(Pointer_context&)
 {
     ImGui::Begin("Viewport");

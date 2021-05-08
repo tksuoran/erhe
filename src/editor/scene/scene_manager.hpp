@@ -57,8 +57,10 @@ public:
 
     virtual ~Scene_manager() = default;
 
-    void connect(std::shared_ptr<Programs> programs);
+    // Implements Component
+    void connect() override;
 
+    // Implements Component
     void initialize_component() override;
 
     void add_scene();

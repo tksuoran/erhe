@@ -1,15 +1,36 @@
 #include "application.hpp"
 #include "log.hpp"
-//#include "textures.hpp"
+
+#include "operations/operation_stack.hpp"
+
 #include "renderers/programs.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/forward_renderer.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "renderers/text_renderer.hpp"
 #include "renderers/line_renderer.hpp"
-#include "scene/scene_manager.hpp"
-#include "imgui_demo.hpp"
+
+#include "tools/fly_camera_tool.hpp"
+#include "tools/grid_tool.hpp"
+#include "tools/hover_tool.hpp"
+#include "tools/selection_tool.hpp"
+#include "tools/trs_tool.hpp"
+
+#include "windows/brushes.hpp"
+#include "windows/camera_properties.hpp"
+#include "windows/light_properties.hpp"
+#include "windows/material_properties.hpp"
+#include "windows/mesh_properties.hpp"
+#include "windows/node_properties.hpp"
+#include "windows/operations.hpp"
+#include "windows/viewport_config.hpp"
+#include "windows/viewport_window.hpp"
+
 #include "editor.hpp"
+
+#include "scene/scene_manager.hpp"
+
+#include "imgui_demo.hpp"
 
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/pipeline.hpp"
@@ -31,6 +52,7 @@
 
 namespace editor {
 
+using erhe::graphics::OpenGL_state_tracker;
 using erhe::graphics::Configuration;
 using erhe::graphics::Shader_monitor;
 using std::shared_ptr;
@@ -189,67 +211,34 @@ void Application::run()
 auto Application::launch_component_initialization()
 -> bool
 {
-    std::shared_ptr<Programs>         programs;
-    std::shared_ptr<Id_renderer>      id_renderer;
-    std::shared_ptr<Forward_renderer> forward_renderer;
-    std::shared_ptr<Shadow_renderer>  shadow_renderer;
-    std::shared_ptr<Scene_manager>    scene_manager;
+    m_components.add(shared_from_this());
+    m_components.add(make_shared<Programs            >());
+    m_components.add(make_shared<Id_renderer         >());
+    m_components.add(make_shared<Forward_renderer    >());
+    m_components.add(make_shared<Shadow_renderer     >());
+    m_components.add(make_shared<Scene_manager       >());
+    m_components.add(make_shared<Text_renderer       >());
+    m_components.add(make_shared<Line_renderer       >());
+    m_components.add(make_shared<Editor              >());
+    m_components.add(make_shared<OpenGL_state_tracker>());
+    m_components.add(make_shared<Shader_monitor      >());
+    m_components.add(make_shared<Shader_monitor      >());
+    m_components.add(make_shared<Selection_tool      >());
+    m_components.add(make_shared<Operation_stack     >());
+    m_components.add(make_shared<Brushes             >());
+    m_components.add(make_shared<Camera_properties   >());
+    m_components.add(make_shared<Hover_tool          >());
+    m_components.add(make_shared<Fly_camera_tool     >());
+    m_components.add(make_shared<Light_properties    >());
+    m_components.add(make_shared<Material_properties >());
+    m_components.add(make_shared<Mesh_properties     >());
+    m_components.add(make_shared<Node_properties     >());
+    m_components.add(make_shared<Trs_tool            >());
+    m_components.add(make_shared<Viewport_window     >());
+    m_components.add(make_shared<Operations          >());
+    m_components.add(make_shared<Grid_tool           >());
+    m_components.add(make_shared<Viewport_config     >());
 
-    auto application      = shared_from_this();
-
-    if (true)
-    {
-        programs         = make_shared<Programs>();
-        id_renderer      = make_shared<Id_renderer>();
-        forward_renderer = make_shared<Forward_renderer>();
-        shadow_renderer  = make_shared<Shadow_renderer>();
-        scene_manager    = make_shared<Scene_manager>();
-    }
-
-    auto text_renderer   = make_shared<Text_renderer>();
-    auto line_renderer   = make_shared<Line_renderer>();
-    auto scene_view      = make_shared<Editor>();
-
-    //auto textures               = make_shared<Textures>();
-    //auto menu                   = make_shared<Menu>();
-    //auto image_transfer         = make_shared<erhe::graphics::ImageTransfer>();
-    auto pipeline_state_tracker = make_shared<erhe::graphics::OpenGL_state_tracker>();
-    auto shader_monitor         = make_shared<Shader_monitor>();
-    //auto imgui_demo             = make_shared<Imgui_demo>();
-
-    if (programs)         m_components.add(programs);
-    if (id_renderer)      m_components.add(id_renderer);
-    if (forward_renderer) m_components.add(forward_renderer);
-    if (shadow_renderer)  m_components.add(shadow_renderer);
-    if (scene_manager)    m_components.add(scene_manager);
-    m_components.add(text_renderer);
-    m_components.add(line_renderer);
-    m_components.add(scene_view);
-    m_components.add(shader_monitor);
-    //m_components.add(textures);
-    //m_components.add(menu);
-    //m_components.add(image_transfer);
-    m_components.add(pipeline_state_tracker);
-    //m_components.add(imgui_demo);
-    m_components.add(application);
-
-    //command_buffer->connect(pipeline_state_tracker);
-    //textures->connect(image_transfer);
-    //menu->connect(application, command_buffer, pipeline_state_tracker, programs, textures);
-    if (programs)         programs        ->connect(shader_monitor);
-    if (id_renderer)      id_renderer     ->connect(pipeline_state_tracker, scene_manager, programs);
-    if (forward_renderer) forward_renderer->connect(pipeline_state_tracker, shadow_renderer, scene_manager, programs);
-    if (shadow_renderer)  shadow_renderer ->connect(pipeline_state_tracker, scene_manager, programs);
-    if (text_renderer)    text_renderer   ->connect(pipeline_state_tracker);
-    if (line_renderer)    line_renderer   ->connect(pipeline_state_tracker, shader_monitor);
-    if (scene_manager)    scene_manager   ->connect(programs);
-    if (scene_view)       scene_view      ->connect(application, forward_renderer, id_renderer, scene_manager, pipeline_state_tracker, shader_monitor, shadow_renderer, text_renderer, line_renderer);
-    //////scene_view      ->connect(application, {}, {}, {}, shader_monitor, {}, stream_renderer);
-    //imgui_demo->connect(application, pipeline_state_tracker);
-
-    //connect(menu);
-    //connect(imgui_demo);
-    connect(scene_view);
 
     // if (false)
     // {
@@ -278,9 +267,7 @@ void Application::component_initialization_complete(bool initialization_succeede
     {
         gl::enable(gl::Enable_cap::primitive_restart);
         gl::primitive_restart_index(0xffffu);
-        //m_context_window->get_root_view().reset_view(m_menu);
-        //m_context_window->get_root_view().reset_view(m_imgui_demo);
-        m_context_window->get_root_view().reset_view(m_scene_view);
+        m_context_window->get_root_view().reset_view(get<Editor>());
     }
 }
 

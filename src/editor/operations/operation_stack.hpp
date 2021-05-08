@@ -14,9 +14,8 @@ class Operation_stack
     : public erhe::components::Component
 {
 public:
-    Operation_stack() : erhe::components::Component("Operation Stack")
-    {
-    }
+    Operation_stack() : erhe::components::Component("Operation Stack") {}
+    virtual ~Operation_stack() = default;
 
     void push(std::shared_ptr<IOperation> operation);
     void undo();

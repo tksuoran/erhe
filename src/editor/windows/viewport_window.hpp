@@ -21,12 +21,15 @@ namespace editor
 class Scene_manager;
 
 class Viewport_window
-    : public Window
+    : public erhe::components::Component
+    , public Window
 {
 public:
+    static constexpr const char* c_name = "Viewport_window";
+    Viewport_window() : erhe::components::Component(c_name) {}
     virtual ~Viewport_window() = default;
 
-    // Window
+    // Implements Window
     void window(Pointer_context& pointer_context) override;
 
     glm::vec2 to_scene_content(glm::vec2 position_in_root);

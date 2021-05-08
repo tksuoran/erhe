@@ -3,9 +3,24 @@
 namespace erhe::components
 {
 
-Component::Component(std::string name)
-    : m_name{std::move(name)}
+Component::Component(const char* name)
+    : m_name{name}
 {
+}
+
+void Component::initialization_depends_on(const std::shared_ptr<Component>& a)
+{
+    if (a)
+    {
+        if (!a->is_registered())
+        {
+            log_components.error("Component {} dependency {} has not been registered as a Component",
+                                    name(),
+                                    a->name());
+            FATAL("Dependency has not been registered");
+        }
+        m_dependencies.insert(a);
+    }
 }
 
 auto Component::is_initialized() const

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe/components/component.hpp"
 #include <memory>
 
 namespace editor

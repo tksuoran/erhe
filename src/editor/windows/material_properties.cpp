@@ -1,5 +1,6 @@
 #include "windows/material_properties.hpp"
 #include "scene/scene_manager.hpp"
+#include "tools/selection_tool.hpp"
 #include "erhe/primitive/material.hpp"
 
 #include "imgui.h"
@@ -7,11 +8,10 @@
 namespace editor
 {
 
-Material_properties::Material_properties(const std::shared_ptr<Scene_manager>&  scene_manager,
-                                         const std::shared_ptr<Selection_tool>& selection_tool)
-    : m_scene_manager {scene_manager}
-    , m_selection_tool{selection_tool}
+void Material_properties::connect()
 {
+    m_scene_manager  = get<Scene_manager>();
+    m_selection_tool = get<Selection_tool>();
 }
 
 void Material_properties::window(Pointer_context&)

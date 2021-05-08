@@ -51,8 +51,8 @@ public:
 
     virtual ~Text_renderer();
 
-    void connect(std::shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker);
-
+    // Implements Component
+    void connect() override;
     void initialize_component() override;
 
     void print(const std::string& text,

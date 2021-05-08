@@ -94,7 +94,7 @@ void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> 
     ZoneScoped;
 
     size_t split_count = relative_positions.size();
-    uint32_t point_count = source.point_count();
+    //uint32_t point_count = source.point_count();
     reserve_edge_to_new_points();
     for (Polygon_id src_polygon_id = 0,
          polygon_end = source.polygon_count();

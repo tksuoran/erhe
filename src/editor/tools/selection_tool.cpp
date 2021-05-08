@@ -38,10 +38,9 @@ void Selection_tool::unsubscribe_mesh_selection_change_notification(int handle)
                                                 m_mesh_selection_change_subscriptions.end());
 }
 
-Selection_tool::Selection_tool(const std::shared_ptr<Scene_manager>& scene_manager)
-
-    : m_scene_manager{scene_manager}
+void Selection_tool::connect()
 {
+    m_scene_manager = get<Scene_manager>();
 }
 
 void Selection_tool::window(Pointer_context&)

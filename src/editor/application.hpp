@@ -1,16 +1,12 @@
 #pragma once
 
+#include "erhe/components/component.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/window.hpp"
 
 #include "renderdoc_app.h"
 
 namespace editor {
-
-class Programs;
-class Textures;
-class Imgui_demo;
-class Editor;
 
 class Application
     : public erhe::components::Component
@@ -20,12 +16,6 @@ public:
     Application(RENDERDOC_API_1_1_2* renderdoc_api = nullptr);
 
     virtual ~Application();
-
-    //void connect(std::shared_ptr<Menu> menu);
-
-    void connect(std::shared_ptr<Imgui_demo> imgui_demo);
-
-    void connect(std::shared_ptr<Editor> scene_view);
 
     void run();
 
@@ -53,9 +43,6 @@ private:
 
     std::unique_ptr<erhe::toolkit::Context_window> m_context_window;
     erhe::components::Components                   m_components;
-    //std::shared_ptr<Menu>                          m_menu;
-    std::shared_ptr<Imgui_demo>                    m_imgui_demo;
-    std::shared_ptr<Editor>                    m_scene_view;
     RENDERDOC_API_1_1_2*                           m_renderdoc_api;
 };
 

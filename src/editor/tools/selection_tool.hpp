@@ -19,25 +19,26 @@ namespace editor
 class Scene_manager;
 
 class Selection_tool
-    : public Tool
+    : public erhe::components::Component
+    , public Tool
+    , public Window
 {
 public:
-    explicit Selection_tool(const std::shared_ptr<Scene_manager>& scene_manager);
-
+    static constexpr const char* c_name = "Selection_tool";
+    Selection_tool() : erhe::components::Component(c_name) {}
     virtual ~Selection_tool() = default;
 
-    auto name() -> const char* override { return "Selection_tool"; }
+    // Implements Component
+    void connect() override;
 
-    // Tool
+    // Implements Tool
     auto update(Pointer_context& pointer_context) -> bool override;
-
     void render(Render_context& render_context) override;
-
     auto state() const -> State override;
-
     void cancel_ready() override;
+    auto description() -> const char* override { return c_name; }
 
-    // Window
+    // Implements Window
     void window(Pointer_context& pointer_context) override;
 
     using Mesh_collection           = std::vector<std::shared_ptr<erhe::scene::Mesh>>;

@@ -328,15 +328,16 @@ Texture::Create_info::Create_info(gl::Texture_target  target,
 }
 
 Texture::Texture(const Create_info& create_info)
-    : m_handle         {create_info.target}
-    , m_target         {create_info.target}
-    , m_internal_format{create_info.internal_format}
-    , m_sample_count   {create_info.sample_count}
-    , m_level_count    {create_info.level_count}
-    , m_width          {create_info.width}
-    , m_height         {create_info.height}
-    , m_depth          {create_info.depth}
-    , m_buffer         {create_info.buffer}
+    : m_handle                {create_info.target}
+    , m_target                {create_info.target}
+    , m_internal_format       {create_info.internal_format}
+    , m_fixed_sample_locations{create_info.fixed_sample_locations}
+    , m_sample_count          {create_info.sample_count}
+    , m_level_count           {create_info.level_count}
+    , m_width                 {create_info.width}
+    , m_height                {create_info.height}
+    , m_depth                 {create_info.depth}
+    , m_buffer                {create_info.buffer}
 {
     auto dimensions = storage_dimensions(m_target);
 
@@ -365,7 +366,8 @@ Texture::Texture(const Create_info& create_info)
             }
             else
             {
-                gl::texture_storage_2d_multisample(gl_name(), m_sample_count, m_internal_format, m_width, m_height, GL_FALSE);
+                gl::texture_storage_2d_multisample(gl_name(), m_sample_count, m_internal_format,
+                                                   m_width, m_height, m_fixed_sample_locations ? GL_TRUE : GL_FALSE);
             }
             break;
         }

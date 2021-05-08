@@ -541,7 +541,7 @@ static void ImGui_ImplWGPU_CreateUniformBuffer()
     WGPUBufferDescriptor ub_desc =
     {
         NULL,
-        "Dear ImGui Shader_resource buffer",
+        "Dear ImGui Uniform buffer",
         WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
         sizeof(Uniforms),
         false

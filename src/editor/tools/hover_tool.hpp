@@ -21,22 +21,26 @@ namespace editor
 class Scene_manager;
 
 class Hover_tool
-    : public Tool
+    : public erhe::components::Component
+    , public Tool
+    , public Window
 {
 public:
-    explicit Hover_tool(const std::shared_ptr<Scene_manager>& scene_manager);
-
+    static constexpr const char* c_name = "Hover_tool";
+    Hover_tool() : erhe::components::Component(c_name) {}
     virtual ~Hover_tool() = default;
 
-    auto name() -> const char* override { return "Hover Tool"; }
+    // Implements Component
+    void connect() override;
+    void initialize_component() override;
 
-    // Tool
+    // Implements Tool
     auto update(Pointer_context& pointer_context) -> bool override;
-
     void render(Render_context& render_context) override;
-
     auto state() const -> State override;
+    auto description() -> const char* override { return c_name; }
 
+    // Implements Window
     void window(Pointer_context& pointer_context) override;
 
 private:

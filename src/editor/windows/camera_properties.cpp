@@ -7,9 +7,9 @@
 namespace editor
 {
 
-Camera_properties::Camera_properties(const std::shared_ptr<Scene_manager>& scene_manager)
-    : m_scene_manager(scene_manager)
+void Camera_properties::connect()
 {
+    m_scene_manager = get<Scene_manager>();
 }
 
 void Camera_properties::window(Pointer_context&)
