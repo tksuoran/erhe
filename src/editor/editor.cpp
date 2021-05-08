@@ -220,7 +220,7 @@ void Editor::update_once_per_frame()
         m_shader_monitor->update_once_per_frame();
     }
 
-    if (m_scene_manager)
+    if (m_scene_manager && m_light_properties->animation ())
     {
         m_scene_manager->update_once_per_frame(m_time);
     }
@@ -573,6 +573,8 @@ void Editor::update_pointer()
     m_pointer_context.viewport.width   = m_scene_viewport.width;
     m_pointer_context.viewport.height  = m_scene_viewport.height;
     m_pointer_context.scene_view_focus = m_enable_gui ? m_viewport_window->is_focused() : true;
+    m_pointer_context.geometry         = nullptr;
+    m_pointer_context.polygon_id       = 0;
 
     if (m_pointer_context.pointer_in_content_area() && m_id_renderer)
     {
@@ -590,12 +592,14 @@ void Editor::update_pointer()
             {
                 const auto& primitive = m_pointer_context.hover_mesh->primitives[m_pointer_context.hover_primitive];
                 auto* geometry = primitive.primitive_geometry->source_geometry.get();
+                m_pointer_context.geometry = geometry;
                 m_pointer_context.hover_normal = {};
                 if (geometry != nullptr)
                 {
                     Polygon_id polygon_id = static_cast<Polygon_id>(m_pointer_context.hover_local_index);
                     if (polygon_id < geometry->polygon_count())
                     {
+                        m_pointer_context.polygon_id = polygon_id;
                         auto* polygon_normals = geometry->polygon_attributes().find<glm::vec3>(c_polygon_normals);
                         if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id))
                         {

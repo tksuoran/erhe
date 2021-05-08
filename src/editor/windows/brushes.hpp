@@ -26,6 +26,7 @@ namespace editor
 {
 
 class Editor;
+class Grid_tool;
 class Operation_stack;
 
 class Brushes
@@ -74,6 +75,7 @@ private:
     std::shared_ptr<Editor>                                           m_editor;
     std::shared_ptr<Operation_stack>                                  m_operation_stack;
     std::shared_ptr<Scene_manager>                                    m_scene_manager;
+    std::shared_ptr<Grid_tool>                                        m_grid_tool;
     std::vector<std::shared_ptr<erhe::primitive::Primitive_geometry>> m_brushes;
     std::vector<std::shared_ptr<erhe::primitive::Material>>           m_materials;
     int                                                               m_selected_brush{0};

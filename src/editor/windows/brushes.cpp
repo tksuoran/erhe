@@ -3,6 +3,7 @@
 #include "operations/operation_stack.hpp"
 #include "operations/insert_operation.hpp"
 #include "scene/scene_manager.hpp"
+#include "tools/grid_tool.hpp"
 #include "tools/pointer_context.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/primitive/material.hpp"
@@ -14,6 +15,7 @@ namespace editor
 {
 
 using namespace std;
+using namespace erhe::geometry;
 using namespace erhe::primitive;
 using namespace erhe::toolkit;
 
@@ -26,6 +28,7 @@ void Brushes::connect()
 {
     m_operation_stack = get<Operation_stack>();
     m_scene_manager   = require<Scene_manager>();
+    m_grid_tool       = get<Grid_tool>();
 }
 
 void Brushes::initialize_component()
@@ -83,6 +86,24 @@ auto Brushes::update(Pointer_context& pointer_context) -> bool
     m_hover_tool     = pointer_context.hover_tool;
     m_hover_position = m_hover_content && pointer_context.hover_valid ? pointer_context.position_in_world() : std::optional<glm::vec3>{};
     m_hover_normal   = m_hover_content && pointer_context.hover_valid ? pointer_context.hover_normal        : std::optional<glm::vec3>{};
+
+    if (m_snap_to_grid && m_hover_position.has_value())
+    {
+        m_hover_position = m_grid_tool->snap(m_hover_position.value());
+    }
+    if (m_snap_to_hover_polygon && pointer_context.geometry)
+    {
+        Polygon_id polygon_id = pointer_context.polygon_id;
+        auto* polygon_centroids = pointer_context.geometry->polygon_attributes().find<glm::vec3>(c_polygon_centroids);
+        if ((polygon_centroids != nullptr) && polygon_centroids->has(polygon_id))
+        {
+            if (pointer_context.hover_mesh)
+            {
+                auto node = pointer_context.hover_mesh->node;
+                m_hover_position = node->world_from_node() * glm::vec4(polygon_centroids->get(polygon_id), 1.0f);
+            }
+        }
+    }
 
     if ((m_state == State::passive) &&
         pointer_context.mouse_button[Mouse_button_left].pressed &&

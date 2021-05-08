@@ -251,7 +251,13 @@ void Scene_manager::make_geometries()
 {
     ZoneScoped;
 
-    if constexpr (true) // test scene six platonic solids
+    if constexpr (true) // test scene with two cubes
+    {
+        make_geometry(shapes::make_cube(1.0), Primitive_geometry::Normal_style::polygon_normals);
+        make_geometry(shapes::make_cube(1.0), Primitive_geometry::Normal_style::polygon_normals);
+    }
+
+    if constexpr (true) // test scene with six platonic solids
     {
         if constexpr (true) // teapot
         {
@@ -270,6 +276,14 @@ void Scene_manager::make_geometries()
         make_geometry(shapes::make_tetrahedron(scale),   Primitive_geometry::Normal_style::polygon_normals);
         make_geometry(shapes::make_cube(scale),          Primitive_geometry::Normal_style::polygon_normals);
         make_geometry(shapes::make_cuboctahedron(scale), Primitive_geometry::Normal_style::polygon_normals);
+    }
+
+    if constexpr (false) // Round shapes
+    {
+        make_geometry(shapes::make_sphere(1.0f, 12 * 4, 4 * 6));
+        make_geometry(shapes::make_torus(0.6f, 0.3f, 42, 32));
+        make_geometry(shapes::make_cylinder(-1.0f, 1.0f, 1.0f, true, true, 32, 2));
+        make_geometry(shapes::make_cone(-1.0f, 1.0f, 1.0f, true, 42, 4));
     }
 
     if constexpr (false) // test scene for anisotropy debugging
@@ -299,14 +313,6 @@ void Scene_manager::make_geometries()
         y_rotate_ring_mesh->node->transforms.parent_from_node.set_rotation( glm::pi<float>() / 2.0f, glm::vec3(0.0f, 0.0f, 1.0f));
         z_rotate_ring_mesh->node->transforms.parent_from_node.set_rotation(-glm::pi<float>() / 2.0f, glm::vec3(0.0f, 1.0f, 0.0f));
         return;
-    }
-
-    if constexpr (true) // Round shapes
-    {
-        make_geometry(shapes::make_sphere(1.0f, 12 * 4, 4 * 6));
-        make_geometry(shapes::make_torus(0.6f, 0.3f, 42, 32));
-        make_geometry(shapes::make_cylinder(-1.0f, 1.0f, 1.0f, true, true, 32, 2));
-        make_geometry(shapes::make_cone(-1.0f, 1.0f, 1.0f, true, 42, 4));
     }
 
     if constexpr (false) // Catmull-clark subdivision testing

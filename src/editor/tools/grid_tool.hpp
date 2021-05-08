@@ -24,9 +24,9 @@ public:
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
-    void toolbar();
-
     auto state() const -> State override;
+
+    auto snap(glm::vec3 v) const -> glm::vec3;
 
 private:
     bool  m_enable    {true};

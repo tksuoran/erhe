@@ -24,10 +24,13 @@ public:
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
+    auto animation() const -> bool;
+
 private:
     std::shared_ptr<Scene_manager> m_scene_manager;
     int                            m_layer_index{0};
     int                            m_light_index{0};
+    bool                           m_animation{true};
 };
 
 } // namespace editor

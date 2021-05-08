@@ -4,3 +4,4 @@ engines:
     language: c++
 exclude_paths:
   - "build/**"
+  - "src/imgui/**"

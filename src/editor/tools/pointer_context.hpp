@@ -8,6 +8,11 @@
 #include <memory>
 #include <optional>
 
+namespace erhe::geometry
+{
+    class Geometry;
+}
+
 namespace erhe::scene
 {
     class ICamera;
@@ -84,6 +89,8 @@ struct Pointer_context
     size_t                             hover_local_index{0};
     bool                               hover_tool       {false};
     bool                               hover_content    {false};
+    erhe::geometry::Geometry*          geometry{nullptr};
+    uint32_t                           polygon_id{0};
 };
 
 } // namespace editor

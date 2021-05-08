@@ -281,7 +281,7 @@ void main() {
         float NdotV        = clampedDot(n, v);
         if (NdotL > 0.0 || NdotV > 0.0)
         {
-            vec3  h                = normalize(l + v);          // Direction of the vector between l and v, called halfway vector
+            vec3  h                = normalize(l + v);  // Direction of the vector between l and v, called halfway vector
             float NdotH            = clampedDot(n, h);
             float LdotH            = clampedDot(l, h);
             float VdotH            = clampedDot(v, h);
@@ -325,8 +325,12 @@ void main() {
         //  out_color.g = srgb_to_linear(v_texcoord.y * 1.0);
         //  out_color.b = 0.0;
     }
+    //vec3 t  = normalize(v_TBN[0]);
+    //vec3 b  = normalize(v_TBN[1]);
+    //vec3 ng = normalize(v_TBN[2]);
+
     //out_color.rgb = srgb_to_linear(0.5 * n + vec3(0.5));
-    //out_color.rgb = srgb_to_linear(0.5 * t + vec3(0.5));
+    //out_color.rgb = srgb_to_linear(0.5 * normalize(v_TBN[2]) + vec3(0.5));
     //out_color.rgb = srgb_to_linear(0.5 * b + vec3(0.5));
     //out_color.rgb = vec3(v_tangent_scale * 0.5 + 0.5);
     //out_color.r = srgb_to_linear(v_texcoord.x * 1.0);

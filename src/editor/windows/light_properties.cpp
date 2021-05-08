@@ -13,9 +13,16 @@ void Light_properties::connect()
 
 }
 
+auto Light_properties::animation() const -> bool
+{
+    return m_animation;
+}
+
 void Light_properties::window(Pointer_context&)
 {
     ImGui::Begin("Lights");
+    ImGui::Checkbox("Animation", &m_animation);
+    ImGui::Separator();
     const auto& layers = m_scene_manager->all_layers();
     int last_layer = static_cast<int>(layers.size()) - 1;
     if (ImGui::Button("Prev Layer"))
