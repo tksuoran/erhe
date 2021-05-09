@@ -377,7 +377,8 @@ void Trs_tool::update_axis_translate(Pointer_context& pointer_context)
     snap_translate(translation_vector);
     mat4 translation = create_translation(translation_vector);
 
-    m_visualization.root->transforms.parent_from_node.set(translation * m_drag.initial_world_from_local);
+    mat4 world_from_node = translation * m_drag.initial_world_from_local;
+    set_node_world_transform(world_from_node);
     update_transforms();
 }
 
@@ -509,7 +510,8 @@ void Trs_tool::update_plane_translate(Pointer_context& pointer_context)
     snap_translate(translation_vector);
     mat4 translation = create_translation(translation_vector);
 
-    m_visualization.root->transforms.parent_from_node.set(translation * m_drag.initial_world_from_local);
+    mat4 world_from_node = translation * m_drag.initial_world_from_local;
+    set_node_world_transform(world_from_node);
     update_transforms();
 }
 
@@ -620,16 +622,16 @@ void Trs_tool::update_rotate(Pointer_context& pointer_context)
 
     vec3  q_ = normalize(q);
 
-    float r_dot_side = dot(r_, side);
-    float r_dot_up   = dot(r_, up);
-    float q_dot_side = dot(q_, side);
-    float q_dot_up   = dot(q_, up);
-    float r_angle    = (r_dot_up > 0.0f) ? std::acos(r_dot_side) : 2.0f * pi<float>() - std::acos(r_dot_side);
-    float q_angle    = (q_dot_up > 0.0f) ? std::acos(q_dot_side) : 2.0f * pi<float>() - std::acos(q_dot_side);
-    float angle      = q_angle - r_angle;
-    mat4 rotation      = create_rotation(angle, rotation_axis);
-
-    root()->transforms.parent_from_node.set(untranslate * rotation * translate * m_drag.initial_world_from_local);
+    float r_dot_side      = dot(r_, side);
+    float r_dot_up        = dot(r_, up);
+    float q_dot_side      = dot(q_, side);
+    float q_dot_up        = dot(q_, up);
+    float r_angle         = (r_dot_up > 0.0f) ? std::acos(r_dot_side) : 2.0f * pi<float>() - std::acos(r_dot_side);
+    float q_angle         = (q_dot_up > 0.0f) ? std::acos(q_dot_side) : 2.0f * pi<float>() - std::acos(q_dot_side);
+    float angle           = q_angle - r_angle;
+    mat4  rotation        = create_rotation(angle, rotation_axis);
+    mat4  world_from_node = untranslate * rotation * translate * m_drag.initial_world_from_local;
+    set_node_world_transform(world_from_node);
     update_transforms();
 #endif
 
@@ -659,15 +661,29 @@ void Trs_tool::update_rotate_parallel(Pointer_context& pointer_context)
 
     float angle      = q_angle - r_angle;
 
-    vec3 rotation_axis = get_axis_direction();
+    vec3 rotation_axis   = get_axis_direction();
     vec4 initial_root_position_in_model = m_drag.initial_world_from_local * vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    mat4 translate     = create_translation(vec3(-initial_root_position_in_model));
-    mat4 untranslate   = create_translation(vec3( initial_root_position_in_model));
-    mat4 rotation      = create_rotation(angle, rotation_axis);
-
-    root()->transforms.parent_from_node.set(untranslate * rotation * translate * m_drag.initial_world_from_local);
+    mat4 translate       = create_translation(vec3(-initial_root_position_in_model));
+    mat4 untranslate     = create_translation(vec3( initial_root_position_in_model));
+    mat4 rotation        = create_rotation(angle, rotation_axis);
+    mat4 world_from_node = untranslate * rotation * translate * m_drag.initial_world_from_local;
+    set_node_world_transform(world_from_node);
     update_transforms();
 }
+
+void Trs_tool::set_node_world_transform(glm::mat4 world_from_node)
+{
+    mat4 parent_from_world;
+    if (root()->parent != nullptr)
+    {
+        parent_from_world = root()->parent->node_from_world() * world_from_node;
+    }
+    else
+    {
+        parent_from_world = world_from_node;
+    }
+    root()->transforms.parent_from_node.set(parent_from_world);
+ }
 
 void Trs_tool::render_update()
 {

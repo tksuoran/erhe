@@ -27,81 +27,77 @@ void Operations::window(Pointer_context& pointer_context)
         return;
     }
 
-    ImGui::Begin("Operations");
+    ImGui::Begin("Tools");
 
-    auto activeAction = pointer_context.priority_action;
+    auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
+    auto active_action = pointer_context.priority_action;
     for (unsigned int i = 0; i < static_cast<unsigned int>(Action::count); ++i)
     {
-        auto buttonAction = static_cast<Action>(i);
-        bool isActive = buttonAction == activeAction;
-        if (isActive)
-        {
-            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.3f, 0.4, 0.8f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.5, 0.9f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.5f, 0.6, 1.0f, 1.0f));
-        }
-        if (ImGui::Button(c_action_strings[i]) && (activeAction != buttonAction)) {
+        auto button_action = static_cast<Action>(i);
+        bool buttonPressed = make_button(c_action_strings[i],
+                                         (button_action == active_action) ? Button_mode::active
+                                                                          : Button_mode::normal,
+                                         button_size);
+        if (buttonPressed && (active_action != button_action)) {
             log_tools.trace("Setting priority action to {}", c_action_strings[i]);
-            pointer_context.priority_action = buttonAction;
-        }
-        if (isActive)
-        {
-            ImGui::PopStyleColor(3);
+            pointer_context.priority_action = button_action;
         }
     }
 
     Mesh_operation::Context context;
     context.scene_manager  = m_scene_manager;
     context.selection_tool = m_selection_tool;
-    if (m_operation_stack->can_undo() && ImGui::Button("Undo"))
+    if (make_button("Undo", m_operation_stack->can_undo() ? Button_mode::normal : Button_mode::disabled, button_size))
     {
         m_operation_stack->undo();
     }
-    if (m_operation_stack->can_redo() && ImGui::Button("Redo"))
+    if (make_button("Redo", m_operation_stack->can_redo() ? Button_mode::normal : Button_mode::disabled, button_size))
     {
         m_operation_stack->redo();
     }
 
-    if (ImGui::Button("Catmull-Clark Subdivision"))
+    if (ImGui::Button("Catmull-Clark", button_size))
     {
         auto op = std::make_shared<Catmull_clark_subdivision_operation>(context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Sqrt3 Subdivision"))
+    if (ImGui::Button("Sqrt3", button_size))
     {
         auto op = std::make_shared<Sqrt3_subdivision_operation>(context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Triangulate"))
+    if (ImGui::Button("Triangulate", button_size))
     {
         auto op = std::make_shared<Triangulate_operation>(context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Subdivide"))
+    if (ImGui::Button("Subdivide", button_size))
     {
         auto op = std::make_shared<Subdivide_operation>(context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Dual"))
+    if (ImGui::Button("Dual", button_size))
     {
         auto op = std::make_shared<Dual_operator>(context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Ambo"))
+    if (ImGui::Button("Ambo", button_size))
     {
         auto op = std::make_shared<Ambo_operator>(context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Truncate"))
+    if (ImGui::Button("Truncate", button_size))
     {
         auto op = std::make_shared<Truncate_operator>(context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Snub"))
-    {
-        auto op = std::make_shared<Snub_operator>(context);
-        m_operation_stack->push(op);
-    }
+    // Snub is not implemented
+    //
+    //if (ImGui::Button("Snub"))
+    //{
+    //    auto op = std::make_shared<Snub_operator>(context);
+    //    m_operation_stack->push(op);
+    //}
     ImGui::End();
 }
 

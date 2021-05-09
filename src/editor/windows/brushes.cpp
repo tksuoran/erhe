@@ -82,25 +82,34 @@ auto Brushes::update(Pointer_context& pointer_context) -> bool
         return false;
     }
 
-    m_hover_content  = pointer_context.hover_content;
-    m_hover_tool     = pointer_context.hover_tool;
-    m_hover_position = m_hover_content && pointer_context.hover_valid ? pointer_context.position_in_world() : std::optional<glm::vec3>{};
-    m_hover_normal   = m_hover_content && pointer_context.hover_valid ? pointer_context.hover_normal        : std::optional<glm::vec3>{};
+    m_hover_content     = pointer_context.hover_content;
+    m_hover_tool        = pointer_context.hover_tool;
+    m_hover_node        = pointer_context.hover_mesh ? pointer_context.hover_mesh->node : std::shared_ptr<erhe::scene::Node>{};
+    m_hover_primitive   = pointer_context.hover_primitive;
+    m_hover_local_index = pointer_context.hover_local_index;
+    m_hover_geometry    = pointer_context.geometry;
+    m_hover_position    = m_hover_content && pointer_context.hover_valid ? pointer_context.position_in_world() : std::optional<glm::vec3>{};
+    m_hover_normal      = m_hover_content && pointer_context.hover_valid ? pointer_context.hover_normal        : std::optional<glm::vec3>{};
+    if (m_hover_node && m_hover_position.has_value())
+    {
+        m_hover_position = m_hover_node->node_from_world() * glm::vec4(m_hover_position.value(), 1.0f);
+    }
 
     if (m_snap_to_grid && m_hover_position.has_value())
     {
         m_hover_position = m_grid_tool->snap(m_hover_position.value());
     }
-    if (m_snap_to_hover_polygon && pointer_context.geometry)
+    if (m_snap_to_hover_polygon && pointer_context.hover_mesh && (m_hover_geometry != nullptr))
     {
-        Polygon_id polygon_id = pointer_context.polygon_id;
-        auto* polygon_centroids = pointer_context.geometry->polygon_attributes().find<glm::vec3>(c_polygon_centroids);
+        auto* polygon_centroids = m_hover_geometry->polygon_attributes().find<glm::vec3>(c_polygon_centroids);
+        Polygon_id polygon_id = static_cast<Polygon_id>(m_hover_local_index);
         if ((polygon_centroids != nullptr) && polygon_centroids->has(polygon_id))
         {
             if (pointer_context.hover_mesh)
             {
                 auto node = pointer_context.hover_mesh->node;
-                m_hover_position = node->world_from_node() * glm::vec4(polygon_centroids->get(polygon_id), 1.0f);
+                //m_hover_position = node->world_from_node() * glm::vec4(polygon_centroids->get(polygon_id), 1.0f);
+                m_hover_position = polygon_centroids->get(polygon_id);
             }
         }
     }
@@ -179,6 +188,7 @@ void Brushes::update_mesh_node_transform()
     }
 
     auto transform = get_brush_transform();
+    node->parent = m_hover_node.get(); // TODO reference count
     node->transforms.parent_from_node.set(transform);
 }
 
@@ -194,7 +204,7 @@ void Brushes::do_insert_operation()
     auto material           = m_materials[m_selected_material];
 
     auto node = make_shared<erhe::scene::Node>();
-    node->parent = nullptr; // TODO
+    node->parent = m_hover_node.get(); // TODO reference count
     node->transforms.parent_from_node.set(transform);
     node->update();
 
@@ -260,15 +270,48 @@ void Brushes::window(Pointer_context&)
 {
     ImGui::Begin("Brushes");
 
+    ImGui::Text("Shapes");
     if (!m_brush_names.empty())
     {
-        ImGui::Combo("Brush", &m_selected_brush,
-                     m_brush_names.data(), static_cast<int>(m_brush_names.size()));
+        size_t brush_count = m_brush_names.size();
+        auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth() / static_cast<float>(brush_count), 0.0f);
+        for (int i = 0; i < brush_count; ++i)
+        {
+            if (i > 0)
+            {
+                ImGui::SameLine();
+            }
+            bool button_pressed = make_button(m_brush_names[i],
+                                              (m_selected_brush == i) ? Button_mode::active
+                                                                      : Button_mode::normal,
+                                              button_size);
+            if (button_pressed)
+            {
+                m_selected_brush = i;
+            }
+        }
     }
+    ImGui::Separator();
+    ImGui::Text("Materials");
     if (!m_material_names.empty())
     {
-        ImGui::Combo("Material", &m_selected_material,
-                     m_material_names.data(), static_cast<int>(m_material_names.size()));
+        size_t material_count = m_material_names.size();
+        auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth() / static_cast<float>(material_count), 0.0f);
+        for (int i = 0; i < material_count; ++i)
+        {
+            if (i > 0)
+            {
+                ImGui::SameLine();
+            }
+            bool button_pressed = make_button(m_material_names[i],
+                                              (m_selected_material == i) ? Button_mode::active
+                                                                         : Button_mode::normal,
+                                              button_size);
+            if (button_pressed)
+            {
+                m_selected_material = i;
+            }
+        }
     }
     ImGui::SliderFloat("Scale", &m_scale, 0.0f, 2.0f);
     ImGui::Checkbox("Snap to Polygon", &m_snap_to_hover_polygon);

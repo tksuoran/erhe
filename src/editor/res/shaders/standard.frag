@@ -137,7 +137,7 @@ vec3 BRDF_specularAnisotropicGGX(vec3 f0, vec3 f90, float alphaRoughness,
   //vec3  aggx = F * a_V * a_D;
     vec3  iggx = F * i_V * i_D; // vec3(0.1) * i_D;
     vec3  aggx = F * a_V * a_D; // vec3(0.1) * a_D;
-    return mix(iggx, aggx, 1.0);
+    return mix(iggx, aggx, 0.0);
 }
 
 vec3 BRDF_lambertian(vec3 f0, vec3 f90, vec3 diffuseColor, float VdotH) {

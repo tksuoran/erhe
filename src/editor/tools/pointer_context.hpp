@@ -90,7 +90,6 @@ struct Pointer_context
     bool                               hover_tool       {false};
     bool                               hover_content    {false};
     erhe::geometry::Geometry*          geometry{nullptr};
-    uint32_t                           polygon_id{0};
 };
 
 } // namespace editor

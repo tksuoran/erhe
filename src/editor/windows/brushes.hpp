@@ -20,6 +20,7 @@ namespace erhe::primitive
 namespace erhe::scene
 {
     class Mesh;
+    class Node;
 }
 
 namespace editor
@@ -80,15 +81,18 @@ private:
     std::vector<std::shared_ptr<erhe::primitive::Material>>           m_materials;
     int                                                               m_selected_brush{0};
     int                                                               m_selected_material{0};
-    bool                     m_snap_to_hover_polygon{false};
-    bool                     m_snap_to_grid         {false};
-    std::vector<const char*> m_brush_names;
-    std::vector<const char*> m_material_names;
-    bool                     m_hover_content{false};
-    bool                     m_hover_tool   {false};
-    std::optional<glm::vec3> m_hover_position;
-    std::optional<glm::vec3> m_hover_normal;
-
+    bool                               m_snap_to_hover_polygon{false};
+    bool                               m_snap_to_grid         {false};
+    std::vector<const char*>           m_brush_names;
+    std::vector<const char*>           m_material_names;
+    bool                               m_hover_content{false};
+    bool                               m_hover_tool   {false};
+    std::optional<glm::vec3>           m_hover_position;
+    std::optional<glm::vec3>           m_hover_normal;
+    std::shared_ptr<erhe::scene::Node> m_hover_node;
+    erhe::geometry::Geometry*          m_hover_geometry;
+    size_t                             m_hover_primitive;
+    size_t                             m_hover_local_index;
     State                              m_state{State::passive};
     std::shared_ptr<erhe::scene::Mesh> m_brush_mesh;
     float                              m_scale{1.0f};

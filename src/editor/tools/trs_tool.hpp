@@ -143,6 +143,8 @@ private:
     // and intersects it to plane of current handle;
     auto project_pointer_to_plane(Pointer_context& pointer_context, glm::vec3 p, glm::vec3& q) -> bool;
 
+    void set_node_world_transform(glm::mat4 world_from_node);
+
     void update_transforms()
     {
         if (root() == nullptr)

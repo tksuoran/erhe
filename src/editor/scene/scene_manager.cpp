@@ -251,13 +251,12 @@ void Scene_manager::make_geometries()
 {
     ZoneScoped;
 
-    if constexpr (true) // test scene with two cubes
+    if constexpr (true) // test scene with one cube
     {
-        make_geometry(shapes::make_cube(1.0), Primitive_geometry::Normal_style::polygon_normals);
         make_geometry(shapes::make_cube(1.0), Primitive_geometry::Normal_style::polygon_normals);
     }
 
-    if constexpr (true) // test scene with six platonic solids
+    if constexpr (false) // test scene with six platonic solids
     {
         if constexpr (true) // teapot
         {
@@ -550,7 +549,7 @@ void Scene_manager::make_punctual_light_nodes()
                                intensity);
     }
 
-    int spot_light_count = 4;
+    int spot_light_count = 0;
     for (int i = 0; i < spot_light_count; ++i)
     {
         float rel   = static_cast<float>(i) / static_cast<float>(spot_light_count);
@@ -654,7 +653,7 @@ void Scene_manager::add_scene()
     make_materials();
     make_mesh_nodes();
     make_punctual_light_nodes();
-    add_floor();
+    //add_floor();
     initialize_cameras();
 }
 
