@@ -26,6 +26,7 @@ public:
     };
 
     explicit Node_transform_operation(Context context);
+    virtual ~Node_transform_operation() = default;
 
     void execute() override;
     void undo() override;
@@ -68,6 +69,7 @@ public:
     };
 
     explicit Mesh_insert_remove_operation(Context& context);
+    virtual ~Mesh_insert_remove_operation() = default;
 
     void execute() override;
     void undo() override;
@@ -90,6 +92,7 @@ public:
     };
 
     explicit Light_insert_remove_operation(Context& context);
+    virtual ~Light_insert_remove_operation() = default;
 
     void execute() override;
     void undo() override;

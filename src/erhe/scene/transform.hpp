@@ -14,6 +14,7 @@ public:
     Transform() = default;
 
     Transform(const Transform& t);
+    Transform& operator=(const Transform& t);
 
     explicit Transform(glm::mat4 m);
 

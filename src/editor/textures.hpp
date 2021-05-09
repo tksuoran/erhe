@@ -15,15 +15,13 @@ class Textures
     : public erhe::components::Component
 {
 public:
-    Textures()
-        : erhe::components::Component{"Textures"}
-    {
-    }
+    static constexpr const char* c_name = "Textures";
+    Textures() : erhe::components::Component{c_name} {}
 
     virtual ~Textures() = default;
 
-    void connect(std::shared_ptr<erhe::graphics::ImageTransfer> image_transder);
-
+    // Implements COmponent
+    void connect() override;
     void initialize_component() override;
 
     auto load(const std::filesystem::path& path)

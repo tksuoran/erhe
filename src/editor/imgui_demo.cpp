@@ -17,17 +17,14 @@
 namespace editor {
 
 Imgui_demo::Imgui_demo()
-    : erhe::components::Component{"ImGui Demo"}
+    : erhe::components::Component{c_name}
 {
 }
 
-void Imgui_demo::connect(std::shared_ptr<Application>                          application,
-                         std::shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker)
+void Imgui_demo::connect()
 {
-    m_application            = application;
-    m_pipeline_state_tracker = pipeline_state_tracker;
-
-    initialization_depends_on(pipeline_state_tracker);
+    m_application            = get<Application>();
+    m_pipeline_state_tracker = require<erhe::graphics::OpenGL_state_tracker>();
 }
 
 void Imgui_demo::disconnect()

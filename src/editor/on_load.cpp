@@ -136,7 +136,6 @@ public:
 
 private:
     Application&                                   m_application;
-    erhe::components::Components&                  m_components;
     std::future<bool>                              m_future;
     std::unique_ptr<erhe::toolkit::Context_window> m_loading_context;
 };

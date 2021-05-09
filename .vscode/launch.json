@@ -30,10 +30,20 @@
             "externalConsole": false
         },
         {
-            "name": "editor Ninja",
+            "name": "editor Ninja (Windows)",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/src/editor/Debug/editor",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/src/editor",
+            "externalConsole": false
+        },
+        {
+            "name": "editor Ninja (Linux)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/src/editor/editor",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/src/editor",

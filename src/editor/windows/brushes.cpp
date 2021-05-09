@@ -275,7 +275,7 @@ void Brushes::window(Pointer_context&)
     {
         size_t brush_count = m_brush_names.size();
         auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth() / static_cast<float>(brush_count), 0.0f);
-        for (int i = 0; i < brush_count; ++i)
+        for (int i = 0; i < static_cast<int>(brush_count); ++i)
         {
             if (i > 0)
             {
@@ -297,7 +297,7 @@ void Brushes::window(Pointer_context&)
     {
         size_t material_count = m_material_names.size();
         auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth() / static_cast<float>(material_count), 0.0f);
-        for (int i = 0; i < material_count; ++i)
+        for (int i = 0; i < static_cast<int>(material_count); ++i)
         {
             if (i > 0)
             {

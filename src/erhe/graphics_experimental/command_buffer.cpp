@@ -13,13 +13,9 @@ auto Command_buffer::opengl_state_tracker()
     return m_pipeline_state_tracker.get();
 }
 
-void Command_buffer::connect(std::shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker)
+void Command_buffer::connect()
 {
-    Expects(pipeline_state_tracker);
-
-    m_pipeline_state_tracker = pipeline_state_tracker;
-
-    Ensures(m_pipeline_state_tracker);
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 }
 
 void Command_buffer::bind_pipeline(Pipeline* pipeline)

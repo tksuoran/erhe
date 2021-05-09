@@ -5,20 +5,22 @@
 
 erhe is a C++ library for modern OpenGL experiments.
 
--   Use direct state access
+-   Use direct state access (DSA)
 -   Use persistently mapped buffers
 -   Use multi draw indirect
 -   Use latest OpenGL and GLSL versions
 -   OpenGL state can be managed with pipelines a bit similar to Vulkan
 -   Simple type safe(r) wrapper for GL API (see erhe::gl)
+-   Supports Windows and Linux
 
 erhe is evolution of RenderStack <https://github.com/tksuoran/RenderStack>
 
 ## erhe::components namespace
 
 erhe::components namespace provides classes to manage components.
-Components have initialize() method which is automatically called
-in correct order, based on declared dependencies.
+Components have connect() and initialize() methods which are
+automatically called in correct order, based on declared
+dependencies.
 
 ### erhe::components::Component
 
@@ -33,22 +35,19 @@ in correct order, based on declared dependencies.
 
     -   connect():
 
-        -   Other components are passed as arguments, in shared_ptrs.
+        -   Other components can be fetched with get<> or require<>
 
         -   Other components have C++ constructors called, but they
             have not yet been initialized with Component::initialize()
 
-        -   Store other components to member variables
-
-        -   If initialization of this component depends on other components,
-            these dependencies must be declared by calling
-            initialization_depends_on()
+        -   Components fetched with require<> are added as dependencies,
+            and they will be initialized before Component::initialize()
+            will be called.
 
     -   initialize():
 
-        -   When initialize() is called for a component, then other components
-            delcared with initialization_depends_on() are guaranteed to be
-            already initialized.
+        -   When initialize() is called for a component, then dependency components
+            are guaranteed to be already initialized.
 
 ### erhe::components::Components
 
@@ -59,17 +58,16 @@ in correct order, based on declared dependencies.
 
 ### Usage
 
--   In each Component constructore, declare dependencies to other Components
-    with Component::initialization_depends_on()
+-   Construct all components, using Components::add(make_shared<>())
 
--   Construct all components, using make_shared
+-   In each Component connect(), declare dependencies to other Components
+    with Component::require<>()
 
--   Register all components, in any order, with Components::add()
-
--   Once all components have been registered, call Components::initialize_components().
-    This will call Component::initialize() for each component, in order which respects
-    all declared dependencies. If there are circular dependencies, initialize_components()
-    will abort.
+-   Once all components have been added, call Components::initialize_components().
+    This will call Component::connect() for all components, followed by
+    Component::initialize() for each component, in order which respects
+    all declared dependencies. If there are circular dependencies,
+    initialize_components() will log and error and abort.
 
 ## erhe::geometry namespace
 
@@ -82,6 +80,15 @@ Arbitrary attributes can be associated with each Point, Polygon and Corner.
 
 These classes are designed for manipulating 3D objects, not for rendering them.
 See erhe::mesh how to render geometry objects.
+
+Some features:
+
+-  Catmull-Clark subdivision operation
+-  Sqrt3 subdivision operation
+-  Conway operators:
+    -   Dual
+    -   Ambo
+    -   Truncate
 
 ## erhe::gl namespace
 

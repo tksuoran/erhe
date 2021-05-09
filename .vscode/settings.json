@@ -106,7 +106,8 @@
         "byte": "cpp",
         "narrow": "cpp",
         "util": "cpp",
-        "stop_token": "cpp"
+        "stop_token": "cpp",
+        "charconv": "cpp"
     },
     "C_Cpp.errorSquiggles": "Disabled",
     "C_Cpp.dimInactiveRegions": false,

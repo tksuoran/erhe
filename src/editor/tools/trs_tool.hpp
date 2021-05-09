@@ -177,7 +177,7 @@ private:
     bool                                       m_translate_snap_enable{false};
     bool                                       m_rotate_snap_enable   {false};
     float                                      m_translate_snap       {0.1f};
-    float                                      m_rotate_snap          {15.0f};
+    //float                                      m_rotate_snap          {15.0f};
     erhe::scene::Node::Transforms              m_before;
 
     // These are for debug rendering
@@ -266,7 +266,7 @@ private:
     {
         float distance;
     };
-    Debug_info m_debug_info;
+    //Debug_info m_debug_info;
 };
 
 } // namespace editor

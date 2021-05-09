@@ -175,7 +175,6 @@ Property_map_collection<Key_type>::interpolate(
 
     for (auto& entry : m_entries)
     {
-        const std::string&           map_name   = entry.key;
         Property_map_base<Key_type>* src_map    = entry.value.get();
         const auto&                  descriptor = src_map->descriptor();
         if (descriptor.interpolation_mode == Interpolation_mode::none)

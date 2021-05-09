@@ -14,20 +14,19 @@ namespace editor {
 class Application;
 
 class Imgui_demo
-    : public erhe::toolkit::View
-    , public erhe::components::Component
+    : public erhe::components::Component
+    , public erhe::toolkit::View
 {
 public:
+    static constexpr const char* c_name = "Imgui_demo";
     Imgui_demo();
-
     virtual ~Imgui_demo() = default;
 
-    void connect(std::shared_ptr<Application>                          application,
-                 std::shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker);
+    // Implements Componets
+    void connect() override;
+    void initialize_component() override;
 
     void disconnect();
-
-    void initialize_component() override;
 
     void on_load();
 

@@ -9,9 +9,9 @@ using erhe::graphics::PNG_loader;
 using erhe::log::Log;
 using std::shared_ptr;
 
-void Textures::connect(std::shared_ptr<erhe::graphics::ImageTransfer> image_transfer)
+void Textures::connect()
 {
-    m_image_transfer = image_transfer;
+    m_image_transfer = require<erhe::graphics::ImageTransfer>();
 
     initialization_depends_on(image_transfer);
 

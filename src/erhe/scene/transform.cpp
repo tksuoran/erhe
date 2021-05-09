@@ -14,6 +14,13 @@ Transform::Transform(const Transform& t)
     m_inverse_matrix = t.m_inverse_matrix;
 }
 
+Transform& Transform::operator=(const Transform& t)
+{
+    m_matrix         = t.m_matrix;
+    m_inverse_matrix = t.m_inverse_matrix;
+    return *this;
+}
+
 Transform::Transform(mat4 m)
 {
     m_matrix         = m;

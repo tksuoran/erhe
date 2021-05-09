@@ -45,7 +45,6 @@ void Geometry_operation::make_polygon_centroids()
          src_polygon_id < polygon_end;
          ++src_polygon_id)
     {
-        Polygon& src_polygon = source.polygons[src_polygon_id];
         make_new_point_from_polygon_centroid(src_polygon_id);
     }
 }

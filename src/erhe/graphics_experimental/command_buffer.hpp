@@ -44,12 +44,11 @@ class Command_buffer
     : public erhe::components::Component
 {
 public:
-    Command_buffer()
-        : erhe::components::Component{"erhe::graphics::Command_buffer"}
-    {
-    }
+    static constexpr const char* c_name = "erhe::graphics::Command_buffer";
+    Command_buffer() : erhe::components::Component{c_name} {}
 
-    void connect(std::shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker);
+    // Implements Component
+    void connect() override;
 
     // vkCmdBindPipeline
     void bind_pipeline(Pipeline* pipeline);
