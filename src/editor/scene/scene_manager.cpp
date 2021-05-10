@@ -4,6 +4,8 @@
 #include "renderers/programs.hpp"
 #include "log.hpp"
 
+#include "SkylineBinPack.h" // RectangleBinPack
+
 #include "erhe/geometry/operation/catmull_clark_subdivision.hpp"
 #include "erhe/geometry/operation/clone.hpp"
 #include "erhe/geometry/shapes/box.hpp"
@@ -251,14 +253,17 @@ void Scene_manager::make_geometries()
 {
     ZoneScoped;
 
-    if constexpr (true) // test scene with one cube
+    if constexpr (true) // test scene for merge
     {
-        make_geometry(shapes::make_cube(1.0), Primitive_geometry::Normal_style::polygon_normals);
+        //make_geometry(shapes::make_tetrahedron(2.0),   Primitive_geometry::Normal_style::polygon_normals);
+        //make_geometry(shapes::make_cube(2.0),          Primitive_geometry::Normal_style::polygon_normals);
+        //make_geometry(shapes::make_cuboctahedron(2.0), Primitive_geometry::Normal_style::polygon_normals);
+        make_geometry(shapes::make_dodecahedron(2.0),  Primitive_geometry::Normal_style::polygon_normals);
     }
 
     if constexpr (false) // test scene with six platonic solids
     {
-        if constexpr (true) // teapot
+        if constexpr (false) // teapot
         {
             auto geometry = parse_obj_geometry("res/models/teapot.obj");
             geometry.compute_polygon_normals();
@@ -328,11 +333,19 @@ void Scene_manager::make_geometries()
         make_geometry(std::move(dodecahedron1), Primitive_geometry::Normal_style::polygon_normals);
     }
 
-    if constexpr (false) // Johnson solid 127
+    if constexpr (false) // Johnson solids
     {
-        auto geometry = make_json_polyhedron("res/polyhedra/127.json");
-        geometry.compute_polygon_normals();
-        make_geometry(std::move(geometry), Primitive_geometry::Normal_style::polygon_normals);
+        Json_library library("res/polyhedra/johnson.json");
+        for (const auto& key_name : library.names)
+        {
+            auto geometry = library.make_geometry(key_name);
+            if (geometry.polygon_count() == 0)
+            {
+                continue;
+            }
+            geometry.compute_polygon_normals();
+            make_geometry(std::move(geometry), Primitive_geometry::Normal_style::polygon_normals);
+        }
     }
 }
 
@@ -346,18 +359,18 @@ void Scene_manager::make_materials()
                                        0.00f,
                                        0.50f);
         add(m);
-        return;
+        //return;
     }
 
-    for (float z = -15.0f; z < 15.1f; z += 5.0f)
+    for (size_t i = 0, end = 10; i < end; ++i)
     {
-        float rel = (z + 15.0f) / 30.0f;
-        float h   = rel * 360.0f;
-        float s   = 0.9f;
-        float v   = 1.0f;
+        float rel        = static_cast<float>(i) / static_cast<float>(end);
+        float hue        = rel * 360.0f;
+        float saturation = 0.9f;
+        float value      = 1.0f;
         float R, G, B;
-        erhe::toolkit::hsv_to_rgb(h, s, v, R, G, B);
-        auto m = make_shared<Material>(fmt::format("Material {}", m_materials.size()),
+        erhe::toolkit::hsv_to_rgb(hue, saturation, value, R, G, B);
+        auto m = make_shared<Material>(fmt::format("Hue {}", hue),
                                        vec4(R, G, B, 1.0f),
                                        1.00f,
                                        0.95f,
@@ -379,10 +392,11 @@ void Scene_manager::add_floor()
     auto floor_geometry_entry = Geometry_entry
     {
         shapes::make_box(vec3(40.0f, 1.0f, 40.0f),
-                              ivec3(1, 1, 1),
-                              1.0f),
+                         ivec3(40, 1, 40),
+                         1.0f),
         Primitive_geometry::Normal_style::polygon_normals
     };
+    floor_geometry_entry.geometry->name = "floor";
 
     floor_geometry_entry.geometry->build_edges();
 
@@ -398,52 +412,83 @@ void Scene_manager::make_mesh_nodes()
 {
     ZoneScoped;
 
-    float min_x = 0.0f;
-    float max_x = 0.0f;
-    float gap   = 0.5f;
+    struct Pack_entry
+    {
+        Pack_entry() = default;
+        Pack_entry(const std::shared_ptr<Primitive_geometry>& primitive_geometry)
+            : primitive_geometry{primitive_geometry}
+            , rectangle{0, 0, 0, 0}
+        {
+        }
 
-    size_t geometry_index = 0;
+        std::shared_ptr<Primitive_geometry> primitive_geometry;
+        rbp::Rect                           rectangle;
+    };
+
+    std::vector<Pack_entry> pack_entries;
     for (auto& entry : m_geometries)
     {
-        auto  primitive_geometry = make_primitive_geometry(entry);
+        pack_entries.emplace_back(make_primitive_geometry(entry));
+    }
 
-        vec3  min   = primitive_geometry->bounding_box_min;
-        vec3  max   = primitive_geometry->bounding_box_max;
-        float width = max.x - min.x;
+    rbp::SkylineBinPack packer;
+    int group_width = 2;
+    int group_depth = 2;
+    for (;;)
+    {
+        // Reserve 1 pixel border
+        packer.Init(group_width, group_depth, false);
 
-        float x;
-        if (fabs(min_x) < fabs(max_x))
+        bool pack_failed = false;
+        for (auto& entry : pack_entries)
         {
-            min_x -= 0.5f * gap;
-            min_x -= width * 0.5f;
-            x = min_x;
-            min_x -= width * 0.5f;
-            min_x -= 0.5f * gap;
+            glm::vec3 size = entry.primitive_geometry->bounding_box_max - entry.primitive_geometry->bounding_box_min;
+            int width = static_cast<int>(size.x + 0.5f);
+            int depth = static_cast<int>(size.z + 0.5f);
+            entry.rectangle = packer.Insert(width + 1, depth + 1, rbp::SkylineBinPack::LevelBottomLeft);
+            if ((entry.rectangle.width  == 0) ||
+                (entry.rectangle.height == 0))
+            {
+                pack_failed = true;
+                break;
+            }
+        }
+
+        if (!pack_failed)
+        {
+            break;
+        }
+
+        if (group_width <= group_depth)
+        {
+            group_width *= 2;
         }
         else
         {
-            max_x += 0.5f * gap;
-            max_x += width * 0.5f;
-            x = max_x;
-            max_x += width * 0.5f;
-            max_x += 0.5f * gap;
+            group_depth *= 2;
         }
 
-        size_t material_index = 0;
-        float z = 0.0f; // XXX only one material/mesh node for debugging
-        //for (float z = -15.0f; z < 15.1f; z += 5.0f)
-        {
-            shared_ptr<Material> material = m_materials.at(material_index);
+        VERIFY(group_width <= 16384);
+    }
 
-            auto m = make_mesh_node(entry.geometry->name(),
-                                    primitive_geometry,
-                                    material,
-                                    m_content_layer,
-                                    nullptr,
-                                    vec3(x, -min.y, z));
-            ++material_index;
-        }
-        ++geometry_index;
+    size_t material_index = 0;
+    for (auto& entry : pack_entries)
+    {
+        auto primitive_geometry = entry.primitive_geometry;
+        float x = static_cast<float>(entry.rectangle.x) + 0.5f * static_cast<float>(entry.rectangle.width);
+        float z = static_cast<float>(entry.rectangle.y) + 0.5f * static_cast<float>(entry.rectangle.height);
+        float y = -entry.primitive_geometry->bounding_box_min.y;
+        x -= 0.5f * static_cast<float>(group_width);
+        z -= 0.5f * static_cast<float>(group_depth);
+        shared_ptr<Material> material = m_materials.at(material_index);
+
+        auto m = make_mesh_node(primitive_geometry->source_geometry->name,
+                                primitive_geometry,
+                                material,
+                                m_content_layer,
+                                nullptr,
+                                vec3(x, y, z));
+        material_index = (material_index + 1) % m_materials.size();
     }
 }
 
@@ -653,7 +698,7 @@ void Scene_manager::add_scene()
     make_materials();
     make_mesh_nodes();
     make_punctual_light_nodes();
-    //add_floor();
+    add_floor();
     initialize_cameras();
 }
 

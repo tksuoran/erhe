@@ -70,6 +70,15 @@ void Selection_tool::cancel_ready()
 
 auto Selection_tool::update(Pointer_context& pointer_context) -> bool
 {
+    if (pointer_context.priority_action != Action::select)
+    {
+        if (m_state != State::passive)
+        {
+            cancel_ready();
+        }
+        return false;
+    }
+
     if (!pointer_context.scene_view_focus ||
         !pointer_context.pointer_in_content_area())
     {

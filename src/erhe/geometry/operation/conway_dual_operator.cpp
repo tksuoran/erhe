@@ -45,7 +45,7 @@ Conway_dual_operator::Conway_dual_operator(Geometry& src, Geometry& destination,
 
 auto dual(Geometry& source) -> Geometry
 {
-    Geometry result(fmt::format("dual({})", source.name()));
+    Geometry result(fmt::format("dual({})", source.name));
     Conway_dual_operator operation(source, result);
     return result;
 }

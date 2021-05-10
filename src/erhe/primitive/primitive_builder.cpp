@@ -217,7 +217,7 @@ Primitive_builder::Property_maps::Property_maps(const Geometry&    geometry,
 {
     ZoneScoped;
 
-    log_primitive_builder.trace("Property_maps::Property_maps() for geometry = {}\n", geometry.name());
+    log_primitive_builder.trace("Property_maps::Property_maps() for geometry = {}\n", geometry.name);
     Log::Indenter indenter;
 
     polygon_normals      = geometry.polygon_attributes().find<vec3>(erhe::geometry::c_polygon_normals     );
@@ -672,7 +672,7 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
     log_primitive_builder.trace("Primitive_builder::build_mesh_from_geometry(usage = {}, normal_style = {}) geometry = {}\n",
                                 gl::c_str(m_buffer_info.usage),
                                 Primitive_geometry::desc(m_format_info.normal_style),
-                                m_geometry.name());
+                                m_geometry.name);
     Log::Indenter indenter;
 
     m_vertex_format = m_buffer_info.vertex_format.get();

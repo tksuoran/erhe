@@ -24,7 +24,7 @@ void main()
     float d        = distance(view_position_in_world, position.xyz);
     //float max_size = (NdotV > 0.0) ? primitive.primitives[gl_DrawID].size : 0.0; // cull back facing points
     float max_size = primitive.primitives[gl_DrawID].size;
-    float bias     = 0.0005 * NdotV;
+    float bias     = 0.0005 * abs(NdotV);
     v_normal       = normal;
     v_color        = primitive.primitives[gl_DrawID].color;
     gl_Position    = clip_from_world * position;

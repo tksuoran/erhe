@@ -68,7 +68,7 @@ Conway_ambo_operator::Conway_ambo_operator(Geometry& src, Geometry& destination)
 
 auto ambo(Geometry& source) -> Geometry
 {
-    Geometry result(fmt::format("ambo({})", source.name()));
+    Geometry result(fmt::format("ambo({})", source.name));
     Conway_ambo_operator operation(source, result);
     return result;
 }

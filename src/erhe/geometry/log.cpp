@@ -18,5 +18,7 @@ Log::Category log_catmull_clark    (Log::Color::CYAN,   Log::Color::GRAY, Log::L
 Log::Category log_triangulate      (Log::Color::CYAN,   Log::Color::GRAY, Log::Level::LEVEL_WARN);
 Log::Category log_subdivide        (Log::Color::CYAN,   Log::Color::GRAY, Log::Level::LEVEL_WARN);
 Log::Category log_attribute_maps   (Log::Color::CYAN,   Log::Color::GRAY, Log::Level::LEVEL_WARN);
+Log::Category log_merge            (Log::Color::YELLOW, Log::Color::GRAY, Log::Level::LEVEL_TRACE);
+Log::Category log_weld             (Log::Color::BLUE,   Log::Color::GRAY, Log::Level::LEVEL_TRACE);
 
 } // namespace erhe::geometry

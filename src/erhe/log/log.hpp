@@ -21,7 +21,8 @@ struct fmt::formatter<glm::vec4>
 	template <typename FormatContext>
     auto format(const glm::vec4& vec, FormatContext& ctx)
     {
-        return format_to(ctx.out(), "({: #08f}, {: #08f}, {: #08f}, {: #08f})", vec.x, vec.y, vec.z, vec.w);
+        //return format_to(ctx.out(), "({: #08f}, {: #08f}, {: #08f}, {: #08f})", vec.x, vec.y, vec.z, vec.w);
+        return format_to(ctx.out(), "({: 14f}, {: 14f}, {: 14f}, {: 14f})", vec.x, vec.y, vec.z, vec.w);
     }
 };
 
@@ -36,7 +37,8 @@ struct fmt::formatter<glm::vec3>
 	template <typename FormatContext>
     auto format(const glm::vec3& vec, FormatContext& ctx)
     {
-        return format_to(ctx.out(), "({: #08f}, {: #08f}, {: #08f})", vec.x, vec.y, vec.z);
+        //return format_to(ctx.out(), "({: #08f}, {: #08f}, {: #08f})", vec.x, vec.y, vec.z);
+        return format_to(ctx.out(), "({: 14f}, {: 14f}, {: 14f})", vec.x, vec.y, vec.z);
     }
 };
 
@@ -51,7 +53,8 @@ struct fmt::formatter<glm::vec2>
 	template <typename FormatContext>
     auto format(const glm::vec2& vec, FormatContext& ctx)
     {
-        return format_to(ctx.out(), "({: #08f}, {: #08f})", vec.x, vec.y);
+        //return format_to(ctx.out(), "({: #08f}, {: #08f})", vec.x, vec.y);
+        return format_to(ctx.out(), "({: 14f}, {: 14f})", vec.x, vec.y);
     }
 };
 

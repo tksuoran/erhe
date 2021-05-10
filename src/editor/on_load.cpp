@@ -136,6 +136,7 @@ public:
 
 private:
     Application&                                   m_application;
+    erhe::components::Components&                  m_components;
     std::future<bool>                              m_future;
     std::unique_ptr<erhe::toolkit::Context_window> m_loading_context;
 };
@@ -144,8 +145,8 @@ private:
 auto Application::create_gl_window()
 -> bool
 {
-    m_context_window = std::make_unique<erhe::toolkit::Context_window>(1920, 1080);
-    //m_context_window = std::make_unique<erhe::toolkit::Context_window>(1024, 1024);
+    //m_context_window = std::make_unique<erhe::toolkit::Context_window>(1920, 1080); // 1080p
+    m_context_window = std::make_unique<erhe::toolkit::Context_window>(1280,  720); // 720p
 
 #if defined(ERHE_WINDOW_TOOLKIT_GLFW)
     erhe::graphics::PNG_loader loader;

@@ -3,10 +3,11 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
-#include <map>
 #include <optional>
 #include <typeinfo>
 #include <vector>
+
+#include <glm/glm.hpp>
 
 namespace erhe::geometry
 {
@@ -14,9 +15,9 @@ namespace erhe::geometry
 enum class Transform_mode : unsigned int
 {
     none = 0, // texture coordinates, colors, ...
-    matrix,
-    normalize_inverse_transpose_matrix,
-    normalize_inverse_transpose_matrix_vec3_float,
+    matrix,                                        // position vectors
+    normalize_inverse_transpose_matrix,            // normal and other plain direction vectors
+    normalize_inverse_transpose_matrix_vec3_float, // tangent and bitangent with extra float that is not to be transformed
 };
 
 enum class Interpolation_mode : unsigned int
@@ -56,8 +57,14 @@ public:
     virtual auto has(Key_type key) const
     -> bool = 0;
 
+    virtual void trim(size_t size) = 0;
+
+    virtual void remap_keys(const std::vector<Key_type>& key_old_to_new) = 0;
+
     virtual void interpolate(Property_map_base<Key_type>*                         destination,
                              std::vector<std::vector<std::pair<float, Key_type>>> key_new_to_olds) const = 0;
+
+    virtual void import_from(Property_map_base<Key_type>* source, glm::mat4 transform) = 0;
 
 protected:
     Property_map_base() = default;
@@ -73,7 +80,10 @@ public:
     {
     };
 
-    auto descriptor() const -> Property_map_descriptor final { return m_descriptor; }
+    virtual auto descriptor() const -> Property_map_descriptor override
+    {
+        return m_descriptor;
+    }
 
     void put(Key_type key, Value_type value);
 
@@ -96,18 +106,25 @@ public:
     auto size() const
     -> size_t final;
 
+    void trim(size_t size) final;
+
+    void remap_keys(const std::vector<Key_type>& key_new_to_old) final;
+
     void interpolate(Property_map_base<Key_type>*                         destination,
                      std::vector<std::vector<std::pair<float, Key_type>>> key_new_to_olds) const final;
+
+    void import_from(Property_map_base<Key_type>* source, glm::mat4 transform) final;
 
     auto constructor(const Property_map_descriptor& descriptor) const
     -> Property_map_base<Key_type>* final;
 
-private:
     static constexpr const size_t s_grow_size = 4096;
 
+    std::vector<Value_type> values;
+    std::vector<bool>       present; // Yes, I know vector<bool> has limitations
+
+private:
     Property_map_descriptor m_descriptor;
-    std::vector<Value_type> m_values;
-    std::vector<bool>       m_present; // Yes, I know vector<bool> has limitations
 };
 
 } // namespace erhe::geometry

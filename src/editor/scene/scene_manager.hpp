@@ -101,8 +101,6 @@ public:
 
     auto materials() const -> const std::vector<std::shared_ptr<erhe::primitive::Material>>&;
 
-    //auto meshes() -> std::vector<std::shared_ptr<erhe::scene::Mesh>>&;
-
     auto primitive_geometries() const -> const std::vector<std::shared_ptr<erhe::primitive::Primitive_geometry>>&
     {
         return m_primitive_geometries;
@@ -111,8 +109,6 @@ public:
     auto geometries() -> std::vector<Geometry_entry>&;
 
     auto geometries() const -> const std::vector<Geometry_entry>&;
-
-    //auto lights() -> std::vector<std::shared_ptr<erhe::scene::Light>>&;
 
     auto vertex_buffer() -> erhe::graphics::Buffer*;
 

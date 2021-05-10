@@ -35,8 +35,8 @@ void Operations::window(Pointer_context& pointer_context)
     {
         auto button_action = static_cast<Action>(i);
         bool buttonPressed = make_button(c_action_strings[i],
-                                         (button_action == active_action) ? Button_mode::active
-                                                                          : Button_mode::normal,
+                                         (button_action == active_action) ? Item_mode::active
+                                                                          : Item_mode::normal,
                                          button_size);
         if (buttonPressed && (active_action != button_action)) {
             log_tools.trace("Setting priority action to {}", c_action_strings[i]);
@@ -47,15 +47,25 @@ void Operations::window(Pointer_context& pointer_context)
     Mesh_operation::Context context;
     context.scene_manager  = m_scene_manager;
     context.selection_tool = m_selection_tool;
-    if (make_button("Undo", m_operation_stack->can_undo() ? Button_mode::normal : Button_mode::disabled, button_size))
+    if (make_button("Undo", m_operation_stack->can_undo() ? Item_mode::normal
+                                                          : Item_mode::disabled, button_size))
     {
         m_operation_stack->undo();
     }
-    if (make_button("Redo", m_operation_stack->can_redo() ? Button_mode::normal : Button_mode::disabled, button_size))
+    if (make_button("Redo", m_operation_stack->can_redo() ? Item_mode::normal
+                                                          : Item_mode::disabled, button_size))
     {
         m_operation_stack->redo();
     }
 
+    if (ImGui::Button("Merge", button_size))
+    {
+        Merge_operation::Context merge_context;
+        merge_context.scene_manager  = m_scene_manager;
+        merge_context.selection_tool = m_selection_tool;
+        auto op = std::make_shared<Merge_operation>(merge_context);
+        m_operation_stack->push(op);
+    }
     if (ImGui::Button("Catmull-Clark", button_size))
     {
         auto op = std::make_shared<Catmull_clark_subdivision_operation>(context);

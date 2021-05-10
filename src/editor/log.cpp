@@ -18,5 +18,6 @@ Log::Category log_pointer     (Log::Color::GRAY,    Log::Color::GRAY, Log::Level
 Log::Category log_input_events(Log::Color::CYAN,    Log::Color::GRAY, Log::Level::LEVEL_INFO);
 Log::Category log_materials   (Log::Color::BLUE,    Log::Color::GRAY, Log::Level::LEVEL_INFO);
 Log::Category log_renderdoc   (Log::Color::GREEN,   Log::Color::GRAY, Log::Level::LEVEL_INFO);
+Log::Category log_brush       (Log::Color::GREEN,   Log::Color::GRAY, Log::Level::LEVEL_TRACE);
 
 }

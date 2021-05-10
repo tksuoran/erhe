@@ -125,6 +125,7 @@ struct Primitive_geometry
 
 struct Primitive
 {
+    Primitive() = default;
     Primitive(std::shared_ptr<Primitive_geometry> primitive_geometry,
               std::shared_ptr<Material>           material)
         : primitive_geometry{primitive_geometry}
@@ -132,8 +133,8 @@ struct Primitive
     {
     }
 
-    std::shared_ptr<Primitive_geometry>       primitive_geometry;
-    std::shared_ptr<Material>                 material;
+    std::shared_ptr<Primitive_geometry> primitive_geometry;
+    std::shared_ptr<Material>           material;
 };
 
 std::optional<gl::Primitive_type> primitive_type(Primitive_geometry::Mode mode);

@@ -1,5 +1,4 @@
-#ifndef log_hpp_erhe_geometry
-#define log_hpp_erhe_geometry
+#pragma once
 
 #include "erhe/log/log.hpp"
 
@@ -19,7 +18,7 @@ extern erhe::log::Log::Category log_catmull_clark;
 extern erhe::log::Log::Category log_triangulate;
 extern erhe::log::Log::Category log_subdivide;
 extern erhe::log::Log::Category log_attribute_maps;
+extern erhe::log::Log::Category log_merge;
+extern erhe::log::Log::Category log_weld;
 
 } // namespace erhe::geometry
-
-#endif

@@ -118,7 +118,7 @@ auto snub(Geometry& source) -> Geometry
 {
     Geometry dual_result;
     Conway_dual_operator dual_operation(source, dual_result, false);
-    Geometry result(fmt::format("snub({})", source.name()));
+    Geometry result(fmt::format("snub({})", source.name));
     Conway_dual_operator snub_operation(dual_result, result);
     return result;
 }

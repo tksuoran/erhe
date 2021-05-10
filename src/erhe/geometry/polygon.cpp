@@ -89,6 +89,29 @@ auto Polygon::compute_centroid(const Geometry&                     geometry,
     return centroid /= static_cast<float>(count);
 }
 
+auto Polygon::compute_edge_midpoint(const Geometry&                          geometry,
+                                    const Property_map<Point_id, glm::vec3>& point_locations) const -> glm::vec3
+{
+    if (corner_count >= 2)
+    {
+        Corner_id     corner0_id = geometry.polygon_corners[first_polygon_corner_id];
+        Corner_id     corner1_id = geometry.polygon_corners[first_polygon_corner_id + 1];
+        const Corner& corner0    = geometry.corners[corner0_id];
+        const Corner& corner1    = geometry.corners[corner1_id];
+        Point_id      a          = corner0.point_id;
+        Point_id      b          = corner1.point_id;
+        if (point_locations.has(a) && point_locations.has(b))
+        {
+            glm::vec3 pos_a    = point_locations.get(a);
+            glm::vec3 pos_b    = point_locations.get(b);
+            glm::vec3 midpoint = (pos_a + pos_b) / 2.0f;
+            return midpoint;
+        }
+    }
+    log.warn("Could not compute edge midpoint for polygon with less than three corners\n");
+    return glm::vec3{0.0f, 0.0f, 0.0f};
+}
+
 void Polygon::compute_centroid(Polygon_id                          this_polygon_id,
                                const Geometry&                     geometry,
                                Property_map<Polygon_id, vec3>&     polygon_centroids,

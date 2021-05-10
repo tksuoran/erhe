@@ -116,6 +116,9 @@ struct Polygon
     auto compute_centroid(const Geometry&                          geometry,
                           const Property_map<Point_id, glm::vec3>& point_locations) const -> glm::vec3;
 
+    auto compute_edge_midpoint(const Geometry&                          geometry,
+                               const Property_map<Point_id, glm::vec3>& point_locations) const -> glm::vec3;
+
     void compute_centroid(Polygon_id                               this_polygon_id,
                           const Geometry&                          geometry,
                           Property_map<Polygon_id, glm::vec3>&     polygon_centroids,
@@ -149,19 +152,6 @@ struct Edge
 class Geometry
 {
 public:
-    std::vector<Corner>     corners;
-    std::vector<Point>      points;
-    std::vector<Polygon>    polygons;
-    std::vector<Edge>       edges;
-    std::vector<Corner_id>  point_corners;
-    std::vector<Corner_id>  polygon_corners;
-    std::vector<Polygon_id> edge_polygons;
-
-    using Point_property_map_collection   = Property_map_collection<Point_id>;
-    using Corner_property_map_collection  = Property_map_collection<Corner_id>;
-    using Polygon_property_map_collection = Property_map_collection<Polygon_id>;
-    using Edge_property_map_collection    = Property_map_collection<Edge_id>;
-
     struct Mesh_info
     {
         size_t polygon_count              {0};
@@ -180,6 +170,72 @@ public:
 
         void trace(erhe::log::Log::Category& log) const;
     };
+
+    using Point_property_map_collection   = Property_map_collection<Point_id>;
+    using Corner_property_map_collection  = Property_map_collection<Corner_id>;
+    using Polygon_property_map_collection = Property_map_collection<Polygon_id>;
+    using Edge_property_map_collection    = Property_map_collection<Edge_id>;
+
+    std::string             name;
+    std::vector<Corner>     corners;
+    std::vector<Point>      points;
+    std::vector<Polygon>    polygons;
+    std::vector<Edge>       edges;
+    std::vector<Corner_id>  point_corners;
+    std::vector<Corner_id>  polygon_corners;
+    std::vector<Polygon_id> edge_polygons;
+
+    Geometry() = default;
+
+    explicit Geometry(const std::string& name)
+        : name{name}
+    {
+    }
+
+    Geometry(const Geometry&) = delete;
+
+    Geometry& operator=(const Geometry&) = delete;
+
+    Geometry(Geometry&& other) noexcept
+        : name                                {std::move(other.name)}
+        , corners                             {std::move(other.corners)}
+        , points                              {std::move(other.points)}
+        , polygons                            {std::move(other.polygons)}
+        , edges                               {std::move(other.edges)}
+        , point_corners                       {std::move(other.point_corners)}
+        , polygon_corners                     {std::move(other.polygon_corners)}
+        , edge_polygons                       {std::move(other.edge_polygons)}
+        , m_next_corner_id                    {other.m_next_corner_id           }
+        , m_next_point_id                     {other.m_next_point_id            }
+        , m_next_polygon_id                   {other.m_next_polygon_id          }
+        , m_next_edge_id                      {other.m_next_edge_id             }
+        , m_next_point_corner_reserve         {other.m_next_point_corner_reserve}
+        , m_next_polygon_corner_id            {other.m_next_polygon_corner_id   }
+        , m_next_edge_polygon_id              {other.m_next_edge_polygon_id     }
+        , m_polygon_corner_polygon            {other.m_polygon_corner_polygon   }
+        , m_edge_polygon_edge                 {other.m_edge_polygon_edge        }
+        , m_point_property_map_collection     {std::move(other.m_point_property_map_collection)}
+        , m_corner_property_map_collection    {std::move(other.m_corner_property_map_collection)}
+        , m_polygon_property_map_collection   {std::move(other.m_polygon_property_map_collection)}
+        , m_edge_property_map_collection      {std::move(other.m_edge_property_map_collection)}
+        , m_serial                            {other.m_serial}
+        , m_serial_edges                      {other.m_serial_edges                      }
+        , m_serial_polygon_normals            {other.m_serial_polygon_normals            }
+        , m_serial_polygon_centroids          {other.m_serial_polygon_centroids          }
+        , m_serial_polygon_tangents           {other.m_serial_polygon_tangents           }
+        , m_serial_polygon_bitangents         {other.m_serial_polygon_bitangents         }
+        , m_serial_polygon_texture_coordinates{other.m_serial_polygon_texture_coordinates}
+        , m_serial_point_normals              {other.m_serial_point_normals              }
+        , m_serial_point_tangents             {other.m_serial_point_tangents             }
+        , m_serial_point_bitangents           {other.m_serial_point_bitangents           }
+        , m_serial_point_texture_coordinates  {other.m_serial_point_texture_coordinates  }
+        , m_serial_smooth_point_normals       {other.m_serial_smooth_point_normals       }
+        , m_serial_corner_normals             {other.m_serial_corner_normals             }
+        , m_serial_corner_tangents            {other.m_serial_corner_tangents            }
+        , m_serial_corner_bitangents          {other.m_serial_corner_bitangents          }
+        , m_serial_corner_texture_coordinates {other.m_serial_corner_texture_coordinates }
+    {
+    }
 
     void promise_has_normals()
     {
@@ -207,24 +263,12 @@ public:
         m_serial_corner_texture_coordinates = m_serial;
     }
 
-private:
-    Corner_id         m_next_corner_id           {0};
-    Point_id          m_next_point_id            {0};
-    Polygon_id        m_next_polygon_id          {0};
-    Edge_id           m_next_edge_id             {0};
-    Point_corner_id   m_next_point_corner_reserve{0};
-    Polygon_corner_id m_next_polygon_corner_id   {0};
-    Edge_polygon_id   m_next_edge_polygon_id     {0};
-    Polygon_id        m_polygon_corner_polygon   {0};
-    Edge_id           m_edge_polygon_edge        {0};
-
-    constexpr static size_t s_grow = 4096;
-
-public:
-    uint32_t corner_count () const { return m_next_corner_id; }
-    uint32_t point_count  () const { return m_next_point_id; }
-    uint32_t polygon_count() const { return m_next_polygon_id; }
-    uint32_t edge_count   () const { return m_next_edge_id; }
+    uint32_t corner_count        () const { return m_next_corner_id; }
+    uint32_t point_count         () const { return m_next_point_id; }
+    uint32_t point_corner_count  () const { return m_next_point_corner_reserve; }
+    uint32_t polygon_count       () const { return m_next_polygon_id; }
+    uint32_t polygon_corner_count() const { return m_next_polygon_corner_id; }
+    uint32_t edge_count          () const { return m_next_edge_id; }
 
     std::optional<Edge> find_edge(Point_id a, Point_id b)
     {
@@ -278,63 +322,6 @@ public:
     // - Polygon must be already allocated.
     // - Point must be already allocated.
     auto make_polygon_corner(Polygon_id polygon_id, Point_id point_id) -> Corner_id;
-
-    Geometry() = default;
-
-    explicit Geometry(const std::string& name)
-        : m_name{name}
-    {
-    }
-
-    Geometry(const Geometry&) = delete;
-
-    Geometry& operator=(const Geometry&) = delete;
-
-    Geometry(Geometry&& other) noexcept
-        : corners                             {std::move(other.corners)}
-        , points                              {std::move(other.points)}
-        , polygons                            {std::move(other.polygons)}
-        , edges                               {std::move(other.edges)}
-        , point_corners                       {std::move(other.point_corners)}
-        , polygon_corners                     {std::move(other.polygon_corners)}
-        , edge_polygons                       {std::move(other.edge_polygons)}
-        , m_next_corner_id                    {other.m_next_corner_id           }
-        , m_next_point_id                     {other.m_next_point_id            }
-        , m_next_polygon_id                   {other.m_next_polygon_id          }
-        , m_next_edge_id                      {other.m_next_edge_id             }
-        , m_next_point_corner_reserve         {other.m_next_point_corner_reserve}
-        , m_next_polygon_corner_id            {other.m_next_polygon_corner_id   }
-        , m_next_edge_polygon_id              {other.m_next_edge_polygon_id     }
-        , m_polygon_corner_polygon            {other.m_polygon_corner_polygon   }
-        , m_edge_polygon_edge                 {other.m_edge_polygon_edge        }
-        , m_name                              {std::move(other.m_name)}
-        , m_point_property_map_collection     {std::move(other.m_point_property_map_collection)}
-        , m_corner_property_map_collection    {std::move(other.m_corner_property_map_collection)}
-        , m_polygon_property_map_collection   {std::move(other.m_polygon_property_map_collection)}
-        , m_edge_property_map_collection      {std::move(other.m_edge_property_map_collection)}
-        , m_serial                            {other.m_serial}
-        , m_serial_edges                      {other.m_serial_edges                      }
-        , m_serial_polygon_normals            {other.m_serial_polygon_normals            }
-        , m_serial_polygon_centroids          {other.m_serial_polygon_centroids          }
-        , m_serial_polygon_tangents           {other.m_serial_polygon_tangents           }
-        , m_serial_polygon_bitangents         {other.m_serial_polygon_bitangents         }
-        , m_serial_polygon_texture_coordinates{other.m_serial_polygon_texture_coordinates}
-        , m_serial_point_normals              {other.m_serial_point_normals              }
-        , m_serial_point_tangents             {other.m_serial_point_tangents             }
-        , m_serial_point_bitangents           {other.m_serial_point_bitangents           }
-        , m_serial_point_texture_coordinates  {other.m_serial_point_texture_coordinates  }
-        , m_serial_smooth_point_normals       {other.m_serial_smooth_point_normals       }
-        , m_serial_corner_normals             {other.m_serial_corner_normals             }
-        , m_serial_corner_tangents            {other.m_serial_corner_tangents            }
-        , m_serial_corner_bitangents          {other.m_serial_corner_bitangents          }
-        , m_serial_corner_texture_coordinates {other.m_serial_corner_texture_coordinates }
-    {
-    }
-
-    auto name() const -> const std::string&
-    {
-        return m_name;
-    }
 
     auto count_polygon_triangles() const -> size_t;
 
@@ -449,28 +436,49 @@ public:
 
     void debug_trace();
 
+    void merge(Geometry& other, glm::mat4 transform);
+
+    struct Weld_settings
+    {
+        float max_point_distance    {0.001f};
+        float min_normal_dot_product{0.999f};
+        float max_texcoord_distance {0.001f};
+        float max_color_distance    {0.01f};
+    };
+
+    void weld(Weld_settings weld_settings);
+
 private:
-    std::string                     m_name;
+    constexpr static size_t s_grow = 4096;
+    Corner_id                       m_next_corner_id           {0};
+    Point_id                        m_next_point_id            {0};
+    Polygon_id                      m_next_polygon_id          {0};
+    Edge_id                         m_next_edge_id             {0};
+    Point_corner_id                 m_next_point_corner_reserve{0};
+    Polygon_corner_id               m_next_polygon_corner_id   {0};
+    Edge_polygon_id                 m_next_edge_polygon_id     {0};
+    Polygon_id                      m_polygon_corner_polygon   {0};
+    Edge_id                         m_edge_polygon_edge        {0};
     Point_property_map_collection   m_point_property_map_collection;
     Corner_property_map_collection  m_corner_property_map_collection;
     Polygon_property_map_collection m_polygon_property_map_collection;
     Edge_property_map_collection    m_edge_property_map_collection;
-    uint64_t                        m_serial{1};
-    uint64_t                        m_serial_edges{0};
-    uint64_t                        m_serial_polygon_normals{0};
-    uint64_t                        m_serial_polygon_centroids{0};
-    uint64_t                        m_serial_polygon_tangents{0};
-    uint64_t                        m_serial_polygon_bitangents{0};
+    uint64_t                        m_serial                            {1};
+    uint64_t                        m_serial_edges                      {0};
+    uint64_t                        m_serial_polygon_normals            {0};
+    uint64_t                        m_serial_polygon_centroids          {0};
+    uint64_t                        m_serial_polygon_tangents           {0};
+    uint64_t                        m_serial_polygon_bitangents         {0};
     uint64_t                        m_serial_polygon_texture_coordinates{0};
-    uint64_t                        m_serial_point_normals{0};
-    uint64_t                        m_serial_point_tangents{0};   // never generated
-    uint64_t                        m_serial_point_bitangents{0}; // never generated
-    uint64_t                        m_serial_point_texture_coordinates{0}; // never generated
-    uint64_t                        m_serial_smooth_point_normals{0};
-    uint64_t                        m_serial_corner_normals{0}; 
-    uint64_t                        m_serial_corner_tangents{0};
-    uint64_t                        m_serial_corner_bitangents{0};
-    uint64_t                        m_serial_corner_texture_coordinates{0}; 
+    uint64_t                        m_serial_point_normals              {0};
+    uint64_t                        m_serial_point_tangents             {0}; // never generated
+    uint64_t                        m_serial_point_bitangents           {0}; // never generated
+    uint64_t                        m_serial_point_texture_coordinates  {0}; // never generated
+    uint64_t                        m_serial_smooth_point_normals       {0};
+    uint64_t                        m_serial_corner_normals             {0}; 
+    uint64_t                        m_serial_corner_tangents            {0};
+    uint64_t                        m_serial_corner_bitangents          {0};
+    uint64_t                        m_serial_corner_texture_coordinates {0}; 
 };
 
 } // namespace erhe::geometry

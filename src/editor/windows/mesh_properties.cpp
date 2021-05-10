@@ -40,7 +40,7 @@ void Mesh_properties::window(Pointer_context&)
         if (geometry != nullptr)
         {
             ImGui::Separator();
-            ImGui::Text("%s",           geometry->name().c_str());
+            ImGui::Text("%s",           geometry->name.c_str());
             ImGui::Text("Points: %d",   geometry->point_count());
             ImGui::Text("Polygons: %d", geometry->polygon_count());
             ImGui::Text("Edges: %d",    geometry->edge_count());

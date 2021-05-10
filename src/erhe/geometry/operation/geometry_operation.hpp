@@ -1,5 +1,4 @@
-#ifndef geometry_operation_hpp_erhe_geometry_operation
-#define geometry_operation_hpp_erhe_geometry_operation
+#pragma once
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/property_map.hpp"
@@ -114,5 +113,3 @@ public:
 };
 
 } // namespace namespace geometry
-
-#endif

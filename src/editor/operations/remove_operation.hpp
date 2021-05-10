@@ -23,6 +23,7 @@ public:
 
     Mesh_insert_operation(Context& context);
 
+    // Implements IOperation
     void execute() override;
     void undo() override;
 
@@ -42,6 +43,7 @@ public:
 
     Light_insert_operation(Context& context);
 
+    // Implements IOperation
     void execute() override;
     void undo() override;
 

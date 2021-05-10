@@ -198,7 +198,7 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& de
 
 auto catmull_clark_subdivision(Geometry& source) -> Geometry
 {
-    Geometry result(fmt::format("catmull_clark({})", source.name()));
+    Geometry result(fmt::format("catmull_clark({})", source.name));
     Catmull_clark_subdivision operation(source, result);
     return result;
 }

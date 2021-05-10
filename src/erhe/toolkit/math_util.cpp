@@ -376,7 +376,7 @@ auto create_scale(float x, float y, float z)
 auto create_scale(float s)
 -> mat4
 {
-    mat4 result;
+    mat4 result(1);
     result[0][0] = s;
     result[1][0] = 0.0f;
     result[2][0] = 0.0f;

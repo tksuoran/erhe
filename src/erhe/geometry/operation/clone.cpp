@@ -23,8 +23,16 @@ Clone::Clone(Geometry& src, Geometry& destination)
         add_polygon_corners(new_polygon_id, src_polygon_id);
     }
 
-    build_destination_edges_with_sourcing();
-    interpolate_all_property_maps();
+    post_processing();
+    //build_destination_edges_with_sourcing();
+    //interpolate_all_property_maps();
+}
+
+auto clone(Geometry& source) -> Geometry
+{
+    Geometry result(fmt::format("clone({})", source.name));
+    Clone operation(source, result);
+    return result;
 }
 
 } // namespace erhe::geometry::operation

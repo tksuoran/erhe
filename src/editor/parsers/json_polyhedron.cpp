@@ -3,8 +3,6 @@
 
 #include "erhe/toolkit/file.hpp"
 
-#include <nlohmann/json.hpp>
-
 #include <algorithm>
 #include <cctype>
 #include <glm/glm.hpp>
@@ -18,47 +16,65 @@ using namespace erhe::geometry;
 
 using json = nlohmann::json;
 
-Geometry make_json_polyhedron(const std::filesystem::path& path)
+Json_library::Json_library(const std::filesystem::path& path)
 {
-    log_parsers.trace("path = {}\n", path.generic_string());
-
     auto opt_text = erhe::toolkit::read(path);
     if (!opt_text.has_value())
     {
-        return {};
+        return;
     }
 
     const std::string& text = opt_text.value();
-    log_parsers.trace("text = {}\n", text.c_str());
 
+    m_json = json::parse(text);
+
+    // Collect dcategories
+    for (auto& entry : m_json.items())
+    {
+        std::string key_name       = entry.key();
+        std::string name           = entry.value()["name"];
+        auto        category_names = entry.value()["category"];
+        for (auto& category_name_object : category_names)
+        {
+            std::string category_name = category_name_object.get<std::string>();
+            auto i = std::find_if(categories.begin(), categories.end(), [category_name](const Category& category){
+                return category.category_name == category_name;
+            });
+            if (i != categories.end())
+            {
+                i->key_names.emplace_back(key_name);
+            }
+            else
+            {
+                auto& category = categories.emplace_back(std::move(category_name));
+                category.key_names.emplace_back(key_name);
+            }
+        }
+        names.emplace_back(std::move(key_name));
+    }
+}
+
+auto Json_library::make_geometry(const std::string& key_name) const
+-> Geometry
+{
     Geometry geometry;
-
-    auto json = json::parse(text);
-    auto& mesh = json["mesh"];
-    auto& points = mesh["vertices"];
+    auto& mesh = m_json[key_name];
+    geometry.name = mesh["name"];
+    auto& points = mesh["vertex"];
     for (auto& point : points)
     {
-        auto xo = point["x"];
-        auto yo = point["y"];
-        auto zo = point["z"];
-        std::string xs = xo.get<std::string>();
-        std::string ys = yo.get<std::string>();
-        std::string zs = zo.get<std::string>();
-        log_parsers.trace("{}, {}, {}\n", xs, ys, zs);
-        float x = std::stof(xs);
-        float y = std::stof(ys);
-        float z = std::stof(zs);
+        float x = point[0].get<float>();
+        float y = point[1].get<float>();
+        float z = point[2].get<float>();
         geometry.make_point(-x, -y, -z);
     }
-    auto& polygons = mesh["polygons"];
+    auto& polygons = mesh["face"];
     for (auto& polygon : polygons)
     {
-        auto &corners = polygon["corners"];
         auto g_polygon = geometry.make_polygon();
-        for (auto& corner : corners)
+        for (auto& corner : polygon)
         {
-            std::string s_value = corner.get<std::string>();
-            int index = std::stoi(s_value);
+            int index = corner.get<int>();
             if (index < (int)geometry.point_count())
             {
                 geometry.make_polygon_corner(g_polygon, index);

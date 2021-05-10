@@ -19,6 +19,7 @@ extern erhe::log::Log::Category log_pointer;
 extern erhe::log::Log::Category log_input_events;
 extern erhe::log::Log::Category log_materials;
 extern erhe::log::Log::Category log_renderdoc;
+extern erhe::log::Log::Category log_brush;
 
 }
 

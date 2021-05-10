@@ -1,5 +1,4 @@
-#ifndef clone_hpp_erhe_geometry_operation
-#define clone_hpp_erhe_geometry_operation
+#pragma once
 
 #include "erhe/geometry/operation/geometry_operation.hpp"
 
@@ -13,6 +12,6 @@ public:
     explicit Clone(Geometry& src, Geometry& destination);
 };
 
-} // namespace erhe::geometry::operation
+auto clone(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
 
-#endif
+} // namespace erhe::geometry::operation

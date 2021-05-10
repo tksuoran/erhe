@@ -84,7 +84,7 @@ Conway_truncate_operator::Conway_truncate_operator(Geometry& src, Geometry& dest
 
 auto truncate(Geometry& source) -> Geometry
 {
-    Geometry result(fmt::format("truncate({})", source.name()));
+    Geometry result(fmt::format("truncate({})", source.name));
     Conway_truncate_operator operation(source, result);
     return result;
 }

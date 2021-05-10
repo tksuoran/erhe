@@ -13,8 +13,6 @@ void Textures::connect()
 {
     m_image_transfer = require<erhe::graphics::ImageTransfer>();
 
-    initialization_depends_on(image_transfer);
-
     Ensures(m_image_transfer);
 }
 

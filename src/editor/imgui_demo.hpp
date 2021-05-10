@@ -1,5 +1,4 @@
-#ifndef imhui_demo_hpp
-#define imhui_demo_hpp
+#pragma once
 
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/toolkit/window.hpp"
@@ -44,5 +43,3 @@ private:
 };
 
 }
-
-#endif

@@ -90,6 +90,36 @@ inline auto min_axis(glm::vec3 v)
     return vec3_unit_z;
 }
 
+inline auto max_axis_index(glm::vec3 v)
+-> glm::vec3::length_type
+{
+    if (std::abs(v.x) >= std::abs(v.y) && std::abs(v.x) >= std::abs(v.z))
+    {
+        return glm::vec3::length_type{0};
+    }
+
+    if (std::abs(v.y) >= std::abs(v.x) && std::abs(v.y) >= std::abs(v.z))
+    {
+        return glm::vec3::length_type{1};
+    }
+    return glm::vec3::length_type{2};
+}
+
+inline auto min_axis_index(glm::vec3 v)
+-> glm::vec3::length_type
+{
+    if (std::abs(v.x) <= std::abs(v.y) && std::abs(v.x) <= std::abs(v.z))
+    {
+        return glm::vec3::length_type{0};
+    }
+
+    if (std::abs(v.y) <= std::abs(v.x) && std::abs(v.y) <= std::abs(v.z))
+    {
+        return glm::vec3::length_type{1};
+    }
+    return glm::vec3::length_type{2};
+}
+
 constexpr glm::mat4 mat4_swap_xy{0.0f, 1.0f, 0.0f, 0.0f,
                                  1.0f, 0.0f, 0.0f, 0.0f,
                                  0.0f, 0.0f, 1.0f, 0.0f,

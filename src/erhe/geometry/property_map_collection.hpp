@@ -1,8 +1,6 @@
 #pragma once
 
 #include "erhe/geometry/property_map.hpp"
-#include <map>
-#include <unordered_map>
 #include <memory>
 
 namespace erhe::geometry
@@ -66,7 +64,7 @@ public:
     auto contains(const std::string& name) const
     -> bool;
 
-    auto find_any(const std::string& name)
+    auto find_base(const Property_map_descriptor& descriptor) const
     -> Property_map_base<Key_type>*;
 
     template <typename Value_type>
@@ -77,8 +75,14 @@ public:
     auto find_or_create(const Property_map_descriptor& name)
     -> Property_map<Key_type, Value_type>*;
 
+    void trim(size_t size);
+
+    void remap_keys(const std::vector<Key_type>& key_new_to_old);
+
     void interpolate(Property_map_collection<Key_type>&                   destination,
                      std::vector<std::vector<std::pair<float, Key_type>>> key_new_to_olds);
+
+    void merge_to(Property_map_collection<Key_type>& source, glm::mat4 transform);
 
 private:
     Collection_type m_entries;

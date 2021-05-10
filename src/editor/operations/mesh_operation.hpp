@@ -33,6 +33,8 @@ protected:
 
     void make_entries(Context& context,
                       std::function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation);
+
+    // Implements IOperation
     void execute() override;
     void undo() override;
 
