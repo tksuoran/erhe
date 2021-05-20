@@ -1,5 +1,6 @@
 #include "operations/insert_operation.hpp"
 #include "scene/scene_manager.hpp"
+#include "tools/selection_tool.hpp"
 
 namespace editor
 {
@@ -54,6 +55,7 @@ void Mesh_insert_remove_operation::execute(Mode mode)
     else
     {
         items.erase(std::remove(items.begin(), items.end(), m_context.item), items.end());
+        m_context.selection_tool->remove_from_selection(m_context.item);
         if (m_context.item->node)
         {
             m_context.item->node->reference_count--;

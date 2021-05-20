@@ -31,7 +31,7 @@ public:
 
         m_stride = m_width * m_components;
 
-        size_t byte_count = static_cast<size_t>(m_stride * m_height);
+        size_t byte_count = static_cast<size_t>(m_stride) * static_cast<size_t>(m_height);
         m_data.resize(byte_count);
         fill(0);
     }
@@ -106,7 +106,9 @@ public:
             FATAL("invalid index");
         }
 
-        size_t offset = static_cast<size_t>((x * m_components) + (y * m_stride) + c);
+        size_t offset = static_cast<size_t>(x) * static_cast<size_t>(m_components) +
+                        static_cast<size_t>(y) * static_cast<size_t>(m_stride) +
+                        static_cast<size_t>(c);
         m_data[offset] = value;
     }
 

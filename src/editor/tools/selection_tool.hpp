@@ -6,7 +6,6 @@
 
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <vector>
 
 namespace erhe::scene {
@@ -62,7 +61,7 @@ public:
         }
 
         Subcription(const Subcription&) = delete;
-        Subcription& operator=(const Subcription&) = delete;
+        auto operator=(const Subcription&) -> Subcription& = delete;
 
         Subcription(Subcription&& other) noexcept
         {
@@ -72,7 +71,7 @@ public:
             other.m_handle = 0;
         }
 
-        Subcription& operator=(Subcription&& other) noexcept
+        auto operator=(Subcription&& other) noexcept -> Subcription&
         {
             m_tool         = other.m_tool;
             m_handle       = other.m_handle;
@@ -85,14 +84,27 @@ public:
         Selection_tool* m_tool  {nullptr};
         int             m_handle{0};
     };
-    Subcription subscribe_mesh_selection_change_notification(On_mesh_selection_changed callback);
+
+    auto subscribe_mesh_selection_change_notification(On_mesh_selection_changed callback) -> Subcription;
+
     void unsubscribe_mesh_selection_change_notification(int handle);
 
-    const Mesh_collection& selected_meshes() { return m_selected_meshes; }
+    auto selected_meshes() const -> const Mesh_collection&
+    {
+        return m_selected_meshes;
+    }
+    auto set_mesh_selection(const Mesh_collection& meshes)
+    {
+        m_selected_meshes = meshes;
+        call_mesh_selection_change_subscriptions();
+    }
+    auto clear_mesh_selection() -> bool;
+    auto is_in_selection(std::shared_ptr<erhe::scene::Mesh> mesh) -> bool;
+    auto add_to_selection(std::shared_ptr<erhe::scene::Mesh> mesh) -> bool;
+    auto remove_from_selection(std::shared_ptr<erhe::scene::Mesh> mesh) -> bool;
 
 private:
     void call_mesh_selection_change_subscriptions();
-    void clear_mesh_selection();
     void toggle_mesh_selection(std::shared_ptr<erhe::scene::Mesh> mesh, bool clear_others);
 
     struct Subscription_entry
@@ -103,7 +115,6 @@ private:
 
     State                           m_state{State::passive};
     int                             m_next_mesh_selection_change_subscription{1};
-    std::mutex                      m_mutex;
     Mesh_collection                 m_selected_meshes;
     std::vector<Subscription_entry> m_mesh_selection_change_subscriptions;
     std::shared_ptr<Scene_manager>  m_scene_manager;

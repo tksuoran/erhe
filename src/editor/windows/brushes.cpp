@@ -36,6 +36,7 @@ void Brushes::connect()
 {
     m_operation_stack = get<Operation_stack>();
     m_scene_manager   = require<Scene_manager>();
+    m_selection_tool  = get<Selection_tool>();
     m_grid_tool       = get<Grid_tool>();
 }
 
@@ -340,9 +341,10 @@ void Brushes::do_insert_operation()
     mesh->node->reference_count++;
 
     Mesh_insert_remove_operation::Context context;
-    context.item          = mesh;
-    context.mode          = Scene_item_operation::Mode::insert;
-    context.scene_manager = m_scene_manager;
+    context.item           = mesh;
+    context.mode           = Scene_item_operation::Mode::insert;
+    context.scene_manager  = m_scene_manager;
+    context.selection_tool = m_selection_tool;
 
     auto op = make_shared<Mesh_insert_remove_operation>(context);
     m_operation_stack->push(op);

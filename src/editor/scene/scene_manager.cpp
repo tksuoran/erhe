@@ -253,15 +253,16 @@ void Scene_manager::make_geometries()
 {
     ZoneScoped;
 
-    if constexpr (true) // test scene for merge
+    if constexpr (false) // test scene for weld
     {
-        //make_geometry(shapes::make_tetrahedron(2.0),   Primitive_geometry::Normal_style::polygon_normals);
+        make_geometry(shapes::make_tetrahedron(1.0),   Primitive_geometry::Normal_style::polygon_normals);
+        make_geometry(shapes::make_icosahedron(1.0),   Primitive_geometry::Normal_style::polygon_normals);
         //make_geometry(shapes::make_cube(2.0),          Primitive_geometry::Normal_style::polygon_normals);
         //make_geometry(shapes::make_cuboctahedron(2.0), Primitive_geometry::Normal_style::polygon_normals);
-        make_geometry(shapes::make_dodecahedron(2.0),  Primitive_geometry::Normal_style::polygon_normals);
+        //make_geometry(shapes::make_dodecahedron(2.0),  Primitive_geometry::Normal_style::polygon_normals);
     }
 
-    if constexpr (false) // test scene with six platonic solids
+    if constexpr (true) // test scene with six platonic solids
     {
         if constexpr (false) // teapot
         {
@@ -282,7 +283,7 @@ void Scene_manager::make_geometries()
         make_geometry(shapes::make_cuboctahedron(scale), Primitive_geometry::Normal_style::polygon_normals);
     }
 
-    if constexpr (false) // Round shapes
+    if constexpr (true) // Round shapes
     {
         make_geometry(shapes::make_sphere(1.0f, 12 * 4, 4 * 6));
         make_geometry(shapes::make_torus(0.6f, 0.3f, 42, 32));
@@ -333,7 +334,7 @@ void Scene_manager::make_geometries()
         make_geometry(std::move(dodecahedron1), Primitive_geometry::Normal_style::polygon_normals);
     }
 
-    if constexpr (false) // Johnson solids
+    if constexpr (true) // Johnson solids
     {
         Json_library library("res/polyhedra/johnson.json");
         for (const auto& key_name : library.names)
@@ -706,6 +707,7 @@ void Scene_manager::initialize_cameras()
 {
     auto node = make_shared<erhe::scene::Node>();
     m_scene.nodes.emplace_back(node);
+    //glm::mat4 m = erhe::toolkit::create_look_at(glm::vec3(1.0f, 7.0f, 1.0f),
     glm::mat4 m = erhe::toolkit::create_look_at(glm::vec3(10.0f, 7.0f, 10.0f),
                                                 glm::vec3(0.0f, 0.0f, 0.0f),
                                                 glm::vec3(0.0f, 1.0f, 0.0f));

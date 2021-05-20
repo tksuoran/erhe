@@ -32,7 +32,8 @@ public:
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
-    glm::vec2 to_scene_content(glm::vec2 position_in_root);
+    auto to_scene_content(glm::vec2 position_in_root)
+    -> glm::vec2;
 
     void bind_multisample_framebuffer();
 

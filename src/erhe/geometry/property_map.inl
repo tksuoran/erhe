@@ -309,7 +309,7 @@ Property_map<Key_type, Value_type>::import_from(
                 for (size_t i = 0, end = source->values.size(); i < end; ++i)
                 {
                     Value_type source_value = source->values[i];
-                    Value_type result       = apply_transform(source_value, inverse_transpose_transform, 0.0f);
+                    Value_type result       = glm::normalize(apply_transform(source_value, inverse_transpose_transform, 0.0f));
                     values.push_back(result);
                 }
                 break;
@@ -323,7 +323,7 @@ Property_map<Key_type, Value_type>::import_from(
                     for (size_t i = 0, end = source->values.size(); i < end; ++i)
                     {
                         Value_type source_value     = source->values[i];
-                        glm::vec3  transformed_vec3 = apply_transform(glm::vec3(source_value), inverse_transpose_transform, 0.0f);
+                        glm::vec3  transformed_vec3 = glm::normalize(apply_transform(glm::vec3(source_value), inverse_transpose_transform, 0.0f));
                         Value_type result           = glm::vec4(transformed_vec3, source_value.w);
                         values.push_back(result);
                     }

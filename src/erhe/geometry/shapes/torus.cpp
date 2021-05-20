@@ -185,7 +185,6 @@ struct Torus_builder
 
         geometry.make_point_corners();
         geometry.build_edges();
-        geometry.debug_trace();
         geometry.promise_has_normals();
         geometry.promise_has_tangents();
         geometry.promise_has_bitangents();

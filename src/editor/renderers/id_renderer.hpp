@@ -60,9 +60,9 @@ public:
                 int                     x,
                 int                     y);
 
-    bool get(int x, int y, uint32_t& id, float& depth);
+    auto get(int x, int y, uint32_t& id, float& depth) -> bool;
 
-    Mesh_primitive get(int x, int y, float& depth);
+    auto get(int x, int y, float& depth) -> Mesh_primitive;
 
     void next_frame();
 

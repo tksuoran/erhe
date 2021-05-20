@@ -145,7 +145,7 @@ public:
 
     void reset_id_ranges();
 
-    uint32_t id_offset() const
+    auto id_offset() const -> uint32_t
     {
         return m_id_offset;
     }

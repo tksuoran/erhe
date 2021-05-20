@@ -13,6 +13,9 @@ namespace erhe::geometry
 namespace editor
 {
 
+class Scene_manager;
+class Selection_tool;
+
 class Mesh_operation
     : public IOperation
 {
@@ -26,9 +29,9 @@ public:
 protected:
     struct Entry
     {
-        erhe::scene::Mesh* mesh;
-        erhe::scene::Mesh  before;
-        erhe::scene::Mesh  after;
+        std::shared_ptr<erhe::scene::Mesh> mesh;
+        erhe::scene::Mesh before;
+        erhe::scene::Mesh after;
     };
 
     void make_entries(Context& context,
@@ -41,7 +44,8 @@ protected:
     void add_entry(Entry&& entry);
 
 private:
-    std::vector<Entry> m_entries;
+    std::vector<Entry>              m_entries;
+    std::shared_ptr<Selection_tool> m_selection_tool;
 };
 
 }

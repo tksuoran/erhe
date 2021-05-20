@@ -13,6 +13,7 @@ extern erhe::log::Log::Category log_parsers;
 extern erhe::log::Log::Category log_render;
 extern erhe::log::Log::Category log_trs_tool;
 extern erhe::log::Log::Category log_tools;
+extern erhe::log::Log::Category log_selection;
 extern erhe::log::Log::Category log_id_render;
 extern erhe::log::Log::Category log_framebuffer;
 extern erhe::log::Log::Category log_pointer;

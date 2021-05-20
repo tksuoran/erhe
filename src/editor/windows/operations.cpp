@@ -1,6 +1,7 @@
 #include "windows/operations.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/geometry_operations.hpp"
+#include "operations/merge_operation.hpp"
 #include "scene/scene_manager.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/pointer_context.hpp"

@@ -25,8 +25,6 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& de
 {
     ZoneScoped;
 
-    //src.debug_trace();
-
     //                       (n-3)P
     // Make initial P's with ------
     //                          n

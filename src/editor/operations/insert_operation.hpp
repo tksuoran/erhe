@@ -13,6 +13,9 @@ namespace erhe::geometry
 namespace editor
 {
 
+class Scene_manager;
+class Selection_tool;
+
 class Node_transform_operation
     : public IOperation
 {
@@ -64,6 +67,7 @@ public:
     struct Context
     {
         std::shared_ptr<Scene_manager>     scene_manager;
+        std::shared_ptr<Selection_tool>    selection_tool;
         std::shared_ptr<erhe::scene::Mesh> item;
         Mode                               mode;
     };

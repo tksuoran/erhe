@@ -20,7 +20,6 @@ auto Selection_tool::state() const -> Tool::State
 
 Selection_tool::Subcription Selection_tool::subscribe_mesh_selection_change_notification(On_mesh_selection_changed callback)
 {
-    std::lock_guard lock(m_mutex);
     int handle = m_next_mesh_selection_change_subscription++;
     m_mesh_selection_change_subscriptions.push_back({callback, handle});
     return Subcription(this, handle);
@@ -28,7 +27,6 @@ Selection_tool::Subcription Selection_tool::subscribe_mesh_selection_change_noti
 
 void Selection_tool::unsubscribe_mesh_selection_change_notification(int handle)
 {
-    std::lock_guard lock(m_mutex);
     m_mesh_selection_change_subscriptions.erase(std::remove_if(m_mesh_selection_change_subscriptions.begin(),
                                                                m_mesh_selection_change_subscriptions.end(),
                                                                [=](Subscription_entry& entry) -> bool
@@ -131,36 +129,92 @@ auto Selection_tool::update(Pointer_context& pointer_context) -> bool
     return false;
 }
 
+auto Selection_tool::clear_mesh_selection() -> bool
+{
+    if (m_selected_meshes.empty())
+    {
+        return false;
+    }
+
+    log_selection.trace("Clearing mesh selection ({} meshes were selected)\n", m_selected_meshes.size());
+    m_selected_meshes.clear();
+    call_mesh_selection_change_subscriptions();
+    return true;
+}
+
 void Selection_tool::toggle_mesh_selection(std::shared_ptr<erhe::scene::Mesh> mesh, bool clear_others)
 {
     if (clear_others)
     {
-        auto i = std::find(m_selected_meshes.begin(),
-                           m_selected_meshes.end(),
-                           mesh);
-        bool was_selected = i != m_selected_meshes.end();
-        m_selected_meshes.clear();
+        bool was_selected = is_in_selection(mesh);
+        clear_mesh_selection();
         if (!was_selected && mesh)
         {
-            m_selected_meshes.push_back(mesh);
+            add_to_selection(mesh);
         }
     }
     else if (mesh)
     {
-        auto i = std::remove(m_selected_meshes.begin(),
-                             m_selected_meshes.end(),
-                             mesh);
-        if (i != m_selected_meshes.end())
+        if (is_in_selection(mesh))
         {
-            m_selected_meshes.erase(i, m_selected_meshes.end());
+            remove_from_selection(mesh);
         }
         else
         {
-            m_selected_meshes.push_back(mesh);
+            add_to_selection(mesh);
         }
     }
 
     call_mesh_selection_change_subscriptions();
+}
+
+auto Selection_tool::is_in_selection(std::shared_ptr<erhe::scene::Mesh> mesh) -> bool
+{
+    return std::find(m_selected_meshes.begin(),
+                     m_selected_meshes.end(),
+                     mesh) != m_selected_meshes.end();
+}
+
+auto Selection_tool::add_to_selection(std::shared_ptr<erhe::scene::Mesh> mesh) -> bool
+{
+    if (!mesh)
+    {
+        log_selection.warn("Trying to add empty mesh to selection\n");
+        return false;
+    }
+
+    if (!is_in_selection(mesh))
+    {
+        log_selection.trace("Adding mesh {} to selection\n", mesh->name);
+        m_selected_meshes.push_back(mesh);
+        return true;
+    }
+
+    log_selection.warn("Adding mesh {} to selection failed - was already in selection\n", mesh->name);
+    return false;
+}
+
+auto Selection_tool::remove_from_selection(std::shared_ptr<erhe::scene::Mesh> mesh) -> bool
+{
+    if (!mesh)
+    {
+        log_selection.warn("Trying to remove empty mesh from selection\n");
+        return false;
+    }
+
+    auto i = std::remove(m_selected_meshes.begin(),
+                         m_selected_meshes.end(),
+                         mesh);
+    if (i != m_selected_meshes.end())
+    {
+        log_selection.trace("Removing mesh {} from selection\n", mesh->name);
+        m_selected_meshes.erase(i, m_selected_meshes.end());
+        call_mesh_selection_change_subscriptions();
+        return true;
+    }
+
+    log_selection.warn("Removing mesh {} from selection failed - was not in selection\n", mesh->name);
+    return false;
 }
 
 void Selection_tool::call_mesh_selection_change_subscriptions()
@@ -169,13 +223,6 @@ void Selection_tool::call_mesh_selection_change_subscriptions()
     {
         entry.callback(m_selected_meshes);
     }
-}
-
-void Selection_tool::clear_mesh_selection()
-{
-    std::lock_guard lock(m_mutex);
-    m_selected_meshes.clear();
-    call_mesh_selection_change_subscriptions();
 }
 
 void Selection_tool::render(Render_context& render_context)

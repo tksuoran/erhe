@@ -426,6 +426,8 @@ public:
                         const Property_map<Corner_id, glm::vec3>&  corner_normals,
                         const Property_map<Polygon_id, glm::vec3>& point_normals) const;
 
+    void sort_point_corners();
+
     void make_point_corners();
 
     void build_edges();
@@ -447,6 +449,8 @@ public:
     };
 
     void weld(Weld_settings weld_settings);
+
+    void sanity_check();
 
 private:
     constexpr static size_t s_grow = 4096;

@@ -5,9 +5,6 @@
 namespace editor
 {
 
-class Scene_manager;
-class Selection_tool;
-
 class IOperation
 {
 public:
