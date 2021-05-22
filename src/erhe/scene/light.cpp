@@ -6,6 +6,20 @@
 namespace erhe::scene
 {
 
+Light::Light(const std::string& name)
+{
+}
+
+void Light::on_attach(Node& node)
+{
+    m_node = node.shared_from_this();
+}
+
+void Light::on_detach(Node& node)
+{
+    m_node.reset();
+}
+
 void Light::update(Viewport viewport)
 {
     Expects(m_node != nullptr);

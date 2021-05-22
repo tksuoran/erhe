@@ -1,5 +1,6 @@
 #include "erhe/gl/gl.hpp"
 #include "erhe/graphics/state/color_blend_state.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 // #define DISABLE_CACHE 1
 

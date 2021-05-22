@@ -2,22 +2,19 @@
 
 #include "application.hpp"
 #include "log.hpp"
+#include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
-
 #include "renderers/forward_renderer.hpp"
 #include "renderers/id_renderer.hpp"
+#include "renderers/line_renderer.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "renderers/text_renderer.hpp"
-#include "renderers/line_renderer.hpp"
-
-#include "scene/scene_manager.hpp"
-
+#include "scene/node_physics.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/hover_tool.hpp"
-#include "tools/selection_tool.hpp"
+#include "tools/physics_tool.hpp"
 #include "tools/trs_tool.hpp"
-
 #include "windows/brushes.hpp"
 #include "windows/camera_properties.hpp"
 #include "windows/light_properties.hpp"
@@ -25,28 +22,18 @@
 #include "windows/mesh_properties.hpp"
 #include "windows/node_properties.hpp"
 #include "windows/operations.hpp"
+#include "windows/physics_window.hpp"
 #include "windows/viewport_config.hpp"
 #include "windows/viewport_window.hpp"
 
-#include "erhe/graphics/texture.hpp"
-#include "erhe/graphics/renderbuffer.hpp"
-#include "erhe/graphics/framebuffer.hpp"
+#include "erhe/geometry/geometry.hpp"
 #include "erhe/graphics_experimental/shader_monitor.hpp"
-#include "erhe/primitive/material.hpp"
-#include "erhe/scene/light.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/toolkit/window.hpp"
-#include "erhe/toolkit/math_util.hpp"
-#include "erhe/gl/gl.hpp"
-
 #include "erhe/imgui/imgui_impl_erhe.hpp"
+#include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/tracy_client.hpp"
+
 #include "backends/imgui_impl_glfw.h"
 
-#include "erhe_tracy.hpp"
-
-#include <GLFW/glfw3.h>
-
-#include <chrono>
 
 namespace editor {
 
@@ -62,42 +49,43 @@ Editor::Editor()
 
 void Editor::connect()
 {
-    m_application            = get<Application         >();
-    m_forward_renderer       = get<Forward_renderer    >();
-    m_id_renderer            = get<Id_renderer         >();
-    m_scene_manager          = require<Scene_manager   >();
-    m_shader_monitor         = get<Shader_monitor      >();
-    m_shadow_renderer        = get<Shadow_renderer     >();
-    m_text_renderer          = get<Text_renderer       >();
-    m_line_renderer          = get<Line_renderer       >();
+    m_application            = get<Application>();
+    m_brushes                = get<Brushes>();
+    m_camera_properties      = get<Camera_properties>();
+    m_fly_camera_tool        = get<Fly_camera_tool>();
+    m_forward_renderer       = get<Forward_renderer>();
+    m_grid_tool              = get<Grid_tool>();
+    m_hover_tool             = get<Hover_tool>();
+    m_id_renderer            = get<Id_renderer>();
+    m_light_properties       = get<Light_properties>();
+    m_line_renderer          = get<Line_renderer>();
+    m_mesh_properties        = get<Mesh_properties>();
+    m_material_properties    = get<Material_properties>();
+    m_node_properties        = get<Node_properties>();
+    m_operation_stack        = get<Operation_stack>();
+    m_operations             = get<Operations>();
+    m_physics_tool           = get<Physics_tool>();
+    m_physics_window         = get<Physics_window>();
     m_pipeline_state_tracker = get<OpenGL_state_tracker>();
-
-    m_selection_tool         = require<Selection_tool  >();
-    m_operation_stack        = get<Operation_stack     >();
-    m_brushes                = get<Brushes             >();
-    m_camera_properties      = get<Camera_properties   >();
-    m_hover_tool             = get<Hover_tool          >();
-    m_fly_camera_tool        = get<Fly_camera_tool     >();
-    m_light_properties       = get<Light_properties    >();
-    m_material_properties    = get<Material_properties >();
-    m_mesh_properties        = get<Mesh_properties     >();
-    m_node_properties        = get<Node_properties     >();
-    m_trs_tool               = get<Trs_tool            >();
-    m_viewport_window        = get<Viewport_window     >();
-    m_operations             = get<Operations          >();
-    m_grid_tool              = get<Grid_tool           >();
-    m_viewport_config        = get<Viewport_config     >();
+    m_scene_manager          = require<Scene_manager>();
+    m_selection_tool         = require<Selection_tool>();
+    m_shader_monitor         = get<Shader_monitor>();
+    m_shadow_renderer        = get<Shadow_renderer>();
+    m_text_renderer          = get<Text_renderer>();
+    m_trs_tool               = get<Trs_tool>();
+    m_viewport_window        = get<Viewport_window>();
+    m_viewport_config        = get<Viewport_config>();
 }
 
 void Editor::disconnect()
 {
-    m_application           .reset();
-    m_forward_renderer      .reset();
-    m_scene_manager         .reset();
-    m_shader_monitor        .reset();
-    m_shadow_renderer       .reset();
-    m_text_renderer         .reset();
-    m_line_renderer         .reset();
+    m_application.reset();
+    m_forward_renderer.reset();
+    m_scene_manager.reset();
+    m_shader_monitor.reset();
+    m_shadow_renderer.reset();
+    m_text_renderer.reset();
+    m_line_renderer.reset();
     m_pipeline_state_tracker.reset();
 }
 
@@ -106,17 +94,19 @@ void Editor::initialize_component()
     ZoneScoped;
 
     register_background_tool(m_hover_tool.get());
-    register_tool  (m_trs_tool.get());
-    register_tool  (m_selection_tool.get());
-    register_tool  (m_fly_camera_tool.get());
+    register_tool(m_trs_tool.get());
+    register_tool(m_selection_tool.get());
+    register_tool(m_fly_camera_tool.get());
     register_window(m_camera_properties.get());
     register_window(m_light_properties.get());
     register_window(m_material_properties.get());
-    register_tool  (m_mesh_properties.get());
+    register_tool(m_mesh_properties.get());
     register_window(m_node_properties.get());
     register_window(m_viewport_window.get());
     register_window(m_operations.get());
-    register_tool  (m_brushes.get());
+    register_tool(m_brushes.get());
+    register_tool(m_physics_window.get());
+    register_tool(m_physics_tool.get());
 
     if (m_selection_tool)
     {
@@ -137,17 +127,19 @@ void Editor::initialize_component()
 
     IMGUI_CHECKVERSION();
     m_imgui_context = ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    ImGuiIO& io     = ImGui::GetIO();
+    (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    //io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-    //io.ConfigResizeWindowsFromEdges = true;
+    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    // io.ConfigResizeWindowsFromEdges = true;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
     io.Fonts->AddFontFromFileTTF("res/fonts/ProximaNova-Regular.otf", 16.0f);
-    //io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 18.0f);
-    //io.Fonts->AddFontDefault();
+    // io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 18.0f);
+    // io.Fonts->AddFontDefault();
 
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+    // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable
+    // Gamepad Controls
     ImGui::StyleColorsDark();
     auto* glfw_window = reinterpret_cast<GLFWwindow*>(m_application->get_context_window()->get_glfw_window());
     ImGui_ImplGlfw_InitForOther(glfw_window, true);
@@ -155,13 +147,15 @@ void Editor::initialize_component()
 }
 
 static constexpr const char* c_swap_buffers = "swap buffers";
+
 void Editor::update()
 {
-    auto new_time = chrono::steady_clock::now();
-    chrono::steady_clock::duration duration = new_time - m_current_time;
-    double frame_time = chrono::duration<double, ratio<1> >(duration).count();
+    auto                           new_time   = chrono::steady_clock::now();
+    chrono::steady_clock::duration duration   = new_time - m_current_time;
+    double                         frame_time = chrono::duration<double, ratio<1>>(duration).count();
 
-    if (frame_time > 0.25) {
+    if (frame_time > 0.25)
+    {
         frame_time = 0.25;
     }
 
@@ -170,7 +164,7 @@ void Editor::update()
     const double dt = 1.0 / 120.0;
     while (m_time_accumulator >= dt)
     {
-        update_fixed_step();
+        update_fixed_step(dt);
         m_time_accumulator -= dt;
         m_time += dt;
     }
@@ -199,7 +193,7 @@ void Editor::update()
     TracyGpuCollect
 }
 
-void Editor::update_fixed_step()
+void Editor::update_fixed_step(double dt)
 {
     ZoneScoped;
 
@@ -207,9 +201,14 @@ void Editor::update_fixed_step()
     {
         m_fly_camera_tool->update_fixed_step();
     }
+    if (m_scene_manager)
+    {
+        m_scene_manager->update_fixed_step(dt);
+    }
 }
 
 static constexpr const char* c_shader_monitor_poll = "shader monitor poll";
+
 void Editor::update_once_per_frame()
 {
     ZoneScoped;
@@ -220,7 +219,7 @@ void Editor::update_once_per_frame()
         m_shader_monitor->update_once_per_frame();
     }
 
-    if (m_scene_manager && m_light_properties->animation ())
+    if (m_scene_manager && m_light_properties->animation())
     {
         m_scene_manager->update_once_per_frame(m_time);
     }
@@ -242,7 +241,7 @@ void Editor::begin_frame()
     if (m_enable_gui)
     {
         gui_begin_frame();
-        auto size = m_viewport_window->content_region_size();
+        auto size               = m_viewport_window->content_region_size();
         m_scene_viewport.width  = size.x;
         m_scene_viewport.height = size.y;
     }
@@ -272,22 +271,21 @@ void Editor::gui_render()
     ImGui::ShowDemoWindow();
     ImGui::Render();
 
-    // Pipeline state required for NVIDIA driver not to complain about texture unit state
-    // when doing the clear.
+    // Pipeline state required for NVIDIA driver not to complain about texture
+    // unit state when doing the clear.
     m_pipeline_state_tracker->shader_stages.reset();
     m_pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
-    gl::disable         (gl::Enable_cap::framebuffer_srgb);
-    gl::viewport        (0, 0, width(), height());
-    gl::clear_color     (0.0f, 0.0f, 0.2f, 0.1f);
-    gl::clear           (gl::Clear_buffer_mask::color_buffer_bit);
+    gl::disable(gl::Enable_cap::framebuffer_srgb);
+    gl::viewport(0, 0, width(), height());
+    gl::clear_color(0.0f, 0.0f, 0.2f, 0.1f);
+    gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
     ImGui_ImplErhe_RenderDrawData(ImGui::GetDrawData());
 }
 
 void Editor::render_shadowmaps()
 {
-    m_shadow_renderer->render(m_scene_manager->content_layers(),
-                              m_scene_manager->camera());
+    m_shadow_renderer->render(m_scene_manager->content_layers(), m_scene_manager->camera());
 }
 
 void Editor::render_id()
@@ -309,14 +307,11 @@ void Editor::render_clear_primary()
 
     m_pipeline_state_tracker->shader_stages.reset();
     m_pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
-    gl::viewport     (m_scene_viewport.x, m_scene_viewport.y, m_scene_viewport.width, m_scene_viewport.height);
-    gl::enable       (gl::Enable_cap::framebuffer_srgb);
-    gl::clear_color  (m_viewport_config->clear_color[0],
-                      m_viewport_config->clear_color[1],
-                      m_viewport_config->clear_color[2],
-                      m_viewport_config->clear_color[3]);
+    gl::viewport(m_scene_viewport.x, m_scene_viewport.y, m_scene_viewport.width, m_scene_viewport.height);
+    gl::enable(gl::Enable_cap::framebuffer_srgb);
+    gl::clear_color(m_viewport_config->clear_color[0], m_viewport_config->clear_color[1], m_viewport_config->clear_color[2], m_viewport_config->clear_color[3]);
     gl::clear_depth_f(erhe::graphics::Configuration::depth_clear_value);
-    gl::clear        (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
+    gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 }
 
 void Editor::render_content()
@@ -577,8 +572,8 @@ void Editor::update_pointer()
 
     if (m_pointer_context.pointer_in_content_area() && m_id_renderer)
     {
-        auto mesh_primitive = m_id_renderer->get(m_pointer_context.pointer_x, m_pointer_context.pointer_y, m_pointer_context.pointer_z);    
-        m_pointer_context.hover_valid     = mesh_primitive.valid;
+        auto mesh_primitive           = m_id_renderer->get(m_pointer_context.pointer_x, m_pointer_context.pointer_y, m_pointer_context.pointer_z);
+        m_pointer_context.hover_valid = mesh_primitive.valid;
         if (m_pointer_context.hover_valid)
         {
             m_pointer_context.hover_mesh        = mesh_primitive.mesh;
@@ -589,9 +584,9 @@ void Editor::update_pointer()
             m_pointer_context.hover_content     = m_pointer_context.hover_layer == m_scene_manager->content_layer().get();
             if (m_pointer_context.hover_mesh != nullptr)
             {
-                const auto& primitive = m_pointer_context.hover_mesh->primitives[m_pointer_context.hover_primitive];
-                auto* geometry = primitive.primitive_geometry->source_geometry.get();
-                m_pointer_context.geometry = geometry;
+                const auto& primitive          = m_pointer_context.hover_mesh->primitives[m_pointer_context.hover_primitive];
+                auto*       geometry           = primitive.primitive_geometry->source_geometry.get();
+                m_pointer_context.geometry     = geometry;
                 m_pointer_context.hover_normal = {};
                 if (geometry != nullptr)
                 {
@@ -601,14 +596,21 @@ void Editor::update_pointer()
                         auto* polygon_normals = geometry->polygon_attributes().find<glm::vec3>(c_polygon_normals);
                         if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id))
                         {
+                            auto node         = m_pointer_context.hover_mesh->node();
                             auto local_normal = polygon_normals->get(polygon_id);
-                            auto world_from_node = m_pointer_context.hover_mesh->node->world_from_node();
-                            m_pointer_context.hover_normal = glm::vec3(world_from_node * glm::vec4(local_normal, 0.0f));
+                            if (node)
+                            {
+                                auto world_from_node = node->world_from_node();
+                                m_pointer_context.hover_normal = glm::vec3(world_from_node * glm::vec4(local_normal, 0.0f));
+                            }
+                            else
+                            {
+                                m_pointer_context.hover_normal = local_normal;
+                            }
                         }
                     }
                 }
             }
-             
         }
         // else mesh etc. contain latest valid values
     }
@@ -651,8 +653,34 @@ void Editor::on_key(bool pressed, erhe::toolkit::Keycode code, uint32_t modifier
         case Keycode::Key_s:          return m_fly_camera_tool->z_pos_control(pressed);
         case Keycode::Key_a:          return m_fly_camera_tool->x_neg_control(pressed);
         case Keycode::Key_d:          return m_fly_camera_tool->x_pos_control(pressed);
+
+        case Keycode::Key_z:
+        {
+            if (m_pointer_context.control && m_operation_stack->can_undo())
+            {
+                m_operation_stack->undo();
+            }
+            break;
+        }
+
+        case Keycode::Key_y:
+        {
+            if (m_pointer_context.control && m_operation_stack->can_redo())
+            {
+                m_operation_stack->redo();
+            }
+            break;
+        }
+
+        case Keycode::Key_delete:
+        {
+            delete_selected_meshes();
+            break;
+        }
+
         default: break;
     }
+    // clang-format on
 }
 
 void Editor::on_mouse_click(erhe::toolkit::Mouse_button button, int count)
@@ -704,6 +732,7 @@ void Editor::cancel_ready_tools(Tool* keep)
 
 auto Editor::get_action_tool(Action action) -> Tool*
 {
+    // clang-format off
     switch (action)
     {
         case Action::select:    return m_selection_tool.get();
@@ -711,9 +740,10 @@ auto Editor::get_action_tool(Action action) -> Tool*
         case Action::remove:    return m_brushes.get();
         case Action::translate: return m_trs_tool.get();
         case Action::rotate:    return m_trs_tool.get();
-        default:
-            return nullptr;
+        case Action::drag:      return m_physics_tool.get();
+        default:                return nullptr;
     }
+    // clang-format on
 }
 
 auto Editor::get_priority_action() const -> Action
@@ -725,7 +755,7 @@ void Editor::set_priority_action(Action action)
 {
     log_tools.trace("set_priority_action(action = {})\n", c_action_strings[static_cast<int>(action)]);
     m_priority_action = action;
-    auto* tool = get_action_tool(action);
+    auto* tool        = get_action_tool(action);
 
     switch (action)
     {
@@ -755,17 +785,30 @@ void Editor::set_priority_action(Action action)
         return;
     }
     auto i = std::find(m_tools.begin(), m_tools.end(), tool);
+    log_tools.trace("tools:");
+    for (auto t : m_tools)
+    {
+        log_tools.trace(" {}", t->description());
+    }
+    log_tools.trace("\n");
     if (i == m_tools.begin())
     {
+        log_tools.trace("tool {} already first\n", tool->description());
         return;
     }
     if (i != m_tools.end())
     {
         std::swap(*i, *m_tools.begin());
-        log_tools.trace("moved tool first\n");
+        log_tools.trace("moved tool {} first\n", tool->description());
+        log_tools.trace("tools:");
+        for (auto t : m_tools)
+        {
+            log_tools.trace(" {}", t->description());
+        }
+        log_tools.trace("\n");
         return;
     }
-    log_tools.trace("tool not in list\n");
+    log_tools.trace("tool {} is not registered\n", tool->description());
 }
 
 void Editor::on_pointer()
@@ -852,4 +895,29 @@ void Editor::register_window(Window* window)
     m_windows.emplace_back(window);
 }
 
+void Editor::delete_selected_meshes()
+{
+    if (!m_selection_tool)
+    {
+        return;
+    }
+
+    auto& selection = m_selection_tool->selected_meshes();
+    if (selection.empty())
+    {
+        return;
+    }
+
+    Mesh_insert_remove_operation::Context context;
+    context.mode           = Scene_item_operation::Mode::remove;
+    context.mesh           = selection.front();
+    context.node           = context.mesh->node();
+    context.node_physics   = context.node->get_attachment<Node_physics>();
+    context.scene_manager  = m_scene_manager;
+    context.selection_tool = m_selection_tool;
+
+    auto op = make_shared<Mesh_insert_remove_operation>(context);
+    m_operation_stack->push(op);
 }
+
+}  // namespace editor

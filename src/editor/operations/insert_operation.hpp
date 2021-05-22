@@ -4,6 +4,7 @@
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::geometry
 {
@@ -13,6 +14,7 @@ namespace erhe::geometry
 namespace editor
 {
 
+class Node_physics;
 class Scene_manager;
 class Selection_tool;
 
@@ -54,7 +56,8 @@ public:
         {
         case Mode::insert: return Mode::remove;
         case Mode::remove: return Mode::insert;
-        default: FATAL("Bad Context::Mode");
+        default:
+            FATAL("Bad Context::Mode");
             return Mode::insert;
         }
     }
@@ -68,7 +71,9 @@ public:
     {
         std::shared_ptr<Scene_manager>     scene_manager;
         std::shared_ptr<Selection_tool>    selection_tool;
-        std::shared_ptr<erhe::scene::Mesh> item;
+        std::shared_ptr<erhe::scene::Mesh> mesh;
+        std::shared_ptr<erhe::scene::Node> node;
+        std::shared_ptr<Node_physics>      node_physics;
         Mode                               mode;
     };
 
@@ -92,6 +97,7 @@ public:
     {
         std::shared_ptr<Scene_manager>      scene_manager;
         std::shared_ptr<erhe::scene::Light> item;
+        std::shared_ptr<erhe::scene::Node>  node;
         Mode                                mode;
     };
 

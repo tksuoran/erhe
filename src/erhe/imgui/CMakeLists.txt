@@ -1,20 +1,17 @@
+set(_target "erhe_imgui")
+
 set(source_list
     imgui_impl_erhe.cpp
     imgui_impl_erhe.hpp
 )
 
-add_library(erhe_imgui ${source_list})
+add_library(${_target} ${source_list})
 
-add_library(erhe::imgui ALIAS erhe_imgui)
+target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
-target_include_directories(erhe_imgui
+target_link_libraries(${_target}
     PUBLIC
-        ${ERHE_INCLUDE_ROOT}
-)
-
-target_link_libraries(erhe_imgui
-    PUBLIC
-        erhe::graphics
+        erhe_graphics
         imgui
 )
 

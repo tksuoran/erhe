@@ -1,12 +1,11 @@
 #include "erhe/geometry/geometry.hpp"
-
 #include "erhe/geometry/property_map.hpp"
+#include "erhe/geometry/log.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include "Tracy.hpp"
 
-#include <cassert>
 #include <cmath>
-#include <exception>
 
 namespace erhe::geometry
 {
@@ -69,22 +68,16 @@ void Polygon::compute_normal(Polygon_id                          this_polygon_id
 auto Polygon::compute_centroid(const Geometry&                     geometry,
                                const Property_map<Point_id, vec3>& point_locations) const -> glm::vec3
 {
-    ZoneScoped;
-
     vec3 centroid(0.0f, 0.0f, 0.0f);
     int  count{0};
 
-    for (Polygon_corner_id polygon_corner_id = first_polygon_corner_id,
-         end = first_polygon_corner_id + corner_count;
-         polygon_corner_id < end;
-         ++polygon_corner_id)
+    for_each_corner_const(geometry, [&geometry, &centroid, &count, &point_locations](const Polygon_corner_context_const& i)
     {
-        Corner_id corner_id = geometry.polygon_corners[polygon_corner_id];
-        Point_id  point_id  = geometry.corners[corner_id].point_id;
-        auto      pos0      = point_locations.get(point_id);
+        Point_id point_id = geometry.corners[i.corner_id].point_id;
+        auto     pos0     = point_locations.get(point_id);
         centroid += pos0;
         ++count;
-    }
+    });
 
     return centroid /= static_cast<float>(count);
 }
@@ -117,8 +110,6 @@ void Polygon::compute_centroid(Polygon_id                          this_polygon_
                                Property_map<Polygon_id, vec3>&     polygon_centroids,
                                const Property_map<Point_id, vec3>& point_locations) const
 {
-    ZoneScoped;
-
     if (corner_count < 1)
     {
         return;
@@ -130,18 +121,18 @@ void Polygon::compute_centroid(Polygon_id                          this_polygon_
 
 auto Polygon::corner(const Geometry& geometry, Point_id point) -> Corner_id
 {
-    ZoneScoped;
-
-    for (Polygon_corner_id polygon_corner_id = first_polygon_corner_id,
-         end = first_polygon_corner_id + corner_count;
-         polygon_corner_id < end;
-         ++polygon_corner_id)
+    std::optional<Corner_id> result;
+    for_each_corner_const(geometry, [&](auto& i)
     {
-        Corner_id corner_id = geometry.polygon_corners[polygon_corner_id];
-        if (point == geometry.corners[corner_id].point_id)
+        if (point == i.corner.point_id)
         {
-            return corner_id;
+            result = i.corner_id;
+            return i.break_iteration();
         }
+    });
+    if (result.has_value())
+    {
+        return result.value();
     }
     FATAL("corner not found");
     return {};
@@ -149,8 +140,6 @@ auto Polygon::corner(const Geometry& geometry, Point_id point) -> Corner_id
 
 auto Polygon::next_corner(const Geometry& geometry, Corner_id anchor_corner_id) -> Corner_id
 {
-    ZoneScoped;
-
     for (uint32_t i = 0; i < corner_count; ++i)
     {
         Polygon_corner_id polygon_corner_id = first_polygon_corner_id + i;
@@ -168,8 +157,6 @@ auto Polygon::next_corner(const Geometry& geometry, Corner_id anchor_corner_id) 
 
 auto Polygon::prev_corner(const Geometry& geometry, Corner_id anchor_corner_id) -> Corner_id
 {
-    ZoneScoped;
-
     for (uint32_t i = 0; i < corner_count; ++i)
     {
         Polygon_corner_id polygon_corner_id = first_polygon_corner_id + i;
@@ -187,8 +174,6 @@ auto Polygon::prev_corner(const Geometry& geometry, Corner_id anchor_corner_id) 
 
 void Polygon::reverse(Geometry& geometry)
 {
-    ZoneScoped;
-
     std::reverse(&geometry.polygon_corners[first_polygon_corner_id],
                  &geometry.polygon_corners[first_polygon_corner_id + corner_count]);
 }

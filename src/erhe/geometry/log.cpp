@@ -3,22 +3,22 @@
 namespace erhe::geometry
 {
 
-using erhe::log::Log;
+using namespace erhe::log;
 
-Log::Category log                  (Log::Color::YELLOW, Log::Color::GRAY, Log::Level::LEVEL_INFO);
-Log::Category log_build_edges      (Log::Color::YELLOW, Log::Color::GRAY, Log::Level::LEVEL_INFO);
-Log::Category log_tangent_gen      (Log::Color::YELLOW, Log::Color::GRAY, Log::Level::LEVEL_INFO);
-Log::Category log_cone             (Log::Color::GREEN,  Log::Color::GRAY, Log::Level::LEVEL_INFO);
-Log::Category log_torus            (Log::Color::GREEN,  Log::Color::GRAY, Log::Level::LEVEL_INFO);
-Log::Category log_sphere           (Log::Color::GREEN,  Log::Color::GRAY, Log::Level::LEVEL_INFO);
-Log::Category log_polygon_texcoords(Log::Color::CYAN,   Log::Color::GRAY, Log::Level::LEVEL_INFO);
-Log::Category log_interpolate      (Log::Color::WHITE,  Log::Color::GRAY, Log::Level::LEVEL_INFO);
-Log::Category log_operation        (Log::Color::CYAN,   Log::Color::GRAY, Log::Level::LEVEL_INFO);
-Log::Category log_catmull_clark    (Log::Color::CYAN,   Log::Color::GRAY, Log::Level::LEVEL_INFO);
-Log::Category log_triangulate      (Log::Color::CYAN,   Log::Color::GRAY, Log::Level::LEVEL_INFO);
-Log::Category log_subdivide        (Log::Color::CYAN,   Log::Color::GRAY, Log::Level::LEVEL_INFO);
-Log::Category log_attribute_maps   (Log::Color::CYAN,   Log::Color::GRAY, Log::Level::LEVEL_INFO);
-Log::Category log_merge            (Log::Color::YELLOW, Log::Color::GRAY, Log::Level::LEVEL_INFO);
-Log::Category log_weld             (Log::Color::BLUE,   Log::Color::GRAY, Log::Level::LEVEL_INFO);
+Category log                  (Color::YELLOW, Color::GRAY, Level::LEVEL_WARN);
+Category log_build_edges      (Color::YELLOW, Color::GRAY, Level::LEVEL_WARN);
+Category log_tangent_gen      (Color::YELLOW, Color::GRAY, Level::LEVEL_WARN);
+Category log_cone             (Color::GREEN,  Color::GRAY, Level::LEVEL_WARN);
+Category log_torus            (Color::GREEN,  Color::GRAY, Level::LEVEL_WARN);
+Category log_sphere           (Color::GREEN,  Color::GRAY, Level::LEVEL_WARN);
+Category log_polygon_texcoords(Color::CYAN,   Color::GRAY, Level::LEVEL_WARN);
+Category log_interpolate      (Color::WHITE,  Color::GRAY, Level::LEVEL_WARN);
+Category log_operation        (Color::CYAN,   Color::GRAY, Level::LEVEL_WARN);
+Category log_catmull_clark    (Color::CYAN,   Color::GRAY, Level::LEVEL_WARN);
+Category log_triangulate      (Color::CYAN,   Color::GRAY, Level::LEVEL_WARN);
+Category log_subdivide        (Color::CYAN,   Color::GRAY, Level::LEVEL_WARN);
+Category log_attribute_maps   (Color::CYAN,   Color::GRAY, Level::LEVEL_WARN);
+Category log_merge            (Color::YELLOW, Color::GRAY, Level::LEVEL_WARN);
+Category log_weld             (Color::BLUE,   Color::GRAY, Level::LEVEL_WARN);
 
 } // namespace erhe::geometry

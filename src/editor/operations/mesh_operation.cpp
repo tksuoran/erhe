@@ -1,6 +1,7 @@
 #include "operations/mesh_operation.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/scene_manager.hpp"
+#include "erhe/geometry/geometry.hpp"
 
 namespace editor
 {
@@ -35,6 +36,7 @@ void Mesh_operation::make_entries(Context& context,
         }
         Entry entry;
         entry.mesh   = mesh;
+        entry.node   = mesh->node();
         entry.before = *entry.mesh;
         entry.after  = *entry.mesh;
         for (auto& primitive : entry.after.primitives)
@@ -48,9 +50,10 @@ void Mesh_operation::make_entries(Context& context,
             auto& gr = *g;
             auto result_geometry = operation(gr);
             result_geometry.sanity_check();
-            auto result_primitive_geometry = context.scene_manager->make_primitive_geometry(std::move(result_geometry),
+            auto result_primitive_geometry = context.scene_manager->make_primitive_geometry(result_geometry,
                                                                                             primitive.primitive_geometry->source_normal_style);
             primitive.primitive_geometry = result_primitive_geometry;
+            primitive.primitive_geometry->source_geometry = std::make_shared<erhe::geometry::Geometry>(std::move(result_geometry));
         }
         add_entry(std::move(entry));
     }

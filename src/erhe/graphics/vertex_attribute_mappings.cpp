@@ -33,7 +33,7 @@ void Vertex_attribute_mappings::apply_to_vertex_input_state(Vertex_input_state& 
     Expects(vertex_input_state.bindings().empty());
 
     log_vertex_attribute_mappings.trace("Vertex_attribute_mappings::apply_to_vertex_input_state()\n");
-    Log::Indenter log_indent;
+    log::Indenter log_indent;
 
     for (const auto& mapping : mappings)
     {

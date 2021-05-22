@@ -1,14 +1,12 @@
 #if defined(ERHE_WINDOW_TOOLKIT_GLFW)
 
 #include "erhe/toolkit/glfw_window.hpp"
-
-#include "erhe/log/log.hpp"
 #include "erhe/gl/dynamic_load.hpp"
-
-#include <GLFW/glfw3.h>
-#include <gsl/assert>
+#include "erhe/toolkit/verify.hpp"
 
 #include <fmt/printf.h>
+#include <GLFW/glfw3.h>
+#include <gsl/assert>
 
 #include <cstdlib>
 #include <stdexcept>

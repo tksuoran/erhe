@@ -1,8 +1,12 @@
+set(_target "erhe_toolkit")
+
 set(source_list
     file.cpp
     file.hpp
     math_util.cpp
     math_util.hpp
+    tracy_client.hpp
+    verify.hpp
     view.cpp
     view.hpp
     window.hpp
@@ -22,30 +26,25 @@ if (${ERHE_WINDOW_TOOLKIT} STREQUAL "Mango")
     )
 endif()
 
-add_library(erhe_toolkit ${source_list})
+add_library(${_target} ${source_list})
 
-add_library(erhe::toolkit ALIAS erhe_toolkit)
+target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
-target_include_directories(erhe_toolkit PUBLIC ${ERHE_INCLUDE_ROOT})
-
-target_link_libraries(erhe_toolkit
+target_link_libraries(${_target}
     PUBLIC
-        erhe::gl
+        erhe_gl
         fmt::fmt
         glm::glm
         Microsoft.GSL::GSL
 )
 
 if (${ERHE_WINDOW_TOOLKIT} STREQUAL "GLFW")
-    target_link_libraries(erhe_toolkit PUBLIC glfw)
+    target_link_libraries(${_target} PUBLIC glfw)
 endif ()
 
 if (${ERHE_WINDOW_TOOLKIT} STREQUAL "Mango")
-    target_link_libraries(erhe_toolkit PUBLIC mango)
+    target_link_libraries(${_target} PUBLIC mango)
 endif()
-
-#if (${ERHE_WINDOW_TOOLKIT} STREQUAL "Mango")
-#endif ()
 
 foreach(source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)

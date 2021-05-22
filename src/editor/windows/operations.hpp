@@ -17,7 +17,7 @@ class Operations
 {
 public:
     static constexpr const char* c_name = "Operations";
-    Operations() : erhe::components::Component(c_name) {}
+    Operations() : erhe::components::Component{c_name} {}
     virtual ~Operations() = default;
 
     // Implements Component

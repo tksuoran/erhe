@@ -1,18 +1,16 @@
+set(_target "erhe_log")
+
 set(source_list
     log.cpp
     log.hpp
+    log_glm.hpp
 )
 
-add_library(erhe_log ${source_list})
+add_library(${_target} ${source_list})
 
-add_library(erhe::log ALIAS erhe_log)
+target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
-target_include_directories(erhe_log
-    PUBLIC
-        ${ERHE_INCLUDE_ROOT}
-)
-
-target_link_libraries(erhe_log
+target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
         glm::glm

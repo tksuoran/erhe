@@ -1,5 +1,6 @@
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/log.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <fmt/format.h>
 
@@ -95,7 +96,7 @@ auto Buffer::map_all_bytes(gl::Map_buffer_access_mask access_mask) noexcept
                      gl::to_string(access_mask),
                      gl::c_str(m_target),
                      gl_name());
-    Log::Indenter indenter;
+    log::Indenter indenter;
 
     size_t byte_count = m_capacity_byte_count;
 
@@ -135,7 +136,7 @@ auto Buffer::map_bytes(size_t                     byte_offset,
                      gl::to_string(access_mask),
                      gl::c_str(m_target),
                      gl_name());
-    Log::Indenter indenter;
+    log::Indenter indenter;
 
     VERIFY(byte_offset + byte_count <= m_capacity_byte_count);
 
@@ -171,8 +172,8 @@ void Buffer::unmap() noexcept
                      m_map.size(),
                      reinterpret_cast<intptr_t>(m_map.data()),
                      gl_name());
-    Log::Indenter indented;
-    Log::set_text_color(Log::Color::GREY);
+    log::Indenter indented;
+    Log::set_text_color(erhe::log::Color::GREY);
 
     auto res = gl::unmap_named_buffer(gl_name());
     VERIFY(res == GL_TRUE);

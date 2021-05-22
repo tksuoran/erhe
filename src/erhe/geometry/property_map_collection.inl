@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe/geometry/log.hpp"
 #include "Tracy.hpp"
 
 namespace erhe::geometry
@@ -34,7 +33,7 @@ Property_map_collection<Key_type>::insert(Property_map_base<Key_type>* map)
         VERIFY(entry.key != map->descriptor().name);
     }
     m_entries.emplace_back(map->descriptor().name, map);
-    log_attribute_maps.trace("Added attribute map {}\n", map->descriptor().name);
+    //log_attribute_maps.trace("Added attribute map {}\n", map->descriptor().name);
 }
 
 template <typename Key_type>
@@ -107,7 +106,7 @@ Property_map_collection<Key_type>::create(const Property_map_descriptor& descrip
 
     auto p = new Property_map<Key_type, Value_type>(descriptor);
     m_entries.emplace_back(descriptor.name, p);
-    log_attribute_maps.trace("Added attribute map {}\n", descriptor.name);
+    //log_attribute_maps.trace("Added attribute map {}\n", descriptor.name);
 
     return p;
 }
@@ -159,7 +158,7 @@ Property_map_collection<Key_type>::find_or_create(const Property_map_descriptor&
     // New entry
     auto p = new Property_map<Key_type, Value_type>(descriptor);
     m_entries.emplace_back(descriptor.name, p);
-    log_attribute_maps.trace("Added attribute map {}\n", descriptor.name);
+    //log_attribute_maps.trace("Added attribute map {}\n", descriptor.name);
     return p;
 }
 
@@ -205,7 +204,7 @@ Property_map_collection<Key_type>::interpolate(
         }
         Property_map_base<Key_type>* destination_map = src_map->constructor(descriptor);
 
-        log_interpolate.trace("\ninterpolating {}\n", src_map->descriptor().name);
+        //log_interpolate.trace("\ninterpolating {}\n", src_map->descriptor().name);
         src_map->interpolate(destination_map, key_new_to_olds);
 
         destination.insert(destination_map);
@@ -232,6 +231,23 @@ Property_map_collection<Key_type>::merge_to(
         }
         target_map->import_from(this_map, transform);
     }
+}
+
+template <typename Key_type>
+inline auto
+Property_map_collection<Key_type>::clone_with_transform(glm::mat4 transform)
+-> Property_map_collection<Key_type>
+{
+    Property_map_collection<Key_type> result;
+    for (auto& entry : m_entries)
+    {
+        Property_map_base<Key_type>* this_map   = entry.value.get();
+        const auto&                  descriptor = this_map->descriptor();
+        Property_map_base<Key_type>* target_map = this_map->constructor(descriptor);
+        result.insert(target_map);
+        target_map->import_from(this_map, transform);
+    }
+    return result;
 }
 
 } // namespace erhe::geometry

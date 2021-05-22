@@ -3,6 +3,7 @@
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/toolkit/file.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::graphics
 {

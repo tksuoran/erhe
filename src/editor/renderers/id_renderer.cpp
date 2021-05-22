@@ -14,11 +14,12 @@
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/camera.hpp"
+#include "erhe/scene/scene.hpp"
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/toolkit/math_util.hpp"
-
-#include "erhe_tracy.hpp"
+#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -38,7 +39,7 @@ using namespace glm;
 using namespace std;
 
 Id_renderer::Id_renderer()
-    : erhe::components::Component("Id_renderer")
+    : erhe::components::Component{c_name}
 {
 }
 
@@ -165,7 +166,7 @@ void Id_renderer::render_layer(erhe::scene::Layer* layer)
     layer_range.layer  = layer;
     update_primitive_buffer(layer->meshes, erhe::scene::Mesh::c_visibility_id);
     auto draw_indirect_buffer_range = update_draw_indirect_buffer(layer->meshes,
-                                                                  Primitive_geometry::Mode::polygon_fill,
+                                                                  Primitive_mode::polygon_fill,
                                                                   erhe::scene::Mesh::c_visibility_id);
 
     bind_primitive_buffer();

@@ -16,25 +16,24 @@ void Geometry::smooth_normalize(Property_map<Corner_id, T>&                corne
     float cos_max_smoothing_angle = cos(max_smoothing_angle_radians);
 
     corner_attribute.clear();
-    for (Polygon_id polygon_id = 0, end = polygon_count(); polygon_id < end; ++polygon_id)
+    for_each_polygon_const([&](auto& i)
     {
-        const Polygon& polygon = polygons[polygon_id];
         if (max_smoothing_angle_radians == 0.0f)
         {
-            polygon.copy_to_corners(polygon_id,
-                                    *this,
-                                    corner_attribute,
-                                    polygon_attribute);
+            i.polygon.copy_to_corners(i.polygon_id,
+                                      *this,
+                                      corner_attribute,
+                                      polygon_attribute);
         }
         else
         {
-            polygon.smooth_normalize(*this,
-                                     corner_attribute,
-                                     polygon_attribute,
-                                     polygon_normals,
-                                     cos_max_smoothing_angle);
+            i.polygon.smooth_normalize(*this,
+                                       corner_attribute,
+                                       polygon_attribute,
+                                       polygon_normals,
+                                       cos_max_smoothing_angle);
         }
-    }
+    });
 }
 
 
@@ -46,14 +45,14 @@ void Geometry::smooth_average(Property_map<Corner_id, T>&                smoothe
 {
     ZoneScoped;
 
-    for (auto& polygon : polygons)
+    for_each_polygon([&](auto& i)
     {
-        polygon.smooth_average(*this,
-                               smoothed_corner_attribute,
-                               corner_attribute,
-                               corner_normals,
-                               point_normals);
-    }
+        i.polygon.smooth_average(*this,
+                                 smoothed_corner_attribute,
+                                 corner_attribute,
+                                 corner_normals,
+                                 point_normals);
+    });
 }
 
 } // namespace erhe::geometry

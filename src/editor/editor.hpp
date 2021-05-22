@@ -3,7 +3,6 @@
 #include "scene/scene_manager.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
-#include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/toolkit/window.hpp"
 #include "erhe/toolkit/view.hpp"
 #include "erhe/components/component.hpp"
@@ -19,6 +18,8 @@ namespace erhe::graphics
     class Renderbuffer;
     class Texture;
     class Framebuffer;
+    class Shader_monitor;
+    class OpenGL_state_tracker;
 }
 
 namespace editor {
@@ -42,6 +43,8 @@ class Mesh_properties;
 class Node_properties;
 class Operations;
 class Operation_stack;
+class Physics_tool;
+class Physics_window;
 class Selection_tool;
 class Trs_tool;
 class Tool;
@@ -56,7 +59,6 @@ class Editor
 public:
     static constexpr const char* c_name = "Editor";
     Editor();
-
     virtual ~Editor() = default;
 
     // Implements Component
@@ -91,10 +93,11 @@ public:
 
     void register_window(Window* window);
 
+    void delete_selected_meshes();
+
 private:
     Action m_priority_action{Action::select};
 
-private:
     auto get_action_tool(Action action) -> Tool*;
     void render_shadowmaps();
     void render_id();
@@ -109,7 +112,7 @@ private:
 
     void cancel_ready_tools(Tool* keep);
 
-    void update_fixed_step();
+    void update_fixed_step(double dt);
 
     void update_once_per_frame();
 
@@ -143,10 +146,12 @@ private:
     std::shared_ptr<Node_properties>     m_node_properties;
     std::shared_ptr<Operation_stack>     m_operation_stack;
     std::shared_ptr<Operations>          m_operations;
+    std::shared_ptr<Physics_tool>        m_physics_tool;
     std::shared_ptr<Selection_tool>      m_selection_tool;
     std::shared_ptr<Trs_tool>            m_trs_tool;
     std::shared_ptr<Viewport_config>     m_viewport_config;
     std::shared_ptr<Viewport_window>     m_viewport_window;
+    std::shared_ptr<Physics_window>      m_physics_window;
 
     std::vector<Tool*>                   m_tools;
     std::vector<Tool*>                   m_background_tools;

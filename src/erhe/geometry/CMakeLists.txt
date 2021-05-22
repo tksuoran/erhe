@@ -1,6 +1,13 @@
+set(_target "erhe_geometry")
+
 set(source_list
     corner.inl
     geometry.cpp
+    geometry_iterators.cpp
+    geometry_make.cpp
+    geometry_merge.cpp
+    geometry_tangents.cpp
+    geometry_weld.cpp
     geometry.hpp
     geometry.inl
     log.cpp
@@ -9,14 +16,12 @@ set(source_list
     mikktspace.h
     operation/catmull_clark_subdivision.cpp
     operation/catmull_clark_subdivision.hpp
-    operation/conway_ambo_operator.hpp
-    operation/conway_ambo_operator.cpp
-    operation/conway_dual_operator.hpp
-    operation/conway_dual_operator.cpp
-    operation/conway_snub_operator.hpp
-    operation/conway_snub_operator.cpp
-    operation/conway_truncate_operator.hpp
-    operation/conway_truncate_operator.cpp
+    operation/ambo.hpp
+    operation/ambo.cpp
+    operation/dual.hpp
+    operation/dual.cpp
+    operation/truncate.hpp
+    operation/truncate.cpp
     operation/sqrt3_subdivision.cpp
     operation/sqrt3_subdivision.hpp
     operation/clone.cpp
@@ -49,23 +54,21 @@ set(source_list
     shapes/regular_polyhedron.hpp
 )
 
-add_library(erhe_geometry ${source_list})
+add_library(${_target} ${source_list})
 
-add_library(erhe::geometry ALIAS erhe_geometry)
+target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
-target_include_directories(erhe_geometry
+#target_precompile_headers(${_target} PRIVATE precompiled.hpp)
+#target_precompile_headers(${_target} PRIVATE geometry.hpp)
+
+target_link_libraries(${_target}
     PUBLIC
-        ${ERHE_INCLUDE_ROOT}
-)
-
-target_link_libraries(erhe_geometry
-    PUBLIC
+        erhe_log
+        erhe_toolkit
         fmt::fmt
         glm::glm
         Microsoft.GSL::GSL
-        TracyClient::TracyClient
-        erhe::log
-        erhe::toolkit
+        TracyClient
 )
 
 foreach(source IN LISTS source_list)

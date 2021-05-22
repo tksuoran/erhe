@@ -4,75 +4,64 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace erhe::scene
 {
 
+class INode_attachment;
+
 class Node
+    : public std::enable_shared_from_this<Node>
 {
 public:
+    virtual ~Node();
+
     void update(uint32_t update_serial = 0, bool cache_enable = false);
 
-    auto parent_from_node() const -> glm::mat4
-    {
-        return transforms.parent_from_node.matrix();
-    }
+    void attach(const std::shared_ptr<INode_attachment>& attachment);
 
-    auto world_from_node() const -> glm::mat4
-    {
-        return transforms.world_from_node.matrix();
-    }
+    auto detach(const std::shared_ptr<INode_attachment>& attachment) -> bool;
 
-    auto node_from_parent() const -> glm::mat4
+    template <typename T>
+    auto get_attachment() -> std::shared_ptr<T>
     {
-        return transforms.parent_from_node.inverse_matrix();
-    }
-
-    auto node_from_world() const -> glm::mat4
-    {
-        return transforms.world_from_node.inverse_matrix();
-    }
-
-    auto world_from_parent() const -> glm::mat4
-    {
-        if (parent != nullptr)
+        for (const auto& attachment : m_attachments)
         {
-            return parent->world_from_node();
+            auto typed_attachment = std::dynamic_pointer_cast<T>(attachment);
+            if (typed_attachment)
+            {
+                return typed_attachment;
+            }
         }
-        return glm::mat4(1);
+        return {};
     }
 
-    auto position_in_world() const -> glm::vec4
-    {
-        return world_from_node() * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    }
+    auto parent_from_node() const -> glm::mat4;
 
-    auto direction_in_world() const -> glm::vec4
-    {
-        return world_from_node() * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
-    }
+    auto world_from_node() const -> glm::mat4;
 
-    auto root() -> Node*
-    {
-        if (parent == nullptr)
-        {
-            return this;
-        }
-        return parent->root();
-    }
+    auto node_from_parent() const -> glm::mat4;
 
-    auto root() const -> const Node*
-    {
-        if (parent == nullptr)
-        {
-            return this;
-        }
-        return parent->root();
-    }
+    auto node_from_world() const -> glm::mat4;
+
+    auto world_from_parent() const -> glm::mat4;
+
+    auto position_in_world() const -> glm::vec4;
+
+    auto direction_in_world() const -> glm::vec4;
+
+    auto root() -> Node*;
+
+    auto root() const -> const Node*;
 
     std::string name;
     Node*       parent{nullptr};
-    int         reference_count{0};
+
+    auto attachment_count() -> size_t 
+    {
+        return m_attachments.size();
+    }
 
     struct Transforms
     {
@@ -82,8 +71,17 @@ public:
     Transforms transforms;
 
 protected:
-    bool          m_updated{false};
-    std::uint32_t m_last_update_serial{0};
+    bool                                           m_updated{false};
+    std::uint32_t                                  m_last_update_serial{0};
+    std::vector<std::shared_ptr<INode_attachment>> m_attachments;
+};
+
+class INode_attachment
+{
+public:
+    virtual auto name() const -> const std::string& = 0;
+    virtual void on_attach(Node& node) {};
+    virtual void on_detach(Node& node) {};
 };
 
 } // namespace erhe::scene

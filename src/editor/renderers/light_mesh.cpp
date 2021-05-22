@@ -33,7 +33,7 @@ void Light_mesh::connect()
 
 void Light_mesh::initialize_component()
 {
-    Primitive_builder::Format_info format_info;
+    Format_info format_info;
 
     format_info.want_fill_triangles       = true;
     format_info.want_edge_lines           = true;
@@ -45,7 +45,7 @@ void Light_mesh::initialize_component()
         // -1 .. 1
         auto quad_geometry = erhe::geometry::shapes::make_quad(2.0f);
         quad_geometry.build_edges();
-        Primitive_builder::Buffer_info buffer_info;
+        Buffer_info buffer_info;
         m_quad_mesh = make_primitive(quad_geometry, format_info, buffer_info);
     }
 
@@ -66,7 +66,7 @@ void Light_mesh::initialize_component()
 
         cone_geometry.transform(mat4_rotate_xz_cw);
         cone_geometry.build_edges();
-        Primitive_builder::Buffer_info buffer_info;
+        Buffer_info buffer_info;
         m_cone_mesh = make_primitive(cone_geometry, format_info, buffer_info);
     }
 }

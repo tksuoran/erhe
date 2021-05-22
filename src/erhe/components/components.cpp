@@ -1,5 +1,7 @@
 #include "erhe/components/components.hpp"
 #include "erhe/components/component.hpp"
+#include "erhe/components/log.hpp"
+#include "erhe/toolkit/verify.hpp"
 #include <sstream>
 
 namespace erhe::components

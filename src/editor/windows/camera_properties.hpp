@@ -15,7 +15,7 @@ class Camera_properties
 {
 public:
     static constexpr const char* c_name = "Camera_properties";
-    Camera_properties() : erhe::components::Component(c_name) {}
+    Camera_properties() : erhe::components::Component{c_name} {}
     virtual ~Camera_properties() = default;
 
     // Implements Component

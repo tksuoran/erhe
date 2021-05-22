@@ -5,6 +5,6 @@
 namespace erhe::scene
 {
 
-extern erhe::log::Log::Category log;
+extern erhe::log::Category log;
 
 } // namespace erhe::scene

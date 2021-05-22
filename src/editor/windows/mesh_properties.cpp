@@ -2,6 +2,8 @@
 #include "renderers/text_renderer.hpp"
 #include "scene/scene_manager.hpp"
 #include "tools/selection_tool.hpp"
+#include "erhe/geometry/geometry.hpp"
+#include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
 
 #include "imgui.h"
@@ -77,7 +79,8 @@ void Mesh_properties::render(Render_context& render_context)
         {
             continue;
         }
-        glm::mat4 world_from_node = mesh->node ? mesh->node->world_from_node() : glm::mat4(1.0f);
+        glm::mat4 world_from_node = mesh->node() ? mesh->node()->world_from_node() 
+                                                 : glm::mat4(1.0f);
         for (auto& primitive : mesh->primitives)
         {
             auto geometry = primitive.primitive_geometry->source_geometry;

@@ -12,6 +12,14 @@ using glm::vec2;
 using glm::vec3;
 using glm::vec4;
 
+// Using geometric centroids, centroids are floating above the polygon.
+// The distance from the polygon is more when using small subdivision.
+constexpr const bool use_geometric_centroids = false;
+
+// Using flat centroids ensures centroids are on polygon.
+constexpr const bool use_flat_centroids      = true;
+
+
 struct Torus_builder
 {
     Geometry& geometry;
@@ -53,7 +61,6 @@ struct Torus_builder
         double tz =  cos_theta;
         double ty = 0.0f;
         vec3   T(tx, ty, tz);
-        //float  sign = 1.0f;
 
         double bx = -sin_phi * cos_theta;
         double bz = -sin_phi * sin_theta;
@@ -73,8 +80,6 @@ struct Torus_builder
 
         point_locations ->put(point_id, V);
         point_normals   ->put(point_id, N);
-        //point_tangents  ->put(point_id, vec4(T, t_sign));
-        //point_bitangents->put(point_id, vec4(B, b_sign));
         point_tangents  ->put(point_id, vec4(t_xyz, t_w));
         point_bitangents->put(point_id, vec4(b_xyz, b_w));
         if (!is_uv_discontinuity)
@@ -161,30 +166,38 @@ struct Torus_builder
         for (major = 0; major < major_axis_steps; ++major)
         {
             int  next_major     = (major + 1);
-            //auto rel_major      = static_cast<double>(major) / static_cast<double>(major_axis_steps);
-            //auto rel_next_major = static_cast<double>(next_major) / static_cast<double>(major_axis_steps);
-            //auto avg_major      = (rel_major + rel_next_major) / 2.0;
+            auto rel_major      = static_cast<double>(major) / static_cast<double>(major_axis_steps);
+            auto rel_next_major = static_cast<double>(next_major) / static_cast<double>(major_axis_steps);
+            auto avg_major      = (rel_major + rel_next_major) / 2.0;
 
             for (minor = 0; minor < minor_axis_steps; ++minor)
             {
                 int  next_minor     = (minor + 1);
-                //auto rel_minor      = static_cast<double>(minor) / static_cast<double>(minor_axis_steps);
-                //auto rel_next_minor = static_cast<double>(next_minor) / static_cast<double>(minor_axis_steps);
-                //auto avg_minor      = (rel_minor + rel_next_minor) / 2.0;
-                //Point_id   centroid_id = torus_point(avg_major, avg_minor);
+                auto rel_minor      = static_cast<double>(minor) / static_cast<double>(minor_axis_steps);
+                auto rel_next_minor = static_cast<double>(next_minor) / static_cast<double>(minor_axis_steps);
+                auto avg_minor      = (rel_minor + rel_next_minor) / 2.0;
+                Point_id   centroid_id = torus_point(avg_major, avg_minor);
                 Polygon_id polygon_id  = geometry.make_polygon();
                 make_corner(polygon_id, next_major, next_minor);
                 make_corner(polygon_id, major,      next_minor);
                 make_corner(polygon_id, major,      minor);
                 make_corner(polygon_id, next_major, minor);
 
-                //polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
-                //polygon_normals->put(polygon_id, point_normals->get(centroid_id));
+                if constexpr (use_geometric_centroids)
+                {
+                    polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
+                }
+                polygon_normals->put(polygon_id, point_normals->get(centroid_id));
             }
         }
 
         geometry.make_point_corners();
         geometry.build_edges();
+        geometry.promise_has_polygon_normals();
+        if constexpr (use_flat_centroids)
+        {
+            geometry.compute_polygon_centroids();
+        }
         geometry.promise_has_normals();
         geometry.promise_has_tangents();
         geometry.promise_has_bitangents();
@@ -201,6 +214,11 @@ auto make_torus(double major_radius, double minor_radius, int major_axis_steps, 
     Torus_builder builder(geometry, major_radius, minor_radius, major_axis_steps, minor_axis_steps);
     builder.build();
     return geometry;
+}
+
+auto torus_volume(float major_radius, float minor_radius) -> float
+{
+    return glm::pi<float>() * minor_radius * minor_radius * 2.0f * glm::pi<float>() * major_radius;
 }
 
 } // namespace erhe::geometry::shapes

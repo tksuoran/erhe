@@ -1,7 +1,8 @@
 #include "tools/fly_camera_tool.hpp"
-#include "tools/pointer_context.hpp"
-#include "scene/scene_manager.hpp"
 #include "log.hpp"
+#include "scene/scene_manager.hpp"
+#include "tools/pointer_context.hpp"
+#include "erhe/scene/camera.hpp"
 
 #include "imgui.h"
 

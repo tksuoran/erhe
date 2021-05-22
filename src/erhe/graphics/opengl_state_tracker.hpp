@@ -27,11 +27,8 @@ class OpenGL_state_tracker
     : public erhe::components::Component
 {
 public:
-    OpenGL_state_tracker()
-        : erhe::components::Component{"erhe::graphics::OpenGL_state_tracker"}
-    {
-    }
-
+    static constexpr const char* c_name = "erhe::graphics::OpenGL_state_tracker";
+    OpenGL_state_tracker() : erhe::components::Component{c_name} { }
     virtual ~OpenGL_state_tracker() = default;
 
     OpenGL_state_tracker(const OpenGL_state_tracker&) = delete;

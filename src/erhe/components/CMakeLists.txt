@@ -1,3 +1,5 @@
+set(_target "erhe_components")
+
 set(source_list
     log.cpp
     log.hpp
@@ -7,19 +9,14 @@ set(source_list
     components.hpp
 )
 
-add_library(erhe_components ${source_list})
+add_library(${_target} ${source_list})
 
-add_library(erhe::components ALIAS erhe_components)
+target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
-target_include_directories(erhe_components
-    PUBLIC
-        ${ERHE_INCLUDE_ROOT}
-)
-
-target_link_libraries(erhe_components
+target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
-        erhe::log
+        erhe_log
         Microsoft.GSL::GSL
 )
 

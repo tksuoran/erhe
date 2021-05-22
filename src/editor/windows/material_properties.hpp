@@ -16,7 +16,7 @@ class Material_properties
 {
 public:
     static constexpr const char* c_name = "Light_properties";
-    Material_properties() : erhe::components::Component(c_name) {}
+    Material_properties() : erhe::components::Component{c_name}{}
     virtual ~Material_properties() = default;
 
     // Implements Component

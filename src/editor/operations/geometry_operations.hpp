@@ -68,13 +68,4 @@ public:
     virtual ~Truncate_operator() = default;
 };
 
-class Snub_operator
-    : public Mesh_operation
-{
-public:
-    explicit Snub_operator(Context& context);
-
-    virtual ~Snub_operator() = default;
-};
-
 }

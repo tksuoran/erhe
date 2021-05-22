@@ -14,7 +14,8 @@ class Operation_stack
     : public erhe::components::Component
 {
 public:
-    Operation_stack() : erhe::components::Component("Operation Stack") {}
+    static constexpr const char* c_name = "Operation_stack";
+    Operation_stack() : erhe::components::Component{c_name} {}
     virtual ~Operation_stack() = default;
 
     void push(std::shared_ptr<IOperation> operation);

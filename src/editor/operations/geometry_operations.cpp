@@ -1,14 +1,14 @@
 #include "operations/geometry_operations.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/scene_manager.hpp"
+#include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/operation/catmull_clark_subdivision.hpp"
 #include "erhe/geometry/operation/sqrt3_subdivision.hpp"
 #include "erhe/geometry/operation/triangulate.hpp"
 #include "erhe/geometry/operation/subdivide.hpp"
-#include "erhe/geometry/operation/conway_dual_operator.hpp"
-#include "erhe/geometry/operation/conway_ambo_operator.hpp"
-#include "erhe/geometry/operation/conway_truncate_operator.hpp"
-#include "erhe/geometry/operation/conway_snub_operator.hpp"
+#include "erhe/geometry/operation/dual.hpp"
+#include "erhe/geometry/operation/ambo.hpp"
+#include "erhe/geometry/operation/truncate.hpp"
 
 namespace editor
 {
@@ -46,11 +46,6 @@ Ambo_operator::Ambo_operator(Context& context)
 Truncate_operator::Truncate_operator(Context& context)
 {
     make_entries(context, erhe::geometry::operation::truncate);
-}
-
-Snub_operator::Snub_operator(Context& context)
-{
-    make_entries(context, erhe::geometry::operation::snub);
 }
 
 } // namespace editor

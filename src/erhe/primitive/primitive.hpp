@@ -1,7 +1,7 @@
-#ifndef primitive_hpp_erhe_primitive
-#define primitive_hpp_erhe_primitive
+#pragma once
 
 #include "erhe/primitive/index_range.hpp"
+#include "erhe/primitive/enums.hpp"
 
 #include <glm/glm.hpp>
 
@@ -26,49 +26,6 @@ struct Material;
 
 struct Primitive_geometry
 {
-    enum class Mode : unsigned int
-    {
-        not_set           = 0,
-        polygon_fill      = 1,
-        edge_lines        = 2,
-        corner_points     = 3,
-        corner_normals    = 4,
-        polygon_centroids = 5,
-        count             = 6
-    };
-
-    static constexpr const char* c_mode_strings[] =
-    {
-        "Not Set",
-        "Polygon Fill",
-        "Edge Lines",
-        "Corner Points",
-        "Corner Normals",
-        "Polygon Centroids"
-    };
-
-    enum class Normal_style : unsigned int
-    {
-        none            = 0,
-        corner_normals  = 1,
-        polygon_normals = 2,
-        point_normals   = 3
-    };
-
-    static constexpr const char* c_normal_style_strings[] =
-    {
-        "None",
-        "Corner Normals",
-        "Polygon Normals",
-        "Point Normals"
-    };
-
-    static auto desc(Mode mode)
-    -> const char*;
-
-    static auto desc(Normal_style normal_style)
-    -> const char*;
-
     Primitive_geometry() = default;
 
     // Specifies a constant that should be added to each element of indices when chosing elements from the enabled vertex arrays.
@@ -101,7 +58,7 @@ struct Primitive_geometry
                                size_t                                         index_count,
                                size_t                                         index_element_size);
 
-    auto index_range(Mode mode) -> Index_range;
+    auto index_range(Primitive_mode primitive_mode) -> Index_range;
 
     glm::vec3                               bounding_box_min{std::numeric_limits<float>::max()}; // bounding box
     glm::vec3                               bounding_box_max{std::numeric_limits<float>::lowest()};
@@ -137,8 +94,6 @@ struct Primitive
     std::shared_ptr<Material>           material;
 };
 
-std::optional<gl::Primitive_type> primitive_type(Primitive_geometry::Mode mode);
+std::optional<gl::Primitive_type> primitive_type(Primitive_mode primitive_mode);
 
 } // namespace erhe::primitive
-
-#endif

@@ -10,6 +10,11 @@
 #include <memory>
 #include <optional>
 
+namespace erhe::physics
+{
+    class Rigid_body;
+}
+
 namespace erhe::primitive
 {
     struct Primitive_geometry;
@@ -29,6 +34,7 @@ namespace editor
 
 class Operation_stack;
 class Line_renderer;
+class Node_physics;
 class Scene_manager;
 class Text_renderer;
 
@@ -53,7 +59,7 @@ public:
     };
 
     static constexpr const char* c_name = "Trs_tool";
-    Trs_tool() : erhe::components::Component(c_name) {}
+    Trs_tool() : erhe::components::Component{c_name} {}
     virtual ~Trs_tool() = default;
 
     // Implements Component
@@ -145,26 +151,13 @@ private:
 
     void set_node_world_transform(glm::mat4 world_from_node);
 
-    void update_transforms()
-    {
-        if (root() == nullptr)
-        {
-            return;
-        }
-        root()->update();
-        m_visualization.update_transforms();
-    }
+    void update_transforms();
 
-    void update_visibility()
-    {
-        m_visualization.update_visibility(m_target_node != nullptr, m_active_handle);
-    }
+    void update_visibility();
 
-    auto root() -> erhe::scene::Node*
-    {
-        return m_visualization.root;
-    }
+    auto root() -> erhe::scene::Node*;
 
+    bool m_local{true};
     std::shared_ptr<Operation_stack>           m_operation_stack;
     std::shared_ptr<Scene_manager>             m_scene_manager;
     std::shared_ptr<Selection_tool>            m_selection_tool;
@@ -173,6 +166,7 @@ private:
     std::optional<Selection_tool::Subcription> m_selection_subscription;
     std::map<erhe::scene::Mesh*, Handle>       m_handles;
     std::shared_ptr<erhe::scene::Node>         m_target_node;
+    std::shared_ptr<Node_physics>              m_node_physics;
     std::shared_ptr<erhe::scene::Node>         m_tool_node;
     bool                                       m_translate_snap_enable{false};
     bool                                       m_rotate_snap_enable   {false};
@@ -239,10 +233,12 @@ private:
         bool  show_translate{false};
         bool  show_rotate   {false};
         bool  hide_inactive {true};
-        float scale         {2.0f}; // 6.6 for debug
+        float scale         {3.5f}; // 6.6 for debug
 
         erhe::scene::Node*                         root{nullptr};
         erhe::scene::Node                          tool_node;
+        bool                                       local{true};
+        float                                      view_distance{1.0f};
         std::shared_ptr<erhe::primitive::Material> x_material;
         std::shared_ptr<erhe::primitive::Material> y_material;
         std::shared_ptr<erhe::primitive::Material> z_material;

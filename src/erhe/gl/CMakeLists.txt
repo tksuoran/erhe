@@ -1,3 +1,5 @@
+set(_target "erhe_gl")
+
 find_package(Python3 COMPONENTS Interpreter)
 if (NOT ${Python3_FOUND})
     message(FATAL_ERROR "Python3 is needed to generate sources.")
@@ -66,29 +68,27 @@ set(source_list
 
 list(APPEND source_list ${GEN_DEPENDS})
 
-add_library(erhe_gl
+add_library(${_target}
     ${GENERATED_SOURCES}
     gl.cpp
 )
 
-add_library(erhe::gl ALIAS erhe_gl)
-
-target_include_directories(erhe_gl
+target_include_directories(${_target}
     PUBLIC
         ${ERHE_INCLUDE_ROOT}
         ${CMAKE_BINARY_DIR}/src
 )
 
-target_link_libraries(erhe_gl
+target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
         Microsoft.GSL::GSL
         OpenGL::GL
-        erhe::log
+        erhe_log
 )
 
 if(${ERHE_WINDOW_TOOLKIT} STREQUAL "Mango")
-    target_link_libraries(erhe_gl
+    target_link_libraries(${_target}
         PUBLIC
             mango
             mango-opengl

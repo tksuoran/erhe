@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe/components/components.hpp"
-#include "erhe/components/log.hpp"
 #include <set>
 
 namespace erhe::components

@@ -5,13 +5,13 @@
 namespace erhe::geometry::operation
 {
 
-class Conway_snub_operator
+class Truncate
     : public Geometry_operation
 {
 public:
-    Conway_snub_operator(Geometry& src, Geometry& destination);
+    Truncate(Geometry& source, Geometry& destination);
 };
 
-auto snub(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+auto truncate(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

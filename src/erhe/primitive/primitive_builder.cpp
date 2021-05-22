@@ -10,6 +10,7 @@
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/toolkit/math_util.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
@@ -39,7 +40,8 @@ using Corner            = erhe::geometry::Corner;
 using Point             = erhe::geometry::Point;
 using Polygon           = erhe::geometry::Polygon;
 using Edge              = erhe::geometry::Edge;
-using erhe::geometry::Geometry;
+using Mesh_info         = erhe::geometry::Mesh_info;
+using Geometry          = erhe::geometry::Geometry;
 using erhe::graphics::Configuration;
 using erhe::graphics::Vertex_attribute;
 using gl::size_of_type;
@@ -212,13 +214,15 @@ Primitive_builder::Primitive_builder(const Geometry&    geometry,
 {
 }
 
+Primitive_builder::~Primitive_builder() = default;
+
 Primitive_builder::Property_maps::Property_maps(const Geometry&    geometry,
                                                 const Format_info& format_info)
 {
     ZoneScoped;
 
     log_primitive_builder.trace("Property_maps::Property_maps() for geometry = {}\n", geometry.name);
-    Log::Indenter indenter;
+    erhe::log::Indenter indenter;
 
     polygon_normals      = geometry.polygon_attributes().find<vec3>(erhe::geometry::c_polygon_normals     );
     polygon_centroids    = geometry.polygon_attributes().find<vec3>(erhe::geometry::c_polygon_centroids   );
@@ -235,6 +239,12 @@ Primitive_builder::Property_maps::Property_maps(const Geometry&    geometry,
     point_texcoords      = geometry.point_attributes  ().find<vec2>(erhe::geometry::c_point_texcoords     );
     point_colors         = geometry.point_attributes  ().find<vec4>(erhe::geometry::c_point_colors        );
 
+    if (point_locations == nullptr)
+    {
+        log_primitive_builder.error("geometry has no point locations\n");
+        return;
+    }
+
     if (format_info.want_id)
     {
         polygon_ids_vector3 = polygon_attributes.create<vec3>(erhe::geometry::c_polygon_ids_vec3);
@@ -249,19 +259,18 @@ Primitive_builder::Property_maps::Property_maps(const Geometry&    geometry,
 
     if (format_info.want_normal)
     {
-        if (point_locations != nullptr)
+        if (polygon_normals == nullptr)
         {
-            polygon_normals = polygon_attributes.find_or_create<vec3>(erhe::geometry::c_polygon_normals);
-            for (Polygon_id polygon_id = 0, end = geometry.polygon_count();
-                 polygon_id < end;
-                 ++polygon_id)
-            {
-                if (!polygon_normals->has(polygon_id))
+            polygon_normals = polygon_attributes.create<vec3>(erhe::geometry::c_polygon_normals);
+        }
+        if (!geometry.has_polygon_normals())
+        {
+            geometry.for_each_polygon_const([this, &geometry](auto& i) {
+                if (!polygon_normals->has(i.polygon_id))
                 {
-                    const Polygon& polygon = geometry.polygons[polygon_id];
-                    polygon.compute_normal(polygon_id, geometry, *polygon_normals, *point_locations);
+                    i.polygon.compute_normal(i.polygon_id, geometry, *polygon_normals, *point_locations);
                 }
-            }
+            });
         }
         if ((corner_normals == nullptr) && (point_normals == nullptr) && (point_normals_smooth == nullptr))
         {
@@ -274,20 +283,10 @@ Primitive_builder::Property_maps::Property_maps(const Geometry&    geometry,
     {
         log_primitive_builder.trace("-computing point_normals_smooth\n");
         point_normals_smooth = point_attributes.create<vec3>(erhe::geometry::c_point_normals_smooth);
-        for (Point_id point_id = 0, end = geometry.point_count();
-             point_id < end;
-             ++point_id)
-        {
-            const Point& point = geometry.points[point_id];
+        geometry.for_each_point_const([this, &geometry](auto& i) {
             vec3 normal_sum{0.0f, 0.0f, 0.0f};
-            for (Point_corner_id point_corner_id = point.first_point_corner_id,
-                 end = point.first_point_corner_id + point.corner_count;
-                 point_corner_id < end;
-                 ++point_corner_id)
-            {
-                Corner_id     corner_id  = geometry.point_corners[point_corner_id];
-                const Corner& corner     = geometry.corners[corner_id];
-                Polygon_id    polygon_id = corner.polygon_id;
+            i.point.for_each_corner_const(geometry, [this, &geometry, &normal_sum](auto& j) {
+                Polygon_id polygon_id = j.corner.polygon_id;
                 if (polygon_normals->has(polygon_id))
                 {
                     normal_sum += polygon_normals->get(polygon_id);
@@ -299,23 +298,25 @@ Primitive_builder::Property_maps::Property_maps(const Geometry&    geometry,
                     glm::vec3 normal = polygon.compute_normal(geometry, *point_locations);
                     normal_sum += normal;
                 }
-            }
-            point_normals_smooth->put(point_id, normalize(normal_sum));
-        }
+            });
+            point_normals_smooth->put(i.point_id, normalize(normal_sum));
+        });
     }
 
-    if (format_info.want_centroid_points && (point_locations != nullptr))
+    if (format_info.want_centroid_points)
     {
-        polygon_centroids = polygon_attributes.find_or_create<vec3>(erhe::geometry::c_polygon_centroids);
-        for (Polygon_id polygon_id = 0, end = geometry.polygon_count();
-             polygon_id < end;
-             ++polygon_id)
+        if (polygon_centroids == nullptr)
         {
-            if (!polygon_centroids->has(polygon_id))
-            {
-                const Polygon& polygon = geometry.polygons[polygon_id];
-                polygon.compute_centroid(polygon_id, geometry, *polygon_centroids, *point_locations);
-            }
+            polygon_centroids = polygon_attributes.create<vec3>(erhe::geometry::c_polygon_centroids);
+        }
+        if (!geometry.has_polygon_centroids())
+        {
+            geometry.for_each_polygon_const([this, &geometry](auto& i) {
+                if (!polygon_centroids->has(i.polygon_id))
+                {
+                    i.polygon.compute_centroid(i.polygon_id, geometry, *polygon_centroids, *point_locations);
+                }
+            });
         }
     }
 
@@ -500,7 +501,7 @@ void Primitive_builder::get_geometry_mesh_info()
 {
     ZoneScoped;
 
-    erhe::geometry::Geometry::Mesh_info& mi = m_mesh_info;
+    Mesh_info& mi = m_mesh_info;
 
     m_geometry.info(mi);
     mi.trace(log_primitive_builder);
@@ -597,10 +598,10 @@ void Primitive_builder::allocate_index_buffer()
     }
 }
 
-Primitive_builder::Index_buffer_writer::Index_buffer_writer(Buffer_info&                         buffer_info,
-                                                            const Format_info&                   format_info,
-                                                            erhe::geometry::Geometry::Mesh_info& mesh_info,
-                                                            Primitive_geometry&                  primitive_geometry)
+Primitive_builder::Index_buffer_writer::Index_buffer_writer(Buffer_info&        buffer_info,
+                                                            const Format_info&  format_info,
+                                                            Mesh_info&          mesh_info,
+                                                            Primitive_geometry& primitive_geometry)
     : index_type     {buffer_info.index_type}
     , index_type_size{size_of_type(index_type)}
     , index_mapping  {*primitive_geometry.index_buffer.get(),
@@ -671,9 +672,9 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
     m_primitive_geometry = primitive_geometry;
     log_primitive_builder.trace("Primitive_builder::build_mesh_from_geometry(usage = {}, normal_style = {}) geometry = {}\n",
                                 gl::c_str(m_buffer_info.usage),
-                                Primitive_geometry::desc(m_format_info.normal_style),
+                                c_str(m_format_info.normal_style),
                                 m_geometry.name);
-    Log::Indenter indenter;
+    erhe::log::Indenter indenter;
 
     m_vertex_format = m_buffer_info.vertex_format.get();
     m_vertex_stride = m_vertex_format->stride();
@@ -766,25 +767,25 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
             {
                 switch (m_format_info.normal_style)
                 {
-                    case Primitive_geometry::Normal_style::none:
+                    case Normal_style::none:
                     {
                         // NOTE Was fallthrough to corner_normals
                         break;
                     }
 
-                    case Primitive_geometry::Normal_style::corner_normals:
+                    case Normal_style::corner_normals:
                     {
                         vertex_writer.write(m_attributes.normal, normal);
                         break;
                     }
 
-                    case Primitive_geometry::Normal_style::point_normals:
+                    case Normal_style::point_normals:
                     {
                         vertex_writer.write(m_attributes.normal, point_normal);
                         break;
                     }
 
-                    case Primitive_geometry::Normal_style::polygon_normals:
+                    case Normal_style::polygon_normals:
                     {
                         vertex_writer.write(m_attributes.normal, polygon_normal);
                         break;
@@ -1015,9 +1016,9 @@ void Primitive_builder::allocate_index_range(gl::Primitive_type primitive_type,
 }
 
 
-auto make_primitive(const erhe::geometry::Geometry&       geometry,
-                    const Primitive_builder::Format_info& format_info,
-                    Primitive_builder::Buffer_info&       buffer_info)
+auto make_primitive(const Geometry&    geometry,
+                    const Format_info& format_info,
+                    Buffer_info&       buffer_info)
     -> Primitive_geometry
 {
     Primitive_builder::prepare_vertex_format(format_info, buffer_info);
@@ -1025,15 +1026,16 @@ auto make_primitive(const erhe::geometry::Geometry&       geometry,
     return builder.build();
 }
 
-auto make_primitive_shared(const erhe::geometry::Geometry&       geometry,
-                           const Primitive_builder::Format_info& format_info,
-                           Primitive_builder::Buffer_info&       buffer_info)
+auto make_primitive_shared(const erhe::geometry::Geometry& geometry,
+                           const Format_info&              format_info,
+                           Buffer_info&                    buffer_info)
     -> std::shared_ptr<Primitive_geometry>
 {
     auto result = std::make_shared<Primitive_geometry>();
     Primitive_builder::prepare_vertex_format(format_info, buffer_info);
     Primitive_builder builder(geometry, format_info, buffer_info);
     builder.build(result.get());
+    result->source_normal_style = format_info.normal_style;
     return result;
 }
 

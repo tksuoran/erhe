@@ -1,5 +1,6 @@
 #include "erhe/geometry/shapes/regular_polyhedron.hpp"
 #include "Tracy.hpp"
+
 #include <cmath>  // for sqrt
 
 namespace erhe::geometry::shapes

@@ -2,8 +2,6 @@
 
 #include "tools/tool.hpp"
 
-#include <glm/glm.hpp>
-
 #include <functional>
 #include <memory>
 #include <vector>
@@ -24,7 +22,7 @@ class Selection_tool
 {
 public:
     static constexpr const char* c_name = "Selection_tool";
-    Selection_tool() : erhe::components::Component(c_name) {}
+    Selection_tool() : erhe::components::Component{c_name} {}
     virtual ~Selection_tool() = default;
 
     // Implements Component

@@ -1,7 +1,6 @@
-#ifndef bitmap_hpp_erhe_ui
-#define bitmap_hpp_erhe_ui
+#pragma once
 
-#include "erhe/log/log.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <gsl/span>
 #include <cassert>
@@ -486,5 +485,3 @@ private:
 };
 
 } // namespace erhe::ui
-
-#endif

@@ -1,9 +1,10 @@
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/log/log.hpp"
+#include "erhe/toolkit/verify.hpp"
+
 #include <algorithm>
 #include <cassert>
 #include <gsl/assert>
-#include <stdexcept>
 
 namespace erhe::graphics
 {

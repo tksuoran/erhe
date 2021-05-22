@@ -1,4 +1,6 @@
 #include "erhe/components/component.hpp"
+#include "erhe/components/log.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::components
 {

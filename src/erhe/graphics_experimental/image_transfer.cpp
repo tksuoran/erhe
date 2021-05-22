@@ -1,15 +1,12 @@
 #include "erhe/graphics_experimental/image_transfer.hpp"
-
 #include "erhe/gl/gl.hpp"
-
 #include "erhe/graphics/texture.hpp"
-
-#include "erhe/log/log.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::graphics
 {
 
-ImageTransfer::Slot::Slot()
+Image_transfer::Slot::Slot()
 {
     Expects(pbo.gl_name() != 0);
 
@@ -35,7 +32,7 @@ ImageTransfer::Slot::Slot()
                      capacity);
 }
 
-auto ImageTransfer::Slot::span_for(int width, int height, gl::Internal_format internal_format)
+auto Image_transfer::Slot::span_for(int width, int height, gl::Internal_format internal_format)
 -> gsl::span<std::byte>
 {
     Expects(width >= 1);

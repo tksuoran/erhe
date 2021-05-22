@@ -84,6 +84,8 @@ public:
 
     void merge_to(Property_map_collection<Key_type>& source, glm::mat4 transform);
 
+    auto clone_with_transform(glm::mat4 transform) -> Property_map_collection<Key_type>;
+
 private:
     Collection_type m_entries;
 };

@@ -1,3 +1,5 @@
+set(_target "erhe_graphics_experimental")
+
 set(source_list
     command_buffer.cpp
     command_buffer.hpp
@@ -17,27 +19,21 @@ set(source_list
     texture_bindings.hpp
 )
 
-add_library(erhe_graphics_experimental ${source_list})
-
-add_library(erhe::graphics_experimental ALIAS erhe_graphics_experimental)
+add_library(${_target} ${source_list})
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE_LIST})
 
-target_include_directories(erhe_graphics_experimental
-    PUBLIC
-        ${ERHE_INCLUDE_ROOT}
-)
+target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
-target_link_libraries(erhe_graphics_experimental
+target_link_libraries(${_target}
     PUBLIC
-        erhe::graphics
-        erhe::gl
-        erhe::log
+        erhe_graphics
+        erhe_gl
+        erhe_log
         fmt::fmt
         glm::glm
         Microsoft.GSL::GSL
-        TracyClient::TracyClient
-)
+        TracyClient)
 
 foreach(source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)

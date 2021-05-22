@@ -3,10 +3,7 @@
 
 #include "imgui.h"
 
-#include "erhe/log/log.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
-
-extern erhe::log::Log::Category log_imgui;
 
 bool ImGui_ImplErhe_Init(std::shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker);
 void ImGui_ImplErhe_Shutdown();

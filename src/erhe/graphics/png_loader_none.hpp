@@ -2,8 +2,12 @@
 #define png_loader_none_hpp_erhe_toolkit
 
 #include "erhe/graphics/texture.hpp"
-#include <filesystem>
+//#include <filesystem>
 #include <memory>
+
+namespace std::filesystem { class path; }
+
+namespace erhe::graphics { class Texture::Create_info; }
 
 namespace erhe::graphics
 {

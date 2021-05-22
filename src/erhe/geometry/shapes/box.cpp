@@ -1,6 +1,8 @@
 #include "erhe/geometry/shapes/box.hpp"
 #include "Tracy.hpp"
+
 #include <glm/glm.hpp>
+
 #include <algorithm>
 #include <map>
 #include <memory>
@@ -57,6 +59,8 @@ auto make_box(double x_size, double y_size, double z_size)
 
     geometry.make_point_corners();
     geometry.build_edges();
+    geometry.compute_polygon_normals();
+    geometry.compute_polygon_centroids();
     return geometry;
 }
 
@@ -83,6 +87,8 @@ auto make_box(float min_x, float max_x, float min_y, float max_y, float min_z, f
 
     geometry.make_point_corners();
     geometry.build_edges();
+    geometry.compute_polygon_normals();
+    geometry.compute_polygon_centroids();
     return geometry;
 }
 
@@ -102,13 +108,13 @@ struct Box_builder
 
     std::map<int, Point_id> points;
 
-    Property_map<Point_id   , vec3>* point_locations  {nullptr};
-    Property_map<Point_id   , vec3>* point_normals    {nullptr};
-    Property_map<Point_id   , vec2>* point_texcoords  {nullptr};
-    Property_map<Corner_id  , vec3>* corner_normals   {nullptr};
-    Property_map<Corner_id  , vec2>* corner_texcoords {nullptr};
-    Property_map<Polygon_id , vec3>* polygon_centroids{nullptr};
-    Property_map<Polygon_id , vec3>* polygon_normals  {nullptr};
+    Property_map<Point_id  , vec3>* point_locations  {nullptr};
+    Property_map<Point_id  , vec3>* point_normals    {nullptr};
+    Property_map<Point_id  , vec2>* point_texcoords  {nullptr};
+    Property_map<Corner_id , vec3>* corner_normals   {nullptr};
+    Property_map<Corner_id , vec2>* corner_texcoords {nullptr};
+    Property_map<Polygon_id, vec3>* polygon_centroids{nullptr};
+    Property_map<Polygon_id, vec3>* polygon_normals  {nullptr};
 
     auto make_point(int x, int y, int z, glm::vec3 n, float s, float t)
     -> Point_id
@@ -299,6 +305,8 @@ struct Box_builder
         }
 
         geometry.make_point_corners();
+        geometry.build_edges();
+        geometry.compute_polygon_normals();
         geometry.compute_polygon_centroids();
     }
 };

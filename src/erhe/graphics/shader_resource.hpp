@@ -2,13 +2,12 @@
 #define shader_resource_hpp_erhe_graphics
 
 #include "erhe/gl/wrapper_enums.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/graphics/configuration.hpp"
 
 #include <gsl/pointers>
 
-#include <sstream>
 #include <optional>
+#include <sstream>
+#include <vector>
 
 namespace erhe::graphics
 {

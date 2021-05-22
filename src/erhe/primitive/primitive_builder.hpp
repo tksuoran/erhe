@@ -1,5 +1,4 @@
-#ifndef primitive_builder_hpp_erhe_primitive
-#define primitive_builder_hpp_erhe_primitive
+#pragma once
 
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/geometry/geometry.hpp"
@@ -8,6 +7,9 @@
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
+#include "erhe/primitive/buffer_info.hpp"
+#include "erhe/primitive/enums.hpp"
+#include "erhe/primitive/format_info.hpp"
 #include "erhe/primitive/index_range.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
@@ -34,48 +36,6 @@ class Primitive_builder
 {
 public:
     // Controls what kind of mesh should be built from geometry
-    struct Format_info
-    {
-        bool want_fill_triangles {false};
-        bool want_edge_lines     {false};
-        bool want_corner_points  {false};
-        bool want_centroid_points{false};
-        bool want_position       {false};
-        bool want_normal         {false};
-        bool want_normal_flat    {false};
-        bool want_normal_smooth  {false};
-        bool want_tangent        {false};
-        bool want_bitangent      {false};
-        bool want_color          {false};
-        bool want_texcoord       {false};
-        bool want_id             {false};
-
-        gl::Vertex_attrib_type position_type     {gl::Vertex_attrib_type::float_};
-        gl::Vertex_attrib_type normal_type       {gl::Vertex_attrib_type::float_};
-        gl::Vertex_attrib_type normal_flat_type  {gl::Vertex_attrib_type::float_};
-        gl::Vertex_attrib_type normal_smooth_type{gl::Vertex_attrib_type::float_};
-        gl::Vertex_attrib_type tangent_type      {gl::Vertex_attrib_type::float_};
-        gl::Vertex_attrib_type bitangent_type    {gl::Vertex_attrib_type::float_};
-        gl::Vertex_attrib_type color_type        {gl::Vertex_attrib_type::float_};
-        gl::Vertex_attrib_type texcoord_type     {gl::Vertex_attrib_type::float_};
-        gl::Vertex_attrib_type id_vec3_type      {gl::Vertex_attrib_type::float_};
-        gl::Vertex_attrib_type id_uint_type      {gl::Vertex_attrib_type::float_};
-
-        glm::vec4                                  constant_color{1.0f};
-        bool                                       keep_geometry {false};
-        Primitive_geometry::Normal_style           normal_style  {Primitive_geometry::Normal_style::corner_normals};
-        erhe::graphics::Vertex_attribute_mappings* vertex_attribute_mappings{nullptr};
-    };
-
-    struct Buffer_info
-    {
-        gl::Buffer_usage                               usage       {gl::Buffer_usage::static_draw};
-        Primitive_geometry::Normal_style               normal_style{Primitive_geometry::Normal_style::corner_normals};
-        gl::Draw_elements_type                         index_type  {gl::Draw_elements_type::unsigned_short};
-        std::shared_ptr<erhe::graphics::Buffer>        index_buffer;
-        std::shared_ptr<erhe::graphics::Buffer>        vertex_buffer;
-        std::shared_ptr<erhe::graphics::Vertex_format> vertex_format;
-    };
 
     struct Property_maps
     {
@@ -125,11 +85,11 @@ public:
 
     Primitive_builder() = delete;
 
-    ~Primitive_builder() = default;
-
     Primitive_builder(const erhe::geometry::Geometry& geometry,
                       const Format_info&              format_info,
                       Buffer_info&                    buffer_info);
+
+    ~Primitive_builder();
 
     Primitive_geometry build();
 
@@ -198,10 +158,10 @@ private:
 
     struct Index_buffer_writer
     {
-        Index_buffer_writer(Buffer_info&                         buffer_info,
-                            const Format_info&                   format_info,
-                            erhe::geometry::Geometry::Mesh_info& mesh_info,
-                            Primitive_geometry&                  primitive_geometry);
+        Index_buffer_writer(Buffer_info&               buffer_info,
+                            const Format_info&         format_info,
+                            erhe::geometry::Mesh_info& mesh_info,
+                            Primitive_geometry&        primitive_geometry);
 
         void write_corner  (uint32_t v0);
         void write_triangle(uint32_t v0, uint32_t v1, uint32_t v2);
@@ -233,29 +193,27 @@ private:
                               size_t             index_count,
                               Index_range&       range);
 
-    const erhe::geometry::Geometry&     m_geometry;
-    const Format_info&                  m_format_info;
-    Buffer_info&                        m_buffer_info;
-    Primitive_geometry*                 m_primitive_geometry{nullptr};
-    erhe::geometry::Geometry::Mesh_info m_mesh_info;
-    erhe::graphics::Vertex_format*      m_vertex_format{nullptr};
-    size_t                              m_vertex_stride{0};
-    size_t                              m_total_vertex_count{0};
-    size_t                              m_total_index_count{0};
-    size_t                              m_next_index_range_start{0};
-    Vertex_attributes                   m_attributes;
+    const erhe::geometry::Geometry& m_geometry;
+    const Format_info&              m_format_info;
+    Buffer_info&                    m_buffer_info;
+    Primitive_geometry*             m_primitive_geometry{nullptr};
+    erhe::geometry::Mesh_info       m_mesh_info;
+    erhe::graphics::Vertex_format*  m_vertex_format{nullptr};
+    size_t                          m_vertex_stride{0};
+    size_t                          m_total_vertex_count{0};
+    size_t                          m_total_index_count{0};
+    size_t                          m_next_index_range_start{0};
+    Vertex_attributes               m_attributes;
 };
 
-auto make_primitive(const erhe::geometry::Geometry&       geometry,
-                    const Primitive_builder::Format_info& format_info,
-                    Primitive_builder::Buffer_info&       buffer_info)
+auto make_primitive(const erhe::geometry::Geometry& geometry,
+                    const Format_info&              format_info,
+                    Buffer_info&                    buffer_info)
     -> Primitive_geometry;
 
-auto make_primitive_shared(const erhe::geometry::Geometry&       geometry,
-                           const Primitive_builder::Format_info& format_info,
-                           Primitive_builder::Buffer_info&       buffer_info)
+auto make_primitive_shared(const erhe::geometry::Geometry& geometry,
+                           const Format_info&              format_info,
+                           Buffer_info&                    buffer_info)
     -> std::shared_ptr<Primitive_geometry>;
 
 } // namespace erhe::primitive
-
-#endif

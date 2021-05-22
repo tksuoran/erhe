@@ -13,11 +13,12 @@
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
+#include "erhe/scene/scene.hpp"
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/toolkit/math_util.hpp"
-
-#include "erhe_tracy.hpp"
+#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -346,21 +347,21 @@ auto Forward_renderer::select_pipeline(Pass pass) const -> const erhe::graphics:
     }
 }
 
-auto Forward_renderer::select_primitive_mode(Pass pass) const -> erhe::primitive::Primitive_geometry::Mode
+auto Forward_renderer::select_primitive_mode(Pass pass) const -> erhe::primitive::Primitive_mode
 {
     switch (pass)
     {
-        case Pass::polygon_fill                              : return Primitive_geometry::Mode::polygon_fill;
-        case Pass::edge_lines                                : return Primitive_geometry::Mode::edge_lines;
-        case Pass::polygon_centroids                         : return Primitive_geometry::Mode::polygon_centroids;
-        case Pass::corner_points                             : return Primitive_geometry::Mode::corner_points;
-        case Pass::tag_depth_hidden_with_stencil             : return Primitive_geometry::Mode::polygon_fill;
-        case Pass::tag_depth_visible_with_stencil            : return Primitive_geometry::Mode::polygon_fill;
-        case Pass::clear_depth                               : return Primitive_geometry::Mode::polygon_fill;
-        case Pass::depth_only                                : return Primitive_geometry::Mode::polygon_fill;
-        case Pass::require_stencil_tag_depth_visible         : return Primitive_geometry::Mode::polygon_fill;
-        case Pass::require_stencil_tag_depth_hidden_and_blend: return Primitive_geometry::Mode::polygon_fill;
-        case Pass::hidden_line_with_blend                    : return Primitive_geometry::Mode::edge_lines;
+        case Pass::polygon_fill                              : return Primitive_mode::polygon_fill;
+        case Pass::edge_lines                                : return Primitive_mode::edge_lines;
+        case Pass::polygon_centroids                         : return Primitive_mode::polygon_centroids;
+        case Pass::corner_points                             : return Primitive_mode::corner_points;
+        case Pass::tag_depth_hidden_with_stencil             : return Primitive_mode::polygon_fill;
+        case Pass::tag_depth_visible_with_stencil            : return Primitive_mode::polygon_fill;
+        case Pass::clear_depth                               : return Primitive_mode::polygon_fill;
+        case Pass::depth_only                                : return Primitive_mode::polygon_fill;
+        case Pass::require_stencil_tag_depth_visible         : return Primitive_mode::polygon_fill;
+        case Pass::require_stencil_tag_depth_hidden_and_blend: return Primitive_mode::polygon_fill;
+        case Pass::hidden_line_with_blend                    : return Primitive_mode::edge_lines;
         default:
             FATAL("bad pass\n");
     }

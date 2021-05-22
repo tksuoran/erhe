@@ -14,17 +14,16 @@ class Grid_tool
 {
 public:
     static constexpr const char* c_name = "Grid_tool";
-    Grid_tool() : erhe::components::Component(c_name) {}
+    Grid_tool() : erhe::components::Component{c_name} {}
     virtual ~Grid_tool() = default;
 
     // Implements Tool
     void render(Render_context& render_context) override;
+    auto state() const -> State override;
     auto description() -> const char* override { return c_name; }
 
     // Implements Window
     void window(Pointer_context& pointer_context) override;
-
-    auto state() const -> State override;
 
     auto snap(glm::vec3 v) const -> glm::vec3;
 

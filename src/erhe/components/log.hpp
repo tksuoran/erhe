@@ -6,7 +6,7 @@
 namespace erhe::components
 {
 
-extern erhe::log::Log::Category log_components;
+extern erhe::log::Category log_components;
 
 } // namespace erhe::components
 

@@ -5,6 +5,26 @@
 namespace erhe::scene
 {
 
+Camera::Camera(const std::string& name)
+    : m_name(name)
+{
+}
+
+auto Camera::name() const -> const std::string&
+{
+    return m_name;
+}
+
+void Camera::on_attach(Node& node)
+{
+    m_node = node.shared_from_this();
+}
+
+void Camera::on_detach(Node& node)
+{
+    m_node.reset();
+}
+
 void Camera::update(Viewport viewport)
 {
     Expects(m_node != nullptr);

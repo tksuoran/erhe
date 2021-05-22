@@ -1,3 +1,5 @@
+set(_target "erhe_graphics")
+
 set(source_list
     buffer.cpp
     buffer.hpp
@@ -67,27 +69,24 @@ else()
     )
 endif()
 
-add_library(erhe_graphics ${source_list})
+add_library(${_target} ${source_list})
 
-add_library(erhe::graphics ALIAS erhe_graphics)
-
-target_include_directories(erhe_graphics
+target_include_directories(${_target}
     PUBLIC
         ${ERHE_INCLUDE_ROOT}
 )
 
-target_link_libraries(erhe_graphics
+target_link_libraries(${_target}
     PUBLIC
-        erhe::gl
-        erhe::log
+        erhe_gl
+        erhe_log
         fmt::fmt
         glm::glm
         Microsoft.GSL::GSL
 )
 
 if (${ERHE_PNG_LIBRARY} STREQUAL "Mango")
-    message("linking mango to erhe_graphics")
-    target_link_libraries(erhe_graphics PUBLIC mango)
+    target_link_libraries(${_target} PUBLIC mango)
 endif()
 
 foreach(source IN LISTS source_list)

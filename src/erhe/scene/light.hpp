@@ -15,6 +15,7 @@ namespace erhe::scene
 
 class Light
     : public ICamera
+    , public INode_attachment
 {
 public:
     enum class Type : unsigned int
@@ -31,29 +32,28 @@ public:
         "Spot"
     };
 
-    Light(const std::string&           name,
-          const std::shared_ptr<Node>& node)
-        : m_name(name)
-        , m_node(node)
-    {
-    }
+    explicit Light(const std::string& name);
 
     virtual ~Light() = default;
 
-    Type       type            {Type::directional};
-    glm::vec3  color           {glm::vec3(1.0f, 1.0f, 1.0f)};
-    float      intensity       {1.0f};
-    float      range           {100.0f};
-    float      inner_spot_angle{glm::pi<float>() * 0.4f};
-    float      outer_spot_angle{glm::pi<float>() * 0.5f};
-    bool       cast_shadow     {true};
+    Type      type            {Type::directional};
+    glm::vec3 color           {glm::vec3(1.0f, 1.0f, 1.0f)};
+    float     intensity       {1.0f};
+    float     range           {100.0f};
+    float     inner_spot_angle{glm::pi<float>() * 0.4f};
+    float     outer_spot_angle{glm::pi<float>() * 0.5f};
+    bool      cast_shadow     {true};
 
-    void update(Viewport viewport) override;
-
+    // Implements INode_attachment
     auto name() const -> const std::string&
     {
         return m_name;
     }
+    void on_attach(Node& node);
+    void on_detach(Node& node);
+
+    // Implements ICamera
+    void update(Viewport viewport) override;
 
     auto node() const -> const std::shared_ptr<Node>& override
     {
@@ -99,7 +99,6 @@ public:
     {
         return m_transforms.texture_from_world.inverse_matrix();
     }
-
 
     std::string           m_name;
     std::shared_ptr<Node> m_node;

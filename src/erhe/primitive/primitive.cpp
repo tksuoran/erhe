@@ -1,21 +1,22 @@
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/graphics/buffer.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::primitive
 {
 
-auto Primitive_geometry::desc(Mode mode)
+auto c_str(Primitive_mode primitive_mode)
 -> const char*
 {
-    switch (mode)
+    switch (primitive_mode)
     {
-        case Mode::not_set:           return "not_set";
-        case Mode::polygon_fill:      return "polygon_fill";
-        case Mode::edge_lines:        return "edge_lines";
-        case Mode::corner_points:     return "corner_points";
-        case Mode::corner_normals:    return "corner_normals";
-        case Mode::polygon_centroids: return "polygon_centroids";
-        case Mode::count:             return "count";
+        case Primitive_mode::not_set:           return "not_set";
+        case Primitive_mode::polygon_fill:      return "polygon_fill";
+        case Primitive_mode::edge_lines:        return "edge_lines";
+        case Primitive_mode::corner_points:     return "corner_points";
+        case Primitive_mode::corner_normals:    return "corner_normals";
+        case Primitive_mode::polygon_centroids: return "polygon_centroids";
+        case Primitive_mode::count:             return "count";
         default:
         {
             FATAL("Bad mesh mode");
@@ -23,7 +24,7 @@ auto Primitive_geometry::desc(Mode mode)
     }
 }
 
-auto Primitive_geometry::desc(Normal_style normal_style)
+auto c_str(Normal_style normal_style)
 -> const char*
 {
     switch (normal_style)
@@ -85,31 +86,32 @@ void Primitive_geometry::allocate_index_buffer(const std::shared_ptr<erhe::graph
     this->index_element_size = index_element_size;
 }
 
-auto Primitive_geometry::index_range(Mode mode) -> Index_range
+auto Primitive_geometry::index_range(Primitive_mode primitive_mode) -> Index_range
 {
-    switch (mode)
+    switch (primitive_mode)
     {
-        case Mode::not_set          : return {};
-        case Mode::polygon_fill     : return fill_indices;
-        case Mode::edge_lines       : return edge_line_indices;
-        case Mode::corner_points    : return corner_point_indices;
-        case Mode::polygon_centroids: return polygon_centroid_indices;
-        case Mode::count            : return {};
+        case Primitive_mode::not_set          : return {};
+        case Primitive_mode::polygon_fill     : return fill_indices;
+        case Primitive_mode::edge_lines       : return edge_line_indices;
+        case Primitive_mode::corner_points    : return corner_point_indices;
+        case Primitive_mode::polygon_centroids: return polygon_centroid_indices;
+        case Primitive_mode::count            : return {};
         default:                      return {};
     }
 }
 
-std::optional<gl::Primitive_type> primitive_type(Primitive_geometry::Mode mode)
+auto primitive_type(Primitive_mode primitive_mode)
+-> std::optional<gl::Primitive_type>
 {
-    switch (mode)
+    switch (primitive_mode)
     {
-        case Primitive_geometry::Mode::not_set          : return {};
-        case Primitive_geometry::Mode::polygon_fill     : return gl::Primitive_type::triangles;
-        case Primitive_geometry::Mode::edge_lines       : return gl::Primitive_type::lines;
-        case Primitive_geometry::Mode::corner_points    : return gl::Primitive_type::points;
-        case Primitive_geometry::Mode::polygon_centroids: return gl::Primitive_type::points;
-        case Primitive_geometry::Mode::count            : return {};
-        default:                                          return {};
+        case Primitive_mode::not_set          : return {};
+        case Primitive_mode::polygon_fill     : return gl::Primitive_type::triangles;
+        case Primitive_mode::edge_lines       : return gl::Primitive_type::lines;
+        case Primitive_mode::corner_points    : return gl::Primitive_type::points;
+        case Primitive_mode::polygon_centroids: return gl::Primitive_type::points;
+        case Primitive_mode::count            : return {};
+        default:                                return {};
     }
 }
 

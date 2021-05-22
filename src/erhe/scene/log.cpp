@@ -3,8 +3,8 @@
 namespace erhe::scene
 {
 
-using erhe::log::Log;
+using namespace erhe::log;
 
-Log::Category log(Log::Color::YELLOW, Log::Color::GRAY, Log::Level::LEVEL_INFO);
+Category log(Color::YELLOW, Color::GRAY, Level::LEVEL_INFO);
 
 } // namespace erhe::scene

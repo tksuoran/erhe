@@ -33,6 +33,7 @@ enum class Action : unsigned int
     rotate,
     add,
     remove,
+    drag,
     count
 };
 static constexpr const char* c_action_strings[] =
@@ -42,6 +43,7 @@ static constexpr const char* c_action_strings[] =
     "Rotate",
     "Add",
     "Remove",
+    "Drag"
 };
 
 struct Pointer_context

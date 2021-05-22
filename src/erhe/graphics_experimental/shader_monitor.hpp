@@ -15,8 +15,8 @@ class Shader_monitor
     : public erhe::components::Component
 {
 public:
+    static constexpr const char* c_name = "Shader_monitor";
     Shader_monitor();
-
     virtual ~Shader_monitor();
 
     void initialize_component() override;

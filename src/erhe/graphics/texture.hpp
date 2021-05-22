@@ -10,34 +10,37 @@ namespace erhe::graphics
 
 class Buffer;
 
+
+struct Texture_create_info
+{
+    Texture_create_info() = default;
+
+    Texture_create_info(gl::Texture_target  target,
+                        gl::Internal_format internal_format,
+                        bool                use_mipmaps,
+                        int                 width,
+                        int                 height = 1,
+                        int                 depth  = 1);
+
+    void calculate_level_count();
+
+    gl::Texture_target  target                {gl::Texture_target::texture_2d};
+    gl::Internal_format internal_format       {gl::Internal_format::rgba8};
+    bool                use_mipmaps           {false};
+    bool                fixed_sample_locations{true};
+    int                 sample_count          {0};
+    int                 width                 {1};
+    int                 height                {1};
+    int                 depth                 {1};
+    int                 level_count           {1};
+    int                 row_stride            {0};
+    Buffer*             buffer                {nullptr};
+};
+
 class Texture
 {
 public:
-    struct Create_info
-    {
-        Create_info() = default;
-
-        Create_info(gl::Texture_target  target,
-                    gl::Internal_format internal_format,
-                    bool                use_mipmaps,
-                    int                 width,
-                    int                 height = 1,
-                    int                 depth  = 1);
-
-        void calculate_level_count();
-
-        gl::Texture_target  target                {gl::Texture_target::texture_2d};
-        gl::Internal_format internal_format       {gl::Internal_format::rgba8};
-        bool                use_mipmaps           {false};
-        bool                fixed_sample_locations{true};
-        int                 sample_count          {0};
-        int                 width                 {1};
-        int                 height                {1};
-        int                 depth                 {1};
-        int                 level_count           {1};
-        int                 row_stride            {0};
-        Buffer*             buffer                {nullptr};
-    };
+    using Create_info = Texture_create_info;
 
     static auto storage_dimensions(gl::Texture_target target)
     -> int;

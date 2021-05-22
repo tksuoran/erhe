@@ -29,23 +29,19 @@ public:
 
 class Camera
     : public ICamera
+    , public erhe::scene::INode_attachment
+    , public std::enable_shared_from_this<Camera>
 {
 public:
-    Camera(const std::string&           name, 
-           const std::shared_ptr<Node>& node)
-        : m_name(name)
-        , m_node(node)
-    {
-    }
-
+    explicit Camera(const std::string& name);
     virtual ~Camera() = default;
 
     void update(Viewport viewport) override;
 
-    auto name() const -> const std::string&
-    {
-        return m_name;
-    }
+    // Implements INode_attachment
+    auto name() const -> const std::string&;
+    void on_attach(Node& node);
+    void on_detach(Node& node);
 
     auto node() const -> const std::shared_ptr<Node>& override
     {

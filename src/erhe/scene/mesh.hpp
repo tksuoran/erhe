@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe/scene/node.hpp"
 #include "erhe/primitive/primitive.hpp"
 
 #include <glm/glm.hpp>
@@ -9,26 +10,28 @@
 namespace erhe::scene
 {
 
-class Node;
-
 class Mesh
+    : public INode_attachment
 {
 public:
     Mesh() = default;
 
-    explicit Mesh(const std::string&           name,
-                  const std::shared_ptr<Node>& node = {})
-        : name{name}
-        , node{node}
-    {}
+    explicit Mesh(const std::string& name);
 
-    Mesh(const std::string&           name,
-         const std::shared_ptr<Node>& node,
-         erhe::primitive::Primitive   primitive);
+    Mesh(const std::string&         name,
+         erhe::primitive::Primitive primitive);
 
-    ~Mesh() = default;
+    virtual ~Mesh() = default;
 
-    // glm::vec3 position() const;
+    // Implements INode_attachment
+    auto name() const -> const std::string&;
+    void on_attach(Node& node);
+    void on_detach(Node& node);
+
+    auto node() const -> std::shared_ptr<Node>
+    {
+        return m_node;
+    }
 
     static constexpr const uint64_t c_visibility_content     = (1ul << 0ul);
     static constexpr const uint64_t c_visibility_shadow_cast = (1ul << 1ul);
@@ -38,8 +41,8 @@ public:
     static constexpr const uint64_t c_visibility_selection   = (1ul << 5ul);
     static constexpr const uint64_t c_visibility_all         = ~uint64_t(0);
 
-    std::string                             name;
-    std::shared_ptr<Node>                   node;
+    std::string                             m_name;
+    std::shared_ptr<Node>                   m_node;
     std::vector<erhe::primitive::Primitive> primitives;    
     glm::vec4                               wireframe_color{0.0f, 0.0f, 0.0f, 1.0f};
     float                                   point_size     {3.0f};

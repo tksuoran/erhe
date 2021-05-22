@@ -28,15 +28,10 @@ void Corner::smooth_normalize(Corner_id                                  this_co
     size_t participant_count{0};
 
     const Point& point = geometry.points[point_id];
-    for (Point_corner_id point_corner_id = point.first_point_corner_id,
-        end = point.first_point_corner_id + point.corner_count;
-        point_corner_id < end;
-        ++point_corner_id)
+    point.for_each_corner_const(geometry, [&](const auto& i)
     {
         ++point_corner_count;
-        Corner_id      corner_id           = geometry.point_corners[point_corner_id];
-        const Corner&  corner              = geometry.corners[corner_id];
-        Polygon_id     neighbor_polygon_id = corner.polygon_id;
+        Polygon_id     neighbor_polygon_id = i.corner.polygon_id;
         const Polygon& neighbor_polygon    = geometry.polygons[polygon_id];
 
         if ((polygon_id != neighbor_polygon_id) &&
@@ -66,7 +61,7 @@ void Corner::smooth_normalize(Corner_id                                  this_co
                 ++participant_count;
             }
         }
-    }
+    });
 
     corner_value = normalize(corner_value);
     corner_attribute.put(this_corner_id, corner_value);
@@ -92,27 +87,19 @@ void Corner::smooth_average(Corner_id                                 this_corne
                                            : point_normals.get(point_id);
     T corner_value{};
 
-    size_t point_corner_count{0};
     size_t participant_count{0};
     const Point& point = geometry.points[point_id];
-    for (Point_corner_id point_corner_id = point.first_point_corner_id,
-        end = point.first_point_corner_id + point.corner_count;
-        point_corner_id < end;
-        ++point_corner_id)
+    point.for_each_corner_const([&](const auto& i)
     {
-        ++point_corner_count;
-        Corner_id loop_corner_id = geometry.point_corners[point_corner_id];
-
-        if (!has_corner_normal ||
-            (corner_normals.get(loop_corner_id) == corner_normal))
+        if (!has_corner_normal || (corner_normals.get(i.corner_id) == corner_normal))
         {
-            if (old_corner_attribute.has(loop_corner_id))
+            if (old_corner_attribute.has(i.corner_id))
             {
-                corner_value += old_corner_attribute.get(loop_corner_id);
+                corner_value += old_corner_attribute.get(i.corner_id);
                 ++participant_count;
             }
         }
-    }
+    });
     VERIFY(participant_count >= 1);
 
     corner_value = corner_value / static_cast<float>(participant_count);

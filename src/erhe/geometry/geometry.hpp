@@ -2,16 +2,22 @@
 
 #include "erhe/geometry/property_map.hpp"
 #include "erhe/geometry/property_map_collection.hpp"
-#include "erhe/geometry/log.hpp"
+#include "erhe/geometry/types.hpp"
 
 #include <glm/glm.hpp>
 #include <gsl/assert>
 
 #include "Tracy.hpp"
 
+#include <functional>
 #include <optional>
 #include <set>
 #include <vector>
+
+namespace erhe::log
+{
+    struct Category;
+}
 
 namespace erhe::geometry
 {
@@ -36,14 +42,6 @@ inline constexpr const Property_map_descriptor c_polygon_bitangents  { "polygon_
 inline constexpr const Property_map_descriptor c_polygon_colors      { "polygon_colors"      , Transform_mode::none                                         , Interpolation_mode::none };
 inline constexpr const Property_map_descriptor c_polygon_ids_vec3    { "polygon_ids_vec"     , Transform_mode::none                                         , Interpolation_mode::none };
 inline constexpr const Property_map_descriptor c_polygon_ids_uint    { "polygon_ids_uint"    , Transform_mode::none                                         , Interpolation_mode::none };
-
-using Corner_id         = uint32_t; // index to Geometry::corners
-using Point_id          = uint32_t; // index to Geometry::points
-using Polygon_id        = uint32_t; // index to Geometry::polygons
-using Edge_id           = uint32_t; // index to Geometry::edges
-using Point_corner_id   = uint32_t; // index to Geometry::point_corners
-using Polygon_corner_id = uint32_t; // index to Geometry::polygon_corners
-using Edge_polygon_id   = uint32_t; // index to Geometry::edge_polygons
 
 struct Point;
 struct Polygon;
@@ -74,6 +72,51 @@ struct Corner
 
 struct Point
 {
+    struct Point_corner_context
+    {
+        Geometry&       geometry;
+        Point_corner_id point_corner_id;
+        Corner_id       corner_id;
+        Corner&         corner;
+        bool            break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+
+    void for_each_corner(Geometry& geometry, std::function<void(Point_corner_context& context)> callback);
+
+    struct Point_corner_context_const
+    {
+        const Geometry& geometry;
+        Point_corner_id point_corner_id;
+        Corner_id       corner_id;
+        const Corner&   corner;
+        bool            break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+
+    void for_each_corner_const(const Geometry& geometry, std::function<void(Point_corner_context_const& context)> callback) const;
+
+    struct Point_corner_neighborhood_context
+    {
+        Geometry&       geometry;
+        Point_corner_id prev_point_corner_id;
+        Point_corner_id point_corner_id;
+        Point_corner_id next_point_corner_id;
+        Corner_id       prev_corner_id;
+        Corner_id       corner_id;
+        Corner_id       next_corner_id;
+        Corner&         prev_corner;
+        Corner&         corner;
+        Corner&         next_corner;
+        bool            break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+
+    void for_each_corner_neighborhood(Geometry& geometry, std::function<void(Point_corner_neighborhood_context& context)> callback);
+
     Point_corner_id first_point_corner_id{0};
     uint32_t        corner_count{0};
     uint32_t        reserved_corner_count{0};
@@ -139,6 +182,51 @@ struct Polygon
     auto prev_corner(const Geometry& geometry, Corner_id corner_id) -> Corner_id;
 
     void reverse(Geometry& geometry);
+
+    struct Polygon_corner_context
+    {
+        Geometry&         geometry;
+        Polygon_corner_id polygon_corner_id;
+        Corner_id         corner_id;
+        Corner&           corner;
+        bool              break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+
+    struct Polygon_corner_context_const
+    {
+        const Geometry&   geometry;
+        Polygon_corner_id polygon_corner_id;
+        Corner_id         corner_id;
+        const Corner&     corner;
+        bool              break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+
+    void for_each_corner(Geometry& geometry, std::function<void(Polygon_corner_context& context)> callback);
+
+    void for_each_corner_const(const Geometry& geometry, std::function<void(Polygon_corner_context_const& context)> callback) const;
+
+    struct Polygon_corner_neighborhood_context
+    {
+        Geometry&         geometry;
+        Polygon_corner_id prev_polygon_corner_id;
+        Polygon_corner_id polygon_corner_id;
+        Polygon_corner_id next_polygon_corner_id;
+        Corner_id         prev_corner_id;
+        Corner_id         corner_id;
+        Corner_id         next_corner_id;
+        Corner&           prev_corner;
+        Corner&           corner;
+        Corner&           next_corner;
+        bool              break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+
+    void for_each_corner_neighborhood(Geometry& geometry, std::function<void(Polygon_corner_neighborhood_context& context)> callback);
 };
 
 struct Edge
@@ -147,30 +235,44 @@ struct Edge
     Point_id        b;
     Edge_polygon_id first_edge_polygon_id;
     uint32_t        polygon_count;
+
+    struct Edge_polygon_context
+    {
+        Geometry&       geometry;
+        Edge_polygon_id edge_polygon_id;
+        Polygon_id      polygon_id;
+        Polygon&        polygon;
+        bool            break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+
+    void for_each_polygon(Geometry& geometry, std::function<void(Edge_polygon_context& context)> callback);
+
+};
+
+struct Mesh_info
+{
+    size_t polygon_count              {0};
+    size_t corner_count               {0};
+    size_t triangle_count             {0};
+    size_t edge_count                 {0};
+    size_t vertex_count_corners       {0};
+    size_t vertex_count_centroids     {0};
+    size_t index_count_fill_triangles {0};
+    size_t index_count_edge_lines     {0};
+    size_t index_count_corner_points  {0};
+    size_t index_count_centroid_points{0};
+
+    auto operator+=(const Mesh_info& o)
+    -> Mesh_info&;
+
+    void trace(erhe::log::Category& log) const;
 };
 
 class Geometry
 {
 public:
-    struct Mesh_info
-    {
-        size_t polygon_count              {0};
-        size_t corner_count               {0};
-        size_t triangle_count             {0};
-        size_t edge_count                 {0};
-        size_t vertex_count_corners       {0};
-        size_t vertex_count_centroids     {0};
-        size_t index_count_fill_triangles {0};
-        size_t index_count_edge_lines     {0};
-        size_t index_count_corner_points  {0};
-        size_t index_count_centroid_points{0};
-
-        auto operator+=(const Mesh_info& o)
-        -> Mesh_info&;
-
-        void trace(erhe::log::Log::Category& log) const;
-    };
-
     using Point_property_map_collection   = Property_map_collection<Point_id>;
     using Corner_property_map_collection  = Property_map_collection<Corner_id>;
     using Polygon_property_map_collection = Property_map_collection<Polygon_id>;
@@ -193,6 +295,8 @@ public:
     }
 
     Geometry(const Geometry&) = delete;
+
+    ~Geometry();
 
     Geometry& operator=(const Geometry&) = delete;
 
@@ -241,6 +345,16 @@ public:
     {
         m_serial_point_normals  = m_serial;
         m_serial_corner_normals = m_serial;
+    }
+
+    void promise_has_polygon_normals()
+    {
+        m_serial_polygon_normals = m_serial;
+    }
+
+    void promise_has_polygon_centroids()
+    {
+        m_serial_polygon_centroids = m_serial;
     }
 
     void promise_has_tangents()
@@ -386,14 +500,20 @@ public:
     // Returns true on success.
     auto compute_polygon_normals() -> bool;
 
+    auto has_polygon_normals() const -> bool;
+
     // Requires point locations.
     // Returns false if point locations are not available.
     // Returns true on success.
     auto compute_polygon_centroids() -> bool;
 
+    auto has_polygon_centroids() const -> bool;
+
     // Calculates point normal from polygon normals
     // Returns incorrect data if there are missing polygon normals.
     auto compute_point_normal(Point_id point_id) -> glm::vec3;
+
+    auto has_point_normals() const -> bool;
 
     // Calculates point normals from polygon normals.
     // If polygon normals are not up to date before this call,
@@ -401,6 +521,11 @@ public:
     // Returns false if unable to calculate polygon normals
     // (due to missing point locations).
     auto compute_point_normals(const Property_map_descriptor& descriptor) -> bool;
+
+    auto has_polygon_tangents() const -> bool;
+    auto has_polygon_bitangents() const -> bool;
+    auto has_corner_tangents() const -> bool;
+    auto has_corner_bitangents() const -> bool;
 
     auto compute_tangents(bool corner_tangents    = true,
                           bool corner_bitangents  = true,
@@ -410,6 +535,8 @@ public:
                           bool override_existing  = false) -> bool;
 
     auto generate_polygon_texture_coordinates(bool overwrite_existing_texture_coordinates = false) -> bool;
+
+    auto has_polygon_texture_coordinates() const -> bool;
 
     // Experimental
     void generate_texture_coordinates_spherical();
@@ -432,6 +559,8 @@ public:
 
     void build_edges();
 
+    auto has_edges() const -> bool;
+
     void transform(const glm::mat4& m);
 
     void reverse_polygons();
@@ -442,17 +571,92 @@ public:
 
     struct Weld_settings
     {
-        float max_point_distance    {0.001f};
-        float min_normal_dot_product{0.999f};
-        float max_texcoord_distance {0.001f};
-        float max_color_distance    {0.01f};
+        float max_point_distance    {0.05f};
+        float min_normal_dot_product{0.95f};
+        float max_texcoord_distance {0.05f};
+        float max_color_distance    {0.05f};
     };
 
     void weld(Weld_settings weld_settings);
 
     void sanity_check();
 
-private:
+    auto volume() -> float;
+
+    struct Corner_context
+    {
+        Corner_id corner_id;
+        Corner&   corner;
+        bool      break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+    struct Corner_context_const
+    {
+        Corner_id     corner_id;
+        const Corner& corner;
+        bool          break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+    struct Point_context
+    {
+        Point_id point_id;
+        Point&   point;
+        bool     break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+    struct Point_context_const
+    {
+        Point_id     point_id;
+        const Point& point;
+        bool         break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+    struct Polygon_context
+    {
+        Polygon_id polygon_id;
+        Polygon&   polygon;
+        bool       break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+    struct Polygon_context_const
+    {
+        Polygon_id     polygon_id;
+        const Polygon& polygon;
+        bool           break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+    struct Edge_context
+    {
+        Edge_id edge_id;
+        Edge&   edge;
+        bool    break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+    struct Edge_context_const
+    {
+        Edge_id     edge_id;
+        const Edge& edge;
+        bool        break_{false};
+
+        void break_iteration() { break_ = true; }
+    };
+
+    void for_each_corner       (std::function<void(Corner_context&       )> callback);
+    void for_each_corner_const (std::function<void(Corner_context_const& )> callback) const;
+    void for_each_point        (std::function<void(Point_context&        )> callback);
+    void for_each_point_const  (std::function<void(Point_context_const&  )> callback) const;
+    void for_each_polygon      (std::function<void(Polygon_context&      )> callback);
+    void for_each_polygon_const(std::function<void(Polygon_context_const&)> callback) const;
+    void for_each_edge         (std::function<void(Edge_context&         )> callback);
+    void for_each_edge_const   (std::function<void(Edge_context_const&   )> callback) const;
+
     constexpr static size_t s_grow = 4096;
     Corner_id                       m_next_corner_id           {0};
     Point_id                        m_next_point_id            {0};

@@ -2,6 +2,7 @@
 
 #include "operations/ioperation.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/scene/node.hpp"
 #include <functional>
 #include <vector>
 
@@ -30,8 +31,9 @@ protected:
     struct Entry
     {
         std::shared_ptr<erhe::scene::Mesh> mesh;
-        erhe::scene::Mesh before;
-        erhe::scene::Mesh after;
+        std::shared_ptr<erhe::scene::Node> node;
+        erhe::scene::Mesh                  before;
+        erhe::scene::Mesh                  after;
     };
 
     void make_entries(Context& context,

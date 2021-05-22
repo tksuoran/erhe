@@ -1,3 +1,5 @@
+set(_target "erhe_ui")
+
 set(source_list
     #action.hpp
     #area.cpp
@@ -38,22 +40,17 @@ set(source_list
     #text_buffer.hpp
 )
 
-add_library(erhe_ui ${source_list})
-
-add_library(erhe::ui ALIAS erhe_ui)
+add_library(${_target} ${source_list})
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE_LIST})
 
-target_include_directories(erhe_ui
-    PUBLIC
-        ${ERHE_INCLUDE_ROOT}
-)
+target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
-target_link_libraries(erhe_ui
+target_link_libraries(${_target}
     PUBLIC
-        erhe::gl
-        erhe::graphics
-        erhe::primitive
+        erhe_gl
+        erhe_graphics
+        erhe_primitive
         freetype
         fmt::fmt
         glm::glm

@@ -1,5 +1,6 @@
 #include "erhe/graphics/state/viewport_state.hpp"
 #include "erhe/gl/gl.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 //#define DISABLE_CACHE 1
 

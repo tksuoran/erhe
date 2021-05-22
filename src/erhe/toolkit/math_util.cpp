@@ -1,5 +1,5 @@
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/log/log.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/gtc/constants.hpp>
 #include <glm/ext/matrix_clip_space.hpp>

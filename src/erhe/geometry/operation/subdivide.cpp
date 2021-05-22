@@ -1,7 +1,12 @@
 #include "erhe/geometry/operation/subdivide.hpp"
+#include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/log.hpp"
+
+#include "Tracy.hpp"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
+
 #include <cstdint>
 #include <limits>
 
@@ -22,57 +27,38 @@ Subdivide::Subdivide(Geometry& src, Geometry& destination)
     make_polygon_centroids();
     make_edge_midpoints();
 
+    source.for_each_polygon([&](auto& i)
     {
-        ZoneScopedN("Subdivide");
-
-        for (Polygon_id src_polygon_id = 0,
-             polygon_end = source.polygon_count();
-             src_polygon_id < polygon_end;
-             ++src_polygon_id)
+        //if (src_polygon.corner_count == 3)
+        //{
+        //    Polygon_id new_polygon_id = make_new_polygon_from_polygon(src_polygon_id);
+        //    add_polygon_corners(new_polygon_id, src_polygon_id);
+        //    continue;
+        //}
+        i.polygon.for_each_corner_neighborhood(source, [&](auto& j)
         {
-            Polygon& src_polygon = source.polygons[src_polygon_id];
-
-            if (src_polygon.corner_count == 3)
+            Point_id   a                      = j.prev_corner.point_id;
+            Point_id   b                      = j.corner     .point_id;
+            Point_id   c                      = j.next_corner.point_id;
+            Polygon_id new_polygon_id         = make_new_polygon_from_polygon(i.polygon_id);
+            Point_id   previous_edge_midpoint = get_edge_new_point(a, b);
+            Point_id   next_edge_midpoint     = get_edge_new_point(b, c);
+            if (previous_edge_midpoint == std::numeric_limits<uint32_t>::max())
             {
-                Polygon_id new_polygon_id = make_new_polygon_from_polygon(src_polygon_id);
-                add_polygon_corners(new_polygon_id, src_polygon_id);
-                continue;
+                log_subdivide.warn("midpoint for edge {} {} not found\n", std::min(a, b), std::max(a, b));
+                return;
             }
-
-            for (uint32_t i = 0; i < src_polygon.corner_count; ++i)
+            if (next_edge_midpoint == std::numeric_limits<uint32_t>::max())
             {
-                Polygon_corner_id src_polygon_next_corner_id     = src_polygon.first_polygon_corner_id + (src_polygon.corner_count + i - 1) % src_polygon.corner_count;
-                Polygon_corner_id src_polygon_corner_id          = src_polygon.first_polygon_corner_id + i;
-                Polygon_corner_id src_polygon_previous_corner_id = src_polygon.first_polygon_corner_id + (i + 1) % src_polygon.corner_count;
-                Corner_id         src_previous_corner_id         = source.polygon_corners[src_polygon_previous_corner_id];
-                Corner_id         src_corner_id                  = source.polygon_corners[src_polygon_corner_id];
-                Corner_id         src_next_corner_id             = source.polygon_corners[src_polygon_next_corner_id];
-                Corner&           src_previous_corner            = source.corners[src_previous_corner_id];
-                Corner&           src_corner                     = source.corners[src_corner_id];
-                Corner&           src_next_corner                = source.corners[src_next_corner_id];
-                Point_id          a                              = src_previous_corner.point_id;
-                Point_id          b                              = src_corner.point_id;
-                Point_id          c                              = src_next_corner.point_id;
-                Polygon_id        new_polygon_id                 = make_new_polygon_from_polygon(src_polygon_id);
-                Point_id          previous_edge_midpoint         = get_edge_new_point(a, b);
-                Point_id          next_edge_midpoint             = get_edge_new_point(b, c);
-                if (previous_edge_midpoint == std::numeric_limits<uint32_t>::max())
-                {
-                    log_subdivide.warn("midpoint for edge {} {} not found\n", std::min(a, b), std::max(a, b));
-                    continue;
-                }
-                if (next_edge_midpoint == std::numeric_limits<uint32_t>::max())
-                {
-                    log_subdivide.warn("midpoint for edge {} {} not found\n", std::min(b, c), std::max(b, c));
-                    continue;
-                }
-                make_new_corner_from_polygon_centroid(new_polygon_id, src_polygon_id);
-                make_new_corner_from_point(new_polygon_id, next_edge_midpoint);
-                make_new_corner_from_corner(new_polygon_id, src_corner_id);
-                make_new_corner_from_point(new_polygon_id, previous_edge_midpoint);
+                log_subdivide.warn("midpoint for edge {} {} not found\n", std::min(b, c), std::max(b, c));
+                return;
             }
-        }
-    }
+            make_new_corner_from_polygon_centroid(new_polygon_id, i.polygon_id);
+            make_new_corner_from_point           (new_polygon_id, next_edge_midpoint);
+            make_new_corner_from_corner          (new_polygon_id, j.corner_id);
+            make_new_corner_from_point           (new_polygon_id, previous_edge_midpoint);
+        });
+    });
 
     post_processing();
 }

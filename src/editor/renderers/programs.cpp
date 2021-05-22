@@ -1,17 +1,25 @@
 #include "renderers/programs.hpp"
 
 #include "log.hpp"
-#include "erhe_tracy.hpp"
 
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics_experimental/shader_monitor.hpp"
+#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace editor {
 
 using erhe::graphics::Configuration;
 using erhe::graphics::Shader_stages;
 using erhe::graphics::Vertex_attribute;
-using erhe::log::Log;
+
+Programs::Programs()
+    : erhe::components::Component{c_name}
+{
+}
+
+Programs::~Programs() = default;
 
 void Programs::connect()
 {
@@ -24,7 +32,7 @@ void Programs::initialize_component()
     ZoneScoped;
 
     log_programs.trace("{}()\n", __func__);
-    Log::Indenter indenter;
+    erhe::log::Indenter indenter;
 
     fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 

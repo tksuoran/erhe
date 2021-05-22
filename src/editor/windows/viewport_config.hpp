@@ -14,7 +14,7 @@ class Viewport_config
 {
 public:
     static constexpr const char* c_name = "Viewport_config";
-    Viewport_config() : erhe::components::Component(c_name) {}
+    Viewport_config() : erhe::components::Component{c_name} {}
     virtual ~Viewport_config() = default;
 
     // Implements Window

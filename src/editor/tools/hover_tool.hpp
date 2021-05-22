@@ -27,7 +27,7 @@ class Hover_tool
 {
 public:
     static constexpr const char* c_name = "Hover_tool";
-    Hover_tool() : erhe::components::Component(c_name) {}
+    Hover_tool() : erhe::components::Component{c_name} {}
     virtual ~Hover_tool() = default;
 
     // Implements Component

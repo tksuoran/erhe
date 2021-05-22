@@ -26,7 +26,7 @@
 namespace gl
 {
 
-extern erhe::log::Log::Category log_gl;
+extern erhe::log::Category log_gl;
 
 void set_error_checking(bool enable);
 

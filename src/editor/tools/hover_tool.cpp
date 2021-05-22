@@ -1,15 +1,17 @@
+#include "hover_tool.hpp"
+#include "editor.hpp"
+#include "log.hpp"
 #include "tools/hover_tool.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
 #include "renderers/line_renderer.hpp"
 #include "renderers/text_renderer.hpp"
-#include "editor.hpp"
 #include "scene/scene_manager.hpp"
+
 #include "erhe/scene/mesh.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/material.hpp"
-#include "erhe_tracy.hpp"
-#include "log.hpp"
+#include "erhe/toolkit/tracy_client.hpp"
 
 #include "imgui.h"
 
@@ -79,7 +81,7 @@ void Hover_tool::render(Render_context& render_context)
             auto position = m_hover_position.value();
             position.x += 50.0f;
             position.z  = -0.5f;
-            render_context.text_renderer->print(m_hover_mesh->name,
+            render_context.text_renderer->print(m_hover_mesh->name(),
                                                 position,
                                                 text_color);
         }
@@ -138,7 +140,7 @@ void Hover_tool::select(Pointer_context& pointer_context)
         // Replace primitive material with modified copy
         m_hover_mesh->primitives[m_hover_primitive_index].material = m_hover_material;
         log_materials.info("hover mesh {} primitive {} set to {} with index {}\n",
-                            m_hover_mesh->name,
+                            m_hover_mesh->name(),
                             m_hover_primitive_index,
                             m_hover_material->name,
                             m_hover_material->index);
@@ -152,8 +154,8 @@ void Hover_tool::window(Pointer_context&)
     ImGui::Begin("Hover");
     if (m_hover_mesh != nullptr)
     {
-        ImGui::Text("Mesh: %s", m_hover_mesh->name.c_str());
-        auto* node = m_hover_mesh->node.get();
+        ImGui::Text("Mesh: %s", m_hover_mesh->name().c_str());
+        auto* node = m_hover_mesh->node().get();
         if (node != nullptr)
         {
             ImGui::Text("Node: %s", node->name.c_str());

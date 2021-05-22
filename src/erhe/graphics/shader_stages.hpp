@@ -1,7 +1,8 @@
-#ifndef shader_stages_hpp_erhe_graphics
-#define shader_stages_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/graphics/shader_resource.hpp"
+#include "erhe/graphics/gl_objects.hpp"
+
 #include <filesystem>
 #include <map>
 #include <optional>
@@ -13,6 +14,7 @@ class Fragment_outputs;
 class Shader_monitor;
 class Shader_resource;
 class Vertex_attribute_mappings;
+class Gl_shader;
 
 class Shader_stages
 {
@@ -180,5 +182,3 @@ private:
 };
 
 } // namespace erhe::graphics
-
-#endif

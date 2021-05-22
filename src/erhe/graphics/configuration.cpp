@@ -261,13 +261,7 @@ void Configuration::initialize(PFN_get_proc_address get_proc_address)
 
     extensions.clear();
 
-    s_glNamedFramebufferTextureEXT = (void(*)(GLuint, GLenum, GLuint, GLint))get_proc_address("glNamedFramebufferTextureEXT");
-    s_glNamedFramebufferTexture = (void(*)(GLuint, GLenum, GLuint, GLint))get_proc_address("glNamedFramebufferTexture");
-
-    Log::set_text_color(Log::Color::GRAY);
+    Log::set_text_color(log::Color::GRAY);
 }
-
-void (* Configuration::s_glNamedFramebufferTextureEXT) (GLuint framebuffer, GLenum attachment, GLuint texture, GLint level) = nullptr;
-void (* Configuration::s_glNamedFramebufferTexture) (GLuint framebuffer, GLenum attachment, GLuint texture, GLint level) = nullptr;
 
 } // namespace erhe::graphics

@@ -4,9 +4,9 @@
 namespace erhe::primitive
 {
 
-using erhe::log::Log;
+using namespace erhe::log;
 
-Log::Category log_primitive_builder(Log::Color::RED,     Log::Color::GRAY, Log::Level::LEVEL_WARN);
-Log::Category log_primitive        (Log::Color::MAGENTA, Log::Color::GRAY, Log::Level::LEVEL_WARN);
+Category log_primitive_builder(Color::RED,     Color::GRAY, Level::LEVEL_WARN);
+Category log_primitive        (Color::MAGENTA, Color::GRAY, Level::LEVEL_WARN);
 
 } // namespace erhe::primitive

@@ -1,6 +1,7 @@
 #include "windows/light_properties.hpp"
 #include "scene/scene_manager.hpp"
 #include "erhe/scene/light.hpp"
+#include "erhe/scene/scene.hpp"
 
 #include "imgui.h"
 

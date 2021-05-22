@@ -1,6 +1,6 @@
 #include "erhe/graphics/vertex_attribute.hpp"
 #include "erhe/log/log.hpp"
-#include <stdexcept>
+#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::graphics
 {

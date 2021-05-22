@@ -1,20 +1,23 @@
 #include "tools/trs_tool.hpp"
-#include "tools/pointer_context.hpp"
-#include "tools/selection_tool.hpp"
 #include "log.hpp"
-#include "scene/scene_manager.hpp"
-#include "renderers/line_renderer.hpp"
-#include "renderers/text_renderer.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/insert_operation.hpp"
+#include "renderers/line_renderer.hpp"
+#include "renderers/text_renderer.hpp"
+#include "scene/node_physics.hpp"
+#include "scene/scene_manager.hpp"
+#include "tools/pointer_context.hpp"
+#include "tools/selection_tool.hpp"
 
 #include "erhe/geometry/shapes/box.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
+#include "erhe/physics/rigid_body.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
-#include "erhe_tracy.hpp"
+#include "erhe/toolkit/verify.hpp"
+#include "erhe/toolkit/tracy_client.hpp"
 
 #include "imgui.h"
 
@@ -53,12 +56,30 @@ void Trs_tool::set_node(std::shared_ptr<Node> node)
         return;
     }
 
+    if (m_node_physics)
+    {
+        m_node_physics->rigid_body.end_move();
+    }
+
     // Attach new host to manipulator
     m_target_node = node;
+    m_node_physics = node ? node->get_attachment<Node_physics>() : std::shared_ptr<Node_physics>();
+    if (m_node_physics)
+    {
+        // Promote static to kinematic if we try to move object
+        auto& rigid_body     = m_node_physics->rigid_body;
+        auto  collision_mode = rigid_body.get_collision_mode();
+        if (collision_mode == erhe::physics::Rigid_body::Collision_mode::e_static)
+        {
+            rigid_body.set_collision_mode(erhe::physics::Rigid_body::Collision_mode::e_kinematic);
+        }
+        rigid_body.begin_move();
+    }
+
     if (m_target_node)
     {
         m_visualization.root = m_target_node.get();
-        m_visualization.tool_node.parent = m_visualization.root;
+        m_visualization.tool_node.parent = nullptr; m_visualization.root;
     }
     else
     {
@@ -78,10 +99,7 @@ void Trs_tool::Visualization::update_scale(vec3 view_position_in_world)
         return;
     }
     vec3 position_in_world = root->position_in_world();
-    float distance = length(position_in_world - vec3(view_position_in_world));
-    mat4 parent_from_node = erhe::toolkit::create_scale(scale * distance / 100.0f);
-    //root->transforms.parent_from_node.set_rotation(pi<float>() / 4.0f, vec3(0.0f, 1.0f, 0.0f));
-    tool_node.transforms.parent_from_node.set(parent_from_node);
+    view_distance = length(position_in_world - vec3(view_position_in_world));
     update_transforms();
 }
 
@@ -158,10 +176,10 @@ void Trs_tool::Visualization::initialize(Scene_manager* scene_manager)
     // Torus geometry is on xz plane, swap x and y to make it yz plane
     rotate_ring_geometry.transform(mat4_swap_xy);
     rotate_ring_geometry.reverse_polygons();
-    auto arrow_cylinder_pg = scene_manager->make_primitive_geometry(std::move(arrow_cylinder_geometry));
-    auto arrow_cone_pg     = scene_manager->make_primitive_geometry(std::move(arrow_cone_geometry    ));
-    auto box_pg            = scene_manager->make_primitive_geometry(std::move(box_geometry           ));
-    auto rotate_ring_pg    = scene_manager->make_primitive_geometry(std::move(rotate_ring_geometry   ));
+    auto arrow_cylinder_pg = scene_manager->make_primitive_geometry(arrow_cylinder_geometry);
+    auto arrow_cone_pg     = scene_manager->make_primitive_geometry(arrow_cone_geometry    );
+    auto box_pg            = scene_manager->make_primitive_geometry(box_geometry           );
+    auto rotate_ring_pg    = scene_manager->make_primitive_geometry(rotate_ring_geometry   );
     auto tool_layer        = scene_manager->tool_layer();
     vec3 pos{0.0f, 1.0f, 0.0f};
     x_arrow_cylinder_mesh  = scene_manager->make_mesh_node("X arrow cylinder", arrow_cylinder_pg, x_material, tool_layer, &tool_node, pos);
@@ -177,19 +195,19 @@ void Trs_tool::Visualization::initialize(Scene_manager* scene_manager)
     y_rotate_ring_mesh     = scene_manager->make_mesh_node("Y rotate ring",    rotate_ring_pg,    y_material, tool_layer, &tool_node, pos);
     z_rotate_ring_mesh     = scene_manager->make_mesh_node("Z rotate ring",    rotate_ring_pg,    z_material, tool_layer, &tool_node, pos);
 
-    x_arrow_cylinder_mesh->node->transforms.parent_from_node.set         (mat4(1));
-    x_arrow_cone_mesh    ->node->transforms.parent_from_node.set         (mat4(1));
-    y_arrow_cylinder_mesh->node->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3(0.0f, 0.0f, 1.0f));
-    y_arrow_cone_mesh    ->node->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3(0.0f, 0.0f, 1.0f));
-    z_arrow_cylinder_mesh->node->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
-    z_arrow_cone_mesh    ->node->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
-    xy_box_mesh          ->node->transforms.parent_from_node.set         (mat4(1));
-    xz_box_mesh          ->node->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3(1.0f, 0.0f, 0.0f));
-    yz_box_mesh          ->node->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
+    x_arrow_cylinder_mesh->node()->transforms.parent_from_node.set         (mat4(1));
+    x_arrow_cone_mesh    ->node()->transforms.parent_from_node.set         (mat4(1));
+    y_arrow_cylinder_mesh->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3(0.0f, 0.0f, 1.0f));
+    y_arrow_cone_mesh    ->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3(0.0f, 0.0f, 1.0f));
+    z_arrow_cylinder_mesh->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
+    z_arrow_cone_mesh    ->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
+    xy_box_mesh          ->node()->transforms.parent_from_node.set         (mat4(1));
+    xz_box_mesh          ->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3(1.0f, 0.0f, 0.0f));
+    yz_box_mesh          ->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
 
-    x_rotate_ring_mesh->node->transforms.parent_from_node.set         (mat4(1));
-    y_rotate_ring_mesh->node->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3(0.0f, 0.0f, 1.0f));
-    z_rotate_ring_mesh->node->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
+    x_rotate_ring_mesh->node()->transforms.parent_from_node.set         (mat4(1));
+    y_rotate_ring_mesh->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3(0.0f, 0.0f, 1.0f));
+    z_rotate_ring_mesh->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
 
     //root->transforms.parent_from_node.set_rotation(pi<float>() / 4.0f, vec3(0.0f, 1.0f, 0.0f));
 
@@ -231,7 +249,7 @@ void Trs_tool::initialize_component()
             {
                 if (mesh)
                 {
-                    auto node = mesh->node;
+                    auto node = mesh->node();
                     if (node)
                     {
                         node_found = true;
@@ -256,6 +274,20 @@ void Trs_tool::window(Pointer_context&)
     bool show_translate = m_visualization.show_translate;
     bool show_rotate    = m_visualization.show_rotate;
     ImGui::Begin      ("Transform`");
+
+    auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
+
+    if (make_button("Local", (m_local) ? Item_mode::active : Item_mode::normal, button_size))
+    {
+        m_local = true;
+        m_visualization.local = true;
+    }
+    if (make_button("Global", (!m_local) ? Item_mode::active : Item_mode::normal, button_size))
+    {
+        m_local = false;
+        m_visualization.local = false;
+    }
+
     ImGui::SliderFloat("Scale",                 &m_visualization.scale, 1.0f, 10.0f);
     ImGui::Checkbox   ("Translate Tool",        &m_visualization.show_translate);
     ImGui::Checkbox   ("Translate Snap Enable", &m_translate_snap_enable);
@@ -322,15 +354,15 @@ auto Trs_tool::get_axis_direction() const -> vec3
 {
     switch (m_active_handle)
     {
-        case Handle::e_handle_translate_x:  return m_drag.initial_world_from_local[0];
-        case Handle::e_handle_translate_y:  return m_drag.initial_world_from_local[1];
-        case Handle::e_handle_translate_z:  return m_drag.initial_world_from_local[2];
-        case Handle::e_handle_translate_yz: return m_drag.initial_world_from_local[0];
-        case Handle::e_handle_translate_xz: return m_drag.initial_world_from_local[1];
-        case Handle::e_handle_translate_xy: return m_drag.initial_world_from_local[2];
-        case Handle::e_handle_rotate_x:     return m_drag.initial_world_from_local[0];
-        case Handle::e_handle_rotate_y:     return m_drag.initial_world_from_local[1];
-        case Handle::e_handle_rotate_z:     return m_drag.initial_world_from_local[2];
+        case Handle::e_handle_translate_x:  return m_local ? m_drag.initial_world_from_local[0] : glm::vec3(1.0f, 0.0f, 0.0f);
+        case Handle::e_handle_translate_y:  return m_local ? m_drag.initial_world_from_local[1] : glm::vec3(0.0f, 1.0f, 0.0f);
+        case Handle::e_handle_translate_z:  return m_local ? m_drag.initial_world_from_local[2] : glm::vec3(0.0f, 0.0f, 1.0f);
+        case Handle::e_handle_translate_yz: return m_local ? m_drag.initial_world_from_local[0] : glm::vec3(1.0f, 0.0f, 0.0f);
+        case Handle::e_handle_translate_xz: return m_local ? m_drag.initial_world_from_local[1] : glm::vec3(0.0f, 1.0f, 0.0f);
+        case Handle::e_handle_translate_xy: return m_local ? m_drag.initial_world_from_local[2] : glm::vec3(0.0f, 0.0f, 1.0f);
+        case Handle::e_handle_rotate_x:     return m_local ? m_drag.initial_world_from_local[0] : glm::vec3(1.0f, 0.0f, 0.0f);
+        case Handle::e_handle_rotate_y:     return m_local ? m_drag.initial_world_from_local[1] : glm::vec3(0.0f, 1.0f, 0.0f);
+        case Handle::e_handle_rotate_z:     return m_local ? m_drag.initial_world_from_local[2] : glm::vec3(0.0f, 0.0f, 1.0f);
         default:
             FATAL("bad axis\n");
             break;
@@ -434,12 +466,12 @@ auto Trs_tool::get_plane_normal() const -> vec3
 {
     switch (m_active_handle)
     {
-        case Handle::e_handle_translate_xy: return m_drag.initial_world_from_local[2];
-        case Handle::e_handle_translate_xz: return m_drag.initial_world_from_local[1];
-        case Handle::e_handle_translate_yz: return m_drag.initial_world_from_local[0];
-        case Handle::e_handle_rotate_x:     return m_drag.initial_world_from_local[0];
-        case Handle::e_handle_rotate_y:     return m_drag.initial_world_from_local[1];
-        case Handle::e_handle_rotate_z:     return m_drag.initial_world_from_local[2];
+        case Handle::e_handle_translate_xy: return m_local ? m_drag.initial_world_from_local[2] : glm::vec3(0.0f, 0.0f, 1.0f);
+        case Handle::e_handle_translate_xz: return m_local ? m_drag.initial_world_from_local[1] : glm::vec3(0.0f, 1.0f, 0.0f);
+        case Handle::e_handle_translate_yz: return m_local ? m_drag.initial_world_from_local[0] : glm::vec3(1.0f, 0.0f, 0.0f);
+        case Handle::e_handle_rotate_x:     return m_local ? m_drag.initial_world_from_local[0] : glm::vec3(1.0f, 0.0f, 0.0f);
+        case Handle::e_handle_rotate_y:     return m_local ? m_drag.initial_world_from_local[1] : glm::vec3(0.0f, 1.0f, 0.0f);
+        case Handle::e_handle_rotate_z:     return m_local ? m_drag.initial_world_from_local[2] : glm::vec3(0.0f, 0.0f, 1.0f);
         default:
             FATAL("bad handle for plane");
             break;
@@ -872,6 +904,12 @@ auto Trs_tool::begin(Pointer_context& pointer_context) -> bool
     log_tools.trace("Trs tool state = Ready\n");
     m_state = State::ready;
     update_visibility();
+
+    if (m_node_physics)
+    {
+        m_node_physics->rigid_body.begin_move();
+    }
+
     return true;
 }
 
@@ -890,6 +928,12 @@ auto Trs_tool::end(Pointer_context& pointer_context) -> bool
 
     auto op = std::make_shared<Node_transform_operation>(context);
     m_operation_stack->push(op);
+
+    if (m_node_physics)
+    {
+        m_node_physics->rigid_body.end_move();
+    }
+
     return consume_event;
 }
 
@@ -952,18 +996,60 @@ void Trs_tool::Visualization::update_transforms()
 {
     ZoneScoped;
 
-    x_arrow_cylinder_mesh->node->update();
-    x_arrow_cone_mesh    ->node->update();
-    y_arrow_cylinder_mesh->node->update();
-    y_arrow_cone_mesh    ->node->update();
-    z_arrow_cylinder_mesh->node->update();
-    z_arrow_cone_mesh    ->node->update();
-    xy_box_mesh          ->node->update();
-    xz_box_mesh          ->node->update();
-    yz_box_mesh          ->node->update();
-    x_rotate_ring_mesh   ->node->update();
-    y_rotate_ring_mesh   ->node->update();
-    z_rotate_ring_mesh   ->node->update();
+    if (root == nullptr)
+    {
+        return;
+    }
+
+    mat4 scaling = erhe::toolkit::create_scale(scale * view_distance / 100.0f);
+
+    if (local)
+    {
+        tool_node.transforms = root->transforms;
+    }
+    else
+    {
+        auto position = root->position_in_world();
+        tool_node.transforms.parent_from_node.set_translation(position);
+    }
+    tool_node.transforms.parent_from_node.catenate(scaling);
+
+    x_arrow_cylinder_mesh->node()->update();
+    x_arrow_cone_mesh    ->node()->update();
+    y_arrow_cylinder_mesh->node()->update();
+    y_arrow_cone_mesh    ->node()->update();
+    z_arrow_cylinder_mesh->node()->update();
+    z_arrow_cone_mesh    ->node()->update();
+    xy_box_mesh          ->node()->update();
+    xz_box_mesh          ->node()->update();
+    yz_box_mesh          ->node()->update();
+    x_rotate_ring_mesh   ->node()->update();
+    y_rotate_ring_mesh   ->node()->update();
+    z_rotate_ring_mesh   ->node()->update();
+}
+
+void Trs_tool::update_transforms()
+{
+    if (root() == nullptr)
+    {
+        return;
+    }
+    root()->update();
+    if (m_node_physics)
+    {
+        m_node_physics->on_node_updated();
+    }
+    m_visualization.update_transforms();
+}
+
+void Trs_tool::update_visibility()
+{
+    m_visualization.update_visibility(m_target_node != nullptr, m_active_handle);
+}
+
+auto Trs_tool::root() -> erhe::scene::Node*
+{
+    return m_visualization.root;
 }
 
 } // namespace editor

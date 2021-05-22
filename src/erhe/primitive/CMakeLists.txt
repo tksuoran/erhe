@@ -1,4 +1,9 @@
+set(_target "erhe_primitive")
+
 set(source_list
+    enums.hpp
+    format_info.hpp
+    buffer_info.hpp
     primitive_builder.cpp
     primitive_builder.hpp
     index_range.cpp
@@ -11,23 +16,18 @@ set(source_list
     primitive.hpp
 )
 
-add_library(erhe_primitive ${source_list})
+add_library(${_target} ${source_list})
 
-add_library(erhe::primitive ALIAS erhe_primitive)
+target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
-target_include_directories(erhe_primitive
-    PUBLIC
-        ${ERHE_INCLUDE_ROOT}
-)
-
-target_link_libraries(erhe_primitive
+target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
         glm::glm
         Microsoft.GSL::GSL
-        TracyClient::TracyClient
-        erhe::gl
-        erhe::log
+        erhe_geometry
+        erhe_gl
+        erhe_log
 )
 
 foreach(source IN LISTS source_list)

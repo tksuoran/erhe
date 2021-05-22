@@ -2,18 +2,17 @@
 #include "Tracy.hpp"
 #include "erhe/log/log.hpp"
 #include "erhe/toolkit/file.hpp"
-
-#include <cassert>
+#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::graphics
 {
 
-erhe::log::Log::Category log_shader_monitor(erhe::log::Log::Color::CYAN, erhe::log::Log::Color::GRAY, erhe::log::Log::Level::LEVEL_WARN);
+erhe::log::Category log_shader_monitor(erhe::log::Color::CYAN, erhe::log::Color::GRAY, erhe::log::Level::LEVEL_WARN);
 
 using std::string;
 
 Shader_monitor::Shader_monitor()
-    : erhe::components::Component{"Shader_monitor"}
+    : erhe::components::Component{c_name}
     , m_run{false}
 {
 }

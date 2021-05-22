@@ -1,5 +1,11 @@
 #include "erhe/graphics/png_loader.hpp"
 #include "erhe/graphics/log.hpp"
+#include "erhe/graphics/texture.hpp"
+#include "erhe/toolkit/verify.hpp"
+
+#include <mango/mango.hpp>
+
+#include <filesystem>
 #include <fstream>
 
 namespace erhe::graphics
@@ -8,16 +14,16 @@ namespace erhe::graphics
 using Format = mango::Format;
 
 auto from_mango(const mango::Format& format)
--> gl::Internal_format
+-> Image_format
 {
     if (format == mango::Format(24, mango::Format::UNORM, mango::Format::RGB,  8, 8, 8, 0))
     {
-        return gl::Internal_format::rgb8;
+        return Image_format::rgb8; // gl::Internal_format::rgb8;
     }
 
     if (format == mango::Format(32, mango::Format::UNORM, mango::Format::RGBA, 8, 8, 8, 8))
     {
-        return gl::Internal_format::rgba8;
+        return Image_format::rgba8; //gl::Internal_format::rgba8;
     }
 
     FATAL("unsupported PNG image color type");
@@ -36,10 +42,22 @@ auto to_mango(gl::Internal_format format)
     FATAL("unsupported PNG image color type");
 }
 
-PNG_loader::~PNG_loader()
+auto to_mango(Image_format format)
+-> mango::Format
 {
-    close();
+    switch (format)
+    {
+        case Image_format::rgb8:  return mango::Format(24, mango::Format::UNORM, mango::Format::RGB,  8, 8, 8, 0);
+        case Image_format::rgba8: return mango::Format(32, mango::Format::UNORM, mango::Format::RGBA, 8, 8, 8, 8);
+        default: break;
+    }
+
+    FATAL("unsupported PNG image color type");
 }
+
+PNG_loader::PNG_loader() = default;
+
+PNG_loader::~PNG_loader() = default;
 
 void PNG_loader::close()
 {
@@ -48,7 +66,7 @@ void PNG_loader::close()
 }
 
 auto PNG_loader::open(const std::filesystem::path& path,
-                      Texture::Create_info&        create_info)
+                      Image_info&                  info)
 -> bool
 {
     m_file = std::make_unique<mango::filesystem::File>(path.string());
@@ -62,14 +80,13 @@ auto PNG_loader::open(const std::filesystem::path& path,
     }
 
     mango::ImageHeader header = m_image_decoder->header();
-
-    create_info.width           = header.width;
-    create_info.height          = header.height;
-    create_info.depth           = header.depth;
-    create_info.level_count     = (header.levels > 0) ? header.levels : 1;
-    create_info.use_mipmaps     = (header.levels > 1);
-    create_info.row_stride      = header.width * header.format.bytes();
-    create_info.internal_format = from_mango(header.format);
+    info.width       = header.width;
+    info.height      = header.height;
+    info.depth       = header.depth;
+    info.level_count = (header.levels > 0) ? header.levels : 1;
+    //info.use_mipmaps     = (header.levels > 1);
+    info.row_stride  = header.width * header.format.bytes();
+    info.format      = from_mango(header.format);
 
     return true;
 }
@@ -85,12 +102,12 @@ auto PNG_loader::load(gsl::span<std::byte> transfer_buffer)
     return status.success;
 }
 
+PNG_writer::PNG_writer() = default;
+
+PNG_writer::~PNG_writer() = default;
 
 auto PNG_writer::write(const std::filesystem::path& path,
-                       gl::Internal_format          internal_format,
-                       int                          width,
-                       int                          height,
-                       int                          row_stride,
+                       const Image_info&            info,
                        gsl::span<std::byte>         data)
 -> bool
 {
@@ -100,7 +117,7 @@ auto PNG_writer::write(const std::filesystem::path& path,
         m_image_encoder.reset();
         return false;
     }
-    mango::Surface surface(width, height, to_mango(internal_format), row_stride, data.data());
+    mango::Surface surface(info.width, info.height, to_mango(info.format), info.row_stride, data.data());
     m_file_stream = std::make_unique<mango::filesystem::FileStream>(path.string(),
                                                                     mango::filesystem::FileStream::OpenMode::WRITE);
     mango::filesystem::FileStream& file_stream = *m_file_stream;

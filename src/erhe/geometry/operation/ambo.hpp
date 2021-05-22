@@ -5,13 +5,14 @@
 namespace erhe::geometry::operation
 {
 
-class Conway_dual_operator
+// Conway ambo operator
+class Ambo
     : public Geometry_operation
 {
 public:
-    Conway_dual_operator(Geometry& src, Geometry& destination, bool post_process = true);
+    Ambo(Geometry& source, Geometry& destination);
 };
 
-auto dual(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+auto ambo(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

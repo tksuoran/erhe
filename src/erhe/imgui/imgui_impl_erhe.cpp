@@ -5,15 +5,14 @@
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/toolkit/math_util.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 using std::shared_ptr;
 using std::unique_ptr;
 using std::make_shared;
 using std::make_unique;
 
-using erhe::log::Log;
-
-Log::Category log_imgui(Log::Color::CYAN, Log::Color::GRAY, Log::Level::LEVEL_INFO);
+erhe::log::Category log_imgui(erhe::log::Color::CYAN, erhe::log::Color::GRAY, erhe::log::Level::LEVEL_INFO);
 
 class Imgui_renderer
 {

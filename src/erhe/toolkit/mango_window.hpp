@@ -4,8 +4,9 @@
 #if defined(ERHE_WINDOW_TOOLKIT_MANGO)
 
 #include "erhe/toolkit/view.hpp"
-#include "erhe/log/log.hpp"
 #include "erhe/gl/dynamic_load.hpp"
+#include "erhe/log/log.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include "mango/window/window.hpp"
 #include "mango/opengl/opengl.hpp"

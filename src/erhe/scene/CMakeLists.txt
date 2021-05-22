@@ -1,3 +1,5 @@
+set(_target "erhe_scene")
+
 set(source_list
     camera.cpp
     camera.hpp
@@ -18,21 +20,16 @@ set(source_list
     viewport.hpp
 )
 
-add_library(erhe_scene ${source_list})
+add_library(${_target} ${source_list})
 
-add_library(erhe::scene ALIAS erhe_scene)
+target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
-target_include_directories(erhe_scene
+target_link_libraries(${_target}
     PUBLIC
-        ${ERHE_INCLUDE_ROOT}
-)
-
-target_link_libraries(erhe_scene
-    PUBLIC
-        erhe::gl
+        erhe_gl
         fmt::fmt
-        Microsoft.GSL::GSL
         glm::glm
+        Microsoft.GSL::GSL
 )
 
 foreach(source IN LISTS source_list)

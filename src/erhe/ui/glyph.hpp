@@ -1,12 +1,11 @@
-#ifndef glyph_hpp_erhe_ui
-#define glyph_hpp_erhe_ui
+#pragma once
 
 #include "Rect.h"
 
 #include "erhe/ui/rectangle.hpp"
 #include "erhe/ui/bitmap.hpp"
 #include "erhe/ui/glyph.hpp"
-#include "erhe/ui/log.hpp"
+#include "erhe/toolkit/verify.hpp"
 #include <string>
 #include <vector>
 
@@ -87,5 +86,3 @@ private:
 };
 
 } // namespace erhe::ui
-
-#endif

@@ -30,8 +30,8 @@ void Node_properties::window(Pointer_context&)
         {
             continue;
         }
-        ImGui::Text("Mesh: %s", mesh->name.c_str());
-        auto* node = mesh->node.get();
+        ImGui::Text("Mesh: %s", mesh->name().c_str());
+        auto* node = mesh->node().get();
         if (node != nullptr)
         {
             glm::mat4 transform = node->world_from_node();

@@ -3,15 +3,15 @@
 namespace erhe::ui
 {
 
-using erhe::log::Log;
+using namespace erhe::log;
 
-Log::Category log_gui_renderer   (Log::Color::GREEN,  Log::Color::GRAY, Log::Level::LEVEL_WARN);
-Log::Category log_render_group   (Log::Color::CYAN,   Log::Color::GRAY, Log::Level::LEVEL_WARN);
-Log::Category log_button         (Log::Color::YELLOW, Log::Color::GRAY, Log::Level::LEVEL_WARN);
-Log::Category log_ninepatch      (Log::Color::YELLOW, Log::Color::GRAY, Log::Level::LEVEL_WARN);
-Log::Category log_ninepatch_style(Log::Color::YELLOW, Log::Color::GRAY, Log::Level::LEVEL_WARN);
-Log::Category log_text_buffer    (Log::Color::GREEN,  Log::Color::GRAY, Log::Level::LEVEL_WARN);
-Log::Category log_font           (Log::Color::YELLOW, Log::Color::GRAY, Log::Level::LEVEL_WARN);
-Log::Category log_layout         (Log::Color::YELLOW, Log::Color::GRAY, Log::Level::LEVEL_WARN);
+Category log_gui_renderer   (Color::GREEN,  Color::GRAY, Level::LEVEL_WARN);
+Category log_render_group   (Color::CYAN,   Color::GRAY, Level::LEVEL_WARN);
+Category log_button         (Color::YELLOW, Color::GRAY, Level::LEVEL_WARN);
+Category log_ninepatch      (Color::YELLOW, Color::GRAY, Level::LEVEL_WARN);
+Category log_ninepatch_style(Color::YELLOW, Color::GRAY, Level::LEVEL_WARN);
+Category log_text_buffer    (Color::GREEN,  Color::GRAY, Level::LEVEL_WARN);
+Category log_font           (Color::YELLOW, Color::GRAY, Level::LEVEL_WARN);
+Category log_layout         (Color::YELLOW, Color::GRAY, Level::LEVEL_WARN);
 
 } // namespace erhe::ui

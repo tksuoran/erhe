@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/geometry/log.hpp"
+#include "erhe/toolkit/verify.hpp"
 #include "Tracy.hpp"
 
 #include <gsl/assert>
@@ -162,7 +162,7 @@ Property_map<Key_type, Value_type>::interpolate(
 
     if (m_descriptor.interpolation_mode == Interpolation_mode::none)
     {
-        log_interpolate.trace("\tinterpolation mode none, skipping this map\n");
+        //log_interpolate.trace("\tinterpolation mode none, skipping this map\n");
         return;
     }
 

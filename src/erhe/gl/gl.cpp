@@ -4,6 +4,7 @@
 //#if !defined(ERHE_WINDOW_TOOLKIT_MANGO)
 #include "erhe/gl/dynamic_load.hpp"
 //#endif
+#include "erhe/toolkit/verify.hpp"
 
 #include <cassert>
 #include <cctype>
@@ -15,12 +16,12 @@
 # include <csignal>
 #endif
 
-using erhe::log::Log;
-
 namespace gl
 {
 
-Log::Category log_gl(Log::Color::YELLOW, Log::Color::GRAY, Log::Level::LEVEL_INFO);
+using namespace erhe::log;
+
+Category log_gl(Color::YELLOW, Color::GRAY, Level::LEVEL_INFO);
 
 static bool enable_error_checking = true;
 

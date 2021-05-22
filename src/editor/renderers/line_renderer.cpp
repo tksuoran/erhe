@@ -14,8 +14,7 @@
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/toolkit/math_util.hpp"
-
-#include "erhe_tracy.hpp"
+#include "erhe/toolkit/tracy_client.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>

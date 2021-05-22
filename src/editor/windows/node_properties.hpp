@@ -16,7 +16,7 @@ class Node_properties
 {
 public:
     static constexpr const char* c_name = "Node_properties";
-    Node_properties() : erhe::components::Component(c_name) {}
+    Node_properties() : erhe::components::Component{c_name} {}
     virtual ~Node_properties() = default;
 
     // Implements Component

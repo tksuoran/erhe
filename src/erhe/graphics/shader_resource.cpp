@@ -1,4 +1,6 @@
 #include "erhe/graphics/shader_resource.hpp"
+#include "erhe/graphics/configuration.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <algorithm>
 
@@ -190,7 +192,7 @@ auto get_type_details(gl::Uniform_type type)
 
         default:
         {
-            FATAL("Bad uniform type {}", c_str(type));
+            FATAL("Bad uniform type");
         }
     }
 }
@@ -340,8 +342,7 @@ auto Shader_resource::c_str(Shader_resource::Precision v)
         case Precision::superp:  return "superp";
         default:
         {
-            //FATAL("Bad uniform precision {}", static_cast<int>(v));
-            return "?";
+            FATAL("Bad uniform precision\n");
         }
     }
 };

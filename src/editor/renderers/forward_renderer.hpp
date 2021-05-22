@@ -84,7 +84,7 @@ public:
 
 private:
     auto select_pipeline      (Pass pass) const -> const erhe::graphics::Pipeline*;
-    auto select_primitive_mode(Pass pass) const -> erhe::primitive::Primitive_geometry::Mode;
+    auto select_primitive_mode(Pass pass) const -> erhe::primitive::Primitive_mode;
 
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Scene_manager>                        m_scene_manager;

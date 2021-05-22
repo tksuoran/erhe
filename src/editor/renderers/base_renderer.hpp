@@ -123,9 +123,9 @@ public:
                               erhe::scene::Viewport viewport)
     -> Buffer_range;
 
-    auto update_draw_indirect_buffer(const Mesh_collection&                    meshes,
-                                     erhe::primitive::Primitive_geometry::Mode mode,
-                                     uint64_t                                  visibility_mask = erhe::scene::Mesh::c_visibility_all)
+    auto update_draw_indirect_buffer(const Mesh_collection&          meshes,
+                                     erhe::primitive::Primitive_mode primitive_mode,
+                                     uint64_t                        visibility_mask = erhe::scene::Mesh::c_visibility_all)
     -> Draw_indirect_buffer_range;
 
     auto programs() -> const std::shared_ptr<Programs>&

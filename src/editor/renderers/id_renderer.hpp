@@ -44,6 +44,7 @@ public:
         bool                               valid               {false};
     };
 
+    static constexpr const char* c_name = "Id_renderer";
     Id_renderer();
 
     virtual ~Id_renderer() = default;

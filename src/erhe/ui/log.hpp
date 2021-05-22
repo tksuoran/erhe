@@ -6,14 +6,14 @@
 namespace erhe::ui
 {
 
-extern erhe::log::Log::Category log_gui_renderer;
-extern erhe::log::Log::Category log_render_group;
-extern erhe::log::Log::Category log_button;
-extern erhe::log::Log::Category log_ninepatch;
-extern erhe::log::Log::Category log_ninepatch_style;
-extern erhe::log::Log::Category log_text_buffer;
-extern erhe::log::Log::Category log_font;
-extern erhe::log::Log::Category log_layout;
+extern erhe::log::Category log_gui_renderer;
+extern erhe::log::Category log_render_group;
+extern erhe::log::Category log_button;
+extern erhe::log::Category log_ninepatch;
+extern erhe::log::Category log_ninepatch_style;
+extern erhe::log::Category log_text_buffer;
+extern erhe::log::Category log_font;
+extern erhe::log::Category log_layout;
 
 } // namespace erhe::ui
 

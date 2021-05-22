@@ -2,15 +2,20 @@
 
 #include "erhe/components/component.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
-#include "erhe/graphics/shader_stages.hpp"
-#include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
+
+#include <filesystem>
+#include <string>
+#include <vector>
+
 
 namespace erhe::graphics
 {
 
+class Sampler;
 class Shader_stages;
+class Shader_monitor;
 
 } // namespace erhe::graphics
 
@@ -68,12 +73,9 @@ class Programs
     : public erhe::components::Component
 {
 public:
-    Programs()
-        : erhe::components::Component{"Programs"}
-    {
-    }
-
-    virtual ~Programs() = default;
+    static constexpr const char* c_name = "Programs";
+    Programs();
+    virtual ~Programs();
 
     // Implements Component
     void connect() override;

@@ -1,4 +1,9 @@
 #include "erhe/geometry/operation/sqrt3_subdivision.hpp"
+#include "erhe/geometry/geometry.hpp"
+
+#include "Tracy.hpp"
+
+#include <fmt/format.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
@@ -23,76 +28,49 @@ Sqrt3_subdivision::Sqrt3_subdivision(Geometry& src, Geometry& destination)
 {
     ZoneScoped;
 
+    source.for_each_point([&](auto& i)
     {
-        ZoneScopedN("Points");
-
-        for (Point_id src_point_id = 0,
-             point_end = source.point_count();
-             src_point_id < point_end;
-             ++src_point_id)
-        {
-            Point& src_point        = source.points[src_point_id];
-            float  alpha            = (4.0f - 2.0f * std::cos(2.0f * glm::pi<float>() / src_point.corner_count)) / 9.0f;
-            float  alpha_per_n      = alpha / static_cast<float>(src_point.corner_count);
-            float  alpha_complement = 1.0f - alpha;
-
-            Point_id new_point = make_new_point_from_point(alpha_complement, src_point_id);
-            add_point_ring(new_point, alpha_per_n, src_point_id);
-        }
-    }
+        float    alpha            = (4.0f - 2.0f * std::cos(2.0f * glm::pi<float>() / i.point.corner_count)) / 9.0f;
+        float    alpha_per_n      = alpha / static_cast<float>(i.point.corner_count);
+        float    alpha_complement = 1.0f - alpha;
+        Point_id new_point        = make_new_point_from_point(alpha_complement, i.point_id);
+        add_point_ring(new_point, alpha_per_n, i.point_id);
+    });
 
     make_polygon_centroids();
 
+    source.for_each_polygon([&](auto& i)
     {
-        ZoneScopedN("Subdivide");
-
-        for (Polygon_id src_polygon_id = 0,
-             polygon_end = source.polygon_count();
-             src_polygon_id < polygon_end;
-             ++src_polygon_id)
+        i.polygon.for_each_corner_neighborhood(source, [&](auto& j)
         {
-            Polygon& src_polygon = source.polygons[src_polygon_id];
+            Point_id src_point_id      = j.corner.point_id;
+            Point_id src_next_point_id = j.next_corner.point_id;
 
-            for (uint32_t i = 0; i < src_polygon.corner_count; ++i)
+            auto edge_opt = source.find_edge(src_point_id, src_next_point_id);
+            if (!edge_opt.has_value())
             {
-                Polygon_corner_id src_polygon_corner_id      = src_polygon.first_polygon_corner_id + i;
-                Polygon_corner_id src_polygon_next_corner_id = src_polygon.first_polygon_corner_id + (i + 1) % src_polygon.corner_count;
-                Corner_id         src_corner_id              = source.polygon_corners[src_polygon_corner_id];
-                Corner_id         src_next_corner_id         = source.polygon_corners[src_polygon_next_corner_id];
-                Corner&           src_corner                 = source.corners[src_corner_id];
-                Corner&           src_next_corner            = source.corners[src_next_corner_id];
-                Point_id          src_point_id               = src_corner.point_id;
-                Point_id          src_next_point_id          = src_next_corner.point_id;
-
-                auto edge_opt = source.find_edge(src_point_id, src_next_point_id);
-                if (!edge_opt.has_value())
-                {
-                    continue;
-                }
-                const auto& edge = edge_opt.value();
-                Polygon_id opposite_polygon_id = src_polygon_id;
-                for (Edge_polygon_id edge_polygon_id = edge.first_edge_polygon_id,
-                     end = edge.first_edge_polygon_id + edge.polygon_count;
-                     edge_polygon_id < end;
-                     ++edge_polygon_id)
-                {
-                    opposite_polygon_id = source.edge_polygons[edge_polygon_id];
-                    if (opposite_polygon_id != src_polygon_id)
-                    {
-                        break;
-                    }
-                }
-                if (opposite_polygon_id == src_polygon_id)
-                {
-                    continue;
-                }
-                Polygon_id new_polygon_id = make_new_polygon_from_polygon(src_polygon_id);
-                make_new_corner_from_polygon_centroid(new_polygon_id, src_polygon_id);
-                make_new_corner_from_corner(new_polygon_id, src_corner_id);
-                make_new_corner_from_polygon_centroid(new_polygon_id, opposite_polygon_id);
+                return;
             }
-        }
-    }
+            auto& edge = edge_opt.value();
+            Polygon_id opposite_polygon_id = i.polygon_id;
+            edge.for_each_polygon(source, [&](auto& k)
+            {
+                if (k.polygon_id != i.polygon_id)
+                {
+                    opposite_polygon_id = k.polygon_id;
+                    return k.break_iteration();
+                }
+            });
+            if (opposite_polygon_id == i.polygon_id)
+            {
+                return;
+            }
+            Polygon_id new_polygon_id = make_new_polygon_from_polygon(i.polygon_id);
+            make_new_corner_from_polygon_centroid(new_polygon_id, i.polygon_id);
+            make_new_corner_from_corner          (new_polygon_id, j.corner_id);
+            make_new_corner_from_polygon_centroid(new_polygon_id, opposite_polygon_id);
+        });
+    });
 
     post_processing();
 }

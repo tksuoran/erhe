@@ -30,6 +30,7 @@ private:
     struct Source_entry
     {
         std::shared_ptr<erhe::scene::Mesh>      mesh;
+        std::shared_ptr<erhe::scene::Node>      node;
         std::vector<erhe::primitive::Primitive> primitives;
     };
     Context                                              m_context;

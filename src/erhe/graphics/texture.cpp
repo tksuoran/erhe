@@ -2,8 +2,9 @@
 #include "erhe/gl/gl.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/toolkit/verify.hpp"
+
 #include <algorithm>
-#include <stdexcept>
 
 namespace erhe::graphics
 {
@@ -258,9 +259,9 @@ auto Texture::size_level_count(int size)
     return level_count;
 }
 
-void Texture::Create_info::calculate_level_count()
+void Texture_create_info::calculate_level_count()
 {
-    auto dimensions = mipmap_dimensions(target);
+    auto dimensions = Texture::mipmap_dimensions(target);
 
     if (dimensions >= 1)
     {
@@ -299,9 +300,9 @@ void Texture::Create_info::calculate_level_count()
 
     if (use_mipmaps)
     {
-        auto x_level_count = size_level_count(width);
-        auto y_level_count = size_level_count(height);
-        auto z_level_count = size_level_count(depth);
+        auto x_level_count = Texture::size_level_count(width);
+        auto y_level_count = Texture::size_level_count(height);
+        auto z_level_count = Texture::size_level_count(depth);
         level_count = std::max(std::max(x_level_count, y_level_count), z_level_count);
     }
     else
@@ -310,12 +311,12 @@ void Texture::Create_info::calculate_level_count()
     }
 }
 
-Texture::Create_info::Create_info(gl::Texture_target  target,
-                                  gl::Internal_format internal_format,
-                                  bool                use_mipmaps,
-                                  int                 width,
-                                  int                 height,
-                                  int                 depth
+Texture_create_info::Texture_create_info(gl::Texture_target  target,
+                                         gl::Internal_format internal_format,
+                                         bool                use_mipmaps,
+                                         int                 width,
+                                         int                 height,
+                                         int                 depth
 )
     : target         {target}
     , internal_format{internal_format}

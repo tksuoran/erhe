@@ -1,9 +1,11 @@
 #include "erhe/geometry/shapes/sphere.hpp"
 #include "erhe/geometry/log.hpp"
 #include "Tracy.hpp"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 #include <gsl/assert>
+
 #include <map>
 #include <vector>
 
@@ -16,6 +18,13 @@ using glm::vec4;
 
 namespace
 {
+
+// Using geometric centroids, centroids are floating above the polygon.
+// The distance from the polygon is more when using small subdivision.
+constexpr const bool use_geometric_centroids = false;
+
+// Using flat centroids ensures centroids are on polygon.
+constexpr const bool use_flat_centroids      = true;
 
 struct Sphere_builder
 {
@@ -228,10 +237,10 @@ struct Sphere_builder
                 int stack       = -stack_division;
                 int stack_base0 = stack + stack_division;
 
-                //double rel_slice = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
-                //double rel_stack = 1.0 - (0.5 / (static_cast<double>(stack) + 1));
+                double rel_slice = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
+                double rel_stack = 1.0 - (0.5 / (static_cast<double>(stack) + 1));
 
-                //Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
+                Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
                 Polygon_id polygon_id  = geometry.make_polygon();
                 make_corner(polygon_id, next_slice, stack_base0);
                 make_corner(polygon_id, slice,      stack_base0);
@@ -259,8 +268,11 @@ struct Sphere_builder
                 vec2 average_texcoord = (uv1 + uv2) / 2.0f;
                 corner_texcoords->put(tip_corner_id, average_texcoord);
 
-                //polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
-                //polygon_normals->put(polygon_id, point_normals->get(centroid_id));
+                if constexpr (use_geometric_centroids)
+                {
+                    polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
+                }
+                polygon_normals->put(polygon_id, point_normals->get(centroid_id));
             }
         }
 
@@ -271,22 +283,25 @@ struct Sphere_builder
             int stack_base0      = stack + stack_division;
             int next_stack_base0 = stack_base0 + 1;
 
-            //double rel_stack = (static_cast<double>(stack) + 0.5) / (static_cast<double>(stack_division) + 1);
+            double rel_stack = (static_cast<double>(stack) + 0.5) / (static_cast<double>(stack_division) + 1);
 
             for (slice = 0; slice < slice_count; ++slice)
             {
                 int    next_slice = (slice + 1);
-                //double rel_slice  = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
+                double rel_slice  = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
 
-                //Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
+                Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
                 Polygon_id polygon_id = geometry.make_polygon();
                 make_corner(polygon_id, next_slice, next_stack_base0);
                 make_corner(polygon_id, slice, next_stack_base0);
                 make_corner(polygon_id, slice, stack_base0);
                 make_corner(polygon_id, next_slice, stack_base0);
 
-                //polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
-                //polygon_normals->put(polygon_id, point_normals->get(centroid_id));
+                if constexpr (use_geometric_centroids)
+                {
+                    polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
+                }
+                polygon_normals->put(polygon_id, point_normals->get(centroid_id));
             }
         }
 
@@ -298,9 +313,9 @@ struct Sphere_builder
             int stack       = stack_division;
             int stack_base0 = stack + stack_division;
 
-            //double rel_slice = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
-            //double rel_stack = 1.0 - (0.5 / (static_cast<double>(stack) + 1));
-            //Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
+            double rel_slice = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
+            double rel_stack = 1.0 - (0.5 / (static_cast<double>(stack) + 1));
+            Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
             Polygon_id polygon_id    = geometry.make_polygon();
             Corner_id  tip_corner_id = make_corner(polygon_id, slice, stack_base0_top);
             make_corner(polygon_id, slice,      stack_base0);
@@ -329,12 +344,20 @@ struct Sphere_builder
             vec2 average_texcoord = (uv1 + uv2) / 2.0f;
             corner_texcoords->put(tip_corner_id, average_texcoord);
 
-            //polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
-            //polygon_normals->put(polygon_id, point_normals->get(centroid_id));
+            if constexpr (use_geometric_centroids)
+            {
+                polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
+            }
+            polygon_normals->put(polygon_id, point_normals->get(centroid_id));
         }
 
         geometry.make_point_corners();
         geometry.build_edges();
+        if constexpr (use_flat_centroids)
+        {
+            geometry.compute_polygon_centroids();
+        }
+        geometry.promise_has_polygon_normals();
         geometry.promise_has_normals();
         geometry.promise_has_tangents();
         geometry.promise_has_bitangents();

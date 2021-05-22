@@ -15,20 +15,17 @@ class Fly_camera_tool
 {
 public:
     static constexpr const char* c_name = "Fly_camera_tool";
-    Fly_camera_tool() : erhe::components::Component(c_name) {}
+    Fly_camera_tool() : erhe::components::Component{c_name} {}
     virtual ~Fly_camera_tool() = default;
 
     // Implements Component
     void connect() override;
     void initialize_component() override;
-
     auto description() -> const char* override { return c_name; }
 
     // Tool
     auto update(Pointer_context& pointer_context) -> bool override;
-
     auto state() const -> State override;
-
     void cancel_ready() override;
 
     // Window

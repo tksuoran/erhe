@@ -10,8 +10,6 @@ set(source_list
     operations/mesh_operation.hpp
     operations/operation_stack.cpp
     operations/operation_stack.hpp
-    operations/remove_operation.cpp
-    operations/remove_operation.hpp
     operations/selection_change_operation.cpp
     operations/selection_change_operation.hpp
 
@@ -39,10 +37,16 @@ set(source_list
     renderers/text_renderer.cpp
     renderers/text_renderer.hpp
 
+    scene/brush.cpp
+    scene/brush.hpp
     scene/controller.cpp
     scene/controller.hpp
+    scene/debug_draw.cpp
+    scene/debug_draw.hpp
     scene/frame_controller.cpp
     scene/frame_controller.hpp
+    scene/node_physics.cpp
+    scene/node_physics.hpp
     scene/scene_manager.cpp
     scene/scene_manager.hpp
 
@@ -54,6 +58,8 @@ set(source_list
     tools/hover_tool.hpp
     tools/pointer_context.cpp
     tools/pointer_context.hpp
+    tools/physics_tool.cpp
+    tools/physics_tool.hpp
     tools/selection_tool.cpp
     tools/selection_tool.hpp
     tools/trs_tool.cpp
@@ -75,6 +81,8 @@ set(source_list
     windows/node_properties.hpp
     windows/operations.cpp
     windows/operations.hpp
+    windows/physics_window.cpp
+    windows/physics_window.hpp
     windows/viewport_config.cpp
     windows/viewport_config.hpp
     windows/viewport_window.cpp
@@ -86,7 +94,6 @@ set(source_list
     application.hpp
     editor.cpp
     editor.hpp
-    erhe_tracy.hpp
     imgui_demo.cpp
     imgui_demo.hpp
     log.cpp
@@ -127,19 +134,20 @@ add_executable(editor ${source_list})
 target_link_libraries(
     editor
     PRIVATE
-    erhe::components
-    erhe::geometry
-    erhe::gl
-    erhe::graphics
-    erhe::graphics_experimental
-    erhe::imgui
-    erhe::log
-    erhe::primitive
-    erhe::scene
-    erhe::toolkit
-    erhe::ui
+    erhe_components
+    erhe_geometry
+    erhe_gl
+    erhe_graphics
+    erhe_graphics_experimental
+    erhe_imgui
+    erhe_log
+    erhe_physics
+    erhe_primitive
+    erhe_scene
+    erhe_toolkit
+    erhe_ui
     nlohmann_json::nlohmann_json
-    TracyClient::TracyClient
+    TracyClient
 )
 
 target_include_directories(editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

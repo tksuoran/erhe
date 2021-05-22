@@ -1,10 +1,14 @@
 #pragma once
 
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/geometry/property_map.hpp"
-#include "erhe/geometry/property_map_collection.hpp"
+#include "erhe/geometry/types.hpp"
+
 #include <set>
 #include <vector>
+
+namespace erhe::geometry
+{
+    class Geometry;
+}
 
 namespace erhe::geometry::operation
 {

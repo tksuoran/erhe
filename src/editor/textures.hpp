@@ -6,8 +6,8 @@
 
 namespace erhe::graphics {
     class Texture;
-    class ImageTransfer;
-} // namespace erhe::graphics
+    class Image_transfer;
+}
 
 namespace editor {
 
@@ -30,7 +30,7 @@ public:
     std::shared_ptr<erhe::graphics::Texture> background_texture;
 
 private:
-    std::shared_ptr<erhe::graphics::ImageTransfer> m_image_transfer;
+    std::shared_ptr<erhe::graphics::Image_transfer> m_image_transfer;
 };
 
 }

@@ -13,6 +13,7 @@
 #include "tools/fly_camera_tool.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/hover_tool.hpp"
+#include "tools/physics_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/trs_tool.hpp"
 
@@ -23,11 +24,13 @@
 #include "windows/mesh_properties.hpp"
 #include "windows/node_properties.hpp"
 #include "windows/operations.hpp"
+#include "windows/physics_window.hpp"
 #include "windows/viewport_config.hpp"
 #include "windows/viewport_window.hpp"
 
 #include "editor.hpp"
 
+#include "scene/debug_draw.hpp"
 #include "scene/scene_manager.hpp"
 
 #include "imgui_demo.hpp"
@@ -36,13 +39,10 @@
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/png_loader.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
-
 #include "erhe/graphics_experimental/image_transfer.hpp"
 #include "erhe/graphics_experimental/shader_monitor.hpp"
-
+#include "erhe/toolkit/tracy_client.hpp"
 #include "erhe/toolkit/window.hpp"
-
-#include "erhe_tracy.hpp"
 
 #if defined(ERHE_WINDOW_TOOLKIT_GLFW)
 #   include <GLFW/glfw3.h>
@@ -150,7 +150,7 @@ auto Application::create_gl_window()
 
 #if defined(ERHE_WINDOW_TOOLKIT_GLFW)
     erhe::graphics::PNG_loader loader;
-    erhe::graphics::Texture::Create_info create_info;
+    erhe::graphics::Image_info image_info;
     std::filesystem::path current_path = std::filesystem::current_path();
     log_startup.trace("current directory is {}\n", current_path.string());
     std::filesystem::path path = current_path / "res" / "images" / "gl32w.png";
@@ -158,19 +158,19 @@ auto Application::create_gl_window()
     bool is_regular_file = std::filesystem::is_regular_file(path);
     if (exists && is_regular_file)
     {
-        bool ok = loader.open(path, create_info);
+        bool ok = loader.open(path, image_info);
         if (ok)
         {
             std::vector<std::byte> data;
-            data.resize(create_info.width * create_info.height * 4);
+            data.resize(image_info.width * image_info.height * 4);
             auto span = gsl::span<std::byte>(data.data(), data.size());
             ok = loader.load(span);
             loader.close();
             if (ok)
             {
                 GLFWimage icons[1];
-                icons[0].width  = create_info.width;
-                icons[0].height = create_info.height;
+                icons[0].width  = image_info.width;
+                icons[0].height = image_info.height;
                 icons[0].pixels = reinterpret_cast<unsigned char*>(span.data());
                 glfwSetWindowIcon(reinterpret_cast<GLFWwindow*>(m_context_window->get_glfw_window()), 1, &icons[0]);
             }
@@ -238,6 +238,9 @@ auto Application::launch_component_initialization()
     m_components.add(make_shared<Operations          >());
     m_components.add(make_shared<Grid_tool           >());
     m_components.add(make_shared<Viewport_config     >());
+    m_components.add(make_shared<Physics_window      >());
+    m_components.add(make_shared<Debug_draw          >());
+    m_components.add(make_shared<Physics_tool        >());
 
 
     // if (false)

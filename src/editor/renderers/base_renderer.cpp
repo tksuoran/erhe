@@ -17,10 +17,9 @@
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/viewport.hpp"
 #include "erhe/toolkit/math_util.hpp"
+#include "erhe/toolkit/tracy_client.hpp"
 #include "erhe/ui/font.hpp"
 #include "erhe/ui/rectangle.hpp"
-
-#include "erhe_tracy.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -105,7 +104,9 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection& meshes,
         {
             continue;
         }
-        mesh->node->update(); // TODO cache
+        auto node = mesh->node();
+        VERIFY(node);
+        node->update(); // TODO cache
 
         size_t mesh_primitive_index{0};
         for (auto& primitive : mesh->primitives)
@@ -126,7 +127,7 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection& meshes,
             vec3 id_offset_vec3 = vec3_from_uint(m_id_offset);
             vec3 id_offset_vec4 = vec4(id_offset_vec3, 0.0f);
 
-            mat4     world_from_node = mesh->node->world_from_node();
+            mat4     world_from_node = node->world_from_node();
             uint32_t material_index  = (primitive.material != nullptr) ? static_cast<uint32_t>(primitive.material->index) : 0u;
             uint32_t extra2          = 0;
             uint32_t extra3          = 0;
@@ -196,15 +197,18 @@ auto Base_renderer::update_light_buffer(Light_collection& lights,
 
         light->update(light_texture_viewport);
 
-        glm::vec4 position  = light->node()->world_from_node() * vec4(0.0f, 0.0f, 0.0f, 1.0f);
-        glm::vec4 direction = light->node()->world_from_node() * vec4(0.0f, 0.0f, 1.0f, 0.0f);
+        auto node = light->node();
+        VERIFY(node);
+
+        glm::vec4 position  = node->world_from_node() * vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        glm::vec4 direction = node->world_from_node() * vec4(0.0f, 0.0f, 1.0f, 0.0f);
         glm::vec4 radiance  = vec4(light->intensity * light->color, light->intensity);
         direction = normalize(direction);
         float inner_spot_cos = std::cos(light->inner_spot_angle * 0.5f);
         float outer_spot_cos = std::cos(light->outer_spot_angle * 0.5f);
-        position.w  = inner_spot_cos;
+        position .w = inner_spot_cos;
         direction.w = outer_spot_cos;
-        radiance.w  = light->range;
+        radiance .w = light->range;
         write(light_gpu_data, m_light_writer.write_offset + offsets.light.texture_from_world,           as_span(light->texture_from_world()));
         write(light_gpu_data, m_light_writer.write_offset + offsets.light.position_and_inner_spot_cos,  as_span(position));
         write(light_gpu_data, m_light_writer.write_offset + offsets.light.direction_and_outer_spot_cos, as_span(direction));
@@ -286,9 +290,9 @@ auto Base_renderer::update_camera_buffer(ICamera& camera,
 }
 
 
-auto Base_renderer::update_draw_indirect_buffer(const Mesh_collection&   meshes,
-                                                Primitive_geometry::Mode mode,
-                                                uint64_t                 visibility_mask)
+auto Base_renderer::update_draw_indirect_buffer(const Mesh_collection& meshes,
+                                                Primitive_mode         primitive_mode,
+                                                uint64_t               visibility_mask)
 -> Base_renderer::Draw_indirect_buffer_range
 {
     ZoneScoped;
@@ -307,7 +311,7 @@ auto Base_renderer::update_draw_indirect_buffer(const Mesh_collection&   meshes,
         for (auto& primitive : mesh->primitives)
         {
             auto* primitive_geometry = primitive.primitive_geometry.get();
-            auto index_range = primitive_geometry->index_range(mode);
+            auto index_range = primitive_geometry->index_range(primitive_mode);
             if (index_range.index_count == 0)
             {
                 continue;

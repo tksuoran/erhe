@@ -4,6 +4,7 @@
 
 #include "erhe/graphics/log.hpp"
 #include "erhe/graphics/vertex_format.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <fmt/format.h>
 
@@ -97,10 +98,10 @@ void debug_buffer(gl::Buffer_target target, GLint buffer, GLenum index_type)
 
                 for (size_t i = 0; (i < count) && (i < 16); ++i)
                 {
-                    log_buffer.log_ni(Log::Level::LEVEL_TRACE, "{} ", data[i]);
+                    log_buffer.log_ni(log::Level::LEVEL_TRACE, "{} ", data[i]);
                 }
 
-                log_buffer.log_ni(Log::Level::LEVEL_TRACE, "\n");
+                log_buffer.log_ni(log::Level::LEVEL_TRACE, "\n");
             }
             break;
 
@@ -112,10 +113,10 @@ void debug_buffer(gl::Buffer_target target, GLint buffer, GLenum index_type)
                 gl::get_buffer_sub_data(target, 0, count * sizeof(uint8_t), &data[0]);
                 for (size_t i = 0; i < count && i < 16; ++i)
                 {
-                    log_buffer.log_ni(Log::Level::LEVEL_TRACE, "{} ", data[i]);
+                    log_buffer.log_ni(log::Level::LEVEL_TRACE, "{} ", data[i]);
                 }
 
-                log_buffer.log_ni(Log::Level::LEVEL_TRACE, "\n");
+                log_buffer.log_ni(log::Level::LEVEL_TRACE, "\n");
             }
             break;
 
@@ -127,10 +128,10 @@ void debug_buffer(gl::Buffer_target target, GLint buffer, GLenum index_type)
                 gl::get_buffer_sub_data(target, 0, count * sizeof(uint16_t), &data[0]);
                 for (size_t i = 0; (i < count) && (i < 16); ++i)
                 {
-                    log_buffer.log_ni(Log::Level::LEVEL_TRACE, "{} ", data[i]);
+                    log_buffer.log_ni(log::Level::LEVEL_TRACE, "{} ", data[i]);
                 }
 
-                log_buffer.log_ni(Log::Level::LEVEL_TRACE, "\n");
+                log_buffer.log_ni(log::Level::LEVEL_TRACE, "\n");
             }
             break;
 
@@ -142,10 +143,10 @@ void debug_buffer(gl::Buffer_target target, GLint buffer, GLenum index_type)
                 gl::get_buffer_sub_data(target, 0, count * sizeof(uint32_t), &data[0]);
                 for (size_t i = 0; (i < count) && (i < 16); ++i)
                 {
-                    log_buffer.log_ni(Log::Level::LEVEL_TRACE, "{} ", data[i]);
+                    log_buffer.log_ni(log::Level::LEVEL_TRACE, "{} ", data[i]);
                 }
 
-                log_buffer.log_ni(Log::Level::LEVEL_TRACE, "\n");
+                log_buffer.log_ni(log::Level::LEVEL_TRACE, "\n");
             }
             break;
 

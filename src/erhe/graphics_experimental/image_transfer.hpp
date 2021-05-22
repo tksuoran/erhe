@@ -11,7 +11,7 @@ namespace erhe::graphics
 
 class Buffer;
 
-class ImageTransfer
+class Image_transfer
     : public erhe::components::Component
 {
 public:
@@ -41,12 +41,9 @@ public:
         gl::Pixel_type       type           {gl::Pixel_type::unsigned_byte};
     };
 
-    ImageTransfer()
-        : erhe::components::Component{"erhe::graphics::ImageTransfer"}
-    {
-    }
-
-    virtual ~ImageTransfer() = default;
+    static constexpr const char* c_name = "erhe::graphics::ImageTransfer";
+    Image_transfer() : erhe::components::Component{c_name} {}
+    virtual ~Image_transfer() = default;
 
     auto get_slot()
     -> Slot&

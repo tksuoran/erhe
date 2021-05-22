@@ -1,4 +1,6 @@
 #include "erhe/log/log.hpp"
+#include "erhe/toolkit/verify.hpp"
+
 #include <cassert>
 #include <cstdarg>
 #include <cstdio>
@@ -102,7 +104,7 @@ void Log::indent(int indent_amount)
     s_indent += indent_amount;
 }
 
-void Log::Category::write(bool indent, int level, const char* format, fmt::format_args args)
+void Category::write(bool indent, int level, const char* format, fmt::format_args args)
 {                       
     if (level < m_level)
     {
@@ -114,7 +116,7 @@ void Log::Category::write(bool indent, int level, const char* format, fmt::forma
     write(indent, text);
 }
 
-void Log::Category::write(bool indent, int level, const std::string& text)
+void Category::write(bool indent, int level, const std::string& text)
 {
     if (level < m_level)
     {
@@ -124,10 +126,10 @@ void Log::Category::write(bool indent, int level, const std::string& text)
     write(indent, text);
 }
 
-void Log::Category::write(bool indent, const std::string& text)
+void Category::write(bool indent, const std::string& text)
 {
     // Log to console
-    if (print_color())
+    if (Log::print_color())
     {
         const char* p;
         const char* span;
@@ -137,7 +139,7 @@ void Log::Category::write(bool indent, const std::string& text)
         {
             case Colorizer::default_:
             {
-                set_text_color(m_color[0]);
+                Log::set_text_color(m_color[0]);
                 p = span = text.data();
                 span_len = 0;
                 char prev = 0;
@@ -152,7 +154,7 @@ void Log::Category::write(bool indent, const std::string& text)
                             //fflush(stdout);
                         }
 
-                        for (int i = 0; i < s_indent; ++i)
+                        for (int i = 0; i < Log::s_indent; ++i)
                         {
                             putc(' ', stdout);
                         }
@@ -169,7 +171,7 @@ void Log::Category::write(bool indent, const std::string& text)
                         ++span_len;
                         span = p;
                         span_len = 0;
-                        set_text_color(m_color[1]);
+                        Log::set_text_color(m_color[1]);
                     }
                     else if (c == ')')
                     {
@@ -178,7 +180,7 @@ void Log::Category::write(bool indent, const std::string& text)
                             fwrite(span, 1, span_len, stdout);
                             //fflush(stdout);
                         }
-                        set_text_color(m_color[0]);
+                        Log::set_text_color(m_color[0]);
                         span = p;
                         ++p;
                         span_len = 1;
@@ -197,14 +199,14 @@ void Log::Category::write(bool indent, const std::string& text)
                         span = p;
                         ++p;
                         span_len = 1;
-                        set_text_color(m_color[0]);
+                        Log::set_text_color(m_color[0]);
                         m_newline = true;
                     }
                     else if (c == 0)
                     {
                         fputs(span, stdout);
                         //fflush(stdout);
-                        set_text_color(m_color[1]);
+                        Log::set_text_color(m_color[1]);
                         break;
                     }
                     else
@@ -217,9 +219,9 @@ void Log::Category::write(bool indent, const std::string& text)
                 break;
             }
 
-            case Log::Colorizer::glsl:
+            case Colorizer::glsl:
             {
-                set_text_color(m_color[0]);
+                Log::set_text_color(m_color[0]);
                 p = span = text.data();
                 span_len = 1;
                 for (;;)
@@ -228,7 +230,7 @@ void Log::Category::write(bool indent, const std::string& text)
 
                     if ((c != '\0') && m_newline && indent)
                     {
-                        for (int i = 0; i < s_indent; ++i)
+                        for (int i = 0; i < Log::s_indent; ++i)
                         {
                             putc(' ', stdout);
                         }
@@ -242,7 +244,7 @@ void Log::Category::write(bool indent, const std::string& text)
                         //fflush(stdout);
                         span = p;
                         span_len = 1;
-                        set_text_color(m_color[1]);
+                        Log::set_text_color(m_color[1]);
                     }
                     else if (c == '\n')
                     {
@@ -250,14 +252,14 @@ void Log::Category::write(bool indent, const std::string& text)
                         //fflush(stdout);
                         span = p;
                         span_len = 1;
-                        set_text_color(m_color[0]);
+                        Log::set_text_color(m_color[0]);
                         m_newline = true;
                     }
                     else if (c == 0)
                     {
                         fputs(span, stdout);
                         //fflush(stdout);
-                        set_text_color(m_color[1]);
+                        Log::set_text_color(m_color[1]);
                         break;
                     }
                     else
@@ -273,7 +275,7 @@ void Log::Category::write(bool indent, const std::string& text)
                 FATAL("Bad log colorizer");
             }
         }
-        set_text_color(Log::Color::GRAY);
+        Log::set_text_color(Color::GRAY);
     }
 
     // Log to file

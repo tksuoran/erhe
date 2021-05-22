@@ -3,8 +3,8 @@
 namespace erhe::components
 {
 
-using erhe::log::Log;
+using namespace erhe::log;
 
-Log::Category log_components(Log::Color::WHITE, Log::Color::GRAY, Log::Level::LEVEL_INFO);
+Category log_components(Color::WHITE, Color::GRAY, Level::LEVEL_INFO);
 
 } // namespace erhe::components

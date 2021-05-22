@@ -1,7 +1,11 @@
 #include "erhe/geometry/shapes/cone.hpp"
+#include "erhe/geometry/log.hpp"
+#include "erhe/log/log_glm.hpp"
+
 #include "Tracy.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
+
 #include <map>
 #include <vector>
 
@@ -11,6 +15,16 @@ namespace erhe::geometry::shapes
 using glm::vec2;
 using glm::vec3;
 using glm::vec4;
+
+// Using geometric centroids, centroids are floating above the polygon.
+// The distance from the polygon is more when using small subdivision.
+
+// Note that cylinder requires use_geometric_centroids at least during
+// generation, so do not turn this to false.
+constexpr const bool use_geometric_centroids = true;
+
+// Using flat centroids ensures centroids are on polygon.
+constexpr const bool use_flat_centroids      = true;
 
 // Stack numbering example
 // with stackDivision = 2
@@ -313,7 +327,11 @@ struct Conical_frustum_builder
                 corner_texcoords->put(tip_corner_id, average_texcoord);
 
                 Point_id centroid_id = cone_point(rel_slice_centroid, rel_stack_centroid);
-                polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
+                
+                if constexpr (use_geometric_centroids)
+                {
+                    polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
+                }
                 polygon_normals->put(polygon_id, point_normals->get(centroid_id));
             }
         }
@@ -323,7 +341,10 @@ struct Conical_frustum_builder
             {
                 //log_cone.trace("Bottom - flat polygon\n");
                 Polygon_id polygon_id = geometry.make_polygon();
-                polygon_centroids->put(polygon_id, vec3(static_cast<float>(min_x), 0.0f, 0.0f));
+                if constexpr (use_geometric_centroids)
+                {
+                    polygon_centroids->put(polygon_id, vec3(static_cast<float>(min_x), 0.0f, 0.0f));
+                }
                 polygon_normals->put(polygon_id, vec3(-1.0f, 0.0f, 0.0f));
 
                 for (int slice = 0; slice < slice_count; ++slice)
@@ -366,7 +387,10 @@ struct Conical_frustum_builder
                 make_corner(polygon_id, slice + 1, stack);
 
                 Point_id centroid_id = cone_point(rel_slice_centroid, rel_stack_centroid);
-                polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
+                if constexpr (use_geometric_centroids)
+                {
+                    polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
+                }
                 polygon_normals->put(polygon_id, point_normals->get(centroid_id));
             }
         }
@@ -412,7 +436,10 @@ struct Conical_frustum_builder
                 corner_texcoords->put(tip_corner_id, average_texcoord);
 
                 Point_id centroid_id = cone_point(rel_slice_centroid, rel_stack_centroid);
-                polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
+                if constexpr (use_geometric_centroids)
+                {
+                    polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
+                }
                 polygon_normals->put(polygon_id, point_normals->get(centroid_id));
             }
         }
@@ -422,7 +449,10 @@ struct Conical_frustum_builder
             {
                 log_cone.trace("Top - flat polygon\n");
                 Polygon_id polygon_id = geometry.make_polygon();
-                polygon_centroids->put(polygon_id, vec3(static_cast<float>(max_x), 0.0f, 0.0f));
+                if constexpr (use_geometric_centroids)
+                {
+                    polygon_centroids->put(polygon_id, vec3(static_cast<float>(max_x), 0.0f, 0.0f));
+                }
                 polygon_normals->put(polygon_id, vec3(1.0f, 0.0f, 0.0f));
 
                 for (int slice = 0; slice < slice_count; ++slice)
@@ -445,6 +475,12 @@ struct Conical_frustum_builder
         }
         geometry.make_point_corners();
         geometry.build_edges();
+        geometry.promise_has_polygon_normals();
+        if constexpr (use_flat_centroids)
+        {
+            geometry.compute_polygon_centroids();
+        }
+        geometry.promise_has_polygon_centroids();
         geometry.promise_has_normals();
         geometry.promise_has_tangents();
         geometry.promise_has_bitangents();

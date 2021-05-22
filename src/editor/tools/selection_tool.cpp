@@ -50,8 +50,8 @@ void Selection_tool::window(Pointer_context&)
         {
             continue;
         }
-        ImGui::Text("Mesh: %s", mesh->name.c_str());
-        auto* node = mesh->node.get();
+        ImGui::Text("Mesh: %s", mesh->name().c_str());
+        auto* node = mesh->node().get();
         if (node != nullptr)
         {
             ImGui::Text("Node: %s", node->name.c_str());
@@ -185,12 +185,12 @@ auto Selection_tool::add_to_selection(std::shared_ptr<erhe::scene::Mesh> mesh) -
 
     if (!is_in_selection(mesh))
     {
-        log_selection.trace("Adding mesh {} to selection\n", mesh->name);
+        log_selection.trace("Adding mesh {} to selection\n", mesh->name());
         m_selected_meshes.push_back(mesh);
         return true;
     }
 
-    log_selection.warn("Adding mesh {} to selection failed - was already in selection\n", mesh->name);
+    log_selection.warn("Adding mesh {} to selection failed - was already in selection\n", mesh->name());
     return false;
 }
 
@@ -207,13 +207,13 @@ auto Selection_tool::remove_from_selection(std::shared_ptr<erhe::scene::Mesh> me
                          mesh);
     if (i != m_selected_meshes.end())
     {
-        log_selection.trace("Removing mesh {} from selection\n", mesh->name);
+        log_selection.trace("Removing mesh {} from selection\n", mesh->name());
         m_selected_meshes.erase(i, m_selected_meshes.end());
         call_mesh_selection_change_subscriptions();
         return true;
     }
 
-    log_selection.warn("Removing mesh {} from selection failed - was not in selection\n", mesh->name);
+    log_selection.warn("Removing mesh {} from selection failed - was not in selection\n", mesh->name());
     return false;
 }
 

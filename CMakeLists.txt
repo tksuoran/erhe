@@ -11,6 +11,8 @@ FetchContent_Declare(
     #GIT_REPOSITORY https://github.com/nlohmann/json.git
     GIT_REPOSITORY https://github.com/ArthurSonzogni/nlohmann_json_cmake_fetchcontent.git
     GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
 )
 
 FetchContent_Declare(
@@ -25,45 +27,94 @@ FetchContent_Declare(
     GIT_TAG        fixes
     #GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz.git
     #GIT_TAG        2.7.4
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
 )
 
 FetchContent_Declare(
     fmt
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
     GIT_TAG        7.1.3
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
 )
 
 FetchContent_Declare(
     RectangleBinPack
     GIT_REPOSITORY https://github.com/juj/RectangleBinPack.git
     GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
 )
 
 FetchContent_Declare(
     ImGui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
     GIT_TAG        master # v1.81
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
 )
 
 FetchContent_Declare(
     avir
     GIT_REPOSITORY https://github.com/avaneev/avir.git
     GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
 )
 
 FetchContent_Declare(
     tracy
     GIT_REPOSITORY https://github.com/tksuoran/tracy.git
-    GIT_TAG        cmake-tracyclient
+    GIT_TAG        cmake-client
     #GIT_REPOSITORY https://github.com/wolfpld/tracy.git
     #GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
 )
 
 FetchContent_Declare(
     reactphysics3d
     GIT_REPOSITORY https://github.com/DanielChappuis/reactphysics3d.git
-    GIT_TAG        master
+    GIT_TAG        v0.8.0
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
 )
+
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        v1.8.5
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+FetchContent_Declare(
+    bullet3
+    #GIT_REPOSITORY https://github.com/bulletphysics/bullet3.git
+    GIT_REPOSITORY https://github.com/tksuoran/bullet3.git
+    GIT_TAG        cmake-fetchcontent
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+FetchContent_Declare(
+    eigen
+    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+    GIT_TAG        3.3.9
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+FetchContent_Declare(
+    libigl
+    GIT_REPOSITORY https://github.com/libigl/libigl.git
+    GIT_TAG        v2.3.0
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+
 
 
 # Mango project name is about to change.
@@ -73,30 +124,47 @@ FetchContent_Declare(
     #GIT_REPOSITORY https://github.com/t0rakka/mango.git
     GIT_REPOSITORY https://github.com/tksuoran/mango.git
     GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
 )
 
 FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
     GIT_TAG        3.3.2
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
 )
 
 FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/tksuoran/glm-1.git
     GIT_TAG        fix-cmake
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
 )
 
 FetchContent_Declare(
     GSL
     GIT_REPOSITORY https://github.com/microsoft/GSL.git
     GIT_TAG        main # v3.1.0
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
 )
 
 FetchContent_MakeAvailable(nlohmann_json)
 FetchContent_MakeAvailable(freetype)
 FetchContent_MakeAvailable(harfbuzz)
 FetchContent_MakeAvailable(fmt)
+FetchContent_MakeAvailable(spdlog)
 FetchContent_MakeAvailable(RectangleBinPack)
 
 # Mango has CMakeLists.txt in build subdirectory
@@ -110,8 +178,13 @@ endif()
 FetchContent_MakeAvailable(glfw)
 FetchContent_MakeAvailable(glm)
 FetchContent_MakeAvailable(GSL)
+#FetchContent_MakeAvailable(googletest)
 FetchContent_MakeAvailable(ImGui)
 FetchContent_MakeAvailable(tracy)
+#FetchContent_MakeAvailable(reactphysics3d)
+FetchContent_MakeAvailable(bullet3)
+#FetchContent_MakeAvailable(eigen)
+#FetchContent_MakeAvailable(libigl)
 
 ### Require out-of-source builds
 file(TO_CMAKE_PATH "${PROJECT_BINARY_DIR}/CMakeLists.txt" LOC_PATH)
@@ -229,6 +302,10 @@ endif()
 find_package(OpenGL REQUIRED)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+if(MSVC)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/MP>)
+endif()
 
 add_subdirectory(src)
 

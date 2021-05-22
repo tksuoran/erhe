@@ -1,6 +1,6 @@
 #include "tools/grid_tool.hpp"
 #include "renderers/line_renderer.hpp"
-#include "erhe_tracy.hpp"
+#include "erhe/toolkit/tracy_client.hpp"
 
 #include "imgui.h"
 
