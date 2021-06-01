@@ -1,5 +1,4 @@
-#ifndef file_hpp_erhe_toolkit
-#define file_hpp_erhe_toolkit
+#pragma once
 
 #include <filesystem>
 #include <optional>
@@ -13,5 +12,3 @@ auto read(const std::filesystem::path& path)
 -> std::optional<std::string>;
 
 } // namespace erhe::toolkit
-
-#endif

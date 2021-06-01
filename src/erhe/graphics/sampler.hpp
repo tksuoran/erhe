@@ -1,5 +1,4 @@
-#ifndef sampler_hpp_erhe_graphics
-#define sampler_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/graphics/gl_objects.hpp"
 
@@ -11,7 +10,7 @@ namespace erhe::graphics
 class Sampler
 {
 public:
-    Sampler() = default;
+    Sampler();
 
     Sampler(gl::Texture_min_filter min_filter,
             gl::Texture_mag_filter mag_filter);
@@ -65,5 +64,3 @@ auto operator!=(const Sampler& lhs, const Sampler& rhs) noexcept
 -> bool;
 
 } // namespace erhe::graphics
-
-#endif

@@ -1,5 +1,7 @@
 #include "renderers/id_renderer.hpp"
-#include "scene/scene_manager.hpp"
+#include "gl_context_provider.hpp"
+#include "renderers/program_interface.hpp"
+#include "renderers/mesh_memory.hpp"
 #include "log.hpp"
 
 #include "erhe/components/component.hpp"
@@ -47,11 +49,12 @@ void Id_renderer::connect()
 {
     base_connect(this);
 
-    m_pipeline_state_tracker = erhe::components::Component::get<OpenGL_state_tracker>();
-    m_scene_manager          = require<Scene_manager>();
+    require<Gl_context_provider>();
+    require<Program_interface>();
 
-    initialization_depends_on(m_scene_manager);
-    initialization_depends_on(programs());
+    m_pipeline_state_tracker = erhe::components::Component::get<OpenGL_state_tracker>();
+    m_mesh_memory            = require<Mesh_memory>();
+    m_programs               = require<Programs>();
 }
 
 static constexpr const char* c_id_renderer_initialize_component = "Id_renderer::initialize_component()";
@@ -59,14 +62,18 @@ void Id_renderer::initialize_component()
 {
     ZoneScoped;
 
+    TracyMessageL("ID: Waiting for GL context");
+    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+    TracyMessageL("ID: Got GL context");
+
     create_frame_resources(1, 1, 1, 1000, 1000);
 
-    m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(programs()->attribute_mappings,
-                                                                          *(m_scene_manager->vertex_format()),
-                                                                          m_scene_manager->vertex_buffer(),
-                                                                          m_scene_manager->index_buffer());
+    m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(Component::get<Program_interface>()->attribute_mappings,
+                                                                          *(m_mesh_memory->vertex_format()),
+                                                                          m_mesh_memory->vertex_buffer(),
+                                                                          m_mesh_memory->index_buffer());
 
-    m_pipeline.shader_stages  = programs()->id.get();
+    m_pipeline.shader_stages  = m_programs->id.get();
     m_pipeline.vertex_input   = m_vertex_input.get();
     m_pipeline.input_assembly = &erhe::graphics::Input_assembly_state::triangles;
     m_pipeline.rasterization  = &erhe::graphics::Rasterization_state::cull_mode_back_ccw;
@@ -74,7 +81,7 @@ void Id_renderer::initialize_component()
     m_pipeline.color_blend    = &erhe::graphics::Color_blend_state::color_blend_disabled;
     m_pipeline.viewport       = nullptr;
 
-    m_selective_depth_clear_pipeline.shader_stages  = programs()->id.get();
+    m_selective_depth_clear_pipeline.shader_stages  = m_programs->id.get();
     m_selective_depth_clear_pipeline.vertex_input   = m_vertex_input.get();
     m_selective_depth_clear_pipeline.input_assembly = &erhe::graphics::Input_assembly_state::triangles;
     m_selective_depth_clear_pipeline.rasterization  = &erhe::graphics::Rasterization_state::cull_mode_back_ccw;
@@ -173,7 +180,7 @@ void Id_renderer::render_layer(erhe::scene::Layer* layer)
     bind_draw_indirect_buffer();
 
     gl::multi_draw_elements_indirect(m_pipeline.input_assembly->primitive_topology,
-                                     m_scene_manager->index_type(),
+                                     m_mesh_memory->index_type(),
                                      reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
                                      static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
                                      static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command)));
@@ -185,13 +192,13 @@ static constexpr const char* c_id_renderer_render_clear   = "Id_renderer::render
 static constexpr const char* c_id_renderer_render_content = "Id_renderer::render() content";
 static constexpr const char* c_id_renderer_render_tool    = "Id_renderer::render() tool";
 static constexpr const char* c_id_renderer_render_read    = "Id_renderer::render() read";
-void Id_renderer::render(erhe::scene::Viewport   viewport,
-                         const Layer_collection& content_layers,
-                         const Layer_collection& tool_layers,
-                         erhe::scene::ICamera&   camera,
-                         double                  time,
-                         int                     x,
-                         int                     y)
+void Id_renderer::render(const erhe::scene::Viewport viewport,
+                         const Layer_collection&     content_layers,
+                         const Layer_collection&     tool_layers,
+                         erhe::scene::ICamera&       camera,
+                         const double                time,
+                         const int                   x,
+                         const int                   y)
 {
     ZoneScoped;
 

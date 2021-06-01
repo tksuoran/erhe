@@ -9,11 +9,11 @@ template <typename T>
 void Geometry::smooth_normalize(Property_map<Corner_id, T>&                corner_attribute,
                                 const Property_map<Polygon_id, T>&         polygon_attribute,
                                 const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-                                float                                      max_smoothing_angle_radians) const
+                                const float                                max_smoothing_angle_radians) const
 {
     ZoneScoped;
 
-    float cos_max_smoothing_angle = cos(max_smoothing_angle_radians);
+    const float cos_max_smoothing_angle = cos(max_smoothing_angle_radians);
 
     corner_attribute.clear();
     for_each_polygon_const([&](auto& i)

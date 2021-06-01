@@ -40,7 +40,6 @@ namespace erhe::scene
 namespace editor
 {
 
-
 class Programs;
 
 class Base_renderer
@@ -94,44 +93,39 @@ public:
 
     static constexpr size_t s_frame_resources_count = 4;
 
-    void create_frame_resources(size_t material_count,
-                                size_t light_count,
-                                size_t camera_count,
-                                size_t primitive_count,
-                                size_t draw_count);
+    void create_frame_resources(const size_t material_count,
+                                const size_t light_count,
+                                const size_t camera_count,
+                                const size_t primitive_count,
+                                const size_t draw_count);
 
     auto current_frame_resources() -> Frame_resources&;
 
     void next_frame();
 
-    void base_connect(erhe::components::Component* component);
+    void base_connect(const erhe::components::Component* component);
 
     auto update_primitive_buffer(const Mesh_collection& meshes,
-                                 uint64_t               visibility_mask = erhe::scene::Mesh::c_visibility_all)
+                                 const uint64_t         visibility_mask = erhe::scene::Mesh::c_visibility_all)
     -> Buffer_range;
 
-    auto update_light_buffer(Light_collection&     lights,
-                             erhe::scene::Viewport light_texture_viewport,
-                             glm::vec4             ambient_light = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f))
+    auto update_light_buffer(const Light_collection&     lights,
+                             const erhe::scene::Viewport light_texture_viewport,
+                             const glm::vec4             ambient_light = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f))
     -> Buffer_range;
 
     auto update_material_buffer(const Material_collection& materials)
 
     -> Buffer_range;
 
-    auto update_camera_buffer(erhe::scene::ICamera& camera,
-                              erhe::scene::Viewport viewport)
+    auto update_camera_buffer(erhe::scene::ICamera&       camera,
+                              const erhe::scene::Viewport viewport)
     -> Buffer_range;
 
-    auto update_draw_indirect_buffer(const Mesh_collection&          meshes,
-                                     erhe::primitive::Primitive_mode primitive_mode,
-                                     uint64_t                        visibility_mask = erhe::scene::Mesh::c_visibility_all)
+    auto update_draw_indirect_buffer(const Mesh_collection&                meshes,
+                                     const erhe::primitive::Primitive_mode primitive_mode,
+                                     const uint64_t                        visibility_mask = erhe::scene::Mesh::c_visibility_all)
     -> Draw_indirect_buffer_range;
-
-    auto programs() -> const std::shared_ptr<Programs>&
-    {
-        return m_programs;
-    }
 
     void bind_material_buffer();
 
@@ -201,9 +195,9 @@ protected:
     };
 
 private:
-    std::shared_ptr<Programs>    m_programs;
-    std::vector<Frame_resources> m_frame_resources;
-    size_t                       m_current_frame_resource_slot{0};
+    std::shared_ptr<Program_interface> m_program_interface;
+    std::vector<Frame_resources>       m_frame_resources;
+    size_t                             m_current_frame_resource_slot{0};
 
     Buffer_writer                m_material_writer;
     Buffer_writer                m_light_writer;

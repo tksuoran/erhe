@@ -1,11 +1,14 @@
 #include "application.hpp"
+#include "gl_context_provider.hpp"
 #include "log.hpp"
 
 #include "operations/operation_stack.hpp"
 
-#include "renderers/programs.hpp"
-#include "renderers/id_renderer.hpp"
 #include "renderers/forward_renderer.hpp"
+#include "renderers/id_renderer.hpp"
+#include "renderers/mesh_memory.hpp"
+#include "renderers/programs.hpp"
+#include "renderers/program_interface.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "renderers/text_renderer.hpp"
 #include "renderers/line_renderer.hpp"
@@ -32,6 +35,7 @@
 
 #include "scene/debug_draw.hpp"
 #include "scene/scene_manager.hpp"
+#include "scene/scene_root.hpp"
 
 #include "imgui_demo.hpp"
 
@@ -43,6 +47,7 @@
 #include "erhe/graphics_experimental/shader_monitor.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 #include "erhe/toolkit/window.hpp"
+#include "erhe/toolkit/tracy_client.hpp"
 
 #if defined(ERHE_WINDOW_TOOLKIT_GLFW)
 #   include <GLFW/glfw3.h>
@@ -67,7 +72,7 @@ public:
         : m_application{application}
         , m_components {components}
     {
-#if 0 && defined(ERHE_WINDOW_TOOLKIT_GLFW)
+#if 1 && defined(ERHE_WINDOW_TOOLKIT_GLFW)
         erhe::toolkit::Context_window* main_window = application.get_context_window();
         m_loading_context = std::make_unique<erhe::toolkit::Context_window>(main_window);
         m_future = std::async(
@@ -91,12 +96,12 @@ public:
 
     void initialize(erhe::components::Components& components)
     {
-        components.initialize_components();
+        components.launch_component_initialization();
     }
 
     auto is_initialization_ready(bool& result) -> bool
     {
-#if 0 && defined(ERHE_WINDOW_TOOLKIT_GLFW)
+#if 1 && defined(ERHE_WINDOW_TOOLKIT_GLFW)
         auto status = m_future.wait_for(std::chrono::milliseconds(0));
         bool is_ready = (status == std::future_status::ready);
         if (is_ready)
@@ -145,6 +150,8 @@ private:
 auto Application::create_gl_window()
 -> bool
 {
+    ZoneScoped;
+
     //m_context_window = std::make_unique<erhe::toolkit::Context_window>(1920, 1080); // 1080p
     m_context_window = std::make_unique<erhe::toolkit::Context_window>(1280,  720); // 720p
 
@@ -158,6 +165,8 @@ auto Application::create_gl_window()
     bool is_regular_file = std::filesystem::is_regular_file(path);
     if (exists && is_regular_file)
     {
+        ZoneScopedN("icon");
+
         bool ok = loader.open(path, image_info);
         if (ok)
         {
@@ -188,12 +197,14 @@ auto Application::create_gl_window()
 auto Application::on_load()
 -> bool
 {
+    TracyMessageL("component initialized");
+
     if (!create_gl_window())
     {
         return false;
     }
 
-    if (!launch_component_initialization())
+    if (!initialize_components())
     {
         return false;
     }
@@ -205,61 +216,78 @@ void Application::run()
 {
     Expects(m_context_window);
 
+    TracyMessageL("component initialized");
+
     m_context_window->enter_event_loop();
 }
 
-auto Application::launch_component_initialization()
+auto Application::initialize_components()
 -> bool
 {
-    m_components.add(shared_from_this());
-    m_components.add(make_shared<Programs            >());
-    m_components.add(make_shared<Id_renderer         >());
-    m_components.add(make_shared<Forward_renderer    >());
-    m_components.add(make_shared<Shadow_renderer     >());
-    m_components.add(make_shared<Scene_manager       >());
-    m_components.add(make_shared<Text_renderer       >());
-    m_components.add(make_shared<Line_renderer       >());
-    m_components.add(make_shared<Editor              >());
-    m_components.add(make_shared<OpenGL_state_tracker>());
-    m_components.add(make_shared<Shader_monitor      >());
-    m_components.add(make_shared<Shader_monitor      >());
-    m_components.add(make_shared<Selection_tool      >());
-    m_components.add(make_shared<Operation_stack     >());
-    m_components.add(make_shared<Brushes             >());
-    m_components.add(make_shared<Camera_properties   >());
-    m_components.add(make_shared<Hover_tool          >());
-    m_components.add(make_shared<Fly_camera_tool     >());
-    m_components.add(make_shared<Light_properties    >());
-    m_components.add(make_shared<Material_properties >());
-    m_components.add(make_shared<Mesh_properties     >());
-    m_components.add(make_shared<Node_properties     >());
-    m_components.add(make_shared<Trs_tool            >());
-    m_components.add(make_shared<Viewport_window     >());
-    m_components.add(make_shared<Operations          >());
-    m_components.add(make_shared<Grid_tool           >());
-    m_components.add(make_shared<Viewport_config     >());
-    m_components.add(make_shared<Physics_window      >());
-    m_components.add(make_shared<Debug_draw          >());
-    m_components.add(make_shared<Physics_tool        >());
+    ZoneScoped;
 
+    shared_ptr<OpenGL_state_tracker> opengl_state_tracker;
+    shared_ptr<Gl_context_provider > gl_context_provider;
 
-    // if (false)
-    // {
-    //     m_context_window->get_root_view().set_view(make_shared<AsyncInit>(*this, m_components));
-    // }
-    // else
     {
-        bool ok{true};
-        try
-        {
-            m_components.initialize_components();
-        }
-        catch(...)
-        {
-            ok = false;
-        }
-        component_initialization_complete(ok);
+        ZoneScopedN("OpenGL state tracker");
+        opengl_state_tracker = make_shared<OpenGL_state_tracker>();
     }
+    {
+        ZoneScopedN("GL context provider constructor");
+        gl_context_provider = make_shared<Gl_context_provider >();
+    }
+
+    {
+        ZoneScopedN("add components");
+        m_components.add(shared_from_this());
+        m_components.add(gl_context_provider);
+        m_components.add(make_shared<Brushes             >());
+        m_components.add(make_shared<Camera_properties   >());
+        m_components.add(make_shared<Debug_draw          >());
+        m_components.add(make_shared<Editor              >());
+        m_components.add(make_shared<Fly_camera_tool     >());
+        m_components.add(make_shared<Forward_renderer    >());
+        m_components.add(make_shared<Grid_tool           >());
+        m_components.add(make_shared<Hover_tool          >());
+        m_components.add(make_shared<Id_renderer         >());
+        m_components.add(make_shared<Light_properties    >());
+        m_components.add(make_shared<Line_renderer       >());
+        m_components.add(make_shared<Material_properties >());
+        m_components.add(make_shared<Mesh_memory         >());
+        m_components.add(make_shared<Mesh_properties     >());
+        m_components.add(make_shared<Node_properties     >());
+        m_components.add(make_shared<OpenGL_state_tracker>());
+        m_components.add(make_shared<Operations          >());
+        m_components.add(make_shared<Operation_stack     >());
+        m_components.add(make_shared<Physics_tool        >());
+        m_components.add(make_shared<Physics_window      >());
+        m_components.add(make_shared<Programs            >());
+        m_components.add(make_shared<Program_interface   >());
+        m_components.add(make_shared<Selection_tool      >());
+        m_components.add(make_shared<Shader_monitor      >());
+        m_components.add(make_shared<Shadow_renderer     >());
+        m_components.add(make_shared<Scene_root          >());
+        m_components.add(make_shared<Scene_manager       >());
+        m_components.add(make_shared<Text_renderer       >());
+        m_components.add(make_shared<Trs_tool            >());
+        m_components.add(make_shared<Viewport_config     >());
+        m_components.add(make_shared<Viewport_window     >());
+    }
+
+    m_components.launch_component_initialization();
+
+    gl_context_provider->provide_worker_contexts(opengl_state_tracker,
+                                                 get_context_window(),
+                                                 [this]() -> bool {
+                                                     return !m_components.is_component_initialization_complete();
+                                                 });
+
+    m_components.wait_component_initialization_complete();
+
+    component_initialization_complete(true);
+
+    opengl_state_tracker->on_thread_enter();
 
     return true;
 }

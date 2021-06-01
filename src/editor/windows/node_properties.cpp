@@ -22,10 +22,15 @@ void Node_properties::connect()
 
 void Node_properties::window(Pointer_context&)
 {
-    const auto& selected_meshes = m_selection_tool->selected_meshes();
+    const auto& selection = m_selection_tool->selection();
     ImGui::Begin("Node");
-    for (const auto& mesh : selected_meshes)
+    for (const auto& item : selection)
     {
+        if (!item)
+        {
+            continue;
+        }
+        auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
         if (!mesh)
         {
             continue;

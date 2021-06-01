@@ -20,6 +20,23 @@ using glm::vec4;
 using glm::mat3;
 using glm::mat4;
 
+Geometry::Geometry() = default;
+
+Geometry::Geometry(std::string_view               name,
+                   std::function<void(Geometry&)> generator)
+    : name{name}
+{
+    if (generator)
+    {
+        generator(*this);
+    }
+}
+
+Geometry::Geometry(std::string_view name)
+    : name{name}
+{
+}
+
 Geometry::~Geometry()
 {
     // TODO Debug how to enable named return value optimization
@@ -78,7 +95,7 @@ auto Mesh_info::operator+=(const Mesh_info& o)
     return *this;
 }
 
-void Geometry::reserve_points(size_t point_count)
+void Geometry::reserve_points(const size_t point_count)
 {
     ZoneScoped;
 
@@ -88,7 +105,7 @@ void Geometry::reserve_points(size_t point_count)
     }
 }
 
-void Geometry::reserve_polygons(size_t polygon_count)
+void Geometry::reserve_polygons(const size_t polygon_count)
 {
     ZoneScoped;
 
@@ -126,8 +143,8 @@ auto Geometry::compute_polygon_normals() -> bool
 
     log.info("{} for {}\n", __func__, name);
 
-    auto* polygon_normals = polygon_attributes().find_or_create<vec3>(c_polygon_normals);
-    auto* point_locations = point_attributes()  .find          <vec3>(c_point_locations);
+    auto*       polygon_normals = polygon_attributes().find_or_create<vec3>(c_polygon_normals);
+    const auto* point_locations = point_attributes()  .find          <vec3>(c_point_locations);
 
     if (point_locations == nullptr)
     {
@@ -171,8 +188,8 @@ auto Geometry::compute_polygon_centroids() -> bool
 
     log.info("{} for {}\n", __func__, name);
 
-    auto* polygon_centroids = polygon_attributes().find_or_create<vec3>(c_polygon_centroids);
-    auto* point_locations   = point_attributes()  .find          <vec3>(c_point_locations);
+    auto*       polygon_centroids = polygon_attributes().find_or_create<vec3>(c_polygon_centroids);
+    const auto* point_locations   = point_attributes()  .find          <vec3>(c_point_locations);
 
     if (point_locations == nullptr)
     {
@@ -226,8 +243,8 @@ void Geometry::build_edges()
 
         i.polygon.for_each_corner_neighborhood(*this, [&](auto& j)
         {
-            Point_id a = j.prev_corner.point_id;
-            Point_id b = j.corner.point_id;
+            const Point_id a = j.prev_corner.point_id;
+            const Point_id b = j.corner.point_id;
             if (a == b)
             {
                 log_build_edges.warn("Bad edge {} - {}\n", a, b);
@@ -235,17 +252,17 @@ void Geometry::build_edges()
             }
             if (a < b)
             {
-                Edge_id edge_id = make_edge(a, b);
-                Point& pa = points[a];
+                const Edge_id edge_id = make_edge(a, b);
+                const Point&  pa      = points[a];
                 make_edge_polygon(edge_id, i.polygon_id);
                 VERIFY(pa.corner_count > 0);
-                pa.for_each_corner(*this, [&](auto& k)
+                pa.for_each_corner_const(*this, [&](auto& k)
                 {
-                     Polygon_id polygon_id_in_point = k.corner.polygon_id;
-                     Polygon&   polygon_in_point    = polygons[polygon_id_in_point];
-                     Corner_id  prev_corner_id      = polygon_in_point.prev_corner(*this, k.corner_id);
-                     Corner&    prev_corner         = corners[prev_corner_id];
-                     Point_id   prev_point_id       = prev_corner.point_id;
+                     const Polygon_id polygon_id_in_point = k.corner.polygon_id;
+                     const Polygon&   polygon_in_point    = polygons[polygon_id_in_point];
+                     const Corner_id  prev_corner_id      = polygon_in_point.prev_corner(*this, k.corner_id);
+                     const Corner&    prev_corner         = corners[prev_corner_id];
+                     const Point_id   prev_point_id       = prev_corner.point_id;
                      if (prev_point_id == b)
                      {
                          make_edge_polygon(edge_id, polygon_id_in_point);
@@ -259,19 +276,19 @@ void Geometry::build_edges()
     m_serial_edges = m_serial;
 }
 
-void Geometry::debug_trace()
+void Geometry::debug_trace() const
 {
     ZoneScoped;
 
-    for_each_corner([](auto& i)
+    for_each_corner_const([](auto& i)
     {
         log.info("corner {:2} = point {:2} polygon {:2}\n", i.corner_id, i.corner.point_id, i.corner.polygon_id);
     });
 
-    for_each_point([&](auto& i)
+    for_each_point_const([&](auto& i)
     {
         log.info("point {:2} corners  = ", i.point_id);
-        i.point.for_each_corner(*this, [&](auto& j)
+        i.point.for_each_corner_const(*this, [&](auto& j)
         {
             if (j.corner_id > i.point.first_point_corner_id)
             {
@@ -281,7 +298,7 @@ void Geometry::debug_trace()
         });
         log.info("\n");
         log.info("point {:2} polygons = ", i.point_id);
-        i.point.for_each_corner(*this, [&](auto& j)
+        i.point.for_each_corner_const(*this, [&](auto& j)
         {
             if (j.corner_id > i.point.first_point_corner_id)
             {
@@ -292,10 +309,10 @@ void Geometry::debug_trace()
         log.info("\n");
     });
 
-    for_each_polygon([&](auto& i)
+    for_each_polygon_const([&](auto& i)
     {
         log.info("polygon {:2} corners = ", i.polygon_id);
-        i.polygon.for_each_corner(*this, [&](auto& j)
+        i.polygon.for_each_corner_const(*this, [&](auto& j)
         {
             if (j.polygon_corner_id > i.polygon.first_polygon_corner_id)
             {
@@ -305,7 +322,7 @@ void Geometry::debug_trace()
         });
         log.info("\n");
         log.info("polygon {:2} points  = ", i.polygon_id);
-        i.polygon.for_each_corner(*this, [&](auto& j)
+        i.polygon.for_each_corner_const(*this, [&](auto& j)
         {
             Point_id point_id = j.corner.point_id;
             if (j.polygon_corner_id > i.polygon.first_polygon_corner_id)
@@ -317,10 +334,10 @@ void Geometry::debug_trace()
         log.info("\n");
     });
 
-    for_each_edge([&](auto& i)
+    for_each_edge_const([&](auto& i)
     {
         log.info("edge {:2} = {:2} .. {:2} :", i.edge_id, i.edge.a, i.edge.b);
-        i.edge.for_each_polygon(*this, [&](auto& j)
+        i.edge.for_each_polygon_const(*this, [&](auto& j)
         {
             log.info("{:2} ", j.polygon_id);
         });
@@ -328,7 +345,7 @@ void Geometry::debug_trace()
     });
 }
 
-auto Geometry::compute_point_normal(Point_id point_id)
+auto Geometry::compute_point_normal(const Point_id point_id)
 -> vec3
 {
     ZoneScoped;
@@ -557,7 +574,7 @@ auto Geometry::has_polygon_texture_coordinates() const -> bool
     return m_serial_polygon_texture_coordinates == m_serial;
 }
 
-auto Geometry::generate_polygon_texture_coordinates(bool overwrite_existing_texture_coordinates) -> bool
+auto Geometry::generate_polygon_texture_coordinates(const bool overwrite_existing_texture_coordinates) -> bool
 {
     ZoneScoped;
 
@@ -608,13 +625,13 @@ auto Geometry::generate_polygon_texture_coordinates(bool overwrite_existing_text
     return true;
 }
 
-void Geometry::sanity_check()
+void Geometry::sanity_check() const
 {
     size_t error_count = 0;
 
-    for_each_point([&](auto& i)
+    for_each_point_const([&](auto& i)
     {
-        i.point.for_each_corner(*this, [&](auto& j)
+        i.point.for_each_corner_const(*this, [&](auto& j)
         {
             if (j.corner.point_id != i.point_id)
             {
@@ -631,9 +648,9 @@ void Geometry::sanity_check()
         });
     });
 
-    for_each_polygon([&](auto& i)
+    for_each_polygon_const([&](auto& i)
     {
-        i.polygon.for_each_corner(*this, [&](auto& j)
+        i.polygon.for_each_corner_const(*this, [&](auto& j)
         {
             if (j.corner.polygon_id != i.polygon_id)
             {
@@ -669,7 +686,7 @@ void Geometry::sanity_check()
         });
     });
 
-    for_each_corner([&](auto& i)
+    for_each_corner_const([&](auto& i)
     {
         bool corner_point_found  {false};
         bool corner_polygon_found{false};
@@ -755,15 +772,15 @@ auto Geometry::volume() -> float
         {
             return;
         }
-        vec3 p0 = polygon_centroids->get(i.polygon_id);
+        const vec3 p0 = polygon_centroids->get(i.polygon_id);
         i.polygon.for_each_corner_neighborhood(*this, [&](auto& j)
         {
-            vec3 p1 = point_locations->get(j.corner.point_id);
-            vec3 p2 = point_locations->get(j.next_corner.point_id);
-            mat3 m{p0, p1, p2};
+            const vec3 p1 = point_locations->get(j.corner.point_id);
+            const vec3 p2 = point_locations->get(j.next_corner.point_id);
+            const mat3 m{p0, p1, p2};
 
             //float a = dot(cross(p0, p1), p2);
-            float b = glm::determinant(m);
+            const float b = glm::determinant(m);
             sum += std::fabs(b);
         });
     });

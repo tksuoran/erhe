@@ -39,57 +39,55 @@ auto make_box(double x_size, double y_size, double z_size)
     double y = y_size / 2.0;
     double z = z_size / 2.0;
 
-    Geometry geometry;
+    return Geometry("box", [=](auto& geometry) {
+        geometry.make_point(-x,  y,  z, 0, 1); // 0
+        geometry.make_point( x,  y,  z, 1, 1); // 1
+        geometry.make_point( x, -y,  z, 1, 1); // 2
+        geometry.make_point(-x, -y,  z, 0, 1); // 3
+        geometry.make_point(-x,  y, -z, 0, 0); // 4
+        geometry.make_point( x,  y, -z, 1, 0); // 5
+        geometry.make_point( x, -y, -z, 1, 0); // 6
+        geometry.make_point(-x, -y, -z, 0, 0); // 7
 
-    geometry.make_point(-x,  y,  z, 0, 1); // 0
-    geometry.make_point( x,  y,  z, 1, 1); // 1
-    geometry.make_point( x, -y,  z, 1, 1); // 2
-    geometry.make_point(-x, -y,  z, 0, 1); // 3
-    geometry.make_point(-x,  y, -z, 0, 0); // 4
-    geometry.make_point( x,  y, -z, 1, 0); // 5
-    geometry.make_point( x, -y, -z, 1, 0); // 6
-    geometry.make_point(-x, -y, -z, 0, 0); // 7
+        geometry.make_polygon( {0, 1, 2, 3} );
+        geometry.make_polygon( {0, 3, 7, 4} );
+        geometry.make_polygon( {0, 4, 5, 1} ); // top
+        geometry.make_polygon( {5, 4, 7, 6} );
+        geometry.make_polygon( {2, 1, 5, 6} );
+        geometry.make_polygon( {7, 3, 2, 6} ); // bottom
 
-    geometry.make_polygon( {0, 1, 2, 3} );
-    geometry.make_polygon( {0, 3, 7, 4} );
-    geometry.make_polygon( {0, 4, 5, 1} ); // top
-    geometry.make_polygon( {5, 4, 7, 6} );
-    geometry.make_polygon( {2, 1, 5, 6} );
-    geometry.make_polygon( {7, 3, 2, 6} ); // bottom
-
-    geometry.make_point_corners();
-    geometry.build_edges();
-    geometry.compute_polygon_normals();
-    geometry.compute_polygon_centroids();
-    return geometry;
+        geometry.make_point_corners();
+        geometry.build_edges();
+        geometry.compute_polygon_normals();
+        geometry.compute_polygon_centroids();
+    });
 }
 
 auto make_box(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z)
 -> Geometry
 {
-    Geometry geometry;
+    return Geometry("box", [=](auto& geometry) {
+        geometry.make_point(min_x, max_y, max_z, 0, 1); // 0
+        geometry.make_point(max_x, max_y, max_z, 1, 1); // 1
+        geometry.make_point(max_x, min_y, max_z, 1, 1); // 2
+        geometry.make_point(min_x, min_y, max_z, 0, 1); // 3
+        geometry.make_point(min_x, max_y, min_z, 0, 0); // 4
+        geometry.make_point(max_x, max_y, min_z, 1, 0); // 5
+        geometry.make_point(max_x, min_y, min_z, 1, 0); // 6
+        geometry.make_point(min_x, min_y, min_z, 0, 0); // 7
 
-    geometry.make_point(min_x, max_y, max_z, 0, 1); // 0
-    geometry.make_point(max_x, max_y, max_z, 1, 1); // 1
-    geometry.make_point(max_x, min_y, max_z, 1, 1); // 2
-    geometry.make_point(min_x, min_y, max_z, 0, 1); // 3
-    geometry.make_point(min_x, max_y, min_z, 0, 0); // 4
-    geometry.make_point(max_x, max_y, min_z, 1, 0); // 5
-    geometry.make_point(max_x, min_y, min_z, 1, 0); // 6
-    geometry.make_point(min_x, min_y, min_z, 0, 0); // 7
+        geometry.make_polygon( {0, 1, 2, 3} );
+        geometry.make_polygon( {0, 3, 7, 4} );
+        geometry.make_polygon( {0, 4, 5, 1} ); // top
+        geometry.make_polygon( {5, 4, 7, 6} );
+        geometry.make_polygon( {2, 1, 5, 6} );
+        geometry.make_polygon( {7, 3, 2, 6} ); // bottom
 
-    geometry.make_polygon( {0, 1, 2, 3} );
-    geometry.make_polygon( {0, 3, 7, 4} );
-    geometry.make_polygon( {0, 4, 5, 1} ); // top
-    geometry.make_polygon( {5, 4, 7, 6} );
-    geometry.make_polygon( {2, 1, 5, 6} );
-    geometry.make_polygon( {7, 3, 2, 6} ); // bottom
-
-    geometry.make_point_corners();
-    geometry.build_edges();
-    geometry.compute_polygon_normals();
-    geometry.compute_polygon_centroids();
-    return geometry;
+        geometry.make_point_corners();
+        geometry.build_edges();
+        geometry.compute_polygon_normals();
+        geometry.compute_polygon_centroids();
+    });
 }
 
 auto make_box(double r)
@@ -316,10 +314,10 @@ auto make_box(glm::vec3 size, glm::ivec3 div, float p)
 {
     ZoneScoped;
 
-    Geometry geometry{"box"};
-    Box_builder builder(geometry, size / 2.0f, div, p);
-    builder.build();
-    return geometry;
+    return Geometry("box", [size, div, p](auto& geometry){
+        Box_builder builder(geometry, size / 2.0f, div, p);
+        builder.build();
+    });
 }
 
 } // namespace erhe::geometry::shapes

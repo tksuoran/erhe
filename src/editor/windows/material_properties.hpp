@@ -7,7 +7,7 @@
 namespace editor
 {
 
-class Scene_manager;
+class Scene_root;
 class Selection_tool;
 
 class Material_properties
@@ -26,10 +26,9 @@ public:
     void window(Pointer_context& pointer_context) override;
 
 private:
-    std::shared_ptr<Scene_manager>  m_scene_manager;
+    std::shared_ptr<Scene_root>     m_scene_root;
     std::shared_ptr<Selection_tool> m_selection_tool;
     int                             m_material_index{0};
-    //int                             m_primitive_index{0};
 };
 
 } // namespace editor

@@ -1,32 +1,23 @@
-#ifndef material_hpp_erhe_primitive
-#define material_hpp_erhe_primitive
+#pragma once
 
 #include <glm/glm.hpp>
 
 #include <map>
 #include <memory>
-#include <string>
+#include <string_view>
 
 namespace erhe::primitive
 {
 
 struct Material
 {
-    Material() = default;
-
-    Material(const std::string& name,
-             glm::vec4          base_color,
-             float              roughness  = 1.0f,
-             float              anisotropy = 0.0f,
-             float              metallic   = 0.6f)
-    : name      {name}
-    , metallic  {metallic}
-    , roughness {roughness}
-    , anisotropy{anisotropy}
-    , base_color{base_color}
-    , emissive  {0.0f, 0.0f, 0.0f, 0.0f}
-    {
-    }
+    Material();
+    ~Material();
+    Material(std::string_view name,
+             glm::vec4        base_color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f),
+             float            roughness  = 1.0f,
+             float            anisotropy = 0.0f,
+             float            metallic   = 0.6f);
 
     size_t      index{0};
     std::string name;
@@ -39,5 +30,3 @@ struct Material
 };
 
 } // namespace erhe::primitive
-
-#endif

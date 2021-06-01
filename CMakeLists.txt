@@ -115,8 +115,6 @@ FetchContent_Declare(
 )
 
 
-
-
 # Mango project name is about to change.
 # Temporarily using my own fork until it comes up with a new name.
 FetchContent_Declare(
@@ -160,11 +158,20 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 
+#FetchContent_Declare(
+#    concurrentqueue
+#    GIT_REPOSITORY https://github.com/cameron314/concurrentqueue.git
+#    GIT_TAG        master
+#    GIT_SHALLOW    TRUE
+#    GIT_PROGRESS   TRUE
+#)
+
+
 FetchContent_MakeAvailable(nlohmann_json)
 FetchContent_MakeAvailable(freetype)
 FetchContent_MakeAvailable(harfbuzz)
 FetchContent_MakeAvailable(fmt)
-FetchContent_MakeAvailable(spdlog)
+#FetchContent_MakeAvailable(spdlog)
 FetchContent_MakeAvailable(RectangleBinPack)
 
 # Mango has CMakeLists.txt in build subdirectory
@@ -185,6 +192,7 @@ FetchContent_MakeAvailable(tracy)
 FetchContent_MakeAvailable(bullet3)
 #FetchContent_MakeAvailable(eigen)
 #FetchContent_MakeAvailable(libigl)
+#FetchContent_MakeAvailable(concurrentqueue)
 
 ### Require out-of-source builds
 file(TO_CMAKE_PATH "${PROJECT_BINARY_DIR}/CMakeLists.txt" LOC_PATH)

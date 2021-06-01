@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe/geometry/geometry.hpp"
+
 namespace erhe::geometry::shapes
 {
 

@@ -13,37 +13,51 @@
 namespace editor
 {
 
-Catmull_clark_subdivision_operation::Catmull_clark_subdivision_operation(Context& context)
+Catmull_clark_subdivision_operation::~Catmull_clark_subdivision_operation() = default;
+
+Catmull_clark_subdivision_operation::Catmull_clark_subdivision_operation(const Context& context)
 {
     make_entries(context, erhe::geometry::operation::catmull_clark_subdivision);
 }
 
-Sqrt3_subdivision_operation::Sqrt3_subdivision_operation(Context& context)
+Sqrt3_subdivision_operation::~Sqrt3_subdivision_operation() = default;
+
+Sqrt3_subdivision_operation::Sqrt3_subdivision_operation(const Context& context)
 {
     make_entries(context, erhe::geometry::operation::sqrt3_subdivision);
 }
 
-Triangulate_operation::Triangulate_operation(Context& context)
+Triangulate_operation::~Triangulate_operation() = default;
+
+Triangulate_operation::Triangulate_operation(const Context& context)
 {
     make_entries(context, erhe::geometry::operation::triangulate);
 }
 
-Subdivide_operation::Subdivide_operation(Context& context)
+Subdivide_operation::~Subdivide_operation() = default;
+
+Subdivide_operation::Subdivide_operation(const Context& context)
 {
     make_entries(context, erhe::geometry::operation::subdivide);
 }
 
-Dual_operator::Dual_operator(Context& context)
+Dual_operator::~Dual_operator() = default;
+
+Dual_operator::Dual_operator(const Context& context)
 {
     make_entries(context, erhe::geometry::operation::dual);
 }
 
-Ambo_operator::Ambo_operator(Context& context)
+Ambo_operator::~Ambo_operator() = default;
+
+Ambo_operator::Ambo_operator(const Context& context)
 {
     make_entries(context, erhe::geometry::operation::ambo);
 }
 
-Truncate_operator::Truncate_operator(Context& context)
+Truncate_operator::~Truncate_operator() = default;
+
+Truncate_operator::Truncate_operator(const Context& context)
 {
     make_entries(context, erhe::geometry::operation::truncate);
 }

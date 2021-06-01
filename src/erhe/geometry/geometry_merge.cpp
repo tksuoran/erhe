@@ -5,10 +5,10 @@
 namespace erhe::geometry
 {
 
-void Geometry::merge(Geometry& other, glm::mat4 transform)
+void Geometry::merge(Geometry& other, const glm::mat4 transform)
 {
     // Append corners
-    Corner_id combined_corner_count = corner_count() + other.corner_count();
+    const Corner_id combined_corner_count = corner_count() + other.corner_count();
     if (corners.size() < combined_corner_count)
     {
         corners.resize(combined_corner_count);
@@ -22,23 +22,23 @@ void Geometry::merge(Geometry& other, glm::mat4 transform)
     }
 
     // Append points
-    Point_id combined_point_count = point_count() + other.point_count();
+    const Point_id combined_point_count = point_count() + other.point_count();
     if (points.size() < combined_point_count)
     {
         points.resize(combined_point_count);
     }
     for (Point_id point_id = 0, end = other.point_count(); point_id < end; ++point_id)
     {
-        Point_id     dst_point_id = point_id + m_next_point_id;
-        const Point& src_point    = other.points[point_id];;
-        Point&       dst_point    = points[dst_point_id];
+        const Point_id dst_point_id = point_id + m_next_point_id;
+        const Point&   src_point    = other.points[point_id];;
+        Point&         dst_point    = points[dst_point_id];
         dst_point.first_point_corner_id = src_point.first_point_corner_id + m_next_point_corner_reserve; 
         dst_point.corner_count          = src_point.corner_count;
         dst_point.reserved_corner_count = src_point.reserved_corner_count;
     }
 
     // Append point corners
-    Point_corner_id combined_point_corner_count = point_corner_count() + other.point_corner_count();
+    const Point_corner_id combined_point_corner_count = point_corner_count() + other.point_corner_count();
     if (point_corners.size() < combined_point_corner_count)
     {
         point_corners.resize(combined_point_corner_count);
@@ -50,16 +50,16 @@ void Geometry::merge(Geometry& other, glm::mat4 transform)
     }
 
     // Append polygons
-    Polygon_id combined_polygon_count = m_next_polygon_id + other.polygon_count();
+    const Polygon_id combined_polygon_count = m_next_polygon_id + other.polygon_count();
     if (polygons.size() < combined_polygon_count)
     {
         polygons.resize(combined_polygon_count);
     }
     for (Polygon_id polygon_id = 0, end = other.polygon_count(); polygon_id < end; ++polygon_id)
     {
-        Polygon_id     dst_polygon_id = polygon_id + m_next_polygon_id;
-        const Polygon& src_polygon    = other.polygons[polygon_id];
-        Polygon&       dst_polygon    = polygons[dst_polygon_id];
+        const Polygon_id dst_polygon_id = polygon_id + m_next_polygon_id;
+        const Polygon&   src_polygon    = other.polygons[polygon_id];
+        Polygon&         dst_polygon    = polygons[dst_polygon_id];
         dst_polygon.first_polygon_corner_id = src_polygon.first_polygon_corner_id + m_next_polygon_corner_id;
         dst_polygon.corner_count            = src_polygon.corner_count;
     }

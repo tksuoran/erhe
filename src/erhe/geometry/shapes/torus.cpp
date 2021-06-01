@@ -210,10 +210,10 @@ auto make_torus(double major_radius, double minor_radius, int major_axis_steps, 
 {
     ZoneScoped;
 
-    Geometry geometry("torus");
-    Torus_builder builder(geometry, major_radius, minor_radius, major_axis_steps, minor_axis_steps);
-    builder.build();
-    return geometry;
+    return Geometry("torus", [=](auto& geometry) {
+        Torus_builder builder(geometry, major_radius, minor_radius, major_axis_steps, minor_axis_steps);
+        builder.build();
+    });
 }
 
 auto torus_volume(float major_radius, float minor_radius) -> float

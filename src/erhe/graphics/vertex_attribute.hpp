@@ -1,8 +1,8 @@
-#ifndef vertex_attribute_hpp_erhe_graphics
-#define vertex_attribute_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/gl/gl.hpp"
+
 #include <cstddef>
 #include <type_traits>
 
@@ -148,5 +148,3 @@ struct Enable_bit_mask_operators<erhe::graphics::Vertex_attribute::Usage_type>
 };
 
 } // namespace erhe::graphics
-
-#endif

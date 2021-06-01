@@ -1,5 +1,5 @@
 #include "renderers/light_mesh.hpp"
-#include "renderers/programs.hpp"
+#include "renderers/program_interface.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/regular_polygon.hpp"
 #include "erhe/graphics/vertex_format.hpp"
@@ -26,27 +26,27 @@ Light_mesh::Light_mesh()
 
 void Light_mesh::connect()
 {
-    m_programs = require<Programs>();
-
-    initialization_depends_on(m_programs);
+    m_program_interface = require<Program_interface>();
 }
 
 void Light_mesh::initialize_component()
 {
+    Buffer_info buffer_info;
     Format_info format_info;
-
     format_info.want_fill_triangles       = true;
     format_info.want_edge_lines           = true;
     format_info.want_position             = true;
-    format_info.vertex_attribute_mappings = &m_programs->attribute_mappings;
+    format_info.vertex_attribute_mappings = &m_program_interface->attribute_mappings;
+
+    erhe::graphics::Buffer_transfer_queue queue;
+    erhe::primitive::Primitive_build_context context{queue, format_info, buffer_info};
 
     // Full screen quad
     {
         // -1 .. 1
         auto quad_geometry = erhe::geometry::shapes::make_quad(2.0f);
         quad_geometry.build_edges();
-        Buffer_info buffer_info;
-        m_quad_mesh = make_primitive(quad_geometry, format_info, buffer_info);
+        m_quad_mesh = make_primitive(quad_geometry, context, Normal_style::none);
     }
 
     // Spot light cone
@@ -67,7 +67,7 @@ void Light_mesh::initialize_component()
         cone_geometry.transform(mat4_rotate_xz_cw);
         cone_geometry.build_edges();
         Buffer_info buffer_info;
-        m_cone_mesh = make_primitive(cone_geometry, format_info, buffer_info);
+        m_cone_mesh = make_primitive(cone_geometry, context);
     }
 }
 

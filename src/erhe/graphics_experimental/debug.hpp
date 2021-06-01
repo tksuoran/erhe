@@ -1,5 +1,4 @@
-#ifndef debug_hpp_erhe_graphics
-#define debug_hpp_erhe_graphics
+#pragma once
 
 namespace erhe::graphics
 {
@@ -10,5 +9,3 @@ void debug_vao();
 void debug_gl_state();
 
 } // namespace erhe::graphics
-
-#endif

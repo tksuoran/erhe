@@ -14,5 +14,6 @@ extern erhe::log::Category log_vertex_attribute_mappings;
 extern erhe::log::Category log_fragment_outputs;
 extern erhe::log::Category log_load_png;
 extern erhe::log::Category log_save_png;
+extern erhe::log::Category log_threads;
 
 } // namespace erhe::graphics

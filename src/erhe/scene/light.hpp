@@ -32,7 +32,7 @@ public:
         "Spot"
     };
 
-    explicit Light(const std::string& name);
+    explicit Light(std::string_view name);
 
     virtual ~Light() = default;
 

@@ -1,6 +1,6 @@
 #include "windows/physics_window.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/pointer_context.hpp"
 #include "log.hpp"
@@ -13,15 +13,15 @@
 namespace editor
 {
 
-auto Physics_window::state() const -> Tool::State
+auto Physics_window::state() const -> State
 {
-    return State::passive;
+    return State::Passive;
 }
 
 void Physics_window::connect()
 {
     m_selection_tool  = get    <Selection_tool>();
-    m_scene_manager   = require<Scene_manager>();
+    m_scene_root      = require<Scene_root    >();
 }
 
 void Physics_window::window(Pointer_context& pointer_context)
@@ -33,8 +33,8 @@ void Physics_window::window(Pointer_context& pointer_context)
 
     ImGui::Begin("Physics");
 
-    auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
-    auto& physics_world = m_scene_manager->physics_world();
+    const auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
+    auto& physics_world = m_scene_root->physics_world();
     ImGui::Checkbox("Physics enabled", &physics_world.physics_enabled);
     ImGui::Checkbox("Debug draw", &m_debug_draw);
 
@@ -51,18 +51,21 @@ void Physics_window::window(Pointer_context& pointer_context)
         }
     }
 
-    const auto& selected_meshes = m_selection_tool->selected_meshes();
-    for (const auto& mesh : selected_meshes)
+    const auto& selecion = m_selection_tool->selection();
+    for (const auto item : selecion)
     {
+        auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
         if (!mesh)
         {
             continue;
         }
-        auto* node = mesh->node().get();
+
+        const auto* node = mesh->node().get();
         if (node == nullptr)
         {
             continue;
         }
+
         auto node_physics = node->get_attachment<Node_physics>();
         if (!node_physics)
         {
@@ -121,11 +124,11 @@ void Physics_window::window(Pointer_context& pointer_context)
     ImGui::End();
 }
 
-void Physics_window::render(Render_context& render_context)
+void Physics_window::render(const Render_context& render_context)
 {
-    if (m_debug_draw && m_scene_manager)
+    if (m_debug_draw && m_scene_root)
     {
-        m_scene_manager->debug_render();
+        m_scene_root->physics_world().bullet_dynamics_world.debugDrawWorld();
     }
 }
 

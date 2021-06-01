@@ -65,9 +65,9 @@ Truncate::Truncate(Geometry& source, Geometry& destination)
 
 auto truncate(Geometry& source) -> Geometry
 {
-    Geometry result(fmt::format("truncate({})", source.name));
-    Truncate operation(source, result);
-    return result;
+    return Geometry(fmt::format("truncate({})", source.name), [&source](auto& result) {
+        Truncate operation(source, result);
+    });
 }
 
 

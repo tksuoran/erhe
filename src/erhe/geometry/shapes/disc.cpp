@@ -203,10 +203,10 @@ auto make_disc(double outer_radius,
 {
     ZoneScoped;
 
-    Geometry geometry("disc");
-    Disc_builder builder(geometry, outer_radius, inner_radius, slice_count, stack_count);
-    builder.build();
-    return geometry;
+    return Geometry("disc", [=](auto& geometry) {
+        Disc_builder builder(geometry, outer_radius, inner_radius, slice_count, stack_count);
+        builder.build();
+    });
 }
 
 } // namespace erhe::geometry::shapes

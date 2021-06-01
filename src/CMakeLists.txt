@@ -1,4 +1,4 @@
-# CMakeLists.txt for erhe/examples
+# CMakeLists.txt for erhe/src
 
 add_subdirectory(imgui)
 add_subdirectory(erhe)

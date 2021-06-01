@@ -21,6 +21,9 @@ Rigid_body::Rigid_body(Create_info& create_info, btMotionState* motion_state)
     , m_collision_mode{create_info.mass > 0.0f ? Collision_mode::e_dynamic
                                                : Collision_mode::e_static}
 {
+    bullet_rigid_body.setDamping(0.02f, 0.02f);
+    bullet_rigid_body.setFriction(0.1f);
+    bullet_rigid_body.setRollingFriction(0.5f);
 }
 
 void Rigid_body::set_static()

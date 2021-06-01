@@ -2,6 +2,7 @@
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::graphics
 {
@@ -43,6 +44,7 @@ Framebuffer::~Framebuffer()
 
 void Framebuffer::reset()
 {
+    m_owner_thread = {};
     m_gl_framebuffer.reset();
 }
 
@@ -50,9 +52,11 @@ void Framebuffer::create()
 {
     if (m_gl_framebuffer.has_value())
     {
+        VERIFY(m_owner_thread == std::this_thread::get_id());
         return;
     }
 
+    m_owner_thread = std::this_thread::get_id();
     m_gl_framebuffer.emplace(Gl_framebuffer{});
     for (auto& attachment : m_attachments)
     {

@@ -3,12 +3,12 @@
 namespace erhe::scene
 {
 
-Mesh::Mesh(const std::string& name)
+Mesh::Mesh(std::string_view name)
     : m_name{name}
 {
 }
 
-Mesh::Mesh(const std::string&         name,
+Mesh::Mesh(std::string_view           name,
            erhe::primitive::Primitive primitive)
     : m_name{name}
 {

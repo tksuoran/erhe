@@ -1,5 +1,4 @@
-#ifndef log_hpp_erhe_ui
-#define log_hpp_erhe_ui
+#pragma once
 
 #include "erhe/log/log.hpp"
 
@@ -16,5 +15,3 @@ extern erhe::log::Category log_font;
 extern erhe::log::Category log_layout;
 
 } // namespace erhe::ui
-
-#endif

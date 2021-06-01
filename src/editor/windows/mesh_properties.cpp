@@ -1,6 +1,7 @@
 #include "windows/mesh_properties.hpp"
+#include "editor.hpp"
 #include "renderers/text_renderer.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/scene/camera.hpp"
@@ -15,22 +16,23 @@ namespace editor
 
 auto Mesh_properties::state() const -> State
 {
-    return State::passive;
+    return State::Passive;
 }
 
 void Mesh_properties::connect()
 {
-    m_scene_manager  = get<Scene_manager>();
+    m_editor         = get<Editor        >();
+    m_scene_root     = get<Scene_root    >();
     m_selection_tool = get<Selection_tool>();
 }
 
 void Mesh_properties::window(Pointer_context&)
 {
     ImGui::Begin("Mesh Debug");
-    const auto& meshes = m_selection_tool->selected_meshes();
-    for (auto mesh : meshes)
+    for (auto item : m_selection_tool->selection())
     {
-        if (mesh.get() == nullptr)
+        auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        if (!mesh)
         {
             continue;
         }
@@ -58,63 +60,66 @@ void Mesh_properties::window(Pointer_context&)
     ImGui::End();
 }
 
-void Mesh_properties::render(Render_context& render_context)
+void Mesh_properties::render(const Render_context& render_context)
 {
     if (render_context.text_renderer == nullptr)
     {
         return;
     }
-    const auto& meshes = m_selection_tool->selected_meshes();
-    if (meshes.size() == 0)
-    {
-        return;
-    }
 
-    auto&     camera          = m_scene_manager->camera();
-    auto&     text_renderer   = *render_context.text_renderer;
-    glm::mat4 clip_from_world = camera.clip_from_world();
-    for (auto mesh : meshes)
+    //const auto& meshes = m_selection_tool->selected_meshes();
+    //if (meshes.size() == 0)
+    //{
+    //    return;
+    //}
+
+    const auto*     camera          = m_editor->get_view_camera().get();
+    auto&           text_renderer   = *render_context.text_renderer;
+    const glm::mat4 clip_from_world = camera->clip_from_world();
+    for (auto item : m_selection_tool->selection())
     {
-        if (mesh.get() == nullptr)
+        const auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        if (!mesh)
         {
             continue;
         }
-        glm::mat4 world_from_node = mesh->node() ? mesh->node()->world_from_node() 
-                                                 : glm::mat4(1.0f);
+        const glm::mat4 world_from_node = mesh->node() ? mesh->node()->world_from_node() 
+                                                       : glm::mat4(1.0f);
         for (auto& primitive : mesh->primitives)
         {
-            auto geometry = primitive.primitive_geometry->source_geometry;
-            if (geometry.get() == nullptr)
+            const auto geometry = primitive.primitive_geometry->source_geometry;
+            if (!geometry)
             {
                 continue;
             }
 
-            auto polygon_centroids = geometry->polygon_attributes().find<glm::vec3>(c_polygon_centroids);
-            auto point_locations   = geometry->point_attributes  ().find<glm::vec3>(c_point_locations  );
+            const auto polygon_centroids = geometry->polygon_attributes().find<glm::vec3>(c_polygon_centroids);
+            const auto point_locations   = geometry->point_attributes  ().find<glm::vec3>(c_point_locations  );
             if ((point_locations != nullptr) && m_show_points)
             {
-                uint32_t end = geometry->point_count();
-                end = std::min(static_cast<uint32_t>(m_max_labels), end);
+                const uint32_t end = std::min(static_cast<uint32_t>(m_max_labels), geometry->point_count());
                 for (Point_id point_id = 0; point_id < end; ++point_id)
                 {
                     if (!point_locations->has(point_id))
                     {
                         continue;
                     }
-                    glm::vec3 p_in_node    = point_locations->get(point_id);
-                    glm::vec4 p4_in_node   = glm::vec4(p_in_node, 1.0f);
-                    glm::vec4 p4_in_world  = world_from_node * p4_in_node;
-                    glm::vec3 p3_in_window = erhe::toolkit::project_to_screen_space(clip_from_world,
-                                                                                    glm::vec3(p4_in_world),
-                                                                                    0.0f,
-                                                                                    1.0f,
-                                                                                    static_cast<float>(render_context.viewport.x),
-                                                                                    static_cast<float>(render_context.viewport.y),
-                                                                                    static_cast<float>(render_context.viewport.width),
-                                                                                    static_cast<float>(render_context.viewport.height));
-                    uint32_t text_color = 0xff00ff00u;
-                    p3_in_window.z = -p3_in_window.z;
-                    text_renderer.print(fmt::format("{}", point_id), p3_in_window, text_color);
+                    const auto p_in_node    = point_locations->get(point_id);
+                    const auto p4_in_node   = glm::vec4(p_in_node, 1.0f);
+                    const auto p4_in_world  = world_from_node * p4_in_node;
+                    const auto p3_in_window = erhe::toolkit::project_to_screen_space(clip_from_world,
+                                                                                          glm::vec3(p4_in_world),
+                                                                                          0.0f,
+                                                                                          1.0f,
+                                                                                          static_cast<float>(render_context.viewport.x),
+                                                                                          static_cast<float>(render_context.viewport.y),
+                                                                                          static_cast<float>(render_context.viewport.width),
+                                                                                          static_cast<float>(render_context.viewport.height));
+                    const uint32_t  text_color = 0xff00ff00u;
+                    const glm::vec3 p3_in_window_z_negated{ p3_in_window.x,
+                                                            p3_in_window.y,
+                                                           -p3_in_window.z};
+                    text_renderer.print(fmt::format("{}", point_id), p3_in_window_z_negated, text_color);
                 }
             }
 
@@ -122,25 +127,27 @@ void Mesh_properties::render(Render_context& render_context)
             {
                 for (Edge_id edge_id = 0; edge_id < geometry->edge_count(); ++edge_id)
                 {
-                    auto& edge = geometry->edges[edge_id];
+                    const auto& edge = geometry->edges[edge_id];
 
                     if (!point_locations->has(edge.a) || !point_locations->has(edge.b))
                     {
                         continue;
                     }
-                    glm::vec3 p_in_node    = (point_locations->get(edge.a) + point_locations->get(edge.b)) / 2.0f;
-                    glm::vec4 p4_in_node   = glm::vec4(p_in_node, 1.0f);
-                    glm::vec4 p4_in_world  = world_from_node * p4_in_node;
-                    glm::vec3 p3_in_window = erhe::toolkit::project_to_screen_space(clip_from_world,
-                                                                                    glm::vec3(p4_in_world),
-                                                                                    0.0f,
-                                                                                    1.0f,
-                                                                                    static_cast<float>(render_context.viewport.x),
-                                                                                    static_cast<float>(render_context.viewport.y),
-                                                                                    static_cast<float>(render_context.viewport.width),
-                                                                                    static_cast<float>(render_context.viewport.height));
-                    uint32_t text_color = 0xff0000ffu;
-                    p3_in_window.z = -p3_in_window.z;
+                    const auto p_in_node    = (point_locations->get(edge.a) + point_locations->get(edge.b)) / 2.0f;
+                    const auto p4_in_node   = glm::vec4(p_in_node, 1.0f);
+                    const auto p4_in_world  = world_from_node * p4_in_node;
+                    const auto p3_in_window = erhe::toolkit::project_to_screen_space(clip_from_world,
+                                                                                     glm::vec3(p4_in_world),
+                                                                                     0.0f,
+                                                                                     1.0f,
+                                                                                     static_cast<float>(render_context.viewport.x),
+                                                                                     static_cast<float>(render_context.viewport.y),
+                                                                                     static_cast<float>(render_context.viewport.width),
+                                                                                     static_cast<float>(render_context.viewport.height));
+                    const uint32_t  text_color = 0xff0000ffu;
+                    const glm::vec3 p3_in_window_z_negated{ p3_in_window.x,
+                                                            p3_in_window.y,
+                                                           -p3_in_window.z};
                     text_renderer.print(fmt::format("{}", edge_id), p3_in_window, text_color);
                 }
             }

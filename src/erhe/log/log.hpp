@@ -3,6 +3,7 @@
 #include <fmt/core.h>
 
 #include <array>
+#include <mutex>
 #include <string>
 
 #include <fmt/format.h>
@@ -118,6 +119,7 @@ struct Category
 protected:
     void write(bool indent, const std::string& text);
 
+    static std::mutex s_mutex;
     std::array<int, 2> m_color;
     int                m_level{Level::LEVEL_ALL};
     Colorizer          m_colorizer{Colorizer::default_};

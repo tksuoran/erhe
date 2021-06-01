@@ -67,6 +67,8 @@ Buffer::Buffer(gl::Buffer_target          target,
     Ensures(m_capacity_byte_count > 0);
 }
 
+Buffer::~Buffer() = default;
+
 auto Buffer::debug_label() const noexcept
 -> const std::string&
 {
@@ -76,6 +78,8 @@ auto Buffer::debug_label() const noexcept
 auto Buffer::allocate_bytes(size_t byte_count, size_t alignment) noexcept
 -> size_t
 {
+    std::lock_guard<std::mutex> lock(m_allocate_mutex);
+
     while ((m_next_free_byte % alignment) != 0)
     {
         ++m_next_free_byte;
@@ -83,6 +87,8 @@ auto Buffer::allocate_bytes(size_t byte_count, size_t alignment) noexcept
     auto offset = m_next_free_byte;
     m_next_free_byte += byte_count;
     VERIFY(m_next_free_byte <= m_capacity_byte_count);
+
+    log_buffer.trace("buffer {}: allocated {} bytes at offset {}\n", gl_name(), byte_count, offset);
     return offset;
 }
 
@@ -285,6 +291,39 @@ auto Buffer::capacity_byte_count() const noexcept
 -> size_t
 {
     return m_capacity_byte_count;
+}
+
+Buffer_transfer_queue::Buffer_transfer_queue()
+{
+}
+
+Buffer_transfer_queue::~Buffer_transfer_queue()
+{
+    flush();
+}
+
+void Buffer_transfer_queue::enqueue(Buffer* buffer, size_t offset, std::vector<uint8_t>&& data)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    log_buffer.trace("queued buffer {} transfer offet = {} size = {}\n", buffer->gl_name(), offset, data.size());
+    m_queued.emplace_back(buffer, offset, std::move(data));
+}
+
+void Buffer_transfer_queue::flush()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (const auto& entry : m_queued)
+    {
+        log_buffer.trace("buffer upload {} transfer offet = {} size = {}\n", entry.target->gl_name(), entry.target_offset, entry.data.size());
+        Scoped_buffer_mapping<uint8_t> scoped_mapping{*entry.target,
+                                                      entry.target_offset,
+                                                      entry.data.size(),
+                                                      gl::Map_buffer_access_mask::map_invalidate_range_bit |
+                                                      gl::Map_buffer_access_mask::map_write_bit};
+        auto destination = scoped_mapping.span();
+        memcpy(destination.data(), entry.data.data(), entry.data.size());
+    }
+    m_queued.clear();
 }
 
 auto operator==(const Buffer& lhs, const Buffer& rhs) noexcept

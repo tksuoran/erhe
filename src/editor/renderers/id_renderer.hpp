@@ -28,7 +28,7 @@ namespace erhe::scene
 namespace editor
 {
 
-class Scene_manager;
+class Mesh_memory;
 
 class Id_renderer
     : public erhe::components::Component,
@@ -53,13 +53,13 @@ public:
     void connect() override;
     void initialize_component() override;
 
-    void render(erhe::scene::Viewport   viewport,
-                const Layer_collection& content_layers,
-                const Layer_collection& tool_layers,
-                erhe::scene::ICamera&   camera,
-                double                  time,
-                int                     x,
-                int                     y);
+    void render(const erhe::scene::Viewport viewport,
+                const Layer_collection&     content_layers,
+                const Layer_collection&     tool_layers,
+                erhe::scene::ICamera&       camera,
+                const double                time,
+                const int                   x,
+                const int                   y);
 
     auto get(int x, int y, uint32_t& id, float& depth) -> bool;
 
@@ -142,7 +142,8 @@ private:
 
     erhe::scene::Viewport                                 m_viewport;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<Scene_manager>                        m_scene_manager;
+    std::shared_ptr<Programs>                             m_programs;
+    std::shared_ptr<Mesh_memory>                          m_mesh_memory;
     erhe::graphics::Pipeline                              m_pipeline;
     erhe::graphics::Pipeline                              m_selective_depth_clear_pipeline;
     std::unique_ptr<erhe::graphics::Vertex_input_state>   m_vertex_input;

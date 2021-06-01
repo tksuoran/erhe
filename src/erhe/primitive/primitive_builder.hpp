@@ -11,6 +11,7 @@
 #include "erhe/primitive/enums.hpp"
 #include "erhe/primitive/format_info.hpp"
 #include "erhe/primitive/index_range.hpp"
+#include "erhe/primitive/log.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 
@@ -31,6 +32,88 @@ namespace erhe::primitive
 
 struct Index_range;
 struct Material;
+
+struct Primitive_build_context
+{
+    Primitive_build_context(erhe::graphics::Buffer_transfer_queue& queue,
+                            const Format_info&                     format_info,
+                            const Buffer_info&                     buffer_info);
+    ~Primitive_build_context();
+    Primitive_build_context(const Primitive_build_context& other);
+    Primitive_build_context& operator=(Primitive_build_context&) = delete;
+    Primitive_build_context(Primitive_build_context&& other) noexcept;
+    Primitive_build_context& operator=(Primitive_build_context&& other) = delete;
+
+    erhe::graphics::Buffer_transfer_queue& queue;
+    Format_info                            format_info;
+    Buffer_info                            buffer_info;
+};
+
+struct Vertex_attribute_info
+{
+    Vertex_attribute_info();
+
+    Vertex_attribute_info(erhe::graphics::Vertex_format*               vertex_format,
+                          gl::Vertex_attrib_type                       default_data_type,
+                          size_t                                       dimension,
+                          erhe::graphics::Vertex_attribute::Usage_type semantic,
+                          unsigned int                                 semantic_index);
+
+    auto is_valid() -> bool;
+
+    const erhe::graphics::Vertex_attribute* attribute{nullptr};
+    gl::Vertex_attrib_type                  data_type{gl::Vertex_attrib_type::float_};
+    size_t                                  offset{std::numeric_limits<size_t>::max()};
+    size_t                                  size{0};
+};
+
+struct Vertex_buffer_writer
+{
+    explicit Vertex_buffer_writer(Primitive_geometry&            primitive_geometry,
+                                  const Primitive_build_context& context);
+    ~Vertex_buffer_writer();
+
+    void write(Vertex_attribute_info& attribute, glm::vec2 value);
+    void write(Vertex_attribute_info& attribute, glm::vec3 value);
+    void write(Vertex_attribute_info& attribute, glm::vec4 value);
+    void write(Vertex_attribute_info& attribute, uint32_t value);
+    void move(size_t relative_offset);
+
+    Primitive_geometry&            primitive_geometry;
+    const Primitive_build_context& context;
+    std::vector<std::uint8_t>      vertex_data;
+    gsl::span<std::uint8_t>        vertex_data_span;
+    size_t                         vertex_write_offset{0};
+};
+
+struct Index_buffer_writer
+{
+    Index_buffer_writer(Primitive_geometry&            primitive_geometry,
+                        const Primitive_build_context& context,
+                        erhe::geometry::Mesh_info&     mesh_info);
+    ~Index_buffer_writer();
+
+    void write_corner  (uint32_t v0);
+    void write_triangle(uint32_t v0, uint32_t v1, uint32_t v2);
+    void write_edge    (uint32_t v0, uint32_t v1);
+    void write_centroid(uint32_t v0);
+
+    Primitive_geometry&            primitive_geometry;
+    const Primitive_build_context& context;
+    const gl::Draw_elements_type   index_type;
+    const size_t                   index_type_size{0};
+    std::vector<std::uint8_t>      index_data;
+    gsl::span<std::uint8_t>        index_data_span;
+    gsl::span<std::uint8_t>        corner_point_index_data_span;
+    gsl::span<std::uint8_t>        fill_index_data_span;
+    gsl::span<std::uint8_t>        edge_line_index_data_span;
+    gsl::span<std::uint8_t>        polygon_centroid_index_data_span;
+
+    size_t corner_point_indices_written    {0};
+    size_t triangle_indices_written        {0};
+    size_t edge_line_indices_written       {0};
+    size_t polygon_centroid_indices_written{0};
+};
 
 class Primitive_builder
 {
@@ -86,8 +169,8 @@ public:
     Primitive_builder() = delete;
 
     Primitive_builder(const erhe::geometry::Geometry& geometry,
-                      const Format_info&              format_info,
-                      Buffer_info&                    buffer_info);
+                      const Primitive_build_context&  context,
+                      Normal_style                    normal_style);
 
     ~Primitive_builder();
 
@@ -99,33 +182,6 @@ public:
                                       Buffer_info&       buffer_info);
 
 private:
-    struct Vertex_attribute_info
-    {
-        Vertex_attribute_info() = default;
-
-        Vertex_attribute_info(erhe::graphics::Vertex_format*               vertex_format,
-                              gl::Vertex_attrib_type                       default_data_type,
-                              size_t                                       dimension,
-                              erhe::graphics::Vertex_attribute::Usage_type semantic,
-                              unsigned int                                 semantic_index)
-            : attribute{vertex_format->find_attribute_maybe(semantic, semantic_index)}
-            , data_type{(attribute != nullptr) ? attribute->data_type.type : default_data_type}
-            , offset   {(attribute != nullptr) ? attribute->offset         : std::numeric_limits<size_t>::max()}
-            , size     {size_of_type(data_type) * dimension}
-        {
-        }
-
-        auto is_valid() -> bool
-        {
-            return (attribute != nullptr) && (offset != std::numeric_limits<size_t>::max()) && (size > 0);
-        }
-
-        const erhe::graphics::Vertex_attribute* attribute{nullptr};
-        gl::Vertex_attrib_type                  data_type{gl::Vertex_attrib_type::float_};
-        size_t                                  offset{std::numeric_limits<size_t>::max()};
-        size_t                                  size{0};
-    };
-
     struct Vertex_attributes
     {
         Vertex_attribute_info position         ;
@@ -140,50 +196,6 @@ private:
         Vertex_attribute_info attribute_id_uint;
     };
 
-    struct Vertex_buffer_writer
-    {
-        explicit Vertex_buffer_writer(Primitive_geometry& primitive_geometry);
-
-        void write(Vertex_attribute_info& attribute, glm::vec2 value);
-        void write(Vertex_attribute_info& attribute, glm::vec3 value);
-        void write(Vertex_attribute_info& attribute, glm::vec4 value);
-        void write(Vertex_attribute_info& attribute, uint32_t value);
-        void move(size_t relative_offset);
-
-        erhe::graphics::Scoped_buffer_mapping<std::byte> vertex_mapping;
-        const gsl::span<std::byte>&                      vertex_data;
-
-        size_t vertex_write_offset{0};
-    };
-
-    struct Index_buffer_writer
-    {
-        Index_buffer_writer(Buffer_info&               buffer_info,
-                            const Format_info&         format_info,
-                            erhe::geometry::Mesh_info& mesh_info,
-                            Primitive_geometry&        primitive_geometry);
-
-        void write_corner  (uint32_t v0);
-        void write_triangle(uint32_t v0, uint32_t v1, uint32_t v2);
-        void write_edge    (uint32_t v0, uint32_t v1);
-        void write_centroid(uint32_t v0);
-
-        gl::Draw_elements_type index_type;
-        size_t                 index_type_size{0};
-
-        erhe::graphics::Scoped_buffer_mapping<std::byte> index_mapping;
-        gsl::span<std::byte> index_data;
-        gsl::span<std::byte> corner_point_index_data;
-        gsl::span<std::byte> fill_index_data;
-        gsl::span<std::byte> edge_line_index_data;
-        gsl::span<std::byte> polygon_centroid_index_data;
-
-        size_t corner_point_indices_written    {0};
-        size_t triangle_indices_written        {0};
-        size_t edge_line_indices_written       {0};
-        size_t polygon_centroid_indices_written{0};
-    };
-
     void get_vertex_attributes();
     void get_geometry_mesh_info();
     void allocate_vertex_buffer();
@@ -194,8 +206,8 @@ private:
                               Index_range&       range);
 
     const erhe::geometry::Geometry& m_geometry;
-    const Format_info&              m_format_info;
-    Buffer_info&                    m_buffer_info;
+    const Primitive_build_context&  m_context;
+    Normal_style                    m_normal_style;
     Primitive_geometry*             m_primitive_geometry{nullptr};
     erhe::geometry::Mesh_info       m_mesh_info;
     erhe::graphics::Vertex_format*  m_vertex_format{nullptr};
@@ -207,13 +219,13 @@ private:
 };
 
 auto make_primitive(const erhe::geometry::Geometry& geometry,
-                    const Format_info&              format_info,
-                    Buffer_info&                    buffer_info)
-    -> Primitive_geometry;
+                    const Primitive_build_context&  context,
+                    const Normal_style              normal_style = Normal_style::corner_normals)
+-> Primitive_geometry;
 
 auto make_primitive_shared(const erhe::geometry::Geometry& geometry,
-                           const Format_info&              format_info,
-                           Buffer_info&                    buffer_info)
-    -> std::shared_ptr<Primitive_geometry>;
+                           const Primitive_build_context&  context,
+                           const Normal_style              normal_style = Normal_style::corner_normals)
+-> std::shared_ptr<Primitive_geometry>;
 
 } // namespace erhe::primitive

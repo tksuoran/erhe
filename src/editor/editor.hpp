@@ -1,6 +1,5 @@
 #pragma once
 
-#include "scene/scene_manager.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
 #include "erhe/toolkit/window.hpp"
@@ -12,32 +11,34 @@
 
 #include <chrono>
 #include <optional>
+#include <thread>
 
 namespace erhe::graphics
 {
-    class Renderbuffer;
-    class Texture;
     class Framebuffer;
-    class Shader_monitor;
     class OpenGL_state_tracker;
+    class Renderbuffer;
+    class Shader_monitor;
+    class Texture;
+}
+
+namespace erhe::scene
+{
+    class ICamera;
 }
 
 namespace editor {
 
 class Application;
-class Forward_renderer;
-class Id_renderer;
-class Scene_manager;
-class Shadow_renderer;
-class Text_renderer;
-class Line_renderer;
-
 class Brushes;
 class Camera_properties;
 class Fly_camera_tool;
+class Forward_renderer;
 class Grid_tool;
 class Hover_tool;
+class Id_renderer;
 class Light_properties;
+class Line_renderer;
 class Material_properties;
 class Mesh_properties;
 class Node_properties;
@@ -45,9 +46,13 @@ class Operations;
 class Operation_stack;
 class Physics_tool;
 class Physics_window;
+class Scene_manager;
+class Scene_root;
 class Selection_tool;
-class Trs_tool;
+class Shadow_renderer;
+class Text_renderer;
 class Tool;
+class Trs_tool;
 class Viewport_config;
 class Viewport_window;
 class Window;
@@ -59,45 +64,36 @@ class Editor
 public:
     static constexpr const char* c_name = "Editor";
     Editor();
-    virtual ~Editor() = default;
+    virtual ~Editor();
 
     // Implements Component
     void connect() override;
     void initialize_component() override;
 
-    void disconnect();
-
     // Implements View
     void update() override;
     void on_enter() override;
-    void on_mouse_move(double x, double y) override;
+    void on_mouse_move( double x, double y) override;
     void on_mouse_click(erhe::toolkit::Mouse_button button, int count) override;
-    void on_key_press(erhe::toolkit::Keycode code, uint32_t modifier_mask) override
-    {
-        on_key(true, code, modifier_mask);
-    }
-
-    void on_key_release(erhe::toolkit::Keycode code, uint32_t modifier_mask) override
-    {
-        on_key(false, code, modifier_mask);
-    }
+    void on_key_press(erhe::toolkit::Keycode code, uint32_t modifier_mask) override;
+    void on_key_release(erhe::toolkit::Keycode code, uint32_t modifier_mask) override;
 
     void render();
-
     auto get_priority_action() const -> Action;
     void set_priority_action(Action action);
-
+ 
     void register_tool(Tool* tool);
-
     void register_background_tool(Tool* tool);
-
     void register_window(Window* window);
-
     void delete_selected_meshes();
+
+    void set_view_camera(std::shared_ptr<erhe::scene::ICamera> camera);
+    auto get_view_camera() const -> std::shared_ptr<erhe::scene::ICamera>;
 
 private:
     Action m_priority_action{Action::select};
 
+    void initialize_camera();
     auto get_action_tool(Action action) -> Tool*;
     void render_shadowmaps();
     void render_id();
@@ -107,32 +103,18 @@ private:
     void render_tool_meshes();
     void render_update_tools();
     void update_and_render_tools();
-
     void on_pointer();
-
     void cancel_ready_tools(Tool* keep);
-
     void update_fixed_step(double dt);
-
     void update_once_per_frame();
-
     void update_pointer();
-
     void on_key(bool pressed, erhe::toolkit::Keycode code, uint32_t modifier_mask);
-
     void begin_frame();
-
     void gui_begin_frame();
-
     void gui_render();
-
-    // Rendering
     auto is_primary_scene_output_framebuffer_ready() -> bool;
-
     void bind_primary_scene_output_framebuffer();
-
     void end_primary_framebuffer();
-
     auto to_scene_content(glm::vec2 position_in_root) -> glm::vec2;
 
     std::shared_ptr<Brushes>             m_brushes;
@@ -147,12 +129,12 @@ private:
     std::shared_ptr<Operation_stack>     m_operation_stack;
     std::shared_ptr<Operations>          m_operations;
     std::shared_ptr<Physics_tool>        m_physics_tool;
+    std::shared_ptr<Scene_root>          m_scene_root;
     std::shared_ptr<Selection_tool>      m_selection_tool;
     std::shared_ptr<Trs_tool>            m_trs_tool;
     std::shared_ptr<Viewport_config>     m_viewport_config;
     std::shared_ptr<Viewport_window>     m_viewport_window;
     std::shared_ptr<Physics_window>      m_physics_window;
-
     std::vector<Tool*>                   m_tools;
     std::vector<Tool*>                   m_background_tools;
     std::vector<Window*>                 m_windows;
@@ -171,6 +153,7 @@ private:
     bool                                                  m_trigger_capture{false};
 
     erhe::scene::Viewport                 m_scene_viewport  {0, 0, 0, 0};
+    std::shared_ptr<erhe::scene::ICamera> m_view_camera;
 
     bool                                  m_enable_gui      {true};
     ImGuiContext*                         m_imgui_context   {nullptr};

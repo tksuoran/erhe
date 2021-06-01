@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe/components/components.hpp"
+#include "erhe/toolkit/verify.hpp"
 #include <set>
 
 namespace erhe::components
@@ -10,6 +11,15 @@ class Components;
 
 class Component
 {
+public:
+    enum class Component_state : unsigned int
+    {
+        Constructed,
+        Connected,
+        Initializing,
+        Ready
+    };
+
 protected:
     Component(const Component& other) = delete;
 
@@ -28,10 +38,8 @@ protected:
 public:
     virtual void connect() {};
 
-    void initialization_depends_on(const std::shared_ptr<Component>& a);
-
     template<typename T>
-    auto get() -> std::shared_ptr<T>
+    auto get() const -> std::shared_ptr<T>
     {
         if (m_components == nullptr)
         {
@@ -52,6 +60,7 @@ public:
     auto require() -> std::shared_ptr<T>
     {
         auto component = get<T>();
+        VERIFY(component);
         initialization_depends_on(component);
         return component;
     }
@@ -68,8 +77,8 @@ public:
         return m_name;
     }
 
-    auto is_initialized() const
-    -> bool;
+    auto get_state() const
+    -> Component_state;
 
     auto is_registered() const
     -> bool
@@ -87,12 +96,12 @@ public:
         m_components = nullptr;
     }
 
-    void initialize();
-
-    auto ready() const
+    auto is_ready() const
     -> bool;
 
-    void remove_dependencies(const std::set<std::shared_ptr<Component>>& remove_set);
+    void remove_dependency(const std::shared_ptr<Component>& component);
+
+    void initialization_depends_on(const std::shared_ptr<Component>& dependency);
 
     auto dependencies()
     -> const std::set<std::shared_ptr<Component>>&
@@ -100,11 +109,15 @@ public:
         return m_dependencies;
     }
 
+    void set_connected();
+    void set_initializing();
+    void set_ready();
+
 private:
-    const char*                          m_name{nullptr};
-    bool                                 m_initialized{false};
-    std::set<std::shared_ptr<Component>> m_dependencies;
+    const char*                          m_name      {nullptr};
+    Component_state                      m_state     {Component_state::Constructed};
     Components*                          m_components{nullptr};
+    std::set<std::shared_ptr<Component>> m_dependencies;
 };
 
 } // namespace erhe::components

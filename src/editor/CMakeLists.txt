@@ -1,4 +1,6 @@
 set(source_list
+    operations/compound_operation.cpp
+    operations/compound_operation.hpp
     operations/geometry_operations.cpp
     operations/geometry_operations.hpp
     operations/insert_operation.cpp
@@ -30,6 +32,10 @@ set(source_list
     renderers/light_mesh.hpp
     renderers/line_renderer.cpp
     renderers/line_renderer.hpp
+    renderers/mesh_memory.cpp
+    renderers/mesh_memory.hpp
+    renderers/program_interface.cpp
+    renderers/program_interface.hpp
     renderers/programs.cpp
     renderers/programs.hpp
     renderers/shadow_renderer.cpp
@@ -45,10 +51,14 @@ set(source_list
     scene/debug_draw.hpp
     scene/frame_controller.cpp
     scene/frame_controller.hpp
+    scene/helpers.cpp
+    scene/helpers.hpp
     scene/node_physics.cpp
     scene/node_physics.hpp
     scene/scene_manager.cpp
     scene/scene_manager.hpp
+    scene/scene_root.cpp
+    scene/scene_root.hpp
 
     tools/fly_camera_tool.cpp
     tools/fly_camera_tool.hpp
@@ -92,8 +102,11 @@ set(source_list
 
     application.cpp
     application.hpp
+    concurrentqueue.h
     editor.cpp
     editor.hpp
+    gl_context_provider.cpp
+    gl_context_provider.hpp
     imgui_demo.cpp
     imgui_demo.hpp
     log.cpp
@@ -146,6 +159,7 @@ target_link_libraries(
     erhe_scene
     erhe_toolkit
     erhe_ui
+    mango
     nlohmann_json::nlohmann_json
     TracyClient
 )

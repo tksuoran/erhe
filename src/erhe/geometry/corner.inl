@@ -6,12 +6,12 @@ namespace erhe::geometry
 {
 
 template <typename T>
-void Corner::smooth_normalize(Corner_id                                  this_corner_id,
+void Corner::smooth_normalize(const Corner_id                            this_corner_id,
                               const Geometry&                            geometry,
                               Property_map<Corner_id, T>&                corner_attribute,
                               const Property_map<Polygon_id, T>&         polygon_attribute,
                               const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-                              float                                      cos_max_smoothing_angle) const
+                              const float                                cos_max_smoothing_angle) const
 {
     ZoneScoped;
 
@@ -20,9 +20,9 @@ void Corner::smooth_normalize(Corner_id                                  this_co
         return;
     }
 
-    auto polygon_normal = polygon_normals.get(polygon_id);
-    T    polygon_value  = polygon_attribute.get(polygon_id);
-    T    corner_value   = polygon_value;
+    const auto polygon_normal = polygon_normals.get(polygon_id);
+    const T    polygon_value  = polygon_attribute.get(polygon_id);
+    T          corner_value   = polygon_value;
 
     size_t point_corner_count{0};
     size_t participant_count{0};
@@ -31,16 +31,16 @@ void Corner::smooth_normalize(Corner_id                                  this_co
     point.for_each_corner_const(geometry, [&](const auto& i)
     {
         ++point_corner_count;
-        Polygon_id     neighbor_polygon_id = i.corner.polygon_id;
-        const Polygon& neighbor_polygon    = geometry.polygons[polygon_id];
+        const Polygon_id neighbor_polygon_id = i.corner.polygon_id;
+        const Polygon&   neighbor_polygon    = geometry.polygons[polygon_id];
 
         if ((polygon_id != neighbor_polygon_id) &&
             polygon_normals.has(neighbor_polygon_id) &&
             polygon_attribute.has(neighbor_polygon_id) &&
             (neighbor_polygon.corner_count > 2))
         {
-            auto neighbor_normal = polygon_normals.get(neighbor_polygon_id);
-            float cos_angle = glm::dot(polygon_normal, neighbor_normal);
+            const auto neighbor_normal = polygon_normals.get(neighbor_polygon_id);
+            float      cos_angle = glm::dot(polygon_normal, neighbor_normal);
             if (cos_angle > 1.0f)
             {
                 cos_angle = 1.0f;
@@ -63,12 +63,11 @@ void Corner::smooth_normalize(Corner_id                                  this_co
         }
     });
 
-    corner_value = normalize(corner_value);
-    corner_attribute.put(this_corner_id, corner_value);
+    corner_attribute.put(this_corner_id, normalize(corner_value));
 }
 
 template <typename T>
-void Corner::smooth_average(Corner_id                                 this_corner_id,
+void Corner::smooth_average(const Corner_id                           this_corner_id,
                             const Geometry&                           geometry,
                             Property_map<Corner_id, T>&               new_corner_attribute,
                             const Property_map<Corner_id, T>&         old_corner_attribute,
@@ -77,14 +76,14 @@ void Corner::smooth_average(Corner_id                                 this_corne
 {
     ZoneScoped;
 
-    bool has_corner_normal = corner_normals.has(this_corner_id);
+    const bool has_corner_normal = corner_normals.has(this_corner_id);
     if (!has_corner_normal && !point_normals.has(point_id))
     {
         return;
     }
 
-    auto corner_normal = has_corner_normal ? corner_normals.get(this_corner_id)
-                                           : point_normals.get(point_id);
+    const auto corner_normal = has_corner_normal ? corner_normals.get(this_corner_id)
+                                                 : point_normals.get(point_id);
     T corner_value{};
 
     size_t participant_count{0};

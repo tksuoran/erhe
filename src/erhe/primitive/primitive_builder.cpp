@@ -29,6 +29,52 @@
 namespace erhe::primitive
 {
 
+Primitive_build_context::Primitive_build_context(erhe::graphics::Buffer_transfer_queue& queue,
+                                                 const Format_info&                     format_info,
+                                                 const Buffer_info&                     buffer_info)
+    : queue      {queue}
+    , format_info{format_info}
+    , buffer_info{buffer_info}
+{
+}
+
+Primitive_build_context::~Primitive_build_context()
+{
+}
+
+Primitive_build_context::Primitive_build_context(const Primitive_build_context& other)
+    : queue      {other.queue}
+    , format_info{other.format_info}
+    , buffer_info{other.buffer_info}
+{
+}
+
+Primitive_build_context::Primitive_build_context(Primitive_build_context&& other) noexcept
+    : queue      {other.queue}
+    , format_info{other.format_info}
+    , buffer_info{other.buffer_info}
+{
+}
+
+Vertex_attribute_info::Vertex_attribute_info() = default;
+
+Vertex_attribute_info::Vertex_attribute_info(erhe::graphics::Vertex_format*               vertex_format,
+                                             gl::Vertex_attrib_type                       default_data_type,
+                                             size_t                                       dimension,
+                                             erhe::graphics::Vertex_attribute::Usage_type semantic,
+                                             unsigned int                                 semantic_index)
+    : attribute{vertex_format->find_attribute_maybe(semantic, semantic_index)}
+    , data_type{(attribute != nullptr) ? attribute->data_type.type : default_data_type}
+    , offset   {(attribute != nullptr) ? attribute->offset         : std::numeric_limits<size_t>::max()}
+    , size     {size_of_type(data_type) * dimension}
+{
+}
+
+auto Vertex_attribute_info::is_valid() -> bool
+{
+    return (attribute != nullptr) && (offset != std::numeric_limits<size_t>::max()) && (size > 0);
+}
+
 using Corner_id         = erhe::geometry::Corner_id;
 using Point_id          = erhe::geometry::Point_id;
 using Polygon_id        = erhe::geometry::Polygon_id;
@@ -55,9 +101,9 @@ using glm::mat4;
 namespace
 {
 
-inline void write_low(gsl::span<std::byte>   destination,
-                      gl::Draw_elements_type type,
-                      size_t                 value)
+inline void write_low(gsl::span<std::uint8_t> destination,
+                      gl::Draw_elements_type  type,
+                      size_t                  value)
 {
     switch (type)
     {
@@ -91,9 +137,9 @@ inline void write_low(gsl::span<std::byte>   destination,
     }
 }
 
-inline void write_low(gsl::span<std::byte>   destination,
-                      gl::Vertex_attrib_type type,
-                      unsigned int           value)
+inline void write_low(gsl::span<std::uint8_t> destination,
+                      gl::Vertex_attrib_type  type,
+                      unsigned int            value)
 {
     switch (type)
     {
@@ -127,9 +173,9 @@ inline void write_low(gsl::span<std::byte>   destination,
     }
 }
 
-inline void write_low(gsl::span<std::byte>   destination,
-                      gl::Vertex_attrib_type type,
-                      vec2                   value)
+inline void write_low(gsl::span<std::uint8_t> destination,
+                      gl::Vertex_attrib_type  type,
+                      vec2                    value)
 {
     if (type == gl::Vertex_attrib_type::float_)
     {
@@ -152,9 +198,9 @@ inline void write_low(gsl::span<std::byte>   destination,
     }
 }
 
-inline void write_low(gsl::span<std::byte>   destination,
-                      gl::Vertex_attrib_type type,
-                      vec3                   value)
+inline void write_low(gsl::span<std::uint8_t> destination,
+                      gl::Vertex_attrib_type  type,
+                      vec3                    value)
 {
     if (type == gl::Vertex_attrib_type::float_)
     {
@@ -176,9 +222,9 @@ inline void write_low(gsl::span<std::byte>   destination,
     }
 }
 
-inline void write_low(gsl::span<std::byte>   destination,
-                      gl::Vertex_attrib_type type,
-                      vec4                   value)
+inline void write_low(gsl::span<std::uint8_t> destination,
+                      gl::Vertex_attrib_type  type,
+                      vec4                    value)
 {
     if (type == gl::Vertex_attrib_type::float_)
     {
@@ -205,12 +251,12 @@ inline void write_low(gsl::span<std::byte>   destination,
 
 } // namespace
 
-Primitive_builder::Primitive_builder(const Geometry&    geometry,
-                                     const Format_info& format_info,
-                                     Buffer_info&       buffer_info)
-    : m_geometry   {geometry}
-    , m_format_info{format_info}
-    , m_buffer_info{buffer_info}
+Primitive_builder::Primitive_builder(const Geometry&                geometry,
+                                     const Primitive_build_context& context,
+                                     Normal_style                   normal_style)
+    : m_geometry    {geometry}
+    , m_context     {context}
+    , m_normal_style{normal_style}
 {
 }
 
@@ -413,87 +459,87 @@ void Primitive_builder::get_vertex_attributes()
 {
     ZoneScoped;
 
-    m_attributes.position      = Vertex_attribute_info(m_vertex_format, m_format_info.position_type,      3, Vertex_attribute::Usage_type::position,  0);
-    m_attributes.normal        = Vertex_attribute_info(m_vertex_format, m_format_info.normal_type,        3, Vertex_attribute::Usage_type::normal,    0); // content normals
-    m_attributes.normal_flat   = Vertex_attribute_info(m_vertex_format, m_format_info.normal_flat_type,   3, Vertex_attribute::Usage_type::normal,    1); // flat normals
-    m_attributes.normal_smooth = Vertex_attribute_info(m_vertex_format, m_format_info.normal_smooth_type, 3, Vertex_attribute::Usage_type::normal,    2); // smooth normals
-    m_attributes.tangent       = Vertex_attribute_info(m_vertex_format, m_format_info.tangent_type,       4, Vertex_attribute::Usage_type::tangent,   0);
-    m_attributes.bitangent     = Vertex_attribute_info(m_vertex_format, m_format_info.bitangent_type,     4, Vertex_attribute::Usage_type::bitangent, 0);
-    m_attributes.color         = Vertex_attribute_info(m_vertex_format, m_format_info.color_type,         4, Vertex_attribute::Usage_type::color,     0);
-    m_attributes.texcoord      = Vertex_attribute_info(m_vertex_format, m_format_info.texcoord_type,      2, Vertex_attribute::Usage_type::tex_coord, 0);
-    m_attributes.id_vec3       = Vertex_attribute_info(m_vertex_format, m_format_info.id_vec3_type,       3, Vertex_attribute::Usage_type::id,        0);
+    m_attributes.position      = Vertex_attribute_info(m_vertex_format, m_context.format_info.position_type,      3, Vertex_attribute::Usage_type::position,  0);
+    m_attributes.normal        = Vertex_attribute_info(m_vertex_format, m_context.format_info.normal_type,        3, Vertex_attribute::Usage_type::normal,    0); // content normals
+    m_attributes.normal_flat   = Vertex_attribute_info(m_vertex_format, m_context.format_info.normal_flat_type,   3, Vertex_attribute::Usage_type::normal,    1); // flat normals
+    m_attributes.normal_smooth = Vertex_attribute_info(m_vertex_format, m_context.format_info.normal_smooth_type, 3, Vertex_attribute::Usage_type::normal,    2); // smooth normals
+    m_attributes.tangent       = Vertex_attribute_info(m_vertex_format, m_context.format_info.tangent_type,       4, Vertex_attribute::Usage_type::tangent,   0);
+    m_attributes.bitangent     = Vertex_attribute_info(m_vertex_format, m_context.format_info.bitangent_type,     4, Vertex_attribute::Usage_type::bitangent, 0);
+    m_attributes.color         = Vertex_attribute_info(m_vertex_format, m_context.format_info.color_type,         4, Vertex_attribute::Usage_type::color,     0);
+    m_attributes.texcoord      = Vertex_attribute_info(m_vertex_format, m_context.format_info.texcoord_type,      2, Vertex_attribute::Usage_type::tex_coord, 0);
+    m_attributes.id_vec3       = Vertex_attribute_info(m_vertex_format, m_context.format_info.id_vec3_type,       3, Vertex_attribute::Usage_type::id,        0);
     if (Configuration::info.use_integer_polygon_ids)
     {
-        m_attributes.attribute_id_uint = Vertex_attribute_info(m_vertex_format, m_format_info.id_uint_type, 1, Vertex_attribute::Usage_type::id, 0);
+        m_attributes.attribute_id_uint = Vertex_attribute_info(m_vertex_format, m_context.format_info.id_uint_type, 1, Vertex_attribute::Usage_type::id, 0);
     }
 
 }
 
-void Primitive_builder::Vertex_buffer_writer::write(Vertex_attribute_info& attribute, glm::vec2 value)
+void Vertex_buffer_writer::write(Vertex_attribute_info& attribute, glm::vec2 value)
 {
-    write_low(vertex_data.subspan(vertex_write_offset + attribute.offset,
-                                  attribute.size),
+    write_low(vertex_data_span.subspan(vertex_write_offset + attribute.offset,
+                                       attribute.size),
               attribute.data_type,
               value);
 }
 
-void Primitive_builder::Vertex_buffer_writer::write(Vertex_attribute_info& attribute, glm::vec3 value)
+void Vertex_buffer_writer::write(Vertex_attribute_info& attribute, glm::vec3 value)
 {
-    write_low(vertex_data.subspan(vertex_write_offset + attribute.offset,
-                                  attribute.size),
+    write_low(vertex_data_span.subspan(vertex_write_offset + attribute.offset,
+                                       attribute.size),
               attribute.data_type,
               value);
 }
 
-void Primitive_builder::Vertex_buffer_writer::write(Vertex_attribute_info& attribute, glm::vec4 value)
+void Vertex_buffer_writer::write(Vertex_attribute_info& attribute, glm::vec4 value)
 {
-    write_low(vertex_data.subspan(vertex_write_offset + attribute.offset,
-                                  attribute.size),
+    write_low(vertex_data_span.subspan(vertex_write_offset + attribute.offset,
+                                       attribute.size),
               attribute.data_type,
               value);
 }
 
-void Primitive_builder::Vertex_buffer_writer::write(Vertex_attribute_info& attribute, uint32_t value)
+void Vertex_buffer_writer::write(Vertex_attribute_info& attribute, uint32_t value)
 {
-    write_low(vertex_data.subspan(vertex_write_offset + attribute.offset,
-                                  attribute.size),
+    write_low(vertex_data_span.subspan(vertex_write_offset + attribute.offset,
+                                       attribute.size),
               attribute.data_type,
               value);
 }
 
-void Primitive_builder::Vertex_buffer_writer::move(size_t relative_offset)
+void Vertex_buffer_writer::move(size_t relative_offset)
 {
     vertex_write_offset += relative_offset;
 }
 
-void Primitive_builder::Index_buffer_writer::write_corner(uint32_t v0)
+void Index_buffer_writer::write_corner(uint32_t v0)
 {
     //log_primitive_builder.trace("point {}\n", v0);
-    write_low(corner_point_index_data.subspan(corner_point_indices_written * index_type_size, index_type_size), index_type, v0);
+    write_low(corner_point_index_data_span.subspan(corner_point_indices_written * index_type_size, index_type_size), index_type, v0);
     ++corner_point_indices_written;
 }
 
-void Primitive_builder::Index_buffer_writer::write_triangle(uint32_t v0, uint32_t v1, uint32_t v2)
+void Index_buffer_writer::write_triangle(uint32_t v0, uint32_t v1, uint32_t v2)
 {
     //log_primitive_builder.trace("triangle {}, {}, {}\n", v0, v1, v2);
-    write_low(fill_index_data.subspan((triangle_indices_written + 0) * index_type_size, index_type_size), index_type, v0);
-    write_low(fill_index_data.subspan((triangle_indices_written + 1) * index_type_size, index_type_size), index_type, v1);
-    write_low(fill_index_data.subspan((triangle_indices_written + 2) * index_type_size, index_type_size), index_type, v2);
+    write_low(fill_index_data_span.subspan((triangle_indices_written + 0) * index_type_size, index_type_size), index_type, v0);
+    write_low(fill_index_data_span.subspan((triangle_indices_written + 1) * index_type_size, index_type_size), index_type, v1);
+    write_low(fill_index_data_span.subspan((triangle_indices_written + 2) * index_type_size, index_type_size), index_type, v2);
     triangle_indices_written += 3;
 }
 
-void Primitive_builder::Index_buffer_writer::write_edge(uint32_t v0, uint32_t v1)
+void Index_buffer_writer::write_edge(uint32_t v0, uint32_t v1)
 {
     //log_primitive_builder.trace("edge {}, {}\n", v0, v1);
-    write_low(edge_line_index_data.subspan((edge_line_indices_written + 0) * index_type_size, index_type_size), index_type, v0);
-    write_low(edge_line_index_data.subspan((edge_line_indices_written + 1) * index_type_size, index_type_size), index_type, v1);
+    write_low(edge_line_index_data_span.subspan((edge_line_indices_written + 0) * index_type_size, index_type_size), index_type, v0);
+    write_low(edge_line_index_data_span.subspan((edge_line_indices_written + 1) * index_type_size, index_type_size), index_type, v1);
     edge_line_indices_written += 2;
 }
 
-void Primitive_builder::Index_buffer_writer::write_centroid(uint32_t v0)
+void Index_buffer_writer::write_centroid(uint32_t v0)
 {
     //log_primitive_builder.trace("centroid {}\n", v0);
-    write_low(polygon_centroid_index_data.subspan(polygon_centroid_indices_written * index_type_size, index_type_size), index_type, v0);
+    write_low(polygon_centroid_index_data_span.subspan(polygon_centroid_indices_written * index_type_size, index_type_size), index_type, v0);
     ++polygon_centroid_indices_written;
 }
 
@@ -506,12 +552,12 @@ void Primitive_builder::get_geometry_mesh_info()
     m_geometry.info(mi);
     mi.trace(log_primitive_builder);
     m_total_vertex_count += mi.vertex_count_corners;
-    if (m_format_info.want_centroid_points)
+    if (m_context.format_info.want_centroid_points)
     {
         m_total_vertex_count += mi.vertex_count_centroids;
     }
 
-    if (m_format_info.want_fill_triangles)
+    if (m_context.format_info.want_fill_triangles)
     {
         m_total_index_count += mi.index_count_fill_triangles;
         allocate_index_range(gl::Primitive_type::triangles,
@@ -519,7 +565,7 @@ void Primitive_builder::get_geometry_mesh_info()
                              m_primitive_geometry->fill_indices);
     }
 
-    if (m_format_info.want_edge_lines)
+    if (m_context.format_info.want_edge_lines)
     {
         m_total_index_count += mi.index_count_edge_lines;
         allocate_index_range(gl::Primitive_type::lines,
@@ -527,7 +573,7 @@ void Primitive_builder::get_geometry_mesh_info()
                              m_primitive_geometry->edge_line_indices);
     }
 
-    if (m_format_info.want_corner_points)
+    if (m_context.format_info.want_corner_points)
     {
         m_total_index_count += mi.index_count_corner_points;
         allocate_index_range(gl::Primitive_type::points,
@@ -535,7 +581,7 @@ void Primitive_builder::get_geometry_mesh_info()
                              m_primitive_geometry->corner_point_indices);
     }
 
-    if (m_format_info.want_centroid_points)
+    if (m_context.format_info.want_centroid_points)
     {
         m_total_index_count += mi.index_count_centroid_points;
         allocate_index_range(gl::Primitive_type::points,
@@ -550,12 +596,13 @@ void Primitive_builder::allocate_vertex_buffer()
 {
     ZoneScoped;
 
-    if (m_buffer_info.vertex_buffer)
+    if (m_context.buffer_info.vertex_buffer)
     {
         // Shared vertex buffer, allocate space from that
         // TODO(tksuoran@gmail.com): If there is not enough space in the shared VBO,
         //                           allocate individual VBO as a fallback?
-        m_primitive_geometry->allocate_vertex_buffer(m_buffer_info.vertex_buffer, m_total_vertex_count, m_vertex_stride);
+        m_primitive_geometry->allocate_vertex_buffer(m_context.buffer_info.vertex_buffer,
+                                                     m_total_vertex_count, m_vertex_stride);
     }
     else
     {
@@ -565,29 +612,42 @@ void Primitive_builder::allocate_vertex_buffer()
     m_primitive_geometry->vertex_count = m_total_vertex_count;
 }
 
-Primitive_builder::Vertex_buffer_writer::Vertex_buffer_writer(Primitive_geometry& primitive_geometry)
-    : vertex_mapping{*primitive_geometry.vertex_buffer.get(),
-                     primitive_geometry.vertex_byte_offset,
-                     primitive_geometry.vertex_count * primitive_geometry.vertex_element_size,
-                     gl::Map_buffer_access_mask::map_write_bit |
-                     gl::Map_buffer_access_mask::map_invalidate_range_bit}
-    , vertex_data{vertex_mapping.span()}
+Vertex_buffer_writer::Vertex_buffer_writer(Primitive_geometry&            primitive_geometry,
+                                           const Primitive_build_context& context)
+    : primitive_geometry{primitive_geometry}
+    , context           {context}
 {
+    vertex_data.resize(primitive_geometry.vertex_count * primitive_geometry.vertex_element_size);
+    vertex_data_span = gsl::make_span(vertex_data);
+}
+
+Vertex_buffer_writer::~Vertex_buffer_writer()
+{
+    context.queue.enqueue(primitive_geometry.vertex_buffer.get(),
+                          primitive_geometry.vertex_byte_offset,
+                          std::move(vertex_data));
+}
+
+Index_buffer_writer::~Index_buffer_writer()
+{
+    context.queue.enqueue(primitive_geometry.index_buffer.get(),
+                          primitive_geometry.index_byte_offset,
+                          std::move(index_data));
 }
 
 void Primitive_builder::allocate_index_buffer()
 {
     ZoneScoped;
 
-    gl::Draw_elements_type index_type = m_buffer_info.index_type;
+    gl::Draw_elements_type index_type = m_context.buffer_info.index_type;
     size_t index_type_size{size_of_type(index_type)};
     bool index_range_allocated{false};
 
     log_primitive_builder.trace("Total {} indices, index type size {}\n", m_total_index_count, index_type_size);
-    if (m_buffer_info.index_buffer)
+    if (m_context.buffer_info.index_buffer)
     {
         // Shared index buffer given, allocate range from that
-        m_primitive_geometry->allocate_index_buffer(m_buffer_info.index_buffer, m_total_index_count, index_type_size);
+        m_primitive_geometry->allocate_index_buffer(m_context.buffer_info.index_buffer, m_total_index_count, index_type_size);
         index_range_allocated = true;
     }
 
@@ -598,39 +658,38 @@ void Primitive_builder::allocate_index_buffer()
     }
 }
 
-Primitive_builder::Index_buffer_writer::Index_buffer_writer(Buffer_info&        buffer_info,
-                                                            const Format_info&  format_info,
-                                                            Mesh_info&          mesh_info,
-                                                            Primitive_geometry& primitive_geometry)
-    : index_type     {buffer_info.index_type}
-    , index_type_size{size_of_type(index_type)}
-    , index_mapping  {*primitive_geometry.index_buffer.get(),
-                      primitive_geometry.index_byte_offset,
-                      primitive_geometry.index_count * index_type_size,
-                      gl::Map_buffer_access_mask::map_write_bit | gl::Map_buffer_access_mask::map_invalidate_range_bit}
-    , index_data     {index_mapping.span()}
+Index_buffer_writer::Index_buffer_writer(Primitive_geometry&            primitive_geometry,
+                                         const Primitive_build_context& context,
+                                         Mesh_info&                     mesh_info)
+    : primitive_geometry{primitive_geometry}
+    , context           {context}
+    , index_type        {context.buffer_info.index_type}
+    , index_type_size   {size_of_type(index_type)}
 {
     ZoneScoped;
 
-    if (format_info.want_corner_points)
+    index_data.resize(primitive_geometry.index_count * index_type_size);
+    index_data_span = gsl::make_span(index_data);
+
+    if (context.format_info.want_corner_points)
     {
-        corner_point_index_data = index_data.subspan(primitive_geometry.corner_point_indices.first_index * index_type_size,
-                                                     mesh_info.index_count_corner_points * index_type_size);
+        corner_point_index_data_span = index_data_span.subspan(primitive_geometry.corner_point_indices.first_index * index_type_size,
+                                                               mesh_info.index_count_corner_points * index_type_size);
     }
-    if (format_info.want_fill_triangles)
+    if (context.format_info.want_fill_triangles)
     {
-        fill_index_data = index_data.subspan(primitive_geometry.fill_indices.first_index * index_type_size,
-                                             mesh_info.index_count_fill_triangles * index_type_size);
+        fill_index_data_span = index_data_span.subspan(primitive_geometry.fill_indices.first_index * index_type_size,
+                                                       mesh_info.index_count_fill_triangles * index_type_size);
     }
-    if (format_info.want_edge_lines)
+    if (context.format_info.want_edge_lines)
     {
-        edge_line_index_data = index_data.subspan(primitive_geometry.edge_line_indices.first_index * index_type_size,
-                                                  mesh_info.index_count_edge_lines * index_type_size);
+        edge_line_index_data_span = index_data_span.subspan(primitive_geometry.edge_line_indices.first_index * index_type_size,
+                                                            mesh_info.index_count_edge_lines * index_type_size);
     }
-    if (format_info.want_centroid_points)
+    if (context.format_info.want_centroid_points)
     {
-        polygon_centroid_index_data = index_data.subspan(primitive_geometry.polygon_centroid_indices.first_index * index_type_size,
-                                                         mesh_info.polygon_count * index_type_size);
+        polygon_centroid_index_data_span = index_data_span.subspan(primitive_geometry.polygon_centroid_indices.first_index * index_type_size,
+                                                                   mesh_info.polygon_count * index_type_size);
     }
 }
 
@@ -671,27 +730,27 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
 
     m_primitive_geometry = primitive_geometry;
     log_primitive_builder.trace("Primitive_builder::build_mesh_from_geometry(usage = {}, normal_style = {}) geometry = {}\n",
-                                gl::c_str(m_buffer_info.usage),
-                                c_str(m_format_info.normal_style),
+                                gl::c_str(m_context.buffer_info.usage),
+                                c_str(m_normal_style),
                                 m_geometry.name);
     erhe::log::Indenter indenter;
 
-    m_vertex_format = m_buffer_info.vertex_format.get();
+    m_vertex_format = m_context.buffer_info.vertex_format.get();
     m_vertex_stride = m_vertex_format->stride();
 
-    Property_maps property_maps(m_geometry, m_format_info);
+    Property_maps property_maps(m_geometry, m_context.format_info);
 
     get_vertex_attributes();
     get_geometry_mesh_info();
     calculate_bounding_box(property_maps.point_locations);
     allocate_vertex_buffer();
     allocate_index_buffer();
-    Vertex_buffer_writer vertex_writer(*m_primitive_geometry);
-    Index_buffer_writer index_writer(m_buffer_info, m_format_info, m_mesh_info, *m_primitive_geometry);
+    Vertex_buffer_writer vertex_writer(*m_primitive_geometry, m_context);
+    Index_buffer_writer  index_writer(*m_primitive_geometry, m_context, m_mesh_info);
 
 #if GENERATE_POLYGONS // polygons
     property_maps.corner_indices->clear();
-    vec3 unit_y{0.0f, 1.0f, 0.0f};
+    const vec3 unit_y{0.0f, 1.0f, 0.0f};
     uint32_t vertex_index{0};
     uint32_t polygon_index{0};
     for (Polygon_id polygon_id = 0, end = m_geometry.polygon_count();
@@ -699,7 +758,7 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
          ++polygon_id)
     {
         const Polygon& polygon = m_geometry.polygons[polygon_id];
-        if (m_format_info.want_id)
+        if (m_context.format_info.want_id)
         {
             if (property_maps.polygon_ids_uint32 != nullptr)
             {
@@ -723,15 +782,15 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
              polygon_corner_id < end;
              ++polygon_corner_id)
         {
-            Corner_id     corner_id = m_geometry.polygon_corners[polygon_corner_id];
-            const Corner& corner    = m_geometry.corners[corner_id];
-            Point_id      point_id  = corner.point_id;
+            const Corner_id corner_id = m_geometry.polygon_corners[polygon_corner_id];
+            const Corner&   corner    = m_geometry.corners[corner_id];
+            const Point_id  point_id  = corner.point_id;
 
             // Position
-            if (m_format_info.want_position && m_attributes.position.is_valid())
+            if (m_context.format_info.want_position && m_attributes.position.is_valid())
             {
                 Expects(property_maps.point_locations != nullptr);
-                vec3 position = property_maps.point_locations->get(point_id);
+                const vec3 position = property_maps.point_locations->get(point_id);
                 vertex_writer.write(m_attributes.position, position);
                 // log_primitive_builder.trace("polygon {} corner {} point {} vertex {} location {}, {}, {}\n",
                 //                             polygon_index, corner_id, point_id, vertex_index,
@@ -763,9 +822,9 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
                 point_normal = property_maps.point_normals_smooth->get(point_id);
             }
 
-            if (m_format_info.want_normal && m_attributes.normal.is_valid())
+            if (m_context.format_info.want_normal && m_attributes.normal.is_valid())
             {
-                switch (m_format_info.normal_style)
+                switch (m_normal_style)
                 {
                     case Normal_style::none:
                     {
@@ -793,12 +852,12 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
                 }
             }
 
-            if (m_format_info.want_normal_flat && m_attributes.normal_flat.is_valid())
+            if (m_context.format_info.want_normal_flat && m_attributes.normal_flat.is_valid())
             {
                 vertex_writer.write(m_attributes.normal_flat, polygon_normal);
             }
 
-            if (m_format_info.want_normal_smooth && m_attributes.normal_smooth.is_valid())
+            if (m_context.format_info.want_normal_smooth && m_attributes.normal_smooth.is_valid())
             {
                 vec3 smooth_point_normal{0.0f, 1.0f, 0.0f};
                 if ((property_maps.point_normals_smooth != nullptr) && property_maps.point_normals_smooth->has(point_id))
@@ -809,7 +868,7 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
             }
 
             // Tangent
-            if (m_format_info.want_tangent && m_attributes.tangent.is_valid())
+            if (m_context.format_info.want_tangent && m_attributes.tangent.is_valid())
             {
                 vec4 tangent{1.0f, 0.0f, 0.0, 1.0f};
                 if ((property_maps.corner_tangents != nullptr) && property_maps.corner_tangents->has(corner_id))
@@ -830,7 +889,7 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
             }
 
             // Bitangent
-            if (m_format_info.want_bitangent && m_attributes.bitangent.is_valid())
+            if (m_context.format_info.want_bitangent && m_attributes.bitangent.is_valid())
             {
                 vec4 bitangent{0.0f, 0.0f, 1.0, 1.0f};
                 if ((property_maps.corner_bitangents != nullptr) && property_maps.corner_bitangents->has(corner_id))
@@ -851,7 +910,7 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
             }
 
             // Texcoord
-            if (m_format_info.want_texcoord && m_attributes.texcoord.is_valid())
+            if (m_context.format_info.want_texcoord && m_attributes.texcoord.is_valid())
             {
                 vec2 texcoord{0.0f, 0.0f};
                 if ((property_maps.corner_texcoords != nullptr) && property_maps.corner_texcoords->has(corner_id))
@@ -866,7 +925,7 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
             }
 
             // Vertex Color
-            if (m_format_info.want_color && m_attributes.color.is_valid())
+            if (m_context.format_info.want_color && m_attributes.color.is_valid())
             {
                 glm::vec4 color;
                 if ((property_maps.corner_colors != nullptr) && property_maps.corner_colors->has(corner_id))
@@ -879,13 +938,13 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
                 }
                 else
                 {
-                    color = m_format_info.constant_color;
+                    color = m_context.format_info.constant_color;
                 }
                 vertex_writer.write(m_attributes.color, color);
             }
 
             // PolygonId
-            if (m_format_info.want_id)
+            if (m_context.format_info.want_id)
             {
                 if (Configuration::info.use_integer_polygon_ids && m_attributes.attribute_id_uint.is_valid())
                 {
@@ -894,20 +953,20 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
 
                 if (m_attributes.id_vec3.is_valid())
                 {
-                    vec3 v = erhe::toolkit::vec3_from_uint(polygon_index);
+                    const vec3 v = erhe::toolkit::vec3_from_uint(polygon_index);
                     vertex_writer.write(m_attributes.id_vec3, v);
                 }
             }
 
             // Indices
-            if (m_format_info.want_corner_points)
+            if (m_context.format_info.want_corner_points)
             {
                 index_writer.write_corner(vertex_index);
             }
 
             property_maps.corner_indices->put(corner_id, vertex_index);
 
-            if (m_format_info.want_fill_triangles)
+            if (m_context.format_info.want_fill_triangles)
             {
                 if (previous_index != first_index)
                 {
@@ -925,17 +984,17 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
     }
 #endif // GENERATE_POLYGONS
 
-    if (m_format_info.want_edge_lines)
+    if (m_context.format_info.want_edge_lines)
     {
         for (Edge_id edge_id = 0, end = m_geometry.edge_count(); edge_id < end; ++edge_id)
         {
-            const Edge&     edge              = m_geometry.edges[edge_id];
-            const Point&    point_a           = m_geometry.points[edge.a];
-            const Point&    point_b           = m_geometry.points[edge.b];
-            Point_corner_id point_corner_id_a = point_a.first_point_corner_id;
-            Point_corner_id point_corner_id_b = point_b.first_point_corner_id;
-            Corner_id       corner_id_a       = m_geometry.point_corners[point_corner_id_a];
-            Corner_id       corner_id_b       = m_geometry.point_corners[point_corner_id_b];
+            const Edge&           edge              = m_geometry.edges[edge_id];
+            const Point&          point_a           = m_geometry.points[edge.a];
+            const Point&          point_b           = m_geometry.points[edge.b];
+            const Point_corner_id point_corner_id_a = point_a.first_point_corner_id;
+            const Point_corner_id point_corner_id_b = point_b.first_point_corner_id;
+            const Corner_id       corner_id_a       = m_geometry.point_corners[point_corner_id_a];
+            const Corner_id       corner_id_b       = m_geometry.point_corners[point_corner_id_b];
 
             VERIFY(edge.a != edge.b);
 
@@ -953,7 +1012,7 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
         }
     }
 
-    if (m_format_info.want_centroid_points)
+    if (m_context.format_info.want_centroid_points)
     {
         for (Polygon_id polygon_id = 0, end = m_geometry.polygon_count();
              polygon_id < end;
@@ -970,17 +1029,17 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
                 normal = property_maps.polygon_normals->get(polygon_id);
             }
 
-            if (m_format_info.want_position && m_attributes.position.is_valid())
+            if (m_context.format_info.want_position && m_attributes.position.is_valid())
             {
                 vertex_writer.write(m_attributes.position, position);
             }
 
-            if (m_format_info.want_normal && m_attributes.normal.is_valid())
+            if (m_context.format_info.want_normal && m_attributes.normal.is_valid())
             {
                 vertex_writer.write(m_attributes.normal, normal);
             }
 
-            if (m_format_info.want_normal_flat && m_attributes.normal_flat.is_valid())
+            if (m_context.format_info.want_normal_flat && m_attributes.normal_flat.is_valid())
             {
                 vertex_writer.write(m_attributes.normal_flat, normal);
             }
@@ -1002,9 +1061,9 @@ using erhe::log::Log;
 using std::shared_ptr;
 
 
-void Primitive_builder::allocate_index_range(gl::Primitive_type primitive_type,
-                                             size_t             index_count,
-                                             Index_range&       range)
+void Primitive_builder::allocate_index_range(const gl::Primitive_type primitive_type,
+                                             const size_t             index_count,
+                                             Index_range&             range)
 {
     range.primitive_type = primitive_type;
     range.first_index    = m_next_index_range_start;
@@ -1012,30 +1071,30 @@ void Primitive_builder::allocate_index_range(gl::Primitive_type primitive_type,
     m_next_index_range_start += index_count;
 
     // If index buffer has not yet been allocated, no check for enough room for index range
-    VERIFY((m_primitive_geometry->index_count == 0) || (m_next_index_range_start <= m_primitive_geometry->index_count));
+    VERIFY((m_primitive_geometry->index_count == 0) ||
+           (m_next_index_range_start <= m_primitive_geometry->index_count));
 }
 
 
-auto make_primitive(const Geometry&    geometry,
-                    const Format_info& format_info,
-                    Buffer_info&       buffer_info)
-    -> Primitive_geometry
+auto make_primitive(const Geometry&                geometry,
+                    const Primitive_build_context& context,
+                    const Normal_style             normal_style)
+-> Primitive_geometry
 {
-    Primitive_builder::prepare_vertex_format(format_info, buffer_info);
-    Primitive_builder builder(geometry, format_info, buffer_info);
+    //Primitive_builder::prepare_vertex_format(context.format_info, context.buffer_info);
+    Primitive_builder builder(geometry, context, normal_style);
     return builder.build();
 }
 
-auto make_primitive_shared(const erhe::geometry::Geometry& geometry,
-                           const Format_info&              format_info,
-                           Buffer_info&                    buffer_info)
-    -> std::shared_ptr<Primitive_geometry>
+auto make_primitive_shared(const Geometry&                geometry,
+                           const Primitive_build_context& context,
+                           const Normal_style             normal_style)
+-> std::shared_ptr<Primitive_geometry>
 {
     auto result = std::make_shared<Primitive_geometry>();
-    Primitive_builder::prepare_vertex_format(format_info, buffer_info);
-    Primitive_builder builder(geometry, format_info, buffer_info);
+    Primitive_builder builder(geometry, context, normal_style);
     builder.build(result.get());
-    result->source_normal_style = format_info.normal_style;
+    result->source_normal_style = context.format_info.normal_style;
     return result;
 }
 

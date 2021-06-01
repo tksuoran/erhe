@@ -1,5 +1,4 @@
-#ifndef color_blend_state_hpp_erhe_graphics
-#define color_blend_state_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/gl/enum_base_zero_functions.hpp"
 
@@ -137,5 +136,3 @@ private:
 };
 
 } // namespace erhe::graphics
-
-#endif

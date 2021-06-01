@@ -145,19 +145,19 @@ private:
                                  nullptr}
 
             , pipeline_depth_pass{shader_stages,
-                                 &vertex_input_state,
-                                 &erhe::graphics::Input_assembly_state::lines,
-                                 &erhe::graphics::Rasterization_state::cull_mode_none,
-                                 &erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled,
-                                 &erhe::graphics::Color_blend_state::color_blend_premultiplied,
-                                 nullptr}
+                                  &vertex_input_state,
+                                  &erhe::graphics::Input_assembly_state::lines,
+                                  &erhe::graphics::Rasterization_state::cull_mode_none,
+                                  &erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled,
+                                  &erhe::graphics::Color_blend_state::color_blend_premultiplied,
+                                  nullptr}
             , pipeline_depth_fail{shader_stages,
-                                 &vertex_input_state,
-                                 &erhe::graphics::Input_assembly_state::lines,
-                                 &erhe::graphics::Rasterization_state::cull_mode_none,
-                                 &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                                 &color_blend_hidden_lines,
-                                 nullptr}
+                                  &vertex_input_state,
+                                  &erhe::graphics::Input_assembly_state::lines,
+                                  &erhe::graphics::Rasterization_state::cull_mode_none,
+                                  &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+                                  &color_blend_hidden_lines,
+                                  nullptr}
         {
             vertex_buffer.set_debug_label("Line Renderer Vertex");
             model_buffer.set_debug_label ("Line Renderer Model");
@@ -166,28 +166,28 @@ private:
         Frame_resources(const Frame_resources& other) = delete;
         auto operator=(const Frame_resources&) -> Frame_resources& = delete;
 
-        Frame_resources(Frame_resources&& other) noexcept
-        {
-            vertex_buffer                    = std::move(other.vertex_buffer);
-            model_buffer                     = std::move(other.model_buffer);
-            vertex_input_state               = std::move(other.vertex_input_state);
-            pipeline_depth_pass              = std::move(other.pipeline_depth_pass);
-            pipeline_depth_fail              = std::move(other.pipeline_depth_fail);
-            pipeline_depth_pass.vertex_input = &vertex_input_state;
-            pipeline_depth_fail.vertex_input = &vertex_input_state;
-        }
+        Frame_resources(Frame_resources&& other) = delete; // noexcept
+        //{
+        //    vertex_buffer                    = std::move(other.vertex_buffer);
+        //    model_buffer                     = std::move(other.model_buffer);
+        //    vertex_input_state               = std::move(other.vertex_input_state);
+        //    pipeline_depth_pass              = std::move(other.pipeline_depth_pass);
+        //    pipeline_depth_fail              = std::move(other.pipeline_depth_fail);
+        //    pipeline_depth_pass.vertex_input = &vertex_input_state;
+        //    pipeline_depth_fail.vertex_input = &vertex_input_state;
+        //}
 
-        auto operator=(Frame_resources&& other) noexcept -> Frame_resources&
-        {
-            vertex_buffer                    = std::move(other.vertex_buffer);
-            model_buffer                     = std::move(other.model_buffer);
-            vertex_input_state               = std::move(other.vertex_input_state);
-            pipeline_depth_pass              = std::move(other.pipeline_depth_pass);
-            pipeline_depth_fail              = std::move(other.pipeline_depth_fail);
-            pipeline_depth_pass.vertex_input = &vertex_input_state;
-            pipeline_depth_fail.vertex_input = &vertex_input_state;
-            return *this;
-        }
+        auto operator=(Frame_resources&& other) = delete; //noexcept -> Frame_resources&
+        //{
+        //    vertex_buffer                    = std::move(other.vertex_buffer);
+        //    model_buffer                     = std::move(other.model_buffer);
+        //    vertex_input_state               = std::move(other.vertex_input_state);
+        //    pipeline_depth_pass              = std::move(other.pipeline_depth_pass);
+        //    pipeline_depth_fail              = std::move(other.pipeline_depth_fail);
+        //    pipeline_depth_pass.vertex_input = &vertex_input_state;
+        //    pipeline_depth_fail.vertex_input = &vertex_input_state;
+        //    return *this;
+        //}
 
         erhe::graphics::Buffer             vertex_buffer;
         erhe::graphics::Buffer             model_buffer;
@@ -212,8 +212,8 @@ private:
     std::unique_ptr<erhe::graphics::Shader_stages>        m_shader_stages;
     erhe::graphics::Shader_resource                       m_default_uniform_block; // containing sampler uniforms
 
-    std::vector<Frame_resources> m_frame_resources;
-    size_t                       m_current_frame_resource_slot{0};
+    std::deque<Frame_resources> m_frame_resources;
+    size_t                      m_current_frame_resource_slot{0};
 
     struct Buffer_range
     {

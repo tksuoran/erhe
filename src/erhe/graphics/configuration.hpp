@@ -1,6 +1,4 @@
-#ifndef configuration_hpp_erhe_graphics
-#define configuration_hpp_erhe_graphics
-
+#pragma once
 
 namespace erhe::graphics
 {
@@ -8,8 +6,6 @@ namespace erhe::graphics
 class Configuration
 {
 public:
-    // TODO Reverse depth
-
     static inline constexpr const bool reverse_depth = true;
 
     static inline constexpr const float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
@@ -59,12 +55,6 @@ public:
     using PFN_get_proc_address = PFN_generic (*) (const char*);
 
     static void initialize(PFN_get_proc_address get_proc_address);
-
-    static void (* s_glNamedFramebufferTextureEXT) (unsigned int framebuffer, unsigned int attachment, unsigned int texture, int level);
-    static void (* s_glNamedFramebufferTexture) (unsigned int framebuffer, unsigned int attachment, unsigned int texture, int level);
-
 };
 
 } // namespace erhe::graphics
-
-#endif

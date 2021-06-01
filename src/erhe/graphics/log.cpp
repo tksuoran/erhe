@@ -14,5 +14,6 @@ Category log_vertex_attribute_mappings(Color::GREEN,  Color::GRAY, Level::LEVEL_
 Category log_fragment_outputs         (Color::GREEN,  Color::GRAY, Level::LEVEL_INFO);
 Category log_load_png                 (Color::CYAN,   Color::GRAY, Level::LEVEL_INFO);
 Category log_save_png                 (Color::CYAN,   Color::GRAY, Level::LEVEL_INFO);
+Category log_threads                  (Color::BLUE,   Color::GRAY, Level::LEVEL_INFO);
 
 } // namespace erhe::graphics

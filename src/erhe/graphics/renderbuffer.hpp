@@ -1,7 +1,7 @@
-#ifndef renderbuffer_hpp_erhe_graphics
-#define renderbuffer_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/graphics/gl_objects.hpp"
+
 #include <gsl/pointers>
 
 namespace erhe::graphics
@@ -68,5 +68,3 @@ auto operator!=(const Renderbuffer& lhs, const Renderbuffer& rhs) noexcept
 -> bool;
 
 } // namespace erhe::graphics
-
-#endif

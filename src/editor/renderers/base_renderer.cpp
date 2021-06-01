@@ -1,4 +1,5 @@
 #include "renderers/base_renderer.hpp"
+#include "renderers/program_interface.hpp"
 #include "scene/scene_manager.hpp"
 #include "log.hpp"
 
@@ -39,26 +40,26 @@ using namespace gl;
 using namespace glm;
 using namespace std;
 
-void Base_renderer::base_connect(erhe::components::Component* component)
+void Base_renderer::base_connect(const erhe::components::Component* component)
 {
-    m_programs = component->get<Programs>();
+    m_program_interface = component->get<Program_interface>();
 }
 
-void Base_renderer::create_frame_resources(size_t material_count,
-                                           size_t light_count,
-                                           size_t camera_count,
-                                           size_t primitive_count,
-                                           size_t draw_count)
+void Base_renderer::create_frame_resources(const size_t material_count,
+                                           const size_t light_count,
+                                           const size_t camera_count,
+                                           const size_t primitive_count,
+                                           const size_t draw_count)
 {
     ZoneScoped;
 
     for (size_t i = 0; i < s_frame_resources_count; ++i)
     {
-        m_frame_resources.emplace_back(m_programs->material_block .size_bytes(),   material_count,
-                                       m_programs->light_block    .size_bytes(),   light_count,
-                                       m_programs->camera_block   .size_bytes(),   camera_count,
-                                       m_programs->primitive_block.size_bytes(),   primitive_count,
-                                       sizeof(gl::Draw_elements_indirect_command), draw_count);
+        m_frame_resources.emplace_back(m_program_interface->material_block .size_bytes(), material_count,
+                                       m_program_interface->light_block    .size_bytes(), light_count,
+                                       m_program_interface->camera_block   .size_bytes(), camera_count,
+                                       m_program_interface->primitive_block.size_bytes(), primitive_count,
+                                       sizeof(gl::Draw_elements_indirect_command),        draw_count);
     }
 }
 
@@ -86,7 +87,7 @@ void Base_renderer::reset_id_ranges()
 }
 
 auto Base_renderer::update_primitive_buffer(const Mesh_collection& meshes,
-                                            uint64_t               visibility_mask)
+                                            const uint64_t         visibility_mask)
 -> Base_renderer::Buffer_range
 {
     ZoneScoped;
@@ -94,10 +95,10 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection& meshes,
     log_render.trace("{}(meshes.size() = {})\n", __func__, meshes.size());
 
     m_primitive_writer.begin();
-    size_t      entry_size         = m_programs->primitive_struct.size_bytes();
-    auto        primitive_gpu_data = current_frame_resources().primitive_buffer.map();
-    size_t      primitive_index    = 0;
-    const auto& offsets            = m_programs->primitive_block_offsets;
+    const size_t entry_size         = m_program_interface->primitive_struct.size_bytes();
+    auto         primitive_gpu_data = current_frame_resources().primitive_buffer.map();
+    const auto&  offsets            = m_program_interface->primitive_block_offsets;
+    size_t       primitive_index    = 0;
     for (auto mesh : meshes)
     {
         if ((mesh->visibility_mask & visibility_mask) == 0)
@@ -111,26 +112,25 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection& meshes,
         size_t mesh_primitive_index{0};
         for (auto& primitive : mesh->primitives)
         {
-            auto* primitive_geometry = primitive.primitive_geometry.get();
+            const auto* primitive_geometry = primitive.primitive_geometry.get();
             log_render.trace("primitive_index = {}\n", primitive_index);
 
-            uint32_t count        = static_cast<uint32_t>(primitive_geometry->fill_indices.index_count);
-            uint32_t power_of_two = next_power_of_two(count);
-            uint32_t mask         = power_of_two - 1;
-            uint32_t current_bits = m_id_offset & mask;
+            const uint32_t count        = static_cast<uint32_t>(primitive_geometry->fill_indices.index_count);
+            const uint32_t power_of_two = next_power_of_two(count);
+            const uint32_t mask         = power_of_two - 1;
+            const uint32_t current_bits = m_id_offset & mask;
             if (current_bits != 0)
             {
-                uint add = power_of_two - current_bits;
+                const uint add = power_of_two - current_bits;
                 m_id_offset += add;
             }
 
-            vec3 id_offset_vec3 = vec3_from_uint(m_id_offset);
-            vec3 id_offset_vec4 = vec4(id_offset_vec3, 0.0f);
-
-            mat4     world_from_node = node->world_from_node();
-            uint32_t material_index  = (primitive.material != nullptr) ? static_cast<uint32_t>(primitive.material->index) : 0u;
-            uint32_t extra2          = 0;
-            uint32_t extra3          = 0;
+            const vec3     id_offset_vec3  = vec3_from_uint(m_id_offset);
+            const vec3     id_offset_vec4  = vec4(id_offset_vec3, 0.0f);
+            const mat4     world_from_node = node->world_from_node();
+            const uint32_t material_index  = (primitive.material != nullptr) ? static_cast<uint32_t>(primitive.material->index) : 0u;
+            const uint32_t extra2          = 0;
+            const uint32_t extra3          = 0;
             const auto color_span = (primitive_color_source == Primitive_color_source::id_offset           ) ? as_span(id_offset_vec4          ) :
                                     (primitive_color_source == Primitive_color_source::mesh_wireframe_color) ? as_span(mesh->wireframe_color   ) :
                                                                                                                as_span(primitive_constant_color);
@@ -163,22 +163,22 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection& meshes,
     return m_primitive_writer.range;
 }
 
-auto Base_renderer::update_light_buffer(Light_collection& lights,
-                                        Viewport          light_texture_viewport,
-                                        glm::vec4         ambient_light)
+auto Base_renderer::update_light_buffer(const Light_collection& lights,
+                                        const Viewport          light_texture_viewport,
+                                        const glm::vec4         ambient_light)
 -> Base_renderer::Buffer_range
 {
     ZoneScoped;
 
     log_render.trace("{}(lights.size() = {})\n", __func__, lights.size());
 
-    size_t      entry_size     = m_programs->light_struct.size_bytes();
-    auto        light_gpu_data = current_frame_resources().light_buffer.map();
-    int         light_index    = 0;
-    const auto& offsets        = m_programs->light_block_offsets;
-    uint32_t    directional_light_count{0};
-    uint32_t    spot_light_count{0};
-    uint32_t    point_light_count{0};
+    const size_t entry_size     = m_program_interface->light_struct.size_bytes();
+    const auto&  offsets        = m_program_interface->light_block_offsets;
+    auto         light_gpu_data = current_frame_resources().light_buffer.map();
+    int          light_index    = 0;
+    uint32_t     directional_light_count{0};
+    uint32_t     spot_light_count{0};
+    uint32_t     point_light_count{0};
 
     m_light_writer.begin();
 
@@ -197,21 +197,19 @@ auto Base_renderer::update_light_buffer(Light_collection& lights,
 
         light->update(light_texture_viewport);
 
-        auto node = light->node();
+        const auto node = light->node();
         VERIFY(node);
 
-        glm::vec4 position  = node->world_from_node() * vec4(0.0f, 0.0f, 0.0f, 1.0f);
-        glm::vec4 direction = node->world_from_node() * vec4(0.0f, 0.0f, 1.0f, 0.0f);
-        glm::vec4 radiance  = vec4(light->intensity * light->color, light->intensity);
-        direction = normalize(direction);
-        float inner_spot_cos = std::cos(light->inner_spot_angle * 0.5f);
-        float outer_spot_cos = std::cos(light->outer_spot_angle * 0.5f);
-        position .w = inner_spot_cos;
-        direction.w = outer_spot_cos;
-        radiance .w = light->range;
+        const vec3  direction            = vec3(node->world_from_node() * vec4(0.0f, 0.0f, 1.0f, 0.0f));
+        const vec3  position             = vec3(node->world_from_node() * vec4(0.0f, 0.0f, 0.0f, 1.0f));
+        const vec4  radiance             = vec4(light->intensity * light->color, light->range);
+        const float inner_spot_cos       = std::cos(light->inner_spot_angle * 0.5f);
+        const float outer_spot_cos       = std::cos(light->outer_spot_angle * 0.5f);
+        const vec4  position_inner_spot  = vec4(position, inner_spot_cos);
+        const vec4  direction_outer_spot = vec4(glm::normalize(vec3(direction)), outer_spot_cos);
         write(light_gpu_data, m_light_writer.write_offset + offsets.light.texture_from_world,           as_span(light->texture_from_world()));
-        write(light_gpu_data, m_light_writer.write_offset + offsets.light.position_and_inner_spot_cos,  as_span(position));
-        write(light_gpu_data, m_light_writer.write_offset + offsets.light.direction_and_outer_spot_cos, as_span(direction));
+        write(light_gpu_data, m_light_writer.write_offset + offsets.light.position_and_inner_spot_cos,  as_span(position_inner_spot));
+        write(light_gpu_data, m_light_writer.write_offset + offsets.light.direction_and_outer_spot_cos, as_span(direction_outer_spot));
         write(light_gpu_data, m_light_writer.write_offset + offsets.light.radiance_and_range,           as_span(radiance));
         m_light_writer.write_offset += entry_size;
         ++light_index;
@@ -232,10 +230,10 @@ auto Base_renderer::update_material_buffer(const Material_collection& materials)
 
     log_render.trace("{}(materials.size() = {})\n", __func__, materials.size());
 
-    size_t      entry_size        = m_programs->material_struct.size_bytes();
-    auto        material_gpu_data = current_frame_resources().material_buffer.map();
-    size_t      material_index    = 0;
-    const auto& offsets           = m_programs->material_block_offsets;
+    const size_t entry_size        = m_program_interface->material_struct.size_bytes();
+    const auto&  offsets           = m_program_interface->material_block_offsets;
+    auto         material_gpu_data = current_frame_resources().material_buffer.map();
+    size_t       material_index    = 0;
     m_material_writer.begin();
     for (auto material : materials)
     {
@@ -255,8 +253,8 @@ auto Base_renderer::update_material_buffer(const Material_collection& materials)
     return m_material_writer.range;
 }
 
-auto Base_renderer::update_camera_buffer(ICamera& camera,
-                                         Viewport viewport)
+auto Base_renderer::update_camera_buffer(ICamera&       camera,
+                                         const Viewport viewport)
 -> Base_renderer::Buffer_range
 {
     ZoneScoped;
@@ -265,25 +263,24 @@ auto Base_renderer::update_camera_buffer(ICamera& camera,
 
     camera.update(viewport);
 
-    auto camera_gpu_data = current_frame_resources().camera_buffer.map();
-    mat4 world_from_node = camera.node()->world_from_node();
-    mat4 world_from_clip = camera.world_from_clip();
-    mat4 clip_from_world = camera.clip_from_world();
+    auto        camera_gpu_data = current_frame_resources().camera_buffer.map();
+    const auto& offsets         = m_program_interface->camera_block_offsets;
+    const mat4  world_from_node = camera.node()->world_from_node();
+    const mat4  world_from_clip = camera.world_from_clip();
+    const mat4  clip_from_world = camera.clip_from_world();
+    const float exposure        = 1.0f;
 
-    float exposure = 1.0f;
-    const auto& offsets = m_programs->camera_block_offsets;
     m_camera_writer.begin();
-    float viewport_floats[4];
-    viewport_floats[0] = static_cast<float>(viewport.x);
-    viewport_floats[1] = static_cast<float>(viewport.y);
-    viewport_floats[2] = static_cast<float>(viewport.width);
-    viewport_floats[3] = static_cast<float>(viewport.height);
+    const float viewport_floats[4] { static_cast<float>(viewport.x),
+                                     static_cast<float>(viewport.y),
+                                     static_cast<float>(viewport.width),
+                                     static_cast<float>(viewport.height) };
     write(camera_gpu_data, m_camera_writer.write_offset + offsets.world_from_node, as_span(world_from_node));
     write(camera_gpu_data, m_camera_writer.write_offset + offsets.world_from_clip, as_span(world_from_clip));
     write(camera_gpu_data, m_camera_writer.write_offset + offsets.clip_from_world, as_span(clip_from_world));
     write(camera_gpu_data, m_camera_writer.write_offset + offsets.viewport,        as_span(viewport_floats));
     write(camera_gpu_data, m_camera_writer.write_offset + offsets.exposure,        as_span(exposure)       );
-    m_camera_writer.write_offset += m_programs->camera_block.size_bytes();
+    m_camera_writer.write_offset += m_program_interface->camera_block.size_bytes();
     m_camera_writer.end();
 
     return m_camera_writer.range;
@@ -291,8 +288,8 @@ auto Base_renderer::update_camera_buffer(ICamera& camera,
 
 
 auto Base_renderer::update_draw_indirect_buffer(const Mesh_collection& meshes,
-                                                Primitive_mode         primitive_mode,
-                                                uint64_t               visibility_mask)
+                                                const Primitive_mode   primitive_mode,
+                                                const uint64_t         visibility_mask)
 -> Base_renderer::Draw_indirect_buffer_range
 {
     ZoneScoped;
@@ -310,8 +307,8 @@ auto Base_renderer::update_draw_indirect_buffer(const Mesh_collection& meshes,
         }
         for (auto& primitive : mesh->primitives)
         {
-            auto* primitive_geometry = primitive.primitive_geometry.get();
-            auto index_range = primitive_geometry->index_range(primitive_mode);
+            const auto* primitive_geometry = primitive.primitive_geometry.get();
+            const auto index_range = primitive_geometry->index_range(primitive_mode);
             if (index_range.index_count == 0)
             {
                 continue;
@@ -323,15 +320,15 @@ auto Base_renderer::update_draw_indirect_buffer(const Mesh_collection& meshes,
                 index_count = std::min(index_count, static_cast<uint32_t>(m_max_index_count));
             }
 
-            uint32_t base_index  = primitive_geometry->base_index();
-            uint32_t first_index = static_cast<uint32_t>(index_range.first_index + base_index);
-            uint32_t base_vertex = primitive_geometry->base_vertex();
+            const uint32_t base_index  = primitive_geometry->base_index();
+            const uint32_t first_index = static_cast<uint32_t>(index_range.first_index + base_index);
+            const uint32_t base_vertex = primitive_geometry->base_vertex();
 
-            auto draw_command = gl::Draw_elements_indirect_command{index_count,
-                                                                   instance_count,
-                                                                   first_index,
-                                                                   base_vertex,
-                                                                   base_instance};
+            const auto draw_command = gl::Draw_elements_indirect_command{index_count,
+                                                                         instance_count,
+                                                                         first_index,
+                                                                         base_vertex,
+                                                                         base_instance};
 
             erhe::graphics::write(draw_indirect_gpu_data,
                                   m_draw_indirect_writer.write_offset,
@@ -354,9 +351,9 @@ void Base_renderer::bind_material_buffer()
         return;
     }
 
-    auto& material_buffer = current_frame_resources().material_buffer;
+    const auto& material_buffer = current_frame_resources().material_buffer;
     gl::bind_buffer_range(material_buffer.target(),
-                          static_cast<GLuint>    (programs()->material_block.binding_point()),
+                          static_cast<GLuint>    (m_program_interface->material_block.binding_point()),
                           static_cast<GLuint>    (material_buffer.gl_name()),
                           static_cast<GLintptr>  (m_material_writer.range.first_byte_offset),
                           static_cast<GLsizeiptr>(m_material_writer.range.byte_count));
@@ -369,9 +366,9 @@ void Base_renderer::bind_light_buffer()
         return;
     }
 
-    auto& buffer = current_frame_resources().light_buffer;
+    const auto& buffer = current_frame_resources().light_buffer;
     gl::bind_buffer_range(buffer.target(),
-                          static_cast<GLuint>    (programs()->light_block.binding_point()),
+                          static_cast<GLuint>    (m_program_interface->light_block.binding_point()),
                           static_cast<GLuint>    (buffer.gl_name()),
                           static_cast<GLintptr>  (m_light_writer.range.first_byte_offset),
                           static_cast<GLsizeiptr>(m_light_writer.range.byte_count));
@@ -383,9 +380,10 @@ void Base_renderer::bind_camera_buffer()
     {
         return;
     }
-    auto& buffer = current_frame_resources().camera_buffer;
+
+    const auto& buffer = current_frame_resources().camera_buffer;
     gl::bind_buffer_range(buffer.target(),
-                          static_cast<GLuint>    (programs()->camera_block.binding_point()),
+                          static_cast<GLuint>    (m_program_interface->camera_block.binding_point()),
                           static_cast<GLuint>    (buffer.gl_name()),
                           static_cast<GLintptr>  (m_camera_writer.range.first_byte_offset),
                           static_cast<GLsizeiptr>(m_camera_writer.range.byte_count));
@@ -398,9 +396,9 @@ void Base_renderer::bind_primitive_buffer()
         return;
     }
 
-    auto& buffer = current_frame_resources().primitive_buffer;
+    const auto& buffer = current_frame_resources().primitive_buffer;
     gl::bind_buffer_range(buffer.target(),
-                          static_cast<GLuint>    (programs()->primitive_block.binding_point()),
+                          static_cast<GLuint>    (m_program_interface->primitive_block.binding_point()),
                           static_cast<GLuint>    (buffer.gl_name()),
                           static_cast<GLintptr>  (m_primitive_writer.range.first_byte_offset),
                           static_cast<GLsizeiptr>(m_primitive_writer.range.byte_count));
@@ -413,8 +411,7 @@ void Base_renderer::bind_draw_indirect_buffer()
         return;
     }
 
-    auto& buffer = current_frame_resources().draw_indirect_buffer;
-
+    const auto& buffer = current_frame_resources().draw_indirect_buffer;
     gl::bind_buffer(buffer.target(),
                     static_cast<GLuint>(buffer.gl_name()));
 }

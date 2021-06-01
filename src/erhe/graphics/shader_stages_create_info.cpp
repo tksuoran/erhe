@@ -32,11 +32,11 @@ auto glsl_token(gl::Attribute_type type)
         }
     }
 }
-Shader_stages::Create_info::Create_info(std::string                name,
+Shader_stages::Create_info::Create_info(std::string_view           name,
                                         Shader_resource*           default_uniform_block, // containing samplers
                                         Vertex_attribute_mappings* vertex_attribute_mappings,
                                         Fragment_outputs*          fragment_outputs)
-    : name                     {std::move(name)}
+    : name                     {name}
     , vertex_attribute_mappings{vertex_attribute_mappings}
     , fragment_outputs         {fragment_outputs}
     , default_uniform_block    {default_uniform_block}
@@ -55,11 +55,11 @@ auto Shader_stages::Create_info::final_source(const Shader_stage& shader) const
         if (vertex_attribute_mappings->mappings.size() > 0)
         {
             sb << "// Attributes\n";
-            for (auto& mapping : vertex_attribute_mappings->mappings)
+            for (auto mapping : vertex_attribute_mappings->mappings)
             {
-                sb << "in layout(location = " << mapping.layout_location << ") ";
-                sb << glsl_token(mapping.shader_type) << " ";
-                sb << mapping.name,
+                sb << "in layout(location = " << mapping->layout_location << ") ";
+                sb << glsl_token(mapping->shader_type) << " ";
+                sb << mapping->name,
                 sb << ";\n";
             }
             sb << "\n";

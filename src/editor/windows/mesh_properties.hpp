@@ -15,7 +15,8 @@ namespace erhe::scene {
 namespace editor
 {
 
-class Scene_manager;
+class Editor;
+class Scene_root;
 class Selection_tool;
 
 class Mesh_properties
@@ -33,14 +34,15 @@ public:
 
     // Implements Tool
     auto description() -> const char* override { return c_name; }
-    void render(Render_context& render_context) override;
+    void render(const Render_context& render_context) override;
     auto state() const -> State override;
 
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
 private:
-    std::shared_ptr<Scene_manager>  m_scene_manager;
+    std::shared_ptr<Editor>         m_editor;
+    std::shared_ptr<Scene_root>     m_scene_root;
     std::shared_ptr<Selection_tool> m_selection_tool;
 
     int  m_max_labels     {400};

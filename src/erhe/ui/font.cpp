@@ -15,7 +15,6 @@
 
 #include <fmt/printf.h>
 
-//#include <ft2build.h> // NOLINT(llvm-include-order)
 #include <freetype/freetype.h>
 #include <freetype/ftbitmap.h>
 #include <freetype/ftglyph.h>

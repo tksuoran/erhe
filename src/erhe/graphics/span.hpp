@@ -1,6 +1,4 @@
-#ifndef span_hpp_erhe_graphics
-#define span_hpp_erhe_graphics
-
+#pragma once
 
 #include <glm/gtc/type_ptr.hpp>
 #include <gsl/gsl>
@@ -40,7 +38,7 @@ auto as_span(const T& value)
 }
 
 template <typename T>
-void write(gsl::span<std::byte>& dst, size_t write_byte_offset, gsl::span<const T> source)
+void write(gsl::span<std::byte>& dst, const size_t write_byte_offset, gsl::span<const T> source)
 {
     Expects(dst.size_bytes() >= source.size_bytes() + write_byte_offset);
     auto source_bytes = gsl::as_bytes(source);
@@ -49,7 +47,7 @@ void write(gsl::span<std::byte>& dst, size_t write_byte_offset, gsl::span<const 
 }
 
 template <typename T>
-void write(gsl::span<T>& dst, size_t write_byte_offset, gsl::span<const T> source)
+void write(gsl::span<T>& dst, const size_t write_byte_offset, gsl::span<const T> source)
 {
     Expects(dst.size_bytes() >= source.size_bytes() + write_byte_offset);
     auto source_bytes = gsl::as_bytes(source);
@@ -58,5 +56,3 @@ void write(gsl::span<T>& dst, size_t write_byte_offset, gsl::span<const T> sourc
 }
 
 } // namespace erhe::graphics
-
-#endif

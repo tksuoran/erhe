@@ -1,5 +1,4 @@
-#ifndef index_range_hpp_erhe_mesh
-#define index_range_hpp_erhe_mesh
+#pragma once
 
 #include "erhe/gl/strong_gl_enums.hpp"
 #include <cstddef>
@@ -15,5 +14,3 @@ struct Index_range
 };
 
 } // namespace erhe::primitive
-
-#endif

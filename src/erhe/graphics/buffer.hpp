@@ -1,10 +1,11 @@
-#ifndef buffer_hpp_erhe_graphics
-#define buffer_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/graphics/gl_objects.hpp"
 #include "erhe/graphics/span.hpp"
 
 #include <gsl/span>
+
+#include <mutex>
 
 namespace erhe::graphics
 {
@@ -56,7 +57,7 @@ public:
         return *this;
     }
 
-    ~Buffer() = default;
+    ~Buffer();
 
     auto map()
     -> gsl::span<std::byte>
@@ -131,11 +132,186 @@ private:
     size_t                  m_capacity_byte_count{0};
     size_t                  m_next_free_byte     {0};
     gl::Buffer_storage_mask m_storage_mask       {0};
+    std::mutex              m_allocate_mutex;
 
     // Last MapBuffer
     gsl::span<std::byte>        m_map;
     size_t                      m_map_byte_offset       {0};
     gl::Map_buffer_access_mask  m_map_buffer_access_mask{0};
+};
+
+class Ring_buffer
+{
+    Ring_buffer(size_t capacity)
+    {
+        m_buffer.resize(capacity);
+        m_max_size = capacity;
+        reset();
+    }
+
+    void reset()
+    {
+        m_write_offset = 0;
+        m_read_offset = 0;
+        m_full = false;
+    }
+
+    bool empty() const
+    {
+        return !m_full && (m_read_offset == m_write_offset);
+    }
+
+    bool full() const
+    {
+        return m_full;
+    }
+
+    size_t max_size() const
+    {
+        return m_max_size;
+    }
+
+    size_t size() const
+    {
+        if (full())
+        {
+            return m_max_size;
+        }
+        if (m_write_offset >= m_read_offset)
+        {
+            return m_write_offset - m_read_offset;
+        }
+        return m_max_size + m_write_offset - m_read_offset;
+    }
+
+    size_t size_available_for_write() const
+    {
+        return m_max_size - size();
+    }
+
+    size_t size_available_for_read() const
+    {
+        return size();
+    }
+
+    size_t write(const uint8_t* src, size_t byte_count)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        size_t can_write_count = std::min(size_available_for_write(), byte_count);
+        if (can_write_count == 0)
+        {
+            return 0;
+        }
+        size_t max_count_before_wrap = m_max_size - m_write_offset;
+        size_t count_before_wrap = std::min(can_write_count, max_count_before_wrap);
+        size_t count_after_wrap = (count_before_wrap < can_write_count) ? (can_write_count - count_before_wrap) : 0;
+        memcpy(&m_buffer[m_write_offset], src, count_before_wrap);
+        if (count_after_wrap > 0)
+        {
+            memcpy(&m_buffer[0], src + count_before_wrap, count_after_wrap);
+        }
+
+        m_write_offset = (m_write_offset + can_write_count) % m_max_size;
+        m_full = (m_write_offset == m_read_offset);
+        return can_write_count;
+    }
+
+    size_t read(uint8_t* dst, size_t byte_count)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        size_t can_read_count = std::min(size_available_for_read(), byte_count);
+        if (can_read_count == 0)
+        {
+            return 0;
+        }
+        size_t max_count_before_wrap = m_max_size - m_read_offset;
+        size_t count_before_wrap = std::min(can_read_count, max_count_before_wrap);
+        size_t count_after_wrap = (count_before_wrap < can_read_count) ? (can_read_count - count_before_wrap) : 0;
+        memcpy(dst, &m_buffer[m_read_offset], count_before_wrap);
+        if (count_after_wrap > 0)
+        {
+            memcpy(dst + count_before_wrap, &m_buffer[0], count_after_wrap);
+        }
+
+        m_read_offset = (m_read_offset + can_read_count) % m_max_size;
+        m_full = false;
+        return can_read_count;
+    }
+
+    size_t discard(size_t byte_count)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        size_t can_discard_count = std::min(size_available_for_read(), byte_count);
+        if (can_discard_count == 0)
+        {
+            return 0;
+        }
+        m_read_offset = (m_read_offset + can_discard_count) % m_max_size;
+        m_full = false;
+        return can_discard_count;
+    }
+
+private:
+    std::mutex           m_mutex;
+    std::vector<uint8_t> m_buffer;
+    size_t               m_read_offset{0};
+    size_t               m_write_offset{0};
+    size_t               m_max_size{0};
+    bool                 m_full{false};
+};
+
+class Buffer_transfer_queue
+{
+public:
+    Buffer_transfer_queue();
+    ~Buffer_transfer_queue();
+    Buffer_transfer_queue(Buffer_transfer_queue&) = delete;
+    Buffer_transfer_queue& operator=(Buffer_transfer_queue&) = delete;
+
+    class Transfer_entry
+    {
+    public:
+        Transfer_entry(Buffer*                target,
+                       size_t                 target_offset,
+                       std::vector<uint8_t>&& data)
+            : target       {target}
+            , target_offset{target_offset}
+            , data         {data}
+        {
+        }
+
+        Transfer_entry(Transfer_entry&) = delete;
+        Transfer_entry& operator=(Transfer_entry&) = delete;
+
+        Transfer_entry(Transfer_entry&& other) noexcept
+            : target       {other.target}
+            , target_offset{other.target_offset}
+            , data         {std::move(other.data)}
+        {
+        }
+
+        Transfer_entry& operator=(Transfer_entry&& other) noexcept
+        {
+            target        = other.target;
+            target_offset = other.target_offset;
+            data          = std::move(other.data);
+            return *this;
+        }
+
+        Buffer*              target{nullptr};
+        size_t               target_offset{0};
+        std::vector<uint8_t> data;
+    };
+
+    void flush();
+    void enqueue(Buffer* buffer, size_t offset, std::vector<uint8_t>&& data);
+
+private:
+    std::mutex                  m_mutex;
+    std::vector<Transfer_entry> m_queued;
 };
 
 template <typename T>
@@ -188,5 +364,3 @@ auto operator!=(const Buffer& lhs, const Buffer& rhs) noexcept
 -> bool;
 
 } // namespace erhe::graphics
-
-#endif

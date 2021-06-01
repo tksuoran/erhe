@@ -6,7 +6,7 @@
 #include "renderers/line_renderer.hpp"
 #include "scene/brush.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/pointer_context.hpp"
 #include "erhe/geometry/operation/clone.hpp"
@@ -32,7 +32,7 @@ using namespace erhe::primitive;
 using namespace erhe::scene;
 using namespace erhe::toolkit;
 
-auto Brushes::state() const -> Tool::State
+auto Brushes::state() const -> State
 {
     return m_state;
 }
@@ -40,22 +40,122 @@ auto Brushes::state() const -> Tool::State
 void Brushes::connect()
 {
     m_operation_stack = get<Operation_stack>();
-    m_scene_manager   = require<Scene_manager>();
+    m_scene_root      = require<Scene_root>();
     m_selection_tool  = get<Selection_tool>();
     m_grid_tool       = get<Grid_tool>();
 }
 
 void Brushes::initialize_component()
 {
-    const auto& materials = m_scene_manager->materials();
-    for (auto material : materials)
+    make_materials();
+
+    m_selected_brush_index = 0;
+}
+
+void Brushes::make_materials()
+{
+    if constexpr (true) // White default material
     {
-        add_material(material);
+        auto m = m_scene_root->make_material(fmt::format("Default Material"),
+                                             vec4(1.0f, 1.0f, 1.0f, 1.0f),
+                                             0.50f,
+                                             0.00f,
+                                             0.50f);
+        add_material(m);
     }
 
-    auto& brushes = m_scene_manager->brushes();
-    m_selected_brush_index = 0;
-    m_brush = &brushes.front();
+    for (size_t i = 0, end = 10; i < end; ++i)
+    {
+        const float rel        = static_cast<float>(i) / static_cast<float>(end);
+        const float hue        = rel * 360.0f;
+        const float saturation = 0.9f;
+        const float value      = 1.0f;
+        float R, G, B;
+        erhe::toolkit::hsv_to_rgb(hue, saturation, value, R, G, B);
+        auto m = m_scene_root->make_material(fmt::format("Hue {}", static_cast<int>(hue)),
+                                             vec4(R, G, B, 1.0f),
+                                             1.00f,
+                                             0.95f,
+                                             0.70f);
+        add_material(m);
+    }
+}
+
+auto Brushes::allocate_brush(const Primitive_build_context& context)
+-> std::shared_ptr<Brush>
+{
+    std::lock_guard<std::mutex> lock(m_brush_mutex);
+    const auto brush = std::make_shared<Brush>(context);
+    m_brushes.push_back(brush);
+    return brush;
+}
+
+auto Brushes::make_brush(Geometry&&                          geometry,
+                         const Brush_create_context&         context,
+                         const shared_ptr<btCollisionShape>& collision_shape)
+-> std::shared_ptr<Brush>
+{
+    ZoneScoped;
+
+    const auto shared_geometry = make_shared<Geometry>(move(geometry));
+    return make_brush(shared_geometry, context, collision_shape);
+}
+
+auto Brushes::make_brush(shared_ptr<Geometry>                geometry,
+                         const Brush_create_context&         context,
+                         const shared_ptr<btCollisionShape>& collision_shape)
+-> std::shared_ptr<Brush>
+{
+    ZoneScoped;
+
+    geometry->build_edges();
+    geometry->compute_polygon_normals();
+    geometry->compute_tangents();
+    geometry->compute_polygon_centroids();
+    geometry->compute_point_normals(c_point_normals_smooth);
+
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry_        = geometry;
+    erhe::primitive::Primitive_build_context&        context_         = context.primitive_build_context;
+    const erhe::primitive::Normal_style              normal_style     = context.normal_style;
+    const float                                      density          = 1.0f;
+    const float                                      volume           = geometry->volume();
+    const std::shared_ptr<btCollisionShape>&         collision_shape_ = collision_shape;
+
+    Brush::Create_info create_info{geometry_,
+                                   context_,
+                                   normal_style,
+                                   density,
+                                   volume,
+                                   collision_shape_};
+
+    const auto brush = allocate_brush(context.primitive_build_context);
+    brush->initialize(create_info);
+    return brush;
+}
+
+auto Brushes::make_brush(shared_ptr<Geometry>        geometry,
+                         const Brush_create_context& context,
+                         Collision_volume_calculator collision_volume_calculator,
+                         Collision_shape_generator   collision_shape_generator)
+-> std::shared_ptr<Brush>
+{
+    ZoneScoped;
+
+    geometry->build_edges();
+    geometry->compute_polygon_normals();
+    geometry->compute_tangents();
+    geometry->compute_polygon_centroids();
+    geometry->compute_point_normals(c_point_normals_smooth);
+    const Brush::Create_info create_info{geometry,
+                                         context.primitive_build_context,
+                                         context.normal_style,
+                                         1.0f, // density
+                                         collision_volume_calculator,
+                                         collision_shape_generator};
+                
+    const auto brush = allocate_brush(context.primitive_build_context);
+    brush->initialize(create_info);
+    return brush;
 }
 
 void Brushes::add_material(const shared_ptr<Material>& material)
@@ -66,7 +166,7 @@ void Brushes::add_material(const shared_ptr<Material>& material)
 
 void Brushes::cancel_ready()
 {
-    m_state = State::passive;
+    m_state = State::Passive;
     if (m_brush_mesh)
     {
         remove_hover_mesh();
@@ -97,15 +197,15 @@ auto Brushes::update(Pointer_context& pointer_context) -> bool
         m_hover_position = m_hover_node->node_from_world() * vec4(m_hover_position.value(), 1.0f);
     }
 
-    if ((m_state == State::passive) &&
+    if ((m_state == State::Passive) &&
         pointer_context.mouse_button[Mouse_button_left].pressed &&
         m_brush_mesh)
     {
-        m_state = State::ready;
+        m_state = State::Ready;
         return true;
     }
 
-    if (m_state != State::ready)
+    if (m_state != State::Ready)
     {
         return false;
     }
@@ -114,18 +214,18 @@ auto Brushes::update(Pointer_context& pointer_context) -> bool
     {
         do_insert_operation();
         remove_hover_mesh();
-        m_state = State::passive;
+        m_state = State::Passive;
         return true;
     }
 
     return false;
 }
 
-void Brushes::render(Render_context&)
+void Brushes::render(const Render_context&)
 {
 }
 
-void Brushes::render_update()
+void Brushes::render_update(const Render_context&)
 {
     update_mesh();
 }
@@ -137,10 +237,10 @@ auto Brushes::get_brush_transform() -> mat4
         return mat4(1);
     }
 
-    Polygon_id      polygon_id = static_cast<Polygon_id>(m_hover_local_index);
-    const Polygon&  polygon    = m_hover_geometry->polygons[polygon_id];
-    Reference_frame hover_frame(*m_hover_geometry, polygon_id);
-    Reference_frame brush_frame = m_brush->get_reference_frame(polygon.corner_count);
+    const Polygon_id polygon_id = static_cast<const Polygon_id>(m_hover_local_index);
+    const Polygon&   polygon    = m_hover_geometry->polygons[polygon_id];
+    Reference_frame  hover_frame(*m_hover_geometry, polygon_id);
+    Reference_frame  brush_frame = m_brush->get_reference_frame(polygon.corner_count);
     hover_frame.N *= -1.0f;
     hover_frame.B *= -1.0f;
 
@@ -168,10 +268,10 @@ auto Brushes::get_brush_transform() -> mat4
         }
     }
 
-    mat4 hover_transform = hover_frame.transform();
-    mat4 brush_transform = brush_frame.transform();
-    mat4 inverse_brush   = inverse(brush_transform);
-    mat4 align           = hover_transform * inverse_brush;
+    const mat4 hover_transform = hover_frame.transform();
+    const mat4 brush_transform = brush_frame.transform();
+    const mat4 inverse_brush   = inverse(brush_transform);
+    const mat4 align           = hover_transform * inverse_brush;
 
     return align;
 }
@@ -182,7 +282,8 @@ void Brushes::update_mesh_node_transform()
     {
         return;
     }
-    auto node = m_brush_mesh->node();
+
+    const auto node = m_brush_mesh->node();
     if (node == nullptr)
     {
         // unexpected
@@ -190,8 +291,8 @@ void Brushes::update_mesh_node_transform()
         return;
     }
 
-    auto  transform    = get_brush_transform();
-    auto& brush_scaled = m_brush->get_scaled(m_transform_scale, *m_scene_manager.get());
+    const auto  transform    = get_brush_transform();
+    const auto& brush_scaled = m_brush->get_scaled(m_transform_scale);
     node->parent = m_hover_node.get(); // TODO reference count
     node->transforms.parent_from_node.set(transform);
     m_brush_mesh->primitives.front().primitive_geometry = brush_scaled.primitive_geometry;
@@ -206,46 +307,52 @@ void Brushes::do_insert_operation()
 
     log_brush.trace("{} scale = {}\n", __func__, m_transform_scale);
 
-    auto transform = get_brush_transform();
-    auto material  = m_materials[m_selected_material];
-    auto instance  = m_brush->make_instance(*m_scene_manager.get(),
-                                            m_hover_node,
-                                            transform,
-                                            material,
-                                            m_transform_scale);
-    Mesh_insert_remove_operation::Context context;
-    context.mode           = Scene_item_operation::Mode::insert;
-    context.mesh           = instance.mesh;
-    context.node           = instance.node;
-    context.node_physics   = instance.node_physics;
-    context.scene_manager  = m_scene_manager;
-    context.selection_tool = m_selection_tool;
-
+    const auto transform = get_brush_transform();
+    const auto material  = m_materials[m_selected_material];
+    const auto instance  = m_brush->make_instance(m_scene_root->content_layer(),
+                                                  m_scene_root->scene(),
+                                                  m_scene_root->physics_world(),
+                                                  m_hover_node,
+                                                  transform,
+                                                  material,
+                                                  m_transform_scale);
+    const Mesh_insert_remove_operation::Context context{m_selection_tool,
+                                                        m_scene_root->content_layer(),
+                                                        m_scene_root->scene(),
+                                                        m_scene_root->physics_world(),
+                                                        instance.mesh,
+                                                        instance.node,
+                                                        instance.node_physics,
+                                                        Scene_item_operation::Mode::insert};
     auto op = make_shared<Mesh_insert_remove_operation>(context);
     m_operation_stack->push(op);
 }
 
 void Brushes::add_hover_mesh()
 {
+    if (m_materials.empty())
+    {
+        return;
+    }
     if ((m_brush == nullptr) || !m_hover_position.has_value())
     {
         return;
     }
 
-    auto  transform    = get_brush_transform();
-    auto  material     = m_materials[m_selected_material];
-    auto& brush_scaled = m_brush->get_scaled(m_transform_scale, *m_scene_manager.get());
-    m_brush_mesh = m_scene_manager->make_mesh_node(brush_scaled.primitive_geometry->source_geometry->name,
-                                                   brush_scaled.primitive_geometry,
-                                                   material);
+    const auto  transform    = get_brush_transform();
+    const auto  material     = m_materials[m_selected_material];
+    const auto& brush_scaled = m_brush->get_scaled(m_transform_scale);
+    m_brush_mesh = m_scene_root->make_mesh_node(brush_scaled.primitive_geometry->source_geometry->name,
+                                                brush_scaled.primitive_geometry,
+                                                material);
     m_brush_mesh->visibility_mask &= ~(Mesh::c_visibility_id);
     update_mesh_node_transform();
 }
 
 void Brushes::remove_hover_mesh()
 {
-    auto layer = m_scene_manager->content_layer();
-    auto& meshes = layer->meshes;
+    auto& layer  = m_scene_root->content_layer();
+    auto& meshes = layer.meshes;
     auto i = remove(meshes.begin(), meshes.end(), m_brush_mesh);
     if (i != meshes.end())
     {
@@ -279,21 +386,20 @@ void Brushes::window(Pointer_context&)
     ImGui::InputFloat("Brush scale",     &debug_info.brush_frame_scale);
     ImGui::InputFloat("Transform scale", &debug_info.transform_scale);
 
-    auto&  brushes     = m_scene_manager->brushes();
-    size_t brush_count = brushes.size();
+    size_t brush_count = m_brushes.size();
 
     auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
     for (int i = 0; i < static_cast<int>(brush_count); ++i)
     {
-        auto& brush = brushes[i];
-        bool button_pressed = make_button(brush.geometry->name.c_str(),
+        auto* brush = m_brushes[i].get();
+        bool button_pressed = make_button(brush->geometry->name.c_str(),
                                           (m_selected_brush_index == i) ? Item_mode::active
                                                                         : Item_mode::normal,
                                           button_size);
         if (button_pressed)
         {
             m_selected_brush_index = i;
-            m_brush = &brush;
+            m_brush = brush;
         }
     }
     bool false_value = false;

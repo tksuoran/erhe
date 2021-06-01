@@ -1,8 +1,16 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/framebuffer.hpp"
+#include "erhe/graphics/pipeline.hpp"
 
 namespace erhe::graphics
 {
+
+OpenGL_state_tracker::OpenGL_state_tracker()
+    : erhe::components::Component{c_name}
+{
+}
+
+OpenGL_state_tracker::~OpenGL_state_tracker() = default;
 
 void OpenGL_state_tracker::on_thread_exit()
 {

@@ -26,7 +26,14 @@ struct Material;
 
 struct Primitive_geometry
 {
-    Primitive_geometry() = default;
+    Primitive_geometry();
+
+    ~Primitive_geometry();
+
+    Primitive_geometry(Primitive_geometry&) = delete;
+    Primitive_geometry* operator=(Primitive_geometry&) = delete;
+    Primitive_geometry(Primitive_geometry&& other);
+    Primitive_geometry& operator=(Primitive_geometry&&);
 
     // Specifies a constant that should be added to each element of indices when chosing elements from the enabled vertex arrays.
     auto base_vertex() const
@@ -58,7 +65,7 @@ struct Primitive_geometry
                                size_t                                         index_count,
                                size_t                                         index_element_size);
 
-    auto index_range(Primitive_mode primitive_mode) -> Index_range;
+    auto index_range(Primitive_mode primitive_mode) const -> Index_range;
 
     glm::vec3                               bounding_box_min{std::numeric_limits<float>::max()}; // bounding box
     glm::vec3                               bounding_box_max{std::numeric_limits<float>::lowest()};
@@ -82,13 +89,9 @@ struct Primitive_geometry
 
 struct Primitive
 {
-    Primitive() = default;
+    Primitive();
     Primitive(std::shared_ptr<Primitive_geometry> primitive_geometry,
-              std::shared_ptr<Material>           material)
-        : primitive_geometry{primitive_geometry}
-        , material{material}
-    {
-    }
+              std::shared_ptr<Material>           material);
 
     std::shared_ptr<Primitive_geometry> primitive_geometry;
     std::shared_ptr<Material>           material;

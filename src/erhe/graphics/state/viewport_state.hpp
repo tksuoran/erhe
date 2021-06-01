@@ -1,7 +1,7 @@
-#ifndef viewport_state_hpp_erhe_graphics
-#define viewport_state_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/gl/strong_gl_enums.hpp"
+
 #include <functional>
 
 namespace erhe::graphics
@@ -95,5 +95,3 @@ private:
 };
 
 } // namespace erhe::graphics
-
-#endif

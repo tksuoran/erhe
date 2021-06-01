@@ -17,7 +17,9 @@ target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
         erhe_log
+        mango
         Microsoft.GSL::GSL
+        TracyClient
 )
 
 foreach(source IN LISTS source_list)

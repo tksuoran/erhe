@@ -1,8 +1,8 @@
-#ifndef depth_stencil_state_hpp_erhe_graphics
-#define depth_stencil_state_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/graphics/configuration.hpp"
+
 #include <functional>
 
 namespace erhe::graphics
@@ -159,5 +159,3 @@ private:
 };
 
 } // namespace erhe::graphics
-
-#endif

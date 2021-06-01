@@ -1,5 +1,4 @@
-#ifndef textures_hpp
-#define textures_hpp
+#pragma once
 
 #include "erhe/components/component.hpp"
 #include <filesystem>
@@ -34,5 +33,3 @@ private:
 };
 
 }
-
-#endif

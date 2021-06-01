@@ -1,7 +1,9 @@
 #include "editor.hpp"
+#include "gl_context_provider.hpp"
 
 #include "application.hpp"
 #include "log.hpp"
+#include "operations/compound_operation.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/forward_renderer.hpp"
@@ -10,6 +12,8 @@
 #include "renderers/shadow_renderer.hpp"
 #include "renderers/text_renderer.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/scene_manager.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/hover_tool.hpp"
@@ -42,13 +46,20 @@ using namespace erhe::geometry;
 using namespace erhe::graphics;
 using namespace erhe::toolkit;
 
+static thread_local erhe::toolkit::Context_window* s_worker_thread_context = nullptr;
+
+
 Editor::Editor()
     : erhe::components::Component{c_name}
 {
 }
 
+Editor::~Editor() = default;
+
 void Editor::connect()
 {
+    require<Gl_context_provider>();
+
     m_application            = get<Application>();
     m_brushes                = get<Brushes>();
     m_camera_properties      = get<Camera_properties>();
@@ -67,7 +78,8 @@ void Editor::connect()
     m_physics_tool           = get<Physics_tool>();
     m_physics_window         = get<Physics_window>();
     m_pipeline_state_tracker = get<OpenGL_state_tracker>();
-    m_scene_manager          = require<Scene_manager>();
+    m_scene_root             = require<Scene_root>();
+    m_scene_manager          = get<Scene_manager>();
     m_selection_tool         = require<Selection_tool>();
     m_shader_monitor         = get<Shader_monitor>();
     m_shadow_renderer        = get<Shadow_renderer>();
@@ -77,53 +89,50 @@ void Editor::connect()
     m_viewport_config        = get<Viewport_config>();
 }
 
-void Editor::disconnect()
-{
-    m_application.reset();
-    m_forward_renderer.reset();
-    m_scene_manager.reset();
-    m_shader_monitor.reset();
-    m_shadow_renderer.reset();
-    m_text_renderer.reset();
-    m_line_renderer.reset();
-    m_pipeline_state_tracker.reset();
-}
-
 void Editor::initialize_component()
 {
     ZoneScoped;
 
+    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+
     register_background_tool(m_hover_tool.get());
-    register_tool(m_trs_tool.get());
-    register_tool(m_selection_tool.get());
-    register_tool(m_fly_camera_tool.get());
+    register_tool  (m_trs_tool.get());
+    register_tool  (m_selection_tool.get());
+    register_tool  (m_fly_camera_tool.get());
     register_window(m_camera_properties.get());
     register_window(m_light_properties.get());
     register_window(m_material_properties.get());
-    register_tool(m_mesh_properties.get());
+    register_tool  (m_mesh_properties.get());
     register_window(m_node_properties.get());
     register_window(m_viewport_window.get());
     register_window(m_operations.get());
-    register_tool(m_brushes.get());
-    register_tool(m_physics_window.get());
-    register_tool(m_physics_tool.get());
+    register_tool  (m_brushes.get());
+    register_tool  (m_physics_window.get());
+    register_tool  (m_physics_tool.get());
 
     if (m_selection_tool)
     {
-        auto lambda = [this](const Selection_tool::Mesh_collection& meshes)
+        auto callback = [this](const Selection_tool::Selection& selection)
         {
-            auto& layer_meshes = m_scene_manager->selection_layer()->meshes;
+            auto& layer_meshes = m_scene_root->selection_layer()->meshes;
             layer_meshes.clear();
-            for (auto mesh : meshes)
+            for (auto item : selection)
             {
+                auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
+                if (!mesh)
+                {
+                    continue;
+                }
                 layer_meshes.push_back(mesh);
             }
         };
-        m_selection_layer_update_subscription = m_selection_tool->subscribe_mesh_selection_change_notification(lambda);
+        m_selection_layer_update_subscription = m_selection_tool->subscribe_selection_change_notification(callback);
     }
 
     register_background_tool(m_grid_tool.get());
     register_window(m_viewport_config.get());
+
+    initialize_camera();
 
     IMGUI_CHECKVERSION();
     m_imgui_context = ImGui::CreateContext();
@@ -146,13 +155,35 @@ void Editor::initialize_component()
     ImGui_ImplErhe_Init(m_pipeline_state_tracker);
 }
 
+void Editor::initialize_camera()
+{
+    auto camera = make_shared<erhe::scene::Camera>("Camera");
+    camera->projection()->fov_y           = erhe::toolkit::degrees_to_radians(35.0f);
+    camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
+    camera->projection()->z_near          = 0.03f;
+    camera->projection()->z_far           = 200.0f;
+    m_scene_root->scene().cameras.push_back(camera);
+
+    auto node = make_shared<erhe::scene::Node>();
+    m_scene_root->scene().nodes.emplace_back(node);
+    //mat4 m = erhe::toolkit::create_look_at(vec3(1.0f, 7.0f, 1.0f),
+    const glm::mat4 m = erhe::toolkit::create_look_at(glm::vec3(10.0f, 7.0f, 10.0f),
+                                                      glm::vec3(0.0f, 0.0f, 0.0f),
+                                                      glm::vec3(0.0f, 1.0f, 0.0f));
+    node->transforms.parent_from_node.set(m);
+    node->update();
+    node->attach(camera);
+
+    set_view_camera(camera);
+}
+
 static constexpr const char* c_swap_buffers = "swap buffers";
 
 void Editor::update()
 {
-    auto                           new_time   = chrono::steady_clock::now();
-    chrono::steady_clock::duration duration   = new_time - m_current_time;
-    double                         frame_time = chrono::duration<double, ratio<1>>(duration).count();
+    const auto new_time   = chrono::steady_clock::now();
+    const auto duration   = new_time - m_current_time;
+    double     frame_time = chrono::duration<double, ratio<1>>(duration).count();
 
     if (frame_time > 0.25)
     {
@@ -161,7 +192,7 @@ void Editor::update()
 
     m_current_time = new_time;
     m_time_accumulator += frame_time;
-    const double dt = 1.0 / 120.0;
+    const double dt = 1.0 / 200.0;
     while (m_time_accumulator >= dt)
     {
         update_fixed_step(dt);
@@ -241,7 +272,7 @@ void Editor::begin_frame()
     if (m_enable_gui)
     {
         gui_begin_frame();
-        auto size               = m_viewport_window->content_region_size();
+        const auto size         = m_viewport_window->content_region_size();
         m_scene_viewport.width  = size.x;
         m_scene_viewport.height = size.y;
     }
@@ -283,19 +314,41 @@ void Editor::gui_render()
     ImGui_ImplErhe_RenderDrawData(ImGui::GetDrawData());
 }
 
+void Editor::set_view_camera(std::shared_ptr<erhe::scene::ICamera> camera)
+{
+    m_view_camera = camera;
+}
+
+auto Editor::get_view_camera() const -> std::shared_ptr<erhe::scene::ICamera>
+{
+    return m_view_camera;
+}
+
 void Editor::render_shadowmaps()
 {
-    m_shadow_renderer->render(m_scene_manager->content_layers(), m_scene_manager->camera());
+    auto* camera = get_view_camera().get();
+    if (camera == nullptr)
+    {
+        return;
+    }
+
+    m_shadow_renderer->render(m_scene_root->content_layers(), *camera);
 }
 
 void Editor::render_id()
 {
     ZoneScoped;
 
+    auto* camera = get_view_camera().get();
+    if (camera == nullptr)
+    {
+        return;
+    }
+
     m_id_renderer->render(m_scene_viewport,
-                          m_scene_manager->content_layers(),
-                          m_scene_manager->tool_layers(),
-                          m_scene_manager->camera(),
+                          m_scene_root->content_layers(),
+                          m_scene_root->tool_layers(),
+                          *camera,
                           m_time,
                           m_pointer_context.pointer_x,
                           m_pointer_context.pointer_y);
@@ -307,9 +360,15 @@ void Editor::render_clear_primary()
 
     m_pipeline_state_tracker->shader_stages.reset();
     m_pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
-    gl::viewport(m_scene_viewport.x, m_scene_viewport.y, m_scene_viewport.width, m_scene_viewport.height);
+    gl::viewport(m_scene_viewport.x,
+                 m_scene_viewport.y,
+                 m_scene_viewport.width,
+                 m_scene_viewport.height);
     gl::enable(gl::Enable_cap::framebuffer_srgb);
-    gl::clear_color(m_viewport_config->clear_color[0], m_viewport_config->clear_color[1], m_viewport_config->clear_color[2], m_viewport_config->clear_color[3]);
+    gl::clear_color(m_viewport_config->clear_color[0],
+                    m_viewport_config->clear_color[1],
+                    m_viewport_config->clear_color[2],
+                    m_viewport_config->clear_color[3]);
     gl::clear_depth_f(erhe::graphics::Configuration::depth_clear_value);
     gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 }
@@ -317,6 +376,12 @@ void Editor::render_clear_primary()
 void Editor::render_content()
 {
     ZoneScoped;
+
+    auto* camera = get_view_camera().get();
+    if (camera == nullptr)
+    {
+        return;
+    }
 
     if (m_viewport_config && m_viewport_config->polygon_offset_enable)
     {
@@ -326,9 +391,9 @@ void Editor::render_content()
                                  m_viewport_config->polygon_offset_clamp);
     }
     m_forward_renderer->render(m_scene_viewport,
-                               m_scene_manager->camera(),
-                               m_scene_manager->content_layers(),
-                               m_scene_manager->materials(),
+                               *camera,
+                               m_scene_root->content_layers(),
+                               m_scene_root->materials(),
                                { Forward_renderer::Pass::polygon_fill },
                                erhe::scene::Mesh::c_visibility_content);
     gl::disable(gl::Enable_cap::polygon_offset_line);
@@ -336,6 +401,12 @@ void Editor::render_content()
 
 void Editor::render_selection()
 {
+    auto* camera = get_view_camera().get();
+    if (camera == nullptr)
+    {
+        return;
+    }
+
     if (m_viewport_config && m_viewport_config->edge_lines)
     {
         ZoneScopedN("selection edge lines");
@@ -349,9 +420,9 @@ void Editor::render_selection()
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_size  = m_viewport_config->line_width;
         m_forward_renderer->render(m_scene_viewport,
-                                   m_scene_manager->camera(),
-                                   m_scene_manager->selection_layers(),
-                                   m_scene_manager->materials(),
+                                   *camera,
+                                   m_scene_root->selection_layers(),
+                                   m_scene_root->materials(),
                                    { Forward_renderer::Pass::edge_lines,
                                      Forward_renderer::Pass::hidden_line_with_blend
                                    },
@@ -369,9 +440,9 @@ void Editor::render_selection()
         m_forward_renderer->primitive_constant_color = m_viewport_config->centroid_color;
         m_forward_renderer->primitive_constant_size  = m_viewport_config->point_size;
         m_forward_renderer->render(m_scene_viewport,
-                                   m_scene_manager->camera(),
-                                   m_scene_manager->selection_layers(),
-                                   m_scene_manager->materials(),
+                                   *camera,
+                                   m_scene_root->selection_layers(),
+                                   m_scene_root->materials(),
                                    { Forward_renderer::Pass::polygon_centroids },
                                    erhe::scene::Mesh::c_visibility_selection);
     }
@@ -383,9 +454,9 @@ void Editor::render_selection()
         m_forward_renderer->primitive_constant_color = m_viewport_config->corner_color;
         m_forward_renderer->primitive_constant_size  = m_viewport_config->point_size;
         m_forward_renderer->render(m_scene_viewport,
-                                   m_scene_manager->camera(),
-                                   m_scene_manager->selection_layers(),
-                                   m_scene_manager->materials(),
+                                   *camera,
+                                   m_scene_root->selection_layers(),
+                                   m_scene_root->materials(),
                                    { Forward_renderer::Pass::corner_points },
                                    erhe::scene::Mesh::c_visibility_selection);
     }
@@ -396,10 +467,17 @@ void Editor::render_tool_meshes()
 {
     ZoneScoped;
 
+    auto* camera = get_view_camera().get();
+    if (camera == nullptr)
+    {
+        return;
+    }
+
+
     m_forward_renderer->render(m_scene_viewport,
-                               m_scene_manager->camera(),
-                               m_scene_manager->tool_layers(),
-                               m_scene_manager->materials(),
+                               *camera,
+                               m_scene_root->tool_layers(),
+                               m_scene_root->materials(),
                                {
                                    Forward_renderer::Pass::tag_depth_hidden_with_stencil,
                                    Forward_renderer::Pass::tag_depth_visible_with_stencil,
@@ -415,13 +493,20 @@ void Editor::render_update_tools()
 {
     ZoneScoped;
 
+    const Render_context render_context{&m_pointer_context,
+                                        m_scene_manager.get(),
+                                        m_line_renderer.get(),
+                                        m_text_renderer.get(),
+                                        m_scene_viewport,
+                                        m_time};
+
     for (auto* tool : m_background_tools)
     {
-        tool->render_update();
+        tool->render_update(render_context);
     }
     for (auto* tool : m_tools)
     {
-        tool->render_update();
+        tool->render_update(render_context);
     }
 }
 
@@ -429,13 +514,12 @@ void Editor::update_and_render_tools()
 {
     ZoneScoped;
 
-    Render_context render_context;
-    render_context.pointer_context = &m_pointer_context;
-    render_context.line_renderer   = m_line_renderer.get();
-    render_context.text_renderer   = m_text_renderer.get();
-    render_context.scene_manager   = m_scene_manager.get();
-    render_context.viewport        = m_scene_viewport;
-    render_context.time            = m_time;
+    const Render_context render_context{&m_pointer_context,
+                                        m_scene_manager.get(),
+                                        m_line_renderer.get(),
+                                        m_text_renderer.get(),
+                                        m_scene_viewport,
+                                        m_time};
 
     for (auto* tool : m_background_tools)
     {
@@ -452,8 +536,8 @@ void Editor::render()
 {
     ZoneScoped;
 
-    int w = width();
-    int h = height();
+    const int w = width();
+    const int h = height();
     if ((w == 0) || (h == 0))
     {
         return;
@@ -468,9 +552,11 @@ void Editor::render()
 
     render_update_tools();
 
+    auto* camera = get_view_camera().get();
     if ((m_scene_viewport.width  > 0) &&
         (m_scene_viewport.height > 0) &&
-        is_primary_scene_output_framebuffer_ready())
+        is_primary_scene_output_framebuffer_ready() &&
+        (camera != nullptr))
     {
         if (m_scene_manager)
         {
@@ -503,7 +589,7 @@ void Editor::render()
 
         if (m_line_renderer)
         {
-            m_line_renderer->render(m_scene_viewport, m_scene_manager->camera());
+            m_line_renderer->render(m_scene_viewport, *camera);
         }
 
         if (m_text_renderer)
@@ -554,12 +640,13 @@ auto Editor::to_scene_content(glm::vec2 position_in_root) -> glm::vec2
 
 void Editor::update_pointer()
 {
-    VERIFY(m_scene_manager);
+    const glm::vec2 pointer = to_scene_content(glm::vec2(m_pointer_context.mouse_x,
+                                                         m_pointer_context.mouse_y));
 
-    glm::vec2 pointer = to_scene_content(glm::vec2(m_pointer_context.mouse_x, m_pointer_context.mouse_y));
+    auto* camera = get_view_camera().get();
 
     float z{1.0f};
-    m_pointer_context.camera           = &m_scene_manager->camera();
+    m_pointer_context.camera           = camera;
     m_pointer_context.pointer_x        = static_cast<int>(pointer.x);
     m_pointer_context.pointer_y        = static_cast<int>(pointer.y);
     m_pointer_context.pointer_z        = z;
@@ -572,7 +659,9 @@ void Editor::update_pointer()
 
     if (m_pointer_context.pointer_in_content_area() && m_id_renderer)
     {
-        auto mesh_primitive           = m_id_renderer->get(m_pointer_context.pointer_x, m_pointer_context.pointer_y, m_pointer_context.pointer_z);
+        auto mesh_primitive = m_id_renderer->get(m_pointer_context.pointer_x,
+                                                 m_pointer_context.pointer_y,
+                                                 m_pointer_context.pointer_z);
         m_pointer_context.hover_valid = mesh_primitive.valid;
         if (m_pointer_context.hover_valid)
         {
@@ -580,8 +669,8 @@ void Editor::update_pointer()
             m_pointer_context.hover_layer       = mesh_primitive.layer;
             m_pointer_context.hover_primitive   = mesh_primitive.mesh_primitive_index;
             m_pointer_context.hover_local_index = mesh_primitive.local_index;
-            m_pointer_context.hover_tool        = m_pointer_context.hover_layer == m_scene_manager->tool_layer().get();
-            m_pointer_context.hover_content     = m_pointer_context.hover_layer == m_scene_manager->content_layer().get();
+            m_pointer_context.hover_tool        = m_pointer_context.hover_layer == m_scene_root->tool_layer().get();
+            m_pointer_context.hover_content     = m_pointer_context.hover_layer == &m_scene_root->content_layer();
             if (m_pointer_context.hover_mesh != nullptr)
             {
                 const auto& primitive          = m_pointer_context.hover_mesh->primitives[m_pointer_context.hover_primitive];
@@ -713,6 +802,16 @@ void Editor::on_mouse_move(double x, double y)
     on_pointer();
 }
 
+void Editor::on_key_press(erhe::toolkit::Keycode code, uint32_t modifier_mask)
+{
+    on_key(true, code, modifier_mask);
+}
+
+void Editor::on_key_release(erhe::toolkit::Keycode code, uint32_t modifier_mask)
+{
+    on_key(false, code, modifier_mask);
+}
+
 void Editor::cancel_ready_tools(Tool* keep)
 {
     for (auto* tool : m_tools)
@@ -721,7 +820,7 @@ void Editor::cancel_ready_tools(Tool* keep)
         {
             continue;
         }
-        if (tool->state() == Tool::State::ready)
+        if (tool->state() == Tool::State::Ready)
         {
             log_input_events.trace("Canceling ready tool {}\n", tool->description());
             tool->cancel_ready();
@@ -816,7 +915,7 @@ void Editor::on_pointer()
     // Pass 1: Active tools
     for (auto* tool : m_tools)
     {
-        if ((tool->state() == Tool::State::active) && tool->update(m_pointer_context))
+        if ((tool->state() == Tool::State::Active) && tool->update(m_pointer_context))
         {
             log_input_events.trace("Active tool {} consumed pointer event\n", tool->description());
             cancel_ready_tools(nullptr);
@@ -827,7 +926,7 @@ void Editor::on_pointer()
     // Pass 2: Ready tools
     for (auto* tool : m_tools)
     {
-        if ((tool->state() == Tool::State::ready) && tool->update(m_pointer_context))
+        if ((tool->state() == Tool::State::Ready) && tool->update(m_pointer_context))
         {
             log_input_events.trace("Ready tool {} consumed pointer event\n", tool->description());
             cancel_ready_tools(nullptr);
@@ -838,7 +937,7 @@ void Editor::on_pointer()
     // Oass 3: Passive tools
     for (auto* tool : m_tools)
     {
-        if ((tool->state() == Tool::State::passive) && tool->update(m_pointer_context))
+        if ((tool->state() == Tool::State::Passive) && tool->update(m_pointer_context))
         {
             log_input_events.trace("Passive tool {} consumed pointer event\n", tool->description());
             cancel_ready_tools(tool);
@@ -902,21 +1001,42 @@ void Editor::delete_selected_meshes()
         return;
     }
 
-    auto& selection = m_selection_tool->selected_meshes();
+    auto& selection = m_selection_tool->selection();
     if (selection.empty())
     {
         return;
     }
 
-    Mesh_insert_remove_operation::Context context;
-    context.mode           = Scene_item_operation::Mode::remove;
-    context.mesh           = selection.front();
-    context.node           = context.mesh->node();
-    context.node_physics   = context.node->get_attachment<Node_physics>();
-    context.scene_manager  = m_scene_manager;
-    context.selection_tool = m_selection_tool;
+    Compound_operation::Context compound_context;
+    for (auto item : selection)
+    {
+        auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        if (!mesh)
+        {
+            continue;
+        }
+        auto node = mesh->node();
+        if (!node)
+        {
+            continue;
+        }
+        Mesh_insert_remove_operation::Context context{m_selection_tool,
+                                                      m_scene_root->content_layer(),  
+                                                      m_scene_root->scene(),
+                                                      m_scene_root->physics_world(),
+                                                      mesh,
+                                                      node,
+                                                      node->get_attachment<Node_physics>(),
+                                                      Scene_item_operation::Mode::remove};
+        auto op = make_shared<Mesh_insert_remove_operation>(context);
+        compound_context.operations.push_back(op);
+    }
+    if (compound_context.operations.empty())
+    {
+        return;
+    }
 
-    auto op = make_shared<Mesh_insert_remove_operation>(context);
+    auto op = make_shared<Compound_operation>(compound_context);
     m_operation_stack->push(op);
 }
 

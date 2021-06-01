@@ -16,9 +16,9 @@ class Mesh
 public:
     Mesh() = default;
 
-    explicit Mesh(const std::string& name);
+    explicit Mesh(std::string_view name);
 
-    Mesh(const std::string&         name,
+    Mesh(std::string_view           name,
          erhe::primitive::Primitive primitive);
 
     virtual ~Mesh() = default;

@@ -1,15 +1,17 @@
-#ifndef vertex_input_state_hpp_erhe_graphics
-#define vertex_input_state_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/graphics/gl_objects.hpp"
+#include "erhe/graphics/log.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
 #include "erhe/graphics/vertex_stream_binding.hpp"
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 
+#include <fmt/ostream.h>
 #include <gsl/gsl>
 
 #include <cstddef>
+#include <deque>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -31,10 +33,10 @@ public:
     class Binding
     {
     public:
-        Binding(Buffer*                         vertex_buffer,
-                const Vertex_attribute_mapping& mapping,
-                const Vertex_attribute*         attribute,
-                size_t                          stride)
+        Binding(Buffer*                                          vertex_buffer,
+                const std::shared_ptr<Vertex_attribute_mapping>& mapping,
+                const Vertex_attribute*                          attribute,
+                size_t                                           stride)
             : vertex_buffer           {vertex_buffer}
             , vertex_attribute_mapping{mapping}
             , vertex_attribute        {attribute}
@@ -53,13 +55,13 @@ public:
         auto operator=(const Binding& other)
         -> Binding& = delete;
 
-        Buffer*                         vertex_buffer   {nullptr};
-        const Vertex_attribute_mapping& vertex_attribute_mapping;
-        const Vertex_attribute*         vertex_attribute{nullptr};
-        size_t                          stride          {0};
+        Buffer*                                   vertex_buffer   {nullptr};
+        std::shared_ptr<Vertex_attribute_mapping> vertex_attribute_mapping;
+        const Vertex_attribute*                   vertex_attribute{nullptr};
+        size_t                                    stride          {0};
     };
 
-    using Binding_collection = std::vector<Binding>;
+    using Binding_collection = std::vector<std::shared_ptr<Binding>>;
 
     Vertex_input_state();
 
@@ -80,28 +82,28 @@ public:
     auto operator=(const Vertex_input_state&)
     -> Vertex_input_state& = delete;
 
-    Vertex_input_state(Vertex_input_state&& other) noexcept
-    {
-        m_bindings        = std::move(other.m_bindings);
-        m_index_buffer    = other.m_index_buffer;
-        m_gl_vertex_array = std::move(other.m_gl_vertex_array);
-    }
+    Vertex_input_state(Vertex_input_state&& other) = delete; //noexcept
+    //{
+    //    m_bindings        = std::move(other.m_bindings);
+    //    m_index_buffer    = other.m_index_buffer;
+    //    m_gl_vertex_array = std::move(other.m_gl_vertex_array);
+    //}
 
-    auto operator=(Vertex_input_state&& other) noexcept
-    -> Vertex_input_state&
-    {
-        m_bindings        = std::move(other. m_bindings);
-        m_index_buffer    = other.m_index_buffer;
-        m_gl_vertex_array = std::move(other.m_gl_vertex_array);
-        return *this;
-    }
+    auto operator=(Vertex_input_state&& other) = delete; //noexcept
+    //-> Vertex_input_state&
+    //{
+    //    m_bindings        = std::move(other. m_bindings);
+    //    m_index_buffer    = other.m_index_buffer;
+    //    m_gl_vertex_array = std::move(other.m_gl_vertex_array);
+    //    return *this;
+    //}
 
 
-    auto emplace_back(gsl::not_null<Buffer*>          vertex_buffer,
-                      const Vertex_attribute_mapping& vertex_attribute_mapping,
-                      const Vertex_attribute*         attribute,
-                      size_t                          stride)
-    -> Binding&;
+    void emplace_back(gsl::not_null<Buffer*>                           vertex_buffer,
+                      const std::shared_ptr<Vertex_attribute_mapping>& vertex_attribute_mapping,
+                      const Vertex_attribute*                          attribute,
+                      size_t                                           stride);
+    //-> Binding&;
 
     void use() const;
 
@@ -130,18 +132,35 @@ public:
 
     static void on_thread_enter()
     {
+        std::lock_guard lock{s_mutex};
         for (auto* vertex_input_state : s_all_vertex_input_states)
         {
-            vertex_input_state->create();
+            log_threads.trace("{}: on thread enter: vertex input state @ {} owned by thread {}\n",
+                              std::this_thread::get_id(), 
+                              fmt::ptr(vertex_input_state),
+                              vertex_input_state->m_owner_thread);
+            if (vertex_input_state->m_owner_thread == std::thread::id{})
+            {
+                vertex_input_state->create();
+            }
         }
     }
 
     static void on_thread_exit()
     {
+        std::lock_guard lock{s_mutex};
         gl::bind_vertex_array(0);
+        auto this_thread_id = std::this_thread::get_id();
         for (auto* vertex_input_state : s_all_vertex_input_states)
         {
-            vertex_input_state->reset();
+            log_threads.trace("{}: on thread exit: vertex input state @ {} owned by thread {}\n",
+                              std::this_thread::get_id(), 
+                              fmt::ptr(vertex_input_state),
+                              vertex_input_state->m_owner_thread);
+            if (vertex_input_state->m_owner_thread == this_thread_id)
+            {
+                vertex_input_state->reset();
+            }
         }
     }
 
@@ -170,6 +189,7 @@ private:
     Buffer*                        m_index_buffer{nullptr};
     std::optional<Gl_vertex_array> m_gl_vertex_array;
     size_t                         m_serial;
+    std::thread::id                m_owner_thread;
 
     static std::mutex                       s_mutex;
     static size_t                           s_serial;
@@ -201,5 +221,3 @@ private:
 };
 
 } // namespace erhe::graphics
-
-#endif

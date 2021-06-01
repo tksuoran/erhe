@@ -1,5 +1,4 @@
-#ifndef fragment_outputs_hpp_erhe_graphics
-#define fragment_outputs_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/graphics/fragment_output.hpp"
 #include <vector>
@@ -26,5 +25,3 @@ private:
 };
 
 } // namespace erhe::graphics
-
-#endif

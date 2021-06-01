@@ -7,7 +7,6 @@ namespace editor
 {
 
 class Line_renderer;
-class Programs;
 class Text_renderer;
 
 class Debug_draw
@@ -16,11 +15,12 @@ class Debug_draw
 {
 public:
     static constexpr const char* c_name = "Debug_draw";
-    Debug_draw() : erhe::components::Component{c_name}, m_debug_mode{0} {}
-    virtual ~Debug_draw() = default;
+    Debug_draw();
+    virtual ~Debug_draw();
 
     // Implements Component
     void connect() override;
+    void initialize_component() override;
 
 	// Implements btIDebugDraw
 	void drawLine(const btVector3& from, const btVector3& to, const btVector3& color) override;

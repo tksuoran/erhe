@@ -92,6 +92,14 @@ void dump_fbo(int fbo_name)
 
 }
 
+Viewport_window::Viewport_window()
+    : erhe::components::Component{c_name}
+{
+
+}
+
+Viewport_window::~Viewport_window() = default;
+
 void Viewport_window::window(Pointer_context& pointer_context)
 {
     ZoneScoped;
@@ -122,6 +130,11 @@ void Viewport_window::window(Pointer_context& pointer_context)
     pointer_context.scene_view_focus = m_is_focused;
     ImGui::End();
     update_framebuffer();
+}
+
+auto Viewport_window::content_region_size() -> glm::ivec2
+{
+    return m_content_region_size;
 }
 
 auto Viewport_window::is_focused() -> bool

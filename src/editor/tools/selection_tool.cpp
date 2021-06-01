@@ -13,27 +13,39 @@ namespace editor
 
 using namespace erhe::toolkit;
 
-auto Selection_tool::state() const -> Tool::State
+Selection_tool::Selection_tool()
+    : erhe::components::Component{c_name}
+{
+}
+
+Selection_tool::~Selection_tool() = default;
+
+auto Selection_tool::description() -> const char*
+{
+    return c_name;
+}
+
+auto Selection_tool::state() const -> State
 {
     return m_state;
 }
 
-Selection_tool::Subcription Selection_tool::subscribe_mesh_selection_change_notification(On_mesh_selection_changed callback)
+Selection_tool::Subcription Selection_tool::subscribe_selection_change_notification(On_selection_changed callback)
 {
-    int handle = m_next_mesh_selection_change_subscription++;
-    m_mesh_selection_change_subscriptions.push_back({callback, handle});
+    const int handle = m_next_selection_change_subscription++;
+    m_selection_change_subscriptions.push_back({callback, handle});
     return Subcription(this, handle);
 }
 
-void Selection_tool::unsubscribe_mesh_selection_change_notification(int handle)
+void Selection_tool::unsubscribe_selection_change_notification(int handle)
 {
-    m_mesh_selection_change_subscriptions.erase(std::remove_if(m_mesh_selection_change_subscriptions.begin(),
-                                                               m_mesh_selection_change_subscriptions.end(),
-                                                               [=](Subscription_entry& entry) -> bool
-                                                               {
-                                                                   return entry.handle == handle;
-                                                               }),
-                                                m_mesh_selection_change_subscriptions.end());
+    m_selection_change_subscriptions.erase(std::remove_if(m_selection_change_subscriptions.begin(),
+                                                          m_selection_change_subscriptions.end(),
+                                                          [=](Subscription_entry& entry) -> bool
+                                                          {
+                                                              return entry.handle == handle;
+                                                          }),
+                                           m_selection_change_subscriptions.end());
 }
 
 void Selection_tool::connect()
@@ -44,14 +56,19 @@ void Selection_tool::connect()
 void Selection_tool::window(Pointer_context&)
 {
     ImGui::Begin("Selection");
-    for (const auto& mesh : m_selected_meshes)
+    for (const auto& item : m_selection)
     {
+        if (!item)
+        {
+            continue;
+        }
+        const auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
         if (!mesh)
         {
             continue;
         }
         ImGui::Text("Mesh: %s", mesh->name().c_str());
-        auto* node = mesh->node().get();
+        const auto* node = mesh->node().get();
         if (node != nullptr)
         {
             ImGui::Text("Node: %s", node->name.c_str());
@@ -63,14 +80,14 @@ void Selection_tool::window(Pointer_context&)
 
 void Selection_tool::cancel_ready()
 {
-    m_state = State::passive;
+    m_state = State::Passive;
 }
 
 auto Selection_tool::update(Pointer_context& pointer_context) -> bool
 {
     if (pointer_context.priority_action != Action::select)
     {
-        if (m_state != State::passive)
+        if (m_state != State::Passive)
         {
             cancel_ready();
         }
@@ -89,17 +106,17 @@ auto Selection_tool::update(Pointer_context& pointer_context) -> bool
     m_hover_content  = pointer_context.hover_content;
     m_hover_tool     = pointer_context.hover_tool;
     
-    if (m_state == State::passive)
+    if (m_state == State::Passive)
     {
         if (m_hover_content && pointer_context.mouse_button[Mouse_button_left].pressed)
         {
-            m_state = State::ready;
+            m_state = State::Ready;
             return true;
         }
         return false;
     }
 
-    if (m_state == State::passive)
+    if (m_state == State::Passive)
     {
         return false;
     }
@@ -112,120 +129,121 @@ auto Selection_tool::update(Pointer_context& pointer_context) -> bool
             {
                 return false;
             }
-            toggle_mesh_selection(m_hover_mesh, false);
-            m_state = State::passive;
+            toggle_selection(m_hover_mesh, false);
+            m_state = State::Passive;
             return true;
         }
         if (!m_hover_content)
         {
-            clear_mesh_selection();
-            m_state = State::passive;
+            clear_selection();
+            m_state = State::Passive;
             return true;
         }
-        toggle_mesh_selection(m_hover_mesh, true);
-        m_state = State::passive;
+        toggle_selection(m_hover_mesh, true);
+        m_state = State::Passive;
         return true;
     }
     return false;
 }
 
-auto Selection_tool::clear_mesh_selection() -> bool
+auto Selection_tool::clear_selection() -> bool
 {
-    if (m_selected_meshes.empty())
+    if (m_selection.empty())
     {
         return false;
     }
 
-    log_selection.trace("Clearing mesh selection ({} meshes were selected)\n", m_selected_meshes.size());
-    m_selected_meshes.clear();
-    call_mesh_selection_change_subscriptions();
+    log_selection.trace("Clearing selection ({} items were selected)\n", m_selection.size());
+    m_selection.clear();
+    call_selection_change_subscriptions();
     return true;
 }
 
-void Selection_tool::toggle_mesh_selection(std::shared_ptr<erhe::scene::Mesh> mesh, bool clear_others)
+void Selection_tool::toggle_selection(std::shared_ptr<erhe::scene::INode_attachment> item,
+                                      bool                                           clear_others)
 {
     if (clear_others)
     {
-        bool was_selected = is_in_selection(mesh);
-        clear_mesh_selection();
-        if (!was_selected && mesh)
+        const bool was_selected = is_in_selection(item);
+        clear_selection();
+        if (!was_selected && item)
         {
-            add_to_selection(mesh);
+            add_to_selection(item);
         }
     }
-    else if (mesh)
+    else if (item)
     {
-        if (is_in_selection(mesh))
+        if (is_in_selection(item))
         {
-            remove_from_selection(mesh);
+            remove_from_selection(item);
         }
         else
         {
-            add_to_selection(mesh);
+            add_to_selection(item);
         }
     }
 
-    call_mesh_selection_change_subscriptions();
+    call_selection_change_subscriptions();
 }
 
-auto Selection_tool::is_in_selection(std::shared_ptr<erhe::scene::Mesh> mesh) -> bool
+auto Selection_tool::is_in_selection(std::shared_ptr<erhe::scene::INode_attachment> item) -> bool
 {
-    return std::find(m_selected_meshes.begin(),
-                     m_selected_meshes.end(),
-                     mesh) != m_selected_meshes.end();
+    return std::find(m_selection.begin(),
+                     m_selection.end(),
+                     item) != m_selection.end();
 }
 
-auto Selection_tool::add_to_selection(std::shared_ptr<erhe::scene::Mesh> mesh) -> bool
+auto Selection_tool::add_to_selection(std::shared_ptr<erhe::scene::INode_attachment> item) -> bool
 {
-    if (!mesh)
+    if (!item)
     {
         log_selection.warn("Trying to add empty mesh to selection\n");
         return false;
     }
 
-    if (!is_in_selection(mesh))
+    if (!is_in_selection(item))
     {
-        log_selection.trace("Adding mesh {} to selection\n", mesh->name());
-        m_selected_meshes.push_back(mesh);
+        log_selection.trace("Adding mesh {} to selection\n", item->name());
+        m_selection.push_back(item);
         return true;
     }
 
-    log_selection.warn("Adding mesh {} to selection failed - was already in selection\n", mesh->name());
+    log_selection.warn("Adding mesh {} to selection failed - was already in selection\n", item->name());
     return false;
 }
 
-auto Selection_tool::remove_from_selection(std::shared_ptr<erhe::scene::Mesh> mesh) -> bool
+auto Selection_tool::remove_from_selection(std::shared_ptr<erhe::scene::INode_attachment> item) -> bool
 {
-    if (!mesh)
+    if (!item)
     {
-        log_selection.warn("Trying to remove empty mesh from selection\n");
+        log_selection.warn("Trying to remove empty item from selection\n");
         return false;
     }
 
-    auto i = std::remove(m_selected_meshes.begin(),
-                         m_selected_meshes.end(),
-                         mesh);
-    if (i != m_selected_meshes.end())
+    const auto i = std::remove(m_selection.begin(),
+                               m_selection.end(),
+                               item);
+    if (i != m_selection.end())
     {
-        log_selection.trace("Removing mesh {} from selection\n", mesh->name());
-        m_selected_meshes.erase(i, m_selected_meshes.end());
-        call_mesh_selection_change_subscriptions();
+        log_selection.trace("Removing item {} from selection\n", item->name());
+        m_selection.erase(i, m_selection.end());
+        call_selection_change_subscriptions();
         return true;
     }
 
-    log_selection.warn("Removing mesh {} from selection failed - was not in selection\n", mesh->name());
+    log_selection.warn("Removing item {} from selection failed - was not in selection\n", item->name());
     return false;
 }
 
-void Selection_tool::call_mesh_selection_change_subscriptions()
+void Selection_tool::call_selection_change_subscriptions()
 {
-    for (const auto& entry : m_mesh_selection_change_subscriptions)
+    for (const auto& entry : m_selection_change_subscriptions)
     {
-        entry.callback(m_selected_meshes);
+        entry.callback(m_selection);
     }
 }
 
-void Selection_tool::render(Render_context& render_context)
+void Selection_tool::render(const Render_context& render_context)
 {
     static_cast<void>(render_context);
 }

@@ -9,14 +9,14 @@ namespace erhe::geometry
 // Allocates new Corner / Corner_id
 // - Point must be allocated.
 // - Polygon must be allocated
-auto Geometry::make_corner(Point_id point_id, Polygon_id polygon_id) -> Corner_id
+auto Geometry::make_corner(const Point_id point_id, const Polygon_id polygon_id) -> Corner_id
 {
     ZoneScoped;
 
     Expects(point_id < m_next_point_id);
     Expects(polygon_id < m_next_polygon_id);
     ++m_serial;
-    Corner_id corner_id = m_next_corner_id++;
+    const Corner_id corner_id = m_next_corner_id++;
 
     if (corner_id >= corners.size()) {
         corners.resize(static_cast<size_t>(corner_id) + s_grow);
@@ -58,7 +58,7 @@ auto Geometry::make_polygon() -> Polygon_id
 
     ++m_serial;
 
-    Polygon_id polygon_id = m_next_polygon_id++;
+    const Polygon_id polygon_id = m_next_polygon_id++;
 
     // TODO
     if (polygon_id >= polygons.size()) {
@@ -74,7 +74,7 @@ auto Geometry::make_polygon() -> Polygon_id
 // Allocates new Edge / Edge_id
 // - Points must be already allocated
 // - Points must be ordered
-auto Geometry::make_edge(Point_id a, Point_id b) -> Edge_id
+auto Geometry::make_edge(const Point_id a, const Point_id b) -> Edge_id
 {
     ZoneScoped;
 
@@ -83,7 +83,7 @@ auto Geometry::make_edge(Point_id a, Point_id b) -> Edge_id
     VERIFY(a < b);
     //Expects(a < b);
     Expects(b < points.size());
-    Edge_id edge_id = m_next_edge_id++;
+    const Edge_id edge_id = m_next_edge_id++;
 
     if (edge_id >= edges.size())
     {
@@ -103,7 +103,7 @@ auto Geometry::make_edge(Point_id a, Point_id b) -> Edge_id
 // Allocates new point corner.
 // - Point must be already allocated.
 // - Corner must be already allocated.
-void Geometry::reserve_point_corner(Point_id point_id, Corner_id corner_id)
+void Geometry::reserve_point_corner(const Point_id point_id, const Corner_id corner_id)
 {
     ZoneScoped;
 
@@ -138,7 +138,7 @@ void Geometry::make_point_corners()
         {
             VERIFY(j.corner_id != std::numeric_limits<Corner_id>::max());
             VERIFY(j.corner_id < m_next_corner_id);
-            Point_id        point_id        = j.corner.point_id;
+            const Point_id  point_id        = j.corner.point_id;
             VERIFY(point_id != std::numeric_limits<Point_id>::max());
             VERIFY(point_id < m_next_point_id);
             Point&          point           = j.geometry.points[point_id];

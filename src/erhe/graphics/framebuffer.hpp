@@ -1,5 +1,4 @@
-#ifndef framebuffer_hpp_erhe_graphics
-#define framebuffer_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/graphics/gl_objects.hpp"
 
@@ -7,6 +6,7 @@
 #include <optional>
 
 #include <mutex>
+#include <vector>
 
 namespace erhe::graphics
 {
@@ -68,24 +68,27 @@ public:
     auto operator=(const Framebuffer&)
     -> Framebuffer& = delete;
 
-    Framebuffer(Framebuffer&& other) noexcept
-        : m_gl_framebuffer{std::move(other.m_gl_framebuffer)}
-    {
-    }
+    Framebuffer(Framebuffer&& other) = delete; //noexcept
+    //    : m_gl_framebuffer{std::move(other.m_gl_framebuffer)}
+    //{
+    //}
 
-    auto operator=(Framebuffer&& other) noexcept
-    -> Framebuffer&
-    {
-        m_gl_framebuffer = std::move(other.m_gl_framebuffer);
-        return *this;
-    }
+    auto operator=(Framebuffer&& other) = delete; //noexcept
+    //-> Framebuffer&
+    //{
+    //    m_gl_framebuffer = std::move(other.m_gl_framebuffer);
+    //    return *this;
+    //}
 
     static void on_thread_enter()
     {
         std::lock_guard lock{s_mutex};
         for (auto* framebuffer : s_all_framebuffers)
         {
-            framebuffer->create();
+            if (framebuffer->m_owner_thread == std::thread::id{})
+            {
+                framebuffer->create();
+            }
         }
     }
 
@@ -94,9 +97,13 @@ public:
         std::lock_guard lock{s_mutex};
         gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, 0);
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+        auto this_thread_id = std::this_thread::get_id();
         for (auto* framebuffer : s_all_framebuffers)
         {
-            framebuffer->reset();
+            if (framebuffer->m_owner_thread == this_thread_id)
+            {
+                framebuffer->reset();
+            }
         }
     }
 
@@ -119,11 +126,10 @@ public:
 private:
     std::optional<Gl_framebuffer> m_gl_framebuffer;
     std::vector<Attachment>       m_attachments;
+    std::thread::id               m_owner_thread;
 
     static std::mutex                s_mutex;
     static std::vector<Framebuffer*> s_all_framebuffers;
 };
 
 } // namespace erhe::graphics
-
-#endif

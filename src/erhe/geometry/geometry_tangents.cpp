@@ -31,12 +31,12 @@ auto Geometry::has_corner_bitangents() const -> bool
     return m_serial_corner_bitangents == m_serial;
 }
 
-auto Geometry::compute_tangents(bool corner_tangents,
-                                bool corner_bitangents,
-                                bool polygon_tangents,
-                                bool polygon_bitangents,
-                                bool make_polygons_flat,
-                                bool override_existing) -> bool
+auto Geometry::compute_tangents(const bool corner_tangents,
+                                const bool corner_bitangents,
+                                const bool polygon_tangents,
+                                const bool polygon_bitangents,
+                                const bool make_polygons_flat,
+                                const bool override_existing) -> bool
 {
     using namespace glm;
 
@@ -95,96 +95,106 @@ auto Geometry::compute_tangents(bool corner_tangents,
             uint32_t   triangle_index;
         };
 
-        Triangle& get_triangle(int iFace)
+        auto get_triangle(const int iFace) -> Triangle&
         {
             return triangles[iFace];
         }
 
-        Polygon_id get_polygon_id(int iFace)
+        auto get_triangle(const int iFace) const -> const Triangle&
+        {
+            return triangles[iFace];
+        }
+
+        auto get_polygon_id(const int iFace) const -> Polygon_id
         {
             return get_triangle(iFace).polygon_id;
         }
 
-        Polygon& get_polygon(int iFace)
+        auto get_polygon(const int iFace) -> Polygon& 
         {
             return geometry->polygons[get_polygon_id(iFace)];
         }
 
-        Point_id get_corner_id_triangulated(int iFace, int iVert)
+        auto get_polygon(const int iFace) const -> const Polygon&
+        {
+            return geometry->polygons[get_polygon_id(iFace)];
+        }
+
+        auto get_corner_id_triangulated(const int iFace, const int iVert) const -> Point_id
         {
             VERIFY(iVert > 0); // This only works for triangulated polygons, N > 3
-            auto& triangle = get_triangle(iFace);
-            auto& polygon  = get_polygon(iFace);
-            uint32_t          corner_offset     = (iVert - 1 + triangle.triangle_index) % polygon.corner_count;
-            Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + corner_offset;
-            Corner_id         corner_id         = geometry->polygon_corners[polygon_corner_id];
+            const auto& triangle = get_triangle(iFace);
+            const auto& polygon  = get_polygon(iFace);
+            const uint32_t          corner_offset     = (iVert - 1 + triangle.triangle_index) % polygon.corner_count;
+            const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + corner_offset;
+            const Corner_id         corner_id         = geometry->polygon_corners[polygon_corner_id];
             return corner_id;
         }
 
-        Point_id get_corner_id_direct(int iFace, int iVert)
+        auto get_corner_id_direct(const int iFace, const int iVert) const -> Point_id
         {
             VERIFY(iVert < 3); // This only works for triangles
-            auto&             polygon           = get_polygon(iFace);
-            Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + iVert;
-            Corner_id         corner_id         = geometry->polygon_corners[polygon_corner_id];
+            const auto&             polygon           = get_polygon(iFace);
+            const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + iVert;
+            const Corner_id         corner_id         = geometry->polygon_corners[polygon_corner_id];
             return corner_id;
         }
 
-        Corner_id get_corner_id(int iFace, int iVert)
+        auto get_corner_id(const int iFace, const int iVert) const -> Corner_id
         {
-            auto& polygon = get_polygon(iFace);
+            const auto& polygon = get_polygon(iFace);
             return (polygon.corner_count == 3) ? get_corner_id_direct(iFace, iVert)
                                                : get_corner_id_triangulated(iFace, iVert);
         }
 
-        Point_id get_point_id(int iFace, int iVert)
+        auto get_point_id(const int iFace, const int iVert) const -> Point_id
         {
-            Corner_id corner_id = get_corner_id(iFace, iVert);
-            Corner&   corner    = geometry->corners[corner_id];
+            const Corner_id corner_id = get_corner_id(iFace, iVert);
+            const Corner&   corner    = geometry->corners[corner_id];
             return corner.point_id;
         }
 
-        glm::vec3 get_position(int iFace, int iVert)
+        auto get_position(const int iFace, const int iVert) const -> glm::vec3
         {
-            Polygon_id polygon_id = get_polygon_id(iFace);
+            const Polygon_id polygon_id = get_polygon_id(iFace);
             if (iVert == 0)
             {
-                glm::vec3 position = polygon_centroids->get(polygon_id);
+                const glm::vec3 position = polygon_centroids->get(polygon_id);
                 return position;
             }
-            Point_id point_id = get_point_id(iFace, iVert);
-            glm::vec3 position = point_locations->get(point_id);
+            const Point_id  point_id = get_point_id(iFace, iVert);
+            const glm::vec3 position = point_locations->get(point_id);
             return position;
         }
 
-        glm::vec3 get_normal(int iFace, int iVert)
+        auto get_normal(const int iFace, const int iVert) const -> glm::vec3 
         {
-            Polygon_id polygon_id = get_polygon_id(iFace);
+            const Polygon_id polygon_id = get_polygon_id(iFace);
             if (iVert == 0)
             {
-                glm::vec3 normal = polygon_normals->get(polygon_id);
+                const glm::vec3 normal = polygon_normals->get(polygon_id);
                 return normal;
             }
-            Corner_id corner_id = get_corner_id(iFace, iVert);
-            Point_id  point_id  = get_point_id (iFace, iVert);
+            const Corner_id corner_id = get_corner_id(iFace, iVert);
+            const Point_id  point_id  = get_point_id (iFace, iVert);
             if ((corner_normals != nullptr) && corner_normals->has(corner_id))
             {
-                glm::vec3 normal = corner_normals->get(corner_id);
+                const glm::vec3 normal = corner_normals->get(corner_id);
                 return normal;
             }
             else if ((point_normals != nullptr) && point_normals->has(point_id))
             {
-                glm::vec3 normal = point_normals->get(point_id);
+                const glm::vec3 normal = point_normals->get(point_id);
                 return normal;
             }
             else if ((point_normals_smooth != nullptr) && point_normals_smooth->has(point_id))
             {
-                glm::vec3 normal = point_normals_smooth->get(point_id);
+                const glm::vec3 normal = point_normals_smooth->get(point_id);
                 return normal;
             }
             else if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id))
             {
-                glm::vec3 normal = polygon_normals->get(polygon_id);
+                const glm::vec3 normal = polygon_normals->get(polygon_id);
                 return normal;
             }
             else
@@ -194,20 +204,20 @@ auto Geometry::compute_tangents(bool corner_tangents,
             return glm::vec3(0.0f, 1.0f, 0.0f);
         }
 
-        glm::vec2 get_texcoord(int iFace, int iVert)
+        auto get_texcoord(const int iFace, const int iVert) -> glm::vec2
         {
             if (iVert == 0)
             {
                 // Calculate and return average texture coordinate from all polygon vertices
-                Polygon&   polygon    = get_polygon(iFace);
-                glm::vec2  texcoord{0.0f, 0.0f};
+                const Polygon& polygon    = get_polygon(iFace);
+                glm::vec2      texcoord{0.0f, 0.0f};
                 for (Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id;
                      polygon_corner_id < polygon.first_polygon_corner_id + polygon.corner_count;
                      ++polygon_corner_id)
                 {
-                    Corner_id corner_id = geometry->polygon_corners[polygon_corner_id];
-                    Corner&   corner    = geometry->corners[corner_id];
-                    Point_id  point_id  = corner.point_id;
+                    const Corner_id corner_id = geometry->polygon_corners[polygon_corner_id];
+                    const Corner&   corner    = geometry->corners[corner_id];
+                    const Point_id  point_id  = corner.point_id;
                     if ((corner_texcoords != nullptr) && corner_texcoords->has(corner_id))
                     {
                         texcoord += corner_texcoords->get(corner_id);
@@ -221,19 +231,19 @@ auto Geometry::compute_tangents(bool corner_tangents,
                         FATAL("No texcoord\n");
                     }
                 }
-                glm::vec2 average_texcoord = texcoord / static_cast<float>(polygon.corner_count);
+                const glm::vec2 average_texcoord = texcoord / static_cast<float>(polygon.corner_count);
                 return average_texcoord;
             }
-            Corner_id corner_id = get_corner_id(iFace, iVert);
-            Point_id  point_id  = get_point_id (iFace, iVert);
+            const Corner_id corner_id = get_corner_id(iFace, iVert);
+            const Point_id  point_id  = get_point_id (iFace, iVert);
             if ((corner_texcoords != nullptr) && corner_texcoords->has(corner_id))
             {
-                glm::vec2 texcoord = corner_texcoords->get(corner_id);
+                const glm::vec2 texcoord = corner_texcoords->get(corner_id);
                 return texcoord;
             }
             else if ((point_texcoords != nullptr) && point_texcoords->has(point_id))
             {
-                glm::vec2 texcoord = point_texcoords->get(point_id);
+                const glm::vec2 texcoord = point_texcoords->get(point_id);
                 return texcoord;
             }
             else
@@ -243,15 +253,15 @@ auto Geometry::compute_tangents(bool corner_tangents,
             return glm::vec2(0.0f, 0.0f);
         }
 
-        void set_tangent(int iFace, int iVert, glm::vec3 tangent, float sign)
+        void set_tangent(const int iFace, const int iVert, const glm::vec3 tangent, const float sign)
         {
-            Polygon&   polygon = get_polygon(iFace);
+            const Polygon& polygon = get_polygon(iFace);
             if ((polygon.corner_count > 3) && (iVert == 0))
             {
                 return;
             }
-            Polygon_id polygon_id = get_polygon_id(iFace);
-            Corner_id  corner_id  = get_corner_id(iFace, iVert);
+            const Polygon_id polygon_id = get_polygon_id(iFace);
+            const Corner_id  corner_id  = get_corner_id(iFace, iVert);
 
             if (polygon_tangents && (override_existing || !polygon_tangents->has(polygon_id)))
             {
@@ -263,15 +273,15 @@ auto Geometry::compute_tangents(bool corner_tangents,
             }
         }
 
-        void set_bitangent(int iFace, int iVert, glm::vec3 bitangent, float sign)
+        void set_bitangent(const int iFace, const int iVert, const glm::vec3 bitangent, const float sign)
         {
-            Polygon&   polygon = get_polygon(iFace);
+            const Polygon&   polygon = get_polygon(iFace);
             if ((polygon.corner_count > 3) && (iVert == 0))
             {
                 return;
             }
-            Polygon_id polygon_id = get_polygon_id(iFace);
-            Corner_id  corner_id  = get_corner_id(iFace, iVert);
+            const Polygon_id polygon_id = get_polygon_id(iFace);
+            const Corner_id  corner_id  = get_corner_id(iFace, iVert);
 
             if (polygon_bitangents && (override_existing || !polygon_bitangents->has(polygon_id)))
             {
@@ -317,7 +327,7 @@ auto Geometry::compute_tangents(bool corner_tangents,
     g.triangles.resize(triangle_count);
     for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
     {
-        Polygon& polygon = polygons[polygon_id];
+        const Polygon& polygon = polygons[polygon_id];
         if (polygon.corner_count < 3)
         {
             continue;
@@ -331,14 +341,14 @@ auto Geometry::compute_tangents(bool corner_tangents,
     SMikkTSpaceInterface mikktspace = {};
     mikktspace.m_getNumFaces = [](const SMikkTSpaceContext* pContext)
     {
-        auto* context   = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
-        int   num_faces = context->triangle_count;
+        const auto* context   = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
+        const int   num_faces = context->triangle_count;
         return num_faces;
     };
 
     mikktspace.m_getNumVerticesOfFace = [](const SMikkTSpaceContext*, int32_t)
     {
-        int num_vertices_of_face = 3;
+        const int num_vertices_of_face = 3;
         return num_vertices_of_face;
     };
 
@@ -347,8 +357,8 @@ auto Geometry::compute_tangents(bool corner_tangents,
                                   int32_t                   iFace,
                                   int32_t                   iVert)
     {
-        auto*     context = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
-        glm::vec3 g_location = context->get_position(iFace, iVert);
+        const auto* context    = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
+        glm::vec3   g_location = context->get_position(iFace, iVert);
         fvPosOut[0] = g_location[0];
         fvPosOut[1] = g_location[1];
         fvPosOut[2] = g_location[2];
@@ -359,8 +369,8 @@ auto Geometry::compute_tangents(bool corner_tangents,
                                 int32_t                   iFace,
                                 int32_t                   iVert)
     {
-        auto*     context  = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
-        glm::vec3 g_normal = context->get_normal(iFace, iVert);
+        const auto* context  = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
+        glm::vec3   g_normal = context->get_normal(iFace, iVert);
         fvNormOut[0] = g_normal[0];
         fvNormOut[1] = g_normal[1];
         fvNormOut[2] = g_normal[2];
@@ -389,14 +399,14 @@ auto Geometry::compute_tangents(bool corner_tangents,
         static_cast<void>(fMagS);
         static_cast<void>(fMagT);
         static_cast<void>(bIsOrientationPreserving);
-        auto*     context = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
-        auto      N     = context->get_normal(iFace, iVert);
-        glm::vec3 T     = glm::vec3(fvTangent  [0], fvTangent  [1], fvTangent  [2]);
-        glm::vec3 B     = glm::vec3(fvBiTangent[0], fvBiTangent[1], fvBiTangent[2]);
-        vec3      t_xyz = glm::normalize(T - N * glm::dot(N, T));
-        float     t_w   = (glm::dot(glm::cross(N, T), B) < 0.0f) ? -1.0f : 1.0f;
-        vec3      b_xyz = glm::normalize(B - N * glm::dot(N, B));
-        float     b_w   = (glm::dot(glm::cross(B, N), T) < 0.0f) ? -1.0f : 1.0f;
+        auto*           context = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
+        const auto      N     = context->get_normal(iFace, iVert);
+        const glm::vec3 T     = glm::vec3(fvTangent  [0], fvTangent  [1], fvTangent  [2]);
+        const glm::vec3 B     = glm::vec3(fvBiTangent[0], fvBiTangent[1], fvBiTangent[2]);
+        const vec3      t_xyz = glm::normalize(T - N * glm::dot(N, T));
+        const float     t_w   = (glm::dot(glm::cross(N, T), B) < 0.0f) ? -1.0f : 1.0f;
+        const vec3      b_xyz = glm::normalize(B - N * glm::dot(N, B));
+        const float     b_w   = (glm::dot(glm::cross(B, N), T) < 0.0f) ? -1.0f : 1.0f;
         context->set_tangent  (iFace, iVert, t_xyz, t_w);
         context->set_bitangent(iFace, iVert, b_xyz, b_w);
     };
@@ -407,7 +417,7 @@ auto Geometry::compute_tangents(bool corner_tangents,
 
     {
         ZoneScopedN("genTangSpaceDefault")
-        auto res = genTangSpaceDefault(&context);
+        const auto res = genTangSpaceDefault(&context);
         if (res == 0)
         {
             log_tangent_gen.trace("genTangSpaceDefault() returned 0\n");
@@ -432,18 +442,18 @@ auto Geometry::compute_tangents(bool corner_tangents,
             std::optional<glm::vec4> B;
             std::vector<glm::vec4> tangents;
             std::vector<glm::vec4> bitangents;
-            glm::vec4 tangent{1.0, 0.0, 0.0, 1.0};
+            glm::vec4 tangent  {1.0, 0.0, 0.0, 1.0};
             glm::vec4 bitangent{0.0, 0.0, 1.0, 1.0};
             for (uint32_t i = 0; i < polygon.corner_count; ++i)
             {
-                Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + i;
-                Corner_id         corner_id         = polygon_corners[polygon_corner_id];
+                const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + i;
+                const Corner_id         corner_id         = polygon_corners[polygon_corner_id];
                 if ((override_existing || !T.has_value()) && corner_tangents && g.corner_tangents->has(corner_id))
                 {
-                    tangent = g.corner_tangents->get(corner_id);
+                    const auto tangent = g.corner_tangents->get(corner_id);
                     for (auto other : tangents)
                     {
-                        float dot = glm::dot(glm::vec3(tangent), glm::vec3(other));
+                        const float dot = glm::dot(glm::vec3(tangent), glm::vec3(other));
                         if (dot > 0.99f)
                         {
                             T = tangent;
@@ -453,10 +463,10 @@ auto Geometry::compute_tangents(bool corner_tangents,
                 }
                 if ((override_existing || !B.has_value()) && corner_bitangents && g.corner_bitangents->has(corner_id))
                 {
-                    bitangent = g.corner_bitangents->get(corner_id);
+                    const auto bitangent = g.corner_bitangents->get(corner_id);
                     for (auto other : bitangents)
                     {
-                        float dot = glm::dot(glm::vec3(bitangent), glm::vec3(other));
+                        const float dot = glm::dot(glm::vec3(bitangent), glm::vec3(other));
                         if (dot > 0.99f)
                         {
                             B = bitangent;
@@ -487,8 +497,8 @@ auto Geometry::compute_tangents(bool corner_tangents,
             {
                 for (uint32_t i = 0; i < polygon.corner_count; ++i)
                 {
-                    Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + i;
-                    Corner_id         corner_id         = polygon_corners[polygon_corner_id];
+                    const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + i;
+                    const Corner_id         corner_id         = polygon_corners[polygon_corner_id];
                     g.corner_tangents->put(corner_id, tangent);
                 }
             }
@@ -496,8 +506,8 @@ auto Geometry::compute_tangents(bool corner_tangents,
             {
                 for (uint32_t i = 0; i < polygon.corner_count; ++i)
                 {
-                    Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + i;
-                    Corner_id         corner_id         = polygon_corners[polygon_corner_id];
+                    const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + i;
+                    const Corner_id         corner_id         = polygon_corners[polygon_corner_id];
                     g.corner_bitangents->put(corner_id, bitangent);
                 }
             }

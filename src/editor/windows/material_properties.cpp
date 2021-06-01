@@ -1,5 +1,5 @@
 #include "windows/material_properties.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 #include "erhe/primitive/material.hpp"
 
@@ -10,13 +10,13 @@ namespace editor
 
 void Material_properties::connect()
 {
-    m_scene_manager  = get<Scene_manager>();
+    m_scene_root     = get<Scene_root>();
     m_selection_tool = get<Selection_tool>();
 }
 
 void Material_properties::window(Pointer_context&)
 {
-    const auto& materials = m_scene_manager->materials();
+    const auto& materials = m_scene_root->materials();
     int last = static_cast<int>(materials.size()) - 1;
     ImGui::Begin("Material");
     if (ImGui::Button("Prev"))

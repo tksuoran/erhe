@@ -1,4 +1,7 @@
 #include "renderers/forward_renderer.hpp"
+#include "gl_context_provider.hpp"
+#include "renderers/mesh_memory.hpp"
+#include "renderers/program_interface.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "scene/scene_manager.hpp"
 
@@ -44,17 +47,21 @@ void Forward_renderer::connect()
 {
     base_connect(this);
 
-    m_pipeline_state_tracker = get<OpenGL_state_tracker>();
-    m_scene_manager          = require<Scene_manager>();
-    m_shadow_renderer        = get<Shadow_renderer>();
+    require<Gl_context_provider>();
+    require<Program_interface  >();
 
-    initialization_depends_on(programs());
+    m_mesh_memory            = require<Mesh_memory>();
+    m_programs               = require<Programs   >();
+    m_pipeline_state_tracker = get<OpenGL_state_tracker>();
+    m_shadow_renderer        = get<Shadow_renderer>();
 }
 
 static constexpr const char* c_forward_renderer_initialize_component = "Forward_renderer::initialize_component()";
 void Forward_renderer::initialize_component()
 {
     ZoneScoped;
+
+    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
@@ -63,12 +70,12 @@ void Forward_renderer::initialize_component()
 
     create_frame_resources(256, 256, 32, 1000, 1000);
 
-    m_vertex_input = std::make_unique<Vertex_input_state>(programs()->attribute_mappings,
-                                                          *m_scene_manager->vertex_format(),
-                                                          m_scene_manager->vertex_buffer(),
-                                                          m_scene_manager->index_buffer());
+    m_vertex_input = std::make_unique<Vertex_input_state>(get<Program_interface>()->attribute_mappings,
+                                                          *m_mesh_memory->vertex_format(),
+                                                          m_mesh_memory->vertex_buffer(),
+                                                          m_mesh_memory->index_buffer());
 
-    m_pipeline_fill.shader_stages  = programs()->standard.get();
+    m_pipeline_fill.shader_stages  = m_programs->standard.get();
     m_pipeline_fill.vertex_input   = m_vertex_input.get();
     m_pipeline_fill.input_assembly = &Input_assembly_state::triangles;
     m_pipeline_fill.rasterization  = &Rasterization_state::cull_mode_back_ccw;
@@ -241,7 +248,7 @@ void Forward_renderer::initialize_component()
 
     // Tool pass one: For hidden tool parts, set stencil to 1.
     // Only reads depth buffer, only writes stencil buffer.
-    m_pipeline_tool_hidden_stencil_pass.shader_stages  = programs()->tool.get();
+    m_pipeline_tool_hidden_stencil_pass.shader_stages  = m_programs->tool.get();
     m_pipeline_tool_hidden_stencil_pass.vertex_input   = m_vertex_input.get();
     m_pipeline_tool_hidden_stencil_pass.input_assembly = &Input_assembly_state::triangles;
     m_pipeline_tool_hidden_stencil_pass.rasterization  = &Rasterization_state::cull_mode_back_ccw;
@@ -251,7 +258,7 @@ void Forward_renderer::initialize_component()
 
     // Tool pass two: For visible tool parts, set stencil to 2.
     // Only reads depth buffer, only writes stencil buffer.
-    m_pipeline_tool_visible_stencil_pass.shader_stages  = programs()->tool.get();
+    m_pipeline_tool_visible_stencil_pass.shader_stages  = m_programs->tool.get();
     m_pipeline_tool_visible_stencil_pass.vertex_input   = m_vertex_input.get();
     m_pipeline_tool_visible_stencil_pass.input_assembly = &Input_assembly_state::triangles;
     m_pipeline_tool_visible_stencil_pass.rasterization  = &Rasterization_state::cull_mode_back_ccw;
@@ -261,7 +268,7 @@ void Forward_renderer::initialize_component()
 
     // Tool pass three: Set depth to fixed value (with depth range)
     // Only writes depth buffer, depth test always.
-    m_pipeline_tool_depth_clear_pass.shader_stages      = programs()->tool.get();
+    m_pipeline_tool_depth_clear_pass.shader_stages      = m_programs->tool.get();
     m_pipeline_tool_depth_clear_pass.vertex_input       = m_vertex_input.get();
     m_pipeline_tool_depth_clear_pass.input_assembly     = &Input_assembly_state::triangles;
     m_pipeline_tool_depth_clear_pass.rasterization      = &Rasterization_state::cull_mode_back_ccw;
@@ -271,7 +278,7 @@ void Forward_renderer::initialize_component()
 
     // Tool pass four: Set depth to proper tool depth
     // Normal depth buffer update with depth test.
-    m_pipeline_tool_depth_pass.shader_stages            = programs()->tool.get();
+    m_pipeline_tool_depth_pass.shader_stages            = m_programs->tool.get();
     m_pipeline_tool_depth_pass.vertex_input             = m_vertex_input.get();
     m_pipeline_tool_depth_pass.input_assembly           = &Input_assembly_state::triangles;
     m_pipeline_tool_depth_pass.rasterization            = &Rasterization_state::cull_mode_back_ccw;
@@ -281,7 +288,7 @@ void Forward_renderer::initialize_component()
 
     // Tool pass five: Render visible tool parts
     // Normal depth test, stencil test require 1, color writes enabled, no blending
-    m_pipeline_tool_visible_color_pass.shader_stages    = programs()->tool.get();
+    m_pipeline_tool_visible_color_pass.shader_stages    = m_programs->tool.get();
     m_pipeline_tool_visible_color_pass.vertex_input     = m_vertex_input.get();
     m_pipeline_tool_visible_color_pass.input_assembly   = &Input_assembly_state::triangles;
     m_pipeline_tool_visible_color_pass.rasterization    = &Rasterization_state::cull_mode_back_ccw;
@@ -291,7 +298,7 @@ void Forward_renderer::initialize_component()
 
     // Tool pass six: Render hidden tool parts
     // Normal depth test, stencil test requires 2, color writes enabled, blending
-    m_pipeline_tool_hidden_color_pass.shader_stages     = programs()->tool.get();
+    m_pipeline_tool_hidden_color_pass.shader_stages     = m_programs->tool.get();
     m_pipeline_tool_hidden_color_pass.vertex_input      = m_vertex_input.get();
     m_pipeline_tool_hidden_color_pass.input_assembly    = &Input_assembly_state::triangles;
     m_pipeline_tool_hidden_color_pass.rasterization     = &Rasterization_state::cull_mode_back_ccw;
@@ -299,8 +306,8 @@ void Forward_renderer::initialize_component()
     m_pipeline_tool_hidden_color_pass.color_blend       = &m_color_blend_constant_point_six;
     m_pipeline_tool_hidden_color_pass.viewport          = nullptr;
 
-    //m_pipeline_edge_lines.shader_stages  = programs()->edge_lines.get();
-    m_pipeline_edge_lines.shader_stages  = programs()->wide_lines.get();
+    //m_pipeline_edge_lines.shader_stages  = m_programs->edge_lines.get();
+    m_pipeline_edge_lines.shader_stages  = m_programs->wide_lines.get();
     m_pipeline_edge_lines.vertex_input   = m_vertex_input.get();
     m_pipeline_edge_lines.input_assembly = &Input_assembly_state::lines;
     m_pipeline_edge_lines.rasterization  = &Rasterization_state::cull_mode_back_ccw;
@@ -308,7 +315,7 @@ void Forward_renderer::initialize_component()
     m_pipeline_edge_lines.color_blend    = &Color_blend_state::color_blend_premultiplied;
     m_pipeline_edge_lines.viewport       = nullptr;
 
-    m_pipeline_points.shader_stages  = programs()->points.get();
+    m_pipeline_points.shader_stages  = m_programs->points.get();
     m_pipeline_points.vertex_input   = m_vertex_input.get();
     m_pipeline_points.input_assembly = &Input_assembly_state::points;
     m_pipeline_points.rasterization  = &Rasterization_state::cull_mode_back_ccw;
@@ -316,7 +323,7 @@ void Forward_renderer::initialize_component()
     m_pipeline_points.color_blend    = &Color_blend_state::color_blend_disabled;
     m_pipeline_points.viewport       = nullptr;
 
-    m_pipeline_line_hidden_blend.shader_stages  = programs()->wide_lines.get();
+    m_pipeline_line_hidden_blend.shader_stages  = m_programs->wide_lines.get();
     m_pipeline_line_hidden_blend.vertex_input   = m_vertex_input.get();
     m_pipeline_line_hidden_blend.input_assembly = &Input_assembly_state::lines;
     m_pipeline_line_hidden_blend.rasterization  = &Rasterization_state::cull_mode_back_ccw;
@@ -383,7 +390,7 @@ void Forward_renderer::render(Viewport                    viewport,
                          c_forward_renderer_render);
     unsigned int shadow_texture_unit = 0;
     unsigned int shadow_texture_name = m_shadow_renderer->texture()->gl_name();
-    gl::bind_sampler (shadow_texture_unit, programs()->nearest_sampler->gl_name());
+    gl::bind_sampler (shadow_texture_unit, m_programs->nearest_sampler->gl_name());
     gl::bind_textures(shadow_texture_unit, 1, &shadow_texture_name);
     gl::viewport     (viewport.x, viewport.y, viewport.width, viewport.height);
     for (auto& pass : passes)
@@ -409,7 +416,7 @@ void Forward_renderer::render(Viewport                    viewport,
 
         m_pipeline_state_tracker->execute(pipeline);
         gl::program_uniform_1i(pipeline->shader_stages->gl_name(),
-                               programs()->shadow_sampler_location,
+                               m_programs->shadow_sampler_location,
                                shadow_texture_unit);
         update_material_buffer(materials);
         update_camera_buffer  (camera, viewport);
@@ -428,7 +435,7 @@ void Forward_renderer::render(Viewport                    viewport,
             bind_draw_indirect_buffer();
 
             gl::multi_draw_elements_indirect(pipeline->input_assembly->primitive_topology,
-                                             m_scene_manager->index_type(),
+                                             m_mesh_memory->index_type(),
                                              reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
                                              static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
                                              static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command)));

@@ -7,7 +7,8 @@
 namespace editor
 {
 
-class Scene_manager;
+class Scene_root;
+class Selection_tool;
 
 class Camera_properties
     : public erhe::components::Component
@@ -25,7 +26,8 @@ public:
     void window(Pointer_context& pointer_context) override;
 
 private:
-    std::shared_ptr<Scene_manager> m_scene_manager;
+    std::shared_ptr<Scene_root>     m_scene_root;
+    std::shared_ptr<Selection_tool> m_selection_tool;
 };
 
 } // namespace editor

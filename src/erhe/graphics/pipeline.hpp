@@ -1,5 +1,4 @@
-#ifndef pipeline_hpp_erhe_graphics
-#define pipeline_hpp_erhe_graphics
+#pragma once
 
 namespace erhe::graphics
 {
@@ -25,5 +24,3 @@ struct Pipeline
 };
 
 } // namespace erhe::graphics
-
-#endif

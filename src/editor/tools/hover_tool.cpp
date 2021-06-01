@@ -6,7 +6,7 @@
 #include "tools/trs_tool.hpp"
 #include "renderers/line_renderer.hpp"
 #include "renderers/text_renderer.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_root.hpp"
 
 #include "erhe/scene/mesh.hpp"
 #include "erhe/primitive/primitive.hpp"
@@ -21,22 +21,32 @@ namespace editor
 using namespace erhe::primitive;
 using namespace erhe::geometry;
 
-auto Hover_tool::state() const -> Tool::State
+Hover_tool::Hover_tool()
+    : erhe::components::Component{c_name}
 {
-    return State::passive;
+}
+
+Hover_tool::~Hover_tool() = default;
+
+auto Hover_tool::description() -> const char*
+{
+    return c_name;
+}
+
+auto Hover_tool::state() const -> State
+{
+    return State::Passive;
 }
 
 void Hover_tool::connect()
 {
-    m_scene_manager = require<Scene_manager>();
+    m_scene_root = require<Scene_root>();
     require<Editor>();
 }
 
 void Hover_tool::initialize_component()
 {
-    m_hover_material = std::make_shared<erhe::primitive::Material>();
-    m_hover_material->name = "hover";
-    m_scene_manager->add(m_hover_material);
+    m_hover_material = m_scene_root->make_material("hover");
     m_hover_material_index = m_hover_material->index;
     get<Editor>()->register_background_tool(this);
 }
@@ -62,17 +72,17 @@ auto Hover_tool::update(Pointer_context& pointer_context) -> bool
     return false;
 }
 
-void Hover_tool::render(Render_context& render_context)
+void Hover_tool::render(const Render_context& render_context)
 {
-    uint32_t text_color = m_hover_content ? 0xffffffffu :
-                          m_hover_tool    ? 0xffff0000u :
-                                            0xff0000ffu; // abgr
+    const uint32_t text_color = m_hover_content ? 0xffffffffu :
+                                m_hover_tool    ? 0xffff0000u :
+                                                  0xff0000ffu; // abgr
     if (m_hover_mesh != nullptr)
     {
         if (m_enable_color_highlight)
         {
             // float t = 0.5f + std::cos(render_context.time * glm::pi<float>()) * 0.5f;
-            float t = 1.0f;
+            const float t = 1.0f;
             m_hover_material->emissive = m_original_primitive_material->emissive + t * m_hover_emissive;
         }
 
@@ -155,7 +165,7 @@ void Hover_tool::window(Pointer_context&)
     if (m_hover_mesh != nullptr)
     {
         ImGui::Text("Mesh: %s", m_hover_mesh->name().c_str());
-        auto* node = m_hover_mesh->node().get();
+        const auto* node = m_hover_mesh->node().get();
         if (node != nullptr)
         {
             ImGui::Text("Node: %s", node->name.c_str());

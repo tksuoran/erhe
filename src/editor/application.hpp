@@ -38,7 +38,7 @@ private:
     auto create_gl_window()
     -> bool;
 
-    auto launch_component_initialization()
+    auto initialize_components()
     -> bool;
 
     std::unique_ptr<erhe::toolkit::Context_window> m_context_window;

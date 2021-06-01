@@ -49,7 +49,8 @@ struct Pair_entries
         T primary;
         T secondary;
     };
-    auto find_primary(T primary) -> Entry*
+
+    auto find_primary(const T primary) const -> Entry*
     {
         for (auto& i : entries)
         {
@@ -60,7 +61,7 @@ struct Pair_entries
         }
         return nullptr;
     }
-    auto find_secondary(T secondary) -> Entry*
+    auto find_secondary(const T secondary) -> Entry*
     {
         for (auto& i : entries)
         {
@@ -71,14 +72,17 @@ struct Pair_entries
         }
         return nullptr;
     }
-    void insert(T primary, T secondary)
+
+    void insert(const T primary, const T secondary)
     {
         entries.emplace_back(primary, secondary);
     }
-    auto size() -> size_t
+
+    auto size() const -> size_t
     {
         return entries.size();
     }
+
     void swap(T lhs, T rhs)
     {
         for (auto& entry : entries)
@@ -92,10 +96,10 @@ struct Pair_entries
 template<typename T>
 struct Remapper
 {
-    Remapper(T size)
+    Remapper(const T size)
         : old_size{size}
         , new_size{size}
-        , new_end{size}
+        , new_end {size}
     {
         old_from_new.resize(size);
         new_from_old.resize(size);
@@ -113,7 +117,7 @@ struct Remapper
     {
         for (T new_id = 0; new_id < new_size; ++new_id)
         {
-            T old_id = old_from_new[new_id];
+            const T old_id = old_from_new[new_id];
             new_from_old[old_id] = new_id;
         }
     }
@@ -124,7 +128,7 @@ struct Remapper
         erhe::log::Indenter scoped_indent;
         for (T old_id = 0; old_id < old_size; ++old_id)
         {
-            T new_id = new_from_old[old_id];
+            const T new_id = new_from_old[old_id];
             log_weld.trace("{:2}", new_id);
             if (is_bijection && (old_id != std::numeric_limits<T>::max()) && (old_from_new[new_id] != old_id))
             {
@@ -154,7 +158,7 @@ struct Remapper
         log_weld.trace("  < new\n");
         for (T new_id = 0; new_id < new_size; ++new_id)
         {
-            T old_id = old_from_new[new_id];
+            const T old_id = old_from_new[new_id];
             log_weld.trace("{:2}", old_id);
             if (is_bijection && (old_id != std::numeric_limits<T>::max()) && (new_from_old[old_id] != new_id))
             {
@@ -173,21 +177,21 @@ struct Remapper
         }
     }
 
-    auto old_id(T new_id) -> T
+    auto old_id(const T new_id) const -> T
     {
         return old_from_new[new_id];
     }
 
-    auto new_id(T old_id) -> T
+    auto new_id(const T old_id) const -> T
     {
         return new_from_old[old_id];
     }
 
-    void swap(T secondary_new_id, T keep_new_id)
+    void swap(const T secondary_new_id, const T keep_new_id)
     {
         VERIFY(secondary_new_id != keep_new_id);
-        T secondary_old_id = old_from_new[secondary_new_id];
-        T keep_old_id      = old_from_new[keep_new_id];
+        const T secondary_old_id = old_from_new[secondary_new_id];
+        const T keep_old_id      = old_from_new[keep_new_id];
         //log_weld.trace("New {:2} old {:2} is being removed - swapping with new {:2} old {:2}\n",
         //                secondary_new_id, secondary_old_id,
         //                keep_new_id, keep_old_id);
@@ -213,7 +217,7 @@ struct Remapper
         }
     }
 
-    auto get_next_end(bool check_used = false) -> T
+    auto get_next_end(const bool check_used = false) -> T
     {
         for (;;)
         {
@@ -224,32 +228,6 @@ struct Remapper
             {
                 continue;
             }
-            //for (size_t i = 0, end = merge.size(); i < end; ++i)
-            //{
-            //    if (merge.entries[i].secondary == new_end)
-            //    {
-            //        restart = true;
-            //        break;
-            //    }
-            //}
-            //if (restart)
-            //{
-            //    continue;
-            //}
-            //for (size_t i = 0, end = eliminate.size(); i < end; ++i)
-            //{
-            //    T secondary_new_id = eliminate.entries[i];
-            //    if (eliminate.entries[i].secondary == new_end)
-            //    {
-            //        restart = true;
-            //        break;
-            //    }
-            //}
-            //if (restart)
-            //{
-            //    continue;
-            //}
-
             return new_end;
         }
     }
@@ -311,7 +289,7 @@ struct Remapper
         new_end = 0;
         for (T new_id = 0, end = new_size; new_id < end; ++new_id)
         {
-            T old_id = old_from_new[new_id];
+            const T old_id = old_from_new[new_id];
             log_weld.trace("new {:2} old {:2} : {}\n", new_id, old_id, (old_used[old_id] ? "true" : "false"));
             if (old_used[old_id])
             {
@@ -321,7 +299,7 @@ struct Remapper
 
         for (T new_id = 0, end = new_size; new_id < end; ++new_id)
         {
-            T old_id = old_from_new[new_id];
+            const T old_id = old_from_new[new_id];
             if (!old_used[old_id])
             {
                 T secondary_new_id = new_id;
@@ -344,9 +322,9 @@ struct Remapper
         log_weld.trace("\n");
     }
 
-    void for_each_primary_new(T primary_new_id,
-                              std::function<void(T primary_new_id,   T primary_old_id,
-                                                 T secondary_new_id, T secondary_old_id)> callback)
+    void for_each_primary_new(const T primary_new_id,
+                              std::function<void(const T primary_new_id,   const T primary_old_id,
+                                                 const T secondary_new_id, const T secondary_old_id)> callback)
     {
         if (!callback)
         {
@@ -354,18 +332,16 @@ struct Remapper
         }
         for (size_t i = 0, end = merge.size(); i < end; ++i)
         {
-            auto& entry = merge.entries[i];
+            const auto& entry = merge.entries[i];
             if (entry.primary != primary_new_id)
             {
                 continue;
             }
-            T primary_new_id   = entry.primary;
-            T primary_old_id   = old_from_new[primary_new_id];
-            T secondary_new_id = entry.secondary;
-            T secondary_old_id = old_from_new[secondary_new_id];
-            {
-                callback(primary_new_id, primary_old_id, secondary_new_id, secondary_old_id);
-            }
+            const T primary_new_id   = entry.primary;
+            const T primary_old_id   = old_from_new[primary_new_id];
+            const T secondary_new_id = entry.secondary;
+            const T secondary_old_id = old_from_new[secondary_new_id];
+            callback(primary_new_id, primary_old_id, secondary_new_id, secondary_old_id);
         }
     }
 
@@ -378,14 +354,12 @@ struct Remapper
         }
         for (size_t i = 0, end = merge.size(); i < end; ++i)
         {
-            auto& entry = merge.entries[i];
-            T primary_new_id   = entry.primary;
-            T primary_old_id   = old_from_new[primary_new_id];
-            T secondary_new_id = entry.secondary;
-            T secondary_old_id = old_from_new[secondary_new_id];
-            {
-                swap_callback(primary_new_id, primary_old_id, secondary_new_id, secondary_old_id);
-            }
+            const auto& entry = merge.entries[i];
+            const T primary_new_id   = entry.primary;
+            const T primary_old_id   = old_from_new[primary_new_id];
+            const T secondary_new_id = entry.secondary;
+            const T secondary_old_id = old_from_new[secondary_new_id];
+            swap_callback(primary_new_id, primary_old_id, secondary_new_id, secondary_old_id);
         }
     }
 
@@ -403,7 +377,7 @@ struct Remapper
         is_bijection = false;
     }
 
-    void trim(std::function<void(T new_id, T old_id)> remove_callback)
+    void trim(std::function<void(const T new_id, const T old_id)> remove_callback)
     {
         if (remove_callback)
         {
@@ -434,7 +408,7 @@ struct Remapper
         new_size = new_end;
     }
 
-    void use_old(T old_id)
+    void use_old(const T old_id)
     {
         old_used[old_id] = true;
     }
@@ -450,7 +424,7 @@ struct Remapper
     std::vector<T>    eliminate;
 };
 
-void Geometry::weld(Weld_settings weld_settings)
+void Geometry::weld(const Weld_settings& weld_settings)
 {
     using namespace glm;
 
@@ -489,20 +463,20 @@ void Geometry::weld(Weld_settings weld_settings)
         {
             continue;
         }
-        vec3 position = point_attribute_maps.locations->get(point_id);
+        const vec3 position = point_attribute_maps.locations->get(point_id);
         log_weld.trace("    {:2}: {}\n", point_id, position);
         min_corner = glm::min(min_corner, position);
         max_corner = glm::max(max_corner, position);
     }
 
-    glm::vec3 bounding_box_size0 = max_corner - min_corner;
-    auto axis0 = erhe::toolkit::max_axis_index(bounding_box_size0);
+    const glm::vec3 bounding_box_size0 = max_corner - min_corner;
+    const auto      axis0 = erhe::toolkit::max_axis_index(bounding_box_size0);
     glm::vec3 bounding_box_size1 = bounding_box_size0;
     bounding_box_size1[axis0] = 0.0f;
-    auto axis1 = erhe::toolkit::max_axis_index(bounding_box_size1);
+    const auto axis1 = erhe::toolkit::max_axis_index(bounding_box_size1);
     glm::vec3 bounding_box_size2 = bounding_box_size1;
     bounding_box_size2[axis1] = 0.0f;
-    auto axis2 = erhe::toolkit::max_axis_index(bounding_box_size2);
+    const auto axis2 = erhe::toolkit::max_axis_index(bounding_box_size2);
 
     log_weld.trace("Primary   axis = {} {}\n", axis0, c_str(axis0));
     log_weld.trace("Secondary axis = {} {}\n", axis1, c_str(axis1));
@@ -525,26 +499,17 @@ void Geometry::weld(Weld_settings weld_settings)
                       {
                           return false;
                       }
-                      glm::vec3 position_lhs = polygon_attribute_maps.centroids->get(lhs);
-                      glm::vec3 position_rhs = polygon_attribute_maps.centroids->get(rhs);
+                      const glm::vec3 position_lhs = polygon_attribute_maps.centroids->get(lhs);
+                      const glm::vec3 position_rhs = polygon_attribute_maps.centroids->get(rhs);
                       if (position_lhs[axis0] != position_rhs[axis0])
                       {
-                          bool is_less = position_lhs[axis0] < position_rhs[axis0];
-                          //log_weld.trace("{:2} vs {:2} {}[{}] {} {}[{}]\n",
-                          //               lhs, rhs, position_lhs, axis0, is_less ? "<" : ">=", position_rhs, axis0);
-                          return is_less;
+                          return position_lhs[axis0] < position_rhs[axis0];;
                       }
                       if (position_lhs[axis1] != position_rhs[axis1])
                       {
-                          bool is_less = position_lhs[axis1] < position_rhs[axis1];
-                          //log_weld.trace("{:2} vs {:2} {}[{}] {} {}[{}]\n",
-                          //               lhs, rhs, position_lhs, axis1, is_less ? "<" : ">=", position_rhs, axis1);
-                          return is_less;
+                          return position_lhs[axis1] < position_rhs[axis1];;
                       }
-                      bool is_less = position_lhs[axis2] < position_rhs[axis2];
-                      //log_weld.trace("{:2} vs {:2} {}[{}] {} {}[{}]\n",
-                      //               lhs, rhs, position_lhs, axis2, is_less ? "<" : ">=", position_rhs, axis2);
-                      return is_less;
+                      return position_lhs[axis2] < position_rhs[axis2];;
                   }
         );
 
@@ -553,16 +518,16 @@ void Geometry::weld(Weld_settings weld_settings)
         log_weld.trace("Sorted polygon centroids:\n");
         for (Polygon_id new_polygon_id = 0; new_polygon_id < m_next_polygon_id; ++new_polygon_id)
         {
-            Polygon_id old_polygon_id = polygon_remapper.old_id(new_polygon_id);
+            const Polygon_id old_polygon_id = polygon_remapper.old_id(new_polygon_id);
             if (!polygon_attribute_maps.centroids->has(old_polygon_id))
             {
                 continue;
             }
-            vec3 centroid = polygon_attribute_maps.centroids->get(old_polygon_id);
+            const vec3 centroid = polygon_attribute_maps.centroids->get(old_polygon_id);
             log_weld.trace("    {:2} (old {:2}: centroid {}", new_polygon_id, old_polygon_id, centroid);
             if (polygon_attribute_maps.normals->has(old_polygon_id))
             {
-                vec3 normal = polygon_attribute_maps.normals->get(old_polygon_id);
+                const vec3 normal = polygon_attribute_maps.normals->get(old_polygon_id);
                 log_weld.trace(" normal {}", normal);
             }
             log_weld.trace("\n");
@@ -586,12 +551,12 @@ void Geometry::weld(Weld_settings weld_settings)
         };
         for (Polygon_id primary_new_id = 0; primary_new_id < m_next_polygon_id; ++primary_new_id)
         {
-            Polygon_id primary_old_id = polygon_remapper.old_id(primary_new_id);
+            const Polygon_id primary_old_id = polygon_remapper.old_id(primary_new_id);
             if (polygon_remapper.merge.find_secondary(primary_new_id) != nullptr)
             {
                 continue;
             }
-            Polygon_data primary_attributes(primary_old_id, polygon_attribute_maps);
+            const Polygon_data primary_attributes(primary_old_id, polygon_attribute_maps);
             //              secondary
             log_weld.trace("primary   new {:2} old {:2} centroid {} normal {}\n",
                            primary_new_id,
@@ -604,15 +569,15 @@ void Geometry::weld(Weld_settings weld_settings)
                 {
                     continue;
                 }
-                Polygon_id   secondary_old_id = polygon_remapper.old_id(secondary_new_id);
-                Polygon_data secondary_attributes(secondary_old_id, polygon_attribute_maps);
+                const Polygon_id   secondary_old_id = polygon_remapper.old_id(secondary_new_id);
+                const Polygon_data secondary_attributes(secondary_old_id, polygon_attribute_maps);
                 log_weld.trace("secondary new {:2} old {:2} centroid {} normal {}\n",
                                secondary_new_id,
                                secondary_old_id,
                                secondary_attributes.centroid,
                                secondary_attributes.normal);
 
-                float diff = std::abs(primary_attributes.centroid[axis0] - secondary_attributes.centroid[axis0]);
+                const float diff = std::abs(primary_attributes.centroid[axis0] - secondary_attributes.centroid[axis0]);
                 if (diff > 0.001f)
                 {
                     log_weld.trace("group end: primary new {:2} old {:2} secondary new {:2} old {:2} diff {}\n",
@@ -620,14 +585,14 @@ void Geometry::weld(Weld_settings weld_settings)
                     break;
                 }
 
-                float distance = glm::distance(primary_attributes.centroid, secondary_attributes.centroid);
+                const float distance = glm::distance(primary_attributes.centroid, secondary_attributes.centroid);
                 if (distance > weld_settings.max_point_distance)
                 {
                     log_weld.trace("primary new {:2} old {:2} secondary new {:2} old {:2} centroid distance {}\n",
                                    primary_new_id, primary_old_id, secondary_new_id, secondary_old_id, distance);
                     continue;
                 }
-                float dot_product = glm::dot(primary_attributes.normal, secondary_attributes.normal);
+                const float dot_product = glm::dot(primary_attributes.normal, secondary_attributes.normal);
                 if (std::abs(dot_product) < weld_settings.min_normal_dot_product)
                 {
                     log_weld.trace("primary new {:2} old {:2} secondary new {:2} old {:2} normal dot product {}\n",
@@ -676,13 +641,13 @@ void Geometry::weld(Weld_settings weld_settings)
             [this](Point_id new_id, Point_id old_id)
             {
                 log_weld.trace("Dropping polygon new {:2} old {:2} corners:", new_id, old_id);
-                Polygon& polygon = polygons[old_id];
+                const Polygon& polygon = polygons[old_id];
                 for (Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id,
                      end = polygon.first_polygon_corner_id + polygon.corner_count;
                      polygon_corner_id < end;
                      ++polygon_corner_id)
                 {
-                    Corner_id corner_id = polygon_corners[polygon_corner_id];
+                    const Corner_id corner_id = polygon_corners[polygon_corner_id];
                     log_weld.trace(" {:2}", corner_id);
                 }
                 log_weld.trace("\n");
@@ -695,7 +660,7 @@ void Geometry::weld(Weld_settings weld_settings)
         uint32_t next_polygon_corner = 0;
         for (Polygon_id new_polygon_id = 0, end = polygon_count(); new_polygon_id < end; ++new_polygon_id)
         {
-            Polygon_id old_polygon_id = polygon_remapper.old_id(new_polygon_id);
+            const Polygon_id old_polygon_id = polygon_remapper.old_id(new_polygon_id);
             log_weld.trace("Polygon new {:2} from old {:2} corners:", new_polygon_id, old_polygon_id);
             Polygon& old_polygon = old_polygons[old_polygon_id];
             Polygon& new_polygon = polygons[new_polygon_id];
@@ -703,9 +668,9 @@ void Geometry::weld(Weld_settings weld_settings)
             polygons[new_polygon_id].corner_count            = 0;
             for (uint32_t i = 0, end = old_polygon.corner_count; i < end; ++i)
             {
-                Polygon_corner_id old_polygon_corner_id = old_polygon.first_polygon_corner_id + i;
-                Polygon_corner_id new_polygon_corner_id = new_polygon.first_polygon_corner_id + new_polygon.corner_count;
-                Corner_id         corner_id             = old_polygon_corners[old_polygon_corner_id];
+                const Polygon_corner_id old_polygon_corner_id = old_polygon.first_polygon_corner_id + i;                
+                const Polygon_corner_id new_polygon_corner_id = new_polygon.first_polygon_corner_id + new_polygon.corner_count;
+                const Corner_id         corner_id             = old_polygon_corners[old_polygon_corner_id];
                 polygon_corners[new_polygon_corner_id] = corner_id;
                 ++new_polygon.corner_count;
                 ++next_polygon_corner;

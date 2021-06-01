@@ -48,6 +48,10 @@ class Text_renderer
 {
 public:
     Text_renderer();
+    Text_renderer(const Text_renderer&) = delete;
+    Text_renderer& operator=(const Text_renderer&) = delete;
+    Text_renderer(Text_renderer&&) = delete;
+    Text_renderer& operator=(Text_renderer&&) = delete;
 
     virtual ~Text_renderer();
 
@@ -113,24 +117,24 @@ private:
         Frame_resources(const Frame_resources& other) = delete;
         auto operator=(const Frame_resources&) -> Frame_resources& = delete;
 
-        Frame_resources(Frame_resources&& other) noexcept
-        {
-            vertex_buffer         = std::move(other.vertex_buffer);
-            projection_buffer     = std::move(other.projection_buffer);
-            vertex_input_state    = std::move(other.vertex_input_state);
-            pipeline              = std::move(other.pipeline);
-            pipeline.vertex_input = &vertex_input_state;
-        }
+        Frame_resources(Frame_resources&& other) = delete; //noexcept
+        //{
+        //    vertex_buffer         = std::move(other.vertex_buffer);
+        //    projection_buffer     = std::move(other.projection_buffer);
+        //    vertex_input_state    = std::move(other.vertex_input_state);
+        //    pipeline              = std::move(other.pipeline);
+        //    pipeline.vertex_input = &vertex_input_state;
+        //}
 
-        auto operator=(Frame_resources&& other) noexcept -> Frame_resources&
-        {
-            vertex_buffer         = std::move(other.vertex_buffer);
-            projection_buffer     = std::move(other.projection_buffer);
-            vertex_input_state    = std::move(other.vertex_input_state);
-            pipeline              = std::move(other.pipeline);
-            pipeline.vertex_input = &vertex_input_state;
-            return *this;
-        }
+        auto operator=(Frame_resources&& other) = delete; //noexcept -> Frame_resources&
+        //{
+        //    vertex_buffer         = std::move(other.vertex_buffer);
+        //    projection_buffer     = std::move(other.projection_buffer);
+        //    vertex_input_state    = std::move(other.vertex_input_state);
+        //    pipeline              = std::move(other.pipeline);
+        //    pipeline.vertex_input = &vertex_input_state;
+        //    return *this;
+        //}
 
         erhe::graphics::Buffer             vertex_buffer;
         erhe::graphics::Buffer             projection_buffer;
@@ -155,8 +159,8 @@ private:
     std::unique_ptr<erhe::graphics::Sampler>              m_nearest_sampler;
     int                                                   m_font_sampler_location{0};
 
-    std::vector<Frame_resources> m_frame_resources;
-    size_t                       m_current_frame_resource_slot{0};
+    std::deque<Frame_resources> m_frame_resources;
+    size_t                      m_current_frame_resource_slot{0};
 
     struct Buffer_range
     {

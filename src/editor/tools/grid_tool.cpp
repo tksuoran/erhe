@@ -7,12 +7,24 @@
 namespace editor
 {
 
-auto Grid_tool::state() const -> Tool::State
+Grid_tool::Grid_tool()
+    : erhe::components::Component{c_name}
 {
-    return State::passive;
 }
 
-void Grid_tool::render(Render_context& render_context)
+Grid_tool::~Grid_tool() = default;
+
+auto Grid_tool::description() -> const char*
+{
+   return c_name;
+}
+
+auto Grid_tool::state() const -> State
+{
+    return State::Passive;
+}
+
+void Grid_tool::render(const Render_context& render_context)
 {
     ZoneScoped;
 
@@ -26,11 +38,11 @@ void Grid_tool::render(Render_context& render_context)
         return;
     }
 
-    uint32_t cell_major_color = 0xff000000u;
-    uint32_t cell_minor_color = 0xff333333u;
+    const uint32_t cell_major_color = 0xff000000u;
+    const uint32_t cell_minor_color = 0xff333333u;
 
-    float extent     = static_cast<float>(m_cell_count) * m_cell_size;
-    float minor_step = m_cell_size / static_cast<float>(m_cell_div);
+    const float extent     = static_cast<float>(m_cell_count) * m_cell_size;
+    const float minor_step = m_cell_size / static_cast<float>(m_cell_div);
     int cell;
     Line_renderer& line_renderer = *render_context.line_renderer;
     for (cell = -m_cell_count; cell < m_cell_count; ++cell)

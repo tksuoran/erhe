@@ -12,6 +12,7 @@
 #include <functional>
 #include <optional>
 #include <set>
+#include <string_view>
 #include <vector>
 
 namespace erhe::log
@@ -54,20 +55,20 @@ struct Corner
     Polygon_id polygon_id{0};
 
     template<typename T>
-    void smooth_normalize(Corner_id                                  this_corner_id,
+    void smooth_normalize(const Corner_id                            this_corner_id,
                           const Geometry&                            geometry,
                           Property_map<Corner_id, T>&                corner_attribute,
                           const Property_map<Polygon_id, T>&         polygon_attribute,
                           const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-                          float                                      cos_max_smoothing_angle) const;
+                          const float                                cos_max_smoothing_angle) const;
 
     template<typename T>
-    void smooth_average(Corner_id                                 this_corner_id,
+    void smooth_average(const Corner_id                           this_corner_id,
                         const Geometry&                           geometry,
                         Property_map<Corner_id, T>&               new_corner_attribute,
                         const Property_map<Corner_id, T>&         old_corner_attribute,
                         const Property_map<Corner_id, glm::vec3>& corner_normals,
-                        const Property_map<Point_id, glm::vec3>&  point_normals) const;
+                        const Property_map<Point_id,  glm::vec3>& point_normals) const;
 };
 
 struct Point
@@ -80,10 +81,14 @@ struct Point
         Corner&         corner;
         bool            break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
 
-    void for_each_corner(Geometry& geometry, std::function<void(Point_corner_context& context)> callback);
+    void for_each_corner(Geometry&                                          geometry,
+                         std::function<void(Point_corner_context& context)> callback);
 
     struct Point_corner_context_const
     {
@@ -93,10 +98,14 @@ struct Point
         const Corner&   corner;
         bool            break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
 
-    void for_each_corner_const(const Geometry& geometry, std::function<void(Point_corner_context_const& context)> callback) const;
+    void for_each_corner_const(const Geometry&                                geometry,
+                               std::function<void(Point_corner_context_const& context)> callback) const;
 
     struct Point_corner_neighborhood_context
     {
@@ -112,10 +121,14 @@ struct Point
         Corner&         next_corner;
         bool            break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
 
-    void for_each_corner_neighborhood(Geometry& geometry, std::function<void(Point_corner_neighborhood_context& context)> callback);
+    void for_each_corner_neighborhood(Geometry&                                                       geometry,
+                                      std::function<void(Point_corner_neighborhood_context& context)> callback);
 
     Point_corner_id first_point_corner_id{0};
     uint32_t        corner_count{0};
@@ -129,7 +142,7 @@ struct Polygon
 
     // Copies polygon property to corners
     template <typename T>
-    void copy_to_corners(Polygon_id                         this_polygon_id,
+    void copy_to_corners(const Polygon_id                   this_polygon_id,
                          const Geometry&                    geometry,
                          Property_map<Corner_id, T>&        corner_attribute,
                          const Property_map<Polygon_id, T>& polygon_attribute) const;
@@ -139,7 +152,7 @@ struct Polygon
                           Property_map<Corner_id, T>&                corner_attribute,
                           const Property_map<Polygon_id, T>&         polygon_attribute,
                           const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-                          float                                      cos_max_smoothing_angle) const;
+                          const float                                cos_max_smoothing_angle) const;
 
     template <typename T>
     void smooth_average(const Geometry&                           geometry,
@@ -148,38 +161,41 @@ struct Polygon
                         const Property_map<Corner_id, glm::vec3>& corner_normals,
                         const Property_map<Point_id, glm::vec3>&  point_normals) const;
 
-    void compute_normal(Polygon_id                               this_polygon_id,
+    void compute_normal(const Polygon_id                         this_polygon_id,
                         const Geometry&                          geometry,
                         Property_map<Polygon_id, glm::vec3>&     polygon_normals,
                         const Property_map<Point_id, glm::vec3>& point_locations) const;
 
     auto compute_normal(const Geometry&                          geometry,
-                        const Property_map<Point_id, glm::vec3>& point_locations) const -> glm::vec3;
+                        const Property_map<Point_id, glm::vec3>& point_locations) const
+    -> glm::vec3;
 
     auto compute_centroid(const Geometry&                          geometry,
-                          const Property_map<Point_id, glm::vec3>& point_locations) const -> glm::vec3;
+                          const Property_map<Point_id, glm::vec3>& point_locations) const
+    -> glm::vec3;
 
     auto compute_edge_midpoint(const Geometry&                          geometry,
-                               const Property_map<Point_id, glm::vec3>& point_locations) const -> glm::vec3;
+                               const Property_map<Point_id, glm::vec3>& point_locations) const
+    -> glm::vec3;
 
-    void compute_centroid(Polygon_id                               this_polygon_id,
+    void compute_centroid(const Polygon_id                         this_polygon_id,
                           const Geometry&                          geometry,
                           Property_map<Polygon_id, glm::vec3>&     polygon_centroids,
                           const Property_map<Point_id, glm::vec3>& point_locations) const;
 
-    void compute_planar_texture_coordinates(Polygon_id                                 this_polygon_id,
+    void compute_planar_texture_coordinates(const Polygon_id                           this_polygon_id,
                                             const Geometry&                            geometry,
                                             Property_map<Corner_id, glm::vec2>&        corner_texcoords,
                                             const Property_map<Polygon_id, glm::vec3>& polygon_centroids,
                                             const Property_map<Polygon_id, glm::vec3>& polygon_normals,
                                             const Property_map<Point_id, glm::vec3>&   point_locations,
-                                            bool                                       overwrite = false) const;
+                                            const bool                                 overwrite = false) const;
 
-    auto corner(const Geometry& geometry, Point_id point_id) -> Corner_id;
+    auto corner(const Geometry& geometry, const Point_id point_id) const -> Corner_id;
 
-    auto next_corner(const Geometry& geometry, Corner_id anchor_corner_id) -> Corner_id;
+    auto next_corner(const Geometry& geometry, const Corner_id anchor_corner_id) const -> Corner_id;
 
-    auto prev_corner(const Geometry& geometry, Corner_id corner_id) -> Corner_id;
+    auto prev_corner(const Geometry& geometry, const Corner_id corner_id) const -> Corner_id;
 
     void reverse(Geometry& geometry);
 
@@ -191,7 +207,10 @@ struct Polygon
         Corner&           corner;
         bool              break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
 
     struct Polygon_corner_context_const
@@ -202,12 +221,17 @@ struct Polygon
         const Corner&     corner;
         bool              break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
 
-    void for_each_corner(Geometry& geometry, std::function<void(Polygon_corner_context& context)> callback);
+    void for_each_corner(Geometry&                                            geometry,
+                         std::function<void(Polygon_corner_context& context)> callback);
 
-    void for_each_corner_const(const Geometry& geometry, std::function<void(Polygon_corner_context_const& context)> callback) const;
+    void for_each_corner_const(const Geometry&                                            geometry,
+                               std::function<void(Polygon_corner_context_const& context)> callback) const;
 
     struct Polygon_corner_neighborhood_context
     {
@@ -223,10 +247,14 @@ struct Polygon
         Corner&           next_corner;
         bool              break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
 
-    void for_each_corner_neighborhood(Geometry& geometry, std::function<void(Polygon_corner_neighborhood_context& context)> callback);
+    void for_each_corner_neighborhood(Geometry&                                                         geometry,
+                                      std::function<void(Polygon_corner_neighborhood_context& context)> callback);
 };
 
 struct Edge
@@ -244,11 +272,31 @@ struct Edge
         Polygon&        polygon;
         bool            break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
 
-    void for_each_polygon(Geometry& geometry, std::function<void(Edge_polygon_context& context)> callback);
+    struct Edge_polygon_context_const
+    {
+        const Geometry& geometry;
+        Edge_polygon_id edge_polygon_id;
+        Polygon_id      polygon_id;
+        const Polygon&  polygon;
+        bool            break_{false};
 
+        void break_iteration()
+        {
+            break_ = true;
+        }
+    };
+
+    void for_each_polygon(Geometry&                                          geometry,
+                          std::function<void(Edge_polygon_context& context)> callback);
+
+    void for_each_polygon_const(const Geometry&                                          geometry,
+                                std::function<void(Edge_polygon_context_const& context)> callback) const;
 };
 
 struct Mesh_info
@@ -287,28 +335,22 @@ public:
     std::vector<Corner_id>  polygon_corners;
     std::vector<Polygon_id> edge_polygons;
 
-    Geometry() = default;
-
-    explicit Geometry(const std::string& name)
-        : name{name}
-    {
-    }
-
+    Geometry();
+    Geometry(std::string_view name, std::function<void(Geometry&)>);
+    explicit Geometry(std::string_view name);
     Geometry(const Geometry&) = delete;
-
     ~Geometry();
-
     Geometry& operator=(const Geometry&) = delete;
 
     Geometry(Geometry&& other) noexcept
-        : name                                {std::move(other.name)}
-        , corners                             {std::move(other.corners)}
-        , points                              {std::move(other.points)}
-        , polygons                            {std::move(other.polygons)}
-        , edges                               {std::move(other.edges)}
-        , point_corners                       {std::move(other.point_corners)}
-        , polygon_corners                     {std::move(other.polygon_corners)}
-        , edge_polygons                       {std::move(other.edge_polygons)}
+        : name                                {std::move(other.name            )}
+        , corners                             {std::move(other.corners         )}
+        , points                              {std::move(other.points          )}
+        , polygons                            {std::move(other.polygons        )}
+        , edges                               {std::move(other.edges           )}
+        , point_corners                       {std::move(other.point_corners   )}
+        , polygon_corners                     {std::move(other.polygon_corners )}
+        , edge_polygons                       {std::move(other.edge_polygons   )}
         , m_next_corner_id                    {other.m_next_corner_id           }
         , m_next_point_id                     {other.m_next_point_id            }
         , m_next_polygon_id                   {other.m_next_polygon_id          }
@@ -384,7 +426,8 @@ public:
     uint32_t polygon_corner_count() const { return m_next_polygon_corner_id; }
     uint32_t edge_count          () const { return m_next_edge_id; }
 
-    std::optional<Edge> find_edge(Point_id a, Point_id b)
+    auto find_edge(Point_id a, Point_id b)
+    -> std::optional<Edge>
     {
         if (b < a)
         {
@@ -403,7 +446,7 @@ public:
     // Allocates new Corner / Corner_id
     // - Point must be allocated.
     // - Polygon must be allocated
-    auto make_corner(Point_id point_id, Polygon_id polygon_id) -> Corner_id;
+    auto make_corner(const Point_id point_id, const Polygon_id polygon_id) -> Corner_id;
 
     // Allocates new Point / Point_id
     auto make_point() -> Point_id;
@@ -414,28 +457,28 @@ public:
     // Allocates new Edge / Edge_id
     // - Points must be already allocated
     // - Points must be ordered
-    auto make_edge(Point_id a, Point_id b) -> Edge_id;
+    auto make_edge(const Point_id a, const Point_id b) -> Edge_id;
 
     // Reserves new point corner.
     // - Point must be already allocated.
     // - Corner must be already allocated.
     // - Does not actually create point corner, only allocates space
-    void reserve_point_corner(Point_id point_id, Corner_id corner_id);
+    void reserve_point_corner(const Point_id point_id, const Corner_id corner_id);
 
     // Allocates new edge polygon.
     // - Edge must be already allocated.
     // - Polygon must be already allocated.
-    auto make_edge_polygon(Edge_id edge_id, Polygon_id polygon_id) -> Edge_polygon_id;
+    auto make_edge_polygon(const Edge_id edge_id, const Polygon_id polygon_id) -> Edge_polygon_id;
 
     // Allocates new polygon corner.
     // - Polygon must be already allocated.
     // - Corner must be already allocated.
-    auto make_polygon_corner_(Polygon_id polygon_id, Corner_id corner_id) -> Polygon_corner_id;
+    auto make_polygon_corner_(const Polygon_id polygon_id, const Corner_id corner_id) -> Polygon_corner_id;
 
     // Allocates new polygon corner.
     // - Polygon must be already allocated.
     // - Point must be already allocated.
-    auto make_polygon_corner(Polygon_id polygon_id, Point_id point_id) -> Corner_id;
+    auto make_polygon_corner(const Polygon_id polygon_id, const Point_id point_id) -> Corner_id;
 
     auto count_polygon_triangles() const -> size_t;
 
@@ -481,17 +524,17 @@ public:
         return m_edge_property_map_collection;
     }
 
-    void reserve_points(size_t point_count);
+    void reserve_points(const size_t point_count);
 
-    void reserve_polygons(size_t polygon_count);
+    void reserve_polygons(const size_t polygon_count);
 
-    auto make_point(float x, float y, float z) -> Point_id;
+    auto make_point(const float x, const float y, const float z) -> Point_id;
 
-    auto make_point(float x, float y, float z, float s, float t) -> Point_id;
+    auto make_point(const float x, const float y, const float z, const float s, const float t) -> Point_id;
 
-    auto make_point(double x, double y, double z) -> Point_id;
+    auto make_point(const double x, const double y, const double z) -> Point_id;
 
-    auto make_point(double x, double y, double z, double s, double t) -> Point_id;
+    auto make_point(const double x, const double y, const double z, const double s, const double t) -> Point_id;
 
     auto make_polygon(const std::initializer_list<Point_id> point_list) -> Polygon_id;
 
@@ -527,14 +570,14 @@ public:
     auto has_corner_tangents() const -> bool;
     auto has_corner_bitangents() const -> bool;
 
-    auto compute_tangents(bool corner_tangents    = true,
-                          bool corner_bitangents  = true,
-                          bool polygon_tangents   = false,
-                          bool polygon_bitangents = false,
-                          bool make_polygons_flat = true,
-                          bool override_existing  = false) -> bool;
+    auto compute_tangents(const bool corner_tangents    = true,
+                          const bool corner_bitangents  = true,
+                          const bool polygon_tangents   = false,
+                          const bool polygon_bitangents = false,
+                          const bool make_polygons_flat = true,
+                          const bool override_existing  = false) -> bool;
 
-    auto generate_polygon_texture_coordinates(bool overwrite_existing_texture_coordinates = false) -> bool;
+    auto generate_polygon_texture_coordinates(const bool overwrite_existing_texture_coordinates = false) -> bool;
 
     auto has_polygon_texture_coordinates() const -> bool;
 
@@ -545,7 +588,7 @@ public:
     void smooth_normalize(Property_map<Corner_id, T>&                corner_attribute,
                           const Property_map<Polygon_id, T>&         polygon_attribute,
                           const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-                          float                                      max_smoothing_angle_radians) const;
+                          const float                                max_smoothing_angle_radians) const;
 
     template <typename T>
     void smooth_average(Property_map<Corner_id, T>&                smoothed_corner_attribute,
@@ -565,9 +608,9 @@ public:
 
     void reverse_polygons();
 
-    void debug_trace();
+    void debug_trace() const;
 
-    void merge(Geometry& other, glm::mat4 transform);
+    void merge(Geometry& other, const glm::mat4 transform);
 
     struct Weld_settings
     {
@@ -577,9 +620,9 @@ public:
         float max_color_distance    {0.05f};
     };
 
-    void weld(Weld_settings weld_settings);
+    void weld(const Weld_settings& weld_settings);
 
-    void sanity_check();
+    void sanity_check() const;
 
     auto volume() -> float;
 
@@ -589,7 +632,10 @@ public:
         Corner&   corner;
         bool      break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
     struct Corner_context_const
     {
@@ -597,7 +643,10 @@ public:
         const Corner& corner;
         bool          break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
     struct Point_context
     {
@@ -605,7 +654,10 @@ public:
         Point&   point;
         bool     break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
     struct Point_context_const
     {
@@ -613,7 +665,10 @@ public:
         const Point& point;
         bool         break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
     struct Polygon_context
     {
@@ -621,7 +676,10 @@ public:
         Polygon&   polygon;
         bool       break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
     struct Polygon_context_const
     {
@@ -629,7 +687,10 @@ public:
         const Polygon& polygon;
         bool           break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
     struct Edge_context
     {
@@ -637,15 +698,22 @@ public:
         Edge&   edge;
         bool    break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
+
     struct Edge_context_const
     {
         Edge_id     edge_id;
         const Edge& edge;
         bool        break_{false};
 
-        void break_iteration() { break_ = true; }
+        void break_iteration()
+        {
+            break_ = true;
+        }
     };
 
     void for_each_corner       (std::function<void(Corner_context&       )> callback);

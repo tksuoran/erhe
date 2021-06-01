@@ -3,6 +3,8 @@
 namespace erhe::graphics
 {
 
+Sampler::Sampler() = default;
+
 Sampler::Sampler(gl::Texture_min_filter min_filter,
                  gl::Texture_mag_filter mag_filter)
     : min_filter{min_filter}

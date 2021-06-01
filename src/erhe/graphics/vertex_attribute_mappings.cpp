@@ -9,12 +9,17 @@ namespace erhe::graphics
 using erhe::log::Log;
 using std::string;
 
+Vertex_attribute_mappings::Vertex_attribute_mappings() = default;
+
+Vertex_attribute_mappings::~Vertex_attribute_mappings() = default;
+
 void Vertex_attribute_mappings::add(gl::Attribute_type      shader_type,
                                     string                  name,
                                     Vertex_attribute::Usage usage,
                                     size_t                  layout_location)
 {
-    mappings.emplace_back(shader_type, std::move(name), usage, layout_location);
+    auto mapping = std::make_shared<Vertex_attribute_mapping>(shader_type, std::move(name), usage, layout_location);
+    mappings.emplace_back(mapping);
 }
 
 void Vertex_attribute_mappings::add(gl::Attribute_type           shader_type,
@@ -23,7 +28,8 @@ void Vertex_attribute_mappings::add(gl::Attribute_type           shader_type,
                                     Vertex_attribute::Usage_type dst_usage_type,
                                     size_t                       layout_location)
 {
-    mappings.emplace_back(shader_type, std::move(name), src_usage, dst_usage_type, layout_location);
+    auto mapping = std::make_shared<Vertex_attribute_mapping>(shader_type, std::move(name), src_usage, dst_usage_type, layout_location);
+    mappings.emplace_back(mapping);
 }
 
 void Vertex_attribute_mappings::apply_to_vertex_input_state(Vertex_input_state&    vertex_input_state,
@@ -35,16 +41,16 @@ void Vertex_attribute_mappings::apply_to_vertex_input_state(Vertex_input_state& 
     log_vertex_attribute_mappings.trace("Vertex_attribute_mappings::apply_to_vertex_input_state()\n");
     log::Indenter log_indent;
 
-    for (const auto& mapping : mappings)
+    for (auto mapping : mappings)
     {
-        if (vertex_format.has_attribute(mapping.src_usage.type,
-                                        static_cast<unsigned int>(mapping.src_usage.index)))
+        if (vertex_format.has_attribute(mapping->src_usage.type,
+                                        static_cast<unsigned int>(mapping->src_usage.index)))
         {
-            auto attribute = vertex_format.find_attribute(mapping.src_usage.type,
-                                                          static_cast<unsigned int>(mapping.src_usage.index));
+            auto attribute = vertex_format.find_attribute(mapping->src_usage.type,
+                                                          static_cast<unsigned int>(mapping->src_usage.index));
             log_vertex_attribute_mappings.trace("vertex attribute: shader type = {}, name = {}, usage = {}, data_type = {}, dimension = {}, index = {}\n",
-                                                gl::c_str(mapping.shader_type),
-                                                mapping.name,
+                                                gl::c_str(mapping->shader_type),
+                                                mapping->name,
                                                 Vertex_attribute::desc(attribute->usage.type),
                                                 gl::c_str(attribute->data_type.type),
                                                 static_cast<unsigned int>(attribute->data_type.dimension),

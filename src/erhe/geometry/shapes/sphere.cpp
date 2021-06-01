@@ -372,10 +372,10 @@ auto make_sphere(double radius, unsigned int slice_count, unsigned int stack_div
 {
     ZoneScoped;
 
-    Geometry geometry("sphere");
-    Sphere_builder builder(geometry, radius, static_cast<int>(slice_count), static_cast<int>(stack_division));
-    builder.build();
-    return geometry;
+    return Geometry("sphere", [=](auto& geometry) {
+        Sphere_builder builder(geometry, radius, static_cast<int>(slice_count), static_cast<int>(stack_division));
+        builder.build();
+    });
 }
 
 } // namespace erhe::geometry::shapes

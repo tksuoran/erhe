@@ -1,5 +1,4 @@
-#ifndef fragment_output_hpp_erhe_graphics
-#define fragment_output_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/gl/wrapper_enums.hpp"
 
@@ -31,5 +30,3 @@ private:
 };
 
 } // namespace erhe::graphics
-
-#endif

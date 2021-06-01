@@ -35,7 +35,8 @@ namespace editor
 class Operation_stack;
 class Line_renderer;
 class Node_physics;
-class Scene_manager;
+class Mesh_memory;
+class Scene_root;
 class Text_renderer;
 
 class Trs_tool
@@ -59,8 +60,8 @@ public:
     };
 
     static constexpr const char* c_name = "Trs_tool";
-    Trs_tool() : erhe::components::Component{c_name} {}
-    virtual ~Trs_tool() = default;
+    Trs_tool();
+    virtual ~Trs_tool();
 
     // Implements Component
     void connect() override;
@@ -68,11 +69,11 @@ public:
 
     // Implements Tool
     auto update(Pointer_context& pointer_context) -> bool override;
-    void render_update() override;
-    void render(Render_context& render_context) override;
+    void render_update(const Render_context& render_context) override;
+    void render(const Render_context& render_context) override;
     auto state() const -> State override;
     void cancel_ready() override;
-    auto description() -> const char* override { return c_name; }
+    auto description() -> const char* override;
 
     // Implements Window
     void window(Pointer_context& pointer_context) override;
@@ -159,9 +160,10 @@ private:
 
     bool m_local{true};
     std::shared_ptr<Operation_stack>           m_operation_stack;
-    std::shared_ptr<Scene_manager>             m_scene_manager;
+    std::shared_ptr<Mesh_memory>               m_mesh_memory;
+    std::shared_ptr<Scene_root>                m_scene_root;
     std::shared_ptr<Selection_tool>            m_selection_tool;
-    State                                      m_state        {State::passive};
+    State                                      m_state        {State::Passive};
     Handle                                     m_active_handle{Handle::e_handle_none};
     std::optional<Selection_tool::Subcription> m_selection_subscription;
     std::map<erhe::scene::Mesh*, Handle>       m_handles;
@@ -225,9 +227,9 @@ private:
     {
         Visualization() = default;
 
-        void initialize(Scene_manager* scene_manager);
-        void update_visibility(bool show, Handle active_handle);
-        void update_scale(glm::vec3 view_position_in_world);
+        void initialize(Mesh_memory& mesh_memory, Scene_root& scene_root);
+        void update_visibility(const bool show, const Handle active_handle);
+        void update_scale(const glm::vec3 view_position_in_world);
         void update_transforms();
 
         bool  show_translate{false};

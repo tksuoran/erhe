@@ -1,8 +1,8 @@
-#ifndef rectangle_hpp_erhe_ui
-#define rectangle_hpp_erhe_ui
+#pragma once
+
+#include <glm/glm.hpp>
 
 #include <algorithm>
-#include <glm/glm.hpp>
 #include <limits>
 
 namespace erhe::ui
@@ -195,5 +195,3 @@ public:
 };
 
 } // namespace erhe::ui
-
-#endif

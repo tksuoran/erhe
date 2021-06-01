@@ -1,5 +1,4 @@
-#ifndef glfw_window_hpp_erhe_toolkit
-#define glfw_window_hpp_erhe_toolkit
+#pragma once
 
 #if defined(ERHE_WINDOW_TOOLKIT_GLFW)
 
@@ -88,4 +87,3 @@ private:
 } // namespace erhe::toolkit
 
 #endif // defined(ERHE_WINDOW_TOOLKIT_GLFW)
-#endif // glfw_window_hpp_erhe_toolkit

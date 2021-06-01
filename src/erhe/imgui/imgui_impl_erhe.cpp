@@ -1,11 +1,15 @@
 #include "imgui.h"
 #include "imgui_impl_erhe.hpp"
 
+#include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
+#include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
+
+#include <deque>
 
 using std::shared_ptr;
 using std::unique_ptr;
@@ -13,6 +17,45 @@ using std::make_shared;
 using std::make_unique;
 
 erhe::log::Category log_imgui(erhe::log::Color::CYAN, erhe::log::Color::GRAY, erhe::log::Level::LEVEL_INFO);
+
+constexpr std::string_view c_vertex_shader_source =
+    "\n"
+    "out      vec4 v_color;\n"
+    "out      vec2 v_texcoord;\n"
+    "out flat uint v_texture_id;\n"
+    "\n"
+    "out gl_PerVertex {\n"
+    "    vec4  gl_Position;\n"
+    "    float gl_ClipDistance[4];\n"
+    "};\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    vec2 scale         = projection.u_scale;\n"
+    "    vec2 translate     = projection.u_translate;\n"
+    "    vec4 clip_rect     = draw.draw_parameters[gl_DrawID].u_clip_rect;\n"
+    "    gl_Position        = vec4(a_position * scale + translate, 0, 1);\n"
+    "    gl_Position.y      = -gl_Position.y;\n"
+    "    gl_ClipDistance[0] = a_position.x - clip_rect[0];\n"
+    "    gl_ClipDistance[1] = a_position.y - clip_rect[1];\n"
+    "    gl_ClipDistance[2] = clip_rect[2] - a_position.x;\n"
+    "    gl_ClipDistance[3] = clip_rect[3] - a_position.y;\n"
+    "    v_texture_id       = draw.draw_parameters[gl_DrawID].u_texture_indices[0];\n"
+    "    v_texcoord         = a_texcoord;\n"
+    "    v_color            = a_color;\n"
+    "}\n";
+
+const std::string_view c_fragment_shader_source =
+    "in vec4      v_color;\n"
+    "in vec2      v_texcoord;\n"
+    "in flat uint v_texture_id;\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    vec4 texture_sample = texture(s_textures[v_texture_id], v_texcoord.st);\n"
+    "    out_color.rgb       = v_color.rgb * texture_sample.rgb;\n"
+    "    out_color.a         = texture_sample.a * v_color.a;\n"
+    "}\n";
 
 class Imgui_renderer
 {
@@ -91,29 +134,29 @@ public:
         auto operator=(const Frame_resources&)
         -> Frame_resources& = delete;
 
-        Frame_resources(Frame_resources&& other) noexcept
-        {
-            std::swap(vertex_buffer,         other.vertex_buffer);
-            std::swap(index_buffer,          other.index_buffer);
-            std::swap(draw_parameter_buffer, other.draw_parameter_buffer);
-            std::swap(draw_indirect_buffer,  other.draw_indirect_buffer);
-            std::swap(vertex_input_state,    other.vertex_input_state);
-            std::swap(pipeline,              other.pipeline);
-            pipeline.vertex_input = &vertex_input_state;
-        }
+        Frame_resources(Frame_resources&& other) = delete; //noexcept
+        //{
+        //    std::swap(vertex_buffer,         other.vertex_buffer);
+        //    std::swap(index_buffer,          other.index_buffer);
+        //    std::swap(draw_parameter_buffer, other.draw_parameter_buffer);
+        //    std::swap(draw_indirect_buffer,  other.draw_indirect_buffer);
+        //    std::swap(vertex_input_state,    other.vertex_input_state);
+        //    std::swap(pipeline,              other.pipeline);
+        //    pipeline.vertex_input = &vertex_input_state;
+        //}
 
-        auto operator=(Frame_resources&& other) noexcept
-        -> Frame_resources&
-        {
-            std::swap(vertex_buffer,         other.vertex_buffer);
-            std::swap(index_buffer,          other.index_buffer);
-            std::swap(draw_parameter_buffer, other.draw_parameter_buffer);
-            std::swap(draw_indirect_buffer,  other.draw_indirect_buffer);
-            std::swap(vertex_input_state,    other.vertex_input_state);
-            std::swap(pipeline,              other.pipeline);
-            pipeline.vertex_input = &vertex_input_state;
-            return *this;
-        }
+        auto operator=(Frame_resources&& other) = delete; //noexcept
+        //-> Frame_resources&
+        //{
+        //    std::swap(vertex_buffer,         other.vertex_buffer);
+        //    std::swap(index_buffer,          other.index_buffer);
+        //    std::swap(draw_parameter_buffer, other.draw_parameter_buffer);
+        //    std::swap(draw_indirect_buffer,  other.draw_indirect_buffer);
+        //    std::swap(vertex_input_state,    other.vertex_input_state);
+        //    std::swap(pipeline,              other.pipeline);
+        //    pipeline.vertex_input = &vertex_input_state;
+        //    return *this;
+        //}
 
         erhe::graphics::Buffer             vertex_buffer;
         erhe::graphics::Buffer             index_buffer;
@@ -172,45 +215,6 @@ public:
         // sampler2d textures[16];
         samplers = &default_uniform_block.add_sampler("s_textures", gl::Uniform_type::sampler_2d, 2);
 
-        const char* vertex_shader_source =
-            "\n"
-            "out      vec4 v_color;\n"
-            "out      vec2 v_texcoord;\n"
-            "out flat uint v_texture_id;\n"
-            "\n"
-            "out gl_PerVertex {\n"
-            "    vec4  gl_Position;\n"
-            "    float gl_ClipDistance[4];\n"
-            "};\n"
-            "\n"
-            "void main()\n"
-            "{\n"
-            "    vec2 scale         = projection.u_scale;\n"
-            "    vec2 translate     = projection.u_translate;\n"
-            "    vec4 clip_rect     = draw.draw_parameters[gl_DrawID].u_clip_rect;\n"
-            "    gl_Position        = vec4(a_position * scale + translate, 0, 1);\n"
-            "    gl_Position.y      = -gl_Position.y;\n"
-            "    gl_ClipDistance[0] = a_position.x - clip_rect[0];\n"
-            "    gl_ClipDistance[1] = a_position.y - clip_rect[1];\n"
-            "    gl_ClipDistance[2] = clip_rect[2] - a_position.x;\n"
-            "    gl_ClipDistance[3] = clip_rect[3] - a_position.y;\n"
-            "    v_texture_id       = draw.draw_parameters[gl_DrawID].u_texture_indices[0];\n"
-            "    v_texcoord         = a_texcoord;\n"
-            "    v_color            = a_color;\n"
-            "}\n";
-
-        const char* fragment_shader_source =
-            "in vec4      v_color;\n"
-            "in vec2      v_texcoord;\n"
-            "in flat uint v_texture_id;\n"
-            "\n"
-            "void main()\n"
-            "{\n"
-            "    vec4 texture_sample = texture(s_textures[v_texture_id], v_texcoord.st);\n"
-            "    out_color.rgb       = v_color.rgb * texture_sample.rgb;\n"
-            "    out_color.a         = texture_sample.a * v_color.a;\n"
-            "}\n";
-
         erhe::graphics::Shader_stages::Create_info create_info("ImGui Renderer",
                                                                &default_uniform_block,
                                                                &attribute_mappings,
@@ -218,8 +222,8 @@ public:
         create_info.add_interface_block(projection_block.get());
         create_info.add_interface_block(draw_parameter_block.get());
         create_info.struct_types.push_back(&draw_parameter_struct);
-        create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vertex_shader_source);
-        create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fragment_shader_source);
+        create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   c_vertex_shader_source);
+        create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, c_fragment_shader_source);
 
         erhe::graphics::Shader_stages::Prototype prototype(create_info);
         VERIFY(prototype.is_valid());
@@ -353,8 +357,8 @@ public:
     };
 
 private:
-    std::vector<Frame_resources> m_frame_resources;
-    size_t                       m_current_frame_resource_slot{0};
+    std::deque<Frame_resources> m_frame_resources;
+    size_t                      m_current_frame_resource_slot{0};
 
     static constexpr size_t frame_resources_count = 4;
 };

@@ -2,6 +2,9 @@
 
 #include "renderers/line_renderer.hpp"
 #include "renderers/text_renderer.hpp"
+#include "scene/scene_root.hpp"
+
+#include "erhe/physics/world.hpp"
 
 #include "log.hpp"
 
@@ -12,8 +15,18 @@
 namespace editor
 {
 
+Debug_draw::Debug_draw()
+    : erhe::components::Component{c_name}
+    , m_debug_mode{0}
+{
+
+}
+
+Debug_draw::~Debug_draw() = default;
+
 void Debug_draw::connect()
 {
+    require<Scene_root>();
     m_line_renderer = get<Line_renderer>();
     m_text_renderer = get<Text_renderer>();
 
@@ -33,6 +46,11 @@ void Debug_draw::connect()
                    DBG_FastWireframe         |
                    DBG_DrawNormals           |
                    DBG_DrawFrames;
+}
+
+void Debug_draw::initialize_component()
+{
+    get<Scene_root>()->physics_world().bullet_dynamics_world.setDebugDrawer(this);
 }
 
 void Debug_draw::drawLine(const btVector3& from, const btVector3& to, const btVector3& color)

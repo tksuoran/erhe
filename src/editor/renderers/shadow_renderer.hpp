@@ -9,14 +9,14 @@ namespace erhe::graphics
 {
     class Framebuffer;
     class OpenGL_state_tracker;
-    class Vertex_input_state;
     class Texture;
+    class Vertex_input_state;
 }
 
 namespace erhe::scene
 {
-    class Layer;
     class Camera;
+    class Layer;
     class Light;
     class Mesh;
 }
@@ -24,8 +24,7 @@ namespace erhe::scene
 namespace editor
 {
 
-class Programs;
-class Scene_manager;
+class Mesh_memory;
 
 class Shadow_renderer
     : public erhe::components::Component,
@@ -60,7 +59,7 @@ public:
 private:
     erhe::scene::Viewport                                     m_viewport;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker>     m_pipeline_state_tracker;
-    std::shared_ptr<Scene_manager>                            m_scene_manager;
+    std::shared_ptr<Mesh_memory>                              m_mesh_memory;
     erhe::graphics::Pipeline                                  m_pipeline;
     std::unique_ptr<erhe::graphics::Vertex_input_state>       m_vertex_input;
     std::unique_ptr<erhe::graphics::Texture>                  m_texture;

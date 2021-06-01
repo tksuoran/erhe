@@ -24,7 +24,7 @@ public:
     auto detach(const std::shared_ptr<INode_attachment>& attachment) -> bool;
 
     template <typename T>
-    auto get_attachment() -> std::shared_ptr<T>
+    auto get_attachment() const -> std::shared_ptr<T>
     {
         for (const auto& attachment : m_attachments)
         {

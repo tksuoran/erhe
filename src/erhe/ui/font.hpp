@@ -1,9 +1,9 @@
-#ifndef font_hpp_erhe_ui
-#define font_hpp_erhe_ui
+#pragma once
 
 #include "erhe/graphics/texture.hpp"
 #include "erhe/ui/bitmap.hpp"
 #include "erhe/ui/rectangle.hpp"
+
 #include <gsl/pointers>
 #include <gsl/span>
 
@@ -195,5 +195,3 @@ private:
 };
 
 } // namespace erhe::ui
-
-#endif

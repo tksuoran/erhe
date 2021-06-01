@@ -22,20 +22,20 @@ namespace
     constexpr float pi_minus_epsilon{glm::pi<float>() - epsilon};
 }
 
-auto unproject(mat4  world_from_clip,
-               vec3  window,
-               float depth_range_near,
-               float depth_range_far,
-               float viewport_x,
-               float viewport_y,
-               float viewport_width,
-               float viewport_height)
+auto unproject(const mat4  world_from_clip,
+               const vec3  window,
+               const float depth_range_near,
+               const float depth_range_far,
+               const float viewport_x,
+               const float viewport_y,
+               const float viewport_width,
+               const float viewport_height)
 -> vec3
 {
-    float viewport_center_x = viewport_x + viewport_width  * 0.5f;
-    float viewport_center_y = viewport_y + viewport_height * 0.5f;
-    float s                 = depth_range_far - depth_range_near;
-    float b                 = depth_range_near;
+    const float viewport_center_x = viewport_x + viewport_width  * 0.5f;
+    const float viewport_center_y = viewport_y + viewport_height * 0.5f;
+    const float s                 = depth_range_far - depth_range_near;
+    const float b                 = depth_range_near;
 
     vec4 ndc;
     ndc.x = (window.x - viewport_center_x) / (viewport_width * 0.5f);
@@ -43,7 +43,7 @@ auto unproject(mat4  world_from_clip,
     ndc.z = (window.z - b) / s;
     ndc.w = 1.0f;
 
-    vec4 world_homogeneous = world_from_clip * ndc;
+    const vec4 world_homogeneous = world_from_clip * ndc;
     if (world_homogeneous.w == 0.0f)
     {
         FATAL("w singularity");
@@ -67,43 +67,43 @@ auto unproject(mat4  world_from_clip,
 // x_window  =  viewport_width  * 0.5 * x_ndc + viewport_left
 // y_window  =  viewport_height * 0.5 * y_ndc + viewport_height
 // z_window  =  (depth_range_far - depth_range_near) * 0.5 * z_ndc + ((depth_range_near + depth_range_far) * 0.5)
-auto project_to_screen_space(mat4  clip_from_world,
-                             vec3  position_in_world,
-                             float depth_range_near,
-                             float depth_range_far,
-                             float viewport_x,
-                             float viewport_y,
-                             float viewport_width,
-                             float viewport_height)
+auto project_to_screen_space(const mat4  clip_from_world,
+                             const vec3  position_in_world,
+                             const float depth_range_near,
+                             const float depth_range_far,
+                             const float viewport_x,
+                             const float viewport_y,
+                             const float viewport_width,
+                             const float viewport_height)
 -> vec3
 {
-    float viewport_center_x = viewport_x + viewport_width  * 0.5f;
-    float viewport_center_y = viewport_y + viewport_height * 0.5f;
-    float s                 = depth_range_far - depth_range_near;
-    float b                 = depth_range_near;
+    const auto viewport_center_x = viewport_x + viewport_width  * 0.5f;
+    const auto viewport_center_y = viewport_y + viewport_height * 0.5f;
+    const auto s                 = depth_range_far - depth_range_near;
+    const auto b                 = depth_range_near;
 
-    vec4 clip = clip_from_world * vec4(position_in_world, 1.0f);
+    const vec4 clip = clip_from_world * vec4(position_in_world, 1.0f);
 
-    vec3 ndc(clip.x / clip.w,
-             clip.y / clip.w,
-             clip.z / clip.w);
+    const vec3 ndc(clip.x / clip.w,
+                   clip.y / clip.w,
+                   clip.z / clip.w);
 
     return vec3(viewport_width  * 0.5f * ndc.x + viewport_center_x,
                 viewport_height * 0.5f * ndc.y + viewport_center_y,
                 s * ndc.z + b);
 }
 
-auto create_frustum(float left, float right, float bottom, float top, float z_near, float z_far)
+auto create_frustum(const float left, const float right, const float bottom, const float top, const float z_near, const float z_far)
 -> mat4
 {
-    float x =  (2.0f  * z_near        ) / (right  - left  );
-    float y =  (2.0f  * z_near        ) / (top    - bottom);
-    float a =  (right + left          ) / (right  - left  );
-    float b =  (top   + bottom        ) / (top    - bottom);
-  //float c = -(z_far + z_near        ) / (z_far  - z_near); -- negative one to one
-    float c =   z_far                   / (z_near - z_far ); // zero to one
-  //float d = -(2.0f  * z_far * z_near) / (z_far  - z_near); -- negative one to one
-    float d = -(z_far * z_near        ) / (z_far  - z_near); // zero to one
+    const float x =  (2.0f  * z_near        ) / (right  - left  );
+    const float y =  (2.0f  * z_near        ) / (top    - bottom);
+    const float a =  (right + left          ) / (right  - left  );
+    const float b =  (top   + bottom        ) / (top    - bottom);
+  //const float c = -(z_far + z_near        ) / (z_far  - z_near); -- negative one to one
+    const float c =   z_far                   / (z_near - z_far ); // zero to one
+  //const float d = -(2.0f  * z_far * z_near) / (z_far  - z_near); -- negative one to one
+    const float d = -(z_far * z_near        ) / (z_far  - z_near); // zero to one
 
     mat4 result;
     result[0][0] = x;
@@ -125,49 +125,38 @@ auto create_frustum(float left, float right, float bottom, float top, float z_ne
     return result;
 }
 
-auto create_frustum_simple(float width, float height, float z_near, float z_far)
+auto create_frustum_simple(const float width, const float height, const float z_near, const float z_far)
 -> mat4
 {
     return create_frustum(-width / 2.0f, width / 2.0f, -height / 2.0f, height / 2.0f, z_near, z_far);
 }
 
-auto create_perspective(float fov_x, float fov_y, float z_near, float z_far)
+auto create_perspective(const float fov_x, const float fov_y, const float z_near, const float z_far)
 -> mat4
 {
-    fov_y = std::max(fov_y, epsilon);
-    fov_y = std::min(fov_y, pi_minus_epsilon);
-    fov_x = std::max(fov_x, epsilon);
-    fov_x = std::min(fov_x, pi_minus_epsilon);
-    auto  tan_x_half_angle = std::tan(fov_x * 0.5f);
-    auto  tan_y_half_angle = std::tan(fov_y * 0.5f);
-    float width            = 2.0f * z_near * tan_x_half_angle;
-    float height           = 2.0f * z_near * tan_y_half_angle;
+    const auto fov_y_clamped    = std::min(std::max(fov_y, epsilon), pi_minus_epsilon);
+    const auto fov_x_clamped    = std::min(std::max(fov_x, epsilon), pi_minus_epsilon);
+    const auto tan_x_half_angle = std::tan(fov_x_clamped * 0.5f);
+    const auto tan_y_half_angle = std::tan(fov_y_clamped * 0.5f);
+    const auto width            = 2.0f * z_near * tan_x_half_angle;
+    const auto height           = 2.0f * z_near * tan_y_half_angle;
     return create_frustum_simple(width, height, z_near, z_far);
 }
 
-auto create_perspective_vertical(float fov_y, float aspect_ratio, float z_near, float z_far)
+auto create_perspective_vertical(const float fov_y, const float aspect_ratio, const float z_near, const float z_far)
 -> mat4
 {
-    fov_y = std::max(fov_y, epsilon);
-    fov_y = std::min(fov_y, pi_minus_epsilon);
-    //float tan_half_angle = std::tan(fov_y * 0.5f);
-    //float height         = 2.0f * z_near * tan_half_angle;
-    //float width          = height * aspect_ratio;
-
-    //mat4 result = create_frustum_simple(width, height, z_near, z_far);
-    mat4 result = glm::perspective(fov_y, aspect_ratio, z_near, z_far);
-    return result;
+    const float fov_y_clamped  = std::min(std::max(fov_y, epsilon), pi_minus_epsilon);
+    return glm::perspective(fov_y_clamped, aspect_ratio, z_near, z_far);
 }
 
-auto create_perspective_horizontal(float fov_x, float aspect_ratio, float z_near, float z_far)
+auto create_perspective_horizontal(const float fov_x, const float aspect_ratio, const float z_near, const float z_far)
 -> mat4
 {
-    fov_x = std::max(fov_x, epsilon);
-    fov_x = std::min(fov_x, pi_minus_epsilon);
-    float tan_half_angle = std::tan(fov_x * 0.5f);
-    float width          = 2.0f * z_near * tan_half_angle;
-    float height         = width / aspect_ratio;
-
+    const auto fov_x_clamped  = std::min(std::max(fov_x, epsilon), pi_minus_epsilon);
+    const auto tan_half_angle = std::tan(fov_x_clamped * 0.5f);
+    const auto width          = 2.0f * z_near * tan_half_angle;
+    const auto height         = width / aspect_ratio;
     return create_frustum_simple(width, height, z_near, z_far);
 }
 
@@ -176,12 +165,12 @@ auto create_perspective_horizontal(float fov_x, float aspect_ratio, float z_near
 // The perspective control value p is not restricted to integer values.
 // The view plane is defined by z.
 // Objects on the view plane will have a homogeneous w value of 1.0 after the transform.
-auto create_projection(float s,          // Stereo-scopic 3D eye separation
-                       float p,          // Perspective (0 == parallel, 1 == perspective)
-                       float n, float f, // Near and z_far z clip depths
-                       float w, float h, // Width and height of viewport (at depth vz)
-                       vec3  v,          // Center of viewport
-                       vec3  e)          // Center of projection (eye position)
+auto create_projection(const float s,                // Stereo-scopic 3D eye separation
+                       const float p,                // Perspective (0 == parallel, 1 == perspective)
+                       const float n, const float f, // Near and z_far z clip depths
+                       const float w, const float h, // Width and height of viewport (at depth vz)
+                       const vec3  v,                // Center of viewport
+                       const vec3  e)                // Center of projection (eye position)
 -> mat4
 {
     mat4 result;
@@ -213,7 +202,7 @@ auto create_projection(float s,          // Stereo-scopic 3D eye separation
     return result;
 }
 
-auto create_orthographic(float left, float right, float bottom, float top, float z_near, float z_far)
+auto create_orthographic(const float left, const float right, const float bottom, const float top, const float z_near, const float z_far)
 -> mat4
 {
     mat4 result;
@@ -236,14 +225,14 @@ auto create_orthographic(float left, float right, float bottom, float top, float
     return result;
 }
 
-auto create_orthographic_centered(float width, float height, float z_near, float z_far)
+auto create_orthographic_centered(const float width, const float height, const float z_near, const float z_far)
 -> mat4
 {
     // TODO Check bottom and top
     return create_orthographic(-width / 2, width / 2, height / 2, -height / 2, z_near, z_far);
 }
 
-auto create_translation(vec2 t)
+auto create_translation(const vec2 t)
 -> mat4
 {
     mat4 result;
@@ -266,7 +255,7 @@ auto create_translation(vec2 t)
     return result;
 }
 
-auto create_translation(glm::vec3 t)
+auto create_translation(const vec3 t)
 -> mat4
 {
     mat4 result;
@@ -289,7 +278,7 @@ auto create_translation(glm::vec3 t)
     return result;
 }
 
-auto create_translation(float x, float y, float z)
+auto create_translation(const float x, const float y, const float z)
 -> mat4
 {
     mat4 result;
@@ -312,15 +301,15 @@ auto create_translation(float x, float y, float z)
     return result;
 }
 
-auto create_rotation(float angle_radians, vec3 axis)
+auto create_rotation(const float angle_radians, const vec3 axis)
 -> mat4
 {
-    float rsin = std::sin(angle_radians);
-    float rcos = std::cos(angle_radians);
+    const float rsin = std::sin(angle_radians);
+    const float rcos = std::cos(angle_radians);
 
-    float u = axis.x;
-    float v = axis.y;
-    float w = axis.z;
+    const float u = axis.x;
+    const float v = axis.y;
+    const float w = axis.z;
 
     mat4 result;
 
@@ -350,7 +339,7 @@ auto create_rotation(float angle_radians, vec3 axis)
     return result;
 }
 
-auto create_scale(float x, float y, float z)
+auto create_scale(const float x, const float y, const float z)
 -> mat4
 {
     mat4 result;
@@ -373,7 +362,7 @@ auto create_scale(float x, float y, float z)
     return result;
 }
 
-auto create_scale(float s)
+auto create_scale(const float s)
 -> mat4
 {
     mat4 result(1);
@@ -396,7 +385,7 @@ auto create_scale(float s)
     return result;
 }
 
-auto create_look_at(vec3 eye, vec3 center, vec3 up0)
+auto create_look_at(const vec3 eye, const vec3 center, const vec3 up0)
 -> mat4
 {
 #if 0
@@ -408,14 +397,10 @@ auto create_look_at(vec3 eye, vec3 center, vec3 up0)
         return mat4(1);
     }
 
-    vec3 back = glm::normalize(eye - center);
-    if (up0 == back)
-    {
-        up0 = min_axis(back);
-    }
-
-    vec3 right = glm::normalize(glm::cross(up0, back));
-    vec3 up    = glm::cross(back, right);
+    const vec3 back  = glm::normalize(eye - center);
+    const vec3 up1   = (up0 == back) ? min_axis(back) : up0;
+    const vec3 right = glm::normalize(glm::cross(up1, back));
+    const vec3 up    = glm::cross(back, right);
 
     mat4 result;
     result[0] = vec4(right, 0.0f);
@@ -426,7 +411,7 @@ auto create_look_at(vec3 eye, vec3 center, vec3 up0)
 #endif
 }
 
-auto degrees_to_radians(float degrees)
+auto degrees_to_radians(const float degrees)
 -> float
 {
     return degrees * glm::pi<float>() / 180.0f;
@@ -601,27 +586,15 @@ void rgb_to_hsv(float r, float g, float b, float& h, float& s, float& v)
     }
 }
 
-auto srgb_to_linear(float cs)
+auto srgb_to_linear(const float cs)
 -> float
 {
-    float cl = 0.0f;
-
-    cs = std::max(0.0f, cs);
-    cs = std::min(cs, 1.0f);
-
-    if (cs <= 0.04045f)
-    {
-        cl = cs / 12.92f;
-    }
-    else
-    {
-        cl = std::pow((cs + 0.055f) / 1.055f, 2.4f);
-    }
-
-    return cl;
+    float cs_clamped = std::min(std::max(0.0f, cs), 1.0f);
+    return (cs_clamped <= 0.04045f) ? cs_clamped / 12.92f
+                                    : std::pow((cs_clamped + 0.055f) / 1.055f, 2.4f);
 }
 
-auto linear_rgb_to_srgb(float cl)
+auto linear_rgb_to_srgb(const float cl)
 -> float
 {
     float res;
@@ -644,7 +617,7 @@ auto linear_rgb_to_srgb(float cl)
     return res;
 }
 
-auto srgb_to_linear_rgb(vec3 srgb)
+auto srgb_to_linear_rgb(const vec3 srgb)
 -> vec3
 {
     return vec3{srgb_to_linear(srgb.x),
@@ -652,7 +625,7 @@ auto srgb_to_linear_rgb(vec3 srgb)
                 srgb_to_linear(srgb.z)};
 }
 
-auto linear_rgb_to_srgb(vec3 linear_rgb)
+auto linear_rgb_to_srgb(const vec3 linear_rgb)
 -> vec3
 {
     return vec3{linear_rgb_to_srgb(linear_rgb.x),
@@ -660,19 +633,19 @@ auto linear_rgb_to_srgb(vec3 linear_rgb)
                 linear_rgb_to_srgb(linear_rgb.z)};
 }
 
-void cartesian_to_heading_elevation(vec3 v, float& out_elevation, float& out_heading)
+void cartesian_to_heading_elevation(const vec3 v, float& out_elevation, float& out_heading)
 {
     out_elevation = -std::asin(v.y);
     out_heading   =  std::atan2(v.x, v.z);
 }
 
-void cartesian_to_spherical_iso(vec3 v, float& out_theta, float& out_phi)
+void cartesian_to_spherical_iso(const vec3 v, float& out_theta, float& out_phi)
 {
     out_theta = std::acos(v.z);
     out_phi   = std::atan2(v.y, v.x);
 }
 
-auto spherical_to_cartesian_iso(float theta, float phi)
+auto spherical_to_cartesian_iso(const float theta, const float phi)
 -> vec3
 {
     return vec3{std::sin(theta) * std::cos(phi),
@@ -680,85 +653,87 @@ auto spherical_to_cartesian_iso(float theta, float phi)
                 std::cos(theta)};
 }
 
-auto closest_points(glm::vec3 P0, glm::vec3 P1, glm::vec3 Q0, glm::vec3 Q1, glm::vec3& out_PC, glm::vec3& out_QC)
+auto closest_points(const glm::vec3 P0, const glm::vec3 P1, const glm::vec3 Q0, const glm::vec3 Q1,
+                    glm::vec3& out_PC, glm::vec3& out_QC)
 -> bool
 {
-    glm::vec3 u  = P1 - P0;
-    glm::vec3 v  = Q1 - Q0;
-    glm::vec3 w0 = P0 - Q0;
-    float     a  = glm::dot(u, u);
-    float     b  = glm::dot(u, v);
-    float     c  = glm::dot(v, v);
-    float     d  = glm::dot(u, w0);
-    float     e  = glm::dot(v, w0);
-    float     denominator = (a * c) - (b * b);
+    const glm::vec3 u  = P1 - P0;
+    const glm::vec3 v  = Q1 - Q0;
+    const glm::vec3 w0 = P0 - Q0;
+    const float     a  = glm::dot(u, u);
+    const float     b  = glm::dot(u, v);
+    const float     c  = glm::dot(v, v);
+    const float     d  = glm::dot(u, w0);
+    const float     e  = glm::dot(v, w0);
+    const float     denominator = (a * c) - (b * b);
 
     if (denominator < 0.000001f)
     {
         return false;
     }
 
-    float sC = ((b * e) - (c * d)) / denominator;
-    float tC = ((a * e) - (b * d)) / denominator;
+    const float sC = ((b * e) - (c * d)) / denominator;
+    const float tC = ((a * e) - (b * d)) / denominator;
     out_PC = P0 + sC * u;
     out_QC = Q0 + tC * v;
 
     return true;
 }
 
-auto closest_points(glm::vec2 P0, glm::vec2 P1, glm::vec2 Q0, glm::vec2 Q1, glm::vec2& out_PC, glm::vec2& out_QC)
+auto closest_points(const glm::vec2 P0, const glm::vec2 P1, const glm::vec2 Q0, const glm::vec2 Q1,
+                    glm::vec2& out_PC, glm::vec2& out_QC)
 -> bool
 {
-    glm::vec2 u  = P1 - P0;
-    glm::vec2 v  = Q1 - Q0;
-    glm::vec2 w0 = P0 - Q0;
-    float     a  = glm::dot(u, u);
-    float     b  = glm::dot(u, v);
-    float     c  = glm::dot(v, v);
-    float     d  = glm::dot(u, w0);
-    float     e  = glm::dot(v, w0);
-    float     denominator = (a * c) - (b * b);
+    const glm::vec2 u  = P1 - P0;
+    const glm::vec2 v  = Q1 - Q0;
+    const glm::vec2 w0 = P0 - Q0;
+    const float     a  = glm::dot(u, u);
+    const float     b  = glm::dot(u, v);
+    const float     c  = glm::dot(v, v);
+    const float     d  = glm::dot(u, w0);
+    const float     e  = glm::dot(v, w0);
+    const float     denominator = (a * c) - (b * b);
 
     if (denominator < epsilon)
     {
         return false;
     }
 
-    float sC = ((b * e) - (c * d)) / denominator;
-    float tC = ((a * e) - (b * d)) / denominator;
+    const float sC = ((b * e) - (c * d)) / denominator;
+    const float tC = ((a * e) - (b * d)) / denominator;
     out_PC = P0 + sC * u;
     out_QC = Q0 + tC * v;
 
     return true;
 }
 
-auto closest_point(glm::vec2 P0, glm::vec2 P1, glm::vec2 Q, glm::vec2& out_PC)
+auto closest_point(const glm::vec2 P0, const glm::vec2 P1, const glm::vec2 Q, glm::vec2& out_PC)
 -> bool
 {
-    glm::vec2 u = P1 - P0;
+    const glm::vec2 u = P1 - P0;
     if (dot(u, u) < epsilon)
     {
         return false;
     }
-    float t = glm::dot(u, Q - P0) / dot(u, u);
+    const float t = glm::dot(u, Q - P0) / dot(u, u);
     out_PC = P0 + t * u;
     return true;
 }
 
-auto closest_point(glm::vec3 P0, glm::vec3 P1, glm::vec3 Q, glm::vec3& out_PC)
+auto closest_point(const glm::vec3 P0, const glm::vec3 P1, const glm::vec3 Q, glm::vec3& out_PC)
 -> bool
 {
-    glm::vec3 u = P1 - P0;
+    const glm::vec3 u = P1 - P0;
     if (dot(u, u) < epsilon)
     {
         return false;
     }
-    float t = glm::dot(u, Q - P0) / dot(u, u);
+    const float t = glm::dot(u, Q - P0) / dot(u, u);
     out_PC = P0 + t * u;
     return true;
 }
 
-auto line_point_distance(glm::vec2 P0, glm::vec2 P1, glm::vec2 Q, float& distance)
+auto line_point_distance(const glm::vec2 P0, const glm::vec2 P1, const glm::vec2 Q, float& distance)
 -> bool
 {
     glm::vec2 PC;
@@ -770,7 +745,7 @@ auto line_point_distance(glm::vec2 P0, glm::vec2 P1, glm::vec2 Q, float& distanc
     return true;
 }
 
-auto line_point_distance(glm::vec3 P0, glm::vec3 P1, glm::vec3 Q, float& distance)
+auto line_point_distance(const glm::vec3 P0, const glm::vec3 P1, const glm::vec3 Q, float& distance)
 -> bool
 {
     glm::vec3 PC;
@@ -782,9 +757,9 @@ auto line_point_distance(glm::vec3 P0, glm::vec3 P1, glm::vec3 Q, float& distanc
     return true;
 }
 
-auto intersect_plane(glm::vec3 n, glm::vec3 p0, glm::vec3 l0, glm::vec3 l, float& t) -> bool
+auto intersect_plane(const glm::vec3 n, const glm::vec3 p0, const glm::vec3 l0, const glm::vec3 l, float& t) -> bool
 {
-    float denominator = glm::dot(n, l);
+    const float denominator = glm::dot(n, l);
     if (std::abs(denominator) < epsilon)
     {
         return false;
@@ -793,23 +768,23 @@ auto intersect_plane(glm::vec3 n, glm::vec3 p0, glm::vec3 l0, glm::vec3 l, float
     return true;
 }
 
-auto project_point_to_plane(glm::vec3 n, glm::vec3 p, glm::vec3& q) -> bool
+auto project_point_to_plane(const glm::vec3 n, const glm::vec3 p, glm::vec3& in_out_q) -> bool
 {
     // Q = P - Pn_v
     // v = P - S
     // Pn_v = dot(v, n) / dot(n, n)
     //glm::vec3 v           = q - p;
-    float     nominator   = dot(n, q - p);
-    float     denominator = dot(n, n);
+    const float     nominator   = dot(n, in_out_q - p);
+    const float     denominator = dot(n, n);
     if (std::abs(denominator) < epsilon)
     {
         return false;
     }
-    float     t            = nominator / denominator;
-    glm::vec3 Pn_v         = t * n;
-    glm::vec3 projected_q1 = q - Pn_v;
+    const float     t            = nominator / denominator;
+    const glm::vec3 Pn_v         = t * n;
+    const glm::vec3 projected_q1 = in_out_q - Pn_v;
 
-    q = projected_q1;
+    in_out_q = projected_q1;
     return true;
 }
 

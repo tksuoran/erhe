@@ -9,7 +9,7 @@ namespace editor
 {
 
 class Selection_tool;
-class Scene_manager;
+class Scene_root;
 
 class Physics_window
     : public erhe::components::Component
@@ -25,7 +25,7 @@ public:
     void connect() override;
 
     // Implements Tool
-    void render(Render_context& render_context) override;
+    void render(const Render_context& render_context) override;
     auto state() const -> State override;
     auto description() -> const char* override { return c_name; }
 
@@ -34,8 +34,8 @@ public:
 
 private:
     std::shared_ptr<Selection_tool> m_selection_tool;
-    std::shared_ptr<Scene_manager>  m_scene_manager;
-    bool                            m_debug_draw{false};
+    std::shared_ptr<Scene_root>     m_scene_root;
+    bool                            m_debug_draw{true};
 };
 
 } // namespace editor

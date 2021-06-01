@@ -1,5 +1,4 @@
-#ifndef texture_bindings_hpp_erhe_graphics
-#define texture_bindings_hpp_erhe_graphics
+#pragma once
 
 #include <array>
 
@@ -39,5 +38,3 @@ auto operator!=(const Texture_bindings& lhs, const Texture_bindings& rhs) noexce
 -> bool;
 
 } // namespace erhe::graphics
-
-#endif

@@ -77,9 +77,9 @@ Sqrt3_subdivision::Sqrt3_subdivision(Geometry& src, Geometry& destination)
 
 auto sqrt3_subdivision(Geometry& source) -> Geometry
 {
-    Geometry result(fmt::format("sqrt3({})", source.name));
-    Sqrt3_subdivision operation(source, result);
-    return result;
+    return Geometry(fmt::format("sqrt3({})", source.name), [&source](auto& result) {
+        Sqrt3_subdivision operation(source, result);
+    });
 }
 
 

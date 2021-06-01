@@ -1,8 +1,10 @@
 #include "tools/fly_camera_tool.hpp"
+#include "editor.hpp"
 #include "log.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "erhe/scene/camera.hpp"
+#include "erhe/scene/scene.hpp"
 
 #include "imgui.h"
 
@@ -10,22 +12,46 @@ namespace editor
 {
 
 using namespace std;
+using namespace erhe::scene;
 using namespace erhe::toolkit;
 
-auto Fly_camera_tool::state() const -> Tool::State
+Fly_camera_tool::Fly_camera_tool()
+    : erhe::components::Component{c_name}
+{
+}
+
+Fly_camera_tool::~Fly_camera_tool() = default;
+
+auto Fly_camera_tool::state() const -> State
 {
     return m_state;
 }
 
 void Fly_camera_tool::connect()
 {
-    m_scene_manager = require<Scene_manager>();
+    m_scene_root = require<Scene_root>();
+    require<Editor>();
 }
 
 void Fly_camera_tool::initialize_component()
 {
-    auto& camera = m_scene_manager->camera();
-    m_camera_controller.set_frame(camera.node().get());
+    auto editor = get<Editor>();
+    if (!editor)
+    {
+        return;
+    }
+
+    auto camera = editor->get_view_camera();
+    if (!camera)
+    {
+        return;
+    }
+    m_camera_controller.set_frame(camera->node().get());
+}
+
+auto Fly_camera_tool::description() -> const char*
+{
+    return c_name;
 }
 
 void Fly_camera_tool::x_pos_control(bool pressed)
@@ -60,22 +86,22 @@ void Fly_camera_tool::z_pos_control(bool pressed)
 
 auto Fly_camera_tool::update(Pointer_context& pointer_context) -> bool
 {
-    if ((m_state == State::passive) &&
+    if ((m_state == State::Passive) &&
         pointer_context.mouse_button[Mouse_button_left].pressed &&
         !pointer_context.hover_tool)
     {
         return begin(pointer_context);
     }
-    if ((m_state != State::passive) && pointer_context.mouse_button[Mouse_button_left].released)
+    if ((m_state != State::Passive) && pointer_context.mouse_button[Mouse_button_left].released)
     {
         return end(pointer_context);
     }
-    if ((m_state == State::ready) && pointer_context.mouse_moved)
+    if ((m_state == State::Ready) && pointer_context.mouse_moved)
     {
         log_tools.trace("Fly camera state = Active\n");
-        m_state = State::active;
+        m_state = State::Active;
     }
-    if (m_state != State::active)
+    if (m_state != State::Active)
     {
         // We might be ready, but not consuming event yet
         return false;
@@ -124,7 +150,7 @@ auto Fly_camera_tool::begin(Pointer_context& pointer_context) -> bool
     }
 
     log_tools.trace("Fly camera state = Ready\n");
-    m_state   = State::ready;
+    m_state   = State::Ready;
     m_mouse_x = pointer_context.mouse_x;
     m_mouse_y = pointer_context.mouse_y;
     return true;
@@ -132,12 +158,12 @@ auto Fly_camera_tool::begin(Pointer_context& pointer_context) -> bool
 
 auto Fly_camera_tool::end(Pointer_context&) -> bool
 {
-    if (m_state == State::passive)
+    if (m_state == State::Passive)
     {
         return false;
     }
 
-    bool consume_event = m_state == State::active;
+    bool consume_event = m_state == State::Active;
     cancel_ready();
     return consume_event;
 }
@@ -145,7 +171,7 @@ auto Fly_camera_tool::end(Pointer_context&) -> bool
 void Fly_camera_tool::cancel_ready()
 {
     log_tools.trace("Fly camera state = Inactive\n");
-    m_state = State::passive;
+    m_state = State::Passive;
 }
 
 void Fly_camera_tool::update_fixed_step()

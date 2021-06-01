@@ -6,14 +6,14 @@ namespace erhe::geometry
 {
 
 template <typename T>
-void Polygon::copy_to_corners(Polygon_id                         this_polygon_id,
+void Polygon::copy_to_corners(const Polygon_id                   this_polygon_id,
                               const Geometry&                    geometry,
                               Property_map<Corner_id, T>&        corner_attribute,
                               const Property_map<Polygon_id, T>& polygon_attribute) const
 {
     ZoneScoped;
 
-    T polygon_value = polygon_attribute.get(this_polygon_id);
+    const T polygon_value = polygon_attribute.get(this_polygon_id);
     for_each_corner_const(geometry, [&corner_attribute, polygon_value](auto& i) {
         corner_attribute.put(i.corner_id, polygon_value);
     });
@@ -24,7 +24,7 @@ void Polygon::smooth_normalize(const Geometry&                            geomet
                                Property_map<Corner_id, T>&                corner_attribute,
                                const Property_map<Polygon_id, T>&         polygon_attribute,
                                const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-                               float                                      cos_max_smoothing_angle) const
+                               const float                                cos_max_smoothing_angle) const
 {
     ZoneScoped;
 
@@ -33,8 +33,8 @@ void Polygon::smooth_normalize(const Geometry&                            geomet
          polygon_corner_id < end;
          ++polygon_corner_id)
     {
-        Corner_id corner_id = geometry.polygon_corners[polygon_corner_id];
-        const Corner& corner = geometry.corners[corner_id];
+        const Corner_id corner_id = geometry.polygon_corners[polygon_corner_id];
+        const Corner&   corner    = geometry.corners[corner_id];
         corner.smooth_normalize(corner_id,
                                 geometry,
                                 corner_attribute,
@@ -58,8 +58,8 @@ void Polygon::smooth_average(const Geometry&                           geometry,
          polygon_corner_id < end;
          ++polygon_corner_id)
     {
-        Corner_id corner_id = geometry.polygon_corners[polygon_corner_id];
-        const Corner& corner = geometry.corners[corner_id];
+        const Corner_id corner_id = geometry.polygon_corners[polygon_corner_id];
+        const Corner&   corner    = geometry.corners[corner_id];
         corner.smooth_average(corner_id,
                               geometry,
                               new_corner_attribute,

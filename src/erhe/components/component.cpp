@@ -2,53 +2,67 @@
 #include "erhe/components/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+#define ERHE_TRACY_NO_GL 1
+#include "erhe/toolkit/tracy_client.hpp"
+
 namespace erhe::components
 {
 
 Component::Component(const char* name)
     : m_name{name}
 {
+    ZoneScoped;
 }
 
-void Component::initialization_depends_on(const std::shared_ptr<Component>& a)
+void Component::initialization_depends_on(const std::shared_ptr<Component>& dependency)
 {
-    if (a)
+    ZoneScoped;
+
+    if (!dependency)
     {
-        if (!a->is_registered())
-        {
-            log_components.error("Component {} dependency {} has not been registered as a Component",
-                                    name(),
-                                    a->name());
-            FATAL("Dependency has not been registered");
-        }
-        m_dependencies.insert(a);
+        return;
     }
+
+    if (!dependency->is_registered())
+    {
+        log_components.error("Component {} dependency {} has not been registered as a Component",
+                             name(),
+                             dependency->name());
+        FATAL("Dependency has not been registered");
+    }
+    m_dependencies.insert(dependency);
 }
 
-auto Component::is_initialized() const
--> bool
+void Component::set_connected()
 {
-    return m_initialized;
+    m_state = Component_state::Connected;
 }
 
-void Component::initialize()
+void Component::set_initializing()
 {
-    initialize_component();
-    m_initialized = true;
+    m_state = Component_state::Initializing;
 }
 
-auto Component::ready() const
+void Component::set_ready()
+{
+    m_state = Component_state::Ready;
+}
+
+auto Component::get_state() const
+-> Component_state
+{
+    return m_state;
+}
+
+auto Component::is_ready() const
 -> bool
 {
     return m_dependencies.empty();
 }
 
-void Component::remove_dependencies(const std::set<std::shared_ptr<Component>>& remove_set)
+void Component::remove_dependency(const std::shared_ptr<Component>& dependency)
 {
-    for (const auto& dependency : remove_set)
-    {
-        m_dependencies.erase(dependency);
-    }
+    m_dependencies.erase(dependency);
 }
 
 } // namespace erhe::components

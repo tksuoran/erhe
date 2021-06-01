@@ -1,4 +1,7 @@
 #include "renderers/shadow_renderer.hpp"
+#include "gl_context_provider.hpp"
+#include "renderers/mesh_memory.hpp"
+#include "renderers/program_interface.hpp"
 #include "scene/scene_manager.hpp"
 
 #include "erhe/graphics/buffer.hpp"
@@ -42,8 +45,12 @@ void Shadow_renderer::connect()
 {
     base_connect(this);
 
+    require<Gl_context_provider>();
+    require<Program_interface>();
+    require<Programs>();
+
     m_pipeline_state_tracker = require<OpenGL_state_tracker>();
-    m_scene_manager          = require<Scene_manager>();
+    m_mesh_memory            = require<Mesh_memory>();
 }
 
 static constexpr const char* c_shadow_renderer_initialize_component = "Shadow_renderer::initialize_component()";
@@ -52,6 +59,8 @@ void Shadow_renderer::initialize_component()
 {
     ZoneScoped;
 
+    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
                          static_cast<GLsizei>(strlen(c_shadow_renderer_initialize_component)),
@@ -59,12 +68,12 @@ void Shadow_renderer::initialize_component()
 
     create_frame_resources(1, 256, 256, 1000, 1000);
 
-    m_vertex_input = std::make_unique<Vertex_input_state>(programs()->attribute_mappings,
-                                                          *m_scene_manager->vertex_format(),
-                                                          m_scene_manager->vertex_buffer(),
-                                                          m_scene_manager->index_buffer());
+    m_vertex_input = std::make_unique<Vertex_input_state>(get<Program_interface>()->attribute_mappings,
+                                                          *m_mesh_memory->vertex_format(),
+                                                          m_mesh_memory->vertex_buffer(),
+                                                          m_mesh_memory->index_buffer());
 
-    m_pipeline.shader_stages  = programs()->depth.get();
+    m_pipeline.shader_stages  = get<Programs>()->depth.get();
     m_pipeline.vertex_input   = m_vertex_input.get();
     m_pipeline.input_assembly = &Input_assembly_state::triangles;
     m_pipeline.rasterization  = &Rasterization_state::cull_mode_none; //cull_mode_back_ccw;
@@ -154,7 +163,7 @@ void Shadow_renderer::render(Layer_collection& layers,
             bind_camera_buffer();
 
             gl::multi_draw_elements_indirect(m_pipeline.input_assembly->primitive_topology,
-                                             m_scene_manager->index_type(),
+                                             m_mesh_memory->index_type(),
                                              reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
                                              static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
                                              static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command)));

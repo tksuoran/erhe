@@ -1,17 +1,20 @@
 #include "tools/trs_tool.hpp"
+#include "gl_context_provider.hpp"
 #include "log.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/insert_operation.hpp"
 #include "renderers/line_renderer.hpp"
+#include "renderers/mesh_memory.hpp"
 #include "renderers/text_renderer.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe/geometry/shapes/box.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
+#include "erhe/graphics/buffer.hpp"
 #include "erhe/physics/rigid_body.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/camera.hpp"
@@ -32,7 +35,19 @@ using namespace erhe::toolkit;
 using namespace erhe::geometry;
 using namespace erhe::geometry::shapes;
 
-auto Trs_tool::state() const -> Tool::State
+Trs_tool::Trs_tool()
+    : erhe::components::Component{c_name}
+{
+}
+
+Trs_tool::~Trs_tool() = default;
+
+auto Trs_tool::description() -> const char*
+{
+    return c_name;
+}
+
+auto Trs_tool::state() const -> State
 {
     return m_state;
 }
@@ -67,8 +82,8 @@ void Trs_tool::set_node(std::shared_ptr<Node> node)
     if (m_node_physics)
     {
         // Promote static to kinematic if we try to move object
-        auto& rigid_body     = m_node_physics->rigid_body;
-        auto  collision_mode = rigid_body.get_collision_mode();
+        auto&      rigid_body     = m_node_physics->rigid_body;
+        const auto collision_mode = rigid_body.get_collision_mode();
         if (collision_mode == erhe::physics::Rigid_body::Collision_mode::e_static)
         {
             rigid_body.set_collision_mode(erhe::physics::Rigid_body::Collision_mode::e_kinematic);
@@ -78,19 +93,19 @@ void Trs_tool::set_node(std::shared_ptr<Node> node)
 
     if (m_target_node)
     {
-        m_visualization.root = m_target_node.get();
-        m_visualization.tool_node.parent = nullptr; m_visualization.root;
+        m_visualization.root             = m_target_node.get();
+        m_visualization.tool_node.parent = nullptr;
     }
     else
     {
-        m_visualization.root = nullptr;
+        m_visualization.root             = nullptr;
         m_visualization.tool_node.parent = nullptr;
     }
 
     update_visibility();
 }
 
-void Trs_tool::Visualization::update_scale(vec3 view_position_in_world)
+void Trs_tool::Visualization::update_scale(const vec3 view_position_in_world)
 {
     ZoneScoped;
 
@@ -98,17 +113,18 @@ void Trs_tool::Visualization::update_scale(vec3 view_position_in_world)
     {
         return;
     }
-    vec3 position_in_world = root->position_in_world();
+
+    const vec3 position_in_world = root->position_in_world();
     view_distance = length(position_in_world - vec3(view_position_in_world));
     update_transforms();
 }
 
-void Trs_tool::Visualization::update_visibility(bool visible, Handle active_handle)
+void Trs_tool::Visualization::update_visibility(const bool visible, const Handle active_handle)
 {
     ZoneScoped;
 
     constexpr const uint64_t visible_mask = erhe::scene::Mesh::c_visibility_tool | erhe::scene::Mesh::c_visibility_id;
-    bool show_all = visible && (active_handle == Handle::e_handle_none);
+    const bool show_all = visible && (active_handle == Handle::e_handle_none);
     y_arrow_cylinder_mesh->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_y ) || show_all) ? visible_mask : 0;
     z_arrow_cylinder_mesh->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_z ) || show_all) ? visible_mask : 0;
     xy_box_mesh          ->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_xy) || show_all) ? visible_mask : 0;
@@ -144,56 +160,52 @@ void Trs_tool::Visualization::update_visibility(bool visible, Handle active_hand
     z_rotate_ring_mesh   ->primitives.front().material = (active_handle == Handle::e_handle_rotate_z    ) ? highlight_material : z_material;
 }
 
-void Trs_tool::Visualization::initialize(Scene_manager* scene_manager)
+void Trs_tool::Visualization::initialize(Mesh_memory& mesh_memory, Scene_root& scene_root)
 {
-    if (scene_manager == nullptr)
-    {
-        return;
-    }
-    x_material         = make_shared<Material>("x",         vec4(1.00f, 0.00f, 0.0f, 1.0f));
-    y_material         = make_shared<Material>("y",         vec4(0.23f, 1.00f, 0.0f, 1.0f));
-    z_material         = make_shared<Material>("z",         vec4(0.00f, 0.23f, 1.0f, 1.0f));
-    highlight_material = make_shared<Material>("highlight", vec4(1.00f, 0.70f, 0.1f, 1.0f));
+    x_material         = scene_root.make_material("x",         vec4(1.00f, 0.00f, 0.0f, 1.0f));
+    y_material         = scene_root.make_material("y",         vec4(0.23f, 1.00f, 0.0f, 1.0f));
+    z_material         = scene_root.make_material("z",         vec4(0.00f, 0.23f, 1.0f, 1.0f));
+    highlight_material = scene_root.make_material("highlight", vec4(1.00f, 0.70f, 0.1f, 1.0f));
 
-    scene_manager->add(x_material);
-    scene_manager->add(y_material);
-    scene_manager->add(z_material);
-    scene_manager->add(highlight_material);
-
-    float arrow_cylinder_length    = 2.5f;
-    float arrow_cone_length        = 1.0f;
-    float arrow_cylinder_radius    = 0.08f;
-    float arrow_cone_radius        = 0.35f;
-    float box_half_thickness       = 0.02f;
-    float box_length               = 1.0f;
-    float arrow_tip                = arrow_cylinder_length + arrow_cone_length;
-    float rotate_ring_major_radius = 4.0f;
-    float rotate_ring_minor_radius = 0.25f;
-    auto  arrow_cylinder_geometry  = make_cylinder(0.0, arrow_cylinder_length, arrow_cylinder_radius, true, true, 32, 4);
-    auto  arrow_cone_geometry      = make_cone    (arrow_cylinder_length, arrow_tip, arrow_cone_radius, true, 32, 4);
-    auto  box_geometry             = make_box     (0.0, box_length, 0.0, box_length, -box_half_thickness, box_half_thickness);
-    auto  rotate_ring_geometry     = make_torus   (rotate_ring_major_radius, rotate_ring_minor_radius, 80, 32);
+    constexpr const float arrow_cylinder_length    = 2.5f;
+    constexpr const float arrow_cone_length        = 1.0f;
+    constexpr const float arrow_cylinder_radius    = 0.08f;
+    constexpr const float arrow_cone_radius        = 0.35f;
+    constexpr const float box_half_thickness       = 0.02f;
+    constexpr const float box_length               = 1.0f;
+    constexpr const float arrow_tip                = arrow_cylinder_length + arrow_cone_length;
+    constexpr const float rotate_ring_major_radius = 4.0f;
+    constexpr const float rotate_ring_minor_radius = 0.25f;
+    const auto arrow_cylinder_geometry  = make_cylinder(0.0, arrow_cylinder_length, arrow_cylinder_radius, true, true, 32, 4);
+    const auto arrow_cone_geometry      = make_cone    (arrow_cylinder_length, arrow_tip, arrow_cone_radius, true, 32, 4);
+    const auto box_geometry             = make_box     (0.0, box_length, 0.0, box_length, -box_half_thickness, box_half_thickness);
+    auto       rotate_ring_geometry     = make_torus   (rotate_ring_major_radius, rotate_ring_minor_radius, 80, 32);
     // Torus geometry is on xz plane, swap x and y to make it yz plane
     rotate_ring_geometry.transform(mat4_swap_xy);
     rotate_ring_geometry.reverse_polygons();
-    auto arrow_cylinder_pg = scene_manager->make_primitive_geometry(arrow_cylinder_geometry);
-    auto arrow_cone_pg     = scene_manager->make_primitive_geometry(arrow_cone_geometry    );
-    auto box_pg            = scene_manager->make_primitive_geometry(box_geometry           );
-    auto rotate_ring_pg    = scene_manager->make_primitive_geometry(rotate_ring_geometry   );
-    auto tool_layer        = scene_manager->tool_layer();
-    vec3 pos{0.0f, 1.0f, 0.0f};
-    x_arrow_cylinder_mesh  = scene_manager->make_mesh_node("X arrow cylinder", arrow_cylinder_pg, x_material, tool_layer, &tool_node, pos);
-    x_arrow_cone_mesh      = scene_manager->make_mesh_node("X arrow cone",     arrow_cone_pg,     x_material, tool_layer, &tool_node, pos);
-    y_arrow_cylinder_mesh  = scene_manager->make_mesh_node("Y arrow cylinder", arrow_cylinder_pg, y_material, tool_layer, &tool_node, pos);
-    y_arrow_cone_mesh      = scene_manager->make_mesh_node("Y arrow cone",     arrow_cone_pg,     y_material, tool_layer, &tool_node, pos);
-    z_arrow_cylinder_mesh  = scene_manager->make_mesh_node("Z arrow cylinder", arrow_cylinder_pg, z_material, tool_layer, &tool_node, pos);
-    z_arrow_cone_mesh      = scene_manager->make_mesh_node("Z arrow cone",     arrow_cone_pg,     z_material, tool_layer, &tool_node, pos);
-    xy_box_mesh            = scene_manager->make_mesh_node("XY box",           box_pg,            z_material, tool_layer, &tool_node, pos);
-    xz_box_mesh            = scene_manager->make_mesh_node("XZ box",           box_pg,            y_material, tool_layer, &tool_node, pos);
-    yz_box_mesh            = scene_manager->make_mesh_node("YZ box",           box_pg,            x_material, tool_layer, &tool_node, pos);
-    x_rotate_ring_mesh     = scene_manager->make_mesh_node("X rotate ring",    rotate_ring_pg,    x_material, tool_layer, &tool_node, pos);
-    y_rotate_ring_mesh     = scene_manager->make_mesh_node("Y rotate ring",    rotate_ring_pg,    y_material, tool_layer, &tool_node, pos);
-    z_rotate_ring_mesh     = scene_manager->make_mesh_node("Z rotate ring",    rotate_ring_pg,    z_material, tool_layer, &tool_node, pos);
+
+    erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
+    Primitive_build_context primitive_build_context{buffer_transfer_queue,
+                                                    mesh_memory.vertex_format_info(),
+                                                    mesh_memory.vertex_buffer_info()};
+    auto  arrow_cylinder_pg = make_primitive_shared(arrow_cylinder_geometry, primitive_build_context);
+    auto  arrow_cone_pg     = make_primitive_shared(arrow_cone_geometry    , primitive_build_context);
+    auto  box_pg            = make_primitive_shared(box_geometry           , primitive_build_context);
+    auto  rotate_ring_pg    = make_primitive_shared(rotate_ring_geometry   , primitive_build_context);
+    auto& tool_layer        = *scene_root.tool_layer().get();
+    const vec3 pos{0.0f, 1.0f, 0.0f};
+    x_arrow_cylinder_mesh  = scene_root.make_mesh_node("X arrow cylinder", arrow_cylinder_pg, x_material, tool_layer, &tool_node, pos);
+    x_arrow_cone_mesh      = scene_root.make_mesh_node("X arrow cone",     arrow_cone_pg,     x_material, tool_layer, &tool_node, pos);
+    y_arrow_cylinder_mesh  = scene_root.make_mesh_node("Y arrow cylinder", arrow_cylinder_pg, y_material, tool_layer, &tool_node, pos);
+    y_arrow_cone_mesh      = scene_root.make_mesh_node("Y arrow cone",     arrow_cone_pg,     y_material, tool_layer, &tool_node, pos);
+    z_arrow_cylinder_mesh  = scene_root.make_mesh_node("Z arrow cylinder", arrow_cylinder_pg, z_material, tool_layer, &tool_node, pos);
+    z_arrow_cone_mesh      = scene_root.make_mesh_node("Z arrow cone",     arrow_cone_pg,     z_material, tool_layer, &tool_node, pos);
+    xy_box_mesh            = scene_root.make_mesh_node("XY box",           box_pg,            z_material, tool_layer, &tool_node, pos);
+    xz_box_mesh            = scene_root.make_mesh_node("XZ box",           box_pg,            y_material, tool_layer, &tool_node, pos);
+    yz_box_mesh            = scene_root.make_mesh_node("YZ box",           box_pg,            x_material, tool_layer, &tool_node, pos);
+    x_rotate_ring_mesh     = scene_root.make_mesh_node("X rotate ring",    rotate_ring_pg,    x_material, tool_layer, &tool_node, pos);
+    y_rotate_ring_mesh     = scene_root.make_mesh_node("Y rotate ring",    rotate_ring_pg,    y_material, tool_layer, &tool_node, pos);
+    z_rotate_ring_mesh     = scene_root.make_mesh_node("Z rotate ring",    rotate_ring_pg,    z_material, tool_layer, &tool_node, pos);
 
     x_arrow_cylinder_mesh->node()->transforms.parent_from_node.set         (mat4(1));
     x_arrow_cone_mesh    ->node()->transforms.parent_from_node.set         (mat4(1));
@@ -217,8 +229,11 @@ void Trs_tool::Visualization::initialize(Scene_manager* scene_manager)
 
 void Trs_tool::connect()
 {
+    require<Gl_context_provider>();
+
     m_operation_stack = get<Operation_stack>();
-    m_scene_manager   = require<Scene_manager>();
+    m_mesh_memory     = require<Mesh_memory>();
+    m_scene_root      = require<Scene_root>();
     m_selection_tool  = require<Selection_tool>();
 }
 
@@ -226,7 +241,12 @@ void Trs_tool::initialize_component()
 {
     ZoneScoped;
 
-    m_visualization.initialize(m_scene_manager.get());
+    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+
+    VERIFY(m_mesh_memory);
+    VERIFY(m_scene_root);
+
+    m_visualization.initialize(*m_mesh_memory.get(), *m_scene_root.get());
     m_handles[m_visualization.x_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_x;
     m_handles[m_visualization.x_arrow_cone_mesh    .get()] = Handle::e_handle_translate_x;
     m_handles[m_visualization.y_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_y;
@@ -242,11 +262,12 @@ void Trs_tool::initialize_component()
 
     if (m_selection_tool)
     {
-        auto lambda = [this](const Selection_tool::Mesh_collection& meshes)
+        auto lambda = [this](const Selection_tool::Selection& selection)
         {
             bool node_found{false};
-            for (auto mesh : meshes)
+            for (auto item : selection)
             {
+                auto mesh = dynamic_pointer_cast<Mesh>(item);
                 if (mesh)
                 {
                     auto node = mesh->node();
@@ -263,7 +284,7 @@ void Trs_tool::initialize_component()
                 set_node({});
             }
         };
-        m_selection_subscription = m_selection_tool->subscribe_mesh_selection_change_notification(lambda);
+        m_selection_subscription = m_selection_tool->subscribe_selection_change_notification(lambda);
     }
 }
 
@@ -271,11 +292,11 @@ void Trs_tool::window(Pointer_context&)
 {
     ZoneScoped;
 
-    bool show_translate = m_visualization.show_translate;
-    bool show_rotate    = m_visualization.show_rotate;
+    const bool show_translate = m_visualization.show_translate;
+    const bool show_rotate    = m_visualization.show_rotate;
     ImGui::Begin      ("Transform`");
 
-    auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
+    const auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
 
     if (make_button("Local", (m_local) ? Item_mode::active : Item_mode::normal, button_size))
     {
@@ -318,20 +339,20 @@ auto Trs_tool::update(Pointer_context& pointer_context) -> bool
 {
     ZoneScoped;
 
-    if ((m_state == State::passive) && pointer_context.mouse_button[Mouse_button_left].pressed) 
+    if ((m_state == State::Passive) && pointer_context.mouse_button[Mouse_button_left].pressed) 
     {
         return begin(pointer_context);
     }
-    if ((m_state != State::passive) && pointer_context.mouse_button[Mouse_button_left].released)
+    if ((m_state != State::Passive) && pointer_context.mouse_button[Mouse_button_left].released)
     {
         return end(pointer_context);
     }
-    if ((m_state == State::ready) && pointer_context.mouse_moved)
+    if ((m_state == State::Ready) && pointer_context.mouse_moved)
     {
         log_tools.trace("Trs tool state = Active\n");
-        m_state = State::active;
+        m_state = State::Active;
     }
-    if (m_state != State::active)
+    if (m_state != State::Active)
     {
         // We might be ready, but not consuming event yet
         return false;
@@ -717,19 +738,24 @@ void Trs_tool::set_node_world_transform(glm::mat4 world_from_node)
     root()->transforms.parent_from_node.set(parent_from_world);
  }
 
-void Trs_tool::render_update()
+void Trs_tool::render_update(const Render_context& render_context)
 {
-    auto&     camera                 = m_scene_manager->camera();
-    glm::vec3 view_position_in_world = vec3(camera.node()->position_in_world());
+    const auto* camera = render_context.pointer_context->camera;
+    if (camera == nullptr)
+    {
+        return;
+    }
+
+    const glm::vec3 view_position_in_world = vec3(camera->node()->position_in_world());
 
     m_visualization.update_scale(view_position_in_world);
 }
 
-void Trs_tool::render(Render_context& render_context)
+void Trs_tool::render(const Render_context& render_context)
 {
     ZoneScoped;
 
-    if (m_state != State::active)
+    if (m_state != State::Active)
     {
         return;
     }
@@ -737,7 +763,7 @@ void Trs_tool::render(Render_context& render_context)
     return; // currently broken
     
     auto* line_renderer     = render_context.line_renderer;
-    auto& camera            = m_scene_manager->camera();
+    auto& camera            = *render_context.pointer_context->camera;
     vec3  position_in_world = root()->position_in_world();
     float distance          = length(position_in_world - vec3(camera.node()->position_in_world()));
     float scale             = m_visualization.scale * distance / 100.0f;
@@ -902,7 +928,7 @@ auto Trs_tool::begin(Pointer_context& pointer_context) -> bool
     }
 
     log_tools.trace("Trs tool state = Ready\n");
-    m_state = State::ready;
+    m_state = State::Ready;
     update_visibility();
 
     if (m_node_physics)
@@ -916,15 +942,16 @@ auto Trs_tool::begin(Pointer_context& pointer_context) -> bool
 auto Trs_tool::end(Pointer_context& pointer_context) -> bool
 {
     static_cast<void>(pointer_context);
-    bool consume_event = m_state == State::active;
+    bool consume_event = m_state == State::Active;
     cancel_ready();
     update_visibility();
 
-    Node_transform_operation::Context context;
-    context.scene_manager = m_scene_manager;
-    context.node          = m_target_node;
-    context.before        = m_drag.initial_transforms;
-    context.after         = m_target_node->transforms;
+    Node_transform_operation::Context context{m_scene_root->content_layer(),
+                                              m_scene_root->scene(),
+                                              m_scene_root->physics_world(),
+                                              m_target_node,
+                                              m_drag.initial_transforms,
+                                              m_target_node->transforms};
 
     auto op = std::make_shared<Node_transform_operation>(context);
     m_operation_stack->push(op);
@@ -940,7 +967,7 @@ auto Trs_tool::end(Pointer_context& pointer_context) -> bool
 void Trs_tool::cancel_ready()
 {
     log_tools.trace("Trs tool state = Passive\n");
-    m_state                          = State::passive;
+    m_state                          = State::Passive;
     m_active_handle                  = Handle::e_handle_none;
     m_drag.initial_position_in_world = vec3(0.0f, 0.0f, 0.0f);
     m_drag.initial_world_from_local  = mat4(1);

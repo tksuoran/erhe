@@ -1,5 +1,4 @@
-#ifndef command_buffer_hpp_erhe_graphics
-#define command_buffer_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/components/component.hpp"
 
@@ -99,5 +98,3 @@ private:
 };
 
 } // namespace erhe::graphics
-
-#endif

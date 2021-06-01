@@ -11,11 +11,21 @@ namespace erhe::geometry
     class Geometry;
 }
 
+namespace erhe::scene
+{
+    class Layer;
+    class Scene;
+};
+
+namespace erhe::physics
+{
+    class World;
+};
+
 namespace editor
 {
 
 class Node_physics;
-class Scene_manager;
 class Selection_tool;
 
 class Node_transform_operation
@@ -24,14 +34,17 @@ class Node_transform_operation
 public:
     struct Context
     {
-        std::shared_ptr<Scene_manager>     scene_manager;
+        //std::shared_ptr<Scene_manager>     scene_manager;
+        erhe::scene::Layer&                layer;
+        erhe::scene::Scene&                scene;
+        erhe::physics::World&              physics_world;
         std::shared_ptr<erhe::scene::Node> node;
         erhe::scene::Node::Transforms      before;
         erhe::scene::Node::Transforms      after;
     };
 
-    explicit Node_transform_operation(Context context);
-    virtual ~Node_transform_operation() = default;
+    explicit Node_transform_operation(const Context& context);
+    virtual ~Node_transform_operation();
 
     void execute() override;
     void undo() override;
@@ -50,7 +63,7 @@ public:
         remove
     };
 
-    static auto inverse(Mode mode) -> Mode
+    static auto inverse(const Mode mode) -> Mode
     {
         switch (mode)
         {
@@ -69,22 +82,24 @@ class Mesh_insert_remove_operation
 public:
     struct Context
     {
-        std::shared_ptr<Scene_manager>     scene_manager;
         std::shared_ptr<Selection_tool>    selection_tool;
+        erhe::scene::Layer&                layer;
+        erhe::scene::Scene&                scene;
+        erhe::physics::World&              physics_world;
         std::shared_ptr<erhe::scene::Mesh> mesh;
         std::shared_ptr<erhe::scene::Node> node;
         std::shared_ptr<Node_physics>      node_physics;
         Mode                               mode;
     };
 
-    explicit Mesh_insert_remove_operation(Context& context);
-    virtual ~Mesh_insert_remove_operation() = default;
+    explicit Mesh_insert_remove_operation(const Context& context);
+    virtual ~Mesh_insert_remove_operation();
 
     void execute() override;
     void undo() override;
 
 private:
-    void execute(Mode mode);
+    void execute(const Mode mode);
 
     Context m_context;
 };
@@ -95,20 +110,21 @@ class Light_insert_remove_operation
 public:
     struct Context
     {
-        std::shared_ptr<Scene_manager>      scene_manager;
-        std::shared_ptr<erhe::scene::Light> item;
+        erhe::scene::Layer&                 layer;
+        erhe::scene::Scene&                 scene;
+        std::shared_ptr<erhe::scene::Light> light;
         std::shared_ptr<erhe::scene::Node>  node;
         Mode                                mode;
     };
 
-    explicit Light_insert_remove_operation(Context& context);
-    virtual ~Light_insert_remove_operation() = default;
+    explicit Light_insert_remove_operation(const Context& context);
+    virtual ~Light_insert_remove_operation();
 
     void execute() override;
     void undo() override;
 
 private:
-    void execute(Mode mode);
+    void execute(const Mode mode);
 
     Context m_context;
 };

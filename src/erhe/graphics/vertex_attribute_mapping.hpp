@@ -1,5 +1,4 @@
-#ifndef vertex_attribute_mapping_hpp_erhe_graphics
-#define vertex_attribute_mapping_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/graphics/vertex_attribute.hpp"
 
@@ -36,6 +35,10 @@ public:
         , layout_location{layout_location}
     {
     }
+    Vertex_attribute_mapping(const Vertex_attribute_mapping&) = delete;
+    Vertex_attribute_mapping& operator=(const Vertex_attribute_mapping&) = delete;
+    Vertex_attribute_mapping(Vertex_attribute_mapping&&) = delete;
+    Vertex_attribute_mapping& operator=(Vertex_attribute_mapping&&) = delete;
 
     gl::Attribute_type           shader_type;
     std::string                  name;
@@ -45,5 +48,3 @@ public:
 };
 
 } // namespace erhe::graphics
-
-#endif

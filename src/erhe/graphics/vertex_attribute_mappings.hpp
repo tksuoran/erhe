@@ -1,9 +1,10 @@
-#ifndef vertex_attribute_mappings_hpp_erhe_graphics
-#define vertex_attribute_mappings_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/graphics/vertex_attribute.hpp"
 #include "erhe/graphics/vertex_attribute_mapping.hpp"
 #include <gsl/pointers>
+
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -17,11 +18,14 @@ class Vertex_input_state;
 class Vertex_attribute_mappings
 {
 public:
-    using Mapping_collection = std::vector<Vertex_attribute_mapping>;
+    using Mapping_collection = std::vector<std::shared_ptr<Vertex_attribute_mapping>>;
 
-    Vertex_attribute_mappings() = default;
-
-    ~Vertex_attribute_mappings() = default;
+    Vertex_attribute_mappings();
+    //Vertex_attribute_mappings(const Vertex_attribute_mappings&) = delete;
+    //Vertex_attribute_mappings& operator=(const Vertex_attribute_mappings&) = delete;
+    //Vertex_attribute_mappings(Vertex_attribute_mappings&&) = delete;
+    //Vertex_attribute_mappings& operator=(Vertex_attribute_mappings&&) = delete;
+    ~Vertex_attribute_mappings();
 
     void add(gl::Attribute_type      shader_type,
              std::string             name,
@@ -42,5 +46,3 @@ public:
 };
 
 } // namespace erhe::graphics
-
-#endif

@@ -18,7 +18,7 @@ namespace erhe::primitive {
 namespace editor
 {
 
-class Scene_manager;
+class Scene_root;
 
 class Hover_tool
     : public erhe::components::Component
@@ -27,8 +27,8 @@ class Hover_tool
 {
 public:
     static constexpr const char* c_name = "Hover_tool";
-    Hover_tool() : erhe::components::Component{c_name} {}
-    virtual ~Hover_tool() = default;
+    Hover_tool();
+    virtual ~Hover_tool();
 
     // Implements Component
     void connect() override;
@@ -36,9 +36,9 @@ public:
 
     // Implements Tool
     auto update(Pointer_context& pointer_context) -> bool override;
-    void render(Render_context& render_context) override;
+    void render(const Render_context& render_context) override;
     auto state() const -> State override;
-    auto description() -> const char* override { return c_name; }
+    auto description() -> const char* override;
 
     // Implements Window
     void window(Pointer_context& pointer_context) override;
@@ -47,7 +47,7 @@ private:
     void deselect();
     void select(Pointer_context& pointer_context);
 
-    std::shared_ptr<Scene_manager>     m_scene_manager;
+    std::shared_ptr<Scene_root>        m_scene_root;
 
     std::shared_ptr<erhe::scene::Mesh> m_hover_mesh           {nullptr};
     size_t                             m_hover_primitive_index{0};

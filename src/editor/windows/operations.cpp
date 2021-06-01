@@ -2,7 +2,8 @@
 #include "operations/operation_stack.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/merge_operation.hpp"
-#include "scene/scene_manager.hpp"
+#include "renderers/mesh_memory.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/pointer_context.hpp"
 #include "log.hpp"
@@ -16,9 +17,10 @@ namespace editor
 
 void Operations::connect()
 {
+    m_mesh_memory     = get<Mesh_memory    >();
     m_operation_stack = get<Operation_stack>();
-    m_selection_tool  = get<Selection_tool>();
-    m_scene_manager   = get<Scene_manager>();
+    m_selection_tool  = get<Selection_tool >();
+    m_scene_root      = get<Scene_root     >();
 }
 
 void Operations::window(Pointer_context& pointer_context)
@@ -30,7 +32,7 @@ void Operations::window(Pointer_context& pointer_context)
 
     ImGui::Begin("Tools");
 
-    auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
+    auto button_size   = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
     auto active_action = pointer_context.priority_action;
     for (unsigned int i = 0; i < static_cast<unsigned int>(Action::count); ++i)
     {
@@ -45,9 +47,11 @@ void Operations::window(Pointer_context& pointer_context)
         }
     }
 
-    Mesh_operation::Context context;
-    context.scene_manager  = m_scene_manager;
-    context.selection_tool = m_selection_tool;
+    Mesh_operation::Context context{m_mesh_memory->primitive_build_context(),
+                                    m_scene_root->content_layer(),
+                                    m_scene_root->scene(),
+                                    m_scene_root->physics_world(),
+                                    m_selection_tool};
     if (make_button("Undo", m_operation_stack->can_undo() ? Item_mode::normal
                                                           : Item_mode::disabled, button_size))
     {
@@ -61,9 +65,11 @@ void Operations::window(Pointer_context& pointer_context)
 
     if (ImGui::Button("Merge", button_size))
     {
-        Merge_operation::Context merge_context;
-        merge_context.scene_manager  = m_scene_manager;
-        merge_context.selection_tool = m_selection_tool;
+        Merge_operation::Context merge_context{m_mesh_memory->primitive_build_context(),
+                                               m_scene_root->content_layer(),
+                                               m_scene_root->scene(),
+                                               m_scene_root->physics_world(),
+                                               m_selection_tool};
         auto op = std::make_shared<Merge_operation>(merge_context);
         m_operation_stack->push(op);
     }

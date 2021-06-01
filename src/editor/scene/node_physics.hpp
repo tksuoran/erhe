@@ -9,10 +9,6 @@
 namespace editor
 {
 
-struct Foo { int a; };
-struct Bar { int a; };
-struct Baz { int a; };
-
 class Node_physics
     : public erhe::scene::INode_attachment
     , public btMotionState

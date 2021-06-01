@@ -6,7 +6,8 @@
 namespace erhe::scene
 {
 
-Light::Light(const std::string& name)
+Light::Light(std::string_view name)
+    : m_name{name}
 {
 }
 

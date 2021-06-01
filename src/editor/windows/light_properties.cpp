@@ -1,5 +1,5 @@
 #include "windows/light_properties.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_root.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/scene.hpp"
 
@@ -10,7 +10,7 @@ namespace editor
 
 void Light_properties::connect()
 {
-    m_scene_manager = get<Scene_manager>();
+    m_scene_root = get<Scene_root>();
 
 }
 
@@ -24,7 +24,7 @@ void Light_properties::window(Pointer_context&)
     ImGui::Begin("Lights");
     ImGui::Checkbox("Animation", &m_animation);
     ImGui::Separator();
-    const auto& layers = m_scene_manager->all_layers();
+    const auto& layers = m_scene_root->all_layers();
     int last_layer = static_cast<int>(layers.size()) - 1;
     if (ImGui::Button("Prev Layer"))
     {

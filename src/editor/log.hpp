@@ -21,5 +21,6 @@ extern erhe::log::Category log_materials;
 extern erhe::log::Category log_renderdoc;
 extern erhe::log::Category log_brush;
 extern erhe::log::Category log_physics;
+extern erhe::log::Category log_gl;
 
 }

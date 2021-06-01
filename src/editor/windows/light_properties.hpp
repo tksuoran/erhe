@@ -7,7 +7,7 @@
 namespace editor
 {
 
-class Scene_manager;
+class Scene_root;
 
 class Light_properties
     : public erhe::components::Component
@@ -27,10 +27,10 @@ public:
     auto animation() const -> bool;
 
 private:
-    std::shared_ptr<Scene_manager> m_scene_manager;
-    int                            m_layer_index{0};
-    int                            m_light_index{0};
-    bool                           m_animation{true};
+    std::shared_ptr<Scene_root> m_scene_root;
+    int                         m_layer_index{0};
+    int                         m_light_index{0};
+    bool                        m_animation{true};
 };
 
 } // namespace editor

@@ -26,10 +26,10 @@ class Tool
 public:
     enum class State : unsigned int
     {
-        disabled = 0,
-        passive,
-        ready,
-        active
+        Disabled = 0,
+        Passive,
+        Ready,
+        Active
     };
 
     virtual auto description() -> const char* = 0;
@@ -43,9 +43,9 @@ public:
     }
 
     // Visual rendering of the tool.
-    virtual void render_update() {}
+    virtual void render_update(const Render_context&) {}
 
-    virtual void render(Render_context&) {}
+    virtual void render(const Render_context&) {}
 
     virtual auto state() const -> State = 0;
 

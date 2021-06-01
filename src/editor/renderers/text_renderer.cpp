@@ -1,4 +1,5 @@
 #include "renderers/text_renderer.hpp"
+#include "gl_context_provider.hpp"
 #include "log.hpp"
 
 #include "erhe/graphics/buffer.hpp"
@@ -39,6 +40,7 @@ using glm::vec4;
 Text_renderer::Text_renderer()
     : Component("Text_renderer")
 {
+    ZoneScoped;
 }
 
 Text_renderer::~Text_renderer()
@@ -47,6 +49,8 @@ Text_renderer::~Text_renderer()
 
 void Text_renderer::connect()
 {
+    require<Gl_context_provider>();
+
     m_pipeline_state_tracker = get<OpenGL_state_tracker>();
 }
 
@@ -55,10 +59,15 @@ void Text_renderer::initialize_component()
 {
     ZoneScoped;
 
+    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+
+    {
+    ZoneScopedN("push_debug_group");
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
                          static_cast<GLsizei>(strlen(c_text_renderer_initialize_component)),
                          c_text_renderer_initialize_component);
+    }
 
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 
@@ -67,9 +76,17 @@ void Text_renderer::initialize_component()
     size_t max_quad_count = 65536 / 4; // each quad consumes 4 indices
     size_t index_count    = 65536 * 5;
     size_t index_stride   = 2;
+
+    {
+    ZoneScopedN("make buffer");
+
     m_index_buffer = std::make_unique<erhe::graphics::Buffer>(gl::Buffer_target::element_array_buffer,
                                                               index_stride * index_count,
                                                               storage_mask);
+    }
+
+    {
+    ZoneScopedN("map buffer");
     erhe::graphics::Scoped_buffer_mapping<uint16_t> index_buffer_map(*m_index_buffer.get(), 0, index_count, access_mask);
     auto gpu_index_data = index_buffer_map.span();
     size_t offset{0};
@@ -122,10 +139,14 @@ void Text_renderer::initialize_component()
     create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
     Shader_stages::Prototype prototype(create_info);
     m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
+    }
 
     create_frame_resources();
 
+    {
+    ZoneScopedN("pop_debug_group");
     gl::pop_debug_group();
+    }
 }
 
 void Text_renderer::create_frame_resources()

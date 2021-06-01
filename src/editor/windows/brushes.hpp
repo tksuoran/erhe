@@ -1,9 +1,11 @@
 #pragma once
 
+#include "scene/collision_generator.hpp"
 #include "tools/tool.hpp"
-#include "scene/scene_manager.hpp" // Brush
+#include "erhe/primitive/enums.hpp"
 
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <vector>
 
@@ -15,6 +17,7 @@ namespace erhe::geometry
 namespace erhe::primitive
 {
     struct Material;
+    struct Primitive_build_context;
     struct Primitive_geometry;
 }
 
@@ -24,14 +27,29 @@ namespace erhe::scene
     class Node;
 }
 
+class btCollisionShape;
+
 namespace editor
 {
 
+class Brush;
 class Editor;
 class Grid_tool;
 class Operation_stack;
+class Scene_root;
 class Selection_tool;
 
+struct Brush_create_context
+{
+    Brush_create_context(erhe::primitive::Primitive_build_context& primitive_build_context,
+                         erhe::primitive::Normal_style             normal_style = erhe::primitive::Normal_style::corner_normals)
+        : primitive_build_context{primitive_build_context}
+        , normal_style           {normal_style}
+    {
+    }
+    erhe::primitive::Primitive_build_context& primitive_build_context;
+    erhe::primitive::Normal_style             normal_style{erhe::primitive::Normal_style::corner_normals};
+};
 
 class Brushes
     : public erhe::components::Component
@@ -49,7 +67,7 @@ public:
 
     // Implements Tool
     auto update(Pointer_context& pointer_context) -> bool override;
-    void render(Render_context& render_context) override;
+    void render(const Render_context& render_context) override;
     auto state() const -> State override;
     void cancel_ready() override;
     auto description() -> const char* override { return c_name; }
@@ -57,13 +75,34 @@ public:
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
-    void render_update() override;
+    void render_update(const Render_context&) override;
 
     void add_brush(const std::shared_ptr<erhe::primitive::Primitive_geometry>& geometry);
 
     void add_material(const std::shared_ptr<erhe::primitive::Material>& material);
 
+    auto allocate_brush(const erhe::primitive::Primitive_build_context& context)
+    -> std::shared_ptr<Brush>;
+
+    auto make_brush(erhe::geometry::Geometry&&               geometry,
+                    const Brush_create_context&              context,
+                    const std::shared_ptr<btCollisionShape>& collision_shape = {})
+    -> std::shared_ptr<Brush>;
+
+    auto make_brush(std::shared_ptr<erhe::geometry::Geometry> geometry,
+                    const Brush_create_context&               context,
+                    const std::shared_ptr<btCollisionShape>&  collision_shape = {})
+    -> std::shared_ptr<Brush>;
+
+    auto make_brush(std::shared_ptr<erhe::geometry::Geometry> geometry,
+                    const Brush_create_context&               context,
+                    Collision_volume_calculator               collision_volume_calculator,
+                    Collision_shape_generator                 collision_shape_generator)
+    -> std::shared_ptr<Brush>;
+
 private:
+    void make_materials();
+
     void update_mesh();
 
     //auto get_transform_scale() -> float;
@@ -80,12 +119,16 @@ private:
 
     std::shared_ptr<Editor>            m_editor;
     std::shared_ptr<Operation_stack>   m_operation_stack;
-    std::shared_ptr<Scene_manager>     m_scene_manager;
+    std::shared_ptr<Scene_root>        m_scene_root;
     std::shared_ptr<Selection_tool>    m_selection_tool;
     std::shared_ptr<Grid_tool>         m_grid_tool;
 
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
     std::vector<const char*>           m_material_names;
+
+    std::mutex                          m_brush_mutex;
+    std::vector<std::shared_ptr<Brush>> m_brushes;
+
     Brush*                             m_brush{nullptr};
     int                                m_selected_brush_index{0};
     int                                m_selected_material   {0};
@@ -100,7 +143,7 @@ private:
     erhe::geometry::Geometry*          m_hover_geometry   {nullptr};
     size_t                             m_hover_primitive  {0};
     size_t                             m_hover_local_index{0};
-    State                              m_state            {State::passive};
+    State                              m_state            {State::Passive};
     std::shared_ptr<erhe::scene::Mesh> m_brush_mesh;
     float                              m_scale            {1.0f};
     float                              m_transform_scale  {1.0f};

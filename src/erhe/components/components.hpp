@@ -1,8 +1,18 @@
 #pragma once
 
-//#include "erhe/components/component.hpp"
+#include "mango/core/thread.hpp"
+
+#include <condition_variable>
+#include <mutex>
 #include <memory>
+#include <optional>
 #include <set>
+
+namespace mango {
+
+class ConcurrentQueue;
+
+}
 
 namespace erhe::components
 {
@@ -23,22 +33,40 @@ class Component;
 class Components
 {
 public:
-    Components() = default;
-
-    ~Components() = default;
+    Components();
+    ~Components();
+    Components(const Components&) = delete;
+    Components& operator=(const Components&) = delete;
+    Components(Components&&) = delete;
+    Components& operator=(Components&&) = delete;
 
     auto add(const std::shared_ptr<erhe::components::Component>& component)
     -> const std::shared_ptr<erhe::components::Component>&;
 
     void cleanup_components();
 
-    void initialize_components();
+    void launch_component_initialization();
+
+    auto get_component_to_initialize() -> std::shared_ptr<Component>;
+
+    //void set_component_initialization_complete();
+
+    auto is_component_initialization_complete() -> bool;
+
+    void wait_component_initialization_complete();
 
     void on_thread_exit();
 
     void on_thread_enter();
 
     std::set<std::shared_ptr<erhe::components::Component>> components;
+
+private:
+    std::mutex                                             m_mutex;
+    bool                                                   m_is_ready{false};
+    std::condition_variable                                m_component_initialized;
+    std::set<std::shared_ptr<erhe::components::Component>> m_uninitialized_components;
+    std::unique_ptr<mango::ConcurrentQueue>                m_execution_queue;
 };
 
 } // namespace erhe::components

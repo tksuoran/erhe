@@ -39,7 +39,7 @@ public:
             {
             }
 
-            Shader_stage(gl::Shader_type type, const char* source)
+            Shader_stage(gl::Shader_type type, std::string_view source)
                 : type  {type}
                 , source{source}
             {
@@ -50,7 +50,7 @@ public:
             std::filesystem::path path;
         };
 
-        Create_info(std::string                name,
+        Create_info(std::string_view           name,
                     Shader_resource*           default_uniform_block, // containing sampler uniforms
                     Vertex_attribute_mappings* vertex_attribute_mappings,
                     Fragment_outputs*          fragment_outputs);
@@ -101,10 +101,6 @@ public:
         static auto try_compile_shader(const Shader_stages::Create_info&               create_info,
                                        const Shader_stages::Create_info::Shader_stage& shader)
         -> std::optional<Gl_shader>;
-
-        void map_uniform(size_t key, const std::string& name);
-
-        void detach_shaders();
 
         friend class Shader_stages;
 

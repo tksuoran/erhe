@@ -1,5 +1,4 @@
-#ifndef image_transfer_hpp_erhe_graphics
-#define image_transfer_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/components/component.hpp"
 #include "erhe/graphics/gl_objects.hpp"
@@ -58,5 +57,3 @@ private:
 };
 
 } // namespace erhe::graphics
-
-#endif

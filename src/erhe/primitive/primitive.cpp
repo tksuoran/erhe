@@ -1,9 +1,74 @@
 #include "erhe/primitive/primitive.hpp"
+#include "erhe/primitive/log.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace erhe::primitive
 {
+
+Primitive_geometry::Primitive_geometry()
+{
+    //log_primitive.warn("Primitive_geometry::Primitive_geometry()\n");
+}
+
+Primitive_geometry::~Primitive_geometry()
+{
+    //log_primitive.warn("Primitive_geometry::~Primitive_geometry()\n");
+}
+
+Primitive_geometry::Primitive_geometry(Primitive_geometry&& other)
+    : bounding_box_min        {other.bounding_box_min          }
+    , bounding_box_max        {other.bounding_box_max          }
+    , fill_indices            {other.fill_indices              }
+    , edge_line_indices       {other.edge_line_indices         }
+    , corner_point_indices    {other.corner_point_indices      }
+    , polygon_centroid_indices{other.polygon_centroid_indices  }
+    , vertex_buffer           {std::move(other.vertex_buffer)  }
+    , index_buffer            {std::move(other.index_buffer)   }
+    , vertex_byte_offset      {other.vertex_byte_offset        }
+    , index_byte_offset       {other.index_byte_offset         }
+    , vertex_element_size     {other.vertex_element_size       }
+    , index_element_size      {other.index_element_size        }
+    , vertex_count            {other.vertex_count              }
+    , index_count             {other.index_count               }
+    , source_geometry         {std::move(other.source_geometry)}
+    , source_normal_style     {other.source_normal_style       }
+{
+    log_primitive_builder.warn("Primitive_geometry move constructor\n");
+}
+
+Primitive_geometry& Primitive_geometry::operator=(Primitive_geometry&& other)
+{
+    log_primitive_builder.warn("Primitive_geometry move assignment\n");
+
+    bounding_box_min         = other.bounding_box_min          ;
+    bounding_box_max         = other.bounding_box_max          ;
+    fill_indices             = other.fill_indices              ;
+    edge_line_indices        = other.edge_line_indices         ;
+    corner_point_indices     = other.corner_point_indices      ;
+    polygon_centroid_indices = other.polygon_centroid_indices  ;
+    vertex_buffer            = std::move(other.vertex_buffer)  ;
+    index_buffer             = std::move(other.index_buffer)   ;
+    vertex_byte_offset       = other.vertex_byte_offset        ;
+    index_byte_offset        = other.index_byte_offset         ;
+    vertex_element_size      = other.vertex_element_size       ;
+    index_element_size       = other.index_element_size        ;
+    vertex_count             = other.vertex_count              ;
+    index_count              = other.index_count               ;
+    source_geometry          = std::move(other.source_geometry);
+    source_normal_style      = other.source_normal_style       ;
+    return *this;
+}
+
+Primitive::Primitive() = default;
+
+
+Primitive::Primitive(std::shared_ptr<Primitive_geometry> primitive_geometry,
+                     std::shared_ptr<Material>           material)
+    : primitive_geometry{primitive_geometry}
+    , material{material}
+{
+}
 
 auto c_str(Primitive_mode primitive_mode)
 -> const char*
@@ -86,7 +151,7 @@ void Primitive_geometry::allocate_index_buffer(const std::shared_ptr<erhe::graph
     this->index_element_size = index_element_size;
 }
 
-auto Primitive_geometry::index_range(Primitive_mode primitive_mode) -> Index_range
+auto Primitive_geometry::index_range(Primitive_mode primitive_mode) const -> Index_range
 {
     switch (primitive_mode)
     {

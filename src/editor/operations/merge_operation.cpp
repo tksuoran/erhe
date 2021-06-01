@@ -2,6 +2,7 @@
 #include "tools/selection_tool.hpp"
 #include "scene/scene_manager.hpp"
 #include "erhe/geometry/geometry.hpp"
+#include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/scene.hpp"
 
 namespace editor
@@ -10,21 +11,23 @@ namespace editor
 Merge_operation::Merge_operation(Context& context)
     : m_context(context)
 {
-    if (context.selection_tool->selected_meshes().size() < 2)
+    if (context.selection_tool->selection().size() < 2)
     {
         return;
     }
+
     using namespace erhe::geometry;
     using namespace erhe::primitive;
     using namespace glm;
 
-    Geometry     combined_geometry;
-    bool         first_mesh                = true;
-    mat4         reference_node_from_world = mat4{1};
-    Normal_style normal_style              = Normal_style::none;
-    for (auto mesh : context.selection_tool->selected_meshes())
+    Geometry combined_geometry;
+    bool     first_mesh                = true;
+    mat4     reference_node_from_world = mat4{1};
+    auto     normal_style              = Normal_style::none;
+    for (auto item : context.selection_tool->selection())
     {
-        if (mesh.get() == nullptr)
+        auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        if (!mesh)
         {
             continue;
         }
@@ -56,24 +59,38 @@ Merge_operation::Merge_operation(Context& context)
             }
         }
 
-        m_source_entries.emplace_back(mesh, mesh->node(), mesh->primitives);
+        m_source_entries.emplace_back(context.primitive_build_context,
+                                      context.layer,
+                                      context.scene,
+                                      context.physics_world,
+                                      mesh,
+                                      mesh->node(),
+                                      mesh->primitives);
     }
 
-    erhe::geometry::Geometry::Weld_settings weld_settings;
+    if (m_source_entries.size() < 2)
+    {
+        return;
+    }
+
+    const erhe::geometry::Geometry::Weld_settings weld_settings;
     combined_geometry.weld(weld_settings);
     combined_geometry.build_edges();
 
-    m_combined_primitive_geometry = context.scene_manager->make_primitive_geometry(combined_geometry, normal_style);
-    m_combined_primitive_geometry->source_geometry = std::make_shared<erhe::geometry::Geometry>(std::move(combined_geometry));
-    m_selection_before = context.selection_tool->selected_meshes();
-    m_selection_after.push_back(context.selection_tool->selected_meshes().front());
+    m_combined_primitive_geometry = make_primitive_shared(combined_geometry,
+                                                          context.primitive_build_context,
+                                                          normal_style);
+    m_combined_primitive_geometry->source_geometry     = std::make_shared<erhe::geometry::Geometry>(std::move(combined_geometry));
+    m_combined_primitive_geometry->source_normal_style = normal_style;
+    m_selection_before = context.selection_tool->selection();
+    m_selection_after.push_back({});
 }
 
 void Merge_operation::execute()
 {
     bool  first_entry = true;
-    auto& meshes      = m_context.scene_manager->content_layer()->meshes;
-    auto& nodes       = m_context.scene_manager->scene().nodes;
+    auto& meshes      = m_context.layer.meshes;
+    auto& nodes       = m_context.scene.nodes;
     for (const auto& entry : m_source_entries)
     {
         if (first_entry)
@@ -98,14 +115,14 @@ void Merge_operation::execute()
             }
         }
     }
-    m_context.selection_tool->set_mesh_selection(m_selection_after);
+    m_context.selection_tool->set_selection(m_selection_after);
 }
 
 void Merge_operation::undo()
 {
     bool  first_entry = true;
-    auto& meshes      = m_context.scene_manager->content_layer()->meshes;
-    auto& nodes       = m_context.scene_manager->scene().nodes;
+    auto& meshes      = m_context.layer.meshes;
+    auto& nodes       = m_context.scene.nodes;
     for (const auto& entry : m_source_entries)
     {
         // For all entries:
@@ -130,7 +147,7 @@ void Merge_operation::undo()
             entry.node->attach(entry.mesh);
         }
     }
-    m_context.selection_tool->set_mesh_selection(m_selection_before);
+    m_context.selection_tool->set_selection(m_selection_before);
 }
 
 } // namespace editor

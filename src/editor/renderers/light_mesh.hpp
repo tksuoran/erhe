@@ -19,7 +19,7 @@ namespace erhe::scene
 namespace editor
 {
 
-class Programs;
+class Program_interface;
 
 class Light_mesh : public erhe::components::Component
 {
@@ -41,7 +41,7 @@ public:
 private:
     void update_light_model(erhe::scene::Light& light);
 
-    std::shared_ptr<Programs>           m_programs;
+    std::shared_ptr<Program_interface>  m_program_interface;
 
     erhe::primitive::Primitive_geometry m_quad_mesh;
     erhe::primitive::Primitive_geometry m_cone_mesh;

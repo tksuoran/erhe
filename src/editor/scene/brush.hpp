@@ -4,6 +4,7 @@
 
 #include "erhe/geometry/types.hpp"
 #include "erhe/primitive/enums.hpp"
+#include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/buffer_info.hpp"
 #include "erhe/primitive/format_info.hpp"
 
@@ -17,16 +18,24 @@ namespace erhe::geometry
     class Geometry;
 }
 
+namespace erhe::physics
+{
+    class World;
+}
+
 namespace erhe::primitive
 {
+    struct Primitive_build_context;
     struct Primitive_geometry;
     struct Material;
 }
 
 namespace erhe::scene
 {
+    class Layer;
     class Mesh;
     class Node;
+    class Scene;
 }
 
 namespace editor
@@ -60,28 +69,25 @@ public:
 
 struct Brush_create_info
 {
-    Brush_create_info(std::shared_ptr<erhe::geometry::Geometry> geometry,
-                      erhe::primitive::Format_info              primitive_format_info,
-                      erhe::primitive::Buffer_info              primitive_buffer_info,
-                      erhe::primitive::Normal_style             normal_style,
-                      float                                     density,
-                      float                                     volume,
-                      std::shared_ptr<btCollisionShape>         collision_shape);
+    Brush_create_info(const std::shared_ptr<erhe::geometry::Geometry>& geometry,
+                      erhe::primitive::Primitive_build_context&        context,
+                      erhe::primitive::Normal_style                    normal_style,
+                      float                                            density,
+                      float                                            volume,
+                      const std::shared_ptr<btCollisionShape>&         collision_shape);
 
-    Brush_create_info(std::shared_ptr<erhe::geometry::Geometry> geometry,
-                      erhe::primitive::Format_info              primitive_format_info,
-                      erhe::primitive::Buffer_info              primitive_buffer_info,
-                      erhe::primitive::Normal_style             normal_style,
-                      float                                     density,
-                      Collision_volume_calculator               collision_volume_calculator,
-                      Collision_shape_generator                 collision_shape_generator);
+    Brush_create_info(const std::shared_ptr<erhe::geometry::Geometry>& geometry,
+                      erhe::primitive::Primitive_build_context&        context,
+                      erhe::primitive::Normal_style                    normal_style,
+                      float                                            density,
+                      Collision_volume_calculator                      collision_volume_calculator,
+                      Collision_shape_generator                        collision_shape_generator);
 
     ~Brush_create_info();
 
     std::shared_ptr<erhe::geometry::Geometry> geometry;
-    erhe::primitive::Format_info              primitive_format_info;
-    erhe::primitive::Buffer_info              primitive_buffer_info;
-    erhe::primitive::Normal_style             normal_style{erhe::primitive::Normal_style::corner_normals};
+    erhe::primitive::Primitive_build_context& context;
+    erhe::primitive::Normal_style             normal_style;
     float                                     density{1.0f};
     float                                     volume{1.0f};
     std::shared_ptr<btCollisionShape>         collision_shape;
@@ -101,16 +107,19 @@ class Brush
 public:
     using Create_info = Brush_create_info;
 
-    Brush() = default;
-    explicit Brush(Create_info& create_info);
+    Brush(const erhe::primitive::Primitive_build_context& context);
+
+    explicit Brush(const Create_info& create_info);
     ~Brush();
 
     Brush(const Brush&) = delete;
     auto operator=(const Brush&) -> Brush& = delete;
     Brush(Brush&& other) noexcept;
-    auto operator=(Brush&& other) noexcept -> Brush&;
+    auto operator=(Brush&& other) noexcept -> Brush& = delete;
 
-    auto get_reference_frame(uint32_t corner_count) -> Reference_frame;
+    void initialize(const Create_info& create_info);
+
+    auto get_reference_frame(const uint32_t corner_count) -> Reference_frame;
 
     static constexpr const float c_scale_factor = 65536.0f;
 
@@ -123,20 +132,23 @@ public:
         btVector3                                            local_inertia;
     };
 
-    auto get_scaled(float scale, Scene_manager& scene_manager)
+    auto get_scaled(const float scale)
     -> const Scaled&;
 
-    auto create_scaled(int scale_key, Scene_manager& scene_manager)
+    auto create_scaled(const int scale_key)
     -> Scaled;
 
-    auto make_instance(Scene_manager&                                    scene_manager,
+    auto make_instance(erhe::scene::Layer&                               layer,
+                       erhe::scene::Scene&                               scene,
+                       erhe::physics::World&                             physics_world,
                        const std::shared_ptr<erhe::scene::Node>&         parent,
-                       glm::mat4                                         local_to_parent,
+                       const glm::mat4                                   local_to_parent,
                        const std::shared_ptr<erhe::primitive::Material>& material,
-                       float                                             scale)
+                       const float                                       scale)
     -> Instance;
 
     std::shared_ptr<erhe::geometry::Geometry>            geometry;
+    const erhe::primitive::Primitive_build_context&      context;
     std::shared_ptr<erhe::primitive::Primitive_geometry> primitive_geometry;
     erhe::primitive::Normal_style                        normal_style{erhe::primitive::Normal_style::corner_normals};
     std::shared_ptr<btCollisionShape>                    collision_shape;

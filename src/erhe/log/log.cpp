@@ -126,8 +126,11 @@ void Category::write(bool indent, int level, const std::string& text)
     write(indent, text);
 }
 
+std::mutex Category::s_mutex;
+
 void Category::write(bool indent, const std::string& text)
 {
+    std::lock_guard<std::mutex> lock{s_mutex};
     // Log to console
     if (Log::print_color())
     {

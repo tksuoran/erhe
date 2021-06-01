@@ -1,5 +1,4 @@
-#ifndef texture_hpp_erhe_graphics
-#define texture_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/graphics/gl_objects.hpp"
 
@@ -166,5 +165,3 @@ auto get_format_and_type(gl::Internal_format internalformat,
 -> bool;
 
 } // namespace erhe::graphics
-
-#endif

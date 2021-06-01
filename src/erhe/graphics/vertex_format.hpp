@@ -1,8 +1,9 @@
-#ifndef vertex_format_hpp_erhe_graphics
-#define vertex_format_hpp_erhe_graphics
+#pragma once
 
 #include "erhe/graphics/vertex_attribute.hpp"
+
 #include <gsl/gsl>
+
 #include <memory>
 #include <vector>
 
@@ -12,16 +13,15 @@ namespace erhe::graphics
 class Vertex_format
 {
 public:
-    Vertex_format() = default;
-
-    ~Vertex_format() = default;
+    Vertex_format();
+    ~Vertex_format();
 
     void clear();
 
-    auto make_attribute(Vertex_attribute::Usage     usage,
+    void make_attribute(Vertex_attribute::Usage     usage,
                         gl::Attribute_type          shader_type,
-                        Vertex_attribute::Data_type data_type)
-    -> Vertex_attribute&;
+                        Vertex_attribute::Data_type data_type);
+    //-> Vertex_attribute&;
 
     auto has_attribute(Vertex_attribute::Usage_type usage_type, unsigned int index = 0) const
     -> bool;
@@ -47,5 +47,3 @@ private:
 };
 
 } // namespace erhe::graphics
-
-#endif

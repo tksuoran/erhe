@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(TRACY_ENABLE)
+#if defined(TRACY_ENABLE) && !defined(ERHE_TRACY_NO_GL)
 #   include "erhe/gl/dynamic_load.hpp"
 #   define glGenQueries          gl::glGenQueries
 #   define glGetInteger64v       gl::glGetInteger64v
@@ -11,9 +11,12 @@
 #endif
 
 #include "Tracy.hpp"
-#include "TracyOpenGL.hpp"
 
-#if defined(TRACY_ENABLE)
+#if !defined(ERHE_TRACY_NO_GL)
+#   include "TracyOpenGL.hpp"
+#endif
+
+#if defined(TRACY_ENABLE) && !defined(ERHE_TRACY_NO_GL)
 #   undef glGenQueries
 #   undef glGetInteger64v
 #   undef glGetQueryiv

@@ -33,8 +33,8 @@ class Camera
     , public std::enable_shared_from_this<Camera>
 {
 public:
-    explicit Camera(const std::string& name);
-    virtual ~Camera() = default;
+    explicit Camera(std::string_view name);
+    virtual ~Camera();
 
     void update(Viewport viewport) override;
 
@@ -43,40 +43,19 @@ public:
     void on_attach(Node& node);
     void on_detach(Node& node);
 
-    auto node() const -> const std::shared_ptr<Node>& override
-    {
-        return m_node;
-    }
+    auto node() const -> const std::shared_ptr<Node>& override;
 
-    auto projection() -> Projection* override
-    {
-        return &m_projection;
-    }
+    auto projection() -> Projection* override;
 
-    auto projection() const -> const Projection* override
-    {
-        return &m_projection;
-    }
+    auto projection() const -> const Projection* override;
 
-    auto clip_from_node() const -> glm::mat4 override
-    {
-        return m_transforms.clip_from_node.matrix();
-    }
+    auto clip_from_node() const -> glm::mat4 override;
 
-    auto clip_from_world() const -> glm::mat4 override
-    {
-        return m_transforms.clip_from_world.matrix();
-    }
+    auto clip_from_world() const -> glm::mat4 override;
 
-    auto node_from_clip() const -> glm::mat4 override
-    {
-        return m_transforms.clip_from_node.inverse_matrix();
-    }
+    auto node_from_clip() const -> glm::mat4 override;
 
-    auto world_from_clip() const -> glm::mat4 override
-    {
-        return m_transforms.clip_from_world.inverse_matrix();
-    }
+    auto world_from_clip() const -> glm::mat4 override;
 
     std::string           m_name;
     std::shared_ptr<Node> m_node;

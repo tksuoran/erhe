@@ -2,6 +2,12 @@
 #include "erhe/components/component.hpp"
 #include "erhe/components/log.hpp"
 #include "erhe/toolkit/verify.hpp"
+
+#define ERHE_TRACY_NO_GL 1
+#include "erhe/toolkit/tracy_client.hpp"
+
+#include <fmt/ostream.h>
+
 #include <sstream>
 
 namespace erhe::components
@@ -9,6 +15,12 @@ namespace erhe::components
 
 using std::set;
 using std::shared_ptr;
+
+Components::Components()
+{
+}
+
+Components::~Components() = default;
 
 auto Components::add(const shared_ptr<Component>& component)
 -> const std::shared_ptr<erhe::components::Component>&
@@ -24,6 +36,8 @@ auto Components::add(const shared_ptr<Component>& component)
 
 void Components::cleanup_components()
 {
+    ZoneScoped;
+
     for (const auto& component : components)
     {
         component->unregister();
@@ -32,72 +46,119 @@ void Components::cleanup_components()
     components.clear();
 }
 
-void Components::initialize_components()
+void Components::launch_component_initialization()
 {
-    log_components.info("Connecting {} Components:\n", components.size());
+    ZoneScoped;
+
+    auto tid = std::this_thread::get_id();
     for (auto const& component : components)
     {
         component->connect();
+        component->set_connected();
     }
 
-    set<shared_ptr<Component>> uninitialized(components);
-    set<shared_ptr<Component>> remove_set;
+    m_uninitialized_components = components;
+    size_t count = m_uninitialized_components.size();
 
-    size_t total_count         = uninitialized.size();
-    size_t uninitialized_count = total_count;
-    size_t initialized_count   = 0;
+    log_components.info("{} Initializing {} Components:\n", tid, count);
 
-    log_components.info("Initializing {} Components:\n", uninitialized_count);
+    m_execution_queue = std::make_unique<mango::ConcurrentQueue>();
 
-    while (uninitialized_count > 0)
+    for (size_t i = 0; i < count; ++i)
     {
-        remove_set.clear();
+        m_execution_queue->enqueue([this]() {
+            ZoneScoped;
 
-        for (auto i = uninitialized.begin(); i != uninitialized.end();)
-        {
-            auto s = *i;
-
-            VERIFY(s != nullptr);
-
-            if (s->ready())
+            auto component = get_component_to_initialize();
+            if (component)
             {
-                ++initialized_count;
-                log_components.info("Initializing Component {} / {}: {}...\n", initialized_count, total_count, s->name());
-                s->initialize();
-                remove_set.insert(s);
-                --uninitialized_count;
-                i = uninitialized.erase(i);
-            }
-            else
-            {
-                ++i;
-            }
-        }
-
-        if (remove_set.empty())
-        {
-            log_components.error("Circular Component dependenciers detected\n");
-            for (const auto& s : uninitialized)
-            {
-                log_components.error("\t{}", s->name());
-                for (const auto& d : s->dependencies())
+                component->initialize_component();
                 {
-                    log_components.error("\t\t{}", d->name());
+                    //ZoneScoped;
+                    ZoneName(component->name(), strlen(component->name()));
+                    //ZoneText(component->name(), strlen(component->name()));
+
+                    std::lock_guard<std::mutex> lock(m_mutex);
+                    component->set_ready();
+                    m_uninitialized_components.erase(component);
+                    for (auto component_ : m_uninitialized_components)
+                    {
+                        component_->remove_dependency(component);
+                    }
+                    std::string message_text = fmt::format("{} initialized", component->name());
+                    TracyMessage(message_text.c_str(), message_text.length());
+                    m_component_initialized.notify_all();
+                    if (m_uninitialized_components.empty())
+                    {
+                        m_is_ready = true;
+                        TracyMessageL("all components initialized");
+                    }
                 }
             }
-            FATAL("Circular dependencies detected");
-        }
+        });
+    }
+}
 
-        for (const auto& s : uninitialized)
+auto Components::get_component_to_initialize() -> shared_ptr<Component>
+{
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        if (m_uninitialized_components.empty())
         {
-            s->remove_dependencies(remove_set);
+            FATAL("No uninitialized component found\n");
+            return {};
         }
     }
-    log_components.info("Done initializing Components\n");
+
+    for (;;)
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            auto i = std::find_if(m_uninitialized_components.begin(),
+                                  m_uninitialized_components.end(),
+                                  [](auto& component) {
+                                      return component->get_state() == Component::Component_state::Connected &&
+                                             component->is_ready();
+                                  });
+            if (i != m_uninitialized_components.end())
+            {
+                auto component = *i;
+                component->set_initializing();
+                return component;
+            }
+        }
+
+        {
+            ZoneScopedNC("wait", 0x444444);
+
+            std::unique_lock<std::mutex> unique_lock(m_mutex);
+            m_component_initialized.wait(unique_lock);
+        }
+    }
+}
+
+auto Components::is_component_initialization_complete() -> bool
+{
+    ZoneScoped;
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_is_ready;
+}
+
+void Components::wait_component_initialization_complete()
+{
+    ZoneScoped;
+
+    VERIFY(m_execution_queue);
+    m_execution_queue->wait();
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_is_ready = true;
 }
 
 void Components::on_thread_exit()
 {
+    ZoneScoped;
+
     for (const auto& component : components)
     {
         component->on_thread_exit();
@@ -106,6 +167,8 @@ void Components::on_thread_exit()
 
 void Components::on_thread_enter()
 {
+    ZoneScoped;
+
     for (const auto& component : components)
     {
         component->on_thread_enter();

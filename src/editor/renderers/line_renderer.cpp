@@ -1,4 +1,5 @@
 #include "renderers/line_renderer.hpp"
+#include "gl_context_provider.hpp"
 #include "log.hpp"
 
 #include "erhe/graphics/buffer.hpp"
@@ -47,6 +48,8 @@ Line_renderer::~Line_renderer()
 
 void Line_renderer::connect()
 {
+    require<Gl_context_provider>();
+
     m_pipeline_state_tracker = get<OpenGL_state_tracker>();
     m_shader_monitor         = require<Shader_monitor>();
 }
@@ -55,6 +58,8 @@ static constexpr const char* c_line_renderer_initialize_component = "Line_render
 void Line_renderer::initialize_component()
 {
     ZoneScoped;
+
+    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
