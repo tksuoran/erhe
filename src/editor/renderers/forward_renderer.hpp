@@ -67,12 +67,12 @@ public:
         "Hidden Line with Blend",
     };
 
-    Forward_renderer();
-
-    virtual ~Forward_renderer() = default;
+    static constexpr const char* c_name = "Forward_renderer";
+    Forward_renderer ();
+    ~Forward_renderer() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
     void initialize_component() override;
 
     void render(erhe::scene::Viewport       viewport,

@@ -88,40 +88,40 @@ struct Conical_frustum_builder
     auto cone_point(double rel_slice, double rel_stack_minus_one_to_one)
     -> Point_id
     {
-        double phi                 = glm::pi<double>() * 2.0 * rel_slice;
-        double sin_phi             = std::sin(phi);
-        double cos_phi             = std::cos(phi);
-        double rel_stack           = 0.5 + 0.5 * rel_stack_minus_one_to_one;
-        double one_minus_rel_stack = 1.0 - rel_stack;
+        const double phi                 = glm::pi<double>() * 2.0 * rel_slice;
+        const double sin_phi             = std::sin(phi);
+        const double cos_phi             = std::cos(phi);
+        const double rel_stack           = 0.5 + 0.5 * rel_stack_minus_one_to_one;
+        const double one_minus_rel_stack = 1.0 - rel_stack;
 
-        vec3 position(static_cast<float>(one_minus_rel_stack * (min_x                  ) + rel_stack * (max_x)),
-                      static_cast<float>(one_minus_rel_stack * (bottom_radius * sin_phi) + rel_stack * (top_radius * sin_phi)),
-                      static_cast<float>(one_minus_rel_stack * (bottom_radius * cos_phi) + rel_stack * (top_radius * cos_phi)));
+        const vec3 position{static_cast<float>(one_minus_rel_stack * (min_x                  ) + rel_stack * (max_x)),
+                            static_cast<float>(one_minus_rel_stack * (bottom_radius * sin_phi) + rel_stack * (top_radius * sin_phi)),
+                            static_cast<float>(one_minus_rel_stack * (bottom_radius * cos_phi) + rel_stack * (top_radius * cos_phi))};
 
-        vec3 bottom(static_cast<float>(min_x),
-                    static_cast<float>(bottom_radius * sin_phi),
-                    static_cast<float>(bottom_radius * cos_phi));
+        const vec3 bottom{static_cast<float>(min_x),
+                          static_cast<float>(bottom_radius * sin_phi),
+                          static_cast<float>(bottom_radius * cos_phi)};
 
-        vec3 top(static_cast<float>(max_x),
-                 static_cast<float>(top_radius * sin_phi),
-                 static_cast<float>(top_radius * cos_phi));
+        const vec3 top{static_cast<float>(max_x),
+                       static_cast<float>(top_radius * sin_phi),
+                       static_cast<float>(top_radius * cos_phi)};
 
-        vec3 B = glm::normalize(top - bottom); // generatrix
-        vec3 T{0.0f,
-               static_cast<float>(std::sin(phi + (glm::pi<double>() * 0.5))),
-               static_cast<float>(std::cos(phi + (glm::pi<double>() * 0.5)))};
-        vec3 N = glm::cross(B, T);
-        N      = glm::normalize(N);
+        const vec3 B = glm::normalize(top - bottom); // generatrix
+        const vec3 T{0.0f,
+                     static_cast<float>(std::sin(phi + (glm::pi<double>() * 0.5))),
+                     static_cast<float>(std::cos(phi + (glm::pi<double>() * 0.5)))};
+        const vec3 N0 = glm::cross(B, T);
+        const vec3 N  = glm::normalize(N0);
 
-        vec3  t_xyz = glm::normalize(T - N * glm::dot(N, T));
-        float t_w   = (glm::dot(glm::cross(N, T), B) < 0.0f) ? -1.0f : 1.0f;
-        vec3  b_xyz = glm::normalize(B - N * glm::dot(N, B));
-        float b_w   = (glm::dot(glm::cross(B, N), T) < 0.0f) ? -1.0f : 1.0f;
+        const vec3  t_xyz = glm::normalize(T - N * glm::dot(N, T));
+        const float t_w   = (glm::dot(glm::cross(N, T), B) < 0.0f) ? -1.0f : 1.0f;
+        const vec3  b_xyz = glm::normalize(B - N * glm::dot(N, B));
+        const float b_w   = (glm::dot(glm::cross(B, N), T) < 0.0f) ? -1.0f : 1.0f;
 
-        double s = rel_slice;
-        double t = rel_stack;
+        const double s = rel_slice;
+        const double t = rel_stack;
 
-        Point_id point_id = geometry.make_point();
+        const Point_id point_id = geometry.make_point();
 
         point_locations ->put(point_id, position);
         point_normals   ->put(point_id, N);
@@ -145,14 +145,14 @@ struct Conical_frustum_builder
     auto make_corner(Polygon_id polygon_id, int slice, int stack, bool base)
     -> Corner_id
     {
-        auto rel_slice                  = static_cast<double>(slice) / static_cast<double>(slice_count);
-        auto rel_stack_minus_one_to_one = static_cast<double>(stack) / (static_cast<double>(stack_division) + 1);
-        auto rel_stack                  = 0.5 + 0.5 * rel_stack_minus_one_to_one;
+        const auto rel_slice                  = static_cast<double>(slice) / static_cast<double>(slice_count);
+        const auto rel_stack_minus_one_to_one = static_cast<double>(stack) / (static_cast<double>(stack_division) + 1);
+        const auto rel_stack                  = 0.5 + 0.5 * rel_stack_minus_one_to_one;
 
-        bool is_slice_seam       = (slice == 0) || (slice == slice_count);
-        bool is_bottom           = stack == -stack_division - 1;
-        bool is_top              = stack ==  stack_division + 1;
-        bool is_uv_discontinuity = is_slice_seam || is_bottom || is_top;
+        const bool is_slice_seam       = (slice == 0) || (slice == slice_count);
+        const bool is_bottom           = stack == -stack_division - 1;
+        const bool is_top              = stack ==  stack_division + 1;
+        const bool is_uv_discontinuity = is_slice_seam || is_bottom || is_top;
 
         Point_id point_id{0};
 
@@ -179,7 +179,7 @@ struct Conical_frustum_builder
             //log_cone.trace("{:2}              ", point_id);
         }
 
-        Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
+        const Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
         //log_cone.trace("corner = {:2}", corner_id);
 
         if (is_uv_discontinuity)
@@ -187,10 +187,10 @@ struct Conical_frustum_builder
             float s, t;
             if (base)
             {
-                double phi                 = glm::pi<double>() * 2.0 * rel_slice;
-                double sin_phi             = std::sin(phi);
-                double cos_phi             = std::cos(phi);
-                double one_minus_rel_stack = 1.0 - rel_stack;
+                const double phi                 = glm::pi<double>() * 2.0 * rel_slice;
+                const double sin_phi             = std::sin(phi);
+                const double cos_phi             = std::cos(phi);
+                const double one_minus_rel_stack = 1.0 - rel_stack;
 
                 s = static_cast<float>(one_minus_rel_stack * sin_phi + rel_stack * sin_phi);
                 t = static_cast<float>(one_minus_rel_stack * cos_phi + rel_stack * cos_phi);
@@ -273,13 +273,13 @@ struct Conical_frustum_builder
         //log_cone.trace("Points:\n");
         for (int slice = 0; slice < slice_count; ++slice)
         {
-            auto rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
+            const auto rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
 
             for (int stack = -stack_division - bottom_not_singular;
                 stack <= stack_division + top_not_singular;
                 ++stack)
             {
-                auto rel_stack = static_cast<double>(stack) / (static_cast<double>(stack_division) + 1);
+                const auto rel_stack = static_cast<double>(stack) / (static_cast<double>(stack_division) + 1);
 
                 //log_cone.trace("\tslice {:2} stack {: 2}: ", slice, stack);
                 points[std::make_pair(slice, stack)] = cone_point(rel_slice, rel_stack);
@@ -294,39 +294,39 @@ struct Conical_frustum_builder
             bottom_point_id = geometry.make_point(min_x, 0.0, 0.0); // Apex
             for (int slice = 0; slice < slice_count; ++slice)
             {
-                int  stack              = -stack_division; // Second last stack, bottom is -stackDivision - 1
-                auto rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
-                auto rel_stack_centroid = -1.0 + (0.5 / (static_cast<double>(stack_division) + 1));
+                const int  stack              = -stack_division; // Second last stack, bottom is -stackDivision - 1
+                const auto rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
+                const auto rel_stack_centroid = -1.0 + (0.5 / (static_cast<double>(stack_division) + 1));
 
-                Polygon_id polygon_id  = geometry.make_polygon();
+                const Polygon_id polygon_id  = geometry.make_polygon();
 
                 make_corner(polygon_id, slice + 1, stack);
                 make_corner(polygon_id, slice,     stack);
-                Corner_id tip_corner_id = make_corner(polygon_id, slice, -stack_division - 1);
-                auto p0 = get_point(slice, stack);
-                auto p1 = get_point(slice + 1, stack);
+                const Corner_id tip_corner_id = make_corner(polygon_id, slice, -stack_division - 1);
+                const auto p0 = get_point(slice, stack);
+                const auto p1 = get_point(slice + 1, stack);
 
-                vec3 n1             = point_normals->get(p0);
-                vec3 n2             = point_normals->get(p1);
-                vec3 average_normal = normalize(n1 + n2);
+                const vec3 n1             = point_normals->get(p0);
+                const vec3 n2             = point_normals->get(p1);
+                const vec3 average_normal = normalize(n1 + n2);
                 corner_normals->put(tip_corner_id, average_normal);
 
-                vec4 t1              = point_tangents->get(p0);
-                vec4 t2              = point_tangents->get(p1);
-                vec3 average_tangent = normalize(glm::vec3(t1) + glm::vec3(t2));
+                const vec4 t1              = point_tangents->get(p0);
+                const vec4 t2              = point_tangents->get(p1);
+                const vec3 average_tangent = normalize(glm::vec3(t1) + glm::vec3(t2));
                 corner_tangents->put(tip_corner_id, glm::vec4(average_tangent, t1.w));
 
-                vec4 b1              = point_bitangents->get(p0);
-                vec4 b2              = point_bitangents->get(p1);
-                vec3 average_bitangent = normalize(glm::vec3(b1) + glm::vec3(b2));
+                const vec4 b1              = point_bitangents->get(p0);
+                const vec4 b2              = point_bitangents->get(p1);
+                const vec3 average_bitangent = normalize(glm::vec3(b1) + glm::vec3(b2));
                 corner_bitangents->put(tip_corner_id, glm::vec4(average_bitangent, b1.w));
 
-                vec2 uv1              = point_texcoords->get(p0);
-                vec2 uv2              = point_texcoords->get(p1);
-                vec2 average_texcoord = (uv1 + uv2) / 2.0f;
+                const vec2 uv1              = point_texcoords->get(p0);
+                const vec2 uv2              = point_texcoords->get(p1);
+                const vec2 average_texcoord = (uv1 + uv2) / 2.0f;
                 corner_texcoords->put(tip_corner_id, average_texcoord);
 
-                Point_id centroid_id = cone_point(rel_slice_centroid, rel_stack_centroid);
+                const Point_id centroid_id = cone_point(rel_slice_centroid, rel_stack_centroid);
                 
                 if constexpr (use_geometric_centroids)
                 {
@@ -340,7 +340,7 @@ struct Conical_frustum_builder
             if (use_bottom)
             {
                 //log_cone.trace("Bottom - flat polygon\n");
-                Polygon_id polygon_id = geometry.make_polygon();
+                const Polygon_id polygon_id = geometry.make_polygon();
                 if constexpr (use_geometric_centroids)
                 {
                     polygon_centroids->put(polygon_id, vec3(static_cast<float>(min_x), 0.0f, 0.0f));
@@ -349,7 +349,7 @@ struct Conical_frustum_builder
 
                 for (int slice = 0; slice < slice_count; ++slice)
                 {
-                    int reverse_slice = slice_count - 1 - slice;
+                    const int reverse_slice = slice_count - 1 - slice;
                     make_corner(polygon_id, reverse_slice, -stack_division - 1, true);
                 }
 
@@ -374,19 +374,19 @@ struct Conical_frustum_builder
             stack < stack_division + top_not_singular;
             ++stack)
         {
-            double rel_stack_centroid = (static_cast<double>(stack) + 0.5) / (static_cast<double>(stack_division) + 1);
+            const double rel_stack_centroid = (static_cast<double>(stack) + 0.5) / (static_cast<double>(stack_division) + 1);
 
             for (int slice = 0; slice < slice_count; ++slice)
             {
-                auto rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
+                const auto rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
 
-                Polygon_id polygon_id = geometry.make_polygon();
+                const Polygon_id polygon_id = geometry.make_polygon();
                 make_corner(polygon_id, slice + 1, stack + 1);
                 make_corner(polygon_id, slice, stack + 1);
                 make_corner(polygon_id, slice, stack);
                 make_corner(polygon_id, slice + 1, stack);
 
-                Point_id centroid_id = cone_point(rel_slice_centroid, rel_stack_centroid);
+                const Point_id centroid_id = cone_point(rel_slice_centroid, rel_stack_centroid);
                 if constexpr (use_geometric_centroids)
                 {
                     polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
@@ -403,39 +403,39 @@ struct Conical_frustum_builder
 
             for (int slice = 0; slice < slice_count; ++slice)
             {
-                int  stack              = stack_division;
-                auto rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
-                auto rel_stack_centroid = 1.0 - (0.5 / (static_cast<double>(stack_division) + 1));
+                const int  stack              = stack_division;
+                const auto rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
+                const auto rel_stack_centroid = 1.0 - (0.5 / (static_cast<double>(stack_division) + 1));
 
-                Polygon_id polygon_id    = geometry.make_polygon();
-                Corner_id  tip_corner_id = make_corner(polygon_id, slice, stack_division + 1);
+                const Polygon_id polygon_id    = geometry.make_polygon();
+                const Corner_id  tip_corner_id = make_corner(polygon_id, slice, stack_division + 1);
                 make_corner(polygon_id, slice, stack);
                 make_corner(polygon_id, slice + 1, stack);
 
                 auto p0 = get_point(slice, stack);
                 auto p1 = get_point(slice + 1, stack);
 
-                vec3 n1             = point_normals->get(p0);
-                vec3 n2             = point_normals->get(p1);
-                vec3 average_normal = normalize(n1 + n2);
+                const vec3 n1             = point_normals->get(p0);
+                const vec3 n2             = point_normals->get(p1);
+                const vec3 average_normal = normalize(n1 + n2);
                 corner_normals->put(tip_corner_id, average_normal);
 
-                vec4 t1              = point_tangents->get(p0);
-                vec4 t2              = point_tangents->get(p1);
-                vec3 average_tangent = normalize(glm::vec3(t1) + glm::vec3(t2));
+                const vec4 t1              = point_tangents->get(p0);
+                const vec4 t2              = point_tangents->get(p1);
+                const vec3 average_tangent = normalize(glm::vec3(t1) + glm::vec3(t2));
                 corner_tangents->put(tip_corner_id, glm::vec4(average_tangent, t1.w));
 
-                vec4 b1                = point_bitangents->get(p0);
-                vec4 b2                = point_bitangents->get(p1);
-                vec3 average_bitangent = normalize(glm::vec3(b1) + glm::vec3(b2));
+                const vec4 b1                = point_bitangents->get(p0);
+                const vec4 b2                = point_bitangents->get(p1);
+                const vec3 average_bitangent = normalize(glm::vec3(b1) + glm::vec3(b2));
                 corner_bitangents->put(tip_corner_id, glm::vec4(average_bitangent, b1.w));
 
-                vec2 uv1              = point_texcoords->get(p0);
-                vec2 uv2              = point_texcoords->get(p1);
-                vec2 average_texcoord = (uv1 + uv2) / 2.0f;
+                const vec2 uv1              = point_texcoords->get(p0);
+                const vec2 uv2              = point_texcoords->get(p1);
+                const vec2 average_texcoord = (uv1 + uv2) / 2.0f;
                 corner_texcoords->put(tip_corner_id, average_texcoord);
 
-                Point_id centroid_id = cone_point(rel_slice_centroid, rel_stack_centroid);
+                const Point_id centroid_id = cone_point(rel_slice_centroid, rel_stack_centroid);
                 if constexpr (use_geometric_centroids)
                 {
                     polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
@@ -448,7 +448,7 @@ struct Conical_frustum_builder
             if (use_top)
             {
                 log_cone.trace("Top - flat polygon\n");
-                Polygon_id polygon_id = geometry.make_polygon();
+                const Polygon_id polygon_id = geometry.make_polygon();
                 if constexpr (use_geometric_centroids)
                 {
                     polygon_centroids->put(polygon_id, vec3(static_cast<float>(max_x), 0.0f, 0.0f));

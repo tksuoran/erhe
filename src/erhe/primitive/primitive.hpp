@@ -24,20 +24,17 @@ namespace erhe::primitive
 struct Index_range;
 struct Material;
 
-struct Primitive_geometry
+struct Primitive_geometry final
 {
-    Primitive_geometry();
-
+    Primitive_geometry ();
     ~Primitive_geometry();
-
-    Primitive_geometry(Primitive_geometry&) = delete;
-    Primitive_geometry* operator=(Primitive_geometry&) = delete;
-    Primitive_geometry(Primitive_geometry&& other);
-    Primitive_geometry& operator=(Primitive_geometry&&);
+    Primitive_geometry (Primitive_geometry&) = delete;
+    void operator=     (Primitive_geometry&) = delete;
+    Primitive_geometry (Primitive_geometry&& other) noexcept;
+    auto operator=     (Primitive_geometry&& other) noexcept -> Primitive_geometry&;
 
     // Specifies a constant that should be added to each element of indices when chosing elements from the enabled vertex arrays.
-    auto base_vertex() const
-    -> uint32_t
+    auto base_vertex() const -> uint32_t
     {
         return static_cast<uint32_t>(vertex_byte_offset / vertex_element_size);
     }

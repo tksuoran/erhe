@@ -43,22 +43,6 @@ Clone::Clone(Geometry& source, Geometry& destination, glm::mat4 transform)
     destination.m_corner_property_map_collection  = source.m_corner_property_map_collection .clone_with_transform(transform);
     destination.m_polygon_property_map_collection = source.m_polygon_property_map_collection.clone_with_transform(transform);
     destination.m_edge_property_map_collection    = source.m_edge_property_map_collection   .clone_with_transform(transform);
-#if 0
-    source.for_each_point([&](auto& i)
-    {
-        make_new_point_from_point(i.point_id);
-    });
-
-    source.for_each_polygon([&](auto& i)
-    {
-        auto new_polygon_id = make_new_polygon_from_polygon(i.polygon_id);
-        add_polygon_corners(new_polygon_id, i.polygon_id);
-    });
-
-    post_processing();
-    //build_destination_edges_with_sourcing();
-    //interpolate_all_property_maps();
-#endif
 }
 
 auto clone(Geometry& source, glm::mat4 transform) -> Geometry

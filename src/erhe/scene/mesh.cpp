@@ -3,6 +3,8 @@
 namespace erhe::scene
 {
 
+Mesh::Mesh() = default;
+
 Mesh::Mesh(std::string_view name)
     : m_name{name}
 {
@@ -14,6 +16,8 @@ Mesh::Mesh(std::string_view           name,
 {
     primitives.emplace_back(primitive);
 }
+
+Mesh::~Mesh() = default;
 
 auto Mesh::name() const -> const std::string&
 {

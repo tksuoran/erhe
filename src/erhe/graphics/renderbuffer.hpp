@@ -19,28 +19,14 @@ public:
                  unsigned int        width,
                  unsigned int        height);
 
-    ~Renderbuffer() = default;
+    ~Renderbuffer();
 
-    auto internal_format() const
-    -> gl::Internal_format;
-
-    auto sample_count() const
-    -> unsigned int;
-
-    auto width() const
-    -> unsigned int;
-
-    auto height() const
-    -> unsigned int;
-
-    auto gl_name() const
-    -> unsigned int;
-
-    void set_debug_label(const std::string& label)
-    {
-        gl::object_label(gl::Object_identifier::renderbuffer,
-                         gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
-    }
+    auto internal_format() const -> gl::Internal_format;
+    auto sample_count   () const -> unsigned int;
+    auto width          () const -> unsigned int;
+    auto height         () const -> unsigned int;
+    auto gl_name        () const -> unsigned int;
+    void set_debug_label(std::string_view label);
 
 private:
     Gl_renderbuffer     m_handle;
@@ -52,13 +38,7 @@ private:
 
 struct Renderbuffer_hash
 {
-    auto operator()(const Renderbuffer& renderbuffer) const noexcept
-    -> size_t
-    {
-        Expects(renderbuffer.gl_name() != 0);
-
-        return static_cast<size_t>(renderbuffer.gl_name());
-    }
+    auto operator()(const Renderbuffer& renderbuffer) const noexcept -> size_t;
 };
 
 auto operator==(const Renderbuffer& lhs, const Renderbuffer& rhs) noexcept

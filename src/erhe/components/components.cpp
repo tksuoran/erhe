@@ -26,11 +26,26 @@ auto Components::add(const shared_ptr<Component>& component)
 -> const std::shared_ptr<erhe::components::Component>&
 {
     // Silently ignores nullptr Components
-    if (component)
+    if (!component)
     {
-        component->register_as_component(this);
-        components.insert(component);
+        return component;
     }
+
+    component->register_as_component(this);
+    components.insert(component);
+
+    auto* fixed_step_update     = dynamic_cast<IUpdate_fixed_step    *>(component.get());
+    auto* once_per_frame_update = dynamic_cast<IUpdate_once_per_frame*>(component.get());
+
+    if (fixed_step_update != nullptr)
+    {
+        fixed_step_updates.insert(fixed_step_update);
+    }
+    if (once_per_frame_update != nullptr)
+    {
+        once_per_frame_updates.insert(once_per_frame_update);
+    }
+
     return component;
 }
 
@@ -46,23 +61,78 @@ void Components::cleanup_components()
     components.clear();
 }
 
+// Optimized queue which executes tasks concurrently
+class Concurrent_execution_queue
+    : public IExecution_queue
+{
+public:
+    void enqueue(std::function<void()> task) override;
+    void wait   () override;
+
+private:
+    mango::ConcurrentQueue m_concurrent_queue;
+};
+
+void Concurrent_execution_queue::enqueue(std::function<void()> task)
+{
+    m_concurrent_queue.enqueue(task);
+}
+
+void Concurrent_execution_queue::wait()
+{
+    m_concurrent_queue.wait();
+}
+
+// Reference queue which executes taska as they are queued
+class Serial_execution_queue
+    : public IExecution_queue
+{
+public:
+    void enqueue(std::function<void()> task) override;
+    void wait   () override;
+};
+
+void Serial_execution_queue::enqueue(std::function<void()> task)
+{
+    task();
+}
+
+void Serial_execution_queue::wait()
+{
+}
+
+void Components::show_dependencies() const
+{
+    log_components.info("Component dependencies:\n");
+    for (auto const& component : components)
+    {
+        log_components.info("    {}:\n", component->name());
+        for (auto const& dependency : component->dependencies())
+        {
+            log_components.info("        {}\n", dependency->name());
+        }
+    }
+}
+
 void Components::launch_component_initialization()
 {
     ZoneScoped;
 
-    auto tid = std::this_thread::get_id();
     for (auto const& component : components)
     {
         component->connect();
         component->set_connected();
     }
 
+    show_dependencies();
+
     m_uninitialized_components = components;
-    size_t count = m_uninitialized_components.size();
+    const size_t count = m_uninitialized_components.size();
 
-    log_components.info("{} Initializing {} Components:\n", tid, count);
+    log_components.info("Initializing {} Components:\n", count);
 
-    m_execution_queue = std::make_unique<mango::ConcurrentQueue>();
+    //m_execution_queue = std::make_unique<Concurrent_execution_queue>();
+    m_execution_queue = std::make_unique<Serial_execution_queue>();
 
     for (size_t i = 0; i < count; ++i)
     {
@@ -72,11 +142,10 @@ void Components::launch_component_initialization()
             auto component = get_component_to_initialize();
             if (component)
             {
+                log_components.info("{}\n", component->name());
                 component->initialize_component();
                 {
-                    //ZoneScoped;
                     ZoneName(component->name(), strlen(component->name()));
-                    //ZoneText(component->name(), strlen(component->name()));
 
                     std::lock_guard<std::mutex> lock(m_mutex);
                     component->set_ready();
@@ -85,7 +154,7 @@ void Components::launch_component_initialization()
                     {
                         component_->remove_dependency(component);
                     }
-                    std::string message_text = fmt::format("{} initialized", component->name());
+                    const std::string message_text = fmt::format("{} initialized", component->name());
                     TracyMessage(message_text.c_str(), message_text.length());
                     m_component_initialized.notify_all();
                     if (m_uninitialized_components.empty())
@@ -119,7 +188,7 @@ auto Components::get_component_to_initialize() -> shared_ptr<Component>
                                   m_uninitialized_components.end(),
                                   [](auto& component) {
                                       return component->get_state() == Component::Component_state::Connected &&
-                                             component->is_ready();
+                                             component->is_ready_to_initialize();
                                   });
             if (i != m_uninitialized_components.end())
             {

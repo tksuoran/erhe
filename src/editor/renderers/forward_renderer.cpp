@@ -39,9 +39,11 @@ using namespace glm;
 using namespace std;
 
 Forward_renderer::Forward_renderer()
-    : Component("Forward_renderer")
+    : Component(c_name)
 {
 }
+
+Forward_renderer::~Forward_renderer() = default;
 
 void Forward_renderer::connect()
 {
@@ -68,7 +70,7 @@ void Forward_renderer::initialize_component()
                          static_cast<GLsizei>(strlen(c_forward_renderer_initialize_component)),
                          c_forward_renderer_initialize_component);
 
-    create_frame_resources(256, 256, 32, 1000, 1000);
+    create_frame_resources(256, 256, 32, 8000, 8000);
 
     m_vertex_input = std::make_unique<Vertex_input_state>(get<Program_interface>()->attribute_mappings,
                                                           *m_mesh_memory->vertex_format(),
@@ -395,20 +397,20 @@ void Forward_renderer::render(Viewport                    viewport,
     gl::viewport     (viewport.x, viewport.y, viewport.width, viewport.height);
     for (auto& pass : passes)
     {
-        auto* pipeline = select_pipeline(pass);
+        const auto* const pipeline = select_pipeline(pass);
         if (pipeline == nullptr)
         {
             return;
         }
 
-        auto primitive_mode = select_primitive_mode(pass);
+        const auto primitive_mode = select_primitive_mode(pass);
 
         if (pass == Pass::clear_depth)
         {
             gl::depth_range(0.0f, 0.0f);
         }
 
-        const char* pass_name = c_pass_strings[static_cast<size_t>(pass)];
+        const char* const pass_name = c_pass_strings[static_cast<size_t>(pass)];
         gl::push_debug_group(gl::Debug_source::debug_source_application,
                              0,
                              static_cast<GLsizei>(strlen(pass_name)),

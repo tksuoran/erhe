@@ -24,25 +24,26 @@ class Selection_tool
 public:
     static constexpr const char* c_name = "Selection_tool";
     Selection_tool();
-    virtual ~Selection_tool();
+    ~Selection_tool() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
+    void initialize_component() override;
 
     // Implements Tool
-    auto update(Pointer_context& pointer_context) -> bool override;
-    void render(const Render_context& render_context) override;
-    auto state() const -> State override;
-    void cancel_ready() override;
-    auto description() -> const char* override;
+    auto update      (Pointer_context& pointer_context) -> bool override;
+    void render      (const Render_context& render_context)     override;
+    auto state       () const -> State                          override;
+    void cancel_ready()                                         override;
+    auto description () -> const char*                          override;
 
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
-    using Selection = std::vector<std::shared_ptr<erhe::scene::INode_attachment>>;
+    using Selection            = std::vector<std::shared_ptr<erhe::scene::INode_attachment>>;
     using On_selection_changed = std::function<void(const Selection&)>;
 
-    class Subcription
+    class Subcription final
     {
     public:
         Subcription(Selection_tool* tool, int handle)
@@ -59,8 +60,8 @@ public:
             }
         }
 
-        Subcription(const Subcription&) = delete;
-        auto operator=(const Subcription&) -> Subcription& = delete;
+        Subcription   (const Subcription&) = delete;
+        void operator=(const Subcription&) = delete;
 
         Subcription(Subcription&& other) noexcept
         {

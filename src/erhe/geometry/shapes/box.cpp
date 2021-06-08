@@ -35,9 +35,9 @@ auto signed_pow(float x, float p)
 auto make_box(double x_size, double y_size, double z_size)
 -> Geometry
 {
-    double x = x_size / 2.0;
-    double y = y_size / 2.0;
-    double z = z_size / 2.0;
+    const double x = x_size / 2.0;
+    const double y = y_size / 2.0;
+    const double z = z_size / 2.0;
 
     return Geometry("box", [=](auto& geometry) {
         geometry.make_point(-x,  y,  z, 0, 1); // 0
@@ -93,7 +93,7 @@ auto make_box(float min_x, float max_x, float min_y, float max_y, float min_z, f
 auto make_box(double r)
 -> Geometry
 {
-    double sq3 = std::sqrt(3.0);
+    const double sq3 = std::sqrt(3.0);
     return make_box(2.0 * r / sq3, 2.0 * r / sq3, 2.0 * r / sq3);
 }
 
@@ -117,30 +117,31 @@ struct Box_builder
     auto make_point(int x, int y, int z, glm::vec3 n, float s, float t)
     -> Point_id
     {
-        int key = y * (div.x * 4 * div.z * 4) +
-                  x * (div.z * 4) +
-                  z;
+        const int key = y * (div.x * 4 * div.z * 4) +
+                        x * (div.z * 4) +
+                        z;
 
-        auto i = points.find(key);
+        const auto i = points.find(key);
         if (i != points.end())
         {
             return i->second;
         }
 
-        float rel_x  = static_cast<float>(x) / static_cast<float>(div.x);
-        float rel_y  = static_cast<float>(y) / static_cast<float>(div.y);
-        float rel_z  = static_cast<float>(z) / static_cast<float>(div.z);
-        float rel_xp = signed_pow(rel_x, p);
-        float rel_yp = signed_pow(rel_y, p);
-        float rel_zp = signed_pow(rel_z, p);
+        const float rel_x  = static_cast<float>(x) / static_cast<float>(div.x);
+        const float rel_y  = static_cast<float>(y) / static_cast<float>(div.y);
+        const float rel_z  = static_cast<float>(z) / static_cast<float>(div.z);
+        const float rel_xp = signed_pow(rel_x, p);
+        const float rel_yp = signed_pow(rel_y, p);
+        const float rel_zp = signed_pow(rel_z, p);
 
-        float x_p = rel_xp * size.x;
-        float y_p = rel_yp * size.y;
-        float z_p = rel_zp * size.z;
+        const float x_p = rel_xp * size.x;
+        const float y_p = rel_yp * size.y;
+        const float z_p = rel_zp * size.z;
 
-        Point_id point_id = geometry.make_point();
-
-        bool is_discontinuity = (x == -div.x) || (x == div.x) || (y == -div.y) || (y == div.y) || (z == -div.z) || (z == div.z);
+        const Point_id point_id         = geometry.make_point();
+        const bool     is_discontinuity = (x == -div.x) || (x == div.x) ||
+                                          (y == -div.y) || (y == div.y) ||
+                                          (z == -div.z) || (z == div.z);
 
         point_locations->put(point_id, vec3(x_p, y_p, z_p));
         if (!is_discontinuity)
@@ -157,14 +158,15 @@ struct Box_builder
     auto make_corner(Polygon_id polygon_id, int x, int y, int z, glm::vec3 n, float s, float t)
     -> Corner_id
     {
-        int key = y * (div.x * 4 * div.z * 4) +
-                  x * (div.z * 4) +
-                  z;
+        const int key = y * (div.x * 4 * div.z * 4) +
+                        x * (div.z * 4) +
+                        z;
 
-        Point_id  point_id  = points[key];
-        Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
-
-        bool is_discontinuity = (x == -div.x) || (x == div.x) || (y == -div.y) || (y == div.y) || (z == -div.z) || (z == div.z);
+        const Point_id  point_id         = points[key];
+        const Corner_id corner_id        = geometry.make_polygon_corner(polygon_id, point_id);
+        const bool      is_discontinuity = (x == -div.x) || (x == div.x) ||
+                                           (y == -div.y) || (y == div.y) ||
+                                           (z == -div.z) || (z == div.z);
         if (is_discontinuity)
         {
             corner_normals->put(corner_id, n);
@@ -196,21 +198,21 @@ struct Box_builder
         int z;
 
         // Generate vertices
-        vec3 unit_x(1.0f, 0.0f, 0.0f);
-        vec3 unit_y(0.0f, 1.0f, 0.0f);
-        vec3 unit_z(0.0f, 0.0f, 1.0f);
+        constexpr const vec3 unit_x(1.0f, 0.0f, 0.0f);
+        constexpr const vec3 unit_y(0.0f, 1.0f, 0.0f);
+        constexpr const vec3 unit_z(0.0f, 0.0f, 1.0f);
         for (x = -div.x; x <= div.x; x++)
         {
-            float rel_x = 0.5f + static_cast<float>(x) / size.x;
+            const float rel_x = 0.5f + static_cast<float>(x) / size.x;
             for (z = -div.z; z <= div.z; z++)
             {
-                float rel_z = 0.5f + static_cast<float>(z) / size.z;
+                const float rel_z = 0.5f + static_cast<float>(z) / size.z;
                 make_point(x,  div.y, z,  unit_y, rel_x, rel_z);
                 make_point(x, -div.y, z, -unit_y, rel_x, rel_z);
             }
             for (y = -div.y; y <= div.y; y++)
             {
-                float rel_y = 0.5f + static_cast<float>(y) / size.y;
+                const float rel_y = 0.5f + static_cast<float>(y) / size.y;
                 make_point(x, y,  div.z,  unit_z, rel_x, rel_y);
                 make_point(x, y, -div.z, -unit_z, rel_x, rel_y);
             }
@@ -219,10 +221,10 @@ struct Box_builder
         // Left and right
         for (z = -div.z; z <= div.z; z++)
         {
-            float rel_z = 0.5f + static_cast<float>(z) / size.z;
+            const float rel_z = 0.5f + static_cast<float>(z) / size.z;
             for (y = -div.y; y <= div.y; y++)
             {
-                float rel_y = 0.5f + static_cast<float>(y) / size.y;
+                const float rel_y = 0.5f + static_cast<float>(y) / size.y;
                 make_point( div.x, y, z,  unit_x, rel_y, rel_z);
                 make_point(-div.x, y, z, -unit_x, rel_y, rel_z);
             }
@@ -231,20 +233,20 @@ struct Box_builder
         // Generate quads
         for (x = -div.x; x < div.x; x++)
         {
-            float rel_x1 = 0.5f + static_cast<float>(x) / size.x;
-            float rel_x2 = 0.5f + static_cast<float>(x + 1) / size.x;
+            const float rel_x1 = 0.5f + static_cast<float>(x) / size.x;
+            const float rel_x2 = 0.5f + static_cast<float>(x + 1) / size.x;
             for (z = -div.z; z < div.z; z++)
             {
-                float rel_z1 = 0.5f + static_cast<float>(z) / size.z;
-                float rel_z2 = 0.5f + static_cast<float>(z + 1) / size.z;
+                const float rel_z1 = 0.5f + static_cast<float>(z) / size.z;
+                const float rel_z2 = 0.5f + static_cast<float>(z + 1) / size.z;
 
-                Polygon_id top_id = geometry.make_polygon();
+                const Polygon_id top_id = geometry.make_polygon();
                 make_corner(top_id, x + 1, div.y, z,     unit_y, rel_x2, rel_z1);
                 make_corner(top_id, x + 1, div.y, z + 1, unit_y, rel_x2, rel_z2);
                 make_corner(top_id, x,     div.y, z + 1, unit_y, rel_x1, rel_z2);
                 make_corner(top_id, x,     div.y, z,     unit_y, rel_x1, rel_z1);
 
-                Polygon_id bottom_id = geometry.make_polygon();
+                const Polygon_id bottom_id = geometry.make_polygon();
                 make_corner(bottom_id, x,     -div.y, z,     -unit_y, rel_x1, rel_z1);
                 make_corner(bottom_id, x,     -div.y, z + 1, -unit_y, rel_x1, rel_z2);
                 make_corner(bottom_id, x + 1, -div.y, z + 1, -unit_y, rel_x2, rel_z2);
@@ -255,16 +257,16 @@ struct Box_builder
             }
             for (y = -div.y; y < div.y; y++)
             {
-                float rel_y1 = 0.5f + static_cast<float>(y    ) / size.y;
-                float rel_y2 = 0.5f + static_cast<float>(y + 1) / size.y;
+                const float rel_y1 = 0.5f + static_cast<float>(y    ) / size.y;
+                const float rel_y2 = 0.5f + static_cast<float>(y + 1) / size.y;
 
-                Polygon_id back_id = geometry.make_polygon();
+                const Polygon_id back_id = geometry.make_polygon();
                 make_corner(back_id, x,     y,     div.z, unit_z, rel_x1, rel_y1);
                 make_corner(back_id, x,     y + 1, div.z, unit_z, rel_x1, rel_y2);
                 make_corner(back_id, x + 1, y + 1, div.z, unit_z, rel_x2, rel_y2);
                 make_corner(back_id, x + 1, y,     div.z, unit_z, rel_x2, rel_y1);
 
-                Polygon_id front_id = geometry.make_polygon();
+                const Polygon_id front_id = geometry.make_polygon();
                 make_corner(front_id, x + 1, y,     -div.z, -unit_z, rel_x2, rel_y1);
                 make_corner(front_id, x + 1, y + 1, -div.z, -unit_z, rel_x2, rel_y2);
                 make_corner(front_id, x,     y + 1, -div.z, -unit_z, rel_x1, rel_y2);
@@ -277,21 +279,21 @@ struct Box_builder
 
         for (z = -div.z; z < div.z; z++)
         {
-            float rel_z1 = 0.5f + static_cast<float>(z    ) / size.z;
-            float rel_z2 = 0.5f + static_cast<float>(z + 1) / size.z;
+            const float rel_z1 = 0.5f + static_cast<float>(z    ) / size.z;
+            const float rel_z2 = 0.5f + static_cast<float>(z + 1) / size.z;
 
             for (y = -div.y; y < div.y; y++)
             {
-                float rel_y1 = 0.5f + static_cast<float>(y    ) / size.y;
-                float rel_y2 = 0.5f + static_cast<float>(y + 1) / size.y;
+                const float rel_y1 = 0.5f + static_cast<float>(y    ) / size.y;
+                const float rel_y2 = 0.5f + static_cast<float>(y + 1) / size.y;
 
-                Polygon_id right_id = geometry.make_polygon();
+                const Polygon_id right_id = geometry.make_polygon();
                 make_corner(right_id, div.x, y,     z,     unit_x, rel_y1, rel_z1);
                 make_corner(right_id, div.x, y,     z + 1, unit_x, rel_y1, rel_z2);
                 make_corner(right_id, div.x, y + 1, z + 1, unit_x, rel_y2, rel_z2);
                 make_corner(right_id, div.x, y + 1, z,     unit_x, rel_y2, rel_z1);
 
-                Polygon_id left_id = geometry.make_polygon();
+                const Polygon_id left_id = geometry.make_polygon();
                 make_corner(left_id, -div.x, y + 1, z,     -unit_x, rel_y2, rel_z1);
                 make_corner(left_id, -div.x, y + 1, z + 1, -unit_x, rel_y2, rel_z2);
                 make_corner(left_id, -div.x, y,     z + 1, -unit_x, rel_y1, rel_z2);

@@ -93,7 +93,11 @@ void Framebuffer::create()
 auto Framebuffer::check_status()
 -> bool
 {
-    auto status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::draw_framebuffer);
+    const auto status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::draw_framebuffer);
+    if (status != gl::Framebuffer_status::framebuffer_complete)
+    {
+        return false;
+    }
     return status == gl::Framebuffer_status::framebuffer_complete;
 }
 

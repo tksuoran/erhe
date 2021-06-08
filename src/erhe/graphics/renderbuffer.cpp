@@ -34,6 +34,14 @@ Renderbuffer::Renderbuffer(gl::Internal_format internal_format,
     gl::named_renderbuffer_storage_multisample(gl_name(), sample_count, internal_format, width, height);
 }
 
+Renderbuffer::~Renderbuffer() = default;
+
+void Renderbuffer::set_debug_label(std::string_view label)
+{
+    gl::object_label(gl::Object_identifier::renderbuffer,
+                     gl_name(), static_cast<GLsizei>(label.length()), label.data());
+}
+
 auto Renderbuffer::internal_format() const
 -> gl::Internal_format
 {
@@ -62,6 +70,14 @@ auto Renderbuffer::gl_name() const
 -> unsigned int
 {
     return m_handle.gl_name();
+}
+
+auto Renderbuffer_hash::operator()(const Renderbuffer& renderbuffer) const noexcept
+-> size_t
+{
+    Expects(renderbuffer.gl_name() != 0);
+
+    return static_cast<size_t>(renderbuffer.gl_name());
 }
 
 auto operator==(const Renderbuffer& lhs, const Renderbuffer& rhs) noexcept

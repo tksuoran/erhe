@@ -55,12 +55,12 @@ class Line_renderer
     : public erhe::components::Component
 {
 public:
-    Line_renderer();
-
-    virtual ~Line_renderer();
+    static constexpr const char* c_name = "Line_renderer";
+    Line_renderer ();
+    ~Line_renderer() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
     void initialize_component() override;
 
     void render(erhe::scene::Viewport       camera_viewport,
@@ -163,31 +163,10 @@ private:
             model_buffer.set_debug_label ("Line Renderer Model");
         }
 
-        Frame_resources(const Frame_resources& other) = delete;
-        auto operator=(const Frame_resources&) -> Frame_resources& = delete;
-
-        Frame_resources(Frame_resources&& other) = delete; // noexcept
-        //{
-        //    vertex_buffer                    = std::move(other.vertex_buffer);
-        //    model_buffer                     = std::move(other.model_buffer);
-        //    vertex_input_state               = std::move(other.vertex_input_state);
-        //    pipeline_depth_pass              = std::move(other.pipeline_depth_pass);
-        //    pipeline_depth_fail              = std::move(other.pipeline_depth_fail);
-        //    pipeline_depth_pass.vertex_input = &vertex_input_state;
-        //    pipeline_depth_fail.vertex_input = &vertex_input_state;
-        //}
-
-        auto operator=(Frame_resources&& other) = delete; //noexcept -> Frame_resources&
-        //{
-        //    vertex_buffer                    = std::move(other.vertex_buffer);
-        //    model_buffer                     = std::move(other.model_buffer);
-        //    vertex_input_state               = std::move(other.vertex_input_state);
-        //    pipeline_depth_pass              = std::move(other.pipeline_depth_pass);
-        //    pipeline_depth_fail              = std::move(other.pipeline_depth_fail);
-        //    pipeline_depth_pass.vertex_input = &vertex_input_state;
-        //    pipeline_depth_fail.vertex_input = &vertex_input_state;
-        //    return *this;
-        //}
+        Frame_resources(const Frame_resources&) = delete;
+        void operator= (const Frame_resources&) = delete;
+        Frame_resources(Frame_resources&& )     = delete;
+        void operator= (Frame_resources&& )     = delete;
 
         erhe::graphics::Buffer             vertex_buffer;
         erhe::graphics::Buffer             model_buffer;
@@ -196,10 +175,8 @@ private:
         erhe::graphics::Pipeline           pipeline_depth_fail;
     };
 
-    void create_frame_resources();
-
+    void create_frame_resources ();
     auto current_frame_resources() -> Frame_resources&;
-
 
     uint32_t m_line_color{0xffffffffu};
 

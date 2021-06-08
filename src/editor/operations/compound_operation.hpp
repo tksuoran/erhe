@@ -16,10 +16,11 @@ public:
     };
 
     explicit Compound_operation(const Context& context);
-    virtual ~Compound_operation();
+    ~Compound_operation        () override;
 
+    // Implements IOperation
     void execute() override;
-    void undo() override;
+    void undo   () override;
 
 private:
     Context m_context;

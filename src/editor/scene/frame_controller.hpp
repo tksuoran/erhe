@@ -19,35 +19,20 @@ class Frame_controller
 public:
     Frame_controller();
 
-    void set_frame(erhe::scene::Node* value);
-
-    auto node() -> erhe::scene::Node*;
-
-    void clear();
-
-    void update();
-
+    void set_frame        (erhe::scene::Node* value);
+    auto node             () -> erhe::scene::Node*;
+    void clear            ();
+    void update           ();
     void update_fixed_step();
-
-    void set_position(glm::vec3 position);
-
-    void set_elevation(float value);
-
-    void set_heading(float value);
-
-    auto position() const -> glm::vec3;
-
-    auto elevation() const -> float;
-
-    auto heading() const -> float;
-
-    auto right() const -> glm::vec3;
-
-    auto up() const -> glm::vec3;
-
-    auto back() const -> glm::vec3;
-    //glm::mat4 const   &parent_from_local() const { return m_parent_from_local; }
-    //glm::mat4 const   &local_from_parent() const { return m_local_from_parent; }
+    void set_position     (glm::vec3 position);
+    void set_elevation    (float value);
+    void set_heading      (float value);
+    auto position         () const -> glm::vec3;
+    auto elevation        () const -> float;
+    auto heading          () const -> float;
+    auto right            () const -> glm::vec3;
+    auto up               () const -> glm::vec3;
+    auto back             () const -> glm::vec3;
 
     Controller rotate_x;
     Controller rotate_y;

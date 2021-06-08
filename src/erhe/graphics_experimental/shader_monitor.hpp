@@ -13,18 +13,21 @@ class Shader_stages;
 
 class Shader_monitor
     : public erhe::components::Component
+    , public erhe::components::IUpdate_once_per_frame
 {
 public:
     static constexpr const char* c_name = "Shader_monitor";
     Shader_monitor();
-    virtual ~Shader_monitor();
+    ~Shader_monitor() override;
 
+    // Implements Component
     void initialize_component() override;
+
+    // Implements IUpdate_once_per_frame
+    void update_once_per_frame(const erhe::components::Time_context& time_context);
 
     void add(Shader_stages::Create_info    create_info,
              gsl::not_null<Shader_stages*> program);
-
-    void update_once_per_frame();
 
 private:
     void set_run(bool value)

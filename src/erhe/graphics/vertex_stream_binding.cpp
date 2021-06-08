@@ -4,9 +4,9 @@ namespace erhe::graphics
 {
 
 Vertex_stream_binding::Vertex_stream_binding(Buffer*                                          vertex_buffer,
-                        const std::shared_ptr<Vertex_attribute_mapping>& mapping,
-                        const Vertex_attribute*                          attribute,
-                        size_t                                           stride)
+                                             const std::shared_ptr<Vertex_attribute_mapping>& mapping,
+                                             const Vertex_attribute*                          attribute,
+                                             size_t                                           stride)
     : vertex_buffer           {vertex_buffer}
     , vertex_attribute_mapping{mapping}
     , vertex_attribute        {attribute}

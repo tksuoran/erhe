@@ -5,6 +5,8 @@
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/scene.hpp"
 
+#include <memory>
+
 namespace editor
 {
 
@@ -26,7 +28,7 @@ Merge_operation::Merge_operation(Context& context)
     auto     normal_style              = Normal_style::none;
     for (auto item : context.selection_tool->selection())
     {
-        auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
         if (!mesh)
         {
             continue;

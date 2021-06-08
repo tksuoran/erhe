@@ -80,7 +80,7 @@ auto Shader_stages::Create_info::final_source(const Shader_stage& shader) const
         sb << "// Defines\n";
         for (const auto& i : defines)
         {
-            sb << "#define " << i.first << " " << i.second << "\n";
+            sb << "#define " << i.first << " " << i.second << '\n';
         }
         sb << "\n";
     }

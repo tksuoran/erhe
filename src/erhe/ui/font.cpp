@@ -134,9 +134,9 @@ void Font::render()
     // First pass: Render glyphs to bitmaps, keep track of glyph box
     for (auto c : m_chars)
     {
-        auto uc = static_cast<unsigned char>(c);
+        const auto uc = static_cast<unsigned char>(c);
         glyphs[c] = make_unique<Glyph>(m_freetype_library, face, uc, m_bolding, 0.0f, m_hint_mode);
-        auto glyph = glyphs[c].get();
+        const auto glyph = glyphs[c].get();
         glyph_box[c] = glyphs[c]->bitmap;
         m_glyph_to_char[glyph->glyph_index] = c;
 
@@ -149,7 +149,7 @@ void Font::render()
         for (size_t i = 0; i < outline_glyphs_vector.size(); ++i)
         {
             auto& outline_glyphs = outline_glyphs_vector[i];
-            auto og = make_unique<Glyph>(m_freetype_library, face, uc, m_bolding, outline_sizes[i], m_hint_mode);
+            auto  og             = make_unique<Glyph>(m_freetype_library, face, uc, m_bolding, outline_sizes[i], m_hint_mode);
             box.left   = std::min(box.left,   og->bitmap.left);
             box.right  = std::max(box.right,  og->bitmap.right);
             box.top    = std::max(box.top,    og->bitmap.top);
@@ -170,9 +170,9 @@ void Font::render()
         bool pack_failed = false;
         for (auto c : m_chars)
         {
-            auto& box = glyph_box[c];
-            int width  = box.right - box.left;
-            int height = box.top   - box.bottom;
+            const auto& box = glyph_box[c];
+            const int width  = box.right - box.left;
+            const int height = box.top   - box.bottom;
             if (width == 0 || height == 0)
             {
                 glyphs[c]->atlas_rect = {};
@@ -221,20 +221,18 @@ void Font::render()
         auto& box        = glyph_box[c];
         int   box_width  = box.right - box.left;
         int   box_height = box.top   - box.bottom;
-
-        bool render = (box_width != 0) && (box_height != 0);
+        bool  render     = (box_width != 0) && (box_height != 0);
 
         const auto& r = g->atlas_rect;
         log_font.trace("char '{}' blit size {} * {}\n", c, face->glyph->bitmap.width, face->glyph->bitmap.rows);
 
-        bool rotated = (r.width != r.height) && ((box_width + 1) == r.height) && ((box_height + 1) == r.width);
-
+        bool  rotated = (r.width != r.height) && ((box_width + 1) == r.height) && ((box_height + 1) == r.width);
         float x_scale = 1.0f / static_cast<float>(m_texture_width);
         float y_scale = 1.0f / static_cast<float>(m_texture_height);
-        auto fx = static_cast<float>(r.x) + 1.0f;
-        auto fy = static_cast<float>(r.y) + 1.0f;
-        auto fw = static_cast<float>(box_width);
-        auto fh = static_cast<float>(box_height);
+        auto  fx      = static_cast<float>(r.x) + 1.0f;
+        auto  fy      = static_cast<float>(r.y) + 1.0f;
+        auto  fw      = static_cast<float>(box_width);
+        auto  fh      = static_cast<float>(box_height);
 
         ft_char d;
         d.width    = box_width;
@@ -286,7 +284,7 @@ void Font::render()
             {
                 for (auto& outline_glyphs : outline_glyphs_vector)
                 {
-                    auto og = outline_glyphs[c].get();
+                    const auto og = outline_glyphs[c].get();
                     m_bitmap->blit<true>(og->bitmap.width,
                                          og->bitmap.height,
                                          r.x + 1 + std::max(0, rotated ? (og->bitmap.bottom - box.bottom) : (og->bitmap.left   - box.left  )),

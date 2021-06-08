@@ -56,22 +56,24 @@ class Mesh_memory;
 class Node_physics;
 class Scene_root;
 
-
 class Scene_manager
     : public erhe::components::Component
+    , public erhe::components::IUpdate_fixed_step
+    , public erhe::components::IUpdate_once_per_frame
 {
 public:
+    static constexpr const char* c_name = "Scene_manager";
     Scene_manager();
-    virtual ~Scene_manager();
+    ~Scene_manager() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
     void initialize_component() override;
 
-    void add_scene();
-
-    void sort_lights();
-
+    void set_view_camera(std::shared_ptr<erhe::scene::ICamera> camera);
+    auto get_view_camera() const -> std::shared_ptr<erhe::scene::ICamera>;
+    void add_scene      ();
+    void sort_lights    ();
     auto make_directional_light(std::string_view name,
                                 glm::vec3        position,
                                 glm::vec3        color,
@@ -99,17 +101,20 @@ public:
         return brush;
     }
 
-    void update_once_per_frame(double time);
+    // Implements IUpdate_once_per_frame
+    void update_once_per_frame(const erhe::components::Time_context& time_context);
 
-    void update_fixed_step(double dt);
+    // Implements IUpdate_fixed_step
+    void update_fixed_step(const erhe::components::Time_context& time_context);
 
 private:
-    void animate_lights(double time_d);
-    auto primitive_build_context() -> erhe::primitive::Primitive_build_context&;
-    auto buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&;
-    void add_floor();
-    void make_brushes();
-    void make_mesh_nodes();
+    void initialize_camera        ();
+    void animate_lights           (double time_d);
+    auto primitive_build_context  () -> erhe::primitive::Primitive_build_context&;
+    auto buffer_transfer_queue    () -> erhe::graphics::Buffer_transfer_queue&;
+    void add_floor                ();
+    void make_brushes             ();
+    void make_mesh_nodes          ();
     void make_punctual_light_nodes();
 
     // Components
@@ -118,12 +123,13 @@ private:
     std::shared_ptr<Scene_root>  m_scene_root;
 
     // Self owned parts
-    std::mutex                           m_brush_mutex;
-    std::unique_ptr<Brush>               m_floor_brush;
-    std::mutex                           m_scene_brushes_mutex;
-    std::vector<std::shared_ptr<Brush>>  m_scene_brushes;
-    std::shared_ptr<erhe::scene::Camera> m_camera;
-    std::shared_ptr<Frame_controller>    m_camera_controls;
+    std::shared_ptr<erhe::scene::ICamera> m_view_camera;
+    std::mutex                            m_brush_mutex;
+    std::unique_ptr<Brush>                m_floor_brush;
+    std::mutex                            m_scene_brushes_mutex;
+    std::vector<std::shared_ptr<Brush>>   m_scene_brushes;
+    std::shared_ptr<erhe::scene::Camera>  m_camera;
+    std::shared_ptr<Frame_controller>     m_camera_controls;
 
 };
 

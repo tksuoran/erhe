@@ -12,7 +12,7 @@ auto make_cuboctahedron(double r)
     ZoneScoped;
 
     return Geometry("cuboctahedron", [=](auto& geometry) {
-        double sq2 = std::sqrt(2.0);
+        const double sq2 = std::sqrt(2.0);
 
         geometry.make_point( 0,      r,      0          );
         geometry.make_point( r / 2,  r / 2,  r * sq2 / 2);
@@ -55,10 +55,10 @@ auto make_dodecahedron(double r)
     ZoneScoped;
 
     return Geometry("dodecahedron", [=](auto& geometry) {
-        double sq3 = std::sqrt(3.0);
-        double sq5 = std::sqrt(5.0);
-        double a   = 2.0 / (sq3 + sq3 * sq5);
-        double b   = 1.0 / (3.0 * a);
+        const double sq3 = std::sqrt(3.0);
+        const double sq5 = std::sqrt(5.0);
+        const double a   = 2.0 / (sq3 + sq3 * sq5);
+        const double b   = 1.0 / (3.0 * a);
 
         geometry.make_point( r / sq3,  r / sq3,  r / sq3);
         geometry.make_point( r / sq3,  r / sq3, -r / sq3);
@@ -107,11 +107,11 @@ auto make_icosahedron(double r)
     ZoneScoped;
 
     return Geometry("icosahedron", [=](auto& geometry) {
-        double sq5 = std::sqrt(5.0);
-        double a   = 2.0 / (1.0 + sq5);
-        double b   = std::sqrt((3.0 + sq5) / (1.0 + sq5));
-        a /= b;
-
+        const double sq5 = std::sqrt(5.0);
+        const double a0  = 2.0 / (1.0 + sq5);
+        const double b   = std::sqrt((3.0 + sq5) / (1.0 + sq5));
+        const double a   = a0 / b;
+                                
         geometry.make_point( 0,      r * a,  r / b);
         geometry.make_point( 0,      r * a, -r / b);
         geometry.make_point( 0,     -r * a,  r / b);

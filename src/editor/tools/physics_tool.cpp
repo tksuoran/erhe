@@ -1,5 +1,6 @@
 #include "tools/physics_tool.hpp"
 #include "log.hpp"
+#include "tools.hpp"
 #include "renderers/line_renderer.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
@@ -24,6 +25,16 @@ Physics_tool::Physics_tool()
 
 Physics_tool::~Physics_tool() = default;
 
+void Physics_tool::connect()
+{
+    m_scene_root = get<Scene_root>();
+}
+
+void Physics_tool::initialize_component()
+{
+    get<Editor_tools>()->register_tool(this);
+}
+
 auto Physics_tool::state() const -> State
 {
     return m_state;
@@ -32,11 +43,6 @@ auto Physics_tool::state() const -> State
 auto Physics_tool::description() -> const char*
 {
     return c_name;
-}
-
-void Physics_tool::connect()
-{
-    m_scene_root = get<Scene_root>();
 }
 
 void Physics_tool::window(Pointer_context&)
@@ -58,6 +64,8 @@ void Physics_tool::cancel_ready()
 
 auto Physics_tool::update(Pointer_context& pointer_context) -> bool
 {
+    ZoneScoped;
+
     if (pointer_context.priority_action != Action::drag)
     {
         if (m_state != State::Passive)
@@ -139,10 +147,11 @@ auto Physics_tool::update(Pointer_context& pointer_context) -> bool
             {
                 m_drag_node_physics->rigid_body.bullet_rigid_body.setDamping(m_original_linear_damping,
                                                                              m_original_angular_damping);
-                m_drag_node_physics->rigid_body.bullet_rigid_body.setActivationState(ACTIVE_TAG);
+                m_drag_node_physics->rigid_body.bullet_rigid_body.forceActivationState(ACTIVE_TAG);
                 m_drag_node_physics.reset();
             }
             m_scene_root->physics_world().bullet_dynamics_world.removeConstraint(m_drag_constraint.get());
+            m_drag_constraint.reset();
         }
         m_drag_mesh.reset();
         log_tools.trace("Physics tool state = passive\n");
@@ -154,9 +163,10 @@ auto Physics_tool::update(Pointer_context& pointer_context) -> bool
 
 void Physics_tool::render(const Render_context& render_context)
 {
+    ZoneScoped;
+
     render_context.line_renderer->set_line_color(0xffffffffu);
-    render_context.line_renderer->add_lines({{m_drag_position_start, m_drag_position_end}}, 4.0f);
-    
+    render_context.line_renderer->add_lines({{m_drag_position_start, m_drag_position_end}}, 4.0f);    
 }
 
 }

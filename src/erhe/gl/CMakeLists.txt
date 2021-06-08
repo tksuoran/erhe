@@ -76,7 +76,7 @@ add_library(${_target}
 target_include_directories(${_target}
     PUBLIC
         ${ERHE_INCLUDE_ROOT}
-        ${CMAKE_BINARY_DIR}/src
+        ${PROJECT_BINARY_DIR}/src
 )
 
 target_link_libraries(${_target}

@@ -34,6 +34,7 @@ struct Texture_create_info
     int                 level_count           {1};
     int                 row_stride            {0};
     Buffer*             buffer                {nullptr};
+    int                 wrap_texture_name     {0};
 };
 
 class Texture
@@ -41,83 +42,28 @@ class Texture
 public:
     using Create_info = Texture_create_info;
 
-    static auto storage_dimensions(gl::Texture_target target)
-    -> int;
-
-    static auto mipmap_dimensions(gl::Texture_target target)
-    -> int;
-
-    static auto size_level_count(int size)
-    -> int;
-
-    ~Texture() = default;
+    static auto storage_dimensions(gl::Texture_target target) -> int;
+    static auto mipmap_dimensions (gl::Texture_target target) -> int;
+    static auto size_level_count  (int size) -> int;
 
     explicit Texture(const Create_info& create_info);
+    ~Texture        ();
+    Texture         (const Texture&) = delete;
+    void operator=  (const Texture&) = delete;
+    Texture         (Texture&& other) noexcept;
+    auto operator=  (Texture&& other) noexcept -> Texture&;
 
-    Texture(const Texture&) = delete;
-
-    auto operator=(const Texture&)
-    -> Texture& = delete;
-
-    Texture(Texture&& other) noexcept
-        : m_handle         {std::move(other.m_handle)}
-        , m_debug_label    {std::move(other.m_debug_label)}
-        , m_target         {other.m_target}
-        , m_internal_format{other.m_internal_format}
-        , m_sample_count   {other.m_sample_count}
-        , m_level_count    {other.m_level_count}
-        , m_width          {other.m_width}
-        , m_height         {other.m_height}
-        , m_depth          {other.m_depth}
-        , m_buffer         {other.m_buffer}
-    {
-    }
-
-    auto operator=(Texture&& other) noexcept
-    -> Texture&
-    {
-        m_handle          = std::move(other.m_handle);
-        m_debug_label     = other.m_debug_label;
-        m_target          = other.m_target;
-        m_internal_format = other.m_internal_format;
-        m_sample_count    = other.m_sample_count;
-        m_level_count     = other.m_level_count;
-        m_width           = other.m_width;
-        m_height          = other.m_height;
-        m_depth           = other.m_depth;
-        m_buffer          = other.m_buffer;
-        return *this;
-    }
-
-    void upload(gl::Internal_format internal_format, int width, int height = 0, int depth = 0);
-
-    void upload(gl::Internal_format internal_format, gsl::span<const std::byte> data, int width, int height = 0, int depth = 0);
-
+    void upload         (gl::Internal_format internal_format, int width, int height = 0, int depth = 0);
+    void upload         (gl::Internal_format internal_format, gsl::span<const std::byte> data, int width, int height = 0, int depth = 0);
     void set_debug_label(std::string value);
-
-    auto debug_label() const
-    -> const std::string&;
-
-    auto width() const
-    -> int;
-
-    auto height() const
-    -> int;
-
-    auto depth() const
-    -> int;
-
-    auto sample_count() const
-    -> int;
-
-    auto target() const
-    -> gl::Texture_target;
-
-    auto is_layered() const
-    -> bool;
-
-    auto gl_name() const
-    -> GLuint;
+    auto debug_label    () const -> const std::string&;
+    auto width          () const -> int;
+    auto height         () const -> int;
+    auto depth          () const -> int;
+    auto sample_count   () const -> int;
+    auto target         () const -> gl::Texture_target;
+    auto is_layered     () const -> bool;
+    auto gl_name        () const -> GLuint;
 
 private:
     Gl_texture          m_handle;

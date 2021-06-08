@@ -10,8 +10,7 @@ class Catmull_clark_subdivision_operation
 {
 public:
     explicit Catmull_clark_subdivision_operation(const Context& context);
-
-    virtual ~Catmull_clark_subdivision_operation();
+    ~Catmull_clark_subdivision_operation        () override;
 };
 
 class Sqrt3_subdivision_operation
@@ -19,8 +18,7 @@ class Sqrt3_subdivision_operation
 {
 public:
     explicit Sqrt3_subdivision_operation(const Context& context);
-
-    virtual ~Sqrt3_subdivision_operation();
+    ~Sqrt3_subdivision_operation        () override;
 };
 
 class Triangulate_operation
@@ -28,8 +26,7 @@ class Triangulate_operation
 {
 public:
     explicit Triangulate_operation(const Context& context);
-
-    virtual ~Triangulate_operation();
+    ~Triangulate_operation        () override;
 };
 
 class Subdivide_operation
@@ -37,8 +34,7 @@ class Subdivide_operation
 {
 public:
     explicit Subdivide_operation(const Context& context);
-
-    virtual ~Subdivide_operation();
+    ~Subdivide_operation        () override;
 };
 
 class Dual_operator
@@ -46,8 +42,7 @@ class Dual_operator
 {
 public:
     explicit Dual_operator(const Context& context);
-
-    virtual ~Dual_operator();
+    ~Dual_operator        () override;
 };
 
 class Ambo_operator
@@ -55,8 +50,7 @@ class Ambo_operator
 {
 public:
     explicit Ambo_operator(const Context& context);
-
-    virtual ~Ambo_operator();
+    ~Ambo_operator        () override;
 };
 
 class Truncate_operator
@@ -64,8 +58,7 @@ class Truncate_operator
 {
 public:
     explicit Truncate_operator(const Context& context);
-
-    virtual ~Truncate_operator();
+    ~Truncate_operator        () override;
 };
 
 }

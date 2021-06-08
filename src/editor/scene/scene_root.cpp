@@ -29,7 +29,7 @@ using namespace glm;
 
 
 Scene_root::Scene_root()
-    : Component("Scene_root")
+    : Component(c_name)
 {
 }
 

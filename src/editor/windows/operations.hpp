@@ -18,11 +18,13 @@ class Operations
 {
 public:
     static constexpr const char* c_name = "Operations";
-    Operations() : erhe::components::Component{c_name} {}
-    virtual ~Operations() = default;
+
+    Operations ();
+    ~Operations() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
+    void initialize_component() override;
 
     // Implements Window
     void window(Pointer_context& pointer_context) override;

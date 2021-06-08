@@ -24,16 +24,16 @@ Truncate::Truncate(Geometry& source, Geometry& destination)
 
     // New faces from old points, new face corner for each old point corner edge
     // 'midpoint' that is closest to the corner
-    source.for_each_point([&](auto& i)
+    source.for_each_point_const([&](auto& i)
     {
-        Polygon_id new_polygon_id = destination.make_polygon();
+        const Polygon_id new_polygon_id = destination.make_polygon();
 
-        i.point.for_each_corner(source, [&](auto& j)
+        i.point.for_each_corner_const(source, [&](auto& j)
         {
-            Polygon&   src_polygon        = source.polygons[j.corner.polygon_id];
-            Corner_id  src_next_corner_id = src_polygon.next_corner(source, j.corner_id);
-            Corner&    src_next_corner    = source.corners[src_next_corner_id];
-            Point_id   edge_midpoint      = get_edge_new_point(j.corner.point_id, src_next_corner.point_id);
+            const Polygon&  src_polygon        = source.polygons[j.corner.polygon_id];
+            const Corner_id src_next_corner_id = src_polygon.next_corner(source, j.corner_id);
+            const Corner&   src_next_corner    = source.corners[src_next_corner_id];
+            Point_id        edge_midpoint      = get_edge_new_point(j.corner.point_id, src_next_corner.point_id);
             if (src_next_corner.point_id > j.corner.point_id)
             {
                 edge_midpoint += 1;
@@ -45,18 +45,22 @@ Truncate::Truncate(Geometry& source, Geometry& destination)
     // New faces from old faces, new face corner for each old corner edge 'midpoint'
     source.for_each_polygon([&](auto& i)
     {
-        Polygon_id new_polygon_id = destination.make_polygon();
+        const Polygon_id new_polygon_id = destination.make_polygon();
         i.polygon.for_each_corner_neighborhood(source, [&](auto& j)
         {
-            Point_id edge_midpoint = get_edge_new_point(j.corner.point_id, j.next_corner.point_id);
-            Point_id point_a       = edge_midpoint;
-            Point_id point_b       = edge_midpoint + 1;
+            const Point_id edge_midpoint = get_edge_new_point(j.corner.point_id, j.next_corner.point_id);
+            const Point_id point_a       = edge_midpoint;
+            const Point_id point_b       = edge_midpoint + 1;
             if (j.next_corner.point_id > j.corner.point_id)
             {
-                std::swap(point_a, point_b);
+                make_new_corner_from_point(new_polygon_id, point_b);
+                make_new_corner_from_point(new_polygon_id, point_a);
             }
-            make_new_corner_from_point(new_polygon_id, point_a);
-            make_new_corner_from_point(new_polygon_id, point_b);
+            else
+            {
+                make_new_corner_from_point(new_polygon_id, point_a);
+                make_new_corner_from_point(new_polygon_id, point_b);
+            }
         });
     });
 

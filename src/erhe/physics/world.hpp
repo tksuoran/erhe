@@ -13,20 +13,18 @@ namespace erhe::physics
 
 class Rigid_body;
 
-class World
+class World final
 {
 public:
-    World();
-    World(const World&) = delete;
-    World& operator=(const World&) = delete;
-    World(World&&) = delete;
-    World& operator=(World&&) = delete;
-    ~World();
+    World         ();
+    ~World        ();
+    World         (const World&)           = delete;
+    auto operator=(const World&) -> World& = delete;
+    World         (World&&)                = delete;
+    auto operator=(World&&) -> World&      = delete;
 
     void update_fixed_step(double dt);
-
-    void add_rigid_body(Rigid_body* rigid_body);
-
+    void add_rigid_body   (Rigid_body* rigid_body);
     void remove_rigid_body(Rigid_body* rigid_body);
 
     bool                                physics_enabled{false};

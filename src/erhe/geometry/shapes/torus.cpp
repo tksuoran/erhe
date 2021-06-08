@@ -43,40 +43,39 @@ struct Torus_builder
     auto torus_point(double rel_major, double rel_minor)
     -> Point_id
     {
-        double R         = major_radius;
-        double r         = minor_radius;
-        double theta     = (glm::pi<double>() * 2.0 * rel_major);
-        double phi       = (glm::pi<double>() * 2.0 * rel_minor);
-        double sin_theta = std::sin(theta);
-        double cos_theta = std::cos(theta);
-        double sin_phi   = std::sin(phi);
-        double cos_phi   = std::cos(phi);
+        const double R         = major_radius;
+        const double r         = minor_radius;
+        const double theta     = (glm::pi<double>() * 2.0 * rel_major);
+        const double phi       = (glm::pi<double>() * 2.0 * rel_minor);
+        const double sin_theta = std::sin(theta);
+        const double cos_theta = std::cos(theta);
+        const double sin_phi   = std::sin(phi);
+        const double cos_phi   = std::cos(phi);
 
-        double vx = (R + r * cos_phi) * cos_theta;
-        double vz = (R + r * cos_phi) * sin_theta;
-        double vy =      r * sin_phi;
-        vec3   V(vx, vy, vz);
+        const double vx = (R + r * cos_phi) * cos_theta;
+        const double vz = (R + r * cos_phi) * sin_theta;
+        const double vy =      r * sin_phi;
+        const vec3   V{vx, vy, vz};
 
-        double tx = -sin_theta;
-        double tz =  cos_theta;
-        double ty = 0.0f;
-        vec3   T(tx, ty, tz);
+        const double tx = -sin_theta;
+        const double tz =  cos_theta;
+        const double ty = 0.0f;
+        const vec3   T{tx, ty, tz};
 
-        double bx = -sin_phi * cos_theta;
-        double bz = -sin_phi * sin_theta;
-        double by =  cos_phi;
-        vec3   B(bx, by, bz);
+        const double bx = -sin_phi * cos_theta;
+        const double bz = -sin_phi * sin_theta;
+        const double by =  cos_phi;
+        const vec3   B{bx, by, bz};
+        const vec3   N = glm::normalize(glm::cross(B, T));
 
-        vec3 N = glm::normalize(glm::cross(B, T));
+        const Point_id point_id = geometry.make_point();
 
-        Point_id point_id = geometry.make_point();
+        const vec3  t_xyz = glm::normalize(T - N * glm::dot(N, T));
+        const float t_w   = (glm::dot(glm::cross(N, T), B) < 0.0f) ? -1.0f : 1.0f;
+        const vec3  b_xyz = glm::normalize(B - N * glm::dot(N, B));
+        const float b_w   = (glm::dot(glm::cross(B, N), T) < 0.0f) ? -1.0f : 1.0f;
 
-        vec3  t_xyz = glm::normalize(T - N * glm::dot(N, T));
-        float t_w   = (glm::dot(glm::cross(N, T), B) < 0.0f) ? -1.0f : 1.0f;
-        vec3  b_xyz = glm::normalize(B - N * glm::dot(N, B));
-        float b_w   = (glm::dot(glm::cross(B, N), T) < 0.0f) ? -1.0f : 1.0f;
-
-        bool is_uv_discontinuity = (rel_major == 1.0) || (rel_minor == 1.0);
+        const bool is_uv_discontinuity = (rel_major == 1.0) || (rel_minor == 1.0);
 
         point_locations ->put(point_id, V);
         point_normals   ->put(point_id, N);
@@ -95,11 +94,11 @@ struct Torus_builder
 
     void make_corner(Polygon_id polygon_id, int major, int minor)
     {
-        auto rel_major           = static_cast<double>(major) / static_cast<double>(major_axis_steps);
-        auto rel_minor           = static_cast<double>(minor) / static_cast<double>(minor_axis_steps);
-        bool is_major_seam       = (major == major_axis_steps);
-        bool is_minor_seam       = (minor == minor_axis_steps);
-        bool is_uv_discontinuity = is_major_seam || is_minor_seam;
+        const auto rel_major           = static_cast<double>(major) / static_cast<double>(major_axis_steps);
+        const auto rel_minor           = static_cast<double>(minor) / static_cast<double>(minor_axis_steps);
+        const bool is_major_seam       = (major == major_axis_steps);
+        const bool is_minor_seam       = (minor == minor_axis_steps);
+        const bool is_uv_discontinuity = is_major_seam || is_minor_seam;
 
         if (is_major_seam)
         {
@@ -111,15 +110,15 @@ struct Torus_builder
             minor = 0;
         }
 
-        Point_id point_id = points[(static_cast<size_t>(major) * static_cast<size_t>(minor_axis_steps)) +
-                                   static_cast<size_t>(minor)];
+        const Point_id point_id = points[(static_cast<size_t>(major) * static_cast<size_t>(minor_axis_steps)) +
+                                         static_cast<size_t>(minor)];
 
-        Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
+        const Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
 
         if (is_uv_discontinuity)
         {
-            auto s = static_cast<float>(rel_major);
-            auto t = static_cast<float>(rel_minor);
+            const auto t = static_cast<float>(rel_minor);
+            const auto s = static_cast<float>(rel_major);
 
             corner_texcoords->put(corner_id, vec2(s, t));
         }
@@ -149,28 +148,25 @@ struct Torus_builder
 
     void build()
     {
-        int major;
-        int minor;
-        for (major = 0; major < major_axis_steps; ++major)
+        for (int major = 0; major < major_axis_steps; ++major)
         {
-            auto rel_major = static_cast<double>(major) / static_cast<double>(major_axis_steps);
-            for (minor = 0; minor < minor_axis_steps; ++minor)
+            const auto rel_major = static_cast<double>(major) / static_cast<double>(major_axis_steps);
+            for (int minor = 0; minor < minor_axis_steps; ++minor)
             {
-                auto rel_minor = static_cast<double>(minor) / static_cast<double>(minor_axis_steps);
-                Point_id point_id = torus_point(rel_major, rel_minor);
-
+                auto           rel_minor = static_cast<double>(minor) / static_cast<double>(minor_axis_steps);
+                const Point_id point_id  = torus_point(rel_major, rel_minor);
                 points.push_back(point_id);
             }
         }
 
-        for (major = 0; major < major_axis_steps; ++major)
+        for (int major = 0; major < major_axis_steps; ++major)
         {
-            int  next_major     = (major + 1);
-            auto rel_major      = static_cast<double>(major) / static_cast<double>(major_axis_steps);
-            auto rel_next_major = static_cast<double>(next_major) / static_cast<double>(major_axis_steps);
-            auto avg_major      = (rel_major + rel_next_major) / 2.0;
+            const int  next_major     = (major + 1);
+            const auto rel_major      = static_cast<double>(major) / static_cast<double>(major_axis_steps);
+            const auto rel_next_major = static_cast<double>(next_major) / static_cast<double>(major_axis_steps);
+            const auto avg_major      = (rel_major + rel_next_major) / 2.0;
 
-            for (minor = 0; minor < minor_axis_steps; ++minor)
+            for (int minor = 0; minor < minor_axis_steps; ++minor)
             {
                 int  next_minor     = (minor + 1);
                 auto rel_minor      = static_cast<double>(minor) / static_cast<double>(minor_axis_steps);

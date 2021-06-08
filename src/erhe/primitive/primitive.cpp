@@ -6,17 +6,11 @@
 namespace erhe::primitive
 {
 
-Primitive_geometry::Primitive_geometry()
-{
-    //log_primitive.warn("Primitive_geometry::Primitive_geometry()\n");
-}
+Primitive_geometry::Primitive_geometry() = default;
 
-Primitive_geometry::~Primitive_geometry()
-{
-    //log_primitive.warn("Primitive_geometry::~Primitive_geometry()\n");
-}
+Primitive_geometry::~Primitive_geometry() = default;
 
-Primitive_geometry::Primitive_geometry(Primitive_geometry&& other)
+Primitive_geometry::Primitive_geometry(Primitive_geometry&& other) noexcept
     : bounding_box_min        {other.bounding_box_min          }
     , bounding_box_max        {other.bounding_box_max          }
     , fill_indices            {other.fill_indices              }
@@ -34,13 +28,11 @@ Primitive_geometry::Primitive_geometry(Primitive_geometry&& other)
     , source_geometry         {std::move(other.source_geometry)}
     , source_normal_style     {other.source_normal_style       }
 {
-    log_primitive_builder.warn("Primitive_geometry move constructor\n");
 }
 
-Primitive_geometry& Primitive_geometry::operator=(Primitive_geometry&& other)
+auto Primitive_geometry::operator=(Primitive_geometry&& other) noexcept
+-> Primitive_geometry&
 {
-    log_primitive_builder.warn("Primitive_geometry move assignment\n");
-
     bounding_box_min         = other.bounding_box_min          ;
     bounding_box_max         = other.bounding_box_max          ;
     fill_indices             = other.fill_indices              ;
@@ -66,7 +58,7 @@ Primitive::Primitive() = default;
 Primitive::Primitive(std::shared_ptr<Primitive_geometry> primitive_geometry,
                      std::shared_ptr<Material>           material)
     : primitive_geometry{primitive_geometry}
-    , material{material}
+    , material          {material}
 {
 }
 

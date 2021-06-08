@@ -6,20 +6,11 @@
 namespace editor
 {
 
+class  Line_renderer;
 struct Pointer_context;
-class Line_renderer;
-class Scene_manager;
-class Text_renderer;
-
-struct Render_context
-{
-    Pointer_context*      pointer_context{nullptr};
-    Scene_manager*        scene_manager  {nullptr};
-    Line_renderer*        line_renderer  {nullptr};
-    Text_renderer*        text_renderer  {nullptr};
-    erhe::scene::Viewport viewport       {0, 0, 0, 0};
-    double                time           {0.0};
-};
+struct Render_context;
+class  Scene_manager;
+class  Text_renderer;
 
 class Tool
 {
@@ -44,12 +35,9 @@ public:
 
     // Visual rendering of the tool.
     virtual void render_update(const Render_context&) {}
-
-    virtual void render(const Render_context&) {}
-
-    virtual auto state() const -> State = 0;
-
-    virtual void cancel_ready() {}
+    virtual void render       (const Render_context&) {}
+    virtual auto state        () const -> State = 0;
+    virtual void cancel_ready () {}
 };
 
 } // namespace editor

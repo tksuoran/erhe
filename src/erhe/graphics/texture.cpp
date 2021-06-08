@@ -240,6 +240,38 @@ auto Texture::mipmap_dimensions(gl::Texture_target target)
     }
 }
 
+Texture::~Texture() = default;
+
+Texture::Texture(Texture&& other) noexcept
+    : m_handle         {std::move(other.m_handle)}
+    , m_debug_label    {std::move(other.m_debug_label)}
+    , m_target         {other.m_target}
+    , m_internal_format{other.m_internal_format}
+    , m_sample_count   {other.m_sample_count}
+    , m_level_count    {other.m_level_count}
+    , m_width          {other.m_width}
+    , m_height         {other.m_height}
+    , m_depth          {other.m_depth}
+    , m_buffer         {other.m_buffer}
+{
+}
+
+auto Texture::operator=(Texture&& other) noexcept
+-> Texture&
+{
+    m_handle          = std::move(other.m_handle);
+    m_debug_label     = other.m_debug_label;
+    m_target          = other.m_target;
+    m_internal_format = other.m_internal_format;
+    m_sample_count    = other.m_sample_count;
+    m_level_count     = other.m_level_count;
+    m_width           = other.m_width;
+    m_height          = other.m_height;
+    m_depth           = other.m_depth;
+    m_buffer          = other.m_buffer;
+    return *this;
+}
+
 auto Texture::gl_name() const
 -> GLuint
 {
@@ -261,7 +293,7 @@ auto Texture::size_level_count(int size)
 
 void Texture_create_info::calculate_level_count()
 {
-    auto dimensions = Texture::mipmap_dimensions(target);
+    const auto dimensions = Texture::mipmap_dimensions(target);
 
     if (dimensions >= 1)
     {
@@ -329,7 +361,7 @@ Texture_create_info::Texture_create_info(gl::Texture_target  target,
 }
 
 Texture::Texture(const Create_info& create_info)
-    : m_handle                {create_info.target}
+    : m_handle                {create_info.target, create_info.wrap_texture_name}
     , m_target                {create_info.target}
     , m_internal_format       {create_info.internal_format}
     , m_fixed_sample_locations{create_info.fixed_sample_locations}
@@ -340,7 +372,60 @@ Texture::Texture(const Create_info& create_info)
     , m_depth                 {create_info.depth}
     , m_buffer                {create_info.buffer}
 {
-    auto dimensions = storage_dimensions(m_target);
+    const auto dimensions = storage_dimensions(m_target);
+
+    if (create_info.wrap_texture_name != 0)
+    {
+        // Current limitation
+        VERIFY(create_info.target == gl::Texture_target::texture_2d);
+
+        //// Store original texture 2d binding
+        //GLint original_texture_2d_binding{0};
+        //gl::get_integer_v(gl::Get_p_name::texture_binding_2d, &original_texture_2d_binding);
+        //gl::bind_texture(gl::Texture_target::texture_2d, gl_name());
+        VERIFY(gl::is_texture(gl_name()));
+        GLint max_framebuffer_width {0};
+        GLint max_framebuffer_height{0};
+        gl::get_integer_v(gl::Get_p_name::max_framebuffer_width, &max_framebuffer_width);
+        gl::get_integer_v(gl::Get_p_name::max_framebuffer_width, &max_framebuffer_height);
+        VERIFY(create_info.width  <= max_framebuffer_width);
+        VERIFY(create_info.height <= max_framebuffer_height);
+        GLint width   {0};
+        GLint height  {0};
+        GLint depth   {0};
+        GLint samples {0};
+        GLint fixed_sample_locations{0};
+        GLint internal_format_i {0};
+        gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_width,  &width);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_height, &height);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_DEPTH),                  &depth);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_SAMPLES),                &samples);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_FIXED_SAMPLE_LOCATIONS), &fixed_sample_locations);      
+        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_INTERNAL_FORMAT),        &internal_format_i);
+        gl::Internal_format internal_format = static_cast<gl::Internal_format>(internal_format_i);
+        VERIFY(width  >= create_info.width);
+        VERIFY(height >= create_info.height);
+        m_width           = width;
+        m_height          = height;
+        m_depth           = depth;
+        m_sample_count    = samples;
+        m_internal_format = internal_format;
+        GLint target_i          {0};
+        GLint immutable_format_i{0};
+        GLint immutable_levels  {0};
+        gl::get_texture_parameter_iv(gl_name(), static_cast<gl::Get_texture_parameter>(GL_TEXTURE_TARGET),           &target_i);
+        gl::Texture_target texture_target = static_cast<gl::Texture_target>(target_i);
+        m_target       = texture_target;
+        gl::get_texture_parameter_iv(gl_name(), static_cast<gl::Get_texture_parameter>(GL_TEXTURE_IMMUTABLE_FORMAT), &immutable_format_i);
+        gl::get_texture_parameter_iv(gl_name(), static_cast<gl::Get_texture_parameter>(GL_TEXTURE_IMMUTABLE_LEVELS), &immutable_levels);
+        gl::Internal_format immutable_internal_format = static_cast<gl::Internal_format>(immutable_format_i);
+        gl::texture_parameter_i(gl_name(), gl::Texture_parameter_name::texture_min_filter, GL_NEAREST);
+        gl::texture_parameter_i(gl_name(), gl::Texture_parameter_name::texture_mag_filter, GL_NEAREST);
+
+        //// Restore original texture 2d bionding
+        //gl::bind_texture(gl::Texture_target::texture_2d, original_texture_2d_binding);
+        return;
+    }
 
     switch (dimensions)
     {

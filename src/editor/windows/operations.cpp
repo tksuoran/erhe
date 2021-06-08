@@ -1,4 +1,5 @@
 #include "windows/operations.hpp"
+#include "tools.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/merge_operation.hpp"
@@ -15,12 +16,24 @@
 namespace editor
 {
 
+Operations::Operations()
+    : erhe::components::Component{c_name}
+{
+}
+
+Operations::~Operations() = default;
+
 void Operations::connect()
 {
     m_mesh_memory     = get<Mesh_memory    >();
     m_operation_stack = get<Operation_stack>();
     m_selection_tool  = get<Selection_tool >();
     m_scene_root      = get<Scene_root     >();
+}
+
+void Operations::initialize_component()
+{
+    get<Editor_tools>()->register_window(this);
 }
 
 void Operations::window(Pointer_context& pointer_context)

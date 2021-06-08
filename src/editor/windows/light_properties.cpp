@@ -1,4 +1,5 @@
 #include "windows/light_properties.hpp"
+#include "tools.hpp"
 #include "scene/scene_root.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/scene.hpp"
@@ -8,10 +9,21 @@
 namespace editor
 {
 
+Light_properties::Light_properties()
+    : erhe::components::Component(c_name)
+{
+}
+
+Light_properties::~Light_properties() = default;
+
 void Light_properties::connect()
 {
     m_scene_root = get<Scene_root>();
+}
 
+void Light_properties::initialize_component()
+{
+    get<Editor_tools>()->register_window(this);
 }
 
 auto Light_properties::animation() const -> bool
@@ -55,10 +67,7 @@ void Light_properties::window(Pointer_context&)
             const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
             ImGui::Text("%s", light->name().c_str());
 
-            int type = static_cast<int>(light->type);
-            ImGui::BeginGroup();
-            ImGui::Combo("Type", &type, erhe::scene::Light::c_type_strings, IM_ARRAYSIZE(erhe::scene::Light::c_type_strings));
-            light->type = static_cast<erhe::scene::Light::Type>(type);
+            make_combo("Type", light->type, erhe::scene::Light::c_type_strings, IM_ARRAYSIZE(erhe::scene::Light::c_type_strings));
             if (light->type == erhe::scene::Light::Type::spot)
             {
                 ImGui::SliderFloat ("Inner Spot", &light->inner_spot_angle, 0.0f, glm::pi<float>());
@@ -66,7 +75,6 @@ void Light_properties::window(Pointer_context&)
             }
             ImGui::SliderFloat("Intensity",  &light->intensity, 0.01f, 2000.0f, "%.3f", logarithmic);
             ImGui::ColorEdit3 ("Color",      &light->color.x,   ImGuiColorEditFlags_Float);
-            ImGui::EndGroup();
         }
         ImGui::Separator();
         ImGui::ColorEdit3("Ambient Light", &layer->ambient_light.x, ImGuiColorEditFlags_Float);

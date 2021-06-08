@@ -33,8 +33,10 @@ public:
     };
 
     explicit Light(std::string_view name);
+    ~Light() override;
 
-    virtual ~Light() = default;
+    auto texture_from_world() const -> glm::mat4;
+    auto world_from_texture() const -> glm::mat4;
 
     Type      type            {Type::directional};
     glm::vec3 color           {glm::vec3(1.0f, 1.0f, 1.0f)};
@@ -45,60 +47,19 @@ public:
     bool      cast_shadow     {true};
 
     // Implements INode_attachment
-    auto name() const -> const std::string&
-    {
-        return m_name;
-    }
+    auto name     () const -> const std::string&;
     void on_attach(Node& node);
     void on_detach(Node& node);
 
     // Implements ICamera
-    void update(Viewport viewport) override;
-
-    auto node() const -> const std::shared_ptr<Node>& override
-    {
-        return m_node;
-    }
-
-    auto projection() -> Projection* override
-    {
-        return &m_projection;
-    }
-
-    auto projection() const -> const Projection* override
-    {
-        return &m_projection;
-    }
-
-    auto clip_from_node() const -> glm::mat4 override
-    {
-        return m_transforms.clip_from_node.matrix();
-    }
-
-    auto clip_from_world() const -> glm::mat4 override
-    {
-        return m_transforms.clip_from_world.matrix();
-    }
-
-    auto node_from_clip() const -> glm::mat4 override
-    {
-        return m_transforms.clip_from_node.inverse_matrix();
-    }
-
-    auto world_from_clip() const -> glm::mat4 override
-    {
-        return m_transforms.clip_from_world.inverse_matrix();
-    }
-
-    auto texture_from_world() const -> glm::mat4
-    {
-        return m_transforms.texture_from_world.matrix();
-    }
-
-    auto world_from_texture() const -> glm::mat4
-    {
-        return m_transforms.texture_from_world.inverse_matrix();
-    }
+    void update         (Viewport viewport)                      override;
+    auto node           () const -> const std::shared_ptr<Node>& override;
+    auto projection     () -> Projection*                        override;
+    auto projection     () const -> const Projection*            override;
+    auto clip_from_node () const -> glm::mat4                    override;
+    auto clip_from_world() const -> glm::mat4                    override;
+    auto node_from_clip () const -> glm::mat4                    override;
+    auto world_from_clip() const -> glm::mat4                    override;
 
     std::string           m_name;
     std::shared_ptr<Node> m_node;

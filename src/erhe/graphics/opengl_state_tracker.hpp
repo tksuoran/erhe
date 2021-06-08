@@ -25,21 +25,15 @@ class OpenGL_state_tracker
 {
 public:
     static constexpr const char* c_name = "erhe::graphics::OpenGL_state_tracker";
-    OpenGL_state_tracker();
-    virtual ~OpenGL_state_tracker();
+    OpenGL_state_tracker ();
+    ~OpenGL_state_tracker() override;
+    OpenGL_state_tracker (const OpenGL_state_tracker&) = delete;
+    void operator=       (const OpenGL_state_tracker&) = delete;
 
-    OpenGL_state_tracker(const OpenGL_state_tracker&) = delete;
-
-    void on_thread_exit() override;
-
+    void on_thread_exit () override;
     void on_thread_enter() override;
-
-    auto operator=(const OpenGL_state_tracker&)
-    -> OpenGL_state_tracker& = delete;
-
-    void reset();
-
-    void execute(gsl::not_null<const Pipeline*> pipeline);
+    void reset          ();
+    void execute        (gsl::not_null<const Pipeline*> pipeline);
 
     Shader_stages_tracker        shader_stages;
     Vertex_input_state_tracker   vertex_input;

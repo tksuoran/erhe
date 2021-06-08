@@ -1,4 +1,5 @@
 #include "tools/selection_tool.hpp"
+#include "tools.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
 #include "renderers/text_renderer.hpp"
@@ -19,6 +20,16 @@ Selection_tool::Selection_tool()
 }
 
 Selection_tool::~Selection_tool() = default;
+
+void Selection_tool::connect()
+{
+    m_scene_manager = get<Scene_manager>();
+}
+
+void Selection_tool::initialize_component()
+{
+    get<Editor_tools>()->register_tool(this);
+}
 
 auto Selection_tool::description() -> const char*
 {
@@ -48,11 +59,6 @@ void Selection_tool::unsubscribe_selection_change_notification(int handle)
                                            m_selection_change_subscriptions.end());
 }
 
-void Selection_tool::connect()
-{
-    m_scene_manager = get<Scene_manager>();
-}
-
 void Selection_tool::window(Pointer_context&)
 {
     ImGui::Begin("Selection");
@@ -62,7 +68,7 @@ void Selection_tool::window(Pointer_context&)
         {
             continue;
         }
-        const auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
         if (!mesh)
         {
             continue;

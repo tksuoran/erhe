@@ -16,11 +16,13 @@ class Node_properties
 {
 public:
     static constexpr const char* c_name = "Node_properties";
-    Node_properties() : erhe::components::Component{c_name} {}
-    virtual ~Node_properties() = default;
+
+    Node_properties ();
+    ~Node_properties() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
+    void initialize_component() override;
 
     // Implements Window
     void window(Pointer_context& pointer_context) override;

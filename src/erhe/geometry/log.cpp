@@ -5,7 +5,7 @@ namespace erhe::geometry
 
 using namespace erhe::log;
 
-Category log                  (Color::YELLOW, Color::GRAY, Level::LEVEL_WARN);
+Category log_geometry         (Color::YELLOW, Color::GRAY, Level::LEVEL_WARN);
 Category log_build_edges      (Color::YELLOW, Color::GRAY, Level::LEVEL_WARN);
 Category log_tangent_gen      (Color::YELLOW, Color::GRAY, Level::LEVEL_WARN);
 Category log_cone             (Color::GREEN,  Color::GRAY, Level::LEVEL_WARN);

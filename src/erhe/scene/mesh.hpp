@@ -14,17 +14,13 @@ class Mesh
     : public INode_attachment
 {
 public:
-    Mesh() = default;
-
+    Mesh         ();
     explicit Mesh(std::string_view name);
-
-    Mesh(std::string_view           name,
-         erhe::primitive::Primitive primitive);
-
-    virtual ~Mesh() = default;
+    Mesh         (std::string_view name, erhe::primitive::Primitive primitive);
+    ~Mesh        () override;
 
     // Implements INode_attachment
-    auto name() const -> const std::string&;
+    auto name     () const -> const std::string&;
     void on_attach(Node& node);
     void on_detach(Node& node);
 

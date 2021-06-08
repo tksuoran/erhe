@@ -54,7 +54,7 @@ auto Component::get_state() const
     return m_state;
 }
 
-auto Component::is_ready() const
+auto Component::is_ready_to_initialize() const
 -> bool
 {
     return m_dependencies.empty();

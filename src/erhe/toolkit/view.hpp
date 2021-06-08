@@ -205,7 +205,7 @@ class View
     : public Event_handler
 {
 public:
-    virtual ~View() = default;
+    ~View() override = default;
 
     virtual void on_enter()
     {

@@ -15,12 +15,12 @@ class Operation_stack
 {
 public:
     static constexpr const char* c_name = "Operation_stack";
-    Operation_stack() : erhe::components::Component{c_name} {}
-    virtual ~Operation_stack() = default;
+    Operation_stack ();
+    ~Operation_stack() override;
 
-    void push(std::shared_ptr<IOperation> operation);
-    void undo();
-    void redo();
+    void push    (std::shared_ptr<IOperation> operation);
+    void undo    ();
+    void redo    ();
     auto can_undo() const -> bool
     {
         return !m_executed.empty();

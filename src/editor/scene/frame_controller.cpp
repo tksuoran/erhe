@@ -81,8 +81,8 @@ void Frame_controller::set_frame(erhe::scene::Node* node)
         return;
     }
 
-    vec4 position  = node->world_from_node() * vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    vec4 direction = node->world_from_node() * vec4(0.0f, 0.0f, 1.0f, 0.0f);
+    const vec4 position  = node->world_from_node() * vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    const vec4 direction = node->world_from_node() * vec4(0.0f, 0.0f, 1.0f, 0.0f);
 
     m_position = position;
     float heading{0.0f};
@@ -114,7 +114,7 @@ void Frame_controller::clear()
 
 void Frame_controller::update()
 {
-    mat4 elevation_matrix = create_rotation(m_elevation, vec3_unit_x);
+    const mat4 elevation_matrix = create_rotation(m_elevation, vec3_unit_x);
     m_rotation_matrix = m_heading_matrix * elevation_matrix;
 
     mat4 parent_from_local = m_rotation_matrix;

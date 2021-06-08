@@ -14,7 +14,6 @@ namespace editor {
 
 using erhe::graphics::Configuration;
 using erhe::graphics::Shader_stages;
-//using erhe::graphics::Vertex_attribute;
 
 Programs::Programs()
     : erhe::components::Component{c_name}
@@ -46,8 +45,8 @@ void Programs::initialize_component()
     linear_sampler = std::make_unique<erhe::graphics::Sampler>(gl::Texture_min_filter::linear,
                                                                gl::Texture_mag_filter::linear);
 
-    default_uniform_block = std::make_unique<erhe::graphics::Shader_resource>();
-    shadow_sampler_location = default_uniform_block->add_sampler("s_shadow",  gl::Uniform_type::sampler_2d_array).location();
+    default_uniform_block   = std::make_unique<erhe::graphics::Shader_resource>();
+    shadow_sampler_location = default_uniform_block->add_sampler("s_shadow",  gl::Uniform_type::sampler_2d_array)->location();
 
     m_shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
 
@@ -68,8 +67,7 @@ auto Programs::make_program(std::string_view name)
     return make_program(name, no_defines);
 }
 
-auto Programs::make_program(std::string_view name,
-                            std::string_view define)
+auto Programs::make_program(std::string_view name, std::string_view define)
 -> std::unique_ptr<erhe::graphics::Shader_stages>
 {
     std::vector<std::string> defines;
@@ -77,8 +75,7 @@ auto Programs::make_program(std::string_view name,
     return make_program(name, defines);
 }
 
-auto Programs::make_program(std::string_view                name,
-                            const std::vector<std::string>& defines)
+auto Programs::make_program(std::string_view name, const std::vector<std::string>& defines)
 -> std::unique_ptr<erhe::graphics::Shader_stages>
 {
     ZoneScoped;
@@ -86,13 +83,13 @@ auto Programs::make_program(std::string_view                name,
     log_programs.trace("Programs::make_program({})\n", name);
     log_programs.trace("current directory is {}\n", std::filesystem::current_path().string());
 
-    std::filesystem::path vs_path = m_shader_path / std::filesystem::path(std::string(name) + ".vert");
-    std::filesystem::path gs_path = m_shader_path / std::filesystem::path(std::string(name) + ".geom");
-    std::filesystem::path fs_path = m_shader_path / std::filesystem::path(std::string(name) + ".frag");
+    const std::filesystem::path vs_path = m_shader_path / std::filesystem::path(std::string(name) + ".vert");
+    const std::filesystem::path gs_path = m_shader_path / std::filesystem::path(std::string(name) + ".geom");
+    const std::filesystem::path fs_path = m_shader_path / std::filesystem::path(std::string(name) + ".frag");
 
-    bool vs_exists = std::filesystem::exists(vs_path);
-    bool gs_exists = std::filesystem::exists(gs_path);
-    bool fs_exists = std::filesystem::exists(fs_path);
+    const bool vs_exists = std::filesystem::exists(vs_path);
+    const bool gs_exists = std::filesystem::exists(gs_path);
+    const bool fs_exists = std::filesystem::exists(fs_path);
 
     Shader_stages::Create_info create_info(name,
                                            default_uniform_block.get(),

@@ -2,6 +2,8 @@
 #include "log.hpp"
 #include "erhe/toolkit/window.hpp"
 
+#include <openxr/openxr.h>
+
 namespace editor {
 
 using std::shared_ptr;

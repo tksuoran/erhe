@@ -26,18 +26,20 @@ class Physics_tool
 {
 public:
     static constexpr const char* c_name = "Physics_tool";
-    Physics_tool();
-    virtual ~Physics_tool();
+
+    Physics_tool ();
+    ~Physics_tool() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
+    void initialize_component() override;
 
     // Implements Tool
-    auto update(Pointer_context& pointer_context) -> bool override;
-    void render(const Render_context& render_context) override;
-    auto state() const -> State override;
-    void cancel_ready() override;
-    auto description() -> const char* override;
+    auto update      (Pointer_context& pointer_context) -> bool override;
+    void render      (const Render_context& render_context)     override;
+    auto state       () const -> State                          override;
+    void cancel_ready()                                         override;
+    auto description () -> const char*                          override;
 
     // Implements Window
     void window(Pointer_context& pointer_context) override;
@@ -53,7 +55,6 @@ private:
     glm::vec3                                m_drag_position_start  {0.0f, 0.0f, 0.0f};
     glm::vec3                                m_drag_position_end    {0.0f, 0.0f, 0.0f};
     std::unique_ptr<btPoint2PointConstraint> m_drag_constraint;
-    //std::unique_ptr<btGeneric6DofSpring2Constraint> m_drag_constraint;
 
     float m_tau                     { 0.001f};
     float m_damping                 { 1.00f};

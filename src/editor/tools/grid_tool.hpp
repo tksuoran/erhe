@@ -14,13 +14,17 @@ class Grid_tool
 {
 public:
     static constexpr const char* c_name = "Grid_tool";
-    Grid_tool();
-    virtual ~Grid_tool();
+
+    Grid_tool ();
+    ~Grid_tool() override;
+
+    // Implements Component
+    void initialize_component() override;
 
     // Implements Tool
-    void render(const Render_context& render_context) override;
-    auto state() const -> State override;
-    auto description() -> const char* override;
+    void render     (const Render_context& render_context) override;
+    auto state      () const -> State                      override;
+    auto description() -> const char*                      override;
 
     // Implements Window
     void window(Pointer_context& pointer_context) override;

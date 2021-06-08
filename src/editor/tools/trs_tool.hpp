@@ -60,41 +60,37 @@ public:
     };
 
     static constexpr const char* c_name = "Trs_tool";
-    Trs_tool();
-    virtual ~Trs_tool();
+
+    Trs_tool ();
+    ~Trs_tool() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
     void initialize_component() override;
 
     // Implements Tool
-    auto update(Pointer_context& pointer_context) -> bool override;
-    void render_update(const Render_context& render_context) override;
-    void render(const Render_context& render_context) override;
-    auto state() const -> State override;
-    void cancel_ready() override;
-    auto description() -> const char* override;
+    auto update       (Pointer_context& pointer_context) -> bool override;
+    void render_update(const Render_context& render_context)     override;
+    void render       (const Render_context& render_context)     override;
+    auto state        () const -> State                          override;
+    void cancel_ready ()                                         override;
+    auto description  () -> const char*                          override;
 
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
     void set_translate(bool enabled);
-    void set_rotate(bool enabled);
+    void set_rotate   (bool enabled);
 
 private:
-    void snap_translate(glm::vec3& translation) const;
-
-    auto begin(Pointer_context& pointer_context) -> bool;
-
-    auto end(Pointer_context& pointer_context) -> bool;
-
-    void set_node(std::shared_ptr<erhe::scene::Node> node);
-
+    void snap_translate       (glm::vec3& translation) const;
+    auto begin                (Pointer_context& pointer_context) -> bool;
+    auto end                  (Pointer_context& pointer_context) -> bool;
+    void set_node             (std::shared_ptr<erhe::scene::Node> node);
     auto is_x_translate_active() const -> bool;
     auto is_y_translate_active() const -> bool;
     auto is_z_translate_active() const -> bool;
-
-    auto is_rotate_active() const -> bool;
+    auto is_rotate_active     () const -> bool;
 
     enum class Handle : unsigned int
     {

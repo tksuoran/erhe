@@ -12,30 +12,25 @@
 
 namespace editor {
 
+using namespace std;
+
 static constexpr const char* c_name = "Gl_context_provider";
 Gl_context_provider::Gl_context_provider()
     : erhe::components::Component{c_name}
+    , m_main_thread_id           {std::this_thread::get_id()}
 {
 }
 
 Gl_context_provider::~Gl_context_provider() = default;
 
-void Gl_context_provider::connect()
-{
-}
-
-void Gl_context_provider::initialize_component()
-{
-}
-
-void Gl_context_provider::provide_worker_contexts(const std::shared_ptr<erhe::graphics::OpenGL_state_tracker>& opengl_state_tracker,
-                                                  erhe::toolkit::Context_window*                               main_window,
-                                                  std::function<bool()>                                        worker_contexts_still_needed_callback)
+void Gl_context_provider::provide_worker_contexts(const shared_ptr<erhe::graphics::OpenGL_state_tracker>& opengl_state_tracker,
+                                                  erhe::toolkit::Context_window*                          main_window,
+                                                  function<bool()>                                        worker_contexts_still_needed_callback)
 {
     ZoneScoped;
 
+    VERIFY(m_main_thread_id == this_thread::get_id());
     m_opengl_state_tracker = opengl_state_tracker;
-    m_main_thread_id = std::this_thread::get_id();
     m_main_window = main_window;
 
     {
@@ -44,7 +39,7 @@ void Gl_context_provider::provide_worker_contexts(const std::shared_ptr<erhe::gr
         main_window->clear_current();
     }
 
-    auto max_count = std::thread::hardware_concurrency();
+    auto max_count = 2u; //thread::hardware_concurrency();
     for (auto end = max_count, i = 0u; i < end; ++i)
     {
         ZoneScopedN("Worker context");
@@ -57,7 +52,7 @@ void Gl_context_provider::provide_worker_contexts(const std::shared_ptr<erhe::gr
 
         TracyMessageL("Creating another GL worker thread context");
 
-        auto context = std::make_shared<erhe::toolkit::Context_window>(main_window);
+        auto context = make_shared<erhe::toolkit::Context_window>(main_window);
         m_contexts.push_back(context);
         context->clear_current();
         Gl_worker_context context_wrapper{
@@ -81,14 +76,19 @@ auto Gl_context_provider::acquire_gl_context() -> Gl_worker_context
 {
     ZoneScopedC(0x223344);
 
+    if (this_thread::get_id() == m_main_thread_id)
+    {
+        return {};
+    }
+
     Gl_worker_context context;
     while (!m_worker_context_pool.try_dequeue(context))
     {
         TracyMessageL("Waiting for available GL context");
-        std::unique_lock<std::mutex> lock(m_mutex);
+        unique_lock<mutex> lock(m_mutex);
         m_condition_variable.wait(lock);
     }
-    std::string text = fmt::format("Got GL context {}", context.id);
+    string text = fmt::format("Got GL context {}", context.id);
     TracyMessage(text.c_str(), text.length());
     ZoneValue(context.id);
     VERIFY(context.context != nullptr);
@@ -100,8 +100,15 @@ void Gl_context_provider::release_gl_context(Gl_worker_context context)
 {
     ZoneScoped;
 
+    if (this_thread::get_id() == m_main_thread_id)
+    {
+        VERIFY(context.id == 0);
+        VERIFY(context.context == nullptr);
+        return;
+    }
+
     VERIFY(context.context != nullptr);
-    std::string text = fmt::format("Releasing GL context {}", context.id);
+    string text = fmt::format("Releasing GL context {}", context.id);
     TracyMessage(text.c_str(), text.length());
     ZoneValue(context.id);
     m_opengl_state_tracker->on_thread_exit();

@@ -34,7 +34,6 @@ class Node_transform_operation
 public:
     struct Context
     {
-        //std::shared_ptr<Scene_manager>     scene_manager;
         erhe::scene::Layer&                layer;
         erhe::scene::Scene&                scene;
         erhe::physics::World&              physics_world;
@@ -44,10 +43,11 @@ public:
     };
 
     explicit Node_transform_operation(const Context& context);
-    virtual ~Node_transform_operation();
+    ~Node_transform_operation        () override;
 
+    // Implements IOperation
     void execute() override;
-    void undo() override;
+    void undo   () override;
 
 private:
     Context m_context;
@@ -93,10 +93,11 @@ public:
     };
 
     explicit Mesh_insert_remove_operation(const Context& context);
-    virtual ~Mesh_insert_remove_operation();
+    ~Mesh_insert_remove_operation        () override;
 
+    // Implements IOperation
     void execute() override;
-    void undo() override;
+    void undo   () override;
 
 private:
     void execute(const Mode mode);
@@ -118,10 +119,10 @@ public:
     };
 
     explicit Light_insert_remove_operation(const Context& context);
-    virtual ~Light_insert_remove_operation();
+    ~Light_insert_remove_operation        () override;
 
     void execute() override;
-    void undo() override;
+    void undo   () override;
 
 private:
     void execute(const Mode mode);

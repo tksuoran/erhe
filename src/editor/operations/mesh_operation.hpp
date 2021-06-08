@@ -60,12 +60,15 @@ protected:
         erhe::scene::Mesh                  after;
     };
 
+    Mesh_operation ();
+    ~Mesh_operation() override;
+
     void make_entries(const Context& context,
                       const std::function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation);
 
     // Implements IOperation
     void execute() override;
-    void undo() override;
+    void undo   () override;
 
     void add_entry(Entry&& entry);
 

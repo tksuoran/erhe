@@ -50,7 +50,7 @@ auto Geometry::compute_tangents(const bool corner_tangents,
         return true;
     }
 
-    log.info("{} for {}\n", __func__, name);
+    log_geometry.info("{} for {}\n", __func__, name);
 
     if (!compute_polygon_normals())
     {

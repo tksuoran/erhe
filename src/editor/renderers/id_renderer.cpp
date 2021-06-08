@@ -45,6 +45,8 @@ Id_renderer::Id_renderer()
 {
 }
 
+Id_renderer::~Id_renderer() = default;
+
 void Id_renderer::connect()
 {
     base_connect(this);
@@ -188,10 +190,10 @@ void Id_renderer::render_layer(erhe::scene::Layer* layer)
     m_layer_ranges.emplace_back(layer_range);
 }
 
-static constexpr const char* c_id_renderer_render_clear   = "Id_renderer::render() clear";
-static constexpr const char* c_id_renderer_render_content = "Id_renderer::render() content";
-static constexpr const char* c_id_renderer_render_tool    = "Id_renderer::render() tool";
-static constexpr const char* c_id_renderer_render_read    = "Id_renderer::render() read";
+static constexpr const char* const c_id_renderer_render_clear   = "Id_renderer::render() clear";
+static constexpr const char* const c_id_renderer_render_content = "Id_renderer::render() content";
+static constexpr const char* const c_id_renderer_render_tool    = "Id_renderer::render() tool";
+static constexpr const char* const c_id_renderer_render_read    = "Id_renderer::render() read";
 void Id_renderer::render(const erhe::scene::Viewport viewport,
                          const Layer_collection&     content_layers,
                          const Layer_collection&     tool_layers,
@@ -234,7 +236,7 @@ void Id_renderer::render(const erhe::scene::Viewport viewport,
         m_pipeline_state_tracker->color_blend.execute(&erhe::graphics::Color_blend_state::color_blend_disabled);
         {
             gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
-            auto status = gl::check_named_framebuffer_status(m_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
+            const auto status = gl::check_named_framebuffer_status(m_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
             if (status != gl::Framebuffer_status::framebuffer_complete)
             {
                 log_framebuffer.error("draw framebuffer status = {}\n", c_str(status));
@@ -244,7 +246,7 @@ void Id_renderer::render(const erhe::scene::Viewport viewport,
 
         {
             gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_framebuffer->gl_name());
-            auto status = gl::check_named_framebuffer_status(m_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
+            const auto status = gl::check_named_framebuffer_status(m_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
             if (status != gl::Framebuffer_status::framebuffer_complete)
             {
                 log_framebuffer.error("read framebuffer status = {}\n", c_str(status));
@@ -305,13 +307,13 @@ void Id_renderer::render(const erhe::scene::Viewport viewport,
             gl::disable(gl::Enable_cap::scissor_test);
         }
         gl::bind_buffer(gl::Buffer_target::pixel_pack_buffer, idr.pixel_pack_buffer.gl_name());
-        void* color_offset = nullptr;
-        void* depth_offset = reinterpret_cast<void*>(s_extent * s_extent * 4);
+        void* const color_offset = nullptr;
+        void* const depth_offset = reinterpret_cast<void*>(s_extent * s_extent * 4);
         gl::read_pixels(idr.x_offset, idr.y_offset, s_extent, s_extent, gl::Pixel_format::rgba,            gl::Pixel_type::unsigned_byte, color_offset);
         gl::read_pixels(idr.x_offset, idr.y_offset, s_extent, s_extent, gl::Pixel_format::depth_component, gl::Pixel_type::float_,        depth_offset);
         gl::bind_buffer(gl::Buffer_target::pixel_pack_buffer, 0);
         idr.sync = gl::fence_sync(gl::Sync_condition::sync_gpu_commands_complete, 0);
-        idr.state = Id_frame_resources::State::waiting_for_read;
+        idr.state = Id_frame_resources::State::Waiting_for_read;
     }
 
     gl::pop_debug_group();
@@ -331,7 +333,7 @@ bool Id_renderer::get(int x, int y, uint32_t& id, float& depth)
 
         auto& idr = m_id_frame_resources[slot];
 
-        if (idr.state == Id_frame_resources::State::waiting_for_read)
+        if (idr.state == Id_frame_resources::State::Waiting_for_read)
         {
             GLint sync_status = GL_UNSIGNALED;
             gl::get_sync_iv(idr.sync, gl::Sync_parameter_name::sync_status, 4, nullptr, &sync_status);
@@ -343,24 +345,24 @@ bool Id_renderer::get(int x, int y, uint32_t& id, float& depth)
                 auto gpu_data = idr.pixel_pack_buffer.map();
 
                 memcpy(&idr.data[0], gpu_data.data(), gpu_data.size_bytes());
-                idr.state = Id_frame_resources::State::read_complete;
+                idr.state = Id_frame_resources::State::Read_complete;
             }
         }
 
-        if (idr.state == Id_frame_resources::State::read_complete)
+        if (idr.state == Id_frame_resources::State::Read_complete)
         {
-            size_t x_ = x - idr.x_offset;
-            size_t y_ = y - idr.y_offset;
+            const size_t x_ = x - idr.x_offset;
+            const size_t y_ = y - idr.y_offset;
             if ((x_ >= 0) && (y_ >= 0) && (x_ < s_extent) && (y_ < s_extent))
             {
-                uint32_t stride      = s_extent * 4;
-                uint8_t  r           = idr.data[x_ * 4 + y_ * stride + 0];
-                uint8_t  g           = idr.data[x_ * 4 + y_ * stride + 1];
-                uint8_t  b           = idr.data[x_ * 4 + y_ * stride + 2];
-                id                   = (r << 16) | (g << 8) | b;
-                uint8_t* depth_ptr   = &idr.data[s_extent * s_extent * 4 + x_ * 4 + y_ * stride];
-                float*   depth_f_ptr = reinterpret_cast<float*>(depth_ptr);
-                depth                = *depth_f_ptr;
+                const uint32_t       stride      = s_extent * 4;
+                const uint8_t        r           = idr.data[x_ * 4 + y_ * stride + 0];
+                const uint8_t        g           = idr.data[x_ * 4 + y_ * stride + 1];
+                const uint8_t        b           = idr.data[x_ * 4 + y_ * stride + 2];
+                const uint8_t* const depth_ptr   = &idr.data[s_extent * s_extent * 4 + x_ * 4 + y_ * stride];
+                const float* const   depth_f_ptr = reinterpret_cast<const float*>(depth_ptr);
+                id                         = (r << 16) | (g << 8) | b;
+                depth                       = *depth_f_ptr;
                 return true;
             }
         }
@@ -373,7 +375,6 @@ Id_renderer::Mesh_primitive Id_renderer::get(int x, int y, float& depth)
 {
     Mesh_primitive result;
     uint32_t id;
-
     bool ok = get(x, y, id, depth);
     if (!ok)
     {

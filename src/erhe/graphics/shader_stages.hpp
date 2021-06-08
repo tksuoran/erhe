@@ -27,21 +27,15 @@ public:
         class Shader_stage
         {
         public:
-            Shader_stage(gl::Shader_type type, std::string source)
+            Shader_stage(gl::Shader_type type, std::string_view source)
                 : type  {type}
-                , source{std::move(source)}
+                , source{source}
             {
             }
 
             Shader_stage(gl::Shader_type type, std::filesystem::path path)
                 : type{type}
                 , path{std::move(path)}
-            {
-            }
-
-            Shader_stage(gl::Shader_type type, std::string_view source)
-                : type  {type}
-                , source{source}
             {
             }
 
@@ -77,17 +71,13 @@ public:
         std::vector<Shader_stage>                           shaders;
     };
 
-    class Prototype
+    class Prototype final
     {
     public:
         explicit Prototype(const Create_info& create_info);
-
-        ~Prototype() = default;
-
-        Prototype(const Prototype&) = delete;
-
-        auto operator=(const Prototype&)
-        -> Prototype& = delete;
+        ~Prototype        () = default;
+        Prototype         (const Prototype&) = delete;
+        void operator=    (const Prototype&) = delete;
 
         auto is_valid() const
         -> bool

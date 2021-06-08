@@ -5,7 +5,7 @@
 namespace erhe::geometry
 {
 
-extern erhe::log::Category log;
+extern erhe::log::Category log_geometry;
 extern erhe::log::Category log_build_edges;
 extern erhe::log::Category log_tangent_gen;
 extern erhe::log::Category log_cone;

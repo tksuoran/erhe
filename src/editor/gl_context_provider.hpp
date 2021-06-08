@@ -34,21 +34,15 @@ class Gl_context_provider
 {
 public:
     static constexpr const char* c_name = "Gl_context_provider";
-    Gl_context_provider();
-    virtual ~Gl_context_provider();
-    Gl_context_provider(const Gl_context_provider&) = delete;
-    Gl_context_provider& operator=(const Gl_context_provider&) = delete;
-    Gl_context_provider(Gl_context_provider&&) = delete;
-    Gl_context_provider& operator=(Gl_context_provider&&) = delete;
+    Gl_context_provider ();
+    ~Gl_context_provider() override;
+    Gl_context_provider (const Gl_context_provider&) = delete;
+    void operator=      (const Gl_context_provider&) = delete;
+    Gl_context_provider (Gl_context_provider&&)      = delete;
+    void operator=      (Gl_context_provider&&)      = delete;
 
-    // Implements Component
-    void connect() override;
-    void initialize_component() override;
-
-    auto acquire_gl_context() -> Gl_worker_context;
-
-    void release_gl_context(Gl_worker_context context);
-
+    auto acquire_gl_context     () -> Gl_worker_context;
+    void release_gl_context     (Gl_worker_context context);
     void provide_worker_contexts(const std::shared_ptr<erhe::graphics::OpenGL_state_tracker>& opengl_state_tracker,
                                  erhe::toolkit::Context_window*                               main_window,
                                  std::function<bool()>                                        worker_contexts_still_needed_callback);
@@ -66,12 +60,12 @@ private:
 class Scoped_gl_context
 {
 public:
-    Scoped_gl_context(Gl_context_provider* context_provider);
-    ~Scoped_gl_context();
-    Scoped_gl_context(const Scoped_gl_context&) = delete;
-    Scoped_gl_context& operator=(const Scoped_gl_context&) = delete;
-    Scoped_gl_context(Scoped_gl_context&&) = delete;
-    Scoped_gl_context& operator=(Scoped_gl_context&&) = delete;
+    explicit Scoped_gl_context(Gl_context_provider* context_provider);
+    ~Scoped_gl_context        ();
+    Scoped_gl_context         (const Scoped_gl_context&) = delete;
+    auto operator=            (const Scoped_gl_context&) = delete;
+    Scoped_gl_context         (Scoped_gl_context&&)      = delete;
+    auto operator=            (Scoped_gl_context&&)      = delete;
 
 private:
     Gl_context_provider* m_context_provider{nullptr};

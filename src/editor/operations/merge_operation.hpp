@@ -44,11 +44,27 @@ public:
 
     // Implements IOperation
     void execute() override;
-    void undo() override;
+    void undo   () override;
 
 private:
     struct Source_entry
     {
+        Source_entry(erhe::primitive::Primitive_build_context& primitive_build_context,
+                     erhe::scene::Layer&                       layer,
+                     erhe::scene::Scene&                       scene,
+                     erhe::physics::World&                     physics_world,
+                     std::shared_ptr<erhe::scene::Mesh>        mesh,
+                     std::shared_ptr<erhe::scene::Node>        node,
+                     std::vector<erhe::primitive::Primitive>   primitives)
+            : primitive_build_context{primitive_build_context}
+            , layer                  {layer                  }
+            , scene                  {scene                  }
+            , physics_world          {physics_world          }
+            , mesh                   {mesh                   }
+            , node                   {node                   }
+            , primitives             {primitives             }
+        {
+        }
         erhe::primitive::Primitive_build_context& primitive_build_context;
         erhe::scene::Layer&                       layer;
         erhe::scene::Scene&                       scene;

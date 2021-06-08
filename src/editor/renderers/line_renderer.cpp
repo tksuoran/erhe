@@ -38,13 +38,11 @@ using glm::vec3;
 using glm::vec4;
 
 Line_renderer::Line_renderer()
-    : Component("Line_renderer")
+    : Component(c_name)
 {
 }
 
-Line_renderer::~Line_renderer()
-{
-}
+Line_renderer::~Line_renderer() = default;
 
 void Line_renderer::connect()
 {
@@ -78,8 +76,8 @@ void Line_renderer::initialize_component()
                                     gl::Attribute_type::float_vec4,
                                     {gl::Vertex_attrib_type::unsigned_byte, true, 4});
 
-    m_clip_from_world_offset        = m_model_block.add_mat4("clip_from_world").offset_in_parent();
-    m_view_position_in_world_offset = m_model_block.add_vec4("view_position_in_world").offset_in_parent();
+    m_clip_from_world_offset        = m_model_block.add_mat4("clip_from_world"       )->offset_in_parent();
+    m_view_position_in_world_offset = m_model_block.add_vec4("view_position_in_world")->offset_in_parent();
 
     auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
     std::filesystem::path vs_path = shader_path / std::filesystem::path("line.vert");
@@ -136,9 +134,9 @@ void Line_renderer::add_lines(const std::initializer_list<Line> lines, float thi
 
     m_vertex_writer.begin();
 
-    std::byte*          start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
-    size_t              byte_count = vertex_gpu_data.size_bytes();
-    size_t              word_count = byte_count / sizeof(float);
+    std::byte* const    start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
+    const size_t        byte_count = vertex_gpu_data.size_bytes();
+    const size_t        word_count = byte_count / sizeof(float);
     gsl::span<float>    gpu_float_data(reinterpret_cast<float*   >(start), word_count);
     gsl::span<uint32_t> gpu_uint_data (reinterpret_cast<uint32_t*>(start), word_count);
 
@@ -179,10 +177,10 @@ void Line_renderer::render(erhe::scene::Viewport       viewport,
                          static_cast<GLsizei>(strlen(c_line_renderer_render)),
                          c_line_renderer_render);
 
-    mat4  clip_from_world        = camera.clip_from_world();
-    vec4  view_position_in_world = camera.node()->position_in_world();
-    auto* model_buffer           = &current_frame_resources().model_buffer;
-    auto  model_gpu_data         = model_buffer->map();
+    const mat4  clip_from_world        = camera.clip_from_world();
+    const vec4  view_position_in_world = camera.node()->position_in_world();
+    auto* const model_buffer           = &current_frame_resources().model_buffer;
+    auto        model_gpu_data         = model_buffer->map();
     write(model_gpu_data, m_clip_from_world_offset,        as_span(clip_from_world));
     write(model_gpu_data, m_view_position_in_world_offset, as_span(view_position_in_world));
 

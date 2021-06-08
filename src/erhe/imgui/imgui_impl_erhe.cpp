@@ -129,34 +129,10 @@ public:
             draw_indirect_buffer .set_debug_label("ImGui Renderer Draw Indirect");
         }
 
-        Frame_resources(const Frame_resources& other) = delete;
-
-        auto operator=(const Frame_resources&)
-        -> Frame_resources& = delete;
-
-        Frame_resources(Frame_resources&& other) = delete; //noexcept
-        //{
-        //    std::swap(vertex_buffer,         other.vertex_buffer);
-        //    std::swap(index_buffer,          other.index_buffer);
-        //    std::swap(draw_parameter_buffer, other.draw_parameter_buffer);
-        //    std::swap(draw_indirect_buffer,  other.draw_indirect_buffer);
-        //    std::swap(vertex_input_state,    other.vertex_input_state);
-        //    std::swap(pipeline,              other.pipeline);
-        //    pipeline.vertex_input = &vertex_input_state;
-        //}
-
-        auto operator=(Frame_resources&& other) = delete; //noexcept
-        //-> Frame_resources&
-        //{
-        //    std::swap(vertex_buffer,         other.vertex_buffer);
-        //    std::swap(index_buffer,          other.index_buffer);
-        //    std::swap(draw_parameter_buffer, other.draw_parameter_buffer);
-        //    std::swap(draw_indirect_buffer,  other.draw_indirect_buffer);
-        //    std::swap(vertex_input_state,    other.vertex_input_state);
-        //    std::swap(pipeline,              other.pipeline);
-        //    pipeline.vertex_input = &vertex_input_state;
-        //    return *this;
-        //}
+        Frame_resources(const Frame_resources&) = delete;
+        void operator= (const Frame_resources&) = delete;
+        Frame_resources(Frame_resources&&)      = delete;
+        void operator= (Frame_resources&&)      = delete;
 
         erhe::graphics::Buffer             vertex_buffer;
         erhe::graphics::Buffer             index_buffer;
@@ -186,8 +162,8 @@ public:
     void create_blocks()
     {
         // Draw parameter struct
-        u_clip_rect_offset       = draw_parameter_struct.add_vec4("u_clip_rect"         ).offset_in_parent();
-        u_texture_indices_offset = draw_parameter_struct.add_uint("u_texture_indices", 4).offset_in_parent();
+        u_clip_rect_offset       = draw_parameter_struct.add_vec4("u_clip_rect"         )->offset_in_parent();
+        u_texture_indices_offset = draw_parameter_struct.add_uint("u_texture_indices", 4)->offset_in_parent();
 
         // Create uniform block for per draw data
         projection_block = make_unique<erhe::graphics::Shader_resource>("projection", // block name
@@ -195,8 +171,8 @@ public:
                                                                         erhe::graphics::Shader_resource::Type::uniform_block);
 
         // Projection block
-        u_scale_offset     = projection_block->add_vec2("u_scale"    ).offset_in_parent();
-        u_translate_offset = projection_block->add_vec2("u_translate").offset_in_parent();
+        u_scale_offset     = projection_block->add_vec2("u_scale"    )->offset_in_parent();
+        u_translate_offset = projection_block->add_vec2("u_translate")->offset_in_parent();
 
         // Create uniform block for per draw data
         draw_parameter_block = make_unique<erhe::graphics::Shader_resource>("draw", // block name
@@ -213,7 +189,7 @@ public:
         fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 
         // sampler2d textures[16];
-        samplers = &default_uniform_block.add_sampler("s_textures", gl::Uniform_type::sampler_2d, 2);
+        samplers = default_uniform_block.add_sampler("s_textures", gl::Uniform_type::sampler_2d, 2);
 
         erhe::graphics::Shader_stages::Create_info create_info("ImGui Renderer",
                                                                &default_uniform_block,

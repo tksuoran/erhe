@@ -1,6 +1,6 @@
 #include "hover_tool.hpp"
-#include "editor.hpp"
 #include "log.hpp"
+#include "tools.hpp"
 #include "tools/hover_tool.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
@@ -41,14 +41,14 @@ auto Hover_tool::state() const -> State
 void Hover_tool::connect()
 {
     m_scene_root = require<Scene_root>();
-    require<Editor>();
+    require<Editor_tools>();
 }
 
 void Hover_tool::initialize_component()
 {
     m_hover_material = m_scene_root->make_material("hover");
     m_hover_material_index = m_hover_material->index;
-    get<Editor>()->register_background_tool(this);
+    get<Editor_tools>()->register_background_tool(this);
 }
 
 auto Hover_tool::update(Pointer_context& pointer_context) -> bool
@@ -74,6 +74,8 @@ auto Hover_tool::update(Pointer_context& pointer_context) -> bool
 
 void Hover_tool::render(const Render_context& render_context)
 {
+    ZoneScoped;
+
     const uint32_t text_color = m_hover_content ? 0xffffffffu :
                                 m_hover_tool    ? 0xffff0000u :
                                                   0xff0000ffu; // abgr
@@ -159,20 +161,19 @@ void Hover_tool::select(Pointer_context& pointer_context)
 
 void Hover_tool::window(Pointer_context&)
 {
-    ZoneScoped;
 
-    ImGui::Begin("Hover");
-    if (m_hover_mesh != nullptr)
-    {
-        ImGui::Text("Mesh: %s", m_hover_mesh->name().c_str());
-        const auto* node = m_hover_mesh->node().get();
-        if (node != nullptr)
-        {
-            ImGui::Text("Node: %s", node->name.c_str());
-        }
-    }
-    ImGui::ColorEdit4("Highlight Color", &m_hover_emissive.x, ImGuiColorEditFlags_Float);
-    ImGui::End();
+    //ImGui::Begin("Hover");
+    //if (m_hover_mesh != nullptr)
+    //{
+    //    ImGui::Text("Mesh: %s", m_hover_mesh->name().c_str());
+    //    const auto* node = m_hover_mesh->node().get();
+    //    if (node != nullptr)
+    //    {
+    //        ImGui::Text("Node: %s", node->name.c_str());
+    //    }
+    //}
+    //ImGui::ColorEdit4("Highlight Color", &m_hover_emissive.x, ImGuiColorEditFlags_Float);
+    //ImGui::End();
 }
 
 }

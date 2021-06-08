@@ -10,7 +10,7 @@ template <typename Key_type>
 class Property_map_collection
 {
 private:
-    struct Entry
+    struct Entry final
     {
         Entry() = default;
         ~Entry() = default;
@@ -22,10 +22,8 @@ private:
         {
         }
 
-        Entry(const Entry&) = delete;
-
-        auto operator=(const Entry&)
-        -> Entry& = delete;
+        Entry         (const Entry&) = delete;
+        void operator=(const Entry&) = delete;
 
         Entry(Entry&& other) noexcept
             : key  {other.key}

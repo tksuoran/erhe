@@ -46,16 +46,17 @@ static constexpr const char* c_action_strings[] =
     "Drag"
 };
 
+struct Pointer_context;
+class Scene_manager;
+class Line_renderer;
+class Text_renderer;
+
 struct Pointer_context
 {
-    auto position_in_world() const -> glm::vec3;
-
-    auto position_in_world(float z) const-> glm::vec3;
-
-    auto position_in_world(glm::vec3 position_in_window) const-> glm::vec3;
-
-    auto position_in_window(glm::vec3 position_in_world) const -> glm::vec3;
-
+    auto position_in_world      () const -> glm::vec3;
+    auto position_in_world      (float z) const -> glm::vec3;
+    auto position_in_world      (glm::vec3 position_in_window) const -> glm::vec3;
+    auto position_in_window     (glm::vec3 position_in_world) const -> glm::vec3;
     auto pointer_in_content_area() const -> bool
     {
         return (pointer_x >= 0) &&
@@ -64,25 +65,25 @@ struct Pointer_context
                (pointer_y < viewport.height);
     }
 
-    int                   pointer_x       {0};
-    int                   pointer_y       {0};
-    float                 pointer_z       {0.0f};
-    bool                  shift           {false};
-    bool                  control         {false};
-    bool                  alt             {false};
-    bool                  scene_view_focus{false};
+    int   pointer_x       {0};
+    int   pointer_y       {0};
+    float pointer_z       {0.0f};
+    bool  shift           {false};
+    bool  control         {false};
+    bool  alt             {false};
+    bool  scene_view_focus{false};
     struct Mouse_button
     {
         bool pressed {false};
         bool released{false};
     };
-    Action                      priority_action{Action::select};
-    Mouse_button                mouse_button[static_cast<int>(erhe::toolkit::Mouse_button_count)];
-    bool                        mouse_moved     {false};
-    double                      mouse_x         {0.0f};
-    double                      mouse_y         {0.0f};
-    const erhe::scene::ICamera* camera          {nullptr};
-    erhe::scene::Viewport       viewport        {0, 0, 0, 0};
+    Action                             priority_action{Action::select};
+    Mouse_button                       mouse_button[static_cast<int>(erhe::toolkit::Mouse_button_count)];
+    bool                               mouse_moved     {false};
+    double                             mouse_x         {0.0f};
+    double                             mouse_y         {0.0f};
+    const erhe::scene::ICamera*        camera          {nullptr};
+    erhe::scene::Viewport              viewport        {0, 0, 0, 0};
     bool                               hover_valid     {false};
     std::shared_ptr<erhe::scene::Mesh> hover_mesh;
     std::optional<glm::vec3>           hover_normal;

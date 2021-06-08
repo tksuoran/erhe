@@ -45,4 +45,18 @@ auto Image_transfer::Slot::span_for(int width, int height, gl::Internal_format i
     return span.subspan(0, byte_count);
 }
 
+Image_transfer::Image_transfer()
+    : erhe::components::Component{c_name}
+{
+}
+
+Image_transfer::~Image_transfer() = default;
+
+auto Image_transfer::get_slot()
+-> Slot&
+{
+    m_index = (m_index + 1) % m_slots.size();
+    return m_slots[m_index];;
+}
+
 } // namespace erhe::graphics

@@ -116,9 +116,9 @@ void Vertex_input_state::update()
 
     for (auto binding : m_bindings)
     {
-        auto*       vbo       = binding->vertex_buffer;
-        const auto* attribute = binding->vertex_attribute;
-        auto        mapping   = binding->vertex_attribute_mapping;
+        const auto*       vbo       = binding->vertex_buffer;
+        const auto* const attribute = binding->vertex_attribute;
+        const auto        mapping   = binding->vertex_attribute_mapping;
 
         VERIFY(vbo != nullptr);
         VERIFY(attribute != nullptr);

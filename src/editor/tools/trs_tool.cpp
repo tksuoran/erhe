@@ -1,6 +1,7 @@
 #include "tools/trs_tool.hpp"
 #include "gl_context_provider.hpp"
 #include "log.hpp"
+#include "tools.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/insert_operation.hpp"
 #include "renderers/line_renderer.hpp"
@@ -286,6 +287,8 @@ void Trs_tool::initialize_component()
         };
         m_selection_subscription = m_selection_tool->subscribe_selection_change_notification(lambda);
     }
+
+    get<Editor_tools>()->register_tool(this);
 }
 
 void Trs_tool::window(Pointer_context&)
@@ -294,7 +297,7 @@ void Trs_tool::window(Pointer_context&)
 
     const bool show_translate = m_visualization.show_translate;
     const bool show_rotate    = m_visualization.show_rotate;
-    ImGui::Begin      ("Transform`");
+    ImGui::Begin("Transform");
 
     const auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
 
@@ -314,16 +317,14 @@ void Trs_tool::window(Pointer_context&)
     ImGui::Checkbox   ("Translate Snap Enable", &m_translate_snap_enable);
     const float translate_snap_values[] = {  0.001f,  0.01f,  0.1f,  0.2f,  0.25f,  0.5f,  1.0f,  2.0f,  5.0f,  10.0f,  100.0f };
     const char* translate_snap_items [] = { "0.001", "0.01", "0.1", "0.2", "0.25", "0.5", "1.0", "2.0", "5.0", "10.0", "100.0" };
-    static int  translate_item_current = 0;
-    ImGui::Combo("Translate Snap", &translate_item_current, translate_snap_items, IM_ARRAYSIZE(translate_snap_items));
-    m_translate_snap = translate_snap_values[translate_item_current];
+    make_combo("Translate Snap", m_translate_snap, translate_snap_items, IM_ARRAYSIZE(translate_snap_items));
     ImGui::Separator  ();
     ImGui::Checkbox   ("Rotate Tool",        &m_visualization.show_rotate);
     ImGui::Checkbox   ("Rotate Snap Enable", &m_rotate_snap_enable);
     //const float rotate_snap_values[] = {  5.0f, 10.0f, 15.0f, 20.0f, 30.0f, 45.0f, 60.0f, 90.0f };
     const char* rotate_snap_items [] = { "5",  "10",  "15",  "20",  "30",  "45",  "60",  "90" };
     static int  rotate_item_current = 0;
-    ImGui::Combo("Rotate Snap", &rotate_item_current, rotate_snap_items, IM_ARRAYSIZE(rotate_snap_items));
+    make_combo("Rotate Snap", rotate_item_current, rotate_snap_items, IM_ARRAYSIZE(rotate_snap_items));
     ImGui::Separator  ();
     ImGui::Checkbox   ("Hide Inactive", &m_visualization.hide_inactive);
     ImGui::Separator  ();

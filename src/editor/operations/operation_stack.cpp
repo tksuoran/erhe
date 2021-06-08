@@ -4,6 +4,13 @@
 namespace editor
 {
 
+Operation_stack::Operation_stack()
+    : erhe::components::Component{c_name}
+{
+}
+
+Operation_stack::~Operation_stack() = default;
+
 void Operation_stack::push(std::shared_ptr<IOperation> operation)
 {
     operation->execute();

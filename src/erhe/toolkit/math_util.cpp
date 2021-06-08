@@ -143,6 +143,24 @@ auto create_perspective(const float fov_x, const float fov_y, const float z_near
     return create_frustum_simple(width, height, z_near, z_far);
 }
 
+auto create_perspective_xr(const float fov_left, const float fov_right, const float fov_up, const float fov_down, const float z_near, const float z_far)
+-> glm::mat4
+{
+    const auto fov_left_clamped  = std::min(std::max(fov_left,  -pi_minus_epsilon), pi_minus_epsilon);
+    const auto fov_right_clamped = std::min(std::max(fov_right, -pi_minus_epsilon), pi_minus_epsilon);
+    const auto fov_up_clamped    = std::min(std::max(fov_up,    -pi_minus_epsilon), pi_minus_epsilon);
+    const auto fov_down_clamped  = std::min(std::max(fov_down,  -pi_minus_epsilon), pi_minus_epsilon);
+    const auto tan_left          = std::tan(fov_left_clamped );
+    const auto tan_right         = std::tan(fov_right_clamped);
+    const auto tan_up            = std::tan(fov_up_clamped   );
+    const auto tan_down          = std::tan(fov_down_clamped );
+    const auto left              = z_near * tan_left;
+    const auto right             = z_near * tan_right;
+    const auto up                = z_near * tan_up;
+    const auto down              = z_near * tan_down;
+    return create_frustum(left, right, down, up, z_near, z_far);
+}
+
 auto create_perspective_vertical(const float fov_y, const float aspect_ratio, const float z_near, const float z_far)
 -> mat4
 {

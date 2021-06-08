@@ -119,11 +119,11 @@ public:
         return !(*this == other);
     }
 
-    Usage                  usage;
-    gl::Attribute_type     shader_type;
-    Data_type              data_type;
-    size_t                 offset    {0};
-    unsigned int           divisor   {0};
+    Usage              usage;
+    gl::Attribute_type shader_type;
+    Data_type          data_type;
+    size_t             offset    {0};
+    unsigned int       divisor   {0};
 };
 
 template<typename Enum>

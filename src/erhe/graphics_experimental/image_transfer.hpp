@@ -41,15 +41,11 @@ public:
     };
 
     static constexpr const char* c_name = "erhe::graphics::ImageTransfer";
-    Image_transfer() : erhe::components::Component{c_name} {}
-    virtual ~Image_transfer() = default;
+    Image_transfer();
+    ~Image_transfer() override;
 
     auto get_slot()
-    -> Slot&
-    {
-        m_index = (m_index + 1) % m_slots.size();
-        return m_slots[m_index];;
-    }
+    -> Slot&;
 
 private:
     size_t              m_index{0};

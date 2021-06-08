@@ -1,6 +1,6 @@
 #include "windows/brushes.hpp"
-#include "editor.hpp"
 #include "log.hpp"
+#include "tools.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/insert_operation.hpp"
 #include "renderers/line_renderer.hpp"
@@ -9,6 +9,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/pointer_context.hpp"
+
 #include "erhe/geometry/operation/clone.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/primitive/material.hpp"
@@ -32,6 +33,13 @@ using namespace erhe::primitive;
 using namespace erhe::scene;
 using namespace erhe::toolkit;
 
+Brushes::Brushes()
+    : erhe::components::Component(c_name)
+{
+}
+
+Brushes::~Brushes() = default;
+
 auto Brushes::state() const -> State
 {
     return m_state;
@@ -50,6 +58,8 @@ void Brushes::initialize_component()
     make_materials();
 
     m_selected_brush_index = 0;
+
+    get<Editor_tools>()->register_tool(this);
 }
 
 void Brushes::make_materials()
@@ -175,6 +185,8 @@ void Brushes::cancel_ready()
 
 auto Brushes::update(Pointer_context& pointer_context) -> bool
 {
+    ZoneScoped;
+
     if (pointer_context.priority_action != Action::add)
     {
         if (m_brush_mesh)
@@ -339,7 +351,6 @@ void Brushes::add_hover_mesh()
         return;
     }
 
-    const auto  transform    = get_brush_transform();
     const auto  material     = m_materials[m_selected_material];
     const auto& brush_scaled = m_brush->get_scaled(m_transform_scale);
     m_brush_mesh = m_scene_root->make_mesh_node(brush_scaled.primitive_geometry->source_geometry->name,

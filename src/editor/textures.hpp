@@ -15,9 +15,8 @@ class Textures
 {
 public:
     static constexpr const char* c_name = "Textures";
-    Textures() : erhe::components::Component{c_name} {}
-
-    virtual ~Textures() = default;
+    Textures();
+    ~Textures() override;
 
     // Implements COmponent
     void connect() override;

@@ -19,6 +19,7 @@ public:
         perspective_horizontal,
         perspective_vertical,
         perspective,          // Uses both horizontal and vertical fov and ignores aspect ratio
+        perspective_xr,
         orthogonal_horizontal,
         orthogonal_vertical,
         orthogonal,           // Uses both horizontal and vertical size and ignores aspect ratio, O-centered
@@ -32,6 +33,7 @@ public:
         "Perspective Horizontal",
         "Perspective Vertical",
         "Perspective",
+        "Perspective XR",
         "Orthogonal Horizontal",
         "Orthogonal Vertical",
         "Orthogonal Rectangle",
@@ -45,6 +47,10 @@ public:
     float z_far          {100.0};
     float fov_x          {glm::half_pi<float>()};
     float fov_y          {glm::half_pi<float>()};
+    float fov_left       {-glm::pi<float>() / 4.0f};
+    float fov_right      { glm::pi<float>() / 4.0f};
+    float fov_up         { glm::pi<float>() / 4.0f};
+    float fov_down       {-glm::pi<float>() / 4.0f};
     float ortho_left     {-0.5f};
     float ortho_width    { 1.0f};
     float ortho_bottom   {-0.5f};

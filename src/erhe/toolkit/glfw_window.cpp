@@ -278,7 +278,7 @@ void window_close_event_callback(GLFWwindow* glfw_window)
 } // namespace
 
 auto Context_window::get_glfw_window() const
--> void*
+-> GLFWwindow*
 {
     return m_glfw_window;
 }

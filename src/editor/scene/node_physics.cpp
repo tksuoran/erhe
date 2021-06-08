@@ -18,6 +18,8 @@ Node_physics::Node_physics(Rigid_body::Create_info& create_info)
     m_node.reset();
 }
 
+Node_physics::~Node_physics() = default;
+
 const string c_node_physics("Node_physics");
 
 auto Node_physics::name() const -> const string&

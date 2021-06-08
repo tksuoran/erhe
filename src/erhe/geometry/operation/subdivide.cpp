@@ -27,7 +27,7 @@ Subdivide::Subdivide(Geometry& src, Geometry& destination)
     make_polygon_centroids();
     make_edge_midpoints();
 
-    source.for_each_polygon([&](auto& i)
+    source.for_each_polygon_const([&](auto& i)
     {
         //if (src_polygon.corner_count == 3)
         //{
@@ -35,14 +35,14 @@ Subdivide::Subdivide(Geometry& src, Geometry& destination)
         //    add_polygon_corners(new_polygon_id, src_polygon_id);
         //    continue;
         //}
-        i.polygon.for_each_corner_neighborhood(source, [&](auto& j)
+        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j)
         {
-            Point_id   a                      = j.prev_corner.point_id;
-            Point_id   b                      = j.corner     .point_id;
-            Point_id   c                      = j.next_corner.point_id;
-            Polygon_id new_polygon_id         = make_new_polygon_from_polygon(i.polygon_id);
-            Point_id   previous_edge_midpoint = get_edge_new_point(a, b);
-            Point_id   next_edge_midpoint     = get_edge_new_point(b, c);
+            const Point_id   a                      = j.prev_corner.point_id;
+            const Point_id   b                      = j.corner     .point_id;
+            const Point_id   c                      = j.next_corner.point_id;
+            const Polygon_id new_polygon_id         = make_new_polygon_from_polygon(i.polygon_id);
+            const Point_id   previous_edge_midpoint = get_edge_new_point(a, b);
+            const Point_id   next_edge_midpoint     = get_edge_new_point(b, c);
             if (previous_edge_midpoint == std::numeric_limits<uint32_t>::max())
             {
                 log_subdivide.warn("midpoint for edge {} {} not found\n", std::min(a, b), std::max(a, b));

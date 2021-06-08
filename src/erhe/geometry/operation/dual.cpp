@@ -18,11 +18,11 @@ Dual::Dual(Geometry& source, Geometry& destination, bool post_process)
     make_polygon_centroids();
 
     // New faces from old points, new face corner for each old point corner
-    source.for_each_point([&](auto& i)
+    source.for_each_point_const([&](auto& i)
     {
-        Polygon_id new_polygon_id = destination.make_polygon();
+        const Polygon_id new_polygon_id = destination.make_polygon();
 
-        i.point.for_each_corner(source, [&](auto& j)
+        i.point.for_each_corner_const(source, [&](auto& j)
         {
             make_new_corner_from_polygon_centroid(new_polygon_id, j.corner.polygon_id);
         });

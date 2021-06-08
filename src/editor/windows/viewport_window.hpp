@@ -26,18 +26,22 @@ class Viewport_window
 {
 public:
     static constexpr const char* c_name = "Viewport_window";
-    Viewport_window();
-    virtual ~Viewport_window();
+
+    Viewport_window ();
+    ~Viewport_window() override;
+
+    // Implements Component
+    void initialize_component() override;
 
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
-    auto to_scene_content(glm::vec2 position_in_root) -> glm::vec2;
+    auto to_scene_content            (glm::vec2 position_in_root) -> glm::vec2;
     void bind_multisample_framebuffer();
-    auto is_framebuffer_ready() -> bool;
-    void multisample_resolve();
-    auto content_region_size() -> glm::ivec2;
-    auto is_focused() -> bool;
+    auto is_framebuffer_ready        () -> bool;
+    void multisample_resolve         ();
+    auto content_region_size         () -> glm::ivec2;
+    auto is_focused                  () -> bool;
 
 private:
     void update_framebuffer();

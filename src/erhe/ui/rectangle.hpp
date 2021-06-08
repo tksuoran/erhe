@@ -50,16 +50,14 @@ public:
     {
     }
 
-    auto operator=(const Rectangle& other) noexcept
-    -> Rectangle&
+    auto operator=(const Rectangle& other) noexcept -> Rectangle&
     {
         m_min = other.m_min;
         m_max = other.m_max;
         return *this;
     }
 
-    auto operator=(const Rectangle&& other) noexcept
-    -> Rectangle&
+    auto operator=(const Rectangle&& other) noexcept -> Rectangle&
     {
         m_min = other.m_min;
         m_max = other.m_max;

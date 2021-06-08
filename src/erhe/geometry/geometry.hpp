@@ -127,8 +127,31 @@ struct Point
         }
     };
 
+    struct Point_corner_neighborhood_context_const
+    {
+        const Geometry& geometry;
+        Point_corner_id prev_point_corner_id;
+        Point_corner_id point_corner_id;
+        Point_corner_id next_point_corner_id;
+        Corner_id       prev_corner_id;
+        Corner_id       corner_id;
+        Corner_id       next_corner_id;
+        const Corner&   prev_corner;
+        const Corner&   corner;
+        const Corner&   next_corner;
+        bool            break_{false};
+
+        void break_iteration()
+        {
+            break_ = true;
+        }
+    };
+
     void for_each_corner_neighborhood(Geometry&                                                       geometry,
                                       std::function<void(Point_corner_neighborhood_context& context)> callback);
+
+    void for_each_corner_neighborhood_const(const Geometry&                                                       geometry,
+                                            std::function<void(Point_corner_neighborhood_context_const& context)> callback) const;
 
     Point_corner_id first_point_corner_id{0};
     uint32_t        corner_count{0};
@@ -253,8 +276,31 @@ struct Polygon
         }
     };
 
+    struct Polygon_corner_neighborhood_context_const
+    {
+        const Geometry&   geometry;
+        Polygon_corner_id prev_polygon_corner_id;
+        Polygon_corner_id polygon_corner_id;
+        Polygon_corner_id next_polygon_corner_id;
+        Corner_id         prev_corner_id;
+        Corner_id         corner_id;
+        Corner_id         next_corner_id;
+        const Corner&     prev_corner;
+        const Corner&     corner;
+        const Corner&     next_corner;
+        bool              break_{false};
+
+        void break_iteration()
+        {
+            break_ = true;
+        }
+    };
+
     void for_each_corner_neighborhood(Geometry&                                                         geometry,
                                       std::function<void(Polygon_corner_neighborhood_context& context)> callback);
+
+    void for_each_corner_neighborhood_const(const Geometry&                                                         geometry,
+                                            std::function<void(Polygon_corner_neighborhood_context_const& context)> callback) const;
 };
 
 struct Edge
@@ -335,53 +381,14 @@ public:
     std::vector<Corner_id>  polygon_corners;
     std::vector<Polygon_id> edge_polygons;
 
-    Geometry();
-    Geometry(std::string_view name, std::function<void(Geometry&)>);
+    Geometry         ();
     explicit Geometry(std::string_view name);
-    Geometry(const Geometry&) = delete;
-    ~Geometry();
-    Geometry& operator=(const Geometry&) = delete;
-
-    Geometry(Geometry&& other) noexcept
-        : name                                {std::move(other.name            )}
-        , corners                             {std::move(other.corners         )}
-        , points                              {std::move(other.points          )}
-        , polygons                            {std::move(other.polygons        )}
-        , edges                               {std::move(other.edges           )}
-        , point_corners                       {std::move(other.point_corners   )}
-        , polygon_corners                     {std::move(other.polygon_corners )}
-        , edge_polygons                       {std::move(other.edge_polygons   )}
-        , m_next_corner_id                    {other.m_next_corner_id           }
-        , m_next_point_id                     {other.m_next_point_id            }
-        , m_next_polygon_id                   {other.m_next_polygon_id          }
-        , m_next_edge_id                      {other.m_next_edge_id             }
-        , m_next_point_corner_reserve         {other.m_next_point_corner_reserve}
-        , m_next_polygon_corner_id            {other.m_next_polygon_corner_id   }
-        , m_next_edge_polygon_id              {other.m_next_edge_polygon_id     }
-        , m_polygon_corner_polygon            {other.m_polygon_corner_polygon   }
-        , m_edge_polygon_edge                 {other.m_edge_polygon_edge        }
-        , m_point_property_map_collection     {std::move(other.m_point_property_map_collection)}
-        , m_corner_property_map_collection    {std::move(other.m_corner_property_map_collection)}
-        , m_polygon_property_map_collection   {std::move(other.m_polygon_property_map_collection)}
-        , m_edge_property_map_collection      {std::move(other.m_edge_property_map_collection)}
-        , m_serial                            {other.m_serial}
-        , m_serial_edges                      {other.m_serial_edges                      }
-        , m_serial_polygon_normals            {other.m_serial_polygon_normals            }
-        , m_serial_polygon_centroids          {other.m_serial_polygon_centroids          }
-        , m_serial_polygon_tangents           {other.m_serial_polygon_tangents           }
-        , m_serial_polygon_bitangents         {other.m_serial_polygon_bitangents         }
-        , m_serial_polygon_texture_coordinates{other.m_serial_polygon_texture_coordinates}
-        , m_serial_point_normals              {other.m_serial_point_normals              }
-        , m_serial_point_tangents             {other.m_serial_point_tangents             }
-        , m_serial_point_bitangents           {other.m_serial_point_bitangents           }
-        , m_serial_point_texture_coordinates  {other.m_serial_point_texture_coordinates  }
-        , m_serial_smooth_point_normals       {other.m_serial_smooth_point_normals       }
-        , m_serial_corner_normals             {other.m_serial_corner_normals             }
-        , m_serial_corner_tangents            {other.m_serial_corner_tangents            }
-        , m_serial_corner_bitangents          {other.m_serial_corner_bitangents          }
-        , m_serial_corner_texture_coordinates {other.m_serial_corner_texture_coordinates }
-    {
-    }
+    Geometry         (std::string_view name, std::function<void(Geometry&)>);
+    ~Geometry        ();
+    Geometry         (const Geometry&)  = delete;
+    void operator=   (const Geometry&)  = delete;
+    Geometry         (Geometry&& other) noexcept;
+    void operator=   (Geometry&&)       = delete;
 
     void promise_has_normals()
     {

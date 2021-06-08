@@ -59,7 +59,7 @@ void Debug_draw::drawLine(const btVector3& from, const btVector3& to, const btVe
     glm::vec3 p0{from.x(), from.y(), from.z()};
     glm::vec3 p1{to.x(), to.y(), to.z()};
     m_line_renderer->set_line_color(color_ui32);
-    m_line_renderer->add_lines( { {p0, p1} }, 4.0f);
+    m_line_renderer->add_lines( { {p0, p1} }, line_width);
 }
 
 void Debug_draw::draw3dText(const btVector3& location, const char* textString)

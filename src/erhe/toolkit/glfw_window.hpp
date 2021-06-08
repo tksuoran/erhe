@@ -6,6 +6,8 @@
 
 #include <string>
 
+struct GLFWwindow;
+
 namespace erhe::toolkit
 {
 
@@ -15,10 +17,10 @@ public:
     Context_window(int width, int height);
 
     explicit Context_window(Context_window* share);
+    virtual ~Context_window();
 
-    ~Context_window();
-
-    auto open(int width, int height, const std::string& title, int opengl_major_version, int opengl_minor_version, Context_window* share)
+    auto open(int width, int height, const std::string& title,
+              int opengl_major_version, int opengl_minor_version, Context_window* share)
     -> bool;
 
     void make_current() const;
@@ -37,8 +39,7 @@ public:
     auto get_height() const
     -> int;
 
-    auto
-    get_root_view()
+    auto get_root_view()
     -> Root_view&
     {
         return m_root_view;
@@ -56,7 +57,7 @@ public:
     -> bool;
 
     auto get_glfw_window() const
-    -> void*;
+    -> GLFWwindow*;
 
     auto get_opengl_major_version() const
     -> int
@@ -73,13 +74,13 @@ public:
 private:
     void get_extensions();
 
-    Root_view  m_root_view;
-    void*      m_glfw_window{nullptr};
-    bool       m_is_event_loop_running{false};
-    bool       m_is_mouse_captured{false};
-    bool       m_is_window_visible{false};
-    int        m_opengl_major_version{0};
-    int        m_opengl_minor_version{0};
+    Root_view   m_root_view;
+    GLFWwindow* m_glfw_window{nullptr};
+    bool        m_is_event_loop_running{false};
+    bool        m_is_mouse_captured{false};
+    bool        m_is_window_visible{false};
+    int         m_opengl_major_version{0};
+    int         m_opengl_minor_version{0};
 
     static int s_window_count;
 };

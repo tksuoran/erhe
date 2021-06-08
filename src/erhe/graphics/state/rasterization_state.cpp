@@ -7,7 +7,52 @@
 namespace erhe::graphics
 {
 
+Rasterization_state::Rasterization_state()
+    : serial{get_next_serial()}
+{
+}
+
+Rasterization_state::Rasterization_state(bool                     enabled,
+                                         gl::Cull_face_mode       cull_face_mode,
+                                         gl::Front_face_direction front_face_direction,
+                                         gl::Polygon_mode         polygon_mode
+)
+    : serial              {get_next_serial()}
+    , enabled             {enabled}
+    , cull_face_mode      {cull_face_mode}
+    , front_face_direction{front_face_direction}
+    , polygon_mode        {polygon_mode}
+{
+}
+
+void Rasterization_state::touch()
+{
+    serial = get_next_serial();
+}
+
 size_t Rasterization_state::s_serial{0};
+
+auto Rasterization_state::get_next_serial()
+-> size_t
+{
+    do
+    {
+        s_serial++;
+    }
+
+    while (s_serial == 0);
+
+    return s_serial;
+}
+
+auto Rasterization_state_hash::operator()(const Rasterization_state& rasterization_state) noexcept
+-> std::size_t
+{
+    return (rasterization_state.enabled ? 1u : 0u)                         |
+            (gl::base_zero(rasterization_state.cull_face_mode      ) << 1u) | // 2 bits
+            (gl::base_zero(rasterization_state.front_face_direction) << 3u) | // 1 bit
+            (gl::base_zero(rasterization_state.polygon_mode        ) << 4u);  // 2 bits
+}
 
 Rasterization_state Rasterization_state::cull_mode_none           {false, gl::Cull_face_mode::back,           gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
 Rasterization_state Rasterization_state::cull_mode_front          {true,  gl::Cull_face_mode::front,          gl::Front_face_direction::ccw, gl::Polygon_mode::fill};

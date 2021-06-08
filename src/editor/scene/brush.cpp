@@ -28,9 +28,9 @@ Reference_frame::Reference_frame(const erhe::geometry::Geometry& geometry,
                                  erhe::geometry::Polygon_id      polygon_id)
     : polygon_id(polygon_id)
 {
-    auto* polygon_centroids = geometry.polygon_attributes().find<vec3>(c_polygon_centroids);
-    auto* polygon_normals   = geometry.polygon_attributes().find<vec3>(c_polygon_normals);
-    auto* point_locations   = geometry.point_attributes().find<vec3>(c_point_locations);
+    const auto* const polygon_centroids = geometry.polygon_attributes().find<vec3>(c_polygon_centroids);
+    const auto* const polygon_normals   = geometry.polygon_attributes().find<vec3>(c_polygon_normals);
+    const auto* const point_locations   = geometry.point_attributes().find<vec3>(c_point_locations);
     VERIFY(point_locations != nullptr);
 
     const auto& polygon = geometry.polygons[polygon_id];
@@ -41,12 +41,12 @@ Reference_frame::Reference_frame(const erhe::geometry::Geometry& geometry,
         ? polygon_normals->get(polygon_id)
         : polygon.compute_normal(geometry, *point_locations);
 
-    Corner_id   corner_id = geometry.polygon_corners[polygon.first_polygon_corner_id];
-    const auto& corner    = geometry.corners[corner_id];
-    Point_id    point     = corner.point_id;
+    const Corner_id corner_id = geometry.polygon_corners[polygon.first_polygon_corner_id];
+    const auto&     corner    = geometry.corners[corner_id];
+    const Point_id  point     = corner.point_id;
     VERIFY(point_locations->has(point));
     position = point_locations->get(point);
-    vec3 midpoint = polygon.compute_edge_midpoint(geometry, *point_locations);
+    const vec3 midpoint = polygon.compute_edge_midpoint(geometry, *point_locations);
     T = normalize(midpoint - centroid);
     B = normalize(cross(N, T));
     N = normalize(cross(T, B));
@@ -148,11 +148,13 @@ void Brush::initialize(const Create_info& create_info)
     {
         ZoneScopedN("make brush concex hull collision shape");
     
-        this->collision_shape = make_shared<btConvexHullShape>(
+        auto convex_hull_shape = make_shared<btConvexHullShape>(
             reinterpret_cast<const btScalar*>(geometry->point_attributes().find<vec3>(c_point_locations)->values.data()),
             static_cast<int>(geometry->point_count()),
             static_cast<int>(sizeof(vec3))
         );
+        convex_hull_shape->initializePolyhedralFeatures();
+        this->collision_shape = convex_hull_shape;
     }
     
     if (this->collision_volume_calculator)
@@ -190,12 +192,15 @@ Brush::Brush(const Create_info& create_info)
     {
         ZoneScopedN("make brush concex hull collision shape");
 
-        this->collision_shape = make_shared<btConvexHullShape>(
+        auto convex_hull_shape = make_shared<btConvexHullShape>(
             reinterpret_cast<const btScalar*>(geometry->point_attributes().find<vec3>(c_point_locations)->values.data()),
             static_cast<int>(geometry->point_count()),
             static_cast<int>(sizeof(vec3))
         );
+        convex_hull_shape->initializePolyhedralFeatures();
+        this->collision_shape = convex_hull_shape;
     }
+
     if (this->collision_volume_calculator)
     {
         ZoneScopedN("calculate brush volume");

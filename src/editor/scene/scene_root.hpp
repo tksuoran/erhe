@@ -69,11 +69,12 @@ class Scene_root
     : public erhe::components::Component
 {
 public:
+    static constexpr const char* c_name = "Scene_root";
     Scene_root();
-    virtual ~Scene_root();
+    ~Scene_root() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
     void initialize_component() override;
 
     template <typename ...Args>
@@ -88,12 +89,9 @@ public:
     }
 
 
-    auto content_layer() const -> std::shared_ptr<erhe::scene::Layer>;
-
-    auto selection_layer() const -> std::shared_ptr<erhe::scene::Layer>;
-
-    auto tool_layer() const -> std::shared_ptr<erhe::scene::Layer>;
-
+    auto content_layer   () const -> std::shared_ptr<erhe::scene::Layer>;
+    auto selection_layer () const -> std::shared_ptr<erhe::scene::Layer>;
+    auto tool_layer      () const -> std::shared_ptr<erhe::scene::Layer>;
     auto all_layers      () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_all_layers; }
     auto content_layers  () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_content_layers; }
     auto selection_layers() -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_selection_layers; }
@@ -114,24 +112,13 @@ public:
                         const glm::vec3                                      position = glm::vec3(0.0f))
     -> std::shared_ptr<erhe::scene::Mesh>;
 
-    auto add(std::shared_ptr<erhe::primitive::Material> material) -> std::shared_ptr<erhe::primitive::Material>;
-
-    auto add(std::shared_ptr<erhe::scene::Mesh> mesh) -> std::shared_ptr<erhe::scene::Mesh>;
-
-    auto add(std::shared_ptr<erhe::scene::Light> light) -> std::shared_ptr<erhe::scene::Light>;
-
-    //auto camera() -> erhe::scene::ICamera&;
-
-    //auto camera() const -> const erhe::scene::Camera&;
-
-    auto materials() -> std::vector<std::shared_ptr<erhe::primitive::Material>>&;
-
-    auto materials() const -> const std::vector<std::shared_ptr<erhe::primitive::Material>>&;
-
+    auto add          (std::shared_ptr<erhe::primitive::Material> material) -> std::shared_ptr<erhe::primitive::Material>;
+    auto add          (std::shared_ptr<erhe::scene::Mesh> mesh) -> std::shared_ptr<erhe::scene::Mesh>;
+    auto add          (std::shared_ptr<erhe::scene::Light> light) -> std::shared_ptr<erhe::scene::Light>;
+    auto materials    () -> std::vector<std::shared_ptr<erhe::primitive::Material>>&;
+    auto materials    () const -> const std::vector<std::shared_ptr<erhe::primitive::Material>>&;
     auto physics_world() -> erhe::physics::World&;
-
-    auto scene() -> erhe::scene::Scene&;
-
+    auto scene        () -> erhe::scene::Scene&;
     auto content_layer() -> erhe::scene::Layer&;
 
 private:

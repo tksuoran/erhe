@@ -2,12 +2,37 @@
 
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/verify.hpp"
+
+#include <memory>
 #include <set>
 
 namespace erhe::components
 {
 
 class Components;
+
+struct Time_context
+{
+    double   dt;
+    double   time;
+    uint64_t frame_number;
+};
+
+class IUpdate_fixed_step
+{
+public:
+    virtual void update_fixed_step(const Time_context&) = 0;
+};
+
+class IUpdate_once_per_frame
+{
+public:
+    virtual void update_once_per_frame(const Time_context&) = 0;
+};
+
+// Workaround for https://stackoverflow.com/questions/9838862/why-argument-dependent-lookup-doesnt-work-with-function-template-dynamic-pointe
+template<int>
+void dynamic_pointer_cast();
 
 class Component
 {
@@ -21,15 +46,10 @@ public:
     };
 
 protected:
-    Component(const Component& other) = delete;
-
-    Component(Component&& other) = delete;
-
-    auto operator=(const Component&)
-    -> Component& = delete;
-
-    auto operator=(Component&& other)
-    -> Component& = delete;
+    Component     (const Component&) = delete;
+    Component     (Component&&)      = delete;
+    void operator=(const Component&) = delete;
+    void operator=(Component&&)      = delete;
 
     explicit Component(const char* name);
 
@@ -47,7 +67,7 @@ public:
         }
         for (const auto& component : m_components->components)
         {
-            auto typed_component = dynamic_pointer_cast<T>(component);
+            const auto typed_component = dynamic_pointer_cast<T>(component);
             if (typed_component)
             {
                 return typed_component;
@@ -59,7 +79,7 @@ public:
     template<typename T>
     auto require() -> std::shared_ptr<T>
     {
-        auto component = get<T>();
+        const auto component = get<T>();
         VERIFY(component);
         initialization_depends_on(component);
         return component;
@@ -96,7 +116,7 @@ public:
         m_components = nullptr;
     }
 
-    auto is_ready() const
+    auto is_ready_to_initialize() const
     -> bool;
 
     void remove_dependency(const std::shared_ptr<Component>& component);
@@ -113,10 +133,12 @@ public:
     void set_initializing();
     void set_ready();
 
+protected:
+    Components*                          m_components{nullptr};
+
 private:
     const char*                          m_name      {nullptr};
     Component_state                      m_state     {Component_state::Constructed};
-    Components*                          m_components{nullptr};
     std::set<std::shared_ptr<Component>> m_dependencies;
 };
 

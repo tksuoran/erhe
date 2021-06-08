@@ -29,7 +29,7 @@ namespace erhe::graphics
 //
 // When shader resources are created with C++ code, there is
 // no need for shader reflection.
-class Shader_resource
+class Shader_resource final
 {
 public:
     enum class Type : unsigned int
@@ -66,14 +66,14 @@ public:
         superp  = 3 // only reserved - not used
     };
 
-    using Member_collection = std::vector<Shader_resource>;
+    using Member_collection = std::vector<std::unique_ptr<Shader_resource>>;
 
     static auto c_str(Precision v)
     -> const char*;
 
     // Struct definition
-    Shader_resource(std::string_view struct_type_name,
-                    Shader_resource* parent = nullptr);
+    explicit Shader_resource(std::string_view struct_type_name,
+                             Shader_resource* parent = nullptr);
 
     // Struct member
     Shader_resource(std::string_view                struct_member_name,
@@ -149,7 +149,7 @@ public:
     // -> const Member_collection&;
 
     auto member(std::string_view name) const
-    -> const Shader_resource*;
+    -> Shader_resource*;
 
     auto binding_point() const
     -> unsigned int;
@@ -177,34 +177,34 @@ public:
     auto add_struct(std::string_view                name,
                     gsl::not_null<Shader_resource*> struct_type,
                     std::optional<size_t>           array_size = {})
-    -> const Shader_resource&;
+    -> Shader_resource*;
 
     auto add_sampler(std::string_view      name,
                      gl::Uniform_type      sampler_type,
                      std::optional<size_t> array_size = {},
                      std::optional<int>    dedicated_texture_unit = {})
-    -> const Shader_resource&;
+    -> Shader_resource*;
 
     auto add_float(std::string_view name, std::optional<size_t> array_size = {})
-    -> const Shader_resource&;
+    -> Shader_resource*;
 
     auto add_vec2(std::string_view name, std::optional<size_t> array_size = {})
-    -> const Shader_resource&;
+    -> Shader_resource*;
 
     auto add_vec3(std::string_view name, std::optional<size_t> array_size = {})
-    -> const Shader_resource&;
+    -> Shader_resource*;
 
     auto add_vec4(std::string_view name, std::optional<size_t> array_size = {})
-    -> const Shader_resource&;
+    -> Shader_resource*;
 
     auto add_mat4(std::string_view name, std::optional<size_t> array_size = {})
-    -> const Shader_resource&;
+    -> Shader_resource*;
 
     auto add_int(std::string_view name, std::optional<size_t> array_size = {})
-    -> const Shader_resource&;
+    -> Shader_resource*;
 
     auto add_uint(std::string_view name, std::optional<size_t> array_size = {})
-    -> const Shader_resource&;
+    -> Shader_resource*;
 
 private:
     void align_offset_to(unsigned int alignment);

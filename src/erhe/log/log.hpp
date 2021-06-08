@@ -136,7 +136,7 @@ struct Log
     static void console_init();
 };
 
-class Indenter
+class Indenter final
 {
 public:
     Indenter(int amount = 3)

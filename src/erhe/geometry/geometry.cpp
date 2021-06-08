@@ -40,7 +40,48 @@ Geometry::Geometry(std::string_view name)
 Geometry::~Geometry()
 {
     // TODO Debug how to enable named return value optimization
-    // log.warn("Geometry {} destructor\n", name);
+    // log_geometry.warn("Geometry {} destructor\n", name);
+}
+
+Geometry::Geometry(Geometry&& other) noexcept
+    : name                                {std::move(other.name            )}
+    , corners                             {std::move(other.corners         )}
+    , points                              {std::move(other.points          )}
+    , polygons                            {std::move(other.polygons        )}
+    , edges                               {std::move(other.edges           )}
+    , point_corners                       {std::move(other.point_corners   )}
+    , polygon_corners                     {std::move(other.polygon_corners )}
+    , edge_polygons                       {std::move(other.edge_polygons   )}
+    , m_next_corner_id                    {other.m_next_corner_id           }
+    , m_next_point_id                     {other.m_next_point_id            }
+    , m_next_polygon_id                   {other.m_next_polygon_id          }
+    , m_next_edge_id                      {other.m_next_edge_id             }
+    , m_next_point_corner_reserve         {other.m_next_point_corner_reserve}
+    , m_next_polygon_corner_id            {other.m_next_polygon_corner_id   }
+    , m_next_edge_polygon_id              {other.m_next_edge_polygon_id     }
+    , m_polygon_corner_polygon            {other.m_polygon_corner_polygon   }
+    , m_edge_polygon_edge                 {other.m_edge_polygon_edge        }
+    , m_point_property_map_collection     {std::move(other.m_point_property_map_collection)}
+    , m_corner_property_map_collection    {std::move(other.m_corner_property_map_collection)}
+    , m_polygon_property_map_collection   {std::move(other.m_polygon_property_map_collection)}
+    , m_edge_property_map_collection      {std::move(other.m_edge_property_map_collection)}
+    , m_serial                            {other.m_serial}
+    , m_serial_edges                      {other.m_serial_edges                      }
+    , m_serial_polygon_normals            {other.m_serial_polygon_normals            }
+    , m_serial_polygon_centroids          {other.m_serial_polygon_centroids          }
+    , m_serial_polygon_tangents           {other.m_serial_polygon_tangents           }
+    , m_serial_polygon_bitangents         {other.m_serial_polygon_bitangents         }
+    , m_serial_polygon_texture_coordinates{other.m_serial_polygon_texture_coordinates}
+    , m_serial_point_normals              {other.m_serial_point_normals              }
+    , m_serial_point_tangents             {other.m_serial_point_tangents             }
+    , m_serial_point_bitangents           {other.m_serial_point_bitangents           }
+    , m_serial_point_texture_coordinates  {other.m_serial_point_texture_coordinates  }
+    , m_serial_smooth_point_normals       {other.m_serial_smooth_point_normals       }
+    , m_serial_corner_normals             {other.m_serial_corner_normals             }
+    , m_serial_corner_tangents            {other.m_serial_corner_tangents            }
+    , m_serial_corner_bitangents          {other.m_serial_corner_bitangents          }
+    , m_serial_corner_texture_coordinates {other.m_serial_corner_texture_coordinates }
+{
 }
 
 auto Geometry::count_polygon_triangles() const
@@ -141,14 +182,14 @@ auto Geometry::compute_polygon_normals() -> bool
         return true;
     }
 
-    log.info("{} for {}\n", __func__, name);
+    log_geometry.info("{} for {}\n", __func__, name);
 
     auto*       polygon_normals = polygon_attributes().find_or_create<vec3>(c_polygon_normals);
     const auto* point_locations = point_attributes()  .find          <vec3>(c_point_locations);
 
     if (point_locations == nullptr)
     {
-        log.warn("{} {}: Point locations are required, but not found.\n", __func__, name);
+        log_geometry.warn("{} {}: Point locations are required, but not found.\n", __func__, name);
         return false;
     }
 
@@ -186,14 +227,14 @@ auto Geometry::compute_polygon_centroids() -> bool
         return true;
     }
 
-    log.info("{} for {}\n", __func__, name);
+    log_geometry.info("{} for {}\n", __func__, name);
 
     auto*       polygon_centroids = polygon_attributes().find_or_create<vec3>(c_polygon_centroids);
     const auto* point_locations   = point_attributes()  .find          <vec3>(c_point_locations);
 
     if (point_locations == nullptr)
     {
-        log.warn("{} {}: Point locations are required, but not found.\n", __func__, name);
+        log_geometry.warn("{} {}: Point locations are required, but not found.\n", __func__, name);
         return false;
     }
 
@@ -282,66 +323,66 @@ void Geometry::debug_trace() const
 
     for_each_corner_const([](auto& i)
     {
-        log.info("corner {:2} = point {:2} polygon {:2}\n", i.corner_id, i.corner.point_id, i.corner.polygon_id);
+        log_geometry.info("corner {:2} = point {:2} polygon {:2}\n", i.corner_id, i.corner.point_id, i.corner.polygon_id);
     });
 
     for_each_point_const([&](auto& i)
     {
-        log.info("point {:2} corners  = ", i.point_id);
+        log_geometry.info("point {:2} corners  = ", i.point_id);
         i.point.for_each_corner_const(*this, [&](auto& j)
         {
             if (j.corner_id > i.point.first_point_corner_id)
             {
-                log.info(", ");
+                log_geometry.info(", ");
             }
-            log.info("{:2}", j.corner_id);
+            log_geometry.info("{:2}", j.corner_id);
         });
-        log.info("\n");
-        log.info("point {:2} polygons = ", i.point_id);
+        log_geometry.info("\n");
+        log_geometry.info("point {:2} polygons = ", i.point_id);
         i.point.for_each_corner_const(*this, [&](auto& j)
         {
             if (j.corner_id > i.point.first_point_corner_id)
             {
-                log.info(", ");
+                log_geometry.info(", ");
             }
-            log.info("{:2}", j.corner.polygon_id);
+            log_geometry.info("{:2}", j.corner.polygon_id);
         });
-        log.info("\n");
+        log_geometry.info("\n");
     });
 
     for_each_polygon_const([&](auto& i)
     {
-        log.info("polygon {:2} corners = ", i.polygon_id);
+        log_geometry.info("polygon {:2} corners = ", i.polygon_id);
         i.polygon.for_each_corner_const(*this, [&](auto& j)
         {
             if (j.polygon_corner_id > i.polygon.first_polygon_corner_id)
             {
-                log.info(", ");
+                log_geometry.info(", ");
             }
-            log.info("{:2}", j.corner_id);
+            log_geometry.info("{:2}", j.corner_id);
         });
-        log.info("\n");
-        log.info("polygon {:2} points  = ", i.polygon_id);
+        log_geometry.info("\n");
+        log_geometry.info("polygon {:2} points  = ", i.polygon_id);
         i.polygon.for_each_corner_const(*this, [&](auto& j)
         {
             Point_id point_id = j.corner.point_id;
             if (j.polygon_corner_id > i.polygon.first_polygon_corner_id)
             {
-                log.info(", ");
+                log_geometry.info(", ");
             }
-            log.info("{:2}", point_id);
+            log_geometry.info("{:2}", point_id);
         });
-        log.info("\n");
+        log_geometry.info("\n");
     });
 
     for_each_edge_const([&](auto& i)
     {
-        log.info("edge {:2} = {:2} .. {:2} :", i.edge_id, i.edge.a, i.edge.b);
+        log_geometry.info("edge {:2} = {:2} .. {:2} :", i.edge_id, i.edge.a, i.edge.b);
         i.edge.for_each_polygon_const(*this, [&](auto& j)
         {
-            log.info("{:2} ", j.polygon_id);
+            log_geometry.info("{:2} ", j.polygon_id);
         });
-        log.info("\n");
+        log_geometry.info("\n");
     });
 }
 
@@ -488,19 +529,19 @@ void Geometry::reverse_polygons()
 
 void Mesh_info::trace(erhe::log::Category& log) const
 {
-    log.trace("{} vertex corners vertices\n", vertex_count_corners);
-    log.trace("{} centroid vertices\n",       vertex_count_centroids);
-    log.trace("{} fill triangles indices\n",  index_count_fill_triangles);
-    log.trace("{} edge lines indices\n",      index_count_edge_lines);
-    log.trace("{} corner points indices\n",   index_count_corner_points);
-    log.trace("{} centroid points indices\n", index_count_centroid_points);
+    log_geometry.trace("{} vertex corners vertices\n", vertex_count_corners);
+    log_geometry.trace("{} centroid vertices\n",       vertex_count_centroids);
+    log_geometry.trace("{} fill triangles indices\n",  index_count_fill_triangles);
+    log_geometry.trace("{} edge lines indices\n",      index_count_edge_lines);
+    log_geometry.trace("{} corner points indices\n",   index_count_corner_points);
+    log_geometry.trace("{} centroid points indices\n", index_count_centroid_points);
 }
 
 void Geometry::generate_texture_coordinates_spherical()
 {
     ZoneScoped;
 
-    log.info("{} for {}\n", __func__, name);
+    log_geometry.info("{} for {}\n", __func__, name);
 
     compute_polygon_normals();
     compute_point_normals(c_point_normals);
@@ -583,7 +624,7 @@ auto Geometry::generate_polygon_texture_coordinates(const bool overwrite_existin
         return true;
     }
 
-    log.info("{} for {}\n", __func__, name);
+    log_geometry.info("{} for {}\n", __func__, name);
 
     compute_polygon_normals();
     compute_polygon_centroids();
@@ -635,13 +676,13 @@ void Geometry::sanity_check() const
         {
             if (j.corner.point_id != i.point_id)
             {
-                log.error("Sanity check failure: Point {} uses corner {} but corner {} point is {}\n",
+                log_geometry.error("Sanity check failure: Point {} uses corner {} but corner {} point is {}\n",
                           i.point_id, j.corner_id, j.corner_id, j.corner.point_id);
                 ++error_count;
             }
             if (j.corner.polygon_id >= m_next_polygon_id)
             {
-                log.error("Sanity check failure: Point {} uses corner {} which points to invalid polygon {}\n",
+                log_geometry.error("Sanity check failure: Point {} uses corner {} which points to invalid polygon {}\n",
                           i.point_id, j.corner_id, j.corner.polygon_id);
                 ++error_count;
             }
@@ -654,13 +695,13 @@ void Geometry::sanity_check() const
         {
             if (j.corner.polygon_id != i.polygon_id)
             {
-                log.error("Sanity check failure: Polygon {} uses corner {} but corner {} polygon is {}\n",
+                log_geometry.error("Sanity check failure: Polygon {} uses corner {} but corner {} polygon is {}\n",
                           i.polygon_id, j.corner_id, j.corner_id, j.corner.polygon_id);
                 ++error_count;
             }
             if (j.corner.point_id >= m_next_point_id)
             {
-                log.error("Sanity check failure: Polygon {} uses corner {} which points to invalid point {}\n",
+                log_geometry.error("Sanity check failure: Polygon {} uses corner {} which points to invalid point {}\n",
                           i.polygon_id, j.corner_id, j.corner_id, j.corner.point_id);
                 ++error_count;
             }
@@ -678,7 +719,7 @@ void Geometry::sanity_check() const
                 });
                 if (!corner_found)
                 {
-                    log.error("Sanity check failure: Polygon {} uses corner {} which uses point {} which does not point back to the corner\n",
+                    log_geometry.error("Sanity check failure: Polygon {} uses corner {} which uses point {} which does not point back to the corner\n",
                               i.polygon_id, j.corner_id, j.corner.point_id);
                     ++error_count;
                 }
@@ -692,7 +733,7 @@ void Geometry::sanity_check() const
         bool corner_polygon_found{false};
         if (i.corner.point_id >= m_next_point_id)
         {
-            log.error("Sanity check failure: Corner {} points to invalid point {}\n",
+            log_geometry.error("Sanity check failure: Corner {} points to invalid point {}\n",
                       i.corner_id, i.corner.point_id);
             ++error_count;
         }
@@ -712,14 +753,14 @@ void Geometry::sanity_check() const
             });
             if (!corner_point_found)
             {
-                log.error("Sanity check failure: Corner {} not found referenced by any point\n",
+                log_geometry.error("Sanity check failure: Corner {} not found referenced by any point\n",
                           i.corner_id);
                 ++error_count;
             }
         }
         if (i.corner.polygon_id >= m_next_polygon_id)
         {
-            log.error("Sanity check failure: Corner {} points to invalid polygon {}\n",
+            log_geometry.error("Sanity check failure: Corner {} points to invalid polygon {}\n",
                       i.corner_id, i.corner.polygon_id);
             ++error_count;
             return;
@@ -738,20 +779,20 @@ void Geometry::sanity_check() const
             });
             if (!corner_polygon_found)
             {
-                log.error("Sanity check failure: Corner {} not found referenced by any polygon\n",
+                log_geometry.error("Sanity check failure: Corner {} not found referenced by any polygon\n",
                           i.corner_id);
                 ++error_count;
             }
         }
         if (corner_point_found != corner_polygon_found)
         {
-            log.error("Corner {} found in point mismatch found in polygon\n", i.corner_id);
+            log_geometry.error("Corner {} found in point mismatch found in polygon\n", i.corner_id);
             ++error_count;
         }
     });
     if (error_count > 0)
     {
-         log.error("Sanity check failure: Detected {} errors\n", error_count);
+         log_geometry.error("Sanity check failure: Detected {} errors\n", error_count);
     }
 }
 

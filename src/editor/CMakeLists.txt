@@ -103,12 +103,17 @@ set(source_list
     application.cpp
     application.hpp
     concurrentqueue.h
-    editor.cpp
+    rendering.cpp
+    rendering.hpp
+    time.cpp
+    time.hpp
+    tools.cpp
+    tools.hpp
+    view.cpp
+    view.hpp
     editor.hpp
     gl_context_provider.cpp
     gl_context_provider.hpp
-    imgui_demo.cpp
-    imgui_demo.hpp
     log.cpp
     log.hpp
     main.cpp
@@ -161,6 +166,7 @@ target_link_libraries(
     erhe_ui
     mango
     nlohmann_json::nlohmann_json
+    openxr_loader
     TracyClient
 )
 

@@ -33,16 +33,16 @@ namespace erhe::primitive
 struct Index_range;
 struct Material;
 
-struct Primitive_build_context
+struct Primitive_build_context final
 {
     Primitive_build_context(erhe::graphics::Buffer_transfer_queue& queue,
                             const Format_info&                     format_info,
                             const Buffer_info&                     buffer_info);
     ~Primitive_build_context();
     Primitive_build_context(const Primitive_build_context& other);
-    Primitive_build_context& operator=(Primitive_build_context&) = delete;
+    void operator=         (Primitive_build_context&)  = delete;
     Primitive_build_context(Primitive_build_context&& other) noexcept;
-    Primitive_build_context& operator=(Primitive_build_context&& other) = delete;
+    void operator=         (Primitive_build_context&&) = delete;
 
     erhe::graphics::Buffer_transfer_queue& queue;
     Format_info                            format_info;
@@ -52,7 +52,6 @@ struct Primitive_build_context
 struct Vertex_attribute_info
 {
     Vertex_attribute_info();
-
     Vertex_attribute_info(erhe::graphics::Vertex_format*               vertex_format,
                           gl::Vertex_attrib_type                       default_data_type,
                           size_t                                       dimension,
@@ -71,13 +70,13 @@ struct Vertex_buffer_writer
 {
     explicit Vertex_buffer_writer(Primitive_geometry&            primitive_geometry,
                                   const Primitive_build_context& context);
-    ~Vertex_buffer_writer();
+    virtual ~Vertex_buffer_writer();
 
     void write(Vertex_attribute_info& attribute, glm::vec2 value);
     void write(Vertex_attribute_info& attribute, glm::vec3 value);
     void write(Vertex_attribute_info& attribute, glm::vec4 value);
     void write(Vertex_attribute_info& attribute, uint32_t value);
-    void move(size_t relative_offset);
+    void move (size_t relative_offset);
 
     Primitive_geometry&            primitive_geometry;
     const Primitive_build_context& context;
@@ -91,7 +90,7 @@ struct Index_buffer_writer
     Index_buffer_writer(Primitive_geometry&            primitive_geometry,
                         const Primitive_build_context& context,
                         erhe::geometry::Mesh_info&     mesh_info);
-    ~Index_buffer_writer();
+    virtual ~Index_buffer_writer();
 
     void write_corner  (uint32_t v0);
     void write_triangle(uint32_t v0, uint32_t v1, uint32_t v2);
@@ -115,7 +114,7 @@ struct Index_buffer_writer
     size_t polygon_centroid_indices_written{0};
 };
 
-class Primitive_builder
+class Primitive_builder final
 {
 public:
     // Controls what kind of mesh should be built from geometry

@@ -18,13 +18,11 @@ World::World()
                             &bullet_impulse_constraint_solver,
                             &bullet_collision_configuration}
 {
-    log_physics.trace("{}\n", __func__);
     bullet_dynamics_world.setGravity(btVector3(0, -10, 0));
 }
 
 World::~World()
 {
-    log_physics.trace("{}\n", __func__);
 }
 
 void World::update_fixed_step(double dt)

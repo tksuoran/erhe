@@ -20,9 +20,11 @@ using namespace glm;
 using namespace std;
 
 Light_mesh::Light_mesh()
-    : Component("Light_mesh")
+    : Component(c_name)
 {
 }
+
+Light_mesh::~Light_mesh() = default;
 
 void Light_mesh::connect()
 {

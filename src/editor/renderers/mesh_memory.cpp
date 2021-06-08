@@ -33,8 +33,8 @@ void Mesh_memory::initialize_component()
 
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 
-    size_t vertex_byte_count  = 256 * 1024 * 1024;
-    size_t index_byte_count   =  64 * 1024 * 1024;
+    const size_t vertex_byte_count  = 256 * 1024 * 1024;
+    const size_t index_byte_count   =  64 * 1024 * 1024;
     m_buffer_info.index_type    = gl::Draw_elements_type::unsigned_int;
     m_buffer_info.vertex_buffer = make_shared<Buffer>(gl::Buffer_target::array_buffer,
                                                       vertex_byte_count,

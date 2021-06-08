@@ -20,7 +20,7 @@ struct hb_font_t;
 namespace erhe::ui
 {
 
-class Font
+class Font final
 {
 public:
     Font(const std::filesystem::path& path,

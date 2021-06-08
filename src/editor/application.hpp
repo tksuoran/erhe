@@ -15,7 +15,7 @@ class Application
 public:
     Application(RENDERDOC_API_1_1_2* renderdoc_api = nullptr);
 
-    virtual ~Application();
+    ~Application() override;
 
     void run();
 

@@ -69,6 +69,52 @@ Buffer::Buffer(gl::Buffer_target          target,
 
 Buffer::~Buffer() = default;
 
+Buffer::Buffer(Buffer&& other) noexcept
+{
+    m_handle                 = std::move(other.m_handle);
+    m_debug_label            = std::move(other.m_debug_label);
+    m_target                 = other.m_target;
+    m_capacity_byte_count    = other.m_capacity_byte_count;
+    m_next_free_byte         = other.m_next_free_byte;
+    m_storage_mask           = other.m_storage_mask;
+    m_map                    = other.m_map;
+    m_map_byte_offset        = other.m_map_byte_offset;
+    m_map_buffer_access_mask = other.m_map_buffer_access_mask;
+}
+
+auto Buffer::operator=(Buffer&& other) noexcept
+-> Buffer&
+{
+    m_handle                 = std::move(other.m_handle);
+    m_debug_label            = std::move(other.m_debug_label);
+    m_target                 = other.m_target;
+    m_capacity_byte_count    = other.m_capacity_byte_count;
+    m_next_free_byte         = other.m_next_free_byte;
+    m_storage_mask           = other.m_storage_mask;
+    m_map                    = other.m_map;
+    m_map_byte_offset        = other.m_map_byte_offset;
+    m_map_buffer_access_mask = other.m_map_buffer_access_mask;
+    return *this;
+}
+
+auto Buffer::map() -> gsl::span<std::byte>
+{
+    return m_map;
+}
+
+auto Buffer::target() const noexcept
+-> gl::Buffer_target
+{
+    return m_target;
+}
+
+void Buffer::set_debug_label(std::string_view label) noexcept
+{
+    m_debug_label = std::move(label);
+    gl::object_label(gl::Object_identifier::buffer,
+                        gl_name(), static_cast<GLsizei>(m_debug_label.length()), m_debug_label.c_str());
+}
+
 auto Buffer::debug_label() const noexcept
 -> const std::string&
 {
@@ -84,7 +130,7 @@ auto Buffer::allocate_bytes(size_t byte_count, size_t alignment) noexcept
     {
         ++m_next_free_byte;
     }
-    auto offset = m_next_free_byte;
+    const auto offset = m_next_free_byte;
     m_next_free_byte += byte_count;
     VERIFY(m_next_free_byte <= m_capacity_byte_count);
 
@@ -104,15 +150,15 @@ auto Buffer::map_all_bytes(gl::Map_buffer_access_mask access_mask) noexcept
                      gl_name());
     log::Indenter indenter;
 
-    size_t byte_count = m_capacity_byte_count;
+    const size_t byte_count = m_capacity_byte_count;
 
     m_map_byte_offset = 0;
     m_map_buffer_access_mask = access_mask;
 
-    auto* map_pointer = reinterpret_cast<std::byte*>(gl::map_named_buffer_range(gl_name(),
-                                                                                m_map_byte_offset,
-                                                                                static_cast<GLsizeiptr>(byte_count),
-                                                                                m_map_buffer_access_mask));
+    auto* const map_pointer = reinterpret_cast<std::byte*>(gl::map_named_buffer_range(gl_name(),
+                                                                                      m_map_byte_offset,
+                                                                                      static_cast<GLsizeiptr>(byte_count),
+                                                                                      m_map_buffer_access_mask));
     VERIFY(map_pointer != nullptr);
 
     log_buffer.trace(":m_map_byte_offset = {}, m_map_byte_count = {}, m_map_pointer = {}\n",
@@ -149,10 +195,10 @@ auto Buffer::map_bytes(size_t                     byte_offset,
     m_map_byte_offset = static_cast<GLsizeiptr>(byte_offset);
     m_map_buffer_access_mask = access_mask;
 
-    auto* map_pointer = reinterpret_cast<std::byte*>(gl::map_named_buffer_range(gl_name(),
-                                                                                m_map_byte_offset,
-                                                                                static_cast<GLsizeiptr>(byte_count),
-                                                                                m_map_buffer_access_mask));
+    auto* const map_pointer = reinterpret_cast<std::byte*>(gl::map_named_buffer_range(gl_name(),
+                                                                                      m_map_byte_offset,
+                                                                                      static_cast<GLsizeiptr>(byte_count),
+                                                                                      m_map_buffer_access_mask));
     VERIFY(map_pointer != nullptr);
 
     log_buffer.trace(":m_map_byte_offset = {}, m_map_byte_count = {}, m_map_pointer = {}\n",
@@ -181,7 +227,7 @@ void Buffer::unmap() noexcept
     log::Indenter indented;
     Log::set_text_color(erhe::log::Color::GREY);
 
-    auto res = gl::unmap_named_buffer(gl_name());
+    const auto res = gl::unmap_named_buffer(gl_name());
     VERIFY(res == GL_TRUE);
 
     m_map_byte_offset = std::numeric_limits<size_t>::max();
@@ -215,15 +261,14 @@ void Buffer::dump() const noexcept
 {
     Expects(gl_name() != 0);
 
-    bool      unmap     {false};
-    size_t    byte_count{m_capacity_byte_count};
-    size_t    word_count{byte_count / sizeof(uint32_t)};
-    int       mapped    {GL_FALSE};
-    uint32_t* data      {nullptr};
-    std::vector<uint32_t> storage;
+    const size_t byte_count{m_capacity_byte_count};
+    const size_t word_count{byte_count / sizeof(uint32_t)};
 
+    int mapped{GL_FALSE};
     gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_mapped, &mapped);
 
+    uint32_t* data {nullptr};
+    bool      unmap{false};
     if (mapped == GL_FALSE)
     {
         data = reinterpret_cast<uint32_t*>(gl::map_named_buffer_range(gl_name(),
@@ -233,6 +278,7 @@ void Buffer::dump() const noexcept
         unmap = (data != nullptr);
     }
 
+    std::vector<uint32_t> storage;
     if (data == nullptr)
     {
         // This happens if we already had buffer mapped
@@ -267,7 +313,7 @@ void Buffer::flush_and_unmap_bytes(size_t byte_count) noexcept
 {
     Expects(gl_name() != 0);
 
-    bool flush_explicit = (m_map_buffer_access_mask & gl::Map_buffer_access_mask::map_flush_explicit_bit) == gl::Map_buffer_access_mask::map_flush_explicit_bit;
+    const bool flush_explicit = (m_map_buffer_access_mask & gl::Map_buffer_access_mask::map_flush_explicit_bit) == gl::Map_buffer_access_mask::map_flush_explicit_bit;
 
     log_buffer.trace("flush_and_unmap(byte_count = {}) name = {}\n", byte_count, gl_name());
 

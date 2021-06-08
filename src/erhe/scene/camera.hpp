@@ -17,6 +17,7 @@ struct Viewport;
 class ICamera
 {
 public:
+    virtual ~ICamera() {}
     virtual void update         (Viewport viewport) = 0;
     virtual auto node           () const -> const std::shared_ptr<Node>& = 0;
     virtual auto projection     () -> Projection* = 0;
@@ -34,28 +35,23 @@ class Camera
 {
 public:
     explicit Camera(std::string_view name);
-    virtual ~Camera();
+    ~Camera() override;
 
     void update(Viewport viewport) override;
 
     // Implements INode_attachment
-    auto name() const -> const std::string&;
+    auto name     () const -> const std::string&;
     void on_attach(Node& node);
     void on_detach(Node& node);
 
-    auto node() const -> const std::shared_ptr<Node>& override;
-
-    auto projection() -> Projection* override;
-
-    auto projection() const -> const Projection* override;
-
-    auto clip_from_node() const -> glm::mat4 override;
-
-    auto clip_from_world() const -> glm::mat4 override;
-
-    auto node_from_clip() const -> glm::mat4 override;
-
-    auto world_from_clip() const -> glm::mat4 override;
+    // Implements ICamera
+    auto node           () const -> const std::shared_ptr<Node>& override;
+    auto projection     () -> Projection*                        override;
+    auto projection     () const -> const Projection*            override;
+    auto clip_from_node () const -> glm::mat4                    override;
+    auto clip_from_world() const -> glm::mat4                    override;
+    auto node_from_clip () const -> glm::mat4                    override;
+    auto world_from_clip() const -> glm::mat4                    override;
 
     std::string           m_name;
     std::shared_ptr<Node> m_node;

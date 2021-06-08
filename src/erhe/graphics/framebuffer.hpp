@@ -14,7 +14,7 @@ namespace erhe::graphics
 class Renderbuffer;
 class Texture;
 
-class Framebuffer
+class Framebuffer final
 {
 public:
     class Attachment
@@ -60,25 +60,11 @@ public:
     };
 
     explicit Framebuffer(const Create_info& create_info);
-
-    ~Framebuffer();
-
-    Framebuffer(const Framebuffer&) = delete;
-
-    auto operator=(const Framebuffer&)
-    -> Framebuffer& = delete;
-
-    Framebuffer(Framebuffer&& other) = delete; //noexcept
-    //    : m_gl_framebuffer{std::move(other.m_gl_framebuffer)}
-    //{
-    //}
-
-    auto operator=(Framebuffer&& other) = delete; //noexcept
-    //-> Framebuffer&
-    //{
-    //    m_gl_framebuffer = std::move(other.m_gl_framebuffer);
-    //    return *this;
-    //}
+    ~Framebuffer        ();
+    Framebuffer         (const Framebuffer&) = delete;
+    void operator=      (const Framebuffer&) = delete;
+    Framebuffer         (Framebuffer&&)      = delete;
+    void operator=      (Framebuffer&&)      = delete;
 
     static void on_thread_enter()
     {
@@ -107,15 +93,10 @@ public:
         }
     }
 
-    auto gl_name()
-    -> unsigned int;
-
-    void create();
-
-    void reset();
-
-    auto check_status()
-    -> bool;
+    auto gl_name     () -> unsigned int;
+    void create      ();
+    void reset       ();
+    auto check_status() -> bool;
 
     void set_debug_label(const std::string& label)
     {

@@ -45,12 +45,11 @@ public:
     };
 
     static constexpr const char* c_name = "Id_renderer";
-    Id_renderer();
-
-    virtual ~Id_renderer() = default;
+    Id_renderer ();
+    ~Id_renderer() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
     void initialize_component() override;
 
     void render(const erhe::scene::Viewport viewport,
@@ -83,9 +82,9 @@ private:
                                                                 gl::Map_buffer_access_mask::map_read_bit};
         enum class State : unsigned int
         {
-            unused = 0,
-            waiting_for_read,
-            read_complete
+            Unused = 0,
+            Waiting_for_read,
+            Read_complete
         };
 
         Id_frame_resources()
@@ -95,12 +94,12 @@ private:
         }
 
         Id_frame_resources(const Id_frame_resources& other) = delete;
-        auto operator=(const Id_frame_resources&) -> Id_frame_resources& = delete;
+        auto operator=    (const Id_frame_resources&) -> Id_frame_resources& = delete;
 
         Id_frame_resources(Id_frame_resources&& other) noexcept
         {
             pixel_pack_buffer = std::move(other.pixel_pack_buffer);
-            data              = std::move(other.data             );
+            data              = std::move(other.data);
             time              = other.time;
             sync              = other.sync;
             clip_from_world   = other.clip_from_world;
@@ -112,7 +111,7 @@ private:
         auto operator=(Id_frame_resources&& other) noexcept -> Id_frame_resources&
         {
             pixel_pack_buffer = std::move(other.pixel_pack_buffer);
-            data              = std::move(other.data             );
+            data              = std::move(other.data);
             time              = other.time;
             sync              = other.sync;
             clip_from_world   = other.clip_from_world;
@@ -129,16 +128,13 @@ private:
         glm::mat4                             clip_from_world{1.0f};
         int                                   x_offset{0};
         int                                   y_offset{0};
-        State                                 state{State::unused};
+        State                                 state{State::Unused};
     };
 
-    void create_id_frame_resources();
-
+    void create_id_frame_resources ();
     auto current_id_frame_resources() -> Id_frame_resources&;
-
-    void update_framebuffer(erhe::scene::Viewport viewport);
-
-    void render_layer(erhe::scene::Layer* layer);
+    void update_framebuffer        (erhe::scene::Viewport viewport);
+    void render_layer              (erhe::scene::Layer* layer);
 
     erhe::scene::Viewport                                 m_viewport;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;

@@ -40,6 +40,10 @@ using namespace gl;
 using namespace glm;
 using namespace std;
 
+Base_renderer::Base_renderer() = default;
+
+Base_renderer::~Base_renderer() = default;
+
 void Base_renderer::base_connect(const erhe::components::Component* component)
 {
     m_program_interface = component->get<Program_interface>();
@@ -73,10 +77,10 @@ void Base_renderer::next_frame()
 {
     m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % s_frame_resources_count;
 
-    m_material_writer.reset();
-    m_light_writer.reset();
-    m_camera_writer.reset();
-    m_primitive_writer.reset();
+    m_material_writer     .reset();
+    m_light_writer        .reset();
+    m_camera_writer       .reset();
+    m_primitive_writer    .reset();
     m_draw_indirect_writer.reset();
 }
 
@@ -85,6 +89,16 @@ void Base_renderer::reset_id_ranges()
     m_id_offset = 0;
     m_id_ranges.clear();
 }
+
+auto Base_renderer::id_offset() const -> uint32_t
+{
+    return m_id_offset;
+}
+
+auto Base_renderer::id_ranges() const -> const std::vector<Id_range>&
+{
+    return m_id_ranges;
+} 
 
 auto Base_renderer::update_primitive_buffer(const Mesh_collection& meshes,
                                             const uint64_t         visibility_mask)
@@ -112,7 +126,7 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection& meshes,
         size_t mesh_primitive_index{0};
         for (auto& primitive : mesh->primitives)
         {
-            const auto* primitive_geometry = primitive.primitive_geometry.get();
+            const auto* const primitive_geometry = primitive.primitive_geometry.get();
             log_render.trace("primitive_index = {}\n", primitive_index);
 
             const uint32_t count        = static_cast<uint32_t>(primitive_geometry->fill_indices.index_count);
@@ -307,7 +321,7 @@ auto Base_renderer::update_draw_indirect_buffer(const Mesh_collection& meshes,
         }
         for (auto& primitive : mesh->primitives)
         {
-            const auto* primitive_geometry = primitive.primitive_geometry.get();
+            const auto* const primitive_geometry = primitive.primitive_geometry.get();
             const auto index_range = primitive_geometry->index_range(primitive_mode);
             if (index_range.index_count == 0)
             {
@@ -422,6 +436,16 @@ void Base_renderer::debug_properties_window()
     ImGui::Checkbox("Enable Max Index Count", &m_max_index_count_enable);
     ImGui::SliderInt("Max Index Count", &m_max_index_count, 0, 256);
     ImGui::End();
+}
+
+auto Base_renderer::max_index_count_enable() const -> bool
+{
+    return m_max_index_count_enable;
+}
+
+auto Base_renderer::max_index_count() const -> int
+{
+    return m_max_index_count;
 }
 
 } // namespace editor

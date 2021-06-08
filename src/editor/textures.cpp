@@ -11,6 +11,13 @@ using erhe::graphics::PNG_loader;
 using erhe::log::Log;
 using std::shared_ptr;
 
+Textures::Textures()
+    : erhe::components::Component{c_name}
+{
+}
+
+Textures::~Textures() = default;
+
 void Textures::connect()
 {
     m_image_transfer = require<erhe::graphics::Image_transfer>();
@@ -46,8 +53,7 @@ auto Textures::load(const std::filesystem::path& path)
         erhe::graphics::Image_info image_info;
         PNG_loader                 loader;
 
-        bool ok = loader.open(path, image_info);
-        if (!ok)
+        if (!loader.open(path, image_info))
         {
             return {};
         }
@@ -66,7 +72,7 @@ auto Textures::load(const std::filesystem::path& path)
                                                   image_info.height,
                                                   texture_create_info.internal_format);
 
-        ok = loader.load(span);
+        bool ok = loader.load(span);
         loader.close();
         if (!ok)
         {

@@ -26,6 +26,11 @@ struct Pair_entries
 {
     struct Entry
     {
+        Entry(T primary, T secondary)
+            : primary  {primary}
+            , secondary{secondary}
+        {
+        }
         void swap(T lhs, T rhs)
         {
             if (primary == lhs)
@@ -367,11 +372,11 @@ struct Remapper
     {
         for (size_t i = 0, end = merge.size(); i < end; ++i)
         {
-            auto& entry = merge.entries[i];
-            T primary_new_id   = entry.primary;
-            T primary_old_id   = old_from_new[primary_new_id];
-            T secondary_new_id = entry.secondary;
-            T secondary_old_id = old_from_new[secondary_new_id];
+            const auto& entry = merge.entries[i];
+            const T primary_new_id   = entry.primary;
+            const T primary_old_id   = old_from_new[primary_new_id];
+            const T secondary_new_id = entry.secondary;
+            const T secondary_old_id = old_from_new[secondary_new_id];
             new_from_old[secondary_old_id] = primary_new_id;
         }
         is_bijection = false;

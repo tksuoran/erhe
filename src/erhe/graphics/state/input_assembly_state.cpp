@@ -6,7 +6,48 @@
 namespace erhe::graphics
 {
 
+Input_assembly_state::Input_assembly_state()
+    : serial{get_next_serial()}
+{
+}
+
+Input_assembly_state::Input_assembly_state(gl::Primitive_type primitive_topology,
+                        bool               primitive_restart)
+    : serial            {get_next_serial()}
+    , primitive_topology{primitive_topology}
+    , primitive_restart {primitive_restart}
+{
+}
+
+void Input_assembly_state::touch()
+{
+    serial = get_next_serial();
+}
+
 size_t Input_assembly_state::s_serial{0};
+
+auto Input_assembly_state::get_next_serial()
+-> size_t
+{
+    do
+    {
+        s_serial++;
+    }
+
+    while (s_serial == 0);
+
+    return s_serial;
+}
+
+void Input_assembly_state_tracker::reset()
+{
+    m_last = nullptr;
+}
+
+void Input_assembly_state_tracker::execute(const Input_assembly_state* state)
+{
+    m_last = state;
+}
 
 Input_assembly_state Input_assembly_state::points
 {

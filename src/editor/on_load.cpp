@@ -1,6 +1,10 @@
 #include "application.hpp"
 #include "gl_context_provider.hpp"
 #include "log.hpp"
+#include "rendering.hpp"
+#include "time.hpp"
+#include "tools.hpp"
+#include "view.hpp"
 
 #include "operations/operation_stack.hpp"
 
@@ -31,15 +35,12 @@
 #include "windows/viewport_config.hpp"
 #include "windows/viewport_window.hpp"
 
-#include "editor.hpp"
-
 #include "scene/debug_draw.hpp"
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
 
-#include "imgui_demo.hpp"
-
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/png_loader.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
@@ -62,90 +63,6 @@ using erhe::graphics::Configuration;
 using erhe::graphics::Shader_monitor;
 using std::shared_ptr;
 using std::make_shared;
-
-class AsyncInit
-    : public erhe::toolkit::View
-{
-public:
-    AsyncInit(Application&                  application,
-              erhe::components::Components& components)
-        : m_application{application}
-        , m_components {components}
-    {
-#if 1 && defined(ERHE_WINDOW_TOOLKIT_GLFW)
-        erhe::toolkit::Context_window* main_window = application.get_context_window();
-        m_loading_context = std::make_unique<erhe::toolkit::Context_window>(main_window);
-        m_future = std::async(
-            std::launch::async, [&components, this]
-            {
-                this->m_loading_context->make_current();
-
-                initialize(components);
-
-                components.on_thread_exit();
-                m_loading_context->clear_current();
-                m_loading_context.reset();
-                return true;
-            }
-        );
-#else
-        // Mango does not provide context sharing at least on Windows yet
-        initialize(components);
-#endif
-    }
-
-    void initialize(erhe::components::Components& components)
-    {
-        components.launch_component_initialization();
-    }
-
-    auto is_initialization_ready(bool& result) -> bool
-    {
-#if 1 && defined(ERHE_WINDOW_TOOLKIT_GLFW)
-        auto status = m_future.wait_for(std::chrono::milliseconds(0));
-        bool is_ready = (status == std::future_status::ready);
-        if (is_ready)
-        {
-            result = m_future.get();
-            m_components.on_thread_enter();
-        }
-        return is_ready;
-#else
-        result = true;
-        return true;
-#endif
-    }
-
-    void update() override
-    {
-        bool result;
-        if (is_initialization_ready(result))
-        {
-            m_application.component_initialization_complete(result);
-        }
-        else
-        {
-            if (false)
-            {
-                gl::clear_color(0.3f, 0.3f, 0.3f, 1.0f);
-                gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
-                m_application.get_context_window()->swap_buffers();
-
-            }
-            else
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            }
-        }
-    }
-
-private:
-    Application&                                   m_application;
-    erhe::components::Components&                  m_components;
-    std::future<bool>                              m_future;
-    std::unique_ptr<erhe::toolkit::Context_window> m_loading_context;
-};
-
 
 auto Application::create_gl_window()
 -> bool
@@ -235,7 +152,7 @@ auto Application::initialize_components()
     }
     {
         ZoneScopedN("GL context provider constructor");
-        gl_context_provider = make_shared<Gl_context_provider >();
+        gl_context_provider = make_shared<Gl_context_provider>();
     }
 
     {
@@ -245,7 +162,10 @@ auto Application::initialize_components()
         m_components.add(make_shared<Brushes             >());
         m_components.add(make_shared<Camera_properties   >());
         m_components.add(make_shared<Debug_draw          >());
-        m_components.add(make_shared<Editor              >());
+        m_components.add(make_shared<Editor_rendering    >());
+        m_components.add(make_shared<Editor_time         >());
+        m_components.add(make_shared<Editor_tools        >());
+        m_components.add(make_shared<Editor_view         >());
         m_components.add(make_shared<Fly_camera_tool     >());
         m_components.add(make_shared<Forward_renderer    >());
         m_components.add(make_shared<Grid_tool           >());
@@ -298,7 +218,7 @@ void Application::component_initialization_complete(bool initialization_succeede
     {
         gl::enable(gl::Enable_cap::primitive_restart);
         gl::primitive_restart_index(0xffffu);
-        m_context_window->get_root_view().reset_view(get<Editor>());
+        m_context_window->get_root_view().reset_view(get<Editor_view>());
     }
 }
 

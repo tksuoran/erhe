@@ -46,10 +46,8 @@ struct Frame_resources
         draw_indirect_buffer.set_debug_label("Draw Indirect");
     }
 
-    Frame_resources(const Frame_resources& other) = delete;
-
-    auto operator=(const Frame_resources&)
-    -> Frame_resources& = delete;
+    Frame_resources(const Frame_resources&) = delete;
+    void operator= (const Frame_resources&) = delete;
 
     Frame_resources(Frame_resources&& other) noexcept
     {

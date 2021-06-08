@@ -24,19 +24,17 @@ class Program_interface;
 class Light_mesh : public erhe::components::Component
 {
 public:
-    Light_mesh();
-
-    virtual ~Light_mesh() = default;
+    static constexpr const char* c_name = "Light_mesh";
+    Light_mesh ();
+    ~Light_mesh() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
     void initialize_component() override;
 
     auto get_light_transform(erhe::scene::Light& light) -> glm::mat4;
-
-    auto point_in_light(glm::vec3 point_in_world, erhe::scene::Light& light) -> bool;
-
-    auto get_light_mesh(erhe::scene::Light& light) -> erhe::primitive::Primitive_geometry*;
+    auto point_in_light     (glm::vec3 point_in_world, erhe::scene::Light& light) -> bool;
+    auto get_light_mesh     (erhe::scene::Light& light) -> erhe::primitive::Primitive_geometry*;
 
 private:
     void update_light_model(erhe::scene::Light& light);

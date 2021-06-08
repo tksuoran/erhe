@@ -17,14 +17,6 @@ Shader_monitor::Shader_monitor()
 {
 }
 
-void Shader_monitor::initialize_component()
-{
-    ZoneScoped;
-
-    set_run(true);
-    m_poll_filesystem_thread = std::thread(&Shader_monitor::poll_thread, this);
-}
-
 Shader_monitor::~Shader_monitor()
 {
     ZoneScoped;
@@ -33,6 +25,13 @@ Shader_monitor::~Shader_monitor()
     m_poll_filesystem_thread.join();
 }
 
+void Shader_monitor::initialize_component()
+{
+    ZoneScoped;
+
+    set_run(true);
+    m_poll_filesystem_thread = std::thread(&Shader_monitor::poll_thread, this);
+}
 
 void Shader_monitor::add(Shader_stages::Create_info    create_info,
                          gsl::not_null<Shader_stages*> shader_stages)
@@ -115,8 +114,11 @@ void Shader_monitor::poll_thread()
     }
 }
 
-void Shader_monitor::update_once_per_frame()
+static constexpr const char* c_shader_monitor_poll = "shader monitor poll";
+
+void Shader_monitor::update_once_per_frame(const erhe::components::Time_context& time_context)
 {
+    static_cast<void>(time_context);
     ZoneScoped;
 
     const std::lock_guard<std::mutex> lock(m_mutex);

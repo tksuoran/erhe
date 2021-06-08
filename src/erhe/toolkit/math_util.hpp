@@ -163,6 +163,9 @@ auto create_frustum_simple(const float width, const float height, const float z_
 auto create_perspective(const float fov_x, const float fov_y, const float z_near, const float z_far)
 -> glm::mat4;
 
+auto create_perspective_xr(const float fov_left, const float fov_right, const float fov_up, const float fov_down, const float z_near, const float z_far)
+-> glm::mat4;
+
 auto create_perspective_vertical(const float fov_y, const float aspect_ratio, const float z_near, const float z_far)
 -> glm::mat4;
 

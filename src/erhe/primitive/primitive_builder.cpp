@@ -109,7 +109,7 @@ inline void write_low(gsl::span<std::uint8_t> destination,
     {
         case gl::Draw_elements_type::unsigned_byte:
         {
-            auto* ptr = reinterpret_cast<uint8_t*>(destination.data());
+            auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             Expects(value <= 0xffU);
             ptr[0] = value & 0xffU;
             break;
@@ -117,7 +117,7 @@ inline void write_low(gsl::span<std::uint8_t> destination,
 
         case gl::Draw_elements_type::unsigned_short:
         {
-            auto* ptr = reinterpret_cast<uint16_t*>(destination.data());
+            auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
             Expects(value <= 0xffffU);
             ptr[0] = value & 0xffffU;
             break;
@@ -125,7 +125,7 @@ inline void write_low(gsl::span<std::uint8_t> destination,
 
         case gl::Draw_elements_type::unsigned_int:
         {
-            auto* ptr = reinterpret_cast<uint32_t*>(destination.data());
+            auto* const ptr = reinterpret_cast<uint32_t*>(destination.data());
             ptr[0] = value & 0xffffffffu;
             break;
         }
@@ -145,7 +145,7 @@ inline void write_low(gsl::span<std::uint8_t> destination,
     {
         case gl::Vertex_attrib_type::unsigned_byte:
         {
-            auto* ptr = reinterpret_cast<uint8_t*>(destination.data());
+            auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             Expects(value <= 0xffU);
             ptr[0] = value & 0xffU;
             break;
@@ -153,7 +153,7 @@ inline void write_low(gsl::span<std::uint8_t> destination,
 
         case gl::Vertex_attrib_type::unsigned_short:
         {
-            auto* ptr = reinterpret_cast<uint16_t*>(destination.data());
+            auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
             Expects(value <= 0xffffU);
             ptr[0] = value & 0xffffU;
             break;
@@ -179,7 +179,7 @@ inline void write_low(gsl::span<std::uint8_t> destination,
 {
     if (type == gl::Vertex_attrib_type::float_)
     {
-        auto* ptr = reinterpret_cast<float*>(destination.data());
+        auto* const ptr = reinterpret_cast<float*>(destination.data());
         ptr[0] = value.x;
         ptr[1] = value.y;
     }
@@ -188,7 +188,7 @@ inline void write_low(gsl::span<std::uint8_t> destination,
         // TODO(tksuoran@gmail.com): Would this be safe even if we are not aligned?
         // uint* ptr = reinterpret_cast<uint*>(data_ptr);
         // *ptr = glm::packHalf2x16(value);
-        auto* ptr = reinterpret_cast<glm::uint16*>(destination.data());
+        auto* const ptr = reinterpret_cast<glm::uint16*>(destination.data());
         ptr[0] = glm::packHalf1x16(value.x);
         ptr[1] = glm::packHalf1x16(value.y);
     }
@@ -204,14 +204,14 @@ inline void write_low(gsl::span<std::uint8_t> destination,
 {
     if (type == gl::Vertex_attrib_type::float_)
     {
-        auto* ptr = reinterpret_cast<float*>(destination.data());
+        auto* const ptr = reinterpret_cast<float*>(destination.data());
         ptr[0] = value.x;
         ptr[1] = value.y;
         ptr[2] = value.z;
     }
     else if (type == gl::Vertex_attrib_type::half_float)
     {
-        auto* ptr = reinterpret_cast<glm::uint16 *>(destination.data());
+        auto* const ptr = reinterpret_cast<glm::uint16 *>(destination.data());
         ptr[0] = glm::packHalf1x16(value.x);
         ptr[1] = glm::packHalf1x16(value.y);
         ptr[2] = glm::packHalf1x16(value.z);
@@ -228,7 +228,7 @@ inline void write_low(gsl::span<std::uint8_t> destination,
 {
     if (type == gl::Vertex_attrib_type::float_)
     {
-        auto* ptr = reinterpret_cast<float*>(destination.data());
+        auto* const ptr = reinterpret_cast<float*>(destination.data());
         ptr[0] = value.x;
         ptr[1] = value.y;
         ptr[2] = value.z;
@@ -236,7 +236,7 @@ inline void write_low(gsl::span<std::uint8_t> destination,
     }
     else if (type == gl::Vertex_attrib_type::half_float)
     {
-        auto* ptr = reinterpret_cast<glm::uint16*>(destination.data());
+        auto* const ptr = reinterpret_cast<glm::uint16*>(destination.data());
         // TODO(tksuoran@gmail.com): glm::packHalf4x16() - but what if we are not aligned?
         ptr[0] = glm::packHalf1x16(value.x);
         ptr[1] = glm::packHalf1x16(value.y);
@@ -332,7 +332,7 @@ Primitive_builder::Property_maps::Property_maps(const Geometry&    geometry,
         geometry.for_each_point_const([this, &geometry](auto& i) {
             vec3 normal_sum{0.0f, 0.0f, 0.0f};
             i.point.for_each_corner_const(geometry, [this, &geometry, &normal_sum](auto& j) {
-                Polygon_id polygon_id = j.corner.polygon_id;
+                const Polygon_id polygon_id = j.corner.polygon_id;
                 if (polygon_normals->has(polygon_id))
                 {
                     normal_sum += polygon_normals->get(polygon_id);
@@ -341,7 +341,7 @@ Primitive_builder::Property_maps::Property_maps(const Geometry&    geometry,
                 {
                     //log_primitive_builder.warn("{} - smooth normals have been requested, but polygon normals have missing polygons\n", __func__);
                     const Polygon& polygon = geometry.polygons[polygon_id];
-                    glm::vec3 normal = polygon.compute_normal(geometry, *point_locations);
+                    const vec3     normal  = polygon.compute_normal(geometry, *point_locations);
                     normal_sum += normal;
                 }
             });
@@ -475,7 +475,7 @@ void Primitive_builder::get_vertex_attributes()
 
 }
 
-void Vertex_buffer_writer::write(Vertex_attribute_info& attribute, glm::vec2 value)
+void Vertex_buffer_writer::write(Vertex_attribute_info& attribute, vec2 value)
 {
     write_low(vertex_data_span.subspan(vertex_write_offset + attribute.offset,
                                        attribute.size),
@@ -483,7 +483,7 @@ void Vertex_buffer_writer::write(Vertex_attribute_info& attribute, glm::vec2 val
               value);
 }
 
-void Vertex_buffer_writer::write(Vertex_attribute_info& attribute, glm::vec3 value)
+void Vertex_buffer_writer::write(Vertex_attribute_info& attribute, vec3 value)
 {
     write_low(vertex_data_span.subspan(vertex_write_offset + attribute.offset,
                                        attribute.size),
@@ -491,7 +491,7 @@ void Vertex_buffer_writer::write(Vertex_attribute_info& attribute, glm::vec3 val
               value);
 }
 
-void Vertex_buffer_writer::write(Vertex_attribute_info& attribute, glm::vec4 value)
+void Vertex_buffer_writer::write(Vertex_attribute_info& attribute, vec4 value)
 {
     write_low(vertex_data_span.subspan(vertex_write_offset + attribute.offset,
                                        attribute.size),
@@ -594,8 +594,6 @@ void Primitive_builder::get_geometry_mesh_info()
 
 void Primitive_builder::allocate_vertex_buffer()
 {
-    ZoneScoped;
-
     if (m_context.buffer_info.vertex_buffer)
     {
         // Shared vertex buffer, allocate space from that
@@ -666,8 +664,6 @@ Index_buffer_writer::Index_buffer_writer(Primitive_geometry&            primitiv
     , index_type        {context.buffer_info.index_type}
     , index_type_size   {size_of_type(index_type)}
 {
-    ZoneScoped;
-
     index_data.resize(primitive_geometry.index_count * index_type_size);
     index_data_span = gsl::make_span(index_data);
 
@@ -693,7 +689,7 @@ Index_buffer_writer::Index_buffer_writer(Primitive_geometry&            primitiv
     }
 }
 
-void Primitive_builder::calculate_bounding_box(erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec3>* point_locations)
+void Primitive_builder::calculate_bounding_box(erhe::geometry::Property_map<Point_id, vec3>* point_locations)
 {
     ZoneScoped;
 
@@ -710,7 +706,7 @@ void Primitive_builder::calculate_bounding_box(erhe::geometry::Property_map<erhe
     {
         if (point_locations->has(point_id))
         {
-            vec3 position = point_locations->get(point_id);
+            const vec3 position = point_locations->get(point_id);
             m_primitive_geometry->bounding_box_min = glm::min(m_primitive_geometry->bounding_box_min, position);
             m_primitive_geometry->bounding_box_max = glm::max(m_primitive_geometry->bounding_box_max, position);
         }
@@ -927,7 +923,7 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
             // Vertex Color
             if (m_context.format_info.want_color && m_attributes.color.is_valid())
             {
-                glm::vec4 color;
+                vec4 color;
                 if ((property_maps.corner_colors != nullptr) && property_maps.corner_colors->has(corner_id))
                 {
                     color = property_maps.corner_colors->get(corner_id);

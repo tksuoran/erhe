@@ -37,9 +37,11 @@ using namespace glm;
 using namespace std;
 
 Shadow_renderer::Shadow_renderer()
-    : Component("Shadow_renderer")
+    : Component(c_name)
 {
 }
+
+Shadow_renderer::~Shadow_renderer() = default;
 
 void Shadow_renderer::connect()
 {
@@ -172,6 +174,16 @@ void Shadow_renderer::render(Layer_collection& layers,
     }
 
     gl::pop_debug_group();
+}
+
+auto Shadow_renderer::texture() const -> erhe::graphics::Texture*
+{
+    return m_texture.get();
+}
+
+auto Shadow_renderer::viewport() const -> erhe::scene::Viewport
+{
+    return m_viewport;
 }
 
 } // namespace editor

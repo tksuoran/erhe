@@ -94,11 +94,11 @@ auto PNG_loader::open(const std::filesystem::path& path,
 auto PNG_loader::load(gsl::span<std::byte> transfer_buffer)
 -> bool
 {
-    mango::ImageHeader header = m_image_decoder->header();
-    auto stride = header.width * header.format.bytes();
+    const mango::ImageHeader header = m_image_decoder->header();
+    const auto stride = header.width * header.format.bytes();
     mango::Surface surface(header.width, header.height, header.format, stride, transfer_buffer.data());
 
-    auto status = m_image_decoder->decode(surface);
+    const auto status = m_image_decoder->decode(surface);
     return status.success;
 }
 
@@ -122,7 +122,7 @@ auto PNG_writer::write(const std::filesystem::path& path,
                                                                     mango::filesystem::FileStream::OpenMode::WRITE);
     mango::filesystem::FileStream& file_stream = *m_file_stream;
     mango::ImageEncodeOptions encode_options;
-    auto status = m_image_encoder->encode(file_stream, surface, encode_options);
+    const auto status = m_image_encoder->encode(file_stream, surface, encode_options);
     if (!status.success)
     {
         log_save_png.error("{}", status.info);

@@ -10,7 +10,7 @@
 namespace erhe::graphics
 {
 
-class Vertex_format
+class Vertex_format final
 {
 public:
     Vertex_format();

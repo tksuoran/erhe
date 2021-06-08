@@ -27,7 +27,7 @@ class Vertex_format;
 
 static constexpr int MAX_ATTRIBUTE_COUNT { 16 }; // TODO(tksuoran@gmail.com): Get rid of this kind of constant?
 
-class Vertex_input_state
+class Vertex_input_state final
 {
 public:
     class Binding
@@ -52,8 +52,7 @@ public:
         {
         }
 
-        auto operator=(const Binding& other)
-        -> Binding& = delete;
+        void operator=(const Binding&) = delete;
 
         Buffer*                                   vertex_buffer   {nullptr};
         std::shared_ptr<Vertex_attribute_mapping> vertex_attribute_mapping;

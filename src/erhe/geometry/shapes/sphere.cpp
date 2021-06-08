@@ -66,49 +66,44 @@ struct Sphere_builder
     auto sphere_point(double rel_slice, double rel_stack)
     -> Point_id
     {
-        double phi     = (glm::pi<double>() * 2.0 * rel_slice);
-        double sin_phi = std::sin(phi);
-        double cos_phi = std::cos(phi);
+        const double phi     = (glm::pi<double>() * 2.0 * rel_slice);
+        const double sin_phi = std::sin(phi);
+        const double cos_phi = std::cos(phi);
 
-        double theta     = (glm::pi<double>() * 0.5 * rel_stack);
-        double sin_theta = std::sin(theta);
-        double cos_theta = std::cos(theta);
+        const double theta     = (glm::pi<double>() * 0.5 * rel_stack);
+        const double sin_theta = std::sin(theta);
+        const double cos_theta = std::cos(theta);
 
-        double stack_radius = cos_theta;
+        const double stack_radius = cos_theta;
 
-        auto xVN = static_cast<float>(stack_radius * cos_phi);
-        auto yVN = static_cast<float>(sin_theta);
-        auto zVN = static_cast<float>(stack_radius * sin_phi);
+        const auto xVN = static_cast<float>(stack_radius * cos_phi);
+        const auto yVN = static_cast<float>(sin_theta);
+        const auto zVN = static_cast<float>(stack_radius * sin_phi);
 
-        auto xP = static_cast<float>(radius * xVN);
-        auto yP = static_cast<float>(radius * yVN);
-        auto zP = static_cast<float>(radius * zVN);
+        const auto xP = static_cast<float>(radius * xVN);
+        const auto yP = static_cast<float>(radius * yVN);
+        const auto zP = static_cast<float>(radius * zVN);
 
-        auto s = 1.0f - static_cast<float>(rel_slice);
-        auto t = 1.0f - static_cast<float>(0.5 * (1.0 + rel_stack));
+        const auto s = 1.0f - static_cast<float>(rel_slice);
+        const auto t = 1.0f - static_cast<float>(0.5 * (1.0 + rel_stack));
 
-        // B = T x N
-        // T = N x B
-        // N = B x T
+        const vec3     N(xVN, yVN, zVN);
+        const vec3     axis(0.0f, 1.0f, 0.0f);
+        const vec3     B        = glm::normalize(glm::cross(axis, N));
+        const vec3     T        = glm::normalize(glm::cross(N, B));
+        const Point_id point_id = geometry.make_point();
 
-        vec3  N(xVN, yVN, zVN);
-        vec3  axis(0.0f, 1.0f, 0.0f);
-        vec3  B    = glm::normalize(glm::cross(axis, N));
-        vec3  T    = glm::normalize(glm::cross(N, B));
-
-        Point_id point_id = geometry.make_point();
-
-        vec3  t_xyz = glm::normalize(T - N * glm::dot(N, T));
-        float t_w   = (glm::dot(glm::cross(N, T), B) < 0.0f) ? -1.0f : 1.0f;
-        vec3  b_xyz = glm::normalize(B - N * glm::dot(N, B));
-        float b_w   = (glm::dot(glm::cross(B, N), T) < 0.0f) ? -1.0f : 1.0f;
+        const vec3  t_xyz = glm::normalize(T - N * glm::dot(N, T));
+        const float t_w   = (glm::dot(glm::cross(N, T), B) < 0.0f) ? -1.0f : 1.0f;
+        const vec3  b_xyz = glm::normalize(B - N * glm::dot(N, B));
+        const float b_w   = (glm::dot(glm::cross(B, N), T) < 0.0f) ? -1.0f : 1.0f;
 
         //bool is_uv_discontinuity = (rel_stack == -1.0) ||
         //                           (rel_stack ==  1.0) ||
         //                        // (relSlice == 0.0) ||
         //                           (rel_slice ==  1.0);
 
-        vec3 P = vec3(xP, yP, zP);
+        const vec3 P = vec3(xP, yP, zP);
 
         point_locations ->put(point_id, P);
         point_normals   ->put(point_id, N);
@@ -133,13 +128,13 @@ struct Sphere_builder
         Expects(slice >= 0);
 
         //int stack_base0 = stack + stackDivision;
-        int    stack               = stack_base0 - stack_division;
-        double rel_slice           = static_cast<double>(slice) / static_cast<double>(slice_count);
-        double rel_stack           = static_cast<double>(stack) / (static_cast<double>(stack_division) + 1);
-        bool   is_slice_seam       = /*(slice == 0) ||*/ (slice == slice_count);
-        bool   is_bottom           = (stack_base0 == stack_base0_bottom);
-        bool   is_top              = (stack_base0 == stack_base0_top);
-        bool   is_uv_discontinuity = is_slice_seam || is_bottom || is_top;
+        const int    stack               = stack_base0 - stack_division;
+        const double rel_slice           = static_cast<double>(slice) / static_cast<double>(slice_count);
+        const double rel_stack           = static_cast<double>(stack) / (static_cast<double>(stack_division) + 1);
+        const bool   is_slice_seam       = /*(slice == 0) ||*/ (slice == slice_count);
+        const bool   is_bottom           = (stack_base0 == stack_base0_bottom);
+        const bool   is_top              = (stack_base0 == stack_base0_top);
+        const bool   is_uv_discontinuity = is_slice_seam || is_bottom || is_top;
 
         //log_sphere.trace("\tpolygon {:3} slice = {: 2} stack_base0 = {: 2} rel_slice = {: #08f} rel_stack = {: #08f} using ",
         //                 polygon_id, slice, stack_base0, rel_slice, rel_stack);
@@ -166,7 +161,7 @@ struct Sphere_builder
             //log_sphere.trace("point id {:2}", point_id);
         }
 
-        Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
+        const Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
         //log_sphere.trace(" corner id = {:2}\n", corner_id);
 
         if (is_uv_discontinuity)
@@ -211,15 +206,13 @@ struct Sphere_builder
         point_tangents->put(bottom_point_id, vec4(0.0f, 0.0f, 0.0f, 0.0f));
         point_tangents->put(top_point_id,    vec4(0.0f, 0.0f, 0.0f, 0.0f));
 
-        int slice;
-        int stack;
-        for (slice = 0; slice < slice_count; ++slice)
+        for (int slice = 0; slice < slice_count; ++slice)
         {
-            double rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
-            for (stack = -stack_division; stack <= stack_division; ++stack)
+            const double rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
+            for (int stack = -stack_division; stack <= stack_division; ++stack)
             {
-                double   rel_stack = static_cast<double>(stack) / static_cast<double>(stack_division);
-                Point_id point_id  = sphere_point(rel_slice, rel_stack);
+                const double   rel_stack = static_cast<double>(stack) / static_cast<double>(stack_division);
+                const Point_id point_id  = sphere_point(rel_slice, rel_stack);
                 set_point(slice, stack, point_id);
                 //log_sphere.trace("point id {:2} is rel slice {: #08f} rel stack {: #08f}\n", point_id, rel_slice, rel_stack);
             }
@@ -231,41 +224,39 @@ struct Sphere_builder
         // Bottom fan
         log_sphere.trace("bottom fan\n");
         {
-            for (slice = 0; slice < slice_count; ++slice)
+            for (int slice = 0; slice < slice_count; ++slice)
             {
-                int next_slice  = slice + 1;
-                int stack       = -stack_division;
-                int stack_base0 = stack + stack_division;
-
-                double rel_slice = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
-                double rel_stack = 1.0 - (0.5 / (static_cast<double>(stack) + 1));
-
-                Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
-                Polygon_id polygon_id  = geometry.make_polygon();
+                const int        next_slice  = slice + 1;
+                const int        stack       = -stack_division;
+                const int        stack_base0 = stack + stack_division;
+                const double     rel_slice   = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
+                const double     rel_stack   = 1.0 - (0.5 / (static_cast<double>(stack) + 1));
+                const Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
+                const Polygon_id polygon_id  = geometry.make_polygon();
                 make_corner(polygon_id, next_slice, stack_base0);
                 make_corner(polygon_id, slice,      stack_base0);
-                Corner_id tip_corner_id = make_corner(polygon_id, slice, stack_base0_bottom);
-                auto p0 = get_point(next_slice, stack);
-                auto p1 = get_point(slice,      stack);
+                const Corner_id tip_corner_id = make_corner(polygon_id, slice, stack_base0_bottom);
+                const auto      p0            = get_point(next_slice, stack);
+                const auto      p1            = get_point(slice,      stack);
 
-                vec3 n1             = point_normals->get(p0);
-                vec3 n2             = point_normals->get(p1);
-                vec3 average_normal = normalize(n1 + n2);
+                const vec3 n1             = point_normals->get(p0);
+                const vec3 n2             = point_normals->get(p1);
+                const vec3 average_normal = normalize(n1 + n2);
                 corner_normals->put(tip_corner_id, average_normal);
 
-                vec4 t1              = point_tangents->get(p0);
-                vec4 t2              = point_tangents->get(p1);
-                vec3 average_tangent = normalize(glm::vec3(t1) + glm::vec3(t2));
+                const vec4 t1              = point_tangents->get(p0);
+                const vec4 t2              = point_tangents->get(p1);
+                const vec3 average_tangent = normalize(glm::vec3(t1) + glm::vec3(t2));
                 corner_tangents->put(tip_corner_id, glm::vec4(average_tangent, t1.w));
 
-                vec4 b1                = point_bitangents->get(p0);
-                vec4 b2                = point_bitangents->get(p1);
-                vec3 average_bitangent = normalize(glm::vec3(b1) + glm::vec3(b2));
+                const vec4 b1                = point_bitangents->get(p0);
+                const vec4 b2                = point_bitangents->get(p1);
+                const vec3 average_bitangent = normalize(glm::vec3(b1) + glm::vec3(b2));
                 corner_bitangents->put(tip_corner_id, glm::vec4(average_bitangent, b1.w));
 
-                vec2 uv1              = point_texcoords->get(p0);
-                vec2 uv2              = point_texcoords->get(p1);
-                vec2 average_texcoord = (uv1 + uv2) / 2.0f;
+                const vec2 uv1              = point_texcoords->get(p0);
+                const vec2 uv2              = point_texcoords->get(p1);
+                const vec2 average_texcoord = (uv1 + uv2) / 2.0f;
                 corner_texcoords->put(tip_corner_id, average_texcoord);
 
                 if constexpr (use_geometric_centroids)
@@ -277,21 +268,17 @@ struct Sphere_builder
         }
 
         // Middle quads, bottom up
-        log_sphere.trace("middle quads\n");
-        for (stack = -stack_division; stack < stack_division; ++stack)
+        for (int stack = -stack_division; stack < stack_division; ++stack)
         {
-            int stack_base0      = stack + stack_division;
-            int next_stack_base0 = stack_base0 + 1;
-
-            double rel_stack = (static_cast<double>(stack) + 0.5) / (static_cast<double>(stack_division) + 1);
-
-            for (slice = 0; slice < slice_count; ++slice)
+            const int    stack_base0      = stack + stack_division;
+            const int    next_stack_base0 = stack_base0 + 1;
+            const double rel_stack        = (static_cast<double>(stack) + 0.5) / (static_cast<double>(stack_division) + 1);
+            for (int slice = 0; slice < slice_count; ++slice)
             {
-                int    next_slice = (slice + 1);
-                double rel_slice  = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
-
-                Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
-                Polygon_id polygon_id = geometry.make_polygon();
+                const int        next_slice  = (slice + 1);
+                const double     rel_slice   = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
+                const Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
+                const Polygon_id polygon_id  = geometry.make_polygon();
                 make_corner(polygon_id, next_slice, next_stack_base0);
                 make_corner(polygon_id, slice, next_stack_base0);
                 make_corner(polygon_id, slice, stack_base0);
@@ -307,41 +294,40 @@ struct Sphere_builder
 
         // Top fan
         log_sphere.trace("top fan\n");
-        for (slice = 0; slice < slice_count; ++slice)
+        for (int slice = 0; slice < slice_count; ++slice)
         {
-            int next_slice  = (slice + 1);
-            int stack       = stack_division;
-            int stack_base0 = stack + stack_division;
-
-            double rel_slice = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
-            double rel_stack = 1.0 - (0.5 / (static_cast<double>(stack) + 1));
-            Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
-            Polygon_id polygon_id    = geometry.make_polygon();
-            Corner_id  tip_corner_id = make_corner(polygon_id, slice, stack_base0_top);
+            const int        next_slice    = (slice + 1);
+            const int        stack         = stack_division;
+            const int        stack_base0   = stack + stack_division;
+            const double     rel_slice     = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
+            const double     rel_stack     = 1.0 - (0.5 / (static_cast<double>(stack) + 1));
+            const Point_id   centroid_id   = sphere_point(rel_slice, rel_stack);
+            const Polygon_id polygon_id    = geometry.make_polygon();
+            const Corner_id  tip_corner_id = make_corner(polygon_id, slice, stack_base0_top);
             make_corner(polygon_id, slice,      stack_base0);
             make_corner(polygon_id, next_slice, stack_base0);
 
-            Point_id p0 = get_point(slice,      stack);
-            Point_id p1 = get_point(next_slice, stack);
+            const Point_id p0 = get_point(slice,      stack);
+            const Point_id p1 = get_point(next_slice, stack);
 
-            vec3 n1 = point_normals->get(p0);
-            vec3 n2 = point_normals->get(p1);
-            vec3 n  = normalize(n1 + n2);
+            const vec3 n1 = point_normals->get(p0);
+            const vec3 n2 = point_normals->get(p1);
+            const vec3 n  = normalize(n1 + n2);
             corner_normals->put(tip_corner_id, n);
 
-            vec4 t1              = point_tangents->get(p0);
-            vec4 t2              = point_tangents->get(p1);
-            vec3 average_tangent = normalize(glm::vec3(t1) + glm::vec3(t2));
+            const vec4 t1              = point_tangents->get(p0);
+            const vec4 t2              = point_tangents->get(p1);
+            const vec3 average_tangent = normalize(glm::vec3(t1) + glm::vec3(t2));
             corner_tangents->put(tip_corner_id, glm::vec4(average_tangent, t1.w));
 
-            vec4 b1                = point_bitangents->get(p0);
-            vec4 b2                = point_bitangents->get(p1);
-            vec3 average_bitangent = normalize(glm::vec3(b1) + glm::vec3(b2));
+            const vec4 b1                = point_bitangents->get(p0);
+            const vec4 b2                = point_bitangents->get(p1);
+            const vec3 average_bitangent = normalize(glm::vec3(b1) + glm::vec3(b2));
             corner_bitangents->put(tip_corner_id, glm::vec4(average_bitangent, b1.w));
 
-            vec2 uv1              = point_texcoords->get(p0);
-            vec2 uv2              = point_texcoords->get(p1);
-            vec2 average_texcoord = (uv1 + uv2) / 2.0f;
+            const vec2 uv1              = point_texcoords->get(p0);
+            const vec2 uv2              = point_texcoords->get(p1);
+            const vec2 average_texcoord = (uv1 + uv2) / 2.0f;
             corner_texcoords->put(tip_corner_id, average_texcoord);
 
             if constexpr (use_geometric_centroids)

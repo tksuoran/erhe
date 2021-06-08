@@ -15,11 +15,13 @@ class Light_properties
 {
 public:
     static constexpr const char* c_name = "Light_properties";
-    Light_properties() : erhe::components::Component(c_name) {}
-    virtual ~Light_properties() = default;
+
+    Light_properties ();
+    ~Light_properties() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
+    void initialize_component() override;
 
     // Implements Window
     void window(Pointer_context& pointer_context) override;

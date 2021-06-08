@@ -38,14 +38,12 @@ using glm::vec3;
 using glm::vec4;
 
 Text_renderer::Text_renderer()
-    : Component("Text_renderer")
+    : Component(c_name)
 {
     ZoneScoped;
 }
 
-Text_renderer::~Text_renderer()
-{
-}
+Text_renderer::~Text_renderer() = default;
 
 void Text_renderer::connect()
 {
@@ -61,35 +59,26 @@ void Text_renderer::initialize_component()
 
     Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
 
-    {
-    ZoneScopedN("push_debug_group");
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
                          static_cast<GLsizei>(strlen(c_text_renderer_initialize_component)),
                          c_text_renderer_initialize_component);
-    }
 
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 
     static constexpr gl::Map_buffer_access_mask access_mask{gl::Map_buffer_access_mask::map_write_bit};
 
-    size_t max_quad_count = 65536 / 4; // each quad consumes 4 indices
-    size_t index_count    = 65536 * 5;
-    size_t index_stride   = 2;
-
-    {
-    ZoneScopedN("make buffer");
+    const size_t max_quad_count = 65536 / 4; // each quad consumes 4 indices
+    const size_t index_count    = 65536 * 5;
+    const size_t index_stride   = 2;
 
     m_index_buffer = std::make_unique<erhe::graphics::Buffer>(gl::Buffer_target::element_array_buffer,
                                                               index_stride * index_count,
                                                               storage_mask);
-    }
 
-    {
-    ZoneScopedN("map buffer");
     erhe::graphics::Scoped_buffer_mapping<uint16_t> index_buffer_map(*m_index_buffer.get(), 0, index_count, access_mask);
-    auto gpu_index_data = index_buffer_map.span();
-    size_t offset{0};
+    auto     gpu_index_data = index_buffer_map.span();
+    size_t   offset{0};
     uint16_t vertex_index{0};
     for (unsigned int i = 0; i < max_quad_count; ++i)
     {
@@ -121,15 +110,15 @@ void Text_renderer::initialize_component()
     m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(gl::Texture_min_filter::nearest,
                                                                   gl::Texture_mag_filter::nearest);
 
-    m_font_sampler_location = m_default_uniform_block.add_sampler("s_texture", gl::Uniform_type::sampler_2d).location();
+    m_font_sampler_location = m_default_uniform_block.add_sampler("s_texture", gl::Uniform_type::sampler_2d)->location();
 
     m_projection_block.add_mat4("clip_from_window");
 
     m_font = std::make_unique<erhe::ui::Font>("res/fonts/Ubuntu-R.ttf", 12, 0.4f);
 
-    auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
-    std::filesystem::path vs_path = shader_path / std::filesystem::path("text.vert");
-    std::filesystem::path fs_path = shader_path / std::filesystem::path("text.frag");
+    const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
+    const std::filesystem::path vs_path = shader_path / std::filesystem::path("text.vert");
+    const std::filesystem::path fs_path = shader_path / std::filesystem::path("text.frag");
     Shader_stages::Create_info create_info("stream",
                                            &m_default_uniform_block,
                                            &m_attribute_mappings,
@@ -139,21 +128,17 @@ void Text_renderer::initialize_component()
     create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
     Shader_stages::Prototype prototype(create_info);
     m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
-    }
 
     create_frame_resources();
 
-    {
-    ZoneScopedN("pop_debug_group");
     gl::pop_debug_group();
-    }
 }
 
 void Text_renderer::create_frame_resources()
 {
     ZoneScoped;
 
-    size_t vertex_count = 65536;
+    const size_t vertex_count = 65536;
     for (size_t i = 0; i < s_frame_resources_count; ++i)
     {
         m_frame_resources.emplace_back(vertex_count,
@@ -187,19 +172,19 @@ void Text_renderer::print(const std::string& text,
 
     m_vertex_writer.begin();
 
-    std::byte*          start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
-    size_t              byte_count = vertex_gpu_data.size_bytes();
-    size_t              word_count = byte_count / sizeof(float);
-    gsl::span<float>    gpu_float_data(reinterpret_cast<float*   >(start), word_count);
-    gsl::span<uint32_t> gpu_uint_data (reinterpret_cast<uint32_t*>(start), word_count);
+    std::byte* const    start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
+    const size_t        byte_count = vertex_gpu_data.size_bytes();
+    const size_t        word_count = byte_count / sizeof(float);
+    gsl::span<float>    gpu_float_data(reinterpret_cast<float* const   >(start), word_count);
+    gsl::span<uint32_t> gpu_uint_data (reinterpret_cast<uint32_t* const>(start), word_count);
 
     erhe::ui::Rectangle bounding_box;
-    size_t quad_count = m_font->print(gpu_float_data,
-                                      gpu_uint_data,
-                                      text,
-                                      text_position,
-                                      text_color,
-                                      bounding_box);
+    const size_t quad_count = m_font->print(gpu_float_data,
+                                            gpu_uint_data,
+                                            text,
+                                            text_position,
+                                            text_color,
+                                            bounding_box);
     m_vertex_writer.write_offset += quad_count * 4 * m_vertex_format.stride();
     m_quad_count += quad_count;
     m_vertex_writer.end();
@@ -221,15 +206,15 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
                          static_cast<GLsizei>(strlen(c_text_renderer_render)),
                          c_text_renderer_render);
 
-    mat4 clip_from_window = erhe::toolkit::create_orthographic(static_cast<float>(viewport.x), static_cast<float>(viewport.width),
-                                                               static_cast<float>(viewport.y), static_cast<float>(viewport.height),
-                                                               0.0f,
-                                                               1.0f);
-    auto* projection_buffer   = &current_frame_resources().projection_buffer;
-    auto  projection_gpu_data = projection_buffer->map();
+    const mat4 clip_from_window = erhe::toolkit::create_orthographic(static_cast<float>(viewport.x), static_cast<float>(viewport.width),
+                                                                     static_cast<float>(viewport.y), static_cast<float>(viewport.height),
+                                                                     0.0f,
+                                                                     1.0f);
+    auto* const projection_buffer   = &current_frame_resources().projection_buffer;
+    auto        projection_gpu_data = projection_buffer->map();
     write(projection_gpu_data, 0, as_span(clip_from_window));
 
-    auto& pipeline = current_frame_resources().pipeline;
+    const auto& pipeline = current_frame_resources().pipeline;
 
     m_pipeline_state_tracker->shader_stages.reset();
     m_pipeline_state_tracker->color_blend.execute(&erhe::graphics::Color_blend_state::color_blend_disabled);
@@ -238,8 +223,8 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     m_pipeline_state_tracker->execute(&pipeline);
 
-    unsigned int font_texture_unit = 0;
-    unsigned int font_texture_name = m_font->texture()->gl_name();
+    const unsigned int font_texture_unit = 0;
+    const unsigned int font_texture_name = m_font->texture()->gl_name();
     gl::program_uniform_1i(pipeline.shader_stages->gl_name(),
                            m_font_sampler_location,
                            font_texture_unit);
@@ -252,7 +237,7 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
                           static_cast<GLintptr>  (0),
                           static_cast<GLsizeiptr>(4 * 4 * sizeof(float)));
 
-    size_t index_count = 5 * m_quad_count;
+    const size_t index_count = 5 * m_quad_count;
     gl::draw_elements(pipeline.input_assembly->primitive_topology,
                       static_cast<GLsizei>(index_count),
                       gl::Draw_elements_type::unsigned_short,

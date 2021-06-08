@@ -31,7 +31,7 @@ void Sampler::apply()
 {
     Expects(m_handle.gl_name() != 0);
 
-    auto name = m_handle.gl_name();
+    const auto name = m_handle.gl_name();
     gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_min_filter,     static_cast<int>(min_filter));
     gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_mag_filter,     static_cast<int>(mag_filter));
     gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_compare_mode,   static_cast<int>(compare_mode));

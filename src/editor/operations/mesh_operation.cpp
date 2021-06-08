@@ -12,6 +12,10 @@ using namespace erhe::geometry;
 using namespace erhe::primitive;
 using namespace erhe::scene;
 
+Mesh_operation::Mesh_operation() = default;
+
+Mesh_operation::~Mesh_operation() = default;
+
 void Mesh_operation::execute()
 {
     for (const auto& entry : m_entries)

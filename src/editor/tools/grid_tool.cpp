@@ -1,5 +1,6 @@
 #include "tools/grid_tool.hpp"
 #include "renderers/line_renderer.hpp"
+#include "tools.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include "imgui.h"
@@ -13,6 +14,11 @@ Grid_tool::Grid_tool()
 }
 
 Grid_tool::~Grid_tool() = default;
+
+void Grid_tool::initialize_component()
+{
+    get<Editor_tools>()->register_background_tool(this);
+}
 
 auto Grid_tool::description() -> const char*
 {

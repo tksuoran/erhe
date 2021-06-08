@@ -1,4 +1,5 @@
 #include "windows/material_properties.hpp"
+#include "tools.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 #include "erhe/primitive/material.hpp"
@@ -8,10 +9,22 @@
 namespace editor
 {
 
+Material_properties::Material_properties()
+    : erhe::components::Component{c_name}
+{
+}
+
+Material_properties::~Material_properties() = default;
+
 void Material_properties::connect()
 {
     m_scene_root     = get<Scene_root>();
     m_selection_tool = get<Selection_tool>();
+}
+
+void Material_properties::initialize_component()
+{
+    get<Editor_tools>()->register_window(this);
 }
 
 void Material_properties::window(Pointer_context&)

@@ -10,10 +10,11 @@
 namespace erhe::graphics
 {
 
-class Buffer
+class Buffer final
 {
 public:
-    Buffer() = default;
+    Buffer () = default;
+    ~Buffer();
 
     Buffer(gl::Buffer_target       target,
            size_t                  capacity_bytes_count,
@@ -24,55 +25,23 @@ public:
            gl::Buffer_storage_mask    storage_mask,
            gl::Map_buffer_access_mask map_buffer_access_mask) noexcept;
 
-    Buffer(const Buffer& other) = delete;
+    Buffer        (const Buffer&) = delete;
+    void operator=(const Buffer&) = delete;
+    Buffer        (Buffer&& other) noexcept;
+    auto operator=(Buffer&& other) noexcept -> Buffer&;
 
-    auto operator=(const Buffer&)
-    -> Buffer& = delete;
-
-    Buffer(Buffer&& other) noexcept
-    {
-        m_handle                 = std::move(other.m_handle);
-        m_debug_label            = std::move(other.m_debug_label);
-        m_target                 = other.m_target;
-        m_capacity_byte_count    = other.m_capacity_byte_count;
-        m_next_free_byte         = other.m_next_free_byte;
-        m_storage_mask           = other.m_storage_mask;
-        m_map                    = other.m_map;
-        m_map_byte_offset        = other.m_map_byte_offset;
-        m_map_buffer_access_mask = other.m_map_buffer_access_mask;
-    }
-
-    auto operator=(Buffer&& other) noexcept
-    -> Buffer&
-    {
-        m_handle                 = std::move(other.m_handle);
-        m_debug_label            = std::move(other.m_debug_label);
-        m_target                 = other.m_target;
-        m_capacity_byte_count    = other.m_capacity_byte_count;
-        m_next_free_byte         = other.m_next_free_byte;
-        m_storage_mask           = other.m_storage_mask;
-        m_map                    = other.m_map;
-        m_map_byte_offset        = other.m_map_byte_offset;
-        m_map_buffer_access_mask = other.m_map_buffer_access_mask;
-        return *this;
-    }
-
-    ~Buffer();
-
-    auto map()
-    -> gsl::span<std::byte>
-    {
-        return m_map;
-    }
-
-    auto debug_label() const noexcept
-    -> const std::string&;
-
-    auto capacity_byte_count() const noexcept
-    -> size_t;
-
-    auto allocate_bytes(size_t byte_count, size_t alignment = 64) noexcept
-    -> size_t;
+    auto map                  ()                -> gsl::span<std::byte>;
+    auto debug_label          () const noexcept -> const std::string&;
+    auto capacity_byte_count  () const noexcept -> size_t;
+    auto allocate_bytes       (size_t byte_count, size_t alignment = 64) noexcept -> size_t;
+    void unmap                () noexcept;
+    void flush_bytes          (size_t byte_offset, size_t byte_count) noexcept;
+    void flush_and_unmap_bytes(size_t byte_count) noexcept;
+    auto free_capacity_bytes  () const noexcept -> size_t;
+    auto target               () const noexcept -> gl::Buffer_target;
+    void set_debug_label      (std::string_view label) noexcept;
+    void dump                 () const noexcept;
+    auto gl_name              () const noexcept -> unsigned int;
 
     template <typename T>
     auto map_elements(size_t                     element_offset,
@@ -80,8 +49,8 @@ public:
                       gl::Map_buffer_access_mask access_mask) noexcept
     -> gsl::span<T>
     {
-        size_t byte_offset = element_offset * sizeof(T);
-        size_t byte_count  = element_count * sizeof(T);
+        const size_t byte_offset = element_offset * sizeof(T);
+        const size_t byte_count  = element_count * sizeof(T);
         auto raw_map = map_bytes(byte_offset, byte_count, access_mask);
         return gsl::span(reinterpret_cast<T*>(raw_map.data()),
                                               raw_map.size_bytes() / sizeof(T));
@@ -94,33 +63,6 @@ public:
                    size_t                     byte_count,
                    gl::Map_buffer_access_mask access_mask) noexcept
     -> gsl::span<std::byte>;
-
-    void unmap() noexcept;
-
-    void flush_bytes(size_t byte_offset, size_t byte_count) noexcept;
-
-    void flush_and_unmap_bytes(size_t byte_count) noexcept;
-
-    auto free_capacity_bytes() const noexcept
-    -> size_t;
-
-    auto target() const noexcept
-    -> gl::Buffer_target
-    {
-        return m_target;
-    }
-
-    void set_debug_label(std::string label) noexcept
-    {
-        m_debug_label = std::move(label);
-        gl::object_label(gl::Object_identifier::buffer,
-                         gl_name(), static_cast<GLsizei>(m_debug_label.length()), m_debug_label.c_str());
-    }
-
-    void dump() const noexcept;
-
-    auto gl_name() const noexcept
-    -> unsigned int;
 
     friend class Vertex_input_state;
     friend class Texture;
@@ -263,13 +205,13 @@ private:
     bool                 m_full{false};
 };
 
-class Buffer_transfer_queue
+class Buffer_transfer_queue final
 {
 public:
-    Buffer_transfer_queue();
+    Buffer_transfer_queue ();
     ~Buffer_transfer_queue();
-    Buffer_transfer_queue(Buffer_transfer_queue&) = delete;
-    Buffer_transfer_queue& operator=(Buffer_transfer_queue&) = delete;
+    Buffer_transfer_queue (Buffer_transfer_queue&) = delete;
+    auto operator=        (Buffer_transfer_queue&) -> Buffer_transfer_queue& = delete;
 
     class Transfer_entry
     {
@@ -284,7 +226,7 @@ public:
         }
 
         Transfer_entry(Transfer_entry&) = delete;
-        Transfer_entry& operator=(Transfer_entry&) = delete;
+        void operator=(Transfer_entry&) = delete;
 
         Transfer_entry(Transfer_entry&& other) noexcept
             : target       {other.target}
@@ -333,12 +275,9 @@ public:
     }
 
     Scoped_buffer_mapping(const Scoped_buffer_mapping&) = delete;
+    auto operator=       (const Scoped_buffer_mapping&) -> Scoped_buffer_mapping& = delete;
 
-    auto operator=(const Scoped_buffer_mapping&)
-    -> Scoped_buffer_mapping& = delete;
-
-    auto span() const
-    -> const gsl::span<T>&
+    auto span() const -> const gsl::span<T>&
     {
         return m_span;
     }

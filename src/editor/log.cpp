@@ -22,5 +22,6 @@ Category log_renderdoc   (Color::GREEN,   Color::GRAY, Level::LEVEL_INFO);
 Category log_brush       (Color::GREEN,   Color::GRAY, Level::LEVEL_INFO);
 Category log_physics     (Color::CYAN,    Color::GRAY, Level::LEVEL_INFO);
 Category log_gl          (Color::BLUE,    Color::GRAY, Level::LEVEL_INFO);
+Category log_headset     (Color::WHITE,   Color::GRAY, Level::LEVEL_TRACE);
 
 }

@@ -14,7 +14,7 @@ Transform::Transform(const Transform& t)
     m_inverse_matrix = t.m_inverse_matrix;
 }
 
-Transform& Transform::operator=(const Transform& t)
+auto Transform::operator=(const Transform& t) -> Transform&
 {
     m_matrix         = t.m_matrix;
     m_inverse_matrix = t.m_inverse_matrix;
@@ -140,6 +140,17 @@ void Transform::set_perspective(float fov_x, float fov_y, float z_near, float z_
     }
 
     m_matrix = erhe::toolkit::create_perspective(fov_x, fov_y, z_near, z_far);
+    m_inverse_matrix = glm::inverse(m_matrix);
+}
+
+void Transform::set_perspective_xr(float fov_left, float fov_right, float fov_up, float fov_down, float z_near, float z_far)
+{
+    if constexpr (erhe::graphics::Configuration::reverse_depth)
+    {
+        std::swap(z_near, z_far);
+    }
+
+    m_matrix = erhe::toolkit::create_perspective_xr(fov_left, fov_right, fov_up, fov_down, z_near, z_far);
     m_inverse_matrix = glm::inverse(m_matrix);
 }
 

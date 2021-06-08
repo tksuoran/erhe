@@ -31,26 +31,17 @@ class Shadow_renderer
       public Base_renderer
 {
 public:
-    Shadow_renderer();
-
-    virtual ~Shadow_renderer() = default;
+    static constexpr const char* c_name = "Shadow_renderer";
+    Shadow_renderer ();
+    ~Shadow_renderer() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
     void initialize_component() override;
 
-    void render(Layer_collection&           layers,
-                const erhe::scene::ICamera& camera);
-
-    auto texture() const -> erhe::graphics::Texture*
-    {
-        return m_texture.get();
-    }
-
-    auto viewport() const -> erhe::scene::Viewport
-    {
-        return m_viewport;
-    }
+    void render  (Layer_collection& layers, const erhe::scene::ICamera& camera);
+    auto texture () const -> erhe::graphics::Texture*;
+    auto viewport() const -> erhe::scene::Viewport;
 
     static constexpr size_t s_max_light_count    = 8;
     static constexpr size_t s_texture_resolution = 4 * 1024;

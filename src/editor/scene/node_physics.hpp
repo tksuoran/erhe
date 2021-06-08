@@ -16,13 +16,12 @@ class Node_physics
 {
 public:
     explicit Node_physics(erhe::physics::Rigid_body::Create_info& create_info);
-
-    virtual ~Node_physics() = default;
+    ~Node_physics() override;
 
 	// Implements INode_attachment
-    auto name() const -> const std::string& override;
-    void on_attach(erhe::scene::Node& node) override;
-    void on_detach(erhe::scene::Node& node) override;
+    auto name     () const -> const std::string& override;
+    void on_attach(erhe::scene::Node& node)      override;
+    void on_detach(erhe::scene::Node& node)      override;
 
     // Implements btMotionState
     void getWorldTransform(btTransform& worldTrans) const override;

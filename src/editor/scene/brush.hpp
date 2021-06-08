@@ -67,7 +67,7 @@ public:
     glm::vec3                  N{0.0f, 1.0f, 0.0f};
 };
 
-struct Brush_create_info
+struct Brush_create_info final
 {
     Brush_create_info(const std::shared_ptr<erhe::geometry::Geometry>& geometry,
                       erhe::primitive::Primitive_build_context&        context,
@@ -102,20 +102,18 @@ struct Instance
     std::shared_ptr<Node_physics>      node_physics;
 };
 
-class Brush
+class Brush final
 {
 public:
     using Create_info = Brush_create_info;
 
-    Brush(const erhe::primitive::Primitive_build_context& context);
-
+    explicit Brush(const erhe::primitive::Primitive_build_context& context);
     explicit Brush(const Create_info& create_info);
-    ~Brush();
-
-    Brush(const Brush&) = delete;
-    auto operator=(const Brush&) -> Brush& = delete;
-    Brush(Brush&& other) noexcept;
-    auto operator=(Brush&& other) noexcept -> Brush& = delete;
+    ~Brush        ();
+    Brush         (const Brush&) = delete;
+    void operator=(const Brush&) = delete;
+    Brush         (Brush&& other) noexcept;
+    void operator=(Brush&&)      = delete;
 
     void initialize(const Create_info& create_info);
 

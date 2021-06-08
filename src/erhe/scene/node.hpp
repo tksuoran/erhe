@@ -18,9 +18,7 @@ public:
     virtual ~Node();
 
     void update(uint32_t update_serial = 0, bool cache_enable = false);
-
     void attach(const std::shared_ptr<INode_attachment>& attachment);
-
     auto detach(const std::shared_ptr<INode_attachment>& attachment) -> bool;
 
     template <typename T>
@@ -37,23 +35,15 @@ public:
         return {};
     }
 
-    auto parent_from_node() const -> glm::mat4;
-
-    auto world_from_node() const -> glm::mat4;
-
-    auto node_from_parent() const -> glm::mat4;
-
-    auto node_from_world() const -> glm::mat4;
-
-    auto world_from_parent() const -> glm::mat4;
-
-    auto position_in_world() const -> glm::vec4;
-
+    auto parent_from_node  () const -> glm::mat4;
+    auto world_from_node   () const -> glm::mat4;
+    auto node_from_parent  () const -> glm::mat4;
+    auto node_from_world   () const -> glm::mat4;
+    auto world_from_parent () const -> glm::mat4;
+    auto position_in_world () const -> glm::vec4;
     auto direction_in_world() const -> glm::vec4;
-
-    auto root() -> Node*;
-
-    auto root() const -> const Node*;
+    auto root              () -> Node*;
+    auto root              () const -> const Node*;
 
     std::string name;
     Node*       parent{nullptr};
@@ -79,7 +69,8 @@ protected:
 class INode_attachment
 {
 public:
-    virtual auto name() const -> const std::string& = 0;
+    virtual ~INode_attachment() {};
+    virtual auto name     () const -> const std::string& = 0;
     virtual void on_attach(Node& node) {};
     virtual void on_detach(Node& node) {};
 };

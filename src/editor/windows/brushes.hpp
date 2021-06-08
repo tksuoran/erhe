@@ -58,35 +58,31 @@ class Brushes
 {
 public:
     static constexpr const char* c_name = "Brushes";
-    Brushes() : erhe::components::Component(c_name) {}
-    virtual ~Brushes() = default;
+
+    Brushes ();
+    ~Brushes() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
     void initialize_component() override;
 
     // Implements Tool
-    auto update(Pointer_context& pointer_context) -> bool override;
-    void render(const Render_context& render_context) override;
-    auto state() const -> State override;
-    void cancel_ready() override;
-    auto description() -> const char* override { return c_name; }
+    auto update       (Pointer_context& pointer_context) -> bool override;
+    void render       (const Render_context& render_context) override;
+    auto state        () const -> State override;
+    void cancel_ready () override;
+    auto description  () -> const char* override { return c_name; }
+    void render_update(const Render_context&) override;
 
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
-    void render_update(const Render_context&) override;
-
-    void add_brush(const std::shared_ptr<erhe::primitive::Primitive_geometry>& geometry);
-
-    void add_material(const std::shared_ptr<erhe::primitive::Material>& material);
-
-    auto allocate_brush(const erhe::primitive::Primitive_build_context& context)
-    -> std::shared_ptr<Brush>;
-
-    auto make_brush(erhe::geometry::Geometry&&               geometry,
-                    const Brush_create_context&              context,
-                    const std::shared_ptr<btCollisionShape>& collision_shape = {})
+    void add_brush     (const std::shared_ptr<erhe::primitive::Primitive_geometry>& geometry);
+    void add_material  (const std::shared_ptr<erhe::primitive::Material>& material);
+    auto allocate_brush(const erhe::primitive::Primitive_build_context& context) -> std::shared_ptr<Brush>;
+    auto make_brush    (erhe::geometry::Geometry&&               geometry,
+                        const Brush_create_context&              context,
+                        const std::shared_ptr<btCollisionShape>& collision_shape = {})
     -> std::shared_ptr<Brush>;
 
     auto make_brush(std::shared_ptr<erhe::geometry::Geometry> geometry,
@@ -101,20 +97,12 @@ public:
     -> std::shared_ptr<Brush>;
 
 private:
-    void make_materials();
-
-    void update_mesh();
-
-    //auto get_transform_scale() -> float;
-
-    auto get_brush_transform() -> glm::mat4;
-
-    void do_insert_operation();
-
-    void add_hover_mesh();
-
-    void remove_hover_mesh();
-
+    void make_materials            ();
+    void update_mesh               ();
+    auto get_brush_transform       () -> glm::mat4;
+    void do_insert_operation       ();
+    void add_hover_mesh            ();
+    void remove_hover_mesh         ();
     void update_mesh_node_transform();
 
     std::shared_ptr<Editor>            m_editor;

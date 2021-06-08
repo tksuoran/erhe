@@ -47,16 +47,16 @@ class Text_renderer
     : public erhe::components::Component
 {
 public:
-    Text_renderer();
-    Text_renderer(const Text_renderer&) = delete;
-    Text_renderer& operator=(const Text_renderer&) = delete;
-    Text_renderer(Text_renderer&&) = delete;
-    Text_renderer& operator=(Text_renderer&&) = delete;
-
-    virtual ~Text_renderer();
+    static constexpr const char* c_name = "Text_renderer";
+    Text_renderer ();
+    ~Text_renderer() override;
+    Text_renderer (const Text_renderer&) = delete;
+    void operator=(const Text_renderer&) = delete;
+    Text_renderer (Text_renderer&&)      = delete;
+    void operator=(Text_renderer&&)      = delete;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
     void initialize_component() override;
 
     void print(const std::string& text,
@@ -64,7 +64,6 @@ public:
                uint32_t           text_color);
 
     void render(erhe::scene::Viewport viewport);
-
     void next_frame();
 
 private:
@@ -114,27 +113,10 @@ private:
             vertex_buffer.set_debug_label("Projection Vertex");
         }
 
-        Frame_resources(const Frame_resources& other) = delete;
-        auto operator=(const Frame_resources&) -> Frame_resources& = delete;
-
-        Frame_resources(Frame_resources&& other) = delete; //noexcept
-        //{
-        //    vertex_buffer         = std::move(other.vertex_buffer);
-        //    projection_buffer     = std::move(other.projection_buffer);
-        //    vertex_input_state    = std::move(other.vertex_input_state);
-        //    pipeline              = std::move(other.pipeline);
-        //    pipeline.vertex_input = &vertex_input_state;
-        //}
-
-        auto operator=(Frame_resources&& other) = delete; //noexcept -> Frame_resources&
-        //{
-        //    vertex_buffer         = std::move(other.vertex_buffer);
-        //    projection_buffer     = std::move(other.projection_buffer);
-        //    vertex_input_state    = std::move(other.vertex_input_state);
-        //    pipeline              = std::move(other.pipeline);
-        //    pipeline.vertex_input = &vertex_input_state;
-        //    return *this;
-        //}
+        Frame_resources(const Frame_resources&) = delete;
+        auto operator= (const Frame_resources&) -> Frame_resources& = delete;
+        Frame_resources(Frame_resources&&) = delete;
+        auto operator= (Frame_resources&&) = delete;
 
         erhe::graphics::Buffer             vertex_buffer;
         erhe::graphics::Buffer             projection_buffer;
@@ -185,8 +167,8 @@ private:
         void reset()
         {
             range.first_byte_offset = 0;
-            range.byte_count = 0;
-            write_offset = 0;
+            range.byte_count        = 0;
+            write_offset            = 0;
         }
     };
 

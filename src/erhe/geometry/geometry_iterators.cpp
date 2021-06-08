@@ -209,6 +209,35 @@ void Point::for_each_corner_neighborhood(Geometry&                              
     }
 }
 
+void Point::for_each_corner_neighborhood_const(const Geometry&                                               geometry,
+                                               std::function<void(Point_corner_neighborhood_context_const&)> callback) const
+{
+    for (uint32_t i = 0; i < corner_count; ++i)
+    {
+        const Point_corner_id prev_point_corner_id = first_point_corner_id + (corner_count + i - 1) % corner_count;
+        const Point_corner_id point_corner_id      = first_point_corner_id + i;
+        const Point_corner_id next_point_corner_id = first_point_corner_id + (i + 1) % corner_count;
+        const Corner_id       prev_corner_id       = geometry.point_corners[prev_point_corner_id];
+        const Corner_id       corner_id            = geometry.point_corners[point_corner_id];
+        const Corner_id       next_corner_id       = geometry.point_corners[next_point_corner_id];
+        Point_corner_neighborhood_context_const context{geometry,
+                                                        prev_point_corner_id,
+                                                        point_corner_id,
+                                                        next_point_corner_id,
+                                                        prev_corner_id,
+                                                        corner_id,
+                                                        next_corner_id,
+                                                        geometry.corners[prev_corner_id],
+                                                        geometry.corners[corner_id],
+                                                        geometry.corners[next_corner_id]};
+        callback(context);
+        if (context.break_)
+        {
+            return;
+        }
+    }
+}
+
 void Polygon::for_each_corner(Geometry&                                    geometry,
                               std::function<void(Polygon_corner_context&)> callback)
 {
@@ -272,6 +301,35 @@ void Polygon::for_each_corner_neighborhood(Geometry&                            
                                                     geometry.corners[prev_corner_id],
                                                     geometry.corners[corner_id],
                                                     geometry.corners[next_corner_id]};
+        callback(context);
+        if (context.break_)
+        {
+            return;
+        }
+    }
+}
+
+void Polygon::for_each_corner_neighborhood_const(const Geometry&                                                 geometry,
+                                                 std::function<void(Polygon_corner_neighborhood_context_const&)> callback) const
+{
+    for (uint32_t i = 0; i < corner_count; ++i)
+    {
+        const Polygon_corner_id prev_polygon_corner_id = first_polygon_corner_id + (corner_count + i - 1) % corner_count;
+        const Polygon_corner_id polygon_corner_id      = first_polygon_corner_id + i;
+        const Polygon_corner_id next_polygon_corner_id = first_polygon_corner_id + (i + 1) % corner_count;
+        const Corner_id         prev_corner_id         = geometry.polygon_corners[prev_polygon_corner_id];
+        const Corner_id         corner_id              = geometry.polygon_corners[polygon_corner_id];
+        const Corner_id         next_corner_id         = geometry.polygon_corners[next_polygon_corner_id];
+        Polygon_corner_neighborhood_context_const context{geometry,
+                                                          prev_polygon_corner_id,
+                                                          polygon_corner_id,
+                                                          next_polygon_corner_id,
+                                                          prev_corner_id,
+                                                          corner_id,
+                                                          next_corner_id,
+                                                          geometry.corners[prev_corner_id],
+                                                          geometry.corners[corner_id],
+                                                          geometry.corners[next_corner_id]};
         callback(context);
         if (context.break_)
         {

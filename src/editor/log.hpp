@@ -22,5 +22,6 @@ extern erhe::log::Category log_renderdoc;
 extern erhe::log::Category log_brush;
 extern erhe::log::Category log_physics;
 extern erhe::log::Category log_gl;
+extern erhe::log::Category log_headset;
 
 }

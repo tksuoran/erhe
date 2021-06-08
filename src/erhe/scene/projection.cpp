@@ -15,6 +15,12 @@ void Projection::update(Transform& transform, Viewport viewport) const
             break;
         }
 
+        case Projection::Type::perspective_xr:
+        {
+            transform.set_perspective_xr(fov_left, fov_right, fov_up, fov_down, z_near, z_far);
+            break;
+        }
+
         case Projection::Type::perspective_horizontal:
         {
             transform.set_perspective_horizontal(fov_x, viewport.aspect_ratio(), z_near, z_far);

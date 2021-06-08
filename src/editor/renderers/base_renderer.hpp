@@ -52,6 +52,13 @@ public:
         constant_color,
     };
 
+    static constexpr const char* c_primitive_color_source_strings[] =
+    {
+        "ID Offset",
+        "Mesh Wireframe color",
+        "Constant Color"
+    };
+
     Primitive_color_source primitive_color_source  {Primitive_color_source::constant_color};
     glm::vec4              primitive_constant_color{1.0f, 1.0f, 1.0f, 1.0f};
 
@@ -89,7 +96,8 @@ public:
     using Material_collection = std::vector<std::shared_ptr<erhe::primitive::Material>>;
     using Mesh_collection     = std::vector<std::shared_ptr<erhe::scene::Mesh>>;
 
-    virtual ~Base_renderer() = default;
+    Base_renderer();
+    virtual ~Base_renderer();
 
     static constexpr size_t s_frame_resources_count = 4;
 
@@ -115,7 +123,6 @@ public:
     -> Buffer_range;
 
     auto update_material_buffer(const Material_collection& materials)
-
     -> Buffer_range;
 
     auto update_camera_buffer(erhe::scene::ICamera&       camera,
@@ -127,39 +134,17 @@ public:
                                      const uint64_t                        visibility_mask = erhe::scene::Mesh::c_visibility_all)
     -> Draw_indirect_buffer_range;
 
-    void bind_material_buffer();
-
-    void bind_light_buffer();
-
-    void bind_camera_buffer();
-
-    void bind_primitive_buffer();
-
+    void bind_material_buffer     ();
+    void bind_light_buffer        ();
+    void bind_camera_buffer       ();
+    void bind_primitive_buffer    ();
     void bind_draw_indirect_buffer();
-
-    void reset_id_ranges();
-
-    auto id_offset() const -> uint32_t
-    {
-        return m_id_offset;
-    }
-
-    auto id_ranges() const -> const std::vector<Id_range>&
-    {
-        return m_id_ranges;
-    } 
-
-    void debug_properties_window();
-
-    auto max_index_count_enable() const -> bool
-    {
-        return m_max_index_count_enable;
-    }
-
-    auto max_index_count() const -> int
-    {
-        return m_max_index_count;
-    }
+    void reset_id_ranges          ();
+    auto id_offset                () const -> uint32_t;
+    auto id_ranges                () const -> const std::vector<Id_range>&;
+    void debug_properties_window  ();
+    auto max_index_count_enable   () const -> bool;
+    auto max_index_count          () const -> int;
 
 protected:
     struct Buffer_writer

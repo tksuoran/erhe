@@ -1,6 +1,7 @@
 #include "windows/mesh_properties.hpp"
-#include "editor.hpp"
+#include "tools.hpp"
 #include "renderers/text_renderer.hpp"
+#include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 #include "erhe/geometry/geometry.hpp"
@@ -14,47 +15,66 @@ using namespace erhe::geometry;
 namespace editor
 {
 
+Mesh_properties::Mesh_properties()
+    : erhe::components::Component(c_name)
+{
+}
+
+Mesh_properties::~Mesh_properties() = default;
+
+void Mesh_properties::connect()
+{
+    m_scene_manager  = get<Scene_manager >();
+    m_scene_root     = get<Scene_root    >();
+    m_selection_tool = get<Selection_tool>();
+}
+
+void Mesh_properties::initialize_component()
+{
+    get<Editor_tools>()->register_window(this);
+}
+
 auto Mesh_properties::state() const -> State
 {
     return State::Passive;
 }
 
-void Mesh_properties::connect()
-{
-    m_editor         = get<Editor        >();
-    m_scene_root     = get<Scene_root    >();
-    m_selection_tool = get<Selection_tool>();
-}
-
 void Mesh_properties::window(Pointer_context&)
 {
-    ImGui::Begin("Mesh Debug");
+    ImGui::Begin("Mesh");
     for (auto item : m_selection_tool->selection())
     {
-        auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
         if (!mesh)
         {
             continue;
         }
-        int max_primitive_index = static_cast<int>(mesh->primitives.size()) - 1;
-        ImGui::SliderInt("Primitive", &m_primitive_index, 0, max_primitive_index);
-        const auto& primitive = mesh->primitives.at(m_primitive_index);
-        //auto* primitive_geometry = primitive.primitive_geometry.get();
-        auto geometry = primitive.primitive_geometry->source_geometry;
-        if (geometry != nullptr)
+        if (ImGui::TreeNode(mesh->name().c_str()))
         {
-            ImGui::Separator();
-            ImGui::Text("%s",           geometry->name.c_str());
-            ImGui::Text("Points: %d",   geometry->point_count());
-            ImGui::Text("Polygons: %d", geometry->polygon_count());
-            ImGui::Text("Edges: %d",    geometry->edge_count());
-            ImGui::Text("Corners: %d",  geometry->corner_count());
+            ImGui::ColorEdit3("Wireframe Color", &mesh->wireframe_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);
 
-            ImGui::Checkbox("Show Points",   &m_show_points);
-            ImGui::Checkbox("Show Polygons", &m_show_polygons);
-            ImGui::Checkbox("Show Edges",    &m_show_edges);
+            int max_primitive_index = static_cast<int>(mesh->primitives.size()) - 1;
+            ImGui::SliderInt("Primitive", &m_primitive_index, 0, max_primitive_index);
+            const auto& primitive = mesh->primitives.at(m_primitive_index);
+            //auto* primitive_geometry = primitive.primitive_geometry.get();
+            auto geometry = primitive.primitive_geometry->source_geometry;
+            if (geometry != nullptr)
+            {
+                if (ImGui::TreeNode(geometry->name.c_str()))
+                {
+                    ImGui::Text("Points: %d",   geometry->point_count());
+                    ImGui::Text("Polygons: %d", geometry->polygon_count());
+                    ImGui::Text("Edges: %d",    geometry->edge_count());
+                    ImGui::Text("Corners: %d",  geometry->corner_count());
+
+                    ImGui::Checkbox("Show Points",   &m_show_points);
+                    ImGui::Checkbox("Show Polygons", &m_show_polygons);
+                    ImGui::Checkbox("Show Edges",    &m_show_edges);
+                    ImGui::TreePop();
+                }
+            }
+            ImGui::TreePop();
         }
-        ImGui::Separator();
     }
     ImGui::SliderInt("Max Labels", &m_max_labels, 0, 2000);
     ImGui::End();
@@ -62,6 +82,8 @@ void Mesh_properties::window(Pointer_context&)
 
 void Mesh_properties::render(const Render_context& render_context)
 {
+    ZoneScoped;
+
     if (render_context.text_renderer == nullptr)
     {
         return;
@@ -73,12 +95,12 @@ void Mesh_properties::render(const Render_context& render_context)
     //    return;
     //}
 
-    const auto*     camera          = m_editor->get_view_camera().get();
+    const auto*     camera          = m_scene_manager->get_view_camera().get();
     auto&           text_renderer   = *render_context.text_renderer;
     const glm::mat4 clip_from_world = camera->clip_from_world();
     for (auto item : m_selection_tool->selection())
     {
-        const auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
         if (!mesh)
         {
             continue;

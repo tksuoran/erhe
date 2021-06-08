@@ -27,25 +27,26 @@ class Hover_tool
 {
 public:
     static constexpr const char* c_name = "Hover_tool";
-    Hover_tool();
-    virtual ~Hover_tool();
+
+    Hover_tool ();
+    ~Hover_tool() override;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
     void initialize_component() override;
 
     // Implements Tool
-    auto update(Pointer_context& pointer_context) -> bool override;
-    void render(const Render_context& render_context) override;
-    auto state() const -> State override;
-    auto description() -> const char* override;
+    auto update     (Pointer_context& pointer_context) -> bool override;
+    void render     (const Render_context& render_context)     override;
+    auto state      () const -> State                          override;
+    auto description() -> const char*                          override;
 
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
 private:
     void deselect();
-    void select(Pointer_context& pointer_context);
+    void select  (Pointer_context& pointer_context);
 
     std::shared_ptr<Scene_root>        m_scene_root;
 

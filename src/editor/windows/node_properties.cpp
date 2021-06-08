@@ -1,4 +1,5 @@
 #include "windows/node_properties.hpp"
+#include "tools.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/scene_manager.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -14,12 +15,24 @@
 namespace editor
 {
 
+Node_properties::Node_properties()
+    : erhe::components::Component{c_name}
+{
+}
+
+Node_properties::~Node_properties() = default;
+
 void Node_properties::connect()
 {
     m_scene_manager  = get<Scene_manager>();
     m_selection_tool = get<Selection_tool>();
 }
 
+void Node_properties::initialize_component()
+{
+    get<Editor_tools>()->register_window(this);
+}
+    
 void Node_properties::window(Pointer_context&)
 {
     const auto& selection = m_selection_tool->selection();
@@ -30,7 +43,7 @@ void Node_properties::window(Pointer_context&)
         {
             continue;
         }
-        auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
         if (!mesh)
         {
             continue;

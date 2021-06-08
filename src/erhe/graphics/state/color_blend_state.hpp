@@ -36,11 +36,7 @@ auto operator!=(const Blend_state_component& lhs,
 
 struct Color_blend_state
 {
-    Color_blend_state()
-        : serial{get_next_serial()}
-    {
-    }
-
+    Color_blend_state();
     Color_blend_state(bool                  enabled,
                       Blend_state_component rgb,
                       Blend_state_component alpha,
@@ -48,35 +44,10 @@ struct Color_blend_state
                       bool                  color_write_mask_red   = true,
                       bool                  color_write_mask_green = true,
                       bool                  color_write_mask_blue  = true,
-                      bool                  color_write_mask_alpha = true
-    )
-        : serial                {get_next_serial()}
-        , enabled               {enabled}
-        , rgb                   {rgb}
-        , alpha                 {alpha}
-        , color                 {color}
-        , color_write_mask_red  {color_write_mask_red}
-        , color_write_mask_green{color_write_mask_green}
-        , color_write_mask_blue {color_write_mask_blue}
-        , color_write_mask_alpha{color_write_mask_alpha}
-    {
-    }
+                      bool                  color_write_mask_alpha = true);
+    void touch();
 
-    void touch()
-    {
-        serial = get_next_serial();
-    }
-
-    static auto get_next_serial()
-    -> size_t
-    {
-        do
-        {
-            s_serial++;
-        }
-        while (s_serial == 0);
-        return s_serial;
-    }
+    static auto get_next_serial() -> size_t;
 
     size_t                serial;
     bool                  enabled{false};
@@ -96,25 +67,7 @@ struct Color_blend_state
 
 struct Blend_state_hash
 {
-    auto operator()(const Color_blend_state& state) const noexcept
-    -> size_t
-    {
-        return
-            (
-                (state.enabled ? 1u : 0u)                          | // 1 bit
-                (Blend_state_component_hash{}(state.rgb  ) << 1u)  | // 13 bits
-                (Blend_state_component_hash{}(state.alpha) << 14u)
-            ) ^
-            (
-                std::hash<glm::vec4>{}(state.color)
-            ) ^
-            (
-               (state.color_write_mask_red   ? 1u : 0u) |
-               (state.color_write_mask_green ? 2u : 0u) |
-               (state.color_write_mask_blue  ? 4u : 0u) |
-               (state.color_write_mask_alpha ? 8u : 0u)
-            );
-    }
+    auto operator()(const Color_blend_state& state) const noexcept -> size_t;
 };
 
 auto operator==(const Color_blend_state& lhs, const Color_blend_state& rhs) noexcept
@@ -126,8 +79,7 @@ auto operator!=(const Color_blend_state& lhs, const Color_blend_state& rhs) noex
 class Color_blend_state_tracker
 {
 public:
-    void reset();
-
+    void reset  ();
     void execute(const Color_blend_state* state) noexcept;
 
 private:

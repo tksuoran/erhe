@@ -7,6 +7,67 @@
 namespace erhe::graphics
 {
 
+Color_blend_state::Color_blend_state()
+    : serial{get_next_serial()}
+{
+}
+
+Color_blend_state::Color_blend_state(bool                  enabled,
+                                     Blend_state_component rgb,
+                                     Blend_state_component alpha,
+                                     glm::vec4             color,
+                                     bool                  color_write_mask_red,
+                                     bool                  color_write_mask_green,
+                                     bool                  color_write_mask_blue,
+                                     bool                  color_write_mask_alpha 
+)
+    : serial                {get_next_serial()}
+    , enabled               {enabled}
+    , rgb                   {rgb}
+    , alpha                 {alpha}
+    , color                 {color}
+    , color_write_mask_red  {color_write_mask_red}
+    , color_write_mask_green{color_write_mask_green}
+    , color_write_mask_blue {color_write_mask_blue}
+    , color_write_mask_alpha{color_write_mask_alpha}
+{
+}
+
+void Color_blend_state::touch()
+{
+    serial = get_next_serial();
+}
+
+auto Color_blend_state::get_next_serial()
+-> size_t
+{
+    do
+    {
+        s_serial++;
+    }
+    while (s_serial == 0);
+    return s_serial;
+}
+
+auto Blend_state_hash::operator()(const Color_blend_state& state) const noexcept
+-> size_t
+{
+    return
+        (
+            (state.enabled ? 1u : 0u)                          | // 1 bit
+            (Blend_state_component_hash{}(state.rgb  ) << 1u)  | // 13 bits
+            (Blend_state_component_hash{}(state.alpha) << 14u)
+        ) ^
+        (
+            std::hash<glm::vec4>{}(state.color)
+        ) ^
+        (
+            (state.color_write_mask_red   ? 1u : 0u) |
+            (state.color_write_mask_green ? 2u : 0u) |
+            (state.color_write_mask_blue  ? 4u : 0u) |
+            (state.color_write_mask_alpha ? 8u : 0u)
+        );
+}
 
 size_t Color_blend_state::s_serial{0};
 

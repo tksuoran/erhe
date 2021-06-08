@@ -5,7 +5,7 @@
 #include <gsl/pointers>
 
 #include <memory>
-#include <string>
+#include <string_view>
 #include <vector>
 
 namespace erhe::graphics
@@ -15,25 +15,21 @@ class Buffer;
 class Vertex_format;
 class Vertex_input_state;
 
-class Vertex_attribute_mappings
+class Vertex_attribute_mappings final
 {
 public:
     using Mapping_collection = std::vector<std::shared_ptr<Vertex_attribute_mapping>>;
 
     Vertex_attribute_mappings();
-    //Vertex_attribute_mappings(const Vertex_attribute_mappings&) = delete;
-    //Vertex_attribute_mappings& operator=(const Vertex_attribute_mappings&) = delete;
-    //Vertex_attribute_mappings(Vertex_attribute_mappings&&) = delete;
-    //Vertex_attribute_mappings& operator=(Vertex_attribute_mappings&&) = delete;
     ~Vertex_attribute_mappings();
 
     void add(gl::Attribute_type      shader_type,
-             std::string             name,
+             std::string_view        name,
              Vertex_attribute::Usage usage,
              size_t                  layout_location);
 
     void add(gl::Attribute_type           shader_type,
-             std::string                  name,
+             std::string_view             name,
              Vertex_attribute::Usage      src_usage,
              Vertex_attribute::Usage_type dst_usage_type,
              size_t                       layout_location);

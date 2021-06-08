@@ -67,14 +67,15 @@ class Program_interface
     : public erhe::components::Component
 {
 public:
-    static constexpr const char* c_name = "Program_interface";
-    Program_interface();
-    virtual ~Program_interface();
+    static constexpr const size_t c_max_light_count = 120;
+    static constexpr const char*  c_name            = "Program_interface";
 
-    Program_interface(const Program_interface&) = delete;
-    Program_interface& operator=(const Program_interface&) = delete;
-    Program_interface(Program_interface&&) = delete;
-    Program_interface& operator=(Program_interface&&) = delete;
+    Program_interface ();
+    ~Program_interface() override;
+    Program_interface (const Program_interface&) = delete;
+    void operator=    (const Program_interface&) = delete;
+    Program_interface (Program_interface&&)      = delete;
+    void operator=    (Program_interface&&)      = delete;
 
     // Implements Component
     void initialize_component() override;
@@ -99,9 +100,6 @@ public:
 
     erhe::graphics::Shader_resource           default_uniform_block; // containing sampler uniforms
     int                                       shadow_sampler_location{0};
-
-    //std::unique_ptr<erhe::graphics::Sampler>  nearest_sampler;
-    //std::unique_ptr<erhe::graphics::Sampler>  linear_sampler;
 };
 
 }

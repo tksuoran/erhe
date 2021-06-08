@@ -1,6 +1,7 @@
 #include "tools/fly_camera_tool.hpp"
-#include "editor.hpp"
 #include "log.hpp"
+#include "tools.hpp"
+#include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "erhe/scene/camera.hpp"
@@ -30,23 +31,26 @@ auto Fly_camera_tool::state() const -> State
 void Fly_camera_tool::connect()
 {
     m_scene_root = require<Scene_root>();
-    require<Editor>();
+    require<Scene_manager>();
 }
 
 void Fly_camera_tool::initialize_component()
 {
-    auto editor = get<Editor>();
-    if (!editor)
+    auto scene_manager = get<Scene_manager>();
+    if (!scene_manager)
     {
         return;
     }
 
-    auto camera = editor->get_view_camera();
+    auto camera = scene_manager->get_view_camera();
     if (!camera)
     {
         return;
     }
+
     m_camera_controller.set_frame(camera->node().get());
+
+    get<Editor_tools>()->register_tool(this);
 }
 
 auto Fly_camera_tool::description() -> const char*
@@ -86,6 +90,8 @@ void Fly_camera_tool::z_pos_control(bool pressed)
 
 auto Fly_camera_tool::update(Pointer_context& pointer_context) -> bool
 {
+    ZoneScoped;
+
     if ((m_state == State::Passive) &&
         pointer_context.mouse_button[Mouse_button_left].pressed &&
         !pointer_context.hover_tool)
@@ -143,7 +149,7 @@ auto Fly_camera_tool::begin(Pointer_context& pointer_context) -> bool
     static constexpr const float border = 32.0f;
     if ((pointer_context.pointer_x < border) ||
         (pointer_context.pointer_y < border) ||
-        (pointer_context.pointer_x >= pointer_context.viewport.width - border) ||
+        (pointer_context.pointer_x >= pointer_context.viewport.width  - border) ||
         (pointer_context.pointer_y >= pointer_context.viewport.height - border))
     {
         return false;
@@ -174,12 +180,12 @@ void Fly_camera_tool::cancel_ready()
     m_state = State::Passive;
 }
 
-void Fly_camera_tool::update_fixed_step()
+void Fly_camera_tool::update_fixed_step(const erhe::components::Time_context& time_context)
 {
     m_camera_controller.update_fixed_step();
 }
 
-void Fly_camera_tool::update_once_per_frame()
+void Fly_camera_tool::update_once_per_frame(const erhe::components::Time_context& time_context)
 {
     m_camera_controller.update();
 }

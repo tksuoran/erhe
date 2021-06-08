@@ -168,14 +168,14 @@ void Geometry::sort_point_corners()
 
         i.point.for_each_corner(*this, [&](auto& j)
         {
-            Corner_id  prev_corner_id   = 0;
-            Corner_id  middle_corner_id = j.corner_id; //point_corners[j.point_corner_id];
-            Corner_id  next_corner_id   = 0;
-            Corner&    middle_corner    = j.corner; // corners[middle_corner_id];
-            Polygon_id polygon_id       = middle_corner.polygon_id;
-            Polygon&   polygon          = polygons[polygon_id];
-            bool       found            = false;
-            polygon.for_each_corner_neighborhood(*this, [&](auto& k)
+            Corner_id        prev_corner_id   = 0;
+            const Corner_id  middle_corner_id = j.corner_id; //point_corners[j.point_corner_id];
+            Corner_id        next_corner_id   = 0;
+            const Corner&    middle_corner    = j.corner; // corners[middle_corner_id];
+            const Polygon_id polygon_id       = middle_corner.polygon_id;
+            const Polygon&   polygon          = polygons[polygon_id];
+            bool             found            = false;
+            polygon.for_each_corner_neighborhood_const(*this, [&](auto& k)
             {
                 if (k.corner_id == middle_corner_id)
                 {
@@ -189,8 +189,8 @@ void Geometry::sort_point_corners()
             {
                 return;
             }
-            Corner& prev_corner = corners[prev_corner_id];
-            Corner& next_corner = corners[next_corner_id];
+            const Corner& prev_corner = corners[prev_corner_id];
+            const Corner& next_corner = corners[next_corner_id];
 
             Point_corner_info point_corner_info;
             point_corner_info.point_corner_id = j.point_corner_id;
@@ -204,7 +204,7 @@ void Geometry::sort_point_corners()
 
         for (uint32_t j = 0, end = static_cast<uint32_t>(point_corner_infos.size()); j < end; ++j)
         {
-            uint32_t           next_j = (j + 1) % end;
+            const uint32_t     next_j = (j + 1) % end;
             Point_corner_info& head   = point_corner_infos[j];
             Point_corner_info& next   = point_corner_infos[next_j];
             bool found{false};
@@ -227,7 +227,7 @@ void Geometry::sort_point_corners()
                 }
             }
             if (!found) {
-                log.trace("Could not sort point corners\n");
+                log_geometry.trace("Could not sort point corners\n");
             }
             Point_corner_id point_corner_id = i.point.first_point_corner_id + j;
             point_corners[point_corner_id] = head.corner_id;
@@ -258,7 +258,7 @@ auto Geometry::make_edge_polygon(Edge_id edge_id, Polygon_id polygon_id) -> Edge
         VERIFY(m_edge_polygon_edge == edge_id);
     }
     ++m_next_edge_polygon_id;
-    Edge_polygon_id edge_polygon_id = edge.first_edge_polygon_id + edge.polygon_count;
+    const Edge_polygon_id edge_polygon_id = edge.first_edge_polygon_id + edge.polygon_count;
     ++edge.polygon_count;
     //log.trace("\tmake_edge_polygon(edge = {}, polygon = {}) first_edge_polygon_id = {}, edge.polygon_count = {}\n",
     //          edge_id, polygon_id, edge.first_edge_polygon_id, edge.polygon_count);
@@ -295,7 +295,7 @@ auto Geometry::make_polygon_corner_(Polygon_id polygon_id, Corner_id corner_id) 
         VERIFY(m_polygon_corner_polygon == polygon_id);
     }
     ++m_next_polygon_corner_id;
-    Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + polygon.corner_count;
+    const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + polygon.corner_count;
     ++polygon.corner_count;
 
     //log.trace("\tmake_polygon_corner_(polygon_id = {}, corner_id = {}) first_polygon_corner_id = {}, polygon.corner_count = {}\n",
@@ -322,7 +322,7 @@ auto Geometry::make_polygon_corner(Polygon_id polygon_id, Point_id point_id) -> 
 
     ++m_serial;
 
-    Corner_id corner_id = make_corner(point_id, polygon_id);
+    const Corner_id corner_id = make_corner(point_id, polygon_id);
     make_polygon_corner_(polygon_id, corner_id);
     reserve_point_corner(point_id, corner_id);
     //log.trace("polygon {} adding point {} as corner {}\n", polygon_id, point_id, corner_id);
@@ -334,8 +334,8 @@ auto Geometry::make_point(float x, float y, float z)
 {
     ZoneScoped;
 
-    Point_id point_id        = make_point();
-    auto*    point_positions = point_attributes().find_or_create<glm::vec3>(c_point_locations);
+    const Point_id point_id        = make_point();
+    auto* const    point_positions = point_attributes().find_or_create<glm::vec3>(c_point_locations);
 
     point_positions->put(point_id, glm::vec3(x, y, z));
 
@@ -347,9 +347,9 @@ auto Geometry::make_point(float x, float y, float z, float s, float t)
 {
     ZoneScoped;
 
-    Point_id point_id        = make_point();
-    auto*    point_positions = point_attributes().find_or_create<glm::vec3>(c_point_locations);
-    auto*    point_texcoords = point_attributes().find_or_create<glm::vec2>(c_point_texcoords);
+    const Point_id point_id        = make_point();
+    auto* const    point_positions = point_attributes().find_or_create<glm::vec3>(c_point_locations);
+    auto* const    point_texcoords = point_attributes().find_or_create<glm::vec2>(c_point_texcoords);
 
     point_positions->put(point_id, glm::vec3(x, y, z));
     point_texcoords->put(point_id, glm::vec2(s, t));
@@ -374,7 +374,7 @@ auto Geometry::make_polygon(const std::initializer_list<Point_id> point_list)
 {
     ZoneScoped;
 
-    Polygon_id polygon_id = make_polygon();
+    const Polygon_id polygon_id = make_polygon();
     for (Point_id point_id : point_list)
     {
         make_polygon_corner(polygon_id, point_id);

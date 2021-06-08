@@ -42,20 +42,19 @@ struct Disc_builder
     auto make_point(double rel_slice, double rel_stack)
     -> Point_id
     {
-        double phi                 = glm::pi<double>() * 2.0 * rel_slice;
-        double sin_phi             = std::sin(phi);
-        double cos_phi             = std::cos(phi);
-        double one_minus_rel_stack = 1.0 - rel_stack;
+        const double phi                 = glm::pi<double>() * 2.0 * rel_slice;
+        const double sin_phi             = std::sin(phi);
+        const double cos_phi             = std::cos(phi);
+        const double one_minus_rel_stack = 1.0 - rel_stack;
 
-        vec3 position(static_cast<float>(one_minus_rel_stack * (outer_radius * cos_phi) + rel_stack * (inner_radius * cos_phi)),
-                      static_cast<float>(one_minus_rel_stack * (outer_radius * sin_phi) + rel_stack * (inner_radius * sin_phi)),
-                      0.0f);
+        const vec3 position{static_cast<float>(one_minus_rel_stack * (outer_radius * cos_phi) + rel_stack * (inner_radius * cos_phi)),
+                            static_cast<float>(one_minus_rel_stack * (outer_radius * sin_phi) + rel_stack * (inner_radius * sin_phi)),
+                            0.0f};
 
-        auto s = static_cast<float>(rel_slice);
-        auto t = static_cast<float>(rel_stack);
+        const auto s = static_cast<float>(rel_slice);
+        const auto t = static_cast<float>(rel_stack);
 
-        Point_id point_id = geometry.make_point();
-
+        const Point_id point_id = geometry.make_point();
         point_locations->put(point_id, vec3(position.x, position.y, position.z));
         point_normals  ->put(point_id, vec3(0.0f, 0.0f, 1.0f));
         point_texcoords->put(point_id, vec2(s, t));
@@ -66,11 +65,11 @@ struct Disc_builder
     auto make_corner(Polygon_id polygon_id, int slice, int stack)
     -> Corner_id
     {
-        double rel_slice           = static_cast<double>(slice) / static_cast<double>(slice_count);
-        double rel_stack           = (stack_count == 1) ? 1.0 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
-        bool   is_slice_seam       = (slice == 0) || (slice == slice_count);
-        bool   is_center           = (stack == 0) && (inner_radius == 0.0);
-        bool   is_uv_discontinuity = is_slice_seam || is_center;
+        const double rel_slice           = static_cast<double>(slice) / static_cast<double>(slice_count);
+        const double rel_stack           = (stack_count == 1) ? 1.0 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
+        const bool   is_slice_seam       = (slice == 0) || (slice == slice_count);
+        const bool   is_center           = (stack == 0) && (inner_radius == 0.0);
+        const bool   is_uv_discontinuity = is_slice_seam || is_center;
 
         Point_id point_id;
         if (is_center)
@@ -89,7 +88,7 @@ struct Disc_builder
             }
         }
 
-        Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
+        const Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
 
         if (is_uv_discontinuity)
         {
@@ -127,10 +126,10 @@ struct Disc_builder
         // Make points
         for (int stack = 0; stack < stack_count; ++stack)
         {
-            double rel_stack = (stack_count == 1) ? 1.0 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
+            const double rel_stack = (stack_count == 1) ? 1.0 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
             for (int slice = 0; slice <= slice_count; ++slice)
             {
-                double rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
+                const double rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
 
                 points[std::make_pair(slice, stack)] = make_point(rel_slice, rel_stack);
             }
@@ -139,7 +138,7 @@ struct Disc_builder
         // Special case without center point
         if (stack_count == 1)
         {
-            Polygon_id polygon_id = geometry.make_polygon();
+            const Polygon_id polygon_id = geometry.make_polygon();
             polygon_centroids->put(polygon_id, vec3(0.0f, 0.0f, 0.0f));
             polygon_normals->put(polygon_id, vec3(0.0f, 0.0f, 1.0f));
 
@@ -159,25 +158,25 @@ struct Disc_builder
         // Quads/triangles
         for (int stack = 0; stack < stack_count - 1; ++stack)
         {
-            double rel_stack_centroid = (stack_count == 1) ? 0.5 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
+            const double rel_stack_centroid = (stack_count == 1) ? 0.5 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
 
             for (int slice = 0; slice < slice_count; ++slice)
             {
-                double     rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
-                Point_id   centroid_id = make_point(rel_slice_centroid, rel_stack_centroid);
-                Polygon_id polygon_id = geometry.make_polygon();
+                const double     rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
+                const Point_id   centroid_id        = make_point(rel_slice_centroid, rel_stack_centroid);
+                const Polygon_id polygon_id         = geometry.make_polygon();
 
                 polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
                 polygon_normals->put(polygon_id, vec3(0.0f, 0.0f, 1.0f));
                 if ((stack == 0) && (inner_radius == 0.0))
                 {
-                    Corner_id tip_corner_id = make_corner(polygon_id, slice, stack);
+                    const Corner_id tip_corner_id = make_corner(polygon_id, slice, stack);
                     make_corner(polygon_id, slice + 1, stack + 1);
                     make_corner(polygon_id, slice, stack + 1);
 
-                    vec2 t1               = point_texcoords->get(get_point(slice, stack));
-                    vec2 t2               = point_texcoords->get(get_point(slice + 1, stack));
-                    vec2 average_texcoord = (t1 + t2) / 2.0f;
+                    const vec2 t1               = point_texcoords->get(get_point(slice, stack));
+                    const vec2 t2               = point_texcoords->get(get_point(slice + 1, stack));
+                    const vec2 average_texcoord = (t1 + t2) / 2.0f;
                     corner_texcoords->put(tip_corner_id, average_texcoord);
                 }
                 else

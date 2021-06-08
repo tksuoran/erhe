@@ -26,16 +26,15 @@ class Programs
 {
 public:
     static constexpr const char* c_name = "Programs";
-    Programs();
-    virtual ~Programs();
-
-    Programs(const Programs&) = delete;
-    Programs& operator=(const Programs&) = delete;
-    Programs(Programs&&) = delete;
-    Programs& operator=(Programs&&) = delete;
+    Programs      ();
+    ~Programs     () override;
+    Programs      (const Programs&) = delete;
+    void operator=(const Programs&) = delete;
+    Programs      (Programs&&)      = delete;
+    void operator=(Programs&&)      = delete;
 
     // Implements Component
-    void connect() override;
+    void connect             () override;
     void initialize_component() override;
 
 private:
@@ -51,9 +50,6 @@ private:
     -> std::unique_ptr<erhe::graphics::Shader_stages>;
 
 public:
-    //erhe::graphics::Vertex_attribute_mappings attribute_mappings;
-    //erhe::graphics::Fragment_outputs          fragment_outputs;
-
     std::unique_ptr<erhe::graphics::Shader_resource> default_uniform_block; // containing sampler uniforms
     int                                              shadow_sampler_location{0};
     std::unique_ptr<erhe::graphics::Sampler>         nearest_sampler;

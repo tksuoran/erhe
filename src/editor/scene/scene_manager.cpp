@@ -49,7 +49,7 @@ using namespace glm;
 
 
 Scene_manager::Scene_manager()
-    : Component("Scene_manager")
+    : Component(c_name)
 {
 }
 
@@ -72,7 +72,37 @@ void Scene_manager::initialize_component()
 
     m_scene_root = Component::get<Scene_root>();
 
+    initialize_camera();
     add_scene();
+}
+
+void Scene_manager::set_view_camera(std::shared_ptr<erhe::scene::ICamera> camera)
+{
+    m_view_camera = camera;
+}
+
+auto Scene_manager::get_view_camera() const -> std::shared_ptr<erhe::scene::ICamera>
+{
+    return m_view_camera;
+}
+
+void Scene_manager::initialize_camera()
+{
+    auto camera = make_shared<erhe::scene::Camera>("Camera");
+    camera->projection()->fov_y           = erhe::toolkit::degrees_to_radians(35.0f);
+    camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
+    camera->projection()->z_near          = 0.03f;
+    camera->projection()->z_far           = 200.0f;
+    m_scene_root->scene().cameras.push_back(camera);
+
+    auto node = make_shared<erhe::scene::Node>();
+    m_scene_root->scene().nodes.emplace_back(node);
+    const glm::mat4 identity{1.0f};
+    node->transforms.parent_from_node.set(identity);
+    node->update();
+    node->attach(camera);
+
+    set_view_camera(camera);
 }
 
 void Scene_manager::make_brushes()
@@ -312,7 +342,7 @@ void Scene_manager::add_floor()
                                                  m_scene_root->scene(),
                                                  m_scene_root->physics_world(),
                                                  {},
-                                                 erhe::toolkit::create_translation(0, -0.5001f, 0.0f),
+                                                 erhe::toolkit::create_translation(0, -1.5001f, 0.0f),
                                                  floor_material,
                                                  1.0f);
     attach(m_scene_root->content_layer(),
@@ -330,7 +360,7 @@ void Scene_manager::make_mesh_nodes()
     struct Pack_entry
     {
         Pack_entry() = default;
-        Pack_entry(Brush* brush)
+        explicit Pack_entry(Brush* brush)
             : brush    {brush}
             , rectangle{0, 0, 0, 0}
         {
@@ -537,19 +567,19 @@ void Scene_manager::make_punctual_light_nodes()
     }
 }
 
-void Scene_manager::update_fixed_step(double dt)
+void Scene_manager::update_fixed_step(const erhe::components::Time_context& time_context)
 {
     // TODO
     // Physics should mostly run in a separate thread.
-    m_scene_root->physics_world().update_fixed_step(dt);
+    m_scene_root->physics_world().update_fixed_step(time_context.dt);
 }
 
-void Scene_manager::update_once_per_frame(double time_d)
+void Scene_manager::update_once_per_frame(const erhe::components::Time_context& time_context)
 {
     ZoneScoped;
 
     buffer_transfer_queue().flush();
-    animate_lights(time_d);
+    animate_lights(time_context.time);
 }
 
 void Scene_manager::animate_lights(double time_d)

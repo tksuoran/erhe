@@ -1,4 +1,5 @@
 #include "windows/viewport_window.hpp"
+#include "tools.hpp"
 #include "tools/pointer_context.hpp"
 #include "log.hpp"
 
@@ -95,10 +96,14 @@ void dump_fbo(int fbo_name)
 Viewport_window::Viewport_window()
     : erhe::components::Component{c_name}
 {
-
 }
 
 Viewport_window::~Viewport_window() = default;
+
+void Viewport_window::initialize_component()
+{
+    get<Editor_tools>()->register_window(this);
+}
 
 void Viewport_window::window(Pointer_context& pointer_context)
 {

@@ -158,6 +158,16 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 
+
+FetchContent_Declare(
+    OpenXR-SDK
+    GIT_REPOSITORY https://github.com/KhronosGroup/OpenXR-SDK.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+
 #FetchContent_Declare(
 #    concurrentqueue
 #    GIT_REPOSITORY https://github.com/cameron314/concurrentqueue.git
@@ -190,6 +200,8 @@ FetchContent_MakeAvailable(ImGui)
 FetchContent_MakeAvailable(tracy)
 #FetchContent_MakeAvailable(reactphysics3d)
 FetchContent_MakeAvailable(bullet3)
+
+FetchContent_MakeAvailable(OpenXR-SDK)
 #FetchContent_MakeAvailable(eigen)
 #FetchContent_MakeAvailable(libigl)
 #FetchContent_MakeAvailable(concurrentqueue)
@@ -306,6 +318,10 @@ endif()
 ###     endif()
 ### endif()
 
+# Workaround VS2017
+add_definitions(-D_ENABLE_EXTENDED_ALIGNED_STORAGE)
+
+#add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/WX>)
 
 find_package(OpenGL REQUIRED)
 
