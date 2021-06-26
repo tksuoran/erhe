@@ -24,6 +24,7 @@
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/material.hpp"
+#include "erhe/primitive/material.hpp"
 #include "erhe/physics/world.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
@@ -88,21 +89,21 @@ auto Scene_manager::get_view_camera() const -> std::shared_ptr<erhe::scene::ICam
 
 void Scene_manager::initialize_camera()
 {
-    auto camera = make_shared<erhe::scene::Camera>("Camera");
-    camera->projection()->fov_y           = erhe::toolkit::degrees_to_radians(35.0f);
-    camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
-    camera->projection()->z_near          = 0.03f;
-    camera->projection()->z_far           = 200.0f;
-    m_scene_root->scene().cameras.push_back(camera);
+    m_camera = make_shared<erhe::scene::Camera>("Camera");
+    m_camera->projection()->fov_y           = erhe::toolkit::degrees_to_radians(35.0f);
+    m_camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
+    m_camera->projection()->z_near          = 0.03f;
+    m_camera->projection()->z_far           = 200.0f;
+    m_scene_root->scene().cameras.push_back(m_camera);
 
     auto node = make_shared<erhe::scene::Node>();
     m_scene_root->scene().nodes.emplace_back(node);
     const glm::mat4 identity{1.0f};
     node->transforms.parent_from_node.set(identity);
     node->update();
-    node->attach(camera);
+    node->attach(m_camera);
 
-    set_view_camera(camera);
+    set_view_camera(m_camera);
 }
 
 void Scene_manager::make_brushes()
@@ -295,7 +296,7 @@ void Scene_manager::make_brushes()
             ZoneScopedN("Johnson solids");
 
             const Brush_create_context context{primitive_build_context(), Normal_style::polygon_normals};
-            constexpr const bool instantiate = true;
+            constexpr const bool instantiate = false;
 
             const Json_library library("res/polyhedra/johnson.json");
             for (const auto& key_name : library.names)
@@ -630,7 +631,7 @@ void Scene_manager::add_scene()
     make_brushes();
     make_mesh_nodes();
     make_punctual_light_nodes();
-    add_floor();
+    //add_floor();
 }
 
 namespace

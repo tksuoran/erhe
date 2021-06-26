@@ -131,6 +131,7 @@ void Editor_view::on_key(bool pressed, erhe::toolkit::Keycode code, uint32_t mod
     pointer_context.shift   = (modifier_mask & Key_modifier_bit_shift) == Key_modifier_bit_shift;
     pointer_context.alt     = (modifier_mask & Key_modifier_bit_menu ) == Key_modifier_bit_menu;
     pointer_context.control = (modifier_mask & Key_modifier_bit_ctrl ) == Key_modifier_bit_ctrl;
+
     switch (code)
     {
         //case Keycode::Key_f2:         m_trigger_capture = true; break;

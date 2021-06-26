@@ -28,6 +28,29 @@ using namespace std;
 using namespace glm;
 
 
+Camera_rig::Camera_rig(Scene_root&                          scene_root,
+                       std::shared_ptr<erhe::scene::Camera> camera)
+    : position{camera}
+{
+    // position_fps_heading           = make_shared<erhe::scene::Camera>("Camera");
+    // position_fps_heading_elevation = make_shared<erhe::scene::Camera>("Camera");
+    // position_free                  = make_shared<erhe::scene::Camera>("Camera");
+    // *position_fps_heading          ->projection() = *camera->projection();
+    // *position_fps_heading_elevation->projection() = *camera->projection();
+    // *position_free                 ->projection() = *camera->projection();
+    // scene_root.scene().cameras.push_back(position_fps_heading          );
+    // scene_root.scene().cameras.push_back(position_fps_heading_elevation);
+    // scene_root.scene().cameras.push_back(position_fps_heading);
+    // 
+    // auto position_fps_heading_node = make_shared<erhe::scene::Node>();
+    // scene_root.scene().nodes.emplace_back(position_fps_heading_node);
+    // const glm::mat4 identity{1.0f};
+    // position_fps_heading_node->transforms.parent_from_node.set(identity);
+    // position_fps_heading_node->update();
+    // position_fps_heading_node->attach(position_fps_heading);
+}
+
+
 Scene_root::Scene_root()
     : Component(c_name)
 {
@@ -44,23 +67,28 @@ void Scene_root::initialize_component()
     ZoneScoped;
 
     // Layer configuration
-    m_content_layer   = make_shared<Layer>();
-    m_selection_layer = make_shared<Layer>();
-    m_tool_layer      = make_shared<Layer>();
-    m_brush_layer     = make_shared<Layer>();
-    m_scene           = std::make_unique<Scene>();
-    m_scene->layers   .push_back(m_content_layer);
-    m_scene->layers   .push_back(m_selection_layer);
-    m_scene->layers   .push_back(m_tool_layer);
-    m_scene->layers   .push_back(m_brush_layer);
-    m_all_layers      .push_back(m_content_layer);
-    m_all_layers      .push_back(m_selection_layer);
-    m_all_layers      .push_back(m_tool_layer);
-    m_all_layers      .push_back(m_brush_layer);
-    m_content_layers  .push_back(m_content_layer);
-    m_selection_layers.push_back(m_selection_layer);
-    m_tool_layers     .push_back(m_tool_layer);
-    m_brush_layers    .push_back(m_brush_layer);
+    m_content_layer    = make_shared<Layer>();
+    m_controller_layer = make_shared<Layer>();
+    m_selection_layer  = make_shared<Layer>();
+    m_tool_layer       = make_shared<Layer>();
+    m_brush_layer      = make_shared<Layer>();
+    m_scene            = std::make_unique<Scene>();
+    m_scene->layers      .push_back(m_content_layer);
+    m_scene->layers      .push_back(m_controller_layer);
+    m_scene->layers      .push_back(m_selection_layer);
+    m_scene->layers      .push_back(m_tool_layer);
+    m_scene->layers      .push_back(m_brush_layer);
+    m_all_layers         .push_back(m_content_layer);
+    m_all_layers         .push_back(m_controller_layer);
+    m_all_layers         .push_back(m_selection_layer);
+    m_all_layers         .push_back(m_tool_layer);
+    m_all_layers         .push_back(m_brush_layer);
+    m_content_layers     .push_back(m_content_layer);
+    m_content_fill_layers.push_back(m_content_layer);
+    m_content_fill_layers.push_back(m_controller_layer);
+    m_selection_layers   .push_back(m_selection_layer);
+    m_tool_layers        .push_back(m_tool_layer);
+    m_brush_layers       .push_back(m_brush_layer);
 
     m_physics_world = std::make_unique<erhe::physics::World>();
 }
@@ -120,6 +148,11 @@ auto Scene_root::add(shared_ptr<Light> light)
 auto Scene_root::content_layer() const -> std::shared_ptr<erhe::scene::Layer>
 {
     return m_content_layer;
+}
+
+auto Scene_root::controller_layer() const -> std::shared_ptr<erhe::scene::Layer>
+{
+    return m_controller_layer;
 }
 
 auto Scene_root::selection_layer() const -> std::shared_ptr<erhe::scene::Layer>

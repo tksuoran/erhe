@@ -42,6 +42,24 @@ public:
 
     void update(Transform& transform, Viewport viewport) const;
 
+    struct Fov_sides
+    {
+        Fov_sides(float left, float right, float up, float down)
+            : left {left}
+            , right{right}
+            , up   {up}
+            , down {down}
+        {
+        }
+
+        float left;
+        float right;
+        float up;
+        float down;
+    };
+
+    auto get_fov_sides(Viewport viewport) const -> Fov_sides;
+
     Type  projection_type{Type::perspective_vertical};
     float z_near         {  1.0f};
     float z_far          {100.0};

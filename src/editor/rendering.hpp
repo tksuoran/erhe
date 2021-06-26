@@ -2,7 +2,7 @@
 
 #include "erhe/components/component.hpp"
 #include "erhe/scene/viewport.hpp"
-#include "erhe/toolkit/xr.hpp"
+#include "erhe/xr/xr.hpp"
 
 
 namespace erhe::graphics
@@ -16,6 +16,7 @@ namespace erhe::scene
 {
     class Camera;
     class ICamera;
+    class Mesh;
     class Node;
 }
 namespace erhe::xr
@@ -33,6 +34,7 @@ class Editor_tools;
 class Forward_renderer;
 class Id_renderer;
 class Line_renderer;
+class Mesh_memory;
 class Scene_manager;
 class Scene_root;
 class Shadow_renderer;
@@ -54,6 +56,20 @@ struct Headset_view_resources
     std::unique_ptr<erhe::graphics::Framebuffer>  framebuffer;
     std::shared_ptr<erhe::scene::Node>            camera_node;
     std::shared_ptr<erhe::scene::Camera>          camera;
+};
+
+class Controller_visualization
+{
+public:
+    Controller_visualization(Mesh_memory&       mesh_memory,
+                             Scene_root&        scene_root,
+                             erhe::scene::Node* view_root);
+
+    void update  (const erhe::xr::Pose& pose);
+    auto get_node() const -> erhe::scene::Node*;
+
+private:
+    std::shared_ptr<erhe::scene::Mesh> m_controller_mesh;
 };
 
 class Editor_rendering
@@ -113,9 +129,11 @@ private:
     std::shared_ptr<Viewport_window>                      m_viewport_window;
 
     std::vector<Headset_view_resources>                   m_view_resources;
+    std::unique_ptr<Controller_visualization>             m_controller_visualization;
 
     bool                                                  m_trigger_capture{false};
     bool                                                  m_enable_gui     {true};
+    bool                                                  m_enable_headset {true};
 };
 
 }

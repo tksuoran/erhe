@@ -124,6 +124,16 @@ constexpr const glm::mat4 mat4_swap_xy{0.0f, 1.0f, 0.0f, 0.0f,
                                        0.0f, 0.0f, 1.0f, 0.0f,
                                        0.0f, 0.0f, 0.0f, 1.0f};
 
+constexpr const glm::mat4 mat4_swap_xz{0.0f, 0.0f, 1.0f, 0.0f,
+                                       0.0f, 1.0f, 0.0f, 0.0f,
+                                       1.0f, 0.0f, 0.0f, 0.0f,
+                                       0.0f, 0.0f, 0.0f, 1.0f};
+
+constexpr const glm::mat4 mat4_swap_yz{1.0f, 0.0f, 0.0f, 0.0f,
+                                       0.0f, 0.0f, 1.0f, 0.0f,
+                                       0.0f, 1.0f, 0.0f, 0.0f,
+                                       0.0f, 0.0f, 0.0f, 1.0f};
+
 constexpr const glm::mat4 mat4_rotate_xy_cw{0.0f, -1.0f, 0.0f, 0.0f,
                                             1.0f,  0.0f, 0.0f, 0.0f,
                                             0.0f,  0.0f, 1.0f, 0.0f,

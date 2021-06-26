@@ -12,10 +12,15 @@
 
 namespace erhe::xr {
 
+struct Pose
+{
+    glm::quat orientation;
+    glm::vec3 position;
+};
+
 struct Render_view
 {
-    glm::quat           orientation;
-    glm::vec3           position;
+    Pose                view_pose;
     float               fov_left;
     float               fov_right;
     float               fov_up;

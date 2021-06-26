@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe/xr/xr.hpp"
+
 #include <glm/glm.hpp>
 
 #include <functional>
@@ -33,14 +35,16 @@ public:
     explicit Headset(erhe::toolkit::Context_window* window);
     ~Headset        ();
 
-    auto begin_frame  () -> Frame_timing;
-    auto render       (std::function<bool(Render_view&)> render_view_callback) -> bool;
-    auto end_frame    () -> bool;
-    auto trigger_value() const -> float;
+    auto begin_frame    () -> Frame_timing;
+    auto render         (std::function<bool(Render_view&)> render_view_callback) -> bool;
+    auto end_frame      () -> bool;
+    auto trigger_value  () const -> float;
+    auto controller_pose() const -> Pose;
 
 private:
     std::unique_ptr<Xr_instance> m_xr_instance;
     std::unique_ptr<Xr_session > m_xr_session;
+    Pose                         m_controller_pose;
 };
 
 }

@@ -1,7 +1,7 @@
-#include "erhe/toolkit/headset.hpp"
+#include "erhe/xr/headset.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/xr_instance.hpp"
-#include "erhe/toolkit/xr_session.hpp"
+#include "erhe/xr/xr_instance.hpp"
+#include "erhe/xr/xr_session.hpp"
 
 namespace erhe::xr {
 
@@ -17,6 +17,11 @@ Headset::Headset(erhe::toolkit::Context_window* context_window)
 
 Headset::~Headset()
 {
+}
+
+auto Headset::controller_pose() const -> Pose
+{
+    return m_controller_pose;
 }
 
 auto Headset::trigger_value() const -> float
@@ -35,10 +40,13 @@ auto Headset::begin_frame() -> Frame_timing
     {
         return result;
     }
+
     if (!m_xr_instance->update_actions(*m_xr_session.get()))
     {
         return result;
     }
+    m_controller_pose.orientation = to_glm(m_xr_instance->actions.aim_pose_space_location.pose.orientation);
+    m_controller_pose.position    = to_glm(m_xr_instance->actions.aim_pose_space_location.pose.position);
 
     auto* xr_frame_state = m_xr_session->wait_frame();
     if (xr_frame_state == nullptr)

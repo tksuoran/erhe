@@ -3,23 +3,17 @@ set(_target "erhe_toolkit")
 set(source_list
     file.cpp
     file.hpp
-    headset.cpp
-    headset.hpp
+    hidapi.c
+    hidapi.h
     math_util.cpp
     math_util.hpp
+    space_mouse.cpp
+    space_mouse.hpp
     tracy_client.hpp
     verify.hpp
     view.cpp
     view.hpp
     window.hpp
-    xr_instance.cpp
-    xr_instance.hpp
-    xr_session.cpp
-    xr_session.hpp
-    xr_swapchain_image.cpp
-    xr_swapchain_image.hpp
-    xr.cpp
-    xr.hpp
 )
 
 if (${ERHE_WINDOW_TOOLKIT} STREQUAL "GLFW")
@@ -46,7 +40,6 @@ target_link_libraries(${_target}
         fmt::fmt
         glm::glm
         Microsoft.GSL::GSL
-        openxr_loader
 )
 
 if (${ERHE_WINDOW_TOOLKIT} STREQUAL "GLFW")

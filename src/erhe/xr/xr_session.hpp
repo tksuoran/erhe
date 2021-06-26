@@ -1,8 +1,8 @@
 #pragma once
 
 #include "erhe/gl/gl.hpp"
-#include "erhe/toolkit/xr.hpp"
-#include "erhe/toolkit/xr_swapchain_image.hpp"
+#include "erhe/xr/xr.hpp"
+#include "erhe/xr/xr_swapchain_image.hpp"
 #include <openxr/openxr.h>
 
 #include <vector>

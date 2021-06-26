@@ -135,6 +135,7 @@ set(source_list
     res/shaders/id.vert
     res/shaders/id.frag
     res/shaders/line.vert
+    res/shaders/line.geom
     res/shaders/line.frag
     res/shaders/points.vert
     res/shaders/points.frag
@@ -164,6 +165,7 @@ target_link_libraries(
     erhe_scene
     erhe_toolkit
     erhe_ui
+    erhe_xr
     mango
     nlohmann_json::nlohmann_json
     openxr_loader

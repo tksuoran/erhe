@@ -76,18 +76,22 @@ void Line_renderer::initialize_component()
                                     gl::Attribute_type::float_vec4,
                                     {gl::Vertex_attrib_type::unsigned_byte, true, 4});
 
-    m_clip_from_world_offset        = m_model_block.add_mat4("clip_from_world"       )->offset_in_parent();
-    m_view_position_in_world_offset = m_model_block.add_vec4("view_position_in_world")->offset_in_parent();
+    m_clip_from_world_offset        = m_view_block.add_mat4("clip_from_world"       )->offset_in_parent();
+    m_view_position_in_world_offset = m_view_block.add_vec4("view_position_in_world")->offset_in_parent();
+    m_viewport_offset               = m_view_block.add_vec4("viewport"              )->offset_in_parent();
+    m_fov_offset                    = m_view_block.add_vec4("fov"                   )->offset_in_parent();
 
     auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
     std::filesystem::path vs_path = shader_path / std::filesystem::path("line.vert");
+    std::filesystem::path gs_path = shader_path / std::filesystem::path("line.geom");
     std::filesystem::path fs_path = shader_path / std::filesystem::path("line.frag");
     Shader_stages::Create_info create_info("line",
                                            &m_default_uniform_block,
                                            &m_attribute_mappings,
                                            &m_fragment_outputs);
-    create_info.add_interface_block(&m_model_block);
+    create_info.add_interface_block(&m_view_block);
     create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
+    create_info.shaders.emplace_back(gl::Shader_type::geometry_shader, gs_path);
     create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
     Shader_stages::Prototype prototype(create_info);
     m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
@@ -109,7 +113,8 @@ void Line_renderer::create_frame_resources()
     size_t vertex_count = 65536;
     for (size_t i = 0; i < s_frame_resources_count; ++i)
     {
-        m_frame_resources.emplace_back(vertex_count,
+        m_frame_resources.emplace_back(256, 16,
+                                       vertex_count,
                                        m_shader_stages.get(),
                                        m_attribute_mappings,
                                        m_vertex_format);
@@ -124,6 +129,7 @@ auto Line_renderer::current_frame_resources() -> Frame_resources&
 void Line_renderer::next_frame()
 {
     m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % s_frame_resources_count;
+    m_view_writer  .reset();
     m_vertex_writer.reset();
     m_line_count = 0;
 }
@@ -177,21 +183,38 @@ void Line_renderer::render(erhe::scene::Viewport       viewport,
                          static_cast<GLsizei>(strlen(c_line_renderer_render)),
                          c_line_renderer_render);
 
+    m_view_writer.begin();
+
     const mat4  clip_from_world        = camera.clip_from_world();
     const vec4  view_position_in_world = camera.node()->position_in_world();
-    auto* const model_buffer           = &current_frame_resources().model_buffer;
-    auto        model_gpu_data         = model_buffer->map();
-    write(model_gpu_data, m_clip_from_world_offset,        as_span(clip_from_world));
-    write(model_gpu_data, m_view_position_in_world_offset, as_span(view_position_in_world));
+    const auto  fov_sides              = camera.projection()->get_fov_sides(viewport);
+    auto* const view_buffer            = &current_frame_resources().view_buffer;
+    auto        view_gpu_data          = view_buffer->map();
+    const float viewport_floats[4] { static_cast<float>(viewport.x),
+                                     static_cast<float>(viewport.y),
+                                     static_cast<float>(viewport.width),
+                                     static_cast<float>(viewport.height) };
+    const float fov_floats[4] { fov_sides.left,
+                                fov_sides.right,
+                                fov_sides.up,
+                                fov_sides.down };
+
+    write(view_gpu_data, m_view_writer.write_offset + m_clip_from_world_offset,        as_span(clip_from_world       ));
+    write(view_gpu_data, m_view_writer.write_offset + m_view_position_in_world_offset, as_span(view_position_in_world));
+    write(view_gpu_data, m_view_writer.write_offset + m_viewport_offset,               as_span(viewport_floats       ));
+    write(view_gpu_data, m_view_writer.write_offset + m_fov_offset,                    as_span(fov_floats            ));
+
+    m_view_writer.write_offset += m_view_block.size_bytes();
+    m_view_writer.end();
 
     gl::disable          (gl::Enable_cap::framebuffer_srgb);
     gl::disable          (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport         (viewport.x, viewport.y, viewport.width, viewport.height);
-    gl::bind_buffer_range(model_buffer->target(),
-                          static_cast<GLuint>    (m_model_block.binding_point()),
-                          static_cast<GLuint>    (model_buffer->gl_name()),
-                          static_cast<GLintptr>  (0),
-                          static_cast<GLsizeiptr>(4 * 4 * sizeof(float)));
+    gl::bind_buffer_range(view_buffer->target(),
+                          static_cast<GLuint>    (m_view_block.binding_point()),
+                          static_cast<GLuint>    (view_buffer->gl_name()),
+                          static_cast<GLintptr>  (m_view_writer.range.first_byte_offset),
+                          static_cast<GLsizeiptr>(m_view_writer.range.byte_count));
 
     if (false)
     {

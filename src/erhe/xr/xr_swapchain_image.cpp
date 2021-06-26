@@ -1,6 +1,6 @@
-#include "erhe/toolkit/xr_swapchain_image.hpp"
+#include "erhe/xr/xr_swapchain_image.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/xr.hpp"
+#include "erhe/xr/xr.hpp"
 
 #include <unknwn.h>
 #define XR_USE_PLATFORM_WIN32      1

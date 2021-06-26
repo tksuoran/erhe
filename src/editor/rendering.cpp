@@ -6,18 +6,22 @@
 #include "renderers/forward_renderer.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/line_renderer.hpp"
+#include "renderers/mesh_memory.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "renderers/text_renderer.hpp"
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
 #include "windows/viewport_config.hpp"
 #include "windows/viewport_window.hpp"
+#include "erhe/geometry/shapes/cone.hpp"
+#include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/headset.hpp"
+#include "erhe/xr/headset.hpp"
+#include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include <glm/trigonometric.hpp>
@@ -44,17 +48,29 @@ void Editor_rendering::connect()
     m_id_renderer            = get<Id_renderer     >();
     m_line_renderer          = get<Line_renderer   >();
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-    m_scene_manager          = get<Scene_manager  >();
-    m_scene_root             = get<Scene_root     >();
+    m_scene_manager          = require<Scene_manager>();
+    m_scene_root             = require<Scene_root   >();
     m_shadow_renderer        = get<Shadow_renderer>();
     m_text_renderer          = get<Text_renderer  >();
     m_viewport_config        = get<Viewport_config>();
     m_viewport_window        = get<Viewport_window>();
+
+    require<Mesh_memory>();
 }
 
 void Editor_rendering::initialize_component()
 {
-    m_headset = std::make_unique<erhe::xr::Headset>(m_application->get_context_window());
+    if (m_enable_headset)
+    {
+        m_headset = std::make_unique<erhe::xr::Headset>(m_application->get_context_window());
+
+        auto  mesh_memory = get<Mesh_memory>();
+        auto* view_root   = m_scene_manager->get_view_camera()->node().get();
+
+        m_controller_visualization = std::make_unique<Controller_visualization>(*mesh_memory.get(),
+                                                                                *m_scene_root.get(),
+                                                                                view_root);
+    }
 }
 
 void Editor_rendering::init_state()
@@ -90,6 +106,11 @@ void Editor_rendering::begin_frame()
     {
         scene_viewport.width  = width();
         scene_viewport.height = height();
+    }
+
+    if (m_controller_visualization && m_headset)
+    {
+        m_controller_visualization->update(m_headset->controller_pose());
     }
 }
 
@@ -243,7 +264,10 @@ void Editor_rendering::render(double time)
         gui_render();
     }
 
-    render_headset();
+    if (m_enable_headset)
+    {
+        render_headset();
+    }
 }
 
 Headset_view_resources::Headset_view_resources(erhe::xr::Render_view& render_view,
@@ -260,7 +284,7 @@ Headset_view_resources::Headset_view_resources(erhe::xr::Render_view& render_vie
                       glm::degrees(render_view.fov_right),
                       glm::degrees(render_view.fov_up   ),
                       glm::degrees(render_view.fov_down ),
-                      render_view.position);
+                      render_view.view_pose.position);
 
     Texture_create_info color_texture_create_info;
     color_texture_create_info.target            = gl::Texture_target::texture_2d;
@@ -324,18 +348,50 @@ void Headset_view_resources::update(erhe::xr::Render_view& render_view,
     render_view.near_depth = 0.03f;
     render_view.far_depth  = 200.0f;
 
-    //const auto m = glm::mat4_cast(glm::dquat(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z));
-    //mat[3][0] = pose.position.x;
-    //mat[3][1] = pose.position.y;
-    //mat[3][2] = pose.position.z;
-    //return glm::inverse(mat);
-
-    const glm::mat4 orientation = glm::mat4_cast(render_view.orientation);
-    const glm::mat4 translation = glm::translate(glm::mat4{ 1 }, render_view.position);
+    const glm::mat4 orientation = glm::mat4_cast(render_view.view_pose.orientation);
+    const glm::mat4 translation = glm::translate(glm::mat4{ 1 }, render_view.view_pose.position);
     const glm::mat4 m           = translation * orientation;
-    const glm::mat4 im          = glm::inverse(m);
     camera_node->transforms.parent_from_node.set(m);
     camera_node->update();
+}
+
+Controller_visualization::Controller_visualization(Mesh_memory&       mesh_memory,
+                                                   Scene_root&        scene_root,
+                                                   erhe::scene::Node* view_root)
+{
+    auto controller_material = scene_root.make_material("Controller", glm::vec4(0.1f, 0.1f, 0.2f, 1.0f));
+    constexpr const float length = 0.05f;
+    constexpr const float radius = 0.02f;
+    auto controller_geometry = erhe::geometry::shapes::make_torus(0.05f, 0.0025f, 22, 8);
+    controller_geometry.transform(erhe::toolkit::mat4_swap_yz);
+    controller_geometry.reverse_polygons();
+
+    erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
+    erhe::primitive::Primitive_build_context primitive_build_context{buffer_transfer_queue,
+                                                                     mesh_memory.vertex_format_info(),
+                                                                     mesh_memory.vertex_buffer_info()};
+    auto controller_pg = make_primitive_shared(controller_geometry, primitive_build_context);
+    m_controller_mesh = scene_root.make_mesh_node("Controller",
+                                                  controller_pg,
+                                                  controller_material,
+                                                  *scene_root.controller_layer().get(),
+                                                  view_root,
+                                                  glm::vec3(-9999.9f, -9999.9f, -9999.9f));
+}
+
+void Controller_visualization::update(const erhe::xr::Pose& pose)
+{
+    const glm::mat4 orientation = glm::mat4_cast(pose.orientation);
+    const glm::mat4 translation = glm::translate(glm::mat4{ 1 }, pose.position);
+    const glm::mat4 m           = translation * orientation;
+    auto node = m_controller_mesh->node();
+    node->transforms.parent_from_node.set(m);
+    node->update();
+}
+
+auto Controller_visualization::get_node() const -> erhe::scene::Node*
+{
+    return m_controller_mesh->node().get();
 }
 
 auto Editor_rendering::get_headset_view_resources(erhe::xr::Render_view& render_view) -> Headset_view_resources&
@@ -362,6 +418,29 @@ void Editor_rendering::render_headset()
     auto frame_timing = m_headset->begin_frame();
     if (frame_timing.should_render)
     {
+        if (m_line_renderer)
+        {
+            uint32_t red   = 0xff0000ffu;
+            uint32_t green = 0xff00ff00u;
+            uint32_t blue  = 0xffff0000u;
+            auto* controller_node      = m_controller_visualization->get_node();
+            auto  controller_position  = controller_node->position_in_world();
+            auto  controller_direction = controller_node->direction_in_world();
+            auto  end_position         = controller_position - m_headset->trigger_value() * 2.0f * controller_direction;
+            glm::vec3 origo {0.0f, 0.0f, 0.0f};
+            glm::vec3 unit_x{1.0f, 0.0f, 0.0f};
+            glm::vec3 unit_y{0.0f, 1.0f, 0.0f};
+            glm::vec3 unit_z{0.0f, 0.0f, 1.0f};
+            m_line_renderer->set_line_color(red);
+            m_line_renderer->add_lines({{origo, unit_x}}, 10.0f);
+            m_line_renderer->set_line_color(green);
+            m_line_renderer->add_lines({{origo, unit_y}}, 10.0f);
+            m_line_renderer->set_line_color(blue);
+            m_line_renderer->add_lines({{origo, unit_z}}, 10.0f);
+            m_line_renderer->set_line_color(green);
+            m_line_renderer->add_lines({{controller_position, end_position }}, 10.0f);
+        }
+
         auto callback = [this](erhe::xr::Render_view& render_view) -> bool {
             auto& view_resources = get_headset_view_resources(render_view);
             view_resources.update(render_view, * this);
@@ -381,8 +460,14 @@ void Editor_rendering::render_headset()
 
             render_clear_primary();
             view_resources.camera_node->update();
-            render_content(view_resources.camera.get(), viewport);
-    
+            auto* camera = view_resources.camera.get();
+            render_content(camera, viewport);
+
+            if (m_line_renderer && m_headset->trigger_value() > 0.0f)
+            {
+                m_line_renderer->render(viewport, *camera);
+            }
+
             // TODO
             return true;
         };
@@ -485,7 +570,7 @@ void Editor_rendering::render_content(erhe::scene::ICamera* camera,
         m_forward_renderer->primitive_constant_size  = render_style.line_width;
         m_forward_renderer->render(viewport,
                                    *camera,
-                                   m_scene_root->content_layers(),
+                                   m_scene_root->content_fill_layers(),
                                    m_scene_root->materials(),
                                    { Forward_renderer::Pass::edge_lines },
                                    erhe::scene::Mesh::c_visibility_content);

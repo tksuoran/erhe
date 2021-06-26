@@ -31,6 +31,7 @@ struct Camera_struct
     size_t world_from_clip; // mat4
     size_t clip_from_world; // mat4
     size_t viewport;        // vec4
+    size_t fov;             // vec4
     size_t exposure;
 };
 

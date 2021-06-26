@@ -221,11 +221,11 @@ private:
 
     struct Visualization
     {
-        Visualization() = default;
+        Visualization();
 
-        void initialize(Mesh_memory& mesh_memory, Scene_root& scene_root);
+        void initialize       (Mesh_memory& mesh_memory, Scene_root& scene_root);
         void update_visibility(const bool show, const Handle active_handle);
-        void update_scale(const glm::vec3 view_position_in_world);
+        void update_scale     (const glm::vec3 view_position_in_world);
         void update_transforms();
 
         bool  show_translate{false};

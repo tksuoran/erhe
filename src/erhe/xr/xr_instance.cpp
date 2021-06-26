@@ -1,6 +1,6 @@
-#include "erhe/toolkit/xr_instance.hpp"
-#include "erhe/toolkit/xr_session.hpp"
-#include "erhe/toolkit/xr.hpp"
+#include "erhe/xr/xr_instance.hpp"
+#include "erhe/xr/xr_session.hpp"
+#include "erhe/xr/xr.hpp"
 
 #include <unknwn.h>
 #define XR_USE_PLATFORM_WIN32      1

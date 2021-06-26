@@ -289,10 +289,16 @@ auto Base_renderer::update_camera_buffer(ICamera&       camera,
                                      static_cast<float>(viewport.y),
                                      static_cast<float>(viewport.width),
                                      static_cast<float>(viewport.height) };
+    const auto fov_sides = camera.projection()->get_fov_sides(viewport);
+    const float fov_floats[4] { fov_sides.left,
+                                fov_sides.right,
+                                fov_sides.up,
+                                fov_sides.down };
     write(camera_gpu_data, m_camera_writer.write_offset + offsets.world_from_node, as_span(world_from_node));
     write(camera_gpu_data, m_camera_writer.write_offset + offsets.world_from_clip, as_span(world_from_clip));
     write(camera_gpu_data, m_camera_writer.write_offset + offsets.clip_from_world, as_span(clip_from_world));
     write(camera_gpu_data, m_camera_writer.write_offset + offsets.viewport,        as_span(viewport_floats));
+    write(camera_gpu_data, m_camera_writer.write_offset + offsets.fov,             as_span(fov_floats     ));
     write(camera_gpu_data, m_camera_writer.write_offset + offsets.exposure,        as_span(exposure)       );
     m_camera_writer.write_offset += m_program_interface->camera_block.size_bytes();
     m_camera_writer.end();

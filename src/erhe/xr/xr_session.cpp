@@ -1,10 +1,10 @@
-#include "erhe/toolkit/xr_session.hpp"
+#include "erhe/xr/xr_session.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/window.hpp"
-#include "erhe/toolkit/xr_instance.hpp"
-#include "erhe/toolkit/xr.hpp"
-#include "erhe/toolkit/xr_swapchain_image.hpp"
+#include "erhe/xr/xr_instance.hpp"
+#include "erhe/xr/xr.hpp"
+#include "erhe/xr/xr_swapchain_image.hpp"
 
 #define GLFW_EXPOSE_NATIVE_WIN32 1
 #define GLFW_EXPOSE_NATIVE_WGL   1
@@ -485,18 +485,18 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
         }
 
         Render_view render_view;
-        render_view.orientation   = to_glm(m_xr_views[i].pose.orientation);
-        render_view.position      = to_glm(m_xr_views[i].pose.position);
-        render_view.fov_left      = m_xr_views[i].fov.angleLeft;
-        render_view.fov_right     = m_xr_views[i].fov.angleRight;
-        render_view.fov_up        = m_xr_views[i].fov.angleUp;
-        render_view.fov_down      = m_xr_views[i].fov.angleDown;
-        render_view.color_texture = color_texture;
-        render_view.color_format  = m_swapchain_color_format;
-        render_view.depth_texture = depth_texture;
-        render_view.depth_format  = m_swapchain_depth_format;
-        render_view.width         = view_configuration_views[i].recommendedImageRectWidth;
-        render_view.height        = view_configuration_views[i].recommendedImageRectHeight;
+        render_view.view_pose.orientation = to_glm(m_xr_views[i].pose.orientation);
+        render_view.view_pose.position    = to_glm(m_xr_views[i].pose.position);
+        render_view.fov_left              = m_xr_views[i].fov.angleLeft;
+        render_view.fov_right             = m_xr_views[i].fov.angleRight;
+        render_view.fov_up                = m_xr_views[i].fov.angleUp;
+        render_view.fov_down              = m_xr_views[i].fov.angleDown;
+        render_view.color_texture         = color_texture;
+        render_view.color_format          = m_swapchain_color_format;
+        render_view.depth_texture         = depth_texture;
+        render_view.depth_format          = m_swapchain_depth_format;
+        render_view.width                 = view_configuration_views[i].recommendedImageRectWidth;
+        render_view.height                = view_configuration_views[i].recommendedImageRectHeight;
 
         {
             const auto result = render_view_callback(render_view);

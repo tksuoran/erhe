@@ -124,20 +124,21 @@ private:
                                                                 gl::Map_buffer_access_mask::map_persistent_bit |
                                                                 gl::Map_buffer_access_mask::map_write_bit};
 
-        Frame_resources(size_t                                    vertex_count,
+        Frame_resources(size_t view_stride, size_t view_count,
+                        size_t                                    vertex_count,
                         erhe::graphics::Shader_stages*            shader_stages,
                         erhe::graphics::Vertex_attribute_mappings attribute_mappings,
                         erhe::graphics::Vertex_format&            vertex_format)
 
-            : vertex_buffer     {gl::Buffer_target::array_buffer,
-                                 vertex_format.stride() * vertex_count,
-                                 storage_mask,
-                                 access_mask}
+            : vertex_buffer{gl::Buffer_target::array_buffer,
+                            vertex_format.stride() * vertex_count,
+                            storage_mask,
+                            access_mask}
 
-            , model_buffer      {gl::Buffer_target::uniform_buffer,
-                                 256,
-                                 storage_mask,
-                                 access_mask}
+            , view_buffer{gl::Buffer_target::uniform_buffer,
+                          view_stride * view_count,
+                          storage_mask,
+                          access_mask}
 
             , vertex_input_state{attribute_mappings,
                                  vertex_format,
@@ -160,7 +161,7 @@ private:
                                   nullptr}
         {
             vertex_buffer.set_debug_label("Line Renderer Vertex");
-            model_buffer.set_debug_label ("Line Renderer Model");
+            view_buffer.set_debug_label ("Line Renderer View");
         }
 
         Frame_resources(const Frame_resources&) = delete;
@@ -169,7 +170,7 @@ private:
         void operator= (Frame_resources&& )     = delete;
 
         erhe::graphics::Buffer             vertex_buffer;
-        erhe::graphics::Buffer             model_buffer;
+        erhe::graphics::Buffer             view_buffer;
         erhe::graphics::Vertex_input_state vertex_input_state;
         erhe::graphics::Pipeline           pipeline_depth_pass;
         erhe::graphics::Pipeline           pipeline_depth_fail;
@@ -185,7 +186,7 @@ private:
     erhe::graphics::Fragment_outputs                      m_fragment_outputs;
     erhe::graphics::Vertex_attribute_mappings             m_attribute_mappings;
     erhe::graphics::Vertex_format                         m_vertex_format;
-    erhe::graphics::Shader_resource                       m_model_block{"model", 0, erhe::graphics::Shader_resource::Type::uniform_block};
+    erhe::graphics::Shader_resource                       m_view_block{"view", 0, erhe::graphics::Shader_resource::Type::uniform_block};
     std::unique_ptr<erhe::graphics::Shader_stages>        m_shader_stages;
     erhe::graphics::Shader_resource                       m_default_uniform_block; // containing sampler uniforms
 
@@ -221,11 +222,14 @@ private:
         }
     };
 
+    Buffer_writer m_view_writer;
     Buffer_writer m_vertex_writer;
     size_t        m_line_count{0};
 
     size_t        m_clip_from_world_offset       {0};
     size_t        m_view_position_in_world_offset{0};
+    size_t        m_viewport_offset              {0};
+    size_t        m_fov_offset                   {0};
 };
 
 }

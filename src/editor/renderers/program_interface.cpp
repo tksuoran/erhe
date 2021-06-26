@@ -59,6 +59,7 @@ void Program_interface::initialize_component()
     camera_block_offsets.world_from_clip = camera_struct.add_mat4 ("world_from_clip")->offset_in_parent();
     camera_block_offsets.clip_from_world = camera_struct.add_mat4 ("clip_from_world")->offset_in_parent();
     camera_block_offsets.viewport        = camera_struct.add_vec4 ("viewport"       )->offset_in_parent();
+    camera_block_offsets.fov             = camera_struct.add_vec4 ("fov"            )->offset_in_parent();
     camera_block_offsets.exposure        = camera_struct.add_float("exposure"       )->offset_in_parent();
     camera_block.add_struct("cameras", &camera_struct, 1);
 

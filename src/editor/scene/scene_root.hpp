@@ -62,15 +62,28 @@ class Debug_draw;
 class Mesh_memory;
 class Node_physics;
 class Scene_manager;
+class Scene_root;
 class Brush;
 
+
+struct Camera_rig
+{
+    Camera_rig(Scene_root&                          scene_root,
+               std::shared_ptr<erhe::scene::Camera> camera);
+
+    std::shared_ptr<erhe::scene::Camera> position;
+    std::shared_ptr<erhe::scene::Camera> position_fps_heading;           // parent = position
+    std::shared_ptr<erhe::scene::Camera> position_fps_heading_elevation; // parent = fps_position_heading
+    std::shared_ptr<erhe::scene::Camera> position_free;                  // parent = position
+};
 
 class Scene_root
     : public erhe::components::Component
 {
 public:
     static constexpr const char* c_name = "Scene_root";
-    Scene_root();
+    
+    Scene_root ();
     ~Scene_root() override;
 
     // Implements Component
@@ -89,13 +102,15 @@ public:
     }
 
 
-    auto content_layer   () const -> std::shared_ptr<erhe::scene::Layer>;
-    auto selection_layer () const -> std::shared_ptr<erhe::scene::Layer>;
-    auto tool_layer      () const -> std::shared_ptr<erhe::scene::Layer>;
-    auto all_layers      () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_all_layers; }
-    auto content_layers  () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_content_layers; }
-    auto selection_layers() -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_selection_layers; }
-    auto tool_layers     () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_tool_layers; }
+    auto content_layer      () const -> std::shared_ptr<erhe::scene::Layer>;
+    auto controller_layer   () const -> std::shared_ptr<erhe::scene::Layer>;
+    auto selection_layer    () const -> std::shared_ptr<erhe::scene::Layer>;
+    auto tool_layer         () const -> std::shared_ptr<erhe::scene::Layer>;
+    auto all_layers         () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_all_layers; }
+    auto content_fill_layers() -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_content_fill_layers; }
+    auto content_layers     () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_content_layers; }
+    auto selection_layers   () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_selection_layers; }
+    auto tool_layers        () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_tool_layers; }
 
     auto make_mesh_node(std::string_view                                     name,
                         std::shared_ptr<erhe::primitive::Primitive_geometry> primitive_geometry,
@@ -128,6 +143,7 @@ private:
     std::unique_ptr<erhe::physics::World>            m_physics_world;
     std::unique_ptr<erhe::scene::Scene>              m_scene;
     std::shared_ptr<erhe::scene::Layer>              m_content_layer;
+    std::shared_ptr<erhe::scene::Layer>              m_controller_layer;
     std::shared_ptr<erhe::scene::Layer>              m_selection_layer;
     std::shared_ptr<erhe::scene::Layer>              m_tool_layer;
     std::shared_ptr<erhe::scene::Layer>              m_brush_layer;
@@ -135,6 +151,7 @@ private:
     std::shared_ptr<Frame_controller>                m_camera_controls;
 
     std::vector<std::shared_ptr<erhe::scene::Layer>> m_all_layers;
+    std::vector<std::shared_ptr<erhe::scene::Layer>> m_content_fill_layers;
     std::vector<std::shared_ptr<erhe::scene::Layer>> m_content_layers;
     std::vector<std::shared_ptr<erhe::scene::Layer>> m_selection_layers;
     std::vector<std::shared_ptr<erhe::scene::Layer>> m_tool_layers;

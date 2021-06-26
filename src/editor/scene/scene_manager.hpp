@@ -124,6 +124,9 @@ private:
 
     // Self owned parts
     std::shared_ptr<erhe::scene::ICamera> m_view_camera;
+    //std::shared_ptr<erhe::scene::ICamera> m_view_camera_position_only;
+    //std::shared_ptr<erhe::scene::ICamera> m_view_camera_position_heading;
+    //std::shared_ptr<erhe::scene::ICamera> m_view_camera_position_heading_elevation;
     std::mutex                            m_brush_mutex;
     std::unique_ptr<Brush>                m_floor_brush;
     std::mutex                            m_scene_brushes_mutex;

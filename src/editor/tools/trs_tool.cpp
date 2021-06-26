@@ -106,6 +106,8 @@ void Trs_tool::set_node(std::shared_ptr<Node> node)
     update_visibility();
 }
 
+Trs_tool::Visualization::Visualization() = default;
+
 void Trs_tool::Visualization::update_scale(const vec3 view_position_in_world)
 {
     ZoneScoped;
