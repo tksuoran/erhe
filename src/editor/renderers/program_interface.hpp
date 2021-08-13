@@ -15,8 +15,9 @@ class Shader_stages;
 
 namespace editor {
 
-struct Primitive_struct
+class Primitive_struct
 {
+public:
     size_t world_from_node; // mat4 16 * 4 bytes
     size_t color;           // vec4  4 * 4 bytes - id_offset / wire frame color
     size_t material_index;  // uint  1 * 4 bytes
@@ -25,8 +26,9 @@ struct Primitive_struct
     size_t extra3;          // uint  1 * 4 bytes
 };
 
-struct Camera_struct
+class Camera_struct
 {
+public:
     size_t world_from_node; // mat4
     size_t world_from_clip; // mat4
     size_t clip_from_world; // mat4
@@ -35,16 +37,18 @@ struct Camera_struct
     size_t exposure;
 };
 
-struct Light_struct
+class Light_struct
 {
+public:
     size_t texture_from_world; // mat4
     size_t position_and_inner_spot_cos;
     size_t direction_and_outer_spot_cos;
     size_t radiance_and_range;
 };
 
-struct Light_block
+class Light_block
 {
+public:
     size_t       directional_light_count;
     size_t       spot_light_count;
     size_t       point_light_count;
@@ -54,8 +58,9 @@ struct Light_block
     Light_struct light;
 };
 
-struct Material_struct
+class Material_struct
 {
+public:
     size_t metallic;     // float
     size_t roughness;    // float
     size_t anisotropy;   // float
@@ -68,8 +73,8 @@ class Program_interface
     : public erhe::components::Component
 {
 public:
-    static constexpr const size_t c_max_light_count = 120;
-    static constexpr const char*  c_name            = "Program_interface";
+    static constexpr size_t            c_max_light_count = 120;
+    static constexpr const char* const c_name            = "Program_interface";
 
     Program_interface ();
     ~Program_interface() override;

@@ -17,40 +17,41 @@
 
 namespace erhe::log
 {
-    struct Category;
+    class Category;
 }
 
 namespace erhe::geometry
 {
 
-inline constexpr const Property_map_descriptor c_point_locations     { "point_locations"     , Transform_mode::matrix                                       , Interpolation_mode::linear };
-inline constexpr const Property_map_descriptor c_point_normals       { "point_normals"       , Transform_mode::normalize_inverse_transpose_matrix           , Interpolation_mode::normalized };
-inline constexpr const Property_map_descriptor c_point_normals_smooth{ "point_normals_smooth", Transform_mode::normalize_inverse_transpose_matrix           , Interpolation_mode::normalized  };
-inline constexpr const Property_map_descriptor c_point_texcoords     { "point_texcoords"     , Transform_mode::none                                         , Interpolation_mode::linear };
-inline constexpr const Property_map_descriptor c_point_tangents      { "point_tangents"      , Transform_mode::normalize_inverse_transpose_matrix_vec3_float, Interpolation_mode::normalized_vec3_float };
-inline constexpr const Property_map_descriptor c_point_bitangents    { "point_bitangents"    , Transform_mode::normalize_inverse_transpose_matrix_vec3_float, Interpolation_mode::normalized_vec3_float };
-inline constexpr const Property_map_descriptor c_point_colors        { "point_colors"        , Transform_mode::none                                         , Interpolation_mode::linear };
-inline constexpr const Property_map_descriptor c_corner_normals      { "corner_normals"      , Transform_mode::normalize_inverse_transpose_matrix           , Interpolation_mode::none };
-inline constexpr const Property_map_descriptor c_corner_texcoords    { "corner_texcoords"    , Transform_mode::none                                         , Interpolation_mode::none };
-inline constexpr const Property_map_descriptor c_corner_tangents     { "corner_tangents"     , Transform_mode::normalize_inverse_transpose_matrix_vec3_float, Interpolation_mode::none };
-inline constexpr const Property_map_descriptor c_corner_bitangents   { "corner_bitangents"   , Transform_mode::normalize_inverse_transpose_matrix_vec3_float, Interpolation_mode::none };
-inline constexpr const Property_map_descriptor c_corner_colors       { "corner_colors"       , Transform_mode::none                                         , Interpolation_mode::none };
-inline constexpr const Property_map_descriptor c_corner_indices      { "corner_indices"      , Transform_mode::none                                         , Interpolation_mode::none };
-inline constexpr const Property_map_descriptor c_polygon_centroids   { "polygon_centroids"   , Transform_mode::matrix                                       , Interpolation_mode::none };
-inline constexpr const Property_map_descriptor c_polygon_normals     { "polygon_normals"     , Transform_mode::normalize_inverse_transpose_matrix           , Interpolation_mode::none };
-inline constexpr const Property_map_descriptor c_polygon_tangents    { "polygon_tangents"    , Transform_mode::normalize_inverse_transpose_matrix_vec3_float, Interpolation_mode::none };
-inline constexpr const Property_map_descriptor c_polygon_bitangents  { "polygon_bitangents"  , Transform_mode::normalize_inverse_transpose_matrix_vec3_float, Interpolation_mode::none };
-inline constexpr const Property_map_descriptor c_polygon_colors      { "polygon_colors"      , Transform_mode::none                                         , Interpolation_mode::none };
-inline constexpr const Property_map_descriptor c_polygon_ids_vec3    { "polygon_ids_vec"     , Transform_mode::none                                         , Interpolation_mode::none };
-inline constexpr const Property_map_descriptor c_polygon_ids_uint    { "polygon_ids_uint"    , Transform_mode::none                                         , Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_point_locations     { "point_locations"     , Transform_mode::matrix                                       , Interpolation_mode::linear };
+inline constexpr Property_map_descriptor c_point_normals       { "point_normals"       , Transform_mode::normalize_inverse_transpose_matrix           , Interpolation_mode::normalized };
+inline constexpr Property_map_descriptor c_point_normals_smooth{ "point_normals_smooth", Transform_mode::normalize_inverse_transpose_matrix           , Interpolation_mode::normalized  };
+inline constexpr Property_map_descriptor c_point_texcoords     { "point_texcoords"     , Transform_mode::none                                         , Interpolation_mode::linear };
+inline constexpr Property_map_descriptor c_point_tangents      { "point_tangents"      , Transform_mode::normalize_inverse_transpose_matrix_vec3_float, Interpolation_mode::normalized_vec3_float };
+inline constexpr Property_map_descriptor c_point_bitangents    { "point_bitangents"    , Transform_mode::normalize_inverse_transpose_matrix_vec3_float, Interpolation_mode::normalized_vec3_float };
+inline constexpr Property_map_descriptor c_point_colors        { "point_colors"        , Transform_mode::none                                         , Interpolation_mode::linear };
+inline constexpr Property_map_descriptor c_corner_normals      { "corner_normals"      , Transform_mode::normalize_inverse_transpose_matrix           , Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_corner_texcoords    { "corner_texcoords"    , Transform_mode::none                                         , Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_corner_tangents     { "corner_tangents"     , Transform_mode::normalize_inverse_transpose_matrix_vec3_float, Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_corner_bitangents   { "corner_bitangents"   , Transform_mode::normalize_inverse_transpose_matrix_vec3_float, Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_corner_colors       { "corner_colors"       , Transform_mode::none                                         , Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_corner_indices      { "corner_indices"      , Transform_mode::none                                         , Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_polygon_centroids   { "polygon_centroids"   , Transform_mode::matrix                                       , Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_polygon_normals     { "polygon_normals"     , Transform_mode::normalize_inverse_transpose_matrix           , Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_polygon_tangents    { "polygon_tangents"    , Transform_mode::normalize_inverse_transpose_matrix_vec3_float, Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_polygon_bitangents  { "polygon_bitangents"  , Transform_mode::normalize_inverse_transpose_matrix_vec3_float, Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_polygon_colors      { "polygon_colors"      , Transform_mode::none                                         , Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_polygon_ids_vec3    { "polygon_ids_vec"     , Transform_mode::none                                         , Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_polygon_ids_uint    { "polygon_ids_uint"    , Transform_mode::none                                         , Interpolation_mode::none };
 
-struct Point;
-struct Polygon;
+class Point;
+class Polygon;
 class Geometry;
-struct Edge;
+class Edge;
 
-struct Corner
+class Corner
 {
+public:
     Point_id   point_id{0};
     Polygon_id polygon_id{0};
 
@@ -71,10 +72,12 @@ struct Corner
                         const Property_map<Point_id,  glm::vec3>& point_normals) const;
 };
 
-struct Point
+class Point
 {
-    struct Point_corner_context
+public:
+    class Point_corner_context
     {
+    public:
         Geometry&       geometry;
         Point_corner_id point_corner_id;
         Corner_id       corner_id;
@@ -90,8 +93,9 @@ struct Point
     void for_each_corner(Geometry&                                          geometry,
                          std::function<void(Point_corner_context& context)> callback);
 
-    struct Point_corner_context_const
+    class Point_corner_context_const
     {
+    public:
         const Geometry& geometry;
         Point_corner_id point_corner_id;
         Corner_id       corner_id;
@@ -104,11 +108,12 @@ struct Point
         }
     };
 
-    void for_each_corner_const(const Geometry&                                geometry,
+    void for_each_corner_const(const Geometry&                                          geometry,
                                std::function<void(Point_corner_context_const& context)> callback) const;
 
-    struct Point_corner_neighborhood_context
+    class Point_corner_neighborhood_context
     {
+    public:
         Geometry&       geometry;
         Point_corner_id prev_point_corner_id;
         Point_corner_id point_corner_id;
@@ -127,8 +132,9 @@ struct Point
         }
     };
 
-    struct Point_corner_neighborhood_context_const
+    class Point_corner_neighborhood_context_const
     {
+    public:
         const Geometry& geometry;
         Point_corner_id prev_point_corner_id;
         Point_corner_id point_corner_id;
@@ -158,8 +164,9 @@ struct Point
     uint32_t        reserved_corner_count{0};
 };
 
-struct Polygon
+class Polygon
 {
+public:
     Polygon_corner_id first_polygon_corner_id{0};
     uint32_t          corner_count{0};
 
@@ -222,8 +229,9 @@ struct Polygon
 
     void reverse(Geometry& geometry);
 
-    struct Polygon_corner_context
+    class Polygon_corner_context
     {
+    public:
         Geometry&         geometry;
         Polygon_corner_id polygon_corner_id;
         Corner_id         corner_id;
@@ -236,8 +244,9 @@ struct Polygon
         }
     };
 
-    struct Polygon_corner_context_const
+    class Polygon_corner_context_const
     {
+    public:
         const Geometry&   geometry;
         Polygon_corner_id polygon_corner_id;
         Corner_id         corner_id;
@@ -256,8 +265,9 @@ struct Polygon
     void for_each_corner_const(const Geometry&                                            geometry,
                                std::function<void(Polygon_corner_context_const& context)> callback) const;
 
-    struct Polygon_corner_neighborhood_context
+    class Polygon_corner_neighborhood_context
     {
+    public:
         Geometry&         geometry;
         Polygon_corner_id prev_polygon_corner_id;
         Polygon_corner_id polygon_corner_id;
@@ -276,8 +286,9 @@ struct Polygon
         }
     };
 
-    struct Polygon_corner_neighborhood_context_const
+    class Polygon_corner_neighborhood_context_const
     {
+    public:
         const Geometry&   geometry;
         Polygon_corner_id prev_polygon_corner_id;
         Polygon_corner_id polygon_corner_id;
@@ -303,15 +314,17 @@ struct Polygon
                                             std::function<void(Polygon_corner_neighborhood_context_const& context)> callback) const;
 };
 
-struct Edge
+class Edge
 {
+public:
     Point_id        a;
     Point_id        b;
     Edge_polygon_id first_edge_polygon_id;
     uint32_t        polygon_count;
 
-    struct Edge_polygon_context
+    class Edge_polygon_context
     {
+    public:
         Geometry&       geometry;
         Edge_polygon_id edge_polygon_id;
         Polygon_id      polygon_id;
@@ -324,8 +337,9 @@ struct Edge
         }
     };
 
-    struct Edge_polygon_context_const
+    class Edge_polygon_context_const
     {
+    public:
         const Geometry& geometry;
         Edge_polygon_id edge_polygon_id;
         Polygon_id      polygon_id;
@@ -345,8 +359,9 @@ struct Edge
                                 std::function<void(Edge_polygon_context_const& context)> callback) const;
 };
 
-struct Mesh_info
+class Mesh_info
 {
+public:
     size_t polygon_count              {0};
     size_t corner_count               {0};
     size_t triangle_count             {0};
@@ -487,6 +502,7 @@ public:
     // - Point must be already allocated.
     auto make_polygon_corner(const Polygon_id polygon_id, const Point_id point_id) -> Corner_id;
 
+    // Calculates the number of triangles as if all faces were triangulated
     auto count_polygon_triangles() const -> size_t;
 
     void info(Mesh_info& info) const;
@@ -619,8 +635,9 @@ public:
 
     void merge(Geometry& other, const glm::mat4 transform);
 
-    struct Weld_settings
+    class Weld_settings
     {
+    public:
         float max_point_distance    {0.05f};
         float min_normal_dot_product{0.95f};
         float max_texcoord_distance {0.05f};
@@ -633,8 +650,9 @@ public:
 
     auto volume() -> float;
 
-    struct Corner_context
+    class Corner_context
     {
+    public:
         Corner_id corner_id;
         Corner&   corner;
         bool      break_{false};
@@ -644,8 +662,10 @@ public:
             break_ = true;
         }
     };
-    struct Corner_context_const
+
+    class Corner_context_const
     {
+    public:
         Corner_id     corner_id;
         const Corner& corner;
         bool          break_{false};
@@ -655,8 +675,10 @@ public:
             break_ = true;
         }
     };
-    struct Point_context
+
+    class Point_context
     {
+    public:
         Point_id point_id;
         Point&   point;
         bool     break_{false};
@@ -666,8 +688,10 @@ public:
             break_ = true;
         }
     };
-    struct Point_context_const
+
+    class Point_context_const
     {
+    public:
         Point_id     point_id;
         const Point& point;
         bool         break_{false};
@@ -677,8 +701,10 @@ public:
             break_ = true;
         }
     };
-    struct Polygon_context
+
+    class Polygon_context
     {
+    public:
         Polygon_id polygon_id;
         Polygon&   polygon;
         bool       break_{false};
@@ -688,8 +714,10 @@ public:
             break_ = true;
         }
     };
-    struct Polygon_context_const
+
+    class Polygon_context_const
     {
+    public:
         Polygon_id     polygon_id;
         const Polygon& polygon;
         bool           break_{false};
@@ -699,8 +727,10 @@ public:
             break_ = true;
         }
     };
-    struct Edge_context
+
+    class Edge_context
     {
+    public:
         Edge_id edge_id;
         Edge&   edge;
         bool    break_{false};
@@ -711,8 +741,9 @@ public:
         }
     };
 
-    struct Edge_context_const
+    class Edge_context_const
     {
+    public:
         Edge_id     edge_id;
         const Edge& edge;
         bool        break_{false};

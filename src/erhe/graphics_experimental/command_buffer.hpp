@@ -13,26 +13,29 @@ namespace erhe::graphics
 class Buffer;
 class Texture;
 class Sampler;
-struct Pipeline;
+class Pipeline;
 class OpenGL_state_tracker;
 
 
-struct Buffer_binding
+class Buffer_binding
 {
+public:
     gl::Buffer_target buffer_target;
     unsigned int      binding_point;
 };
 
-struct Uniform_block_binding
+class Uniform_block_binding
 {
+public:
     unsigned int binding_point;
     unsigned int gl_name;
     size_t       offset;
     size_t       byte_count;
 };
 
-struct Descriptor_buffer_info
+class Descriptor_buffer_info
 {
+public:
     Buffer*  buffer;
     size_t   byte_offset;
     size_t   byte_count;

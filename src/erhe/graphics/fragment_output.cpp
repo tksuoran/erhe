@@ -5,9 +5,9 @@
 namespace erhe::graphics
 {
 
-Fragment_output::Fragment_output(std::string                     name,
-                                 gl::Fragment_shader_output_type type,
-                                 unsigned int                    location)
+Fragment_output::Fragment_output(std::string                           name,
+                                 const gl::Fragment_shader_output_type type,
+                                 const unsigned int                    location)
     : m_name    {std::move(name)}
     , m_type    {type}
     , m_location{location}

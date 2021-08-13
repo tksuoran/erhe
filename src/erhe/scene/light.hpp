@@ -65,8 +65,9 @@ public:
     std::shared_ptr<Node> m_node;
     Projection            m_projection;
 
-    struct Transforms
+    class Transforms
     {
+    public:
         Transform clip_from_node;
         Transform clip_from_world;
         Transform texture_from_world{glm::mat4(1.0f), glm::mat4(1.0f)};

@@ -18,8 +18,9 @@ namespace erhe::graphics
 namespace editor
 {
 
-struct Frame_resources
+class Frame_resources
 {
+public:
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_coherent_bit   |
                                                           gl::Buffer_storage_mask::map_persistent_bit |
                                                           gl::Buffer_storage_mask::map_write_bit};
@@ -28,11 +29,11 @@ struct Frame_resources
                                                             gl::Map_buffer_access_mask::map_persistent_bit |
                                                             gl::Map_buffer_access_mask::map_write_bit};
 
-    explicit Frame_resources(size_t material_stride,  size_t material_count,
-                             size_t light_stride,     size_t light_count,
-                             size_t camera_stride,    size_t camera_count,
-                             size_t primitive_stride, size_t primitive_count,
-                             size_t draw_stride,      size_t draw_count)
+    explicit Frame_resources(const size_t material_stride,  const size_t material_count,
+                             const size_t light_stride,     const size_t light_count,
+                             const size_t camera_stride,    const size_t camera_count,
+                             const size_t primitive_stride, const size_t primitive_count,
+                             const size_t draw_stride,      const size_t draw_count)
         : material_buffer     {gl::Buffer_target::uniform_buffer,        material_count  * material_stride,  storage_mask, access_mask}
         , light_buffer        {gl::Buffer_target::uniform_buffer,        light_count     * light_stride,     storage_mask, access_mask}
         , camera_buffer       {gl::Buffer_target::uniform_buffer,        camera_count    * camera_stride,    storage_mask, access_mask}

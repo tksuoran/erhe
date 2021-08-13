@@ -17,8 +17,9 @@ enum class Colorizer : unsigned int
     glsl     = 1
 };
 
-struct Level
+class Level
 {
+public:
     static constexpr int LEVEL_ALL  {0};
     static constexpr int LEVEL_TRACE{1};
     static constexpr int LEVEL_INFO {2};
@@ -26,8 +27,9 @@ struct Level
     static constexpr int LEVEL_ERROR{4};
 };
 
-struct Color
+class Color
 {
+public:
     static constexpr int DARK_BLUE   {1};
     static constexpr int DARK_GREEN  {2};
     static constexpr int DARK_RED    {4};
@@ -47,8 +49,9 @@ struct Color
     static constexpr int WHITE       {1 | 2 | 4 | 8};
 };
 
-struct Category
+class Category
 {
+public:
     Category(int color0, int color1, int level, Colorizer colorizer = Colorizer::default_) noexcept
         : m_color    {color0, color1}
         , m_level    {level}
@@ -127,8 +130,9 @@ protected:
     bool               m_newline{false};
 };
 
-struct Log
+class Log
 {
+public:
     static int s_indent;
     static bool print_color();
     static void indent(int indent_amount);

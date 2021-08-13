@@ -110,7 +110,7 @@ void Scene_manager::make_brushes()
 {
     ZoneScoped;
 
-    const Brush_create_context brush_create_context{primitive_build_context()};
+    const Brush_create_context brush_create_context{geometry_uploader()};
     mango::ConcurrentQueue     execution_queue;
 
     auto floor_box_shape = make_shared<btBoxShape>(btVector3{20.0f, 0.5f, 20.0f});
@@ -121,15 +121,17 @@ void Scene_manager::make_brushes()
     execution_queue.enqueue([this, &floor_box_shape]() {
         ZoneScopedN("Floor brush");
 
-        const Brush_create_context context{primitive_build_context(), Normal_style::polygon_normals};
+        const Brush_create_context context{geometry_uploader(), Normal_style::polygon_normals};
 
-        shared_ptr<Geometry> floor_geometry = std::make_shared<Geometry>(std::move(make_box(vec3(40.0f, 1.0f, 40.0f),
+        auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(std::move(make_box(vec3(40.0f, 1.0f, 40.0f),
                                                                                             ivec3(40, 1, 40))));
+        //auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(std::move(make_box(vec3(40.0f, 1.0f, 40.0f),
+        //                                                                                    ivec3(1, 1, 1))));
         floor_geometry->name = "floor";
         floor_geometry->build_edges();
 
         const Brush::Create_info brush_create_info{floor_geometry,
-                                                   primitive_build_context(),
+                                                   geometry_uploader(),
                                                    Normal_style::polygon_normals,
                                                    0.0f, // density for static object
                                                    0.0f, // volume for static object
@@ -137,12 +139,13 @@ void Scene_manager::make_brushes()
         m_floor_brush = make_unique<Brush>(brush_create_info);
     });
 
+#if 1
     if constexpr (true) // teapot
     {
         execution_queue.enqueue([this]() {
             ZoneScopedN("teapot from .obj");
 
-            const Brush_create_context context{primitive_build_context(), Normal_style::point_normals};
+            const Brush_create_context context{geometry_uploader(), Normal_style::point_normals};
 
             auto geometry = parse_obj_geometry("res/models/teapot.obj");
             geometry.compute_polygon_normals();
@@ -158,10 +161,10 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue([this]() {
             ZoneScopedN("platonic solids");
 
-            const Brush_create_context context{primitive_build_context(), Normal_style::polygon_normals};
-            constexpr const bool instantiate = false;
+            const Brush_create_context context{geometry_uploader(), Normal_style::polygon_normals};
+            constexpr bool instantiate = true;
 
-            constexpr const float original_scale = 1.0f;
+            constexpr float original_scale = 1.0f;
             make_brush(instantiate, make_dodecahedron (original_scale), context);
             make_brush(instantiate, make_icosahedron  (original_scale), context);
             make_brush(instantiate, make_octahedron   (original_scale), context);
@@ -174,13 +177,13 @@ void Scene_manager::make_brushes()
         });
     }
 
-    if constexpr (true)
+    if constexpr (false)
     {
         execution_queue.enqueue([this]() {
             ZoneScopedN("Sphere");
 
-            const Brush_create_context context{primitive_build_context(), Normal_style::polygon_normals};
-            constexpr const bool instantiate = true;
+            const Brush_create_context context{geometry_uploader(), Normal_style::polygon_normals};
+            constexpr bool instantiate = true;
 
             make_brush(instantiate,
                        make_sphere(1.0f, 12 * 4, 4 * 6),
@@ -191,11 +194,11 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue([this]() {
             ZoneScopedN("Torus");
 
-            const Brush_create_context context{primitive_build_context(), Normal_style::polygon_normals};
-            constexpr const bool instantiate = true;
+            const Brush_create_context context{geometry_uploader(), Normal_style::polygon_normals};
+            constexpr bool instantiate = true;
 
-            constexpr const float major_radius = 1.0f;
-            constexpr const float minor_radius = 0.25f;
+            constexpr float major_radius = 1.0f;
+            constexpr float minor_radius = 0.25f;
             auto torus_collision_volume_calculator = [=](float scale) -> float
             {
                 return torus_volume(major_radius * scale, minor_radius * scale);
@@ -208,13 +211,13 @@ void Scene_manager::make_brushes()
 
                 auto torus_shape = make_shared<btCompoundShape>();
 
-                const double subdivisions        = 16.0;
-                const double scaled_major_radius = major_radius * scale;
-                const double scaled_minor_radius = minor_radius * scale;
-                const double major_circumference = 2.0 * SIMD_PI * scaled_major_radius;
-                const double capsule_length      = major_circumference / subdivisions;
-                const btVector3 forward(btScalar(0.0), btScalar(1.0), btScalar(0.0));
-                const btVector3 side(btScalar(scaled_major_radius), btScalar(0.0), btScalar(0.0));
+                const double    subdivisions        = 16.0;
+                const double    scaled_major_radius = major_radius * scale;
+                const double    scaled_minor_radius = minor_radius * scale;
+                const double    major_circumference = 2.0 * SIMD_PI * scaled_major_radius;
+                const double    capsule_length      = major_circumference / subdivisions;
+                const btVector3 forward{btScalar(0.0), btScalar(1.0), btScalar(0.0)};
+                const btVector3 side   {btScalar(scaled_major_radius), btScalar(0.0), btScalar(0.0)};
 
                 // TODO Fix new
                 btCapsuleShapeZ* shape = new btCapsuleShapeZ(btScalar(scaled_minor_radius), btScalar(capsule_length));
@@ -233,7 +236,7 @@ void Scene_manager::make_brushes()
             };
 
             make_brush(instantiate,
-                       make_shared<Geometry>(move(make_torus(major_radius, minor_radius, 42, 32))),
+                       make_shared<erhe::geometry::Geometry>(move(make_torus(major_radius, minor_radius, 42, 32))),
                        context,
                        torus_collision_volume_calculator,
                        torus_collision_shape_generator);
@@ -242,8 +245,8 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue([this]() {
             ZoneScopedN("Cylinder");
 
-            const Brush_create_context context{primitive_build_context(), Normal_style::polygon_normals};
-            constexpr const bool instantiate = true;
+            const Brush_create_context context{geometry_uploader(), Normal_style::polygon_normals};
+            constexpr bool instantiate = true;
 
             make_brush(instantiate,
                        make_cylinder(-1.0f, 1.0f, 1.0f, true, true, 32, 2),
@@ -254,8 +257,8 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue([this]() {
             ZoneScopedN("Cone");
 
-            const Brush_create_context context{primitive_build_context(), Normal_style::polygon_normals};
-            constexpr const bool instantiate = true;
+            const Brush_create_context context{geometry_uploader(), Normal_style::polygon_normals};
+            constexpr bool instantiate = true;
 
             make_brush(instantiate,
                        make_cone(-1.0f, 1.0f, 1.0f, true, 42, 4),
@@ -278,7 +281,7 @@ void Scene_manager::make_brushes()
         ring_geometry.transform(erhe::toolkit::mat4_swap_xy);
         ring_geometry.reverse_polygons();
         //auto ring_geometry = make_shared<Geometry>(move(ring_geometry));
-        auto rotate_ring_pg = make_primitive_shared(ring_geometry, primitive_build_context());
+        auto rotate_ring_pg = make_primitive_shared(ring_geometry, geometry_uploader());
 
         const vec3 pos{0.0f, 0.0f, 0.0f};
         auto x_rotate_ring_mesh = m_scene_root->make_mesh_node("X ring", rotate_ring_pg, x_material, nullptr, pos);
@@ -290,13 +293,13 @@ void Scene_manager::make_brushes()
         z_rotate_ring_mesh->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
     }
 
-    if constexpr (true)
+    if constexpr (false)
     {
         execution_queue.enqueue([this]() {
             ZoneScopedN("Johnson solids");
 
-            const Brush_create_context context{primitive_build_context(), Normal_style::polygon_normals};
-            constexpr const bool instantiate = false;
+            const Brush_create_context context{geometry_uploader(), Normal_style::polygon_normals};
+            constexpr bool instantiate = true;
 
             const Json_library library("res/polyhedra/johnson.json");
             for (const auto& key_name : library.names)
@@ -312,16 +315,17 @@ void Scene_manager::make_brushes()
             }
         });
     }
+#endif
 
     execution_queue.wait();
 
     buffer_transfer_queue().flush();
 }
 
-auto Scene_manager::primitive_build_context()
--> erhe::primitive::Primitive_build_context&
+auto Scene_manager::geometry_uploader()
+-> erhe::primitive::Geometry_uploader&
 {
-    return m_mesh_memory->primitive_build_context();
+    return m_mesh_memory->geometry_uploader();
 }
 
 auto Scene_manager::buffer_transfer_queue()
@@ -358,8 +362,9 @@ void Scene_manager::make_mesh_nodes()
 {
     ZoneScoped;
 
-    struct Pack_entry
+    class Pack_entry
     {
+    public:
         Pack_entry() = default;
         explicit Pack_entry(Brush* brush)
             : brush    {brush}
@@ -631,7 +636,7 @@ void Scene_manager::add_scene()
     make_brushes();
     make_mesh_nodes();
     make_punctual_light_nodes();
-    //add_floor();
+    add_floor();
 }
 
 namespace
@@ -648,8 +653,9 @@ int sort_value(Light::Type light_type)
     }
 }
 
-struct Light_comparator
+class Light_comparator
 {
+public:
     inline auto operator()(const shared_ptr<Light>& lhs,
                            const shared_ptr<Light>& rhs) -> bool
     {

@@ -18,18 +18,17 @@ public:
 
     void clear();
 
-    void make_attribute(Vertex_attribute::Usage     usage,
-                        gl::Attribute_type          shader_type,
-                        Vertex_attribute::Data_type data_type);
-    //-> Vertex_attribute&;
+    void make_attribute(const Vertex_attribute::Usage     usage,
+                        const gl::Attribute_type          shader_type,
+                        const Vertex_attribute::Data_type data_type);
 
-    auto has_attribute(Vertex_attribute::Usage_type usage_type, unsigned int index = 0) const
+    auto has_attribute(const Vertex_attribute::Usage_type usage_type, const unsigned int index = 0) const
     -> bool;
 
-    auto find_attribute_maybe(Vertex_attribute::Usage_type usage_type, unsigned int index = 0) const
+    auto find_attribute_maybe(const Vertex_attribute::Usage_type usage_type, const unsigned int index = 0) const
     -> const Vertex_attribute*;
 
-    auto find_attribute(Vertex_attribute::Usage_type usage_type, unsigned int index = 0) const
+    auto find_attribute(const Vertex_attribute::Usage_type usage_type, const unsigned int index = 0) const
     -> gsl::not_null<const Vertex_attribute*>;
 
     auto stride() const

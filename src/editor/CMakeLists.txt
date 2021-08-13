@@ -120,7 +120,7 @@ set(source_list
     on_load.cpp
     textures.cpp
     textures.hpp
-    TracyClient.cpp
+    #TracyClient.cpp
 
     res/shaders/anisotropic.vert
     res/shaders/anisotropic.frag

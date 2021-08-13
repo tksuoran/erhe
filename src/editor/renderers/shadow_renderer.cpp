@@ -117,7 +117,7 @@ static constexpr const char* c_shadow_renderer_render = "Shadow_renderer::render
 void Shadow_renderer::render(Layer_collection& layers,
                              const ICamera&    camera)
 {
-    if (s_enable == false)
+    if constexpr (!s_enable)
     {
         return;
     }

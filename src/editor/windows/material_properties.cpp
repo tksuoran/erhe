@@ -30,7 +30,7 @@ void Material_properties::initialize_component()
 void Material_properties::window(Pointer_context&)
 {
     const auto& materials = m_scene_root->materials();
-    int last = static_cast<int>(materials.size()) - 1;
+    const int   last      = static_cast<int>(materials.size()) - 1;
     ImGui::Begin("Material");
     if (ImGui::Button("Prev"))
     {
@@ -43,7 +43,7 @@ void Material_properties::window(Pointer_context&)
     }
     if (m_material_index >= 0 && m_material_index <= last)
     {
-        auto material = materials.at(m_material_index);
+        const auto material = materials.at(m_material_index);
         ImGui::Text("%s", material->name.c_str());
         ImGui::SliderFloat("Metallic",   &material->metallic,    0.0f, 1.0f);
         ImGui::SliderFloat("Anisotropy", &material->anisotropy, -1.0f, 1.0f);

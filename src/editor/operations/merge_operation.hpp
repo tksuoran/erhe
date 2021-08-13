@@ -12,7 +12,8 @@ namespace erhe::physics
 
 namespace erhe::primitive
 {
-    struct Primitive_build_context;
+    class Geometry_uploader;
+    class Primitive_geometry;
 };
 
 namespace erhe::scene
@@ -31,13 +32,14 @@ class Merge_operation
     : public IOperation
 {
 public:
-    struct Context
+    class Context
     {
-        erhe::primitive::Primitive_build_context& primitive_build_context;
-        erhe::scene::Layer&                       layer;
-        erhe::scene::Scene&                       scene;
-        erhe::physics::World&                     physics_world;
-        std::shared_ptr<Selection_tool>           selection_tool;
+    public:
+        erhe::primitive::Geometry_uploader& geometry_uploader;
+        erhe::scene::Layer&                 layer;
+        erhe::scene::Scene&                 scene;
+        erhe::physics::World&               physics_world;
+        std::shared_ptr<Selection_tool>     selection_tool;
     };
 
     explicit Merge_operation(Context& context);
@@ -47,31 +49,32 @@ public:
     void undo   () override;
 
 private:
-    struct Source_entry
+    class Source_entry
     {
-        Source_entry(erhe::primitive::Primitive_build_context& primitive_build_context,
-                     erhe::scene::Layer&                       layer,
-                     erhe::scene::Scene&                       scene,
-                     erhe::physics::World&                     physics_world,
-                     std::shared_ptr<erhe::scene::Mesh>        mesh,
-                     std::shared_ptr<erhe::scene::Node>        node,
-                     std::vector<erhe::primitive::Primitive>   primitives)
-            : primitive_build_context{primitive_build_context}
-            , layer                  {layer                  }
-            , scene                  {scene                  }
-            , physics_world          {physics_world          }
-            , mesh                   {mesh                   }
-            , node                   {node                   }
-            , primitives             {primitives             }
+    public:
+        Source_entry(erhe::primitive::Geometry_uploader&     geometry_uplaoder,
+                     erhe::scene::Layer&                     layer,
+                     erhe::scene::Scene&                     scene,
+                     erhe::physics::World&                   physics_world,
+                     std::shared_ptr<erhe::scene::Mesh>      mesh,
+                     std::shared_ptr<erhe::scene::Node>      node,
+                     std::vector<erhe::primitive::Primitive> primitives)
+            : geometry_uploader{geometry_uploader}
+            , layer            {layer                  }
+            , scene            {scene                  }
+            , physics_world    {physics_world          }
+            , mesh             {mesh                   }
+            , node             {node                   }
+            , primitives       {primitives             }
         {
         }
-        erhe::primitive::Primitive_build_context& primitive_build_context;
-        erhe::scene::Layer&                       layer;
-        erhe::scene::Scene&                       scene;
-        erhe::physics::World&                     physics_world;
-        std::shared_ptr<erhe::scene::Mesh>        mesh;
-        std::shared_ptr<erhe::scene::Node>        node;
-        std::vector<erhe::primitive::Primitive>   primitives;
+        erhe::primitive::Geometry_uploader&     geometry_uploader;
+        erhe::scene::Layer&                     layer;
+        erhe::scene::Scene&                     scene;
+        erhe::physics::World&                   physics_world;
+        std::shared_ptr<erhe::scene::Mesh>      mesh;
+        std::shared_ptr<erhe::scene::Node>      node;
+        std::vector<erhe::primitive::Primitive> primitives;
     };
     Context                                                     m_context;
     std::vector<Source_entry>                                   m_source_entries;

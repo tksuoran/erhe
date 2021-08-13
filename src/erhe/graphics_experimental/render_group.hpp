@@ -15,12 +15,13 @@ namespace erhe::graphics
 {
 
 class Buffer;
-struct Pipeline;
+class Pipeline;
 class Shader_stages;
 
 
-struct Draw_key
+class Draw_key
 {
+public:
     Draw_key() = delete;
 
     explicit Draw_key(gsl::not_null<erhe::graphics::Shader_stages*> program)
@@ -54,8 +55,9 @@ auto operator==(const Draw_key& lhs, const Draw_key& rhs) noexcept
 auto operator!=(const Draw_key& lhs, const Draw_key& rhs) noexcept
 -> bool;
 
-struct Draw_key_hash
+class Draw_key_hash
 {
+public:
     auto operator()(const Draw_key& draw_key) const noexcept
     -> size_t;
 };
@@ -69,8 +71,9 @@ struct Draw_key_hash
 /// Draw_span maps to single call to glMultiDrawElementsIndirect().
 /// For each span, a range up, covering capacity_draws number of draws,
 /// is allocated from draw_indirect buffer
-struct Batch
+class Batch
 {
+public:
     Batch(size_t draw_offset, size_t draw_capacity) noexcept
         : draw_offset  {draw_offset}
         , draw_capacity{draw_capacity}

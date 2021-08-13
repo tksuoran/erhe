@@ -134,19 +134,19 @@ enum class Keycode : signed int
 };
 
 using Key_modifier_mask = uint32_t;
-constexpr const uint32_t Key_modifier_bit_ctrl  = 0x0001u;
-constexpr const uint32_t Key_modifier_bit_shift = 0x0002u;
-constexpr const uint32_t Key_modifier_bit_super = 0x0004u;
-constexpr const uint32_t Key_modifier_bit_menu  = 0x0008u;
+constexpr uint32_t Key_modifier_bit_ctrl  = 0x0001u;
+constexpr uint32_t Key_modifier_bit_shift = 0x0002u;
+constexpr uint32_t Key_modifier_bit_super = 0x0004u;
+constexpr uint32_t Key_modifier_bit_menu  = 0x0008u;
 
 using Mouse_button = uint32_t;
-constexpr const uint32_t Mouse_button_left   = 0;
-constexpr const uint32_t Mouse_button_right  = 1;
-constexpr const uint32_t Mouse_button_middle = 2;
-constexpr const uint32_t Mouse_button_wheel  = 3;
-constexpr const uint32_t Mouse_button_x1     = 4;
-constexpr const uint32_t Mouse_button_x2     = 5;
-constexpr const uint32_t Mouse_button_count  = 6;
+constexpr uint32_t Mouse_button_left   = 0;
+constexpr uint32_t Mouse_button_right  = 1;
+constexpr uint32_t Mouse_button_middle = 2;
+constexpr uint32_t Mouse_button_wheel  = 3;
+constexpr uint32_t Mouse_button_x1     = 4;
+constexpr uint32_t Mouse_button_x2     = 5;
+constexpr uint32_t Mouse_button_count  = 6;
 
 class Event_handler;
 class View;
@@ -259,15 +259,15 @@ public:
 
     void on_close() override;
 
-    void on_resize(int width, int height) override;
+    void on_resize(const int width, const int height) override;
 
-    void on_key_press(Keycode code, uint32_t mask) override;
+    void on_key_press(const Keycode code, const uint32_t mask) override;
 
-    void on_key_release(Keycode code, uint32_t mask) override;
+    void on_key_release(const Keycode code, const uint32_t mask) override;
 
-    void on_mouse_move(double x, double y) override;
+    void on_mouse_move(const double x, const double y) override;
 
-    void on_mouse_click(Mouse_button button, int count) override;
+    void on_mouse_click(const Mouse_button button, const int count) override;
 
 private:
     Context_window*       m_window;

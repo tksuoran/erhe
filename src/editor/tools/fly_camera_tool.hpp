@@ -25,8 +25,8 @@ public:
     Fly_camera_space_mouse_listener (Fly_camera_tool& fly_camera_tool);
     ~Fly_camera_space_mouse_listener();
 
-    bool is_active     ()                                         override;
-    void set_active    (bool value)                               override;
+    auto is_active     () -> bool                                 override;
+    void set_active    (const bool value)                         override;
     void on_translation(const int tx, const int ty, const int tz) override;
     void on_rotation   (const int rx, const int ry, const int rz) override;
     void on_button     (const int id)                             override;
@@ -68,15 +68,15 @@ public:
     // Implements IUpdate_once_per_frame
     void update_once_per_frame(const erhe::components::Time_context& time_context) override;
 
-    void x_pos_control(bool pressed);
-    void x_neg_control(bool pressed);
-    void y_pos_control(bool pressed);
-    void y_neg_control(bool pressed);
-    void z_neg_control(bool pressed);
-    void z_pos_control(bool pressed);
+    void x_pos_control(const bool pressed);
+    void x_neg_control(const bool pressed);
+    void y_pos_control(const bool pressed);
+    void y_neg_control(const bool pressed);
+    void z_neg_control(const bool pressed);
+    void z_pos_control(const bool pressed);
 
-    void translation(int tx, int ty, int tz);
-    void rotation(int rx, int ry, int rz);
+    void translation(const int tx, const int ty, const int tz);
+    void rotation   (const int rx, const int ry, const int rz);
 
 private:
     auto begin(Pointer_context& pointer_context) -> bool;

@@ -14,14 +14,15 @@ using glm::vec4;
 
 // Using geometric centroids, centroids are floating above the polygon.
 // The distance from the polygon is more when using small subdivision.
-constexpr const bool use_geometric_centroids = false;
+constexpr bool use_geometric_centroids = false;
 
 // Using flat centroids ensures centroids are on polygon.
-constexpr const bool use_flat_centroids      = true;
+constexpr bool use_flat_centroids      = true;
 
 
-struct Torus_builder
+class Torus_builder
 {
+public:
     Geometry& geometry;
 
     double major_radius;
@@ -40,7 +41,7 @@ struct Torus_builder
     Property_map<Polygon_id, vec3>* polygon_centroids{nullptr};
     Property_map<Polygon_id, vec3>* polygon_normals  {nullptr};
 
-    auto torus_point(double rel_major, double rel_minor)
+    auto torus_point(const double rel_major, const double rel_minor)
     -> Point_id
     {
         const double R         = major_radius;
@@ -92,7 +93,7 @@ struct Torus_builder
         return point_id;
     }
 
-    void make_corner(Polygon_id polygon_id, int major, int minor)
+    void make_corner(const Polygon_id polygon_id, int major, int minor)
     {
         const auto rel_major           = static_cast<double>(major) / static_cast<double>(major_axis_steps);
         const auto rel_minor           = static_cast<double>(minor) / static_cast<double>(minor_axis_steps);
@@ -129,7 +130,11 @@ struct Torus_builder
         //                 is_major_seam, is_minor_seam, point_id, corner_id);
     }
 
-    Torus_builder(Geometry& geometry, double major_radius, double minor_radius, int major_axis_steps, int minor_axis_steps)
+    Torus_builder(Geometry&    geometry,
+                  const double major_radius,
+                  const double minor_radius,
+                  const int    major_axis_steps,
+                  const int    minor_axis_steps)
         : geometry        {geometry}
         , major_radius    {major_radius}
         , minor_radius    {minor_radius}
@@ -201,7 +206,10 @@ struct Torus_builder
     }
 };
 
-auto make_torus(double major_radius, double minor_radius, int major_axis_steps, int minor_axis_steps)
+auto make_torus(const double major_radius,
+                const double minor_radius,
+                const int    major_axis_steps,
+                const int    minor_axis_steps)
 -> Geometry
 {
     ZoneScoped;
@@ -212,7 +220,7 @@ auto make_torus(double major_radius, double minor_radius, int major_axis_steps, 
     });
 }
 
-auto torus_volume(float major_radius, float minor_radius) -> float
+auto torus_volume(const float major_radius, const float minor_radius) -> float
 {
     return glm::pi<float>() * minor_radius * minor_radius * 2.0f * glm::pi<float>() * major_radius;
 }

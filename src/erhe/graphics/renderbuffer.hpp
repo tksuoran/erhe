@@ -10,14 +10,14 @@ namespace erhe::graphics
 class Renderbuffer
 {
 public:
-    Renderbuffer(gl::Internal_format internal_format,
-                 unsigned int        width,
-                 unsigned int        height);
+    Renderbuffer(const gl::Internal_format internal_format,
+                 const unsigned int        width,
+                 const unsigned int        height);
 
-    Renderbuffer(gl::Internal_format internal_format,
-                 unsigned int        sample_count,
-                 unsigned int        width,
-                 unsigned int        height);
+    Renderbuffer(const gl::Internal_format internal_format,
+                 const unsigned int        sample_count,
+                 const unsigned int        width,
+                 const unsigned int        height);
 
     ~Renderbuffer();
 
@@ -36,8 +36,9 @@ private:
     unsigned int        m_height      {0};
 };
 
-struct Renderbuffer_hash
+class Renderbuffer_hash
 {
+public:
     auto operator()(const Renderbuffer& renderbuffer) const noexcept -> size_t;
 };
 

@@ -25,9 +25,9 @@ namespace erhe::physics
 
 namespace erhe::primitive
 {
-    struct Primitive_build_context;
-    struct Primitive_geometry;
-    struct Material;
+    class Geometry_uploader;
+    class Material;
+    class Primitive_geometry;
 }
 
 namespace erhe::scene
@@ -52,7 +52,7 @@ public:
     Reference_frame(const erhe::geometry::Geometry& geometry,
                     erhe::geometry::Polygon_id      polygon_id);
 
-    void transform_by(glm::mat4 m);
+    void transform_by(const glm::mat4 m);
 
     auto transform() const -> glm::mat4;
 
@@ -67,26 +67,27 @@ public:
     glm::vec3                  N{0.0f, 1.0f, 0.0f};
 };
 
-struct Brush_create_info final
+class Brush_create_info final
 {
+public:
     Brush_create_info(const std::shared_ptr<erhe::geometry::Geometry>& geometry,
-                      erhe::primitive::Primitive_build_context&        context,
-                      erhe::primitive::Normal_style                    normal_style,
-                      float                                            density,
-                      float                                            volume,
+                      erhe::primitive::Geometry_uploader&              geometry_uploader,
+                      const erhe::primitive::Normal_style              normal_style,
+                      const float                                      density,
+                      const float                                      volume,
                       const std::shared_ptr<btCollisionShape>&         collision_shape);
 
     Brush_create_info(const std::shared_ptr<erhe::geometry::Geometry>& geometry,
-                      erhe::primitive::Primitive_build_context&        context,
-                      erhe::primitive::Normal_style                    normal_style,
-                      float                                            density,
-                      Collision_volume_calculator                      collision_volume_calculator,
-                      Collision_shape_generator                        collision_shape_generator);
+                      erhe::primitive::Geometry_uploader&              geometry_uploader,
+                      const erhe::primitive::Normal_style              normal_style,
+                      const float                                      density,
+                      const Collision_volume_calculator                collision_volume_calculator,
+                      const Collision_shape_generator                  collision_shape_generator);
 
     ~Brush_create_info();
 
     std::shared_ptr<erhe::geometry::Geometry> geometry;
-    erhe::primitive::Primitive_build_context& context;
+    erhe::primitive::Geometry_uploader&       geometry_uploader;
     erhe::primitive::Normal_style             normal_style;
     float                                     density{1.0f};
     float                                     volume{1.0f};
@@ -95,8 +96,9 @@ struct Brush_create_info final
     Collision_shape_generator                 collision_shape_generator;
 };
 
-struct Instance
+class Instance
 {
+public:
     std::shared_ptr<erhe::scene::Node> node;
     std::shared_ptr<erhe::scene::Mesh> mesh;
     std::shared_ptr<Node_physics>      node_physics;
@@ -107,7 +109,7 @@ class Brush final
 public:
     using Create_info = Brush_create_info;
 
-    explicit Brush(const erhe::primitive::Primitive_build_context& context);
+    explicit Brush(const erhe::primitive::Geometry_uploader& geometry_uploader);
     explicit Brush(const Create_info& create_info);
     ~Brush        ();
     Brush         (const Brush&) = delete;
@@ -119,10 +121,11 @@ public:
 
     auto get_reference_frame(const uint32_t corner_count) -> Reference_frame;
 
-    static constexpr const float c_scale_factor = 65536.0f;
+    static constexpr float c_scale_factor = 65536.0f;
 
-    struct Scaled
+    class Scaled
     {
+    public:
         int                                                  scale_key;
         std::shared_ptr<erhe::primitive::Primitive_geometry> primitive_geometry;
         std::shared_ptr<btCollisionShape>                    collision_shape;
@@ -146,13 +149,13 @@ public:
     -> Instance;
 
     std::shared_ptr<erhe::geometry::Geometry>            geometry;
-    const erhe::primitive::Primitive_build_context&      context;
+    const erhe::primitive::Geometry_uploader&            geometry_uploader;
     std::shared_ptr<erhe::primitive::Primitive_geometry> primitive_geometry;
     erhe::primitive::Normal_style                        normal_style{erhe::primitive::Normal_style::corner_normals};
     std::shared_ptr<btCollisionShape>                    collision_shape;
     Collision_volume_calculator                          collision_volume_calculator;
     Collision_shape_generator                            collision_shape_generator;
-    float                                                volume{0.0f};
+    float                                                volume {0.0f};
     float                                                density{1.0f};
     std::vector<Reference_frame>                         reference_frames;
     std::vector<Scaled>                                  scaled_entries;

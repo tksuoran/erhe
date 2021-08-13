@@ -8,50 +8,50 @@ class Controller
 public:
     Controller();
 
-    Controller(bool linear, bool multiply);
+    Controller(const bool linear, const bool multiply);
 
     auto damp() const -> float;
 
-    void set_damp(float value);
+    void set_damp(const float value);
 
     auto max_value() const -> float;
 
-    void set_max_value(float value);
+    void set_max_value(const float value);
 
     auto max_delta() const -> float;
 
-    void set_max_delta(float value);
+    void set_max_delta(const float value);
 
     void update();
 
-    void adjust(float delta);
+    void adjust(const float delta);
 
-    void adjust(double delta)
+    void adjust(const double delta)
     {
         adjust(static_cast<float>(delta));
     }
 
-    void set_inhibit(bool value);
+    void set_inhibit(const bool value);
 
     auto more() const -> bool;
 
-    void set_more(bool value);
+    void set_more(const bool value);
 
     auto less() const -> bool;
 
-    void set_less(bool value);
+    void set_less(const bool value);
 
     auto stop() const -> bool;
 
-    void set_stop(bool value);
+    void set_stop(const bool value);
 
     void clear();
 
     auto current_value() const -> float;
 
-    void set_damp_mode(bool linear, bool multiply);
+    void set_damp_mode(const bool linear, const bool multiply);
 
-    void set_damp_and_max_delta(float damp, float max_delta);
+    void set_damp_and_max_delta(const float damp, const float max_delta);
 
 private:
     void dampen();

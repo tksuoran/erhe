@@ -9,14 +9,15 @@
 namespace erhe::graphics
 {
 
-struct InternalFormatFormatType
+class InternalFormatFormatType
 {
+public:
     gl::Internal_format internal_format;
     gl::Pixel_format    format;
     gl::Pixel_type      type;
 };
 
-auto component_count(gl::Pixel_format pixel_format)
+auto component_count(const gl::Pixel_format pixel_format)
 -> size_t
 {
     switch (pixel_format)
@@ -52,7 +53,7 @@ auto component_count(gl::Pixel_format pixel_format)
     }
 }
 
-auto byte_count(gl::Pixel_type pixel_type)
+auto byte_count(const gl::Pixel_type pixel_type)
 -> size_t
 {
     switch (pixel_type)
@@ -131,7 +132,7 @@ constexpr std::array INTERNAL_FORMAT_INFO =
     InternalFormatFormatType{ gl::Internal_format::depth_component16, gl::Pixel_format::depth_component, gl::Pixel_type::unsigned_int   }
 };
 
-auto get_upload_pixel_byte_count(gl::Internal_format internalformat)
+auto get_upload_pixel_byte_count(const gl::Internal_format internalformat)
 -> size_t
 {
     for (const auto& entry : INTERNAL_FORMAT_INFO)
@@ -145,9 +146,9 @@ auto get_upload_pixel_byte_count(gl::Internal_format internalformat)
     FATAL("Bad internal format");
 }
 
-auto get_format_and_type(gl::Internal_format internalformat,
-                         gl::Pixel_format&   format,
-                         gl::Pixel_type&     type)
+auto get_format_and_type(const gl::Internal_format internalformat,
+                         gl::Pixel_format&         format,
+                         gl::Pixel_type&           type)
 -> bool
 {
     for (const auto& entry : INTERNAL_FORMAT_INFO)
@@ -162,7 +163,7 @@ auto get_format_and_type(gl::Internal_format internalformat,
     return false;
 }
 
-auto Texture::storage_dimensions(gl::Texture_target target)
+auto Texture::storage_dimensions(const gl::Texture_target target)
 -> int
 {
     switch (target)
@@ -201,7 +202,7 @@ auto Texture::storage_dimensions(gl::Texture_target target)
     }
 }
 
-auto Texture::mipmap_dimensions(gl::Texture_target target)
+auto Texture::mipmap_dimensions(const gl::Texture_target target)
 -> int
 {
     switch (target)
@@ -343,12 +344,12 @@ void Texture_create_info::calculate_level_count()
     }
 }
 
-Texture_create_info::Texture_create_info(gl::Texture_target  target,
-                                         gl::Internal_format internal_format,
-                                         bool                use_mipmaps,
-                                         int                 width,
-                                         int                 height,
-                                         int                 depth
+Texture_create_info::Texture_create_info(const gl::Texture_target  target,
+                                         const gl::Internal_format internal_format,
+                                         const bool                use_mipmaps,
+                                         const int                 width,
+                                         const int                 height,
+                                         const int                 depth
 )
     : target         {target}
     , internal_format{internal_format}
@@ -471,7 +472,7 @@ Texture::Texture(const Create_info& create_info)
     }
 }
 
-void Texture::upload(gl::Internal_format internal_format, int width, int height, int depth)
+void Texture::upload(const gl::Internal_format internal_format, const int width, const int height, const int depth)
 {
     Expects(internal_format == m_internal_format);
     Expects(width  >= 1);
@@ -510,7 +511,11 @@ void Texture::upload(gl::Internal_format internal_format, int width, int height,
     }
 }
 
-void Texture::upload(gl::Internal_format internal_format, gsl::span<const std::byte> data, int width, int height, int depth)
+void Texture::upload(const gl::Internal_format        internal_format,
+                     const gsl::span<const std::byte> data,
+                     const int                        width,
+                     const int                        height,
+                     const int                        depth)
 {
     Expects(internal_format == m_internal_format);
     Expects(width  >= 1);
@@ -522,8 +527,8 @@ void Texture::upload(gl::Internal_format internal_format, gsl::span<const std::b
     gl::Pixel_type   type;
     VERIFY(get_format_and_type(m_internal_format, format, type));
 
-    auto row_stride = width * get_upload_pixel_byte_count(internal_format);
-    auto byte_count = row_stride * height;
+    const auto row_stride = width * get_upload_pixel_byte_count(internal_format);
+    const auto byte_count = row_stride * height;
     Expects(data.size_bytes() == byte_count);
     const auto* data_pointer = reinterpret_cast<const void*>(data.data());
 
@@ -554,9 +559,9 @@ void Texture::upload(gl::Internal_format internal_format, gsl::span<const std::b
     }
 }
 
-void Texture::set_debug_label(std::string value)
+void Texture::set_debug_label(std::string_view value)
 {
-    m_debug_label = std::move(value);
+    m_debug_label = value;
     gl::object_label(gl::Object_identifier::texture,
                      gl_name(), static_cast<GLsizei>(m_debug_label.length()), m_debug_label.c_str());
 }

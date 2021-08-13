@@ -96,7 +96,7 @@ void Button::update_size()
         if (m_text_buffer)
         {
             m_text_buffer->begin_print();
-            m_text_buffer->print(m_label, 0, 0);
+            m_text_buffer->print(0, 0, m_label);
             m_text_buffer->end_print();
             m_bounds = m_text_buffer->bounding_box();
 

@@ -60,7 +60,7 @@ void Editor_rendering::connect()
 
 void Editor_rendering::initialize_component()
 {
-    if (m_enable_headset)
+    if constexpr (s_enable_headset)
     {
         m_headset = std::make_unique<erhe::xr::Headset>(m_application->get_context_window());
 
@@ -95,7 +95,7 @@ void Editor_rendering::begin_frame()
 {
     ZoneScoped;
 
-    if (m_enable_gui)
+    if constexpr (s_enable_gui)
     {
         m_editor_tools->gui_begin_frame();
         const auto size       = m_viewport_window->content_region_size();
@@ -116,7 +116,7 @@ void Editor_rendering::begin_frame()
 
 auto Editor_rendering::is_primary_scene_output_framebuffer_ready() -> bool
 {
-    if (m_enable_gui)
+    if constexpr (s_enable_gui)
     {
         return m_viewport_window->is_framebuffer_ready();
     }
@@ -149,12 +149,12 @@ void Editor_rendering::gui_render()
 
 auto Editor_rendering::is_content_in_focus() const -> bool
 {
-    return m_enable_gui ? m_viewport_window->is_focused() : true;
+    return s_enable_gui ? m_viewport_window->is_focused() : true;
 }
 
-auto Editor_rendering::to_scene_content(glm::vec2 position_in_root) const -> glm::vec2
+auto Editor_rendering::to_scene_content(const glm::vec2 position_in_root) const -> glm::vec2
 {
-    if (m_enable_gui)
+    if constexpr (s_enable_gui)
     {
         return m_viewport_window->to_scene_content(position_in_root);
     }
@@ -164,7 +164,7 @@ auto Editor_rendering::to_scene_content(glm::vec2 position_in_root) const -> glm
     }
 }
 
-void Editor_rendering::render(double time)
+void Editor_rendering::render(const double time)
 {
     ZoneScoped;
 
@@ -248,26 +248,26 @@ void Editor_rendering::render(double time)
             m_text_renderer->render(scene_viewport);
         }
 
-        if (m_shadow_renderer)  m_shadow_renderer ->next_frame();
-        if (m_id_renderer)      m_id_renderer     ->next_frame();
-        if (m_forward_renderer) m_forward_renderer->next_frame();
-        if (m_text_renderer)    m_text_renderer   ->next_frame();
-        if (m_line_renderer)    m_line_renderer   ->next_frame();
-
         end_primary_framebuffer();
     }
 
-    if (m_enable_gui)
+    if constexpr (s_enable_gui)
     {
         pointer_context.priority_action = m_editor_tools->get_priority_action();
         m_editor_tools->imgui();
         gui_render();
     }
 
-    if (m_enable_headset)
+    if constexpr (s_enable_headset)
     {
         render_headset();
     }
+
+    if (m_shadow_renderer)  m_shadow_renderer ->next_frame();
+    if (m_id_renderer)      m_id_renderer     ->next_frame();
+    if (m_forward_renderer) m_forward_renderer->next_frame();
+    if (m_text_renderer)    m_text_renderer   ->next_frame();
+    if (m_line_renderer)    m_line_renderer   ->next_frame();
 }
 
 Headset_view_resources::Headset_view_resources(erhe::xr::Render_view& render_view,
@@ -360,17 +360,17 @@ Controller_visualization::Controller_visualization(Mesh_memory&       mesh_memor
                                                    erhe::scene::Node* view_root)
 {
     auto controller_material = scene_root.make_material("Controller", glm::vec4(0.1f, 0.1f, 0.2f, 1.0f));
-    constexpr const float length = 0.05f;
-    constexpr const float radius = 0.02f;
+    constexpr float length = 0.05f;
+    constexpr float radius = 0.02f;
     auto controller_geometry = erhe::geometry::shapes::make_torus(0.05f, 0.0025f, 22, 8);
     controller_geometry.transform(erhe::toolkit::mat4_swap_yz);
     controller_geometry.reverse_polygons();
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
-    erhe::primitive::Primitive_build_context primitive_build_context{buffer_transfer_queue,
-                                                                     mesh_memory.vertex_format_info(),
-                                                                     mesh_memory.vertex_buffer_info()};
-    auto controller_pg = make_primitive_shared(controller_geometry, primitive_build_context);
+    erhe::primitive::Gl_geometry_uploader uploader{buffer_transfer_queue,
+                                                   mesh_memory.vertex_format_info(),
+                                                   mesh_memory.vertex_buffer_info()};
+    auto controller_pg = make_primitive_shared(controller_geometry, uploader);
     m_controller_mesh = scene_root.make_mesh_node("Controller",
                                                   controller_pg,
                                                   controller_material,
@@ -459,16 +459,19 @@ void Editor_rendering::render_headset()
             gl::viewport(0, 0, render_view.width, render_view.height);
 
             render_clear_primary();
-            view_resources.camera_node->update();
-            auto* camera = view_resources.camera.get();
-            render_content(camera, viewport);
 
-            if (m_line_renderer && m_headset->trigger_value() > 0.0f)
+            if (!m_headset->squeeze_click())
             {
-                m_line_renderer->render(viewport, *camera);
+                view_resources.camera_node->update();
+                auto* camera = view_resources.camera.get();
+                render_content(camera, viewport);
+
+                if (m_line_renderer && m_headset->trigger_value() > 0.0f)
+                {
+                    m_line_renderer->render(viewport, *camera);
+                }
             }
 
-            // TODO
             return true;
         };
         m_headset->render(callback);
@@ -487,7 +490,7 @@ void Editor_rendering::render_shadowmaps()
     m_shadow_renderer->render(m_scene_root->content_layers(), *camera);
 }
 
-void Editor_rendering::render_id(double time)
+void Editor_rendering::render_id(const double time)
 {
     ZoneScoped;
 
@@ -527,8 +530,8 @@ void Editor_rendering::render_clear_primary()
     gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 }
 
-void Editor_rendering::render_content(erhe::scene::ICamera* camera,
-                                      erhe::scene::Viewport viewport)
+void Editor_rendering::render_content(erhe::scene::ICamera*       camera,
+                                      const erhe::scene::Viewport viewport)
 {
     ZoneScoped;
 
@@ -604,8 +607,8 @@ void Editor_rendering::render_content(erhe::scene::ICamera* camera,
     }
 }
 
-void Editor_rendering::render_selection(erhe::scene::ICamera* camera,
-                                        erhe::scene::Viewport viewport)
+void Editor_rendering::render_selection(erhe::scene::ICamera*       camera,
+                                        const erhe::scene::Viewport viewport)
 {
     if (camera == nullptr)
     {
@@ -666,8 +669,8 @@ void Editor_rendering::render_selection(erhe::scene::ICamera* camera,
     gl::disable(gl::Enable_cap::program_point_size);
 }
 
-void Editor_rendering::render_tool_meshes(erhe::scene::ICamera* camera,
-                                          erhe::scene::Viewport viewport)
+void Editor_rendering::render_tool_meshes(erhe::scene::ICamera*       camera,
+                                          const erhe::scene::Viewport viewport)
 {
     ZoneScoped;
 
@@ -693,7 +696,7 @@ void Editor_rendering::render_tool_meshes(erhe::scene::ICamera* camera,
 
 void Editor_rendering::bind_primary_scene_output_framebuffer()
 {
-    if (m_enable_gui)
+    if constexpr (s_enable_gui)
     {
         m_viewport_window->bind_multisample_framebuffer();
     }
@@ -708,7 +711,7 @@ void Editor_rendering::bind_primary_scene_output_framebuffer()
 // so that we can sample from the texture in GUI scene window.
 void Editor_rendering::end_primary_framebuffer()
 {
-    if (m_enable_gui)
+    if constexpr (s_enable_gui)
     {
         m_viewport_window->multisample_resolve();
     }

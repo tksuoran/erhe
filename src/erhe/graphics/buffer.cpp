@@ -15,9 +15,9 @@ auto Buffer::gl_name() const noexcept
     return m_handle.gl_name();
 }
 
-Buffer::Buffer(gl::Buffer_target       target,
-               size_t                  capacity_byte_count,
-               gl::Buffer_storage_mask storage_mask) noexcept
+Buffer::Buffer(const gl::Buffer_target       target,
+               const size_t                  capacity_byte_count,
+               const gl::Buffer_storage_mask storage_mask) noexcept
     : m_target             {target}
     , m_capacity_byte_count{capacity_byte_count}
     , m_storage_mask       {storage_mask}
@@ -39,10 +39,10 @@ Buffer::Buffer(gl::Buffer_target       target,
     Ensures(m_capacity_byte_count > 0);
 }
 
-Buffer::Buffer(gl::Buffer_target          target,
-               size_t                     capacity_byte_count,
-               gl::Buffer_storage_mask    storage_mask,
-               gl::Map_buffer_access_mask map_buffer_access_mask) noexcept
+Buffer::Buffer(const gl::Buffer_target          target,
+               const size_t                     capacity_byte_count,
+               const gl::Buffer_storage_mask    storage_mask,
+               const gl::Map_buffer_access_mask map_buffer_access_mask) noexcept
     : m_target             {target}
     , m_capacity_byte_count{capacity_byte_count}
     , m_storage_mask       {storage_mask}
@@ -121,7 +121,7 @@ auto Buffer::debug_label() const noexcept
     return m_debug_label;
 }
 
-auto Buffer::allocate_bytes(size_t byte_count, size_t alignment) noexcept
+auto Buffer::allocate_bytes(const size_t byte_count, const size_t alignment) noexcept
 -> size_t
 {
     std::lock_guard<std::mutex> lock(m_allocate_mutex);
@@ -138,7 +138,7 @@ auto Buffer::allocate_bytes(size_t byte_count, size_t alignment) noexcept
     return offset;
 }
 
-auto Buffer::map_all_bytes(gl::Map_buffer_access_mask access_mask) noexcept
+auto Buffer::map_all_bytes(const gl::Map_buffer_access_mask access_mask) noexcept
 -> gsl::span<std::byte>
 {
     Expects(m_map.empty());
@@ -173,9 +173,9 @@ auto Buffer::map_all_bytes(gl::Map_buffer_access_mask access_mask) noexcept
     return m_map;
 }
 
-auto Buffer::map_bytes(size_t                     byte_offset,
-                       size_t                     byte_count,
-                       gl::Map_buffer_access_mask access_mask) noexcept
+auto Buffer::map_bytes(const size_t                     byte_offset,
+                       const size_t                     byte_count,
+                       const gl::Map_buffer_access_mask access_mask) noexcept
 -> gsl::span<std::byte>
 {
     VERIFY(byte_count > 0);
@@ -237,7 +237,7 @@ void Buffer::unmap() noexcept
     Ensures(m_map.empty());
 }
 
-void Buffer::flush_bytes(size_t byte_offset, size_t byte_count) noexcept
+void Buffer::flush_bytes(const size_t byte_offset, const size_t byte_count) noexcept
 {
     Expects((m_map_buffer_access_mask & gl::Map_buffer_access_mask::map_flush_explicit_bit) == gl::Map_buffer_access_mask::map_flush_explicit_bit);
     Expects(gl_name() != 0);
@@ -309,7 +309,7 @@ void Buffer::dump() const noexcept
     }
 }
 
-void Buffer::flush_and_unmap_bytes(size_t byte_count) noexcept
+void Buffer::flush_and_unmap_bytes(const size_t byte_count) noexcept
 {
     Expects(gl_name() != 0);
 
@@ -348,19 +348,21 @@ Buffer_transfer_queue::~Buffer_transfer_queue()
     flush();
 }
 
-void Buffer_transfer_queue::enqueue(Buffer* buffer, size_t offset, std::vector<uint8_t>&& data)
+void Buffer_transfer_queue::enqueue(Buffer* buffer, const size_t offset, std::vector<uint8_t>&& data)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
-    log_buffer.trace("queued buffer {} transfer offet = {} size = {}\n", buffer->gl_name(), offset, data.size());
+
+    log_buffer.trace("queued buffer {} transfer offset = {} size = {}\n", buffer->gl_name(), offset, data.size());
     m_queued.emplace_back(buffer, offset, std::move(data));
 }
 
 void Buffer_transfer_queue::flush()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+
     for (const auto& entry : m_queued)
     {
-        log_buffer.trace("buffer upload {} transfer offet = {} size = {}\n", entry.target->gl_name(), entry.target_offset, entry.data.size());
+        log_buffer.trace("buffer upload {} transfer offset = {} size = {}\n", entry.target->gl_name(), entry.target_offset, entry.data.size());
         Scoped_buffer_mapping<uint8_t> scoped_mapping{*entry.target,
                                                       entry.target_offset,
                                                       entry.data.size(),

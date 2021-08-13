@@ -18,7 +18,7 @@ namespace erhe::physics
 
 namespace erhe::primitive
 {
-    struct Primitive_build_context;
+    class Geometry_uploader;
 }
 
 namespace erhe::scene
@@ -39,18 +39,20 @@ class Mesh_operation
     : public IOperation
 {
 public:
-    struct Context
+    class Context
     {
-        erhe::primitive::Primitive_build_context& primitive_build_context;
-        erhe::scene::Layer&                       layer;
-        erhe::scene::Scene&                       scene;
-        erhe::physics::World&                     physics_world;
-        std::shared_ptr<Selection_tool>           selection_tool;
+    public:
+        erhe::primitive::Geometry_uploader& geometry_uploader;
+        erhe::scene::Layer&                 layer;
+        erhe::scene::Scene&                 scene;
+        erhe::physics::World&               physics_world;
+        std::shared_ptr<Selection_tool>     selection_tool;
     };
 
 protected:
-    struct Entry
+    class Entry
     {
+    public:
         erhe::scene::Layer&                layer;
         erhe::scene::Scene&                scene;
         erhe::physics::World&              physics_world;

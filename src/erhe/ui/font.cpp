@@ -26,6 +26,7 @@
 #include <map>
 #include <memory>
 #include <stdexcept>
+#include <string_view>
 
 
 namespace erhe::ui
@@ -47,7 +48,7 @@ Font::~Font()
     validate(FT_Done_FreeType(m_freetype_library));
 }
 
-Font::Font(const std::filesystem::path& path, unsigned int size, float outline_thickness)
+Font::Font(const std::filesystem::path& path, const unsigned int size, const float outline_thickness)
     : m_path             {path}
     , m_bolding          {(size > 10) ? 0.5f : 0.0f}
     , m_outline_thickness{outline_thickness}
@@ -78,7 +79,7 @@ Font::Font(const std::filesystem::path& path, unsigned int size, float outline_t
     render();
 }
 
-void Font::validate(int /*FT_Error*/ error)
+void Font::validate(const int /*FT_Error*/ error)
 {
     VERIFY(error == FT_Err_Ok);
 }
@@ -428,12 +429,12 @@ void Font::post_process()
 
     auto internal_format = gl::Internal_format::rg8;
 
-    Texture::Create_info create_info(gl::Texture_target::texture_2d,
-                                     internal_format,
-                                     false,
-                                     m_texture_width,
-                                     m_texture_height);
-
+    const Texture::Create_info create_info{gl::Texture_target::texture_2d,
+                                           internal_format,
+                                           false,
+                                           m_texture_width,
+                                           m_texture_height};
+                
     m_texture = std::make_unique<Texture>(create_info);
 
     m_texture->upload(create_info.internal_format, bm.as_span(), create_info.width, create_info.height);
@@ -467,9 +468,9 @@ void Font::post_process()
 
 auto Font::print(gsl::span<float>    float_data,
                  gsl::span<uint32_t> uint_data,
-                 const std::string&  text,
+                 std::string_view    text,
                  glm::vec3           text_position,
-                 uint32_t            text_color,
+                 const uint32_t      text_color,
                  Rectangle&          out_bounds) const
 -> size_t
 {
@@ -483,7 +484,7 @@ auto Font::print(gsl::span<float>    float_data,
     }
 
     hb_buffer_t* buf = hb_buffer_create();
-    hb_buffer_add_utf8     (buf, text.c_str(), -1, 0, -1);
+    hb_buffer_add_utf8     (buf, text.data(), -1, 0, -1);
     hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
     hb_buffer_set_script   (buf, HB_SCRIPT_LATIN);
     hb_buffer_set_language (buf, hb_language_from_string("en", -1));
@@ -502,11 +503,11 @@ auto Font::print(gsl::span<float>    float_data,
     size_t word_offset{0};
     for (unsigned int i = 0; i < glyph_count; ++i)
     {
-        auto glyph_id = glyph_info[i].codepoint;
-        float x_offset  = static_cast<float>(glyph_pos[i].x_offset ) / 64.0f;
-        float y_offset  = static_cast<float>(glyph_pos[i].y_offset ) / 64.0f;
-        float x_advance = static_cast<float>(glyph_pos[i].x_advance) / 64.0f;
-        float y_advance = static_cast<float>(glyph_pos[i].y_advance) / 64.0f;
+        const auto  glyph_id  = glyph_info[i].codepoint;
+        const float x_offset  = static_cast<float>(glyph_pos[i].x_offset ) / 64.0f;
+        const float y_offset  = static_cast<float>(glyph_pos[i].y_offset ) / 64.0f;
+        const float x_advance = static_cast<float>(glyph_pos[i].x_advance) / 64.0f;
+        const float y_advance = static_cast<float>(glyph_pos[i].y_advance) / 64.0f;
         auto j = m_glyph_to_char.find(glyph_id);
         if (j != m_glyph_to_char.end())
         {
@@ -515,16 +516,16 @@ auto Font::print(gsl::span<float>    float_data,
             const ft_char& font_char = m_chars_256[uc];
             if (font_char.width != 0)
             {
-                float b  = static_cast<float>(font_char.g_bottom - font_char.b_bottom);
-                float t  = static_cast<float>(font_char.g_top    - font_char.b_top);
-                float w  = static_cast<float>(font_char.width);
-                float h  = static_cast<float>(font_char.height);
-                float ox = static_cast<float>(font_char.b_left);
-                float oy = static_cast<float>(font_char.b_bottom + t + b);
-                float x0 = text_position.x + x_offset + ox;
-                float y0 = text_position.y + y_offset + oy;
-                float x1 = x0 + w;
-                float y1 = y0 + h;
+                const float b  = static_cast<float>(font_char.g_bottom - font_char.b_bottom);
+                const float t  = static_cast<float>(font_char.g_top    - font_char.b_top);
+                const float w  = static_cast<float>(font_char.width);
+                const float h  = static_cast<float>(font_char.height);
+                const float ox = static_cast<float>(font_char.b_left);
+                const float oy = static_cast<float>(font_char.b_bottom + t + b);
+                const float x0 = text_position.x + x_offset + ox;
+                const float y0 = text_position.y + y_offset + oy;
+                const float x1 = x0 + w;
+                const float y1 = y0 + h;
 
                 float_data[word_offset++] = x0;
                 float_data[word_offset++] = y0;
@@ -589,29 +590,29 @@ void Font::measure(const std::string& text, Rectangle& bounds) const
     float y{0.0f};
     for (unsigned int i = 0; i < glyph_count; ++i)
     {
-        auto glyph_id = glyph_info[i].codepoint;
-        float x_offset  = static_cast<float>(glyph_pos[i].x_offset ) / 64.0f;
-        float y_offset  = static_cast<float>(glyph_pos[i].y_offset ) / 64.0f;
-        float x_advance = static_cast<float>(glyph_pos[i].x_advance) / 64.0f;
-        float y_advance = static_cast<float>(glyph_pos[i].y_advance) / 64.0f;
-        auto j = m_glyph_to_char.find(glyph_id);
+        const auto  glyph_id  = glyph_info[i].codepoint;
+        const float x_offset  = static_cast<float>(glyph_pos[i].x_offset ) / 64.0f;
+        const float y_offset  = static_cast<float>(glyph_pos[i].y_offset ) / 64.0f;
+        const float x_advance = static_cast<float>(glyph_pos[i].x_advance) / 64.0f;
+        const float y_advance = static_cast<float>(glyph_pos[i].y_advance) / 64.0f;
+        const auto  j = m_glyph_to_char.find(glyph_id);
         if (j != m_glyph_to_char.end())
         {
-            auto c = j->second;
-            auto uc = static_cast<unsigned char>(c);
+            const auto c = j->second;
+            const auto uc = static_cast<unsigned char>(c);
             const ft_char& font_char = m_chars_256[uc];
             if (font_char.width != 0)
             {
-                float b  = static_cast<float>(font_char.g_bottom - font_char.b_bottom);
-                float t  = static_cast<float>(font_char.g_top    - font_char.b_top);
-                float w  = static_cast<float>(font_char.width);
-                float h  = static_cast<float>(font_char.height);
-                float ox = static_cast<float>(font_char.b_left);
-                float oy = static_cast<float>(font_char.b_bottom + t + b);
-                float x0 = x + x_offset + ox;
-                float y0 = y + y_offset + oy;
-                float x1 = x0 + w;
-                float y1 = y0 + h;
+                const float b  = static_cast<float>(font_char.g_bottom - font_char.b_bottom);
+                const float t  = static_cast<float>(font_char.g_top    - font_char.b_top);
+                const float w  = static_cast<float>(font_char.width);
+                const float h  = static_cast<float>(font_char.height);
+                const float ox = static_cast<float>(font_char.b_left);
+                const float oy = static_cast<float>(font_char.b_bottom + t + b);
+                const float x0 = x + x_offset + ox;
+                const float y0 = y + y_offset + oy;
+                const float x1 = x0 + w;
+                const float y1 = y0 + h;
                 bounds.extend_by(x0, y0);
                 bounds.extend_by(x1, y1);
             }

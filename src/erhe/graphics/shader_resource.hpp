@@ -43,19 +43,19 @@ public:
         shader_storage_block  = 6
     };
 
-    static auto is_basic(Type type)
+    static auto is_basic(const Type type)
     -> bool;
 
-    static auto is_aggregate(Type type)
+    static auto is_aggregate(const Type type)
     -> bool;
 
-    static auto should_emit_members(Type type)
+    static auto should_emit_members(const Type type)
     -> bool;
 
-    static auto is_block(Type type)
+    static auto is_block(const Type type)
     -> bool;
 
-    static auto uses_binding_points(Type type)
+    static auto uses_binding_points(const Type type)
     -> bool;
 
     enum class Precision : unsigned int
@@ -78,28 +78,28 @@ public:
     // Struct member
     Shader_resource(std::string_view                struct_member_name,
                     gsl::not_null<Shader_resource*> struct_type,
-                    std::optional<size_t>           array_size = {},
+                    const std::optional<size_t>     array_size = {},
                     Shader_resource*                parent = nullptr);
 
     // Block (uniform block or shader storage block)
-    Shader_resource(std::string_view      block_name,
-                    int                   binding_point,
-                    Type                  block_type,
-                    std::optional<size_t> array_size = {});
+    Shader_resource(std::string_view            block_name,
+                    const int                   binding_point,
+                    const Type                  block_type,
+                    const std::optional<size_t> array_size = {});
 
     // Basic type
-    Shader_resource(std::string_view      basic_name,
-                    gl::Uniform_type      basic_type,
-                    std::optional<size_t> array_size = {},
-                    Shader_resource*      parent = nullptr);
+    Shader_resource(std::string_view            basic_name,
+                    const gl::Uniform_type      basic_type,
+                    const std::optional<size_t> array_size = {},
+                    Shader_resource*            parent = nullptr);
 
     // Sampler
     Shader_resource(std::string_view                sampler_name,
                     gsl::not_null<Shader_resource*> parent,
-                    int                             location,
-                    gl::Uniform_type                sampler_type,
-                    std::optional<size_t>           array_size = {},
-                    std::optional<int>              dedicated_texture_unit = {});
+                    const int                       location,
+                    const gl::Uniform_type          sampler_type,
+                    const std::optional<size_t>     array_size = {},
+                    const std::optional<int>        dedicated_texture_unit = {});
 
     // Constructor with no arguments creates default uniform block
     Shader_resource();
@@ -176,40 +176,40 @@ public:
 
     auto add_struct(std::string_view                name,
                     gsl::not_null<Shader_resource*> struct_type,
-                    std::optional<size_t>           array_size = {})
+                    const std::optional<size_t>     array_size = {})
     -> Shader_resource*;
 
-    auto add_sampler(std::string_view      name,
-                     gl::Uniform_type      sampler_type,
-                     std::optional<size_t> array_size = {},
-                     std::optional<int>    dedicated_texture_unit = {})
+    auto add_sampler(std::string_view            name,
+                     const gl::Uniform_type      sampler_type,
+                     const std::optional<size_t> array_size = {},
+                     const std::optional<int>    dedicated_texture_unit = {})
     -> Shader_resource*;
 
-    auto add_float(std::string_view name, std::optional<size_t> array_size = {})
+    auto add_float(std::string_view name, const std::optional<size_t> array_size = {})
     -> Shader_resource*;
 
-    auto add_vec2(std::string_view name, std::optional<size_t> array_size = {})
+    auto add_vec2(std::string_view name, const std::optional<size_t> array_size = {})
     -> Shader_resource*;
 
-    auto add_vec3(std::string_view name, std::optional<size_t> array_size = {})
+    auto add_vec3(std::string_view name, const std::optional<size_t> array_size = {})
     -> Shader_resource*;
 
-    auto add_vec4(std::string_view name, std::optional<size_t> array_size = {})
+    auto add_vec4(std::string_view name, const std::optional<size_t> array_size = {})
     -> Shader_resource*;
 
-    auto add_mat4(std::string_view name, std::optional<size_t> array_size = {})
+    auto add_mat4(std::string_view name, const std::optional<size_t> array_size = {})
     -> Shader_resource*;
 
-    auto add_int(std::string_view name, std::optional<size_t> array_size = {})
+    auto add_int(std::string_view name, const std::optional<size_t> array_size = {})
     -> Shader_resource*;
 
-    auto add_uint(std::string_view name, std::optional<size_t> array_size = {})
+    auto add_uint(std::string_view name, const std::optional<size_t> array_size = {})
     -> Shader_resource*;
 
 private:
-    void align_offset_to(unsigned int alignment);
+    void align_offset_to(const unsigned int alignment);
 
-    void indent(std::stringstream& ss, int indent_level) const;
+    void indent(std::stringstream& ss, const int indent_level) const;
 
     // Any shader type declaration
     Type                  m_type{Type::default_uniform_block};

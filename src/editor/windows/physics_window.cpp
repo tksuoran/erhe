@@ -80,7 +80,7 @@ void Physics_window::window(Pointer_context& pointer_context)
                 ImGui::Checkbox("Frames",            &m_debug_draw.frames           );
             }
             
-            ImVec2 color_button_size{32.0f, 32.0f};
+            const ImVec2 color_button_size{32.0f, 32.0f};
             ImGui::SliderFloat("Line Width", &debug_drawer->line_width, 0.0f, 10.0f);
             ImGui::ColorEdit3("Active",                &m_debug_draw.default_colors.active_object               .x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);
             ImGui::ColorEdit3("Deactivated",           &m_debug_draw.default_colors.deactivated_object          .x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);
@@ -92,7 +92,7 @@ void Physics_window::window(Pointer_context& pointer_context)
         }
     }
 
-    auto gravity = physics_world.bullet_dynamics_world.getGravity();
+    const auto gravity = physics_world.bullet_dynamics_world.getGravity();
     {
         float floats[3] = { gravity.x(), gravity.y(), gravity.z() };
         ImGui::InputFloat3("Gravity", floats);
@@ -108,7 +108,7 @@ void Physics_window::window(Pointer_context& pointer_context)
     const auto& selecion = m_selection_tool->selection();
     for (const auto item : selecion)
     {
-        auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
         if (!mesh)
         {
             continue;
@@ -130,9 +130,10 @@ void Physics_window::window(Pointer_context& pointer_context)
         int collision_mode = static_cast<int>(rigid_body.get_collision_mode());
 
         {
-            btVector3 local_inertia = rigid_body.bullet_rigid_body.getLocalInertia();
+            const btVector3 local_inertia = rigid_body.bullet_rigid_body.getLocalInertia();
             float floats[3] = { local_inertia.x(), local_inertia.y(), local_inertia.z() };
             ImGui::InputFloat3("Local Inertia", floats);
+            // TODO floats back to rigid body?
         }
 
         ImGui::Combo("Collision Mode",
@@ -142,7 +143,7 @@ void Physics_window::window(Pointer_context& pointer_context)
         rigid_body.set_collision_mode(static_cast<erhe::physics::Rigid_body::Collision_mode>(collision_mode));
 
         float mass = rigid_body.bullet_rigid_body.getMass();
-        float before_mass = mass;
+        const float before_mass = mass;
         ImGui::SliderFloat("Mass", &mass, 0.0f, 10.0f);
         if (mass != before_mass)
         {

@@ -98,7 +98,8 @@ const char* c_str(Command command)
 Extension parse_extension(const char* extension_name)
 {{
     auto i = g_extension_map.find(extension_name);
-    if (i != g_extension_map.end()) {{
+    if (i != g_extension_map.end())
+    {{
         return i->second;
     }}
     return Extension::Extension_None;

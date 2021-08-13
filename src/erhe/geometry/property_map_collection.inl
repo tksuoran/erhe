@@ -189,8 +189,8 @@ Property_map_collection<Key_type>::remap_keys(const std::vector<Key_type>& key_n
 template <typename Key_type>
 inline void
 Property_map_collection<Key_type>::interpolate(
-    Property_map_collection<Key_type>&                   destination,
-    std::vector<std::vector<std::pair<float, Key_type>>> key_new_to_olds)
+    Property_map_collection<Key_type>&                          destination,
+    const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds)
 {
     ZoneScoped;
 

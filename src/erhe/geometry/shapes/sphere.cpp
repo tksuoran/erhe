@@ -21,20 +21,21 @@ namespace
 
 // Using geometric centroids, centroids are floating above the polygon.
 // The distance from the polygon is more when using small subdivision.
-constexpr const bool use_geometric_centroids = false;
+constexpr bool use_geometric_centroids = false;
 
 // Using flat centroids ensures centroids are on polygon.
-constexpr const bool use_flat_centroids      = true;
+constexpr bool use_flat_centroids      = true;
 
-struct Sphere_builder
+class Sphere_builder
 {
-    Geometry& geometry;
-    double    radius;
-    int       slice_count;
-    int       stack_division;
-    int       stack_count;
-    int       stack_base0_bottom;
-    int       stack_base0_top;
+public:
+    Geometry&    geometry;
+    const double radius;
+    const int    slice_count;
+    const int    stack_division;
+    const int    stack_count;
+    const int    stack_base0_bottom;
+    const int    stack_base0_top;
 
     std::map<std::pair<int, int>, Point_id> points;
     Point_id                                top_point_id{0};
@@ -52,18 +53,18 @@ struct Sphere_builder
     Property_map<Polygon_id, vec3>* polygon_centroids{nullptr};
     Property_map<Polygon_id, vec3>* polygon_normals  {nullptr};
 
-    auto get_point(int slice, int stack)
+    auto get_point(const int slice, const int stack)
     -> Point_id
     {
         return points[std::make_pair(slice, stack)];
     }
 
-    void set_point(int slice, int stack, Point_id point_id)
+    void set_point(const int slice, const int stack, const Point_id point_id)
     {
         points[std::make_pair(slice, stack)] = point_id;
     }
 
-    auto sphere_point(double rel_slice, double rel_stack)
+    auto sphere_point(const double rel_slice, const double rel_stack)
     -> Point_id
     {
         const double phi     = (glm::pi<double>() * 2.0 * rel_slice);
@@ -123,7 +124,7 @@ struct Sphere_builder
         return point_id;
     }
 
-    Corner_id make_corner(Polygon_id polygon_id, int slice, int stack_base0)
+    Corner_id make_corner(const Polygon_id polygon_id, const int slice, const int stack_base0)
     {
         Expects(slice >= 0);
 
@@ -175,7 +176,7 @@ struct Sphere_builder
         return corner_id;
     }
 
-    Sphere_builder(Geometry& geometry, double radius, int slice_count, int stack_division)
+    Sphere_builder(Geometry& geometry, const double radius, const int slice_count, const int stack_division)
         : geometry          {geometry}
         , radius            {radius}
         , slice_count       {slice_count}
@@ -353,7 +354,7 @@ struct Sphere_builder
 
 } // namespace
 
-auto make_sphere(double radius, unsigned int slice_count, unsigned int stack_division)
+auto make_sphere(const double radius, const unsigned int slice_count, const unsigned int stack_division)
 -> Geometry
 {
     ZoneScoped;

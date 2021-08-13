@@ -37,7 +37,7 @@ void Light_properties::window(Pointer_context&)
     ImGui::Checkbox("Animation", &m_animation);
     ImGui::Separator();
     const auto& layers = m_scene_root->all_layers();
-    int last_layer = static_cast<int>(layers.size()) - 1;
+    const int last_layer = static_cast<int>(layers.size()) - 1;
     if (ImGui::Button("Prev Layer"))
     {
         m_layer_index = m_layer_index > 0 ? m_layer_index - 1 : last_layer;
@@ -49,9 +49,9 @@ void Light_properties::window(Pointer_context&)
     }
     if (m_layer_index >= 0 && m_layer_index <= last_layer)
     {
-        const auto& layer  = layers.at(m_layer_index);
-        const auto& lights = layer->lights;
-        int last_light = static_cast<int>(lights.size()) - 1;
+        const auto& layer      = layers.at(m_layer_index);
+        const auto& lights     = layer->lights;
+        const int   last_light = static_cast<int>(lights.size()) - 1;
         if (ImGui::Button("Prev Light"))
         {
             m_light_index = m_light_index > 0 ? m_light_index - 1 : last_light;
@@ -63,7 +63,7 @@ void Light_properties::window(Pointer_context&)
         }
         if (m_light_index >= 0 && m_light_index <= last_light)
         {
-            auto light = lights.at(m_light_index);
+            const auto light = lights.at(m_light_index);
             const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
             ImGui::Text("%s", light->name().c_str());
 

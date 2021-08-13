@@ -24,12 +24,12 @@ namespace erhe::ui
 class Glyph
 {
 public:
-    Glyph(FT_Library    library,
-          FT_Face       font_face,
-          unsigned char c,
-          float         bolding,
-          float         outline_thickness,
-          int           hint_mode);
+    Glyph(FT_Library          library,
+          FT_Face             font_face,
+          const unsigned char c,
+          const float         bolding,
+          const float         outline_thickness,
+          const int           hint_mode);
 
     auto buffer() const
     -> const std::vector<unsigned char>&
@@ -45,8 +45,9 @@ public:
     unsigned int glyph_index      {0};
     float        outline_thickness{0.0f};
 
-    struct Metrics
+    class Metrics
     {
+    public:
         float bearing_x         {0.0f};
         float width             {0.0f};
         float bearing_y         {0.0f};
@@ -60,8 +61,9 @@ public:
 
     Metrics metrics;
 
-    struct BitmapLayout
+    class BitmapLayout
     {
+    public:
         int left  {0};
         int top   {0};
         int bottom{0};
@@ -74,7 +76,7 @@ public:
     BitmapLayout bitmap;
 
 private:
-    static void validate(FT_Error error)
+    static void validate(const FT_Error error)
     {
         if (error != FT_Err_Ok)
         {

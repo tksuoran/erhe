@@ -10,7 +10,7 @@ namespace erhe::graphics
 namespace
 {
 
-auto glsl_token(gl::Uniform_type type)
+auto glsl_token(const gl::Uniform_type type)
 -> const char*
 {
     switch (type)
@@ -84,22 +84,23 @@ static constexpr unsigned int sampler_array       = 0b001000u;
 static constexpr unsigned int sampler_shadow      = 0b010000u;
 static constexpr unsigned int sampler_rectangle   = 0b100000u;
 
-struct Type_details
+class Type_details
 {
-    Type_details(gl::Uniform_type type,
-                 gl::Uniform_type basic_type,
-                 size_t           component_count)
+public:
+    Type_details(const gl::Uniform_type type,
+                 const gl::Uniform_type basic_type,
+                 const size_t           component_count)
         : type           {type}
         , basic_type     {basic_type}
         , component_count{component_count}
     {
     }
 
-    Type_details(gl::Uniform_type   type,
-                 gl::Uniform_type   basic_type,
-                 gl::Texture_target texture_target,
-                 unsigned int       sampler_dimension,
-                 unsigned int       sampler_mask)
+    Type_details(const gl::Uniform_type   type,
+                 const gl::Uniform_type   basic_type,
+                 const gl::Texture_target texture_target,
+                 const unsigned int       sampler_dimension,
+                 const unsigned int       sampler_mask)
         : type             {type}
         , basic_type       {basic_type}
         , texture_target   {texture_target}
@@ -123,7 +124,7 @@ struct Type_details
     unsigned int       sampler_mask     {0};
 };
 
-auto get_type_details(gl::Uniform_type type)
+auto get_type_details(const gl::Uniform_type type)
 -> Type_details
 {
     switch (type)
@@ -197,7 +198,7 @@ auto get_type_details(gl::Uniform_type type)
     }
 }
 
-auto get_type_size(gl::Uniform_type type)
+auto get_type_size(const gl::Uniform_type type)
 -> size_t
 {
     switch (type)
@@ -217,7 +218,7 @@ auto get_type_size(gl::Uniform_type type)
     }
 }
 
-auto get_pack_size(gl::Uniform_type type)
+auto get_pack_size(const gl::Uniform_type type)
 -> size_t
 {
     const auto type_details = get_type_details(type);
@@ -231,7 +232,7 @@ auto get_pack_size(gl::Uniform_type type)
 
 } // anonymous namespace
 
-auto Shader_resource::is_basic(Type type)
+auto Shader_resource::is_basic(const Type type)
 -> bool
 {
     switch (type)
@@ -250,7 +251,7 @@ auto Shader_resource::is_basic(Type type)
     }
 }
 
-auto Shader_resource::is_aggregate(Shader_resource::Type type)
+auto Shader_resource::is_aggregate(const Shader_resource::Type type)
 -> bool
 {
     switch (type)
@@ -269,7 +270,7 @@ auto Shader_resource::is_aggregate(Shader_resource::Type type)
     }
 }
 
-auto Shader_resource::should_emit_members(Shader_resource::Type type)
+auto Shader_resource::should_emit_members(const Shader_resource::Type type)
 -> bool
 {
     switch (type)
@@ -288,7 +289,7 @@ auto Shader_resource::should_emit_members(Shader_resource::Type type)
     }
 }
 
-auto Shader_resource::is_block(Shader_resource::Type type)
+auto Shader_resource::is_block(const Shader_resource::Type type)
 -> bool
 {
     switch (type)
@@ -307,7 +308,7 @@ auto Shader_resource::is_block(Shader_resource::Type type)
     }
 }
 
-auto Shader_resource::uses_binding_points(Shader_resource::Type type)
+auto Shader_resource::uses_binding_points(const Shader_resource::Type type)
 -> bool
 {
     switch (type)
@@ -326,7 +327,7 @@ auto Shader_resource::uses_binding_points(Shader_resource::Type type)
     }
 }
 
-auto Shader_resource::c_str(Shader_resource::Precision v)
+auto Shader_resource::c_str(const Shader_resource::Precision v)
 -> const char*
 {
     switch (v)
@@ -356,7 +357,7 @@ Shader_resource::Shader_resource(std::string_view struct_type_name,
 // Struct member
 Shader_resource::Shader_resource(std::string_view                struct_member_name,
                                  gsl::not_null<Shader_resource*> struct_type,
-                                 std::optional<size_t>           array_size /* = {} */,
+                                 const std::optional<size_t>     array_size /* = {} */,
                                  Shader_resource*                parent /* = nullptr */)
     : m_type            {Type::struct_member}
     , m_name            {struct_member_name}
@@ -369,10 +370,10 @@ Shader_resource::Shader_resource(std::string_view                struct_member_n
 }
 
 // Block (uniform block or shader storage block)
-Shader_resource::Shader_resource(std::string_view      block_name,
-                                 int                   binding_point,
-                                 Type                  block_type,
-                                 std::optional<size_t> array_size /* = {} */)
+Shader_resource::Shader_resource(std::string_view            block_name,
+                                 const int                   binding_point,
+                                 const Type                  block_type,
+                                 const std::optional<size_t> array_size /* = {} */)
     : m_type         {block_type}
     , m_name         {block_name}
     , m_array_size   {array_size}
@@ -384,10 +385,10 @@ Shader_resource::Shader_resource(std::string_view      block_name,
 }
 
 // Basic type
-Shader_resource::Shader_resource(std::string_view      basic_name,
-                                 gl::Uniform_type      basic_type,
-                                 std::optional<size_t> array_size /* = {} */,
-                                 Shader_resource*      parent /* = nullptr */)
+Shader_resource::Shader_resource(std::string_view            basic_name,
+                                 const gl::Uniform_type      basic_type,
+                                 const std::optional<size_t> array_size /* = {} */,
+                                 Shader_resource*            parent /* = nullptr */)
     : m_type            {Type::basic}
     , m_name            {basic_name}
     , m_array_size      {array_size}
@@ -401,10 +402,10 @@ Shader_resource::Shader_resource(std::string_view      basic_name,
 // Sampler
 Shader_resource::Shader_resource(std::string_view                sampler_name,
                                  gsl::not_null<Shader_resource*> parent,
-                                 int                             location,
-                                 gl::Uniform_type                sampler_type,
-                                 std::optional<size_t>           array_size /* = {} */,
-                                 std::optional<int>              dedicated_texture_unit /* = {} */)
+                                 const int                       location,
+                                 const gl::Uniform_type          sampler_type,
+                                 const std::optional<size_t>     array_size /* = {} */,
+                                 const std::optional<int>        dedicated_texture_unit /* = {} */)
     : m_type                        {Type::sampler}
     , m_name                        {sampler_name}
     , m_array_size                  {array_size}
@@ -700,7 +701,7 @@ auto Shader_resource::layout_string() const
     return ss.str();
 }
 
-auto Shader_resource::source(int indent_level /* = 0 */) const
+auto Shader_resource::source(const int indent_level /* = 0 */) const
 -> std::string
 {
     std::stringstream ss;
@@ -727,7 +728,7 @@ auto Shader_resource::source(int indent_level /* = 0 */) const
         }
         for (const auto& member : m_members)
         {
-            int extra_indent = (m_type == Type::default_uniform_block) ? 0 : 1;
+            const int extra_indent = (m_type == Type::default_uniform_block) ? 0 : 1;
             ss << member->source(indent_level + extra_indent);
         }
         if (m_type != Type::default_uniform_block)
@@ -771,7 +772,7 @@ auto Shader_resource::source(int indent_level /* = 0 */) const
 
 auto Shader_resource::add_struct(std::string_view                name,
                                  gsl::not_null<Shader_resource*> struct_type,
-                                 std::optional<size_t>           array_size /* = {} */)
+                                 const std::optional<size_t>     array_size /* = {} */)
 -> Shader_resource*
 {
     align_offset_to(4); // align by 4 bytes TODO do what spec says
@@ -780,10 +781,10 @@ auto Shader_resource::add_struct(std::string_view                name,
     return new_member;
 }
 
-auto Shader_resource::add_sampler(std::string_view      name,
-                                  gl::Uniform_type      sampler_type,
-                                  std::optional<size_t> array_size /* = {} */,
-                                  std::optional<int>    dedicated_texture_unit /* = {} */)
+auto Shader_resource::add_sampler(std::string_view            name,
+                                  const gl::Uniform_type      sampler_type,
+                                  const std::optional<size_t> array_size /* = {} */,
+                                  const std::optional<int>    dedicated_texture_unit /* = {} */)
 -> Shader_resource*
 {
     Expects(m_type == Type::default_uniform_block);
@@ -795,7 +796,7 @@ auto Shader_resource::add_sampler(std::string_view      name,
     return new_member;
 }
 
-auto Shader_resource::add_float(std::string_view name, std::optional<size_t> array_size /* = {} */)
+auto Shader_resource::add_float(std::string_view name, const std::optional<size_t> array_size /* = {} */)
 -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -805,7 +806,7 @@ auto Shader_resource::add_float(std::string_view name, std::optional<size_t> arr
     return new_member;
 }
 
-auto Shader_resource::add_vec2(std::string_view name, std::optional<size_t> array_size /* = {} */)
+auto Shader_resource::add_vec2(std::string_view name, const std::optional<size_t> array_size /* = {} */)
 -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -815,7 +816,7 @@ auto Shader_resource::add_vec2(std::string_view name, std::optional<size_t> arra
     return new_member;
 }
 
-auto Shader_resource::add_vec3(std::string_view name, std::optional<size_t> array_size /* = {} */)
+auto Shader_resource::add_vec3(std::string_view name, const std::optional<size_t> array_size /* = {} */)
 -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -825,7 +826,7 @@ auto Shader_resource::add_vec3(std::string_view name, std::optional<size_t> arra
     return new_member;
 }
 
-auto Shader_resource::add_vec4(std::string_view name, std::optional<size_t> array_size /* = {} */)
+auto Shader_resource::add_vec4(std::string_view name, const std::optional<size_t> array_size /* = {} */)
 -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -835,7 +836,7 @@ auto Shader_resource::add_vec4(std::string_view name, std::optional<size_t> arra
     return new_member;
 }
 
-auto Shader_resource::add_mat4(std::string_view name, std::optional<size_t> array_size /* = {} */)
+auto Shader_resource::add_mat4(std::string_view name, const std::optional<size_t> array_size /* = {} */)
 -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -845,7 +846,7 @@ auto Shader_resource::add_mat4(std::string_view name, std::optional<size_t> arra
     return new_member;
 }
 
-auto Shader_resource::add_int(std::string_view name, std::optional<size_t> array_size /* = {} */)
+auto Shader_resource::add_int(std::string_view name, const std::optional<size_t> array_size /* = {} */)
 -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -855,7 +856,7 @@ auto Shader_resource::add_int(std::string_view name, std::optional<size_t> array
     return new_member;
 }
 
-auto Shader_resource::add_uint(std::string_view name, std::optional<size_t> array_size /* = {} */)
+auto Shader_resource::add_uint(std::string_view name, const std::optional<size_t> array_size /* = {} */)
 -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -865,7 +866,7 @@ auto Shader_resource::add_uint(std::string_view name, std::optional<size_t> arra
     return new_member;
 }
 
-void Shader_resource::align_offset_to(unsigned int alignment)
+void Shader_resource::align_offset_to(const unsigned int alignment)
 {
     while ((m_offset % alignment) != 0)
     {
@@ -873,7 +874,7 @@ void Shader_resource::align_offset_to(unsigned int alignment)
     }
 }
 
-void Shader_resource::indent(std::stringstream& ss, int indent_level) const
+void Shader_resource::indent(std::stringstream& ss, const int indent_level) const
 {
     for (int i = 0; i < indent_level; ++i)
     {

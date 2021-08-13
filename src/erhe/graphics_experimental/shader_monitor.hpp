@@ -42,8 +42,9 @@ private:
              Shader_stages::Create_info    create_info,
              gsl::not_null<Shader_stages*> program);
 
-    struct Reload_entry
+    class Reload_entry
     {
+    public:
         Reload_entry(Shader_stages::Create_info    create_info,
                      gsl::not_null<Shader_stages*> shader_stages)
             : create_info  {std::move(create_info)}
@@ -55,8 +56,9 @@ private:
         gsl::not_null<Shader_stages*> shader_stages;
     };
 
-    struct Compare_object
+    class Compare_object
     {
+    public:
         auto operator()(const Reload_entry& lhs, const Reload_entry& rhs) const
         -> bool
         {
@@ -64,8 +66,9 @@ private:
         }
     };
 
-    struct File
+    class File
     {
+    public:
         std::filesystem::file_time_type        last_time;
         std::filesystem::path                  path;
         std::set<Reload_entry, Compare_object> reload_entries;

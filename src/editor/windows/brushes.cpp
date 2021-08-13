@@ -91,29 +91,29 @@ void Brushes::make_materials()
     }
 }
 
-auto Brushes::allocate_brush(const Primitive_build_context& context)
+auto Brushes::allocate_brush(const Geometry_uploader& geometry_uploader)
 -> std::shared_ptr<Brush>
 {
     std::lock_guard<std::mutex> lock(m_brush_mutex);
-    const auto brush = std::make_shared<Brush>(context);
+    const auto brush = std::make_shared<Brush>(geometry_uploader);
     m_brushes.push_back(brush);
     return brush;
 }
 
-auto Brushes::make_brush(Geometry&&                          geometry,
+auto Brushes::make_brush(erhe::geometry::Geometry&&          geometry,
                          const Brush_create_context&         context,
                          const shared_ptr<btCollisionShape>& collision_shape)
 -> std::shared_ptr<Brush>
 {
     ZoneScoped;
 
-    const auto shared_geometry = make_shared<Geometry>(move(geometry));
+    const auto shared_geometry = make_shared<erhe::geometry::Geometry>(move(geometry));
     return make_brush(shared_geometry, context, collision_shape);
 }
 
-auto Brushes::make_brush(shared_ptr<Geometry>                geometry,
-                         const Brush_create_context&         context,
-                         const shared_ptr<btCollisionShape>& collision_shape)
+auto Brushes::make_brush(shared_ptr<erhe::geometry::Geometry> geometry,
+                         const Brush_create_context&          context,
+                         const shared_ptr<btCollisionShape>&  collision_shape)
 -> std::shared_ptr<Brush>
 {
     ZoneScoped;
@@ -124,29 +124,29 @@ auto Brushes::make_brush(shared_ptr<Geometry>                geometry,
     geometry->compute_polygon_centroids();
     geometry->compute_point_normals(c_point_normals_smooth);
 
-    const std::shared_ptr<erhe::geometry::Geometry>& geometry_        = geometry;
-    erhe::primitive::Primitive_build_context&        context_         = context.primitive_build_context;
-    const erhe::primitive::Normal_style              normal_style     = context.normal_style;
-    const float                                      density          = 1.0f;
-    const float                                      volume           = geometry->volume();
-    const std::shared_ptr<btCollisionShape>&         collision_shape_ = collision_shape;
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry_          = geometry;
+    erhe::primitive::Geometry_uploader&              geometry_uploader_ = context.geometry_uploader;
+    const erhe::primitive::Normal_style              normal_style       = context.normal_style;
+    const float                                      density            = 1.0f;
+    const float                                      volume             = geometry->volume();
+    const std::shared_ptr<btCollisionShape>&         collision_shape_   = collision_shape;
 
     Brush::Create_info create_info{geometry_,
-                                   context_,
+                                   geometry_uploader_,
                                    normal_style,
                                    density,
                                    volume,
                                    collision_shape_};
 
-    const auto brush = allocate_brush(context.primitive_build_context);
+    const auto brush = allocate_brush(context.geometry_uploader);
     brush->initialize(create_info);
     return brush;
 }
 
-auto Brushes::make_brush(shared_ptr<Geometry>        geometry,
-                         const Brush_create_context& context,
-                         Collision_volume_calculator collision_volume_calculator,
-                         Collision_shape_generator   collision_shape_generator)
+auto Brushes::make_brush(shared_ptr<erhe::geometry::Geometry> geometry,
+                         const Brush_create_context&          context,
+                         Collision_volume_calculator          collision_volume_calculator,
+                         Collision_shape_generator            collision_shape_generator)
 -> std::shared_ptr<Brush>
 {
     ZoneScoped;
@@ -157,13 +157,13 @@ auto Brushes::make_brush(shared_ptr<Geometry>        geometry,
     geometry->compute_polygon_centroids();
     geometry->compute_point_normals(c_point_normals_smooth);
     const Brush::Create_info create_info{geometry,
-                                         context.primitive_build_context,
+                                         context.geometry_uploader,
                                          context.normal_style,
                                          1.0f, // density
                                          collision_volume_calculator,
                                          collision_shape_generator};
                 
-    const auto brush = allocate_brush(context.primitive_build_context);
+    const auto brush = allocate_brush(context.geometry_uploader);
     brush->initialize(create_info);
     return brush;
 }
@@ -397,7 +397,7 @@ void Brushes::window(Pointer_context&)
     ImGui::InputFloat("Brush scale",     &debug_info.brush_frame_scale);
     ImGui::InputFloat("Transform scale", &debug_info.transform_scale);
 
-    size_t brush_count = m_brushes.size();
+    const size_t brush_count = m_brushes.size();
 
     auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
     for (int i = 0; i < static_cast<int>(brush_count); ++i)
@@ -413,24 +413,23 @@ void Brushes::window(Pointer_context&)
             m_brush = brush;
         }
     }
-    bool false_value = false;
     ImGui::SliderFloat("Scale", &m_scale, 0.0f, 2.0f);
     make_check_box("Snap to Polygon", &m_snap_to_hover_polygon);
-    make_check_box("Snap to Grid", &m_snap_to_grid, m_snap_to_hover_polygon ? Window::Item_mode::disabled
-                                                                            : Window::Item_mode::normal);
+    make_check_box("Snap to Grid",    &m_snap_to_grid, m_snap_to_hover_polygon ? Window::Item_mode::disabled
+                                                                               : Window::Item_mode::normal);
     ImGui::End();
 
     ImGui::Begin("Materials");
     if (!m_material_names.empty())
     {
-        size_t material_count = m_material_names.size();
-        auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
+        const size_t material_count = m_material_names.size();
+        const auto   button_size    = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
         for (int i = 0; i < static_cast<int>(material_count); ++i)
         {
-            bool button_pressed = make_button(m_material_names[i],
-                                              (m_selected_material == i) ? Item_mode::active
-                                                                         : Item_mode::normal,
-                                              button_size);
+            const bool button_pressed = make_button(m_material_names[i],
+                                                    (m_selected_material == i) ? Item_mode::active
+                                                                               : Item_mode::normal,
+                                                    button_size);
             if (button_pressed)
             {
                 m_selected_material = i;

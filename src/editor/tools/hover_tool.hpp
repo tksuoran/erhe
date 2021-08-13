@@ -12,7 +12,7 @@ namespace erhe::scene {
 }
 
 namespace erhe::primitive {
-    struct Material;
+    class Material;
 }
 
 namespace editor

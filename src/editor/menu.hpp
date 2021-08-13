@@ -69,8 +69,9 @@ private:
 
     void initialize_background();
 
-    struct Frame_resources
+    class Frame_resources
     {
+    public:
         static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_coherent_bit   |
                                                               gl::Buffer_storage_mask::map_persistent_bit |
                                                               gl::Buffer_storage_mask::map_write_bit};

@@ -9,10 +9,10 @@ namespace erhe::geometry
 
 namespace erhe::primitive
 {
-    struct Material;
-    struct Primitive_build_context;
-    struct Primitive_geometry;
-    struct Primitive;
+    class Material;
+    class Primitive;
+    class Primitive_build_context;
+    class Primitive_geometry;
 }
 
 namespace erhe::scene

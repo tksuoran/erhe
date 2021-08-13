@@ -166,7 +166,7 @@ auto Selection_tool::clear_selection() -> bool
 }
 
 void Selection_tool::toggle_selection(std::shared_ptr<erhe::scene::INode_attachment> item,
-                                      bool                                           clear_others)
+                                      const bool                                     clear_others)
 {
     if (clear_others)
     {

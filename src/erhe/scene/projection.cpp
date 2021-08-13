@@ -5,7 +5,7 @@
 namespace erhe::scene
 {
 
-void Projection::update(Transform& transform, Viewport viewport) const
+void Projection::update(Transform& transform, const Viewport viewport) const
 {
     switch (projection_type)
     {
@@ -94,7 +94,7 @@ void Projection::update(Transform& transform, Viewport viewport) const
     }
 }
 
-auto Projection::get_fov_sides(Viewport viewport) const -> Fov_sides
+auto Projection::get_fov_sides(const Viewport viewport) const -> Fov_sides
 {
     switch (projection_type)
     {

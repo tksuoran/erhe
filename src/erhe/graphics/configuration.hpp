@@ -6,12 +6,13 @@ namespace erhe::graphics
 class Configuration
 {
 public:
-    static inline constexpr const bool reverse_depth = true;
+    static inline constexpr bool reverse_depth = true;
 
-    static inline constexpr const float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
+    static inline constexpr float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
 
-    struct info_t
+    class info_t
     {
+    public:
         int  gl_version             {0};
         int  glsl_version           {0};
         int  shader_model_version   {0};
@@ -24,8 +25,9 @@ public:
         bool use_integer_polygon_ids{false};
     };
 
-    struct limits_t
+    class limits_t
     {
+    public:
         int max_vertex_attribs                {0};
         int max_texture_size                 {64};
         int max_3d_texture_size               {0};
@@ -42,8 +44,9 @@ public:
         int max_tess_evaluation_uniform_blocks{0};
     };
 
-    struct implementation_defined_t
+    class implementation_defined_t
     {
+    public:
         unsigned int uniform_buffer_offset_alignment{1024};
     };
 

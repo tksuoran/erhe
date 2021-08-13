@@ -22,20 +22,20 @@ auto Polygon::compute_normal(const Geometry&                          geometry,
         return {};
     }
 
-    Polygon_corner_id polygon_corner_id0 = first_polygon_corner_id;
-    Polygon_corner_id polygon_corner_id1 = first_polygon_corner_id + 1;
-    Polygon_corner_id polygon_corner_id2 = first_polygon_corner_id + 2;
+    const Polygon_corner_id polygon_corner_id0 = first_polygon_corner_id;
+    const Polygon_corner_id polygon_corner_id1 = first_polygon_corner_id + 1;
+    const Polygon_corner_id polygon_corner_id2 = first_polygon_corner_id + 2;
 
-    Corner_id corner_id0 = geometry.polygon_corners[polygon_corner_id0];
-    Corner_id corner_id1 = geometry.polygon_corners[polygon_corner_id1];
-    Corner_id corner_id2 = geometry.polygon_corners[polygon_corner_id2];
+    const Corner_id corner_id0 = geometry.polygon_corners[polygon_corner_id0];
+    const Corner_id corner_id1 = geometry.polygon_corners[polygon_corner_id1];
+    const Corner_id corner_id2 = geometry.polygon_corners[polygon_corner_id2];
 
-    const Corner& c0 = geometry.corners[corner_id0];
-    const Corner& c1 = geometry.corners[corner_id1];
-    const Corner& c2 = geometry.corners[corner_id2];
-    Point_id p0 = c0.point_id;
-    Point_id p1 = c1.point_id;
-    Point_id p2 = c2.point_id;
+    const Corner&  c0 = geometry.corners[corner_id0];
+    const Corner&  c1 = geometry.corners[corner_id1];
+    const Corner&  c2 = geometry.corners[corner_id2];
+    const Point_id p0 = c0.point_id;
+    const Point_id p1 = c1.point_id;
+    const Point_id p2 = c2.point_id;
 
     // Make sure all points are unique from others
     if ((p0 == p1) || (p0 == p2) || (p1 == p2))
@@ -49,7 +49,7 @@ auto Polygon::compute_normal(const Geometry&                          geometry,
     return glm::normalize(normal);
  }
 
-void Polygon::compute_normal(Polygon_id                          this_polygon_id,
+void Polygon::compute_normal(const Polygon_id                    this_polygon_id,
                              const Geometry&                     geometry,
                              Property_map<Polygon_id, vec3>&     polygon_normals,
                              const Property_map<Point_id, vec3>& point_locations) const
@@ -73,8 +73,8 @@ auto Polygon::compute_centroid(const Geometry&                     geometry,
 
     for_each_corner_const(geometry, [&geometry, &centroid, &count, &point_locations](const Polygon_corner_context_const& i)
     {
-        Point_id point_id = geometry.corners[i.corner_id].point_id;
-        auto     pos0     = point_locations.get(point_id);
+        const Point_id point_id = geometry.corners[i.corner_id].point_id;
+        const auto     pos0     = point_locations.get(point_id);
         centroid += pos0;
         ++count;
     });
@@ -87,17 +87,17 @@ auto Polygon::compute_edge_midpoint(const Geometry&                          geo
 {
     if (corner_count >= 2)
     {
-        Corner_id     corner0_id = geometry.polygon_corners[first_polygon_corner_id];
-        Corner_id     corner1_id = geometry.polygon_corners[first_polygon_corner_id + 1];
-        const Corner& corner0    = geometry.corners[corner0_id];
-        const Corner& corner1    = geometry.corners[corner1_id];
-        Point_id      a          = corner0.point_id;
-        Point_id      b          = corner1.point_id;
+        const Corner_id corner0_id = geometry.polygon_corners[first_polygon_corner_id];
+        const Corner_id corner1_id = geometry.polygon_corners[first_polygon_corner_id + 1];
+        const Corner&   corner0    = geometry.corners[corner0_id];
+        const Corner&   corner1    = geometry.corners[corner1_id];
+        const Point_id  a          = corner0.point_id;
+        const Point_id  b          = corner1.point_id;
         if (point_locations.has(a) && point_locations.has(b))
         {
-            glm::vec3 pos_a    = point_locations.get(a);
-            glm::vec3 pos_b    = point_locations.get(b);
-            glm::vec3 midpoint = (pos_a + pos_b) / 2.0f;
+            const glm::vec3 pos_a    = point_locations.get(a);
+            const glm::vec3 pos_b    = point_locations.get(b);
+            const glm::vec3 midpoint = (pos_a + pos_b) / 2.0f;
             return midpoint;
         }
     }
@@ -105,7 +105,7 @@ auto Polygon::compute_edge_midpoint(const Geometry&                          geo
     return glm::vec3{0.0f, 0.0f, 0.0f};
 }
 
-void Polygon::compute_centroid(Polygon_id                          this_polygon_id,
+void Polygon::compute_centroid(const Polygon_id                    this_polygon_id,
                                const Geometry&                     geometry,
                                Property_map<Polygon_id, vec3>&     polygon_centroids,
                                const Property_map<Point_id, vec3>& point_locations) const
@@ -115,11 +115,11 @@ void Polygon::compute_centroid(Polygon_id                          this_polygon_
         return;
     }
 
-    auto centroid = compute_centroid(geometry, point_locations);
+    const auto centroid = compute_centroid(geometry, point_locations);
     polygon_centroids.put(this_polygon_id, centroid);
 }
 
-auto Polygon::corner(const Geometry& geometry, Point_id point) const -> Corner_id
+auto Polygon::corner(const Geometry& geometry, const Point_id point) const -> Corner_id
 {
     std::optional<Corner_id> result;
     for_each_corner_const(geometry, [&](auto& i)
@@ -138,16 +138,16 @@ auto Polygon::corner(const Geometry& geometry, Point_id point) const -> Corner_i
     return {};
 }
 
-auto Polygon::next_corner(const Geometry& geometry, Corner_id anchor_corner_id) const -> Corner_id
+auto Polygon::next_corner(const Geometry& geometry, const Corner_id anchor_corner_id) const -> Corner_id
 {
     for (uint32_t i = 0; i < corner_count; ++i)
     {
-        Polygon_corner_id polygon_corner_id = first_polygon_corner_id + i;
-        Corner_id corner_id = geometry.polygon_corners[polygon_corner_id];
+        const Polygon_corner_id polygon_corner_id = first_polygon_corner_id + i;
+        const Corner_id         corner_id         = geometry.polygon_corners[polygon_corner_id];
         if (corner_id == anchor_corner_id)
         {
-            Polygon_corner_id next_polygon_corner_id = first_polygon_corner_id + (i + 1) % corner_count;
-            Corner_id next_corner_id = geometry.polygon_corners[next_polygon_corner_id];
+            const Polygon_corner_id next_polygon_corner_id = first_polygon_corner_id + (i + 1) % corner_count;
+            const Corner_id         next_corner_id         = geometry.polygon_corners[next_polygon_corner_id];
             return next_corner_id;
         }
     }
@@ -155,16 +155,16 @@ auto Polygon::next_corner(const Geometry& geometry, Corner_id anchor_corner_id) 
     return {};
 }
 
-auto Polygon::prev_corner(const Geometry& geometry, Corner_id anchor_corner_id) const -> Corner_id
+auto Polygon::prev_corner(const Geometry& geometry, const Corner_id anchor_corner_id) const -> Corner_id
 {
     for (uint32_t i = 0; i < corner_count; ++i)
     {
-        Polygon_corner_id polygon_corner_id = first_polygon_corner_id + i;
-        Corner_id corner_id = geometry.polygon_corners[polygon_corner_id];
+        const Polygon_corner_id polygon_corner_id = first_polygon_corner_id + i;
+        const Corner_id         corner_id         = geometry.polygon_corners[polygon_corner_id];
         if (corner_id == anchor_corner_id)
         {
-            Polygon_corner_id prev_polygon_corner_id = first_polygon_corner_id + (corner_count + i - 1) % corner_count;
-            Corner_id prev_corner_id = geometry.polygon_corners[prev_polygon_corner_id];
+            const Polygon_corner_id prev_polygon_corner_id = first_polygon_corner_id + (corner_count + i - 1) % corner_count;
+            const Corner_id         prev_corner_id         = geometry.polygon_corners[prev_polygon_corner_id];
             return prev_corner_id;
         }
     }
@@ -178,7 +178,7 @@ void Polygon::reverse(Geometry& geometry)
                  &geometry.polygon_corners[first_polygon_corner_id + corner_count]);
 }
 
-void Polygon::compute_planar_texture_coordinates(Polygon_id                                 this_polygon_id,
+void Polygon::compute_planar_texture_coordinates(const Polygon_id                           this_polygon_id,
                                                  const Geometry&                            geometry,
                                                  Property_map<Corner_id, glm::vec2>&        corner_texcoords,
                                                  const Property_map<Polygon_id, glm::vec3>& polygon_centroids,

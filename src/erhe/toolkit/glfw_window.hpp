@@ -14,13 +14,13 @@ namespace erhe::toolkit
 class Context_window
 {
 public:
-    Context_window(int width, int height);
+    Context_window(const int width, const int height, const int msaa_sample_count);
 
     explicit Context_window(Context_window* share);
     virtual ~Context_window();
 
-    auto open(int width, int height, const std::string& title,
-              int opengl_major_version, int opengl_minor_version, Context_window* share)
+    auto open(const int width, const int height, const int msaa_sample_count, const std::string& title,
+              const int opengl_major_version, const int opengl_minor_version, Context_window* share)
     -> bool;
 
     void make_current() const;
@@ -47,11 +47,11 @@ public:
 
     void get_cursor_position(double& xpos, double& ypos);
 
-    void set_visible(bool visible);
+    void set_visible(const bool visible);
 
-    void show_ursor(bool show);
+    void show_ursor(const bool show);
 
-    void capture_mouse(bool capture);
+    void capture_mouse(const bool capture);
 
     auto is_mouse_captured() const
     -> bool;

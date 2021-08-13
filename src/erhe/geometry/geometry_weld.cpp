@@ -10,7 +10,7 @@
 namespace erhe::geometry
 {
 
-const char* c_str(glm::vec3::length_type axis)
+const char* c_str(const glm::vec3::length_type axis)
 {
     switch (axis)
     {
@@ -22,10 +22,12 @@ const char* c_str(glm::vec3::length_type axis)
 }
 
 template<typename T>
-struct Pair_entries
+class Pair_entries
 {
-    struct Entry
+public:
+    class Entry
     {
+    public:
         Entry(T primary, T secondary)
             : primary  {primary}
             , secondary{secondary}
@@ -99,8 +101,9 @@ struct Pair_entries
 };
 
 template<typename T>
-struct Remapper
+class Remapper
 {
+public:
     Remapper(const T size)
         : old_size{size}
         , new_size{size}
@@ -205,19 +208,19 @@ struct Remapper
         std::swap(new_from_old[secondary_old_id], 
                   new_from_old[keep_old_id]);
 
-        for (size_t j = 0; j < merge.size(); ++j)
+        for (size_t i = 0; i < merge.size(); ++i)
         {
-            merge.entries[j].swap(keep_new_id, secondary_new_id);
+            merge.entries[i].swap(keep_new_id, secondary_new_id);
         }
-        for (size_t j = 0; j < eliminate.size(); ++j)
+        for (size_t i = 0; i < eliminate.size(); ++i)
         {
-            if (eliminate[j] == keep_new_id)
+            if (eliminate[i] == keep_new_id)
             {
-                eliminate[j] = secondary_new_id;
+                eliminate[i] = secondary_new_id;
             }
-            else if (eliminate[j] == secondary_new_id)
+            else if (eliminate[i] == secondary_new_id)
             {
-                eliminate[j] = keep_new_id;
+                eliminate[i] = keep_new_id;
             }
         }
     }
@@ -226,7 +229,6 @@ struct Remapper
     {
         for (;;)
         {
-            bool restart = false;
             VERIFY(new_end > 0);
             --new_end;
             if (check_used && !old_used[old_from_new[new_end]])
@@ -249,14 +251,14 @@ struct Remapper
         log_weld.trace("Dropped due to merge:");
         for (size_t i = 0, end = merge.size(); i < end; ++i)
         {
-            auto& entry = merge.entries[i];
-            T secondary_new_id = entry.secondary;
+            const auto& entry = merge.entries[i];
+            const T secondary_new_id = entry.secondary;
             if (secondary_new_id >= new_end)
             {
                 log_weld.trace(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
                 continue;
             }
-            T keep_new_id = get_next_end();
+            const T keep_new_id = get_next_end();
             if (secondary_new_id == keep_new_id)
             {
                 log_weld.trace(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
@@ -435,8 +437,9 @@ void Geometry::weld(const Weld_settings& weld_settings)
 
     ZoneScoped;
 
-    struct Point_attribute_maps
+    class Point_attribute_maps
     {
+    public:
         Property_map<Point_id, glm::vec3>* locations {nullptr};
         Property_map<Point_id, glm::vec3>* normals   {nullptr};
         Property_map<Point_id, glm::vec3>* tangents  {nullptr};
@@ -450,8 +453,9 @@ void Geometry::weld(const Weld_settings& weld_settings)
     point_attribute_maps.bitangents = point_attributes().find<vec3>(c_point_bitangents);
     point_attribute_maps.texcoords  = point_attributes().find<vec2>(c_point_texcoords);
 
-    struct Polygon_attribute_maps
+    class Polygon_attribute_maps
     {
+    public:
         Property_map<Polygon_id, glm::vec3>* centroids{nullptr};
         Property_map<Polygon_id, glm::vec3>* normals  {nullptr};
     };
@@ -542,8 +546,9 @@ void Geometry::weld(const Weld_settings& weld_settings)
         //polygon_remapper.dump();
 
         // Scan for polygon merge/eliminate
-        struct Polygon_data
+        class Polygon_data
         {
+        public:
             Polygon_data(Polygon_id old_id, const Polygon_attribute_maps& attribute_maps)
             {
                 VERIFY((attribute_maps.centroids != nullptr) && attribute_maps.centroids->has(old_id));
@@ -562,7 +567,6 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 continue;
             }
             const Polygon_data primary_attributes(primary_old_id, polygon_attribute_maps);
-            //              secondary
             log_weld.trace("primary   new {:2} old {:2} centroid {} normal {}\n",
                            primary_new_id,
                            primary_old_id,
@@ -739,26 +743,26 @@ void Geometry::weld(const Weld_settings& weld_settings)
                       {
                           return false;
                       }
-                      glm::vec3 position_lhs = point_attribute_maps.locations->get(lhs);
-                      glm::vec3 position_rhs = point_attribute_maps.locations->get(rhs);
+                      const glm::vec3 position_lhs = point_attribute_maps.locations->get(lhs);
+                      const glm::vec3 position_rhs = point_attribute_maps.locations->get(rhs);
                       if (position_lhs[axis0] != position_rhs[axis0])
                       {
-                          bool is_less = position_lhs[axis0] < position_rhs[axis0];
+                          const bool is_less = position_lhs[axis0] < position_rhs[axis0];
                           //log_weld.trace("{:2} vs {:2} {} [ {} ] {} {} [ {} ]\n",
                           //               lhs, rhs, position_lhs, axis0, is_less ? "< " : ">=", position_rhs, axis0);
                           return is_less;
                       }
-                      bool is_not_same = position_lhs[axis1] != position_rhs[axis1];
+                      const bool is_not_same = position_lhs[axis1] != position_rhs[axis1];
                       //log_weld.trace("position_lhs[axis1] = {}, position_rhs[axis1] = {}, is not same = {}\n",
                       //               position_lhs[axis1], position_rhs[axis1], is_not_same);
                       if (is_not_same)
                       {
-                          bool is_less = position_lhs[axis1] < position_rhs[axis1];
+                          const bool is_less = position_lhs[axis1] < position_rhs[axis1];
                           //log_weld.trace("{:2} vs {:2} {} [ {} ] {} {} [ {} ]\n",
                           //               lhs, rhs, position_lhs, axis1, is_less ? "< " : ">=", position_rhs, axis1);
                           return is_less;
                       }
-                      bool is_less = position_lhs[axis2] < position_rhs[axis2];
+                      const bool is_less = position_lhs[axis2] < position_rhs[axis2];
                       //log_weld.trace("{:2} vs {:2} {} [ {} ] {} {} [ {} ]\n",
                       //               lhs, rhs, position_lhs, axis2, is_less ? "< " : ">=", position_rhs, axis2);
                       return is_less;
@@ -782,9 +786,10 @@ void Geometry::weld(const Weld_settings& weld_settings)
         //point_remapper.dump();
 
         // Scan for mergable points
-        struct Point_data
+        class Point_data
         {
-            Point_data(Point_id old_id, const Point_attribute_maps& attribute_maps)
+        public:
+            Point_data(const Point_id old_id, const Point_attribute_maps& attribute_maps)
             {
                 if ((attribute_maps.locations  != nullptr) && attribute_maps.locations ->has(old_id)) position  = attribute_maps.locations ->get(old_id);
                 if ((attribute_maps.normals    != nullptr) && attribute_maps.normals   ->has(old_id)) normal    = attribute_maps.normals   ->get(old_id);
@@ -801,7 +806,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
 
         for (Point_id primary_new_id = 0; primary_new_id < m_next_point_id; ++primary_new_id)
         {
-            Point_id primary_old_id = point_remapper.old_id(primary_new_id);
+            const Point_id primary_old_id = point_remapper.old_id(primary_new_id);
 
             if (point_remapper.merge.find_secondary(primary_new_id) != nullptr)
             {
@@ -810,21 +815,21 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 continue;
             }
 
-            Point_data primary_attributes(primary_old_id, point_attribute_maps);
+            const Point_data primary_attributes(primary_old_id, point_attribute_maps);
             //log_weld.trace("span start: new {:2} old {:2} position {}\n", span_start, new_to_old_point_id[span_start], reference.position.value());
             for (Point_id secondary_new_id = primary_new_id + 1; secondary_new_id < m_next_point_id; ++secondary_new_id)
             {
-                Point_id secondary_old_id = point_remapper.old_id(secondary_new_id);
+                const Point_id secondary_old_id = point_remapper.old_id(secondary_new_id);
                 if (point_remapper.merge.find_secondary(secondary_new_id) != nullptr)
                 {
                     //log_weld.trace("New point {} old point {} has already been removed/merged\n",
                     //               secondary_new_id, secondary_old_id);
                     continue;
                 }
-                Point_data secondary_attributes(secondary_old_id, point_attribute_maps);
+                const Point_data secondary_attributes(secondary_old_id, point_attribute_maps);
                 //log_weld.trace("new {:2} old {:2} current position {}\n", secondary_new_id, secondary_old_id, secondary_attributes.position.value());
 
-                float diff = std::abs(primary_attributes.position.value()[axis0] - secondary_attributes.position.value()[axis0]);
+                const float diff = std::abs(primary_attributes.position.value()[axis0] - secondary_attributes.position.value()[axis0]);
                 if (diff > 0.001f)
                 {
                     //log_weld.trace("span {:2} .. {:2}  {} .. {}\n", span_start, new_point_id, reference.position.value(), current.position.value());
@@ -835,7 +840,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
 
                 if (primary_attributes.position.has_value() && secondary_attributes.position.has_value())
                 {
-                    float distance = glm::distance(primary_attributes.position.value(), secondary_attributes.position.value());
+                    const float distance = glm::distance(primary_attributes.position.value(), secondary_attributes.position.value());
                     if (distance > weld_settings.max_point_distance)
                     {
                         //log_weld.trace("position distance too large for span {:2} point {:2} - {} vs. {}, distance {}\n",
@@ -917,7 +922,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
         uint32_t next_point_corner = 0;
         for (Point_id new_point_id = 0, end = point_count(); new_point_id < end; ++new_point_id)
         {
-            Point_id old_point_id = point_remapper.old_id(new_point_id);
+            const Point_id old_point_id = point_remapper.old_id(new_point_id);
             log_weld.trace("Point new {:2} from old {:2} corners:", new_point_id, old_point_id);
             Point& old_point = old_points[old_point_id];
             Point& new_point = points[new_point_id];
@@ -925,8 +930,8 @@ void Geometry::weld(const Weld_settings& weld_settings)
             points[new_point_id].corner_count          = 0;
             for (uint32_t i = 0, end = old_point.corner_count; i < end; ++i)
             {
-                Point_corner_id old_point_corner_id = old_point.first_point_corner_id + i;
-                Point_corner_id new_point_corner_id = new_point.first_point_corner_id + new_point.corner_count;
+                const Point_corner_id old_point_corner_id = old_point.first_point_corner_id + i;
+                const Point_corner_id new_point_corner_id = new_point.first_point_corner_id + new_point.corner_count;
                 VERIFY(new_point_corner_id == next_point_corner);
                 Corner_id corner_id = old_point_corners[old_point_corner_id];
                 Corner&   corner    = corners[corner_id];
@@ -944,19 +949,19 @@ void Geometry::weld(const Weld_settings& weld_settings)
             point_remapper.for_each_primary_new(
                 new_point_id,
                 [this, new_point_id, &old_points, &old_point_corners, &next_point_corner]
-                (Polygon_id primary_new_id,   Polygon_id primary_old_id, 
-                 Polygon_id secondary_new_id, Polygon_id secondary_old_id)
+                (const Polygon_id primary_new_id,   const Polygon_id primary_old_id, 
+                 const Polygon_id secondary_new_id, const Polygon_id secondary_old_id)
                 {
                     VERIFY(new_point_id == primary_new_id);
-                    Point& primary_new   = points    [primary_new_id];
-                    Point& secondary_old = old_points[secondary_old_id];
+                    Point& primary_new         = points    [primary_new_id];
+                    const Point& secondary_old = old_points[secondary_old_id];
                     VERIFY(secondary_old.corner_count > 0);
                     for (uint32_t i = 0, end = secondary_old.corner_count; i < end; ++i)
                     {
-                        Point_corner_id old_point_corner_id = secondary_old.first_point_corner_id + i;
-                        Point_corner_id new_point_corner_id = primary_new.first_point_corner_id + primary_new.corner_count;
-                        Corner_id       corner_id           = old_point_corners[old_point_corner_id];
-                        Corner&         corner              = corners[corner_id];
+                        const Point_corner_id old_point_corner_id = secondary_old.first_point_corner_id + i;
+                        const Point_corner_id new_point_corner_id = primary_new.first_point_corner_id + primary_new.corner_count;
+                        const Corner_id       corner_id           = old_point_corners[old_point_corner_id];
+                        const Corner&         corner              = corners[corner_id];
                         if (corner.polygon_id >= m_next_polygon_id)
                         {
                             log_weld.trace(" !{:2}", corner_id);
@@ -978,9 +983,9 @@ void Geometry::weld(const Weld_settings& weld_settings)
         for (Corner_id corner_id = 0, end = corner_count(); corner_id < end; ++corner_id)
         {
             Corner& corner = corners[corner_id];
-            Point_id old_point_id = corner.point_id;
+            const Point_id old_point_id = corner.point_id;
             VERIFY(old_point_id != std::numeric_limits<Point_id>::max());
-            Point_id new_point_id = point_remapper.new_id(old_point_id);
+            const Point_id new_point_id = point_remapper.new_id(old_point_id);
             corner.point_id = new_point_id;
             log_weld.trace("Corner {:2} point {:2} -> {:2}\n", corner_id, old_point_id, new_point_id);
         }
@@ -1006,7 +1011,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
                  point_corner_id < end;
                  ++point_corner_id)
             {
-                Corner_id corner_id = point_corners[point_corner_id];
+                const Corner_id corner_id = point_corners[point_corner_id];
                 VERIFY(corner_id != std::numeric_limits<Corner_id>::max());
                 corner_remapper.use_old(corner_id);
             }
@@ -1019,7 +1024,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
                  polygon_corner_id < end;
                  ++polygon_corner_id)
             {
-                Corner_id corner_id = polygon_corners[polygon_corner_id];
+                const Corner_id corner_id = polygon_corners[polygon_corner_id];
                 VERIFY(corner_id != std::numeric_limits<Corner_id>::max());
                 corner_remapper.use_old(corner_id);
             }
@@ -1059,7 +1064,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
             auto old_corners = corners;
             for (Corner_id new_corner_id = 0, end = m_next_corner_id; new_corner_id < end; ++new_corner_id)
             {
-                Corner_id old_corner_id = corner_remapper.old_id(new_corner_id);
+                const Corner_id old_corner_id = corner_remapper.old_id(new_corner_id);
                 log_weld.trace("Corner new {:2} from old {:2}\n", new_corner_id, old_corner_id);
                 corners[new_corner_id] = old_corners[old_corner_id];
             }
@@ -1077,8 +1082,8 @@ void Geometry::weld(const Weld_settings& weld_settings)
                      point_corner_id < end;
                      ++point_corner_id)
                 {
-                    Corner_id old_corner_id = point_corners[point_corner_id];
-                    Corner_id new_corner_id = corner_remapper.new_id(old_corner_id);
+                    const Corner_id old_corner_id = point_corners[point_corner_id];
+                    const Corner_id new_corner_id = corner_remapper.new_id(old_corner_id);
                     log_weld.trace(" {:2} -> {:2}", old_corner_id, new_corner_id);
                     point_corners[point_corner_id] = new_corner_id;
                 }
@@ -1095,8 +1100,8 @@ void Geometry::weld(const Weld_settings& weld_settings)
                      polygon_corner_id < end;
                      ++polygon_corner_id)
                 {
-                    Corner_id old_corner_id = polygon_corners[polygon_corner_id];
-                    Corner_id new_corner_id = corner_remapper.new_id(old_corner_id);
+                    const Corner_id old_corner_id = polygon_corners[polygon_corner_id];
+                    const Corner_id new_corner_id = corner_remapper.new_id(old_corner_id);
                     log_weld.trace(" {:2} -> {:2}", old_corner_id, new_corner_id);
                     polygon_corners[polygon_corner_id] = new_corner_id;
                 }

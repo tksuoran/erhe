@@ -70,7 +70,7 @@ void Forward_renderer::initialize_component()
                          static_cast<GLsizei>(strlen(c_forward_renderer_initialize_component)),
                          c_forward_renderer_initialize_component);
 
-    create_frame_resources(256, 256, 32, 8000, 8000);
+    create_frame_resources(256, 256, 256, 8000, 8000);
 
     m_vertex_input = std::make_unique<Vertex_input_state>(get<Program_interface>()->attribute_mappings,
                                                           *m_mesh_memory->vertex_format(),
@@ -377,12 +377,12 @@ auto Forward_renderer::select_primitive_mode(Pass pass) const -> erhe::primitive
 }
 
 static constexpr const char* c_forward_renderer_render = "Forward_renderer::render()";
-void Forward_renderer::render(Viewport                    viewport,
-                              ICamera&                    camera,
-                              Layer_collection&           layers,
-                              const Material_collection&  materials,
-                              std::initializer_list<Pass> passes,
-                              uint64_t                    visibility_mask)
+void Forward_renderer::render(Viewport                          viewport,
+                              ICamera&                          camera,
+                              Layer_collection&                 layers,
+                              const Material_collection&        materials,
+                              const std::initializer_list<Pass> passes,
+                              const uint64_t                    visibility_mask)
 {
     ZoneScoped;
 
@@ -390,8 +390,8 @@ void Forward_renderer::render(Viewport                    viewport,
                          0,
                          static_cast<GLsizei>(strlen(c_forward_renderer_render)),
                          c_forward_renderer_render);
-    unsigned int shadow_texture_unit = 0;
-    unsigned int shadow_texture_name = m_shadow_renderer->texture()->gl_name();
+    const unsigned int shadow_texture_unit = 0;
+    const unsigned int shadow_texture_name = m_shadow_renderer->texture()->gl_name();
     gl::bind_sampler (shadow_texture_unit, m_programs->nearest_sampler->gl_name());
     gl::bind_textures(shadow_texture_unit, 1, &shadow_texture_name);
     gl::viewport     (viewport.x, viewport.y, viewport.width, viewport.height);
@@ -430,7 +430,7 @@ void Forward_renderer::render(Viewport                    viewport,
 
             update_light_buffer    (layer->lights, m_shadow_renderer->viewport(), layer->ambient_light);
             update_primitive_buffer(layer->meshes, visibility_mask);
-            auto draw_indirect_buffer_range = update_draw_indirect_buffer(layer->meshes, primitive_mode, visibility_mask);
+            const auto draw_indirect_buffer_range = update_draw_indirect_buffer(layer->meshes, primitive_mode, visibility_mask);
 
             bind_light_buffer();
             bind_primitive_buffer();
@@ -453,7 +453,7 @@ void Forward_renderer::render(Viewport                    viewport,
     gl::pop_debug_group();
 
     // state leak insurance
-    unsigned int zero{0};
+    const unsigned int zero{0};
     gl::bind_sampler(shadow_texture_unit, 0);
     gl::bind_textures(shadow_texture_unit, 1, &zero);
 }

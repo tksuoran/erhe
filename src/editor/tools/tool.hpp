@@ -6,11 +6,11 @@
 namespace editor
 {
 
-class  Line_renderer;
-struct Pointer_context;
-struct Render_context;
-class  Scene_manager;
-class  Text_renderer;
+class Line_renderer;
+class Pointer_context;
+class Render_context;
+class Scene_manager;
+class Text_renderer;
 
 class Tool
 {

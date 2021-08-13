@@ -66,7 +66,7 @@ void Debug_draw::draw3dText(const btVector3& location, const char* textString)
 {
     uint32_t text_color = 0xffffffffu; // abgr
     glm::vec3 text_position{location.x(), location.y(), location.z()};
-    m_text_renderer->print(textString, text_position, text_color);
+    m_text_renderer->print(text_position, text_color, textString);
 }
 
 void Debug_draw::setDebugMode(int debugMode)

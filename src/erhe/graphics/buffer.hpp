@@ -16,14 +16,14 @@ public:
     Buffer () = default;
     ~Buffer();
 
-    Buffer(gl::Buffer_target       target,
-           size_t                  capacity_bytes_count,
-           gl::Buffer_storage_mask storage_mask) noexcept;
+    Buffer(const gl::Buffer_target       target,
+           const size_t                  capacity_bytes_count,
+           const gl::Buffer_storage_mask storage_mask) noexcept;
 
-    Buffer(gl::Buffer_target          target,
-           size_t                     capacity_byte_count,
-           gl::Buffer_storage_mask    storage_mask,
-           gl::Map_buffer_access_mask map_buffer_access_mask) noexcept;
+    Buffer(const gl::Buffer_target          target,
+           const size_t                     capacity_byte_count,
+           const gl::Buffer_storage_mask    storage_mask,
+           const gl::Map_buffer_access_mask map_buffer_access_mask) noexcept;
 
     Buffer        (const Buffer&) = delete;
     void operator=(const Buffer&) = delete;
@@ -33,10 +33,10 @@ public:
     auto map                  ()                -> gsl::span<std::byte>;
     auto debug_label          () const noexcept -> const std::string&;
     auto capacity_byte_count  () const noexcept -> size_t;
-    auto allocate_bytes       (size_t byte_count, size_t alignment = 64) noexcept -> size_t;
+    auto allocate_bytes       (const size_t byte_count, const size_t alignment = 64) noexcept -> size_t;
     void unmap                () noexcept;
-    void flush_bytes          (size_t byte_offset, size_t byte_count) noexcept;
-    void flush_and_unmap_bytes(size_t byte_count) noexcept;
+    void flush_bytes          (const size_t byte_offset, const size_t byte_count) noexcept;
+    void flush_and_unmap_bytes(const size_t byte_count) noexcept;
     auto free_capacity_bytes  () const noexcept -> size_t;
     auto target               () const noexcept -> gl::Buffer_target;
     void set_debug_label      (std::string_view label) noexcept;
@@ -44,9 +44,9 @@ public:
     auto gl_name              () const noexcept -> unsigned int;
 
     template <typename T>
-    auto map_elements(size_t                     element_offset,
-                      size_t                     element_count,
-                      gl::Map_buffer_access_mask access_mask) noexcept
+    auto map_elements(const size_t                     element_offset,
+                      const size_t                     element_count,
+                      const gl::Map_buffer_access_mask access_mask) noexcept
     -> gsl::span<T>
     {
         const size_t byte_offset = element_offset * sizeof(T);
@@ -56,12 +56,12 @@ public:
                                               raw_map.size_bytes() / sizeof(T));
     }
 
-    auto map_all_bytes(gl::Map_buffer_access_mask access_mask) noexcept
+    auto map_all_bytes(const gl::Map_buffer_access_mask access_mask) noexcept
     -> gsl::span<std::byte>;
 
-    auto map_bytes(size_t                     byte_offset,
-                   size_t                     byte_count,
-                   gl::Map_buffer_access_mask access_mask) noexcept
+    auto map_bytes(const size_t                     byte_offset,
+                   const size_t                     byte_count,
+                   const gl::Map_buffer_access_mask access_mask) noexcept
     -> gsl::span<std::byte>;
 
     friend class Vertex_input_state;
@@ -84,7 +84,7 @@ private:
 
 class Ring_buffer
 {
-    Ring_buffer(size_t capacity)
+    Ring_buffer(const size_t capacity)
     {
         m_buffer.resize(capacity);
         m_max_size = capacity;
@@ -113,7 +113,7 @@ class Ring_buffer
         return m_max_size;
     }
 
-    size_t size() const
+    auto size() const -> size_t
     {
         if (full())
         {
@@ -126,17 +126,17 @@ class Ring_buffer
         return m_max_size + m_write_offset - m_read_offset;
     }
 
-    size_t size_available_for_write() const
+    auto size_available_for_write() const -> size_t
     {
         return m_max_size - size();
     }
 
-    size_t size_available_for_read() const
+    auto size_available_for_read() const -> size_t
     {
         return size();
     }
 
-    size_t write(const uint8_t* src, size_t byte_count)
+    auto write(const uint8_t* src, const size_t byte_count) -> size_t
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -159,7 +159,7 @@ class Ring_buffer
         return can_write_count;
     }
 
-    size_t read(uint8_t* dst, size_t byte_count)
+    auto read(uint8_t* dst, const size_t byte_count) -> size_t
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -182,7 +182,7 @@ class Ring_buffer
         return can_read_count;
     }
 
-    size_t discard(size_t byte_count)
+    auto discard(const size_t byte_count) -> size_t
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -217,7 +217,7 @@ public:
     {
     public:
         Transfer_entry(Buffer*                target,
-                       size_t                 target_offset,
+                       const size_t           target_offset,
                        std::vector<uint8_t>&& data)
             : target       {target}
             , target_offset{target_offset}
@@ -249,7 +249,7 @@ public:
     };
 
     void flush();
-    void enqueue(Buffer* buffer, size_t offset, std::vector<uint8_t>&& data);
+    void enqueue(Buffer* buffer, const size_t offset, std::vector<uint8_t>&& data);
 
 private:
     std::mutex                  m_mutex;
@@ -260,10 +260,10 @@ template <typename T>
 class Scoped_buffer_mapping
 {
 public:
-    Scoped_buffer_mapping(Buffer&                    buffer,
-                          size_t                     element_offset,
-                          size_t                     element_count,
-                          gl::Map_buffer_access_mask access_mask)
+    Scoped_buffer_mapping(Buffer&                          buffer,
+                          const size_t                     element_offset,
+                          const size_t                     element_count,
+                          const gl::Map_buffer_access_mask access_mask)
         : m_buffer{buffer}
         , m_span  {buffer.map_elements<T>(element_offset, element_count, access_mask)}
     {
@@ -287,8 +287,9 @@ private:
     gsl::span<T> m_span;
 };
 
-struct Buffer_hash
+class Buffer_hash
 {
+public:
     auto operator()(const Buffer& buffer) const noexcept
     -> size_t
     {

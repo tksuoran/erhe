@@ -195,7 +195,7 @@ private:
     static std::vector<Vertex_input_state*> s_all_vertex_input_states;
 };
 
-struct Vertex_input_state_tracker
+class Vertex_input_state_tracker
 {
 public:
     void reset()

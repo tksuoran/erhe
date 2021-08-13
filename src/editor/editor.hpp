@@ -62,9 +62,4 @@ class Editor_tools;
 class Editor_view;
 class Editor_time;
 
-
-
-
-
-
 }

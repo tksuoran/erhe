@@ -251,7 +251,7 @@ void Menu::resize(float w, float h)
         p -= m_text_buffer->bounding_box().half_size();
 
         m_text_buffer->begin_print();
-        m_text_buffer->print(title, static_cast<int>(p.x), static_cast<int>(p.y));
+        m_text_buffer->print(static_cast<int>(p.x), static_cast<int>(p.y), title);
         m_text_buffer->end_print();
     }
 

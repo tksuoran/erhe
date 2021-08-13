@@ -28,8 +28,9 @@ enum class Interpolation_mode : unsigned int
     normalized_vec3_float,  // normalize(tranform with inverse transpose of matrix) = normal, tagent, bitangent
 };
 
-struct Property_map_descriptor
+class Property_map_descriptor
 {
+public:
     const char*        name;
     Transform_mode     transform_mode;
     Interpolation_mode interpolation_mode;
@@ -61,8 +62,8 @@ public:
 
     virtual void remap_keys(const std::vector<Key_type>& key_old_to_new) = 0;
 
-    virtual void interpolate(Property_map_base<Key_type>*                         destination,
-                             std::vector<std::vector<std::pair<float, Key_type>>> key_new_to_olds) const = 0;
+    virtual void interpolate(Property_map_base<Key_type>*                                destination,
+                             const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds) const = 0;
 
     virtual void import_from(Property_map_base<Key_type>* source, glm::mat4 transform) = 0;
 
@@ -110,15 +111,15 @@ public:
 
     void remap_keys(const std::vector<Key_type>& key_new_to_old) final;
 
-    void interpolate(Property_map_base<Key_type>*                         destination,
-                     std::vector<std::vector<std::pair<float, Key_type>>> key_new_to_olds) const final;
+    void interpolate(Property_map_base<Key_type>*                                destination,
+                     const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds) const final;
 
     void import_from(Property_map_base<Key_type>* source, glm::mat4 transform) final;
 
     auto constructor(const Property_map_descriptor& descriptor) const
     -> Property_map_base<Key_type>* final;
 
-    static constexpr const size_t s_grow_size = 4096;
+    static constexpr size_t s_grow_size = 4096;
 
     std::vector<Value_type> values;
     std::vector<bool>       present; // Yes, I know vector<bool> has limitations

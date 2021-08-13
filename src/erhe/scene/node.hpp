@@ -17,7 +17,7 @@ class Node
 public:
     virtual ~Node();
 
-    void update(uint32_t update_serial = 0, bool cache_enable = false);
+    void update(const uint32_t update_serial = 0, const bool cache_enable = false);
     void attach(const std::shared_ptr<INode_attachment>& attachment);
     auto detach(const std::shared_ptr<INode_attachment>& attachment) -> bool;
 
@@ -53,8 +53,9 @@ public:
         return m_attachments.size();
     }
 
-    struct Transforms
+    class Transforms
     {
+    public:
         Transform parent_from_node; // normative
         Transform world_from_node;  // calculated by update()
     };

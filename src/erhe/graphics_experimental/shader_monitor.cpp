@@ -21,8 +21,11 @@ Shader_monitor::~Shader_monitor()
 {
     ZoneScoped;
 
+    log_shader_monitor.info("Shader_monitor shutting down");
     set_run(false);
+    log_shader_monitor.info("Joining shader monitor poll thread");
     m_poll_filesystem_thread.join();
+    log_shader_monitor.info("Shader_monitor shut down complete");
 }
 
 void Shader_monitor::initialize_component()
@@ -112,6 +115,7 @@ void Shader_monitor::poll_thread()
             }
         }
     }
+    log_shader_monitor.info("Exiting shader monitor poll thread");
 }
 
 static constexpr const char* c_shader_monitor_poll = "shader monitor poll";

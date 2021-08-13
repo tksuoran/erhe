@@ -5,10 +5,10 @@
 namespace erhe::geometry::shapes
 {
 
-auto make_triangle(double radius)
+auto make_triangle(const double radius)
 -> Geometry;
 
-auto make_quad(double edge)
+auto make_quad(const double edge)
 -> Geometry;
 
 

@@ -10,7 +10,7 @@ const ImVec4 Window::c_color_disabled         = ImVec4(0.3f, 0.3, 0.3f, 1.0f);
 const ImVec4 Window::c_color_disabled_hovered = ImVec4(0.3f, 0.3, 0.3f, 1.0f);
 const ImVec4 Window::c_color_disabled_active  = ImVec4(0.3f, 0.3, 0.3f, 1.0f); // pressed
 
-bool Window::make_button(const char* label, Item_mode mode, ImVec2 size)
+bool Window::make_button(const char* label, const Item_mode mode, const ImVec2 size)
 {
     if (mode == Item_mode::active)
     {
@@ -24,7 +24,7 @@ bool Window::make_button(const char* label, Item_mode mode, ImVec2 size)
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, c_color_disabled_hovered);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,  c_color_disabled_active);
     }
-    bool pressed = ImGui::Button(label, size) && (mode != Item_mode::disabled);
+    const bool pressed = ImGui::Button(label, size) && (mode != Item_mode::disabled);
     if (mode != Item_mode::normal)
     {
         ImGui::PopStyleColor(3);
@@ -32,9 +32,9 @@ bool Window::make_button(const char* label, Item_mode mode, ImVec2 size)
     return pressed;
 }
 
-void Window::make_check_box(const char* label, bool* value, Item_mode mode)
+void Window::make_check_box(const char* label, bool* value, const Item_mode mode)
 {
-    bool original_value = *value;
+    const bool original_value = *value;
     if (mode == Item_mode::disabled)
     {
         ImGui::PushStyleColor(ImGuiCol_CheckMark, c_color_disabled);

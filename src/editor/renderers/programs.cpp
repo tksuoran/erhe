@@ -63,7 +63,7 @@ void Programs::initialize_component()
 auto Programs::make_program(std::string_view name)
 -> std::unique_ptr<erhe::graphics::Shader_stages>
 {
-    std::vector<std::string> no_defines;
+    const std::vector<std::string> no_defines;
     return make_program(name, no_defines);
 }
 

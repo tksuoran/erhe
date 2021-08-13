@@ -23,16 +23,18 @@ namespace mesh
 {
 class Geometry_mesh;
 }
+
 namespace scene
 {
 class Camera;
 class Light;
-struct Viewport;
+class Viewport;
 } // namespace scene
+
 } // namespace renderstack
 
 class Light_mesh;
-struct Material;
+class Material;
 
 class Deferred_renderer
     : public renderstack::toolkit::service,

@@ -24,8 +24,8 @@ class Font final
 {
 public:
     Font(const std::filesystem::path& path,
-         unsigned int                 size,
-         float                        outline_thickness = 0.0f);
+         const unsigned int           size,
+         const float                  outline_thickness = 0.0f);
 
     ~Font();
 
@@ -39,9 +39,9 @@ public:
 
     auto print(gsl::span<float>    float_data,
                gsl::span<uint32_t> uint_data,
-               const std::string&  text,
+               std::string_view    text,
                glm::vec3           text_position,
-               uint32_t            text_color,
+               const uint32_t      text_color,
                Rectangle&          out_bounds) const
     -> size_t;
 

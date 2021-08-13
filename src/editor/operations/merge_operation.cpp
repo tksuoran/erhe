@@ -22,10 +22,10 @@ Merge_operation::Merge_operation(Context& context)
     using namespace erhe::primitive;
     using namespace glm;
 
-    Geometry combined_geometry;
-    bool     first_mesh                = true;
-    mat4     reference_node_from_world = mat4{1};
-    auto     normal_style              = Normal_style::none;
+    erhe::geometry::Geometry combined_geometry;
+    bool first_mesh                = true;
+    mat4 reference_node_from_world = mat4{1};
+    auto normal_style              = Normal_style::none;
     for (auto item : context.selection_tool->selection())
     {
         auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
@@ -61,7 +61,7 @@ Merge_operation::Merge_operation(Context& context)
             }
         }
 
-        m_source_entries.emplace_back(context.primitive_build_context,
+        m_source_entries.emplace_back(context.geometry_uploader,
                                       context.layer,
                                       context.scene,
                                       context.physics_world,
@@ -80,7 +80,7 @@ Merge_operation::Merge_operation(Context& context)
     combined_geometry.build_edges();
 
     m_combined_primitive_geometry = make_primitive_shared(combined_geometry,
-                                                          context.primitive_build_context,
+                                                          context.geometry_uploader,
                                                           normal_style);
     m_combined_primitive_geometry->source_geometry     = std::make_shared<erhe::geometry::Geometry>(std::move(combined_geometry));
     m_combined_primitive_geometry->source_normal_style = normal_style;

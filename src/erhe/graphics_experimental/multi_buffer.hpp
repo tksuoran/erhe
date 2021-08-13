@@ -46,8 +46,9 @@ public:
     }
 
 private:
-    struct Entry
+    class Entry
     {
+    public:
         std::shared_ptr<erhe::graphics::Buffer> buffer;
         gsl::span<std::byte>                    map_data;
         size_t                                  last_update_serial{0};

@@ -39,9 +39,9 @@ void dump_fbo_attachment(int fbo_name, gl::Framebuffer_attachment attachment)
                                                           attachment,
                                                           gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_name,
                                                           &name);
-        int samples{0};
-        int width{0};
-        int height{0};
+        int samples        {0};
+        int width          {0};
+        int height         {0};
         int internal_format{0};
         if (type == GL_RENDERBUFFER)
         {
@@ -79,7 +79,7 @@ void dump_fbo_attachment(int fbo_name, gl::Framebuffer_attachment attachment)
 
 void dump_fbo(int fbo_name)
 {
-    int samples{0};
+    int samples       {0};
     int sample_buffers{0};
     gl::get_named_framebuffer_parameter_iv(fbo_name, gl::Get_framebuffer_parameter::samples, &samples);
     gl::get_named_framebuffer_parameter_iv(fbo_name, gl::Get_framebuffer_parameter::sample_buffers, &sample_buffers);
@@ -111,12 +111,13 @@ void Viewport_window::window(Pointer_context& pointer_context)
 
     ImGui::Begin("Scene");
 
+    const auto size = ImGui::GetContentRegionAvail();
+
     if (m_can_present &&
         m_color_texture_resolved_for_present &&
         (m_color_texture_resolved_for_present->width() > 0) &&
         (m_color_texture_resolved_for_present->height() > 0))
     {
-        auto size = ImGui::GetContentRegionAvail();
         ImGui::Image(reinterpret_cast<ImTextureID>(m_color_texture_resolved_for_present.get()),
                                                    size,
                                                    ImVec2(0, 1),
@@ -128,7 +129,6 @@ void Viewport_window::window(Pointer_context& pointer_context)
     }
     else
     {
-        auto size = ImGui::GetContentRegionAvail();
         m_content_region_size = to_glm(size);
         m_is_focused = false;
     }
@@ -160,7 +160,7 @@ void Viewport_window::bind_multisample_framebuffer()
     }
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer_multisample->gl_name());
-    auto status = gl::check_named_framebuffer_status(m_framebuffer_multisample->gl_name(), gl::Framebuffer_target::draw_framebuffer);
+    const auto status = gl::check_named_framebuffer_status(m_framebuffer_multisample->gl_name(), gl::Framebuffer_target::draw_framebuffer);
     if (status != gl::Framebuffer_status::framebuffer_complete)
     {
         log_framebuffer.error("draw framebuffer status = {}\n", c_str(status));
@@ -187,7 +187,7 @@ void Viewport_window::multisample_resolve()
     gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_framebuffer_multisample->gl_name());
     if constexpr (true)
     {
-        auto status = gl::check_named_framebuffer_status(m_framebuffer_multisample->gl_name(), gl::Framebuffer_target::draw_framebuffer);
+        const auto status = gl::check_named_framebuffer_status(m_framebuffer_multisample->gl_name(), gl::Framebuffer_target::draw_framebuffer);
         if (status != gl::Framebuffer_status::framebuffer_complete)
         {
             log_framebuffer.error("read framebuffer status = {}\n", c_str(status));
@@ -198,7 +198,7 @@ void Viewport_window::multisample_resolve()
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer_resolved->gl_name());
     if constexpr (true)
     {
-        auto status = gl::check_named_framebuffer_status(m_framebuffer_multisample->gl_name(), gl::Framebuffer_target::draw_framebuffer);
+        const auto status = gl::check_named_framebuffer_status(m_framebuffer_multisample->gl_name(), gl::Framebuffer_target::draw_framebuffer);
         if (status != gl::Framebuffer_status::framebuffer_complete)
         {
             log_framebuffer.error("draw framebuffer status = {}\n", c_str(status));
@@ -271,7 +271,7 @@ void Viewport_window::update_framebuffer()
         m_color_texture_multisample->set_debug_label("Viewport Window Multisample Resolved");
         if (!m_can_present)
         {
-            float clear_value[4] = {1.0f, 0.0f, 0.0f, 1.0f };
+            constexpr float clear_value[4] = {1.0f, 0.0f, 0.0f, 1.0f };
             gl::clear_tex_image(m_color_texture_resolved->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
             m_can_present = true;
         }
@@ -304,7 +304,7 @@ void Viewport_window::update_framebuffer()
         m_framebuffer_resolved = make_unique<Framebuffer>(create_info);
         m_framebuffer_resolved->set_debug_label("Viewport Window Multisample Resolved");
 
-        gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0};
+        constexpr gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0};
         gl::named_framebuffer_draw_buffers(m_framebuffer_resolved->gl_name(), 1, &draw_buffers[0]);
 
         log_framebuffer.trace("Multisample resolved framebuffer:\n");
@@ -314,9 +314,9 @@ void Viewport_window::update_framebuffer()
 
 glm::vec2 Viewport_window::to_scene_content(glm::vec2 position_in_root)
 {
-    float content_x      = static_cast<float>(position_in_root.x) - m_content_region_min.x;
-    float content_y      = static_cast<float>(position_in_root.y) - m_content_region_min.y;
-    float content_flip_y = m_content_region_size.y - content_y;
+    const float content_x      = static_cast<float>(position_in_root.x) - m_content_region_min.x;
+    const float content_y      = static_cast<float>(position_in_root.y) - m_content_region_min.y;
+    const float content_flip_y = m_content_region_size.y - content_y;
     return { content_x, content_flip_y };
 }
 

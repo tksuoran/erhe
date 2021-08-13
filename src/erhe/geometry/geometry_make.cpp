@@ -18,7 +18,8 @@ auto Geometry::make_corner(const Point_id point_id, const Polygon_id polygon_id)
     ++m_serial;
     const Corner_id corner_id = m_next_corner_id++;
 
-    if (corner_id >= corners.size()) {
+    if (corner_id >= corners.size())
+    {
         corners.resize(static_cast<size_t>(corner_id) + s_grow);
     }
 
@@ -37,10 +38,11 @@ auto Geometry::make_point() -> Point_id
 
     ++m_serial;
 
-    Point_id point_id = m_next_point_id++;
+    const Point_id point_id = m_next_point_id++;
 
     // TODO
-    if (point_id >= points.size()) {
+    if (point_id >= points.size())
+    {
         points.resize(static_cast<size_t>(point_id) + s_grow);
     }
 
@@ -61,7 +63,8 @@ auto Geometry::make_polygon() -> Polygon_id
     const Polygon_id polygon_id = m_next_polygon_id++;
 
     // TODO
-    if (polygon_id >= polygons.size()) {
+    if (polygon_id >= polygons.size())
+    {
         polygons.resize(static_cast<size_t>(polygon_id) + s_grow);
     }
 
@@ -154,8 +157,9 @@ void Geometry::make_point_corners()
 
 void Geometry::sort_point_corners()
 {
-    struct Point_corner_info
+    class Point_corner_info
     {
+    public:
         Point_corner_id point_corner_id;
         Corner_id       corner_id;
         Point_id        point_ids[3];
@@ -226,10 +230,11 @@ void Geometry::sort_point_corners()
                     break;
                 }
             }
-            if (!found) {
+            if (!found)
+            {
                 log_geometry.trace("Could not sort point corners\n");
             }
-            Point_corner_id point_corner_id = i.point.first_point_corner_id + j;
+            const Point_corner_id point_corner_id = i.point.first_point_corner_id + j;
             point_corners[point_corner_id] = head.corner_id;
         }
     });
@@ -238,7 +243,7 @@ void Geometry::sort_point_corners()
 // Allocates new edge polygon.
 // - Edge must be already allocated.
 // - Polygon must be already allocated.
-auto Geometry::make_edge_polygon(Edge_id edge_id, Polygon_id polygon_id) -> Edge_polygon_id
+auto Geometry::make_edge_polygon(const Edge_id edge_id, const Polygon_id polygon_id) -> Edge_polygon_id
 {
     ZoneScoped;
 
@@ -275,7 +280,7 @@ auto Geometry::make_edge_polygon(Edge_id edge_id, Polygon_id polygon_id) -> Edge
 // Allocates new polygon corner.
 // - Polygon must be already allocated.
 // - Corner must be already allocated.
-auto Geometry::make_polygon_corner_(Polygon_id polygon_id, Corner_id corner_id) -> Polygon_corner_id
+auto Geometry::make_polygon_corner_(const Polygon_id polygon_id, const Corner_id corner_id) -> Polygon_corner_id
 {
     ZoneScoped;
 
@@ -313,7 +318,7 @@ auto Geometry::make_polygon_corner_(Polygon_id polygon_id, Corner_id corner_id) 
 // Allocates new polygon corner.
 // - Polygon must be already allocated.
 // - Point must be already allocated.
-auto Geometry::make_polygon_corner(Polygon_id polygon_id, Point_id point_id) -> Corner_id
+auto Geometry::make_polygon_corner(const Polygon_id polygon_id, const Point_id point_id) -> Corner_id
 {
     ZoneScoped;
 
@@ -329,7 +334,7 @@ auto Geometry::make_polygon_corner(Polygon_id polygon_id, Point_id point_id) -> 
     return corner_id;
 }
 
-auto Geometry::make_point(float x, float y, float z)
+auto Geometry::make_point(const float x, const float y, const float z)
 -> Point_id
 {
     ZoneScoped;
@@ -342,7 +347,7 @@ auto Geometry::make_point(float x, float y, float z)
     return point_id;
 }
 
-auto Geometry::make_point(float x, float y, float z, float s, float t)
+auto Geometry::make_point(const float x, const float y, const float z, const float s, const float t)
 -> Point_id
 {
     ZoneScoped;
@@ -357,13 +362,13 @@ auto Geometry::make_point(float x, float y, float z, float s, float t)
     return point_id;
 }
 
-auto Geometry::make_point(double x, double y, double z)
+auto Geometry::make_point(const double x, const double y, const double z)
 -> Point_id
 {
     return make_point(float(x), float(y), float(z));
 }
 
-auto Geometry::make_point(double x, double y, double z, double s, double t)
+auto Geometry::make_point(const double x, const double y, const double z, const double s, const double t)
 -> Point_id
 {
     return make_point(float(x), float(y), float(z), float(s), float(t));

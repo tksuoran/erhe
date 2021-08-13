@@ -62,7 +62,7 @@ Root_view::on_close()
 }
 
 void
-Root_view::on_resize(int width, int height)
+Root_view::on_resize(const int width, const int height)
 {
     if (m_view)
     {
@@ -71,7 +71,7 @@ Root_view::on_resize(int width, int height)
 }
 
 void
-Root_view::on_key_press(Keycode code, Key_modifier_mask mask)
+Root_view::on_key_press(const Keycode code, const Key_modifier_mask mask)
 {
     if (m_view)
     {
@@ -80,7 +80,7 @@ Root_view::on_key_press(Keycode code, Key_modifier_mask mask)
 }
 
 void
-Root_view::on_key_release(Keycode code, Key_modifier_mask mask)
+Root_view::on_key_release(const Keycode code, const Key_modifier_mask mask)
 {
     if (m_view)
     {
@@ -89,7 +89,7 @@ Root_view::on_key_release(Keycode code, Key_modifier_mask mask)
 }
 
 void
-Root_view::on_mouse_move(double x, double y)
+Root_view::on_mouse_move(const double x, const double y)
 {
     if (m_view)
     {
@@ -98,7 +98,7 @@ Root_view::on_mouse_move(double x, double y)
 }
 
 void
-Root_view::on_mouse_click(Mouse_button button, int count)
+Root_view::on_mouse_click(const Mouse_button button, const int count)
 {
     if (m_view)
     {

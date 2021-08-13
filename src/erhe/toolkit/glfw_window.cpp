@@ -32,7 +32,7 @@ namespace erhe::toolkit
 namespace
 {
 
-Keycode glfw_key_to_erhe(int glfw_key)
+auto glfw_key_to_erhe(const int glfw_key) -> Keycode
 {
     switch (glfw_key)
     {
@@ -162,7 +162,7 @@ Keycode glfw_key_to_erhe(int glfw_key)
     }
 }
 
-Key_modifier_mask glfw_modifiers_to_erhe(int glfw_modifiers)
+auto glfw_modifiers_to_erhe(const int glfw_modifiers) -> Key_modifier_mask
 {
     uint32_t mask = 0;
     // TODO GLFW_MOD_CAPS_LOCK
@@ -174,7 +174,7 @@ Key_modifier_mask glfw_modifiers_to_erhe(int glfw_modifiers)
     return mask;
 }
 
-Mouse_button glfw_mouse_button_to_erhe(int glfw_mouse_button)
+auto glfw_mouse_button_to_erhe(const int glfw_mouse_button) -> Mouse_button
 {
     switch (glfw_mouse_button)
     {
@@ -191,7 +191,7 @@ Mouse_button glfw_mouse_button_to_erhe(int glfw_mouse_button)
 //  0     = release
 //  1     = press
 //  wheel = signed int with direction and amount
-int glfw_mouse_button_action_to_erhe(int glfw_mouse_button_action)
+auto glfw_mouse_button_action_to_erhe(const int glfw_mouse_button_action) -> int
 {
     switch (glfw_mouse_button_action)
     {
@@ -201,7 +201,7 @@ int glfw_mouse_button_action_to_erhe(int glfw_mouse_button_action)
     }
 }
 
-Event_handler* get_event_handler(GLFWwindow* glfw_window)
+auto get_event_handler(GLFWwindow* glfw_window) -> Event_handler*
 {
     auto* window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
     if (window != nullptr)
@@ -211,7 +211,7 @@ Event_handler* get_event_handler(GLFWwindow* glfw_window)
     return nullptr;
 }
 
-void key_event_callback(GLFWwindow* glfw_window, int key, int scancode, int action, int glfe_modifiers)
+void key_event_callback(GLFWwindow* glfw_window, const int key, const int scancode, const int action, const int glfe_modifiers)
 {
     static_cast<void>(scancode);
     auto* event_handler = get_event_handler(glfw_window);
@@ -238,7 +238,7 @@ void mouse_position_event_callback(GLFWwindow* glfw_window, double x, double y)
     }
 }
 
-void mouse_button_event_callback(GLFWwindow* glfw_window, int button, int action, int mods)
+void mouse_button_event_callback(GLFWwindow* glfw_window, const int button, const int action, const int mods)
 {
     static_cast<void>(mods);
     auto* event_handler = get_event_handler(glfw_window);
@@ -248,7 +248,7 @@ void mouse_button_event_callback(GLFWwindow* glfw_window, int button, int action
     }
 }
 
-void mouse_wheel_event_callback(GLFWwindow* glfw_window, double x, double y)
+void mouse_wheel_event_callback(GLFWwindow* glfw_window, const double x, const double y)
 {
     auto* event_handler = get_event_handler(glfw_window);
     if (event_handler)
@@ -257,7 +257,7 @@ void mouse_wheel_event_callback(GLFWwindow* glfw_window, double x, double y)
     }
 }
 
-void window_resize_event_callback(GLFWwindow* glfw_window, int width, int height)
+void window_resize_event_callback(GLFWwindow* glfw_window, const int width, const int height)
 {
     auto* event_handler = get_event_handler(glfw_window);
     if (event_handler)
@@ -288,7 +288,7 @@ int Context_window::s_window_count{0};
 const char* month_name[] = { "January", "February", "March", "April", "May", "June",
                              "July", "August", "September", "October", "November", "December" };
 
-Context_window::Context_window(int width, int height)
+Context_window::Context_window(const int width, const int height, const int msaa_sample_count)
     : m_root_view{this}
 {
     time_t now = time(0);
@@ -297,7 +297,7 @@ Context_window::Context_window(int width, int height)
                                      month_name[l->tm_mon],
                                      l->tm_mday,
                                      1900 + l->tm_year);
-    bool ok = open(width, height, title, 4, 6, nullptr);
+    bool ok = open(width, height, msaa_sample_count, title, 4, 6, nullptr);
 
     VERIFY(ok);
 }
@@ -307,18 +307,19 @@ Context_window::Context_window(Context_window* share)
 {
     Expects(share != nullptr);
 
-    bool ok = open(64, 64, "erhe share context", share->get_opengl_major_version(), share->get_opengl_minor_version(), share);
+    bool ok = open(64, 64, 0, "erhe share context", share->get_opengl_major_version(), share->get_opengl_minor_version(), share);
 
     VERIFY(ok);
 }
 
 // Currently this is not thread safe.
 // For now, only call this from main thread.
-auto Context_window::open(int                width,
-                          int                height,
+auto Context_window::open(const int          width,
+                          const int          height,
+                          const int          msaa_sample_count,
                           const std::string& title,
-                          int                opengl_major_version,
-                          int                opengl_minor_version,
+                          const int          opengl_major_version,
+                          const int          opengl_minor_version,
                           Context_window*    share)
 -> bool
 {
@@ -339,7 +340,10 @@ auto Context_window::open(int                width,
     glfwWindowHint(GLFW_BLUE_BITS,              8);
     //glfwWindowHint(GLFW_DEPTH_BITS,            24);
     glfwWindowHint(GLFW_SRGB_CAPABLE,          GLFW_TRUE);
-    //glfwWindowHint(GLFW_SAMPLES,               16);
+    if (msaa_sample_count > 0)
+    {
+        glfwWindowHint(GLFW_SAMPLES, msaa_sample_count);
+    }
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, opengl_major_version);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, opengl_minor_version);
     glfwWindowHint(GLFW_OPENGL_PROFILE,        GLFW_OPENGL_CORE_PROFILE);
@@ -442,7 +446,7 @@ void Context_window::get_cursor_position(double& xpos, double& ypos)
     }
 }
 
-void Context_window::set_visible(bool visible)
+void Context_window::set_visible(const bool visible)
 {
     auto* window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
     if (window != nullptr)
@@ -462,7 +466,7 @@ void Context_window::set_visible(bool visible)
     }
 }
 
-void Context_window::show_ursor(bool show)
+void Context_window::show_ursor(const bool show)
 {
     auto* window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
     if (window != nullptr)
@@ -480,7 +484,7 @@ void Context_window::show_ursor(bool show)
     }
 }
 
-void Context_window::capture_mouse(bool capture)
+void Context_window::capture_mouse(const bool capture)
 {
     auto* window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
     if (window != nullptr)

@@ -6,16 +6,16 @@
 namespace erhe::geometry::shapes
 {
 
-auto make_box(double x_size, double y_size, double z_size)
+auto make_box(const double x_size, const double y_size, const double z_size)
 -> Geometry;
 
-auto make_box(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z)
+auto make_box(const float min_x, const float max_x, const float min_y, const float max_y, const float min_z, const float max_z)
 -> Geometry;
 
-auto make_box(double r)
+auto make_box(const double r)
 -> Geometry;
 
-auto make_box(glm::vec3 size, glm::ivec3 div, float p = 1.0f)
+auto make_box(const glm::vec3 size, const glm::ivec3 div, const float p = 1.0f)
 -> Geometry;
 
 } // namespace erhe::geometry::shapes

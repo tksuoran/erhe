@@ -46,7 +46,7 @@ public:
 private:
     void update_framebuffer();
 
-    static constexpr const int                    s_sample_count{16};
+    static constexpr int                          s_sample_count{16};
 
     glm::ivec2                                    m_content_region_min{0.0f, 0.0f};
     glm::ivec2                                    m_content_region_max{0.0f, 0.0f};

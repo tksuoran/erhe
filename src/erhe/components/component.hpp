@@ -11,8 +11,9 @@ namespace erhe::components
 
 class Components;
 
-struct Time_context
+class Time_context
 {
+public:
     double   dt;
     double   time;
     uint64_t frame_number;

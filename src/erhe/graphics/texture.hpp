@@ -4,22 +4,25 @@
 
 #include <gsl/span>
 
+#include <string_view>
+
 namespace erhe::graphics
 {
 
 class Buffer;
 
 
-struct Texture_create_info
+class Texture_create_info
 {
+public:
     Texture_create_info() = default;
 
-    Texture_create_info(gl::Texture_target  target,
-                        gl::Internal_format internal_format,
-                        bool                use_mipmaps,
-                        int                 width,
-                        int                 height = 1,
-                        int                 depth  = 1);
+    Texture_create_info(const gl::Texture_target  target,
+                        const gl::Internal_format internal_format,
+                        const bool                use_mipmaps,
+                        const int                 width,
+                        const int                 height = 1,
+                        const int                 depth  = 1);
 
     void calculate_level_count();
 
@@ -53,9 +56,9 @@ public:
     Texture         (Texture&& other) noexcept;
     auto operator=  (Texture&& other) noexcept -> Texture&;
 
-    void upload         (gl::Internal_format internal_format, int width, int height = 0, int depth = 0);
-    void upload         (gl::Internal_format internal_format, gsl::span<const std::byte> data, int width, int height = 0, int depth = 0);
-    void set_debug_label(std::string value);
+    void upload         (const gl::Internal_format internal_format, const int width, const int height = 0, const int depth = 0);
+    void upload         (const gl::Internal_format internal_format, const gsl::span<const std::byte> data, const int width, const int height = 0, const int depth = 0);
+    void set_debug_label(std::string_view value);
     auto debug_label    () const -> const std::string&;
     auto width          () const -> int;
     auto height         () const -> int;
@@ -79,8 +82,9 @@ private:
     Buffer*             m_buffer                {nullptr};
 };
 
-struct Texture_hash
+class Texture_hash
 {
+public:
     auto operator()(const Texture& texture) const noexcept
     -> size_t
     {

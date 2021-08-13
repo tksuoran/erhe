@@ -5,8 +5,9 @@
 namespace erhe::graphics
 {
 
-struct Rasterization_state
+class Rasterization_state
 {
+public:
     Rasterization_state();
     Rasterization_state(bool                     enabled,
                         gl::Cull_face_mode       cull_face_mode,
@@ -37,8 +38,9 @@ struct Rasterization_state
     static Rasterization_state cull_mode_front_and_back;
 };
 
-struct Rasterization_state_hash
+class Rasterization_state_hash
 {
+public:
     auto operator()(const Rasterization_state& rasterization_state) noexcept -> std::size_t;
 };
 

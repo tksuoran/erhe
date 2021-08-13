@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe/primitive/enums.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 
 #include <glm/glm.hpp>
@@ -12,8 +13,9 @@ namespace erhe::graphics
 namespace erhe::primitive
 {
 
-struct Format_info
+class Format_info
 {
+public:
     bool want_fill_triangles {false};
     bool want_edge_lines     {false};
     bool want_corner_points  {false};

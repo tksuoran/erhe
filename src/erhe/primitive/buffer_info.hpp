@@ -11,17 +11,25 @@ namespace erhe::graphics
     class Vertex_format;
 }
 
+namespace erhe::raytrace
+{
+    class Buffer;
+}
+
 namespace erhe::primitive
 {
 
-struct Buffer_info
+class Buffer_info
 {
-    gl::Buffer_usage                               usage       {gl::Buffer_usage::static_draw};
-    Normal_style                                   normal_style{Normal_style::corner_normals};
-    gl::Draw_elements_type                         index_type  {gl::Draw_elements_type::unsigned_short};
-    std::shared_ptr<erhe::graphics::Buffer>        index_buffer;
-    std::shared_ptr<erhe::graphics::Buffer>        vertex_buffer;
+public:
+    gl::Buffer_usage                               usage        {gl::Buffer_usage::static_draw};
+    Normal_style                                   normal_style {Normal_style::corner_normals};
+    gl::Draw_elements_type                         index_type   {gl::Draw_elements_type::unsigned_short};
     std::shared_ptr<erhe::graphics::Vertex_format> vertex_format;
+    std::shared_ptr<erhe::graphics::Buffer>        gl_index_buffer;
+    std::shared_ptr<erhe::graphics::Buffer>        gl_vertex_buffer;
+    std::shared_ptr<erhe::graphics::Buffer>        embree_index_buffer;
+    std::shared_ptr<erhe::graphics::Buffer>        embree_vertex_buffer;
 };
 
 }

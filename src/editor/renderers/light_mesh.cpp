@@ -41,14 +41,14 @@ void Light_mesh::initialize_component()
     format_info.vertex_attribute_mappings = &m_program_interface->attribute_mappings;
 
     erhe::graphics::Buffer_transfer_queue queue;
-    erhe::primitive::Primitive_build_context context{queue, format_info, buffer_info};
+    erhe::primitive::Gl_geometry_uploader uploader{queue, format_info, buffer_info};
 
     // Full screen quad
     {
         // -1 .. 1
         auto quad_geometry = erhe::geometry::shapes::make_quad(2.0f);
         quad_geometry.build_edges();
-        m_quad_mesh = make_primitive(quad_geometry, context, Normal_style::none);
+        m_quad_mesh = make_primitive(quad_geometry, uploader, Normal_style::none);
     }
 
     // Spot light cone
@@ -69,11 +69,11 @@ void Light_mesh::initialize_component()
         cone_geometry.transform(mat4_rotate_xz_cw);
         cone_geometry.build_edges();
         Buffer_info buffer_info;
-        m_cone_mesh = make_primitive(cone_geometry, context);
+        m_cone_mesh = make_primitive(cone_geometry, uploader);
     }
 }
 
-auto Light_mesh::get_light_transform(Light& light) -> glm::mat4
+auto Light_mesh::get_light_transform(const Light& light) -> glm::mat4
 {
     switch (light.type)
     {
@@ -118,24 +118,24 @@ auto Light_mesh::get_light_transform(Light& light) -> glm::mat4
     }
 }
 
-auto Light_mesh::point_in_light(vec3 point, Light& light) -> bool
+auto Light_mesh::point_in_light(const glm::vec3 point, const Light& light) -> bool
 {
     if (light.type != Light::Type::spot)
     {
         return true;
     }
 
-    float spot_angle         = light.outer_spot_angle * 0.5f;
-    float outer_angle        = spot_angle / std::cos(glm::pi<float>() / static_cast<float>(m_light_cone_sides));
-    float spot_cutoff        = std::cos(outer_angle);
-    float range              = light.range;
-    mat4  light_from_world   = light.node()->node_from_world();
-    vec3  view_in_light      = vec3(light_from_world * vec4(point, 1.0f));
-    float distance           = -view_in_light.z;
-    view_in_light            = normalize(view_in_light);
-    float cos_angle          = dot(view_in_light, vec3(0.0f, 0.0f, -1.0f));
-    bool  outside_cone_angle = (cos_angle < spot_cutoff);
-    bool  outside_cone_range = (distance < 0.0f) || (distance > range);
+    const float spot_angle         = light.outer_spot_angle * 0.5f;
+    const float outer_angle        = spot_angle / std::cos(glm::pi<float>() / static_cast<float>(m_light_cone_sides));
+    const float spot_cutoff        = std::cos(outer_angle);
+    const float range              = light.range;
+    const mat4  light_from_world   = light.node()->node_from_world();
+    const vec3  view_in_light_     = vec3(light_from_world * vec4(point, 1.0f));
+    const float distance           = -view_in_light_.z;
+    const vec3  view_in_light      = normalize(view_in_light_);
+    const float cos_angle          = dot(view_in_light, vec3(0.0f, 0.0f, -1.0f));
+    const bool  outside_cone_angle = (cos_angle < spot_cutoff);
+    const bool  outside_cone_range = (distance < 0.0f) || (distance > range);
     if (outside_cone_angle || outside_cone_range)
     {
         return false;
@@ -146,7 +146,7 @@ auto Light_mesh::point_in_light(vec3 point, Light& light) -> bool
     }
 }
 
-auto Light_mesh::get_light_mesh(Light& light) -> Primitive_geometry*
+auto Light_mesh::get_light_mesh(const Light& light) -> Primitive_geometry*
 {
     switch (light.type)
     {

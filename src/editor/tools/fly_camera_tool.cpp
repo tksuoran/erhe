@@ -25,12 +25,12 @@ Fly_camera_space_mouse_listener::~Fly_camera_space_mouse_listener()
 {
 }
 
-bool Fly_camera_space_mouse_listener::is_active()
+auto Fly_camera_space_mouse_listener::is_active() -> bool
 {
     return m_is_active;
 }
 
-void Fly_camera_space_mouse_listener::set_active(bool value)
+void Fly_camera_space_mouse_listener::set_active(const bool value)
 {
     m_is_active = value;
 }
@@ -97,39 +97,44 @@ auto Fly_camera_tool::description() -> const char*
     return c_name;
 }
 
-void Fly_camera_tool::translation(int tx, int ty, int tz)
+void Fly_camera_tool::translation(const int tx, const int ty, const int tz)
 {
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
-    constexpr const float scale = 16384.0f;
+
+    constexpr float scale = 16384.0f;
     m_camera_controller.translate_x.adjust(tx / scale);
     m_camera_controller.translate_y.adjust(ty / scale);
     m_camera_controller.translate_z.adjust(tz / scale);
 }
 
-void Fly_camera_tool::rotation(int rx, int ry, int rz)
+void Fly_camera_tool::rotation(const int rx, const int ry, const int rz)
 {
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
-    constexpr const float scale = 16384.0f;
+
+    constexpr float scale = 16384.0f;
     m_camera_controller.rotate_x.adjust(rx / scale);
     m_camera_controller.rotate_y.adjust(ry / scale);
     m_camera_controller.rotate_z.adjust(rz / scale);
 }
 
-void Fly_camera_tool::x_pos_control(bool pressed)
+void Fly_camera_tool::x_pos_control(const bool pressed)
 {
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
+
     m_camera_controller.translate_x.set_more(pressed);
 }
 
-void Fly_camera_tool::x_neg_control(bool pressed)
+void Fly_camera_tool::x_neg_control(const bool pressed)
 {
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
+
     m_camera_controller.translate_x.set_less(pressed);
 }
 
-void Fly_camera_tool::y_pos_control(bool pressed)
+void Fly_camera_tool::y_pos_control(const bool pressed)
 {
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
+
     m_camera_controller.translate_y.set_more(pressed);
 }
 
@@ -139,15 +144,17 @@ void Fly_camera_tool::y_neg_control(bool pressed)
     m_camera_controller.translate_y.set_less(pressed);
 }
 
-void Fly_camera_tool::z_neg_control(bool pressed)
+void Fly_camera_tool::z_neg_control(const bool pressed)
 {
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
+
     m_camera_controller.translate_z.set_less(pressed);
 }
 
-void Fly_camera_tool::z_pos_control(bool pressed)
+void Fly_camera_tool::z_pos_control(const bool pressed)
 {
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
+
     m_camera_controller.translate_z.set_more(pressed);
 }
 
@@ -183,14 +190,14 @@ auto Fly_camera_tool::update(Pointer_context& pointer_context) -> bool
 
     if (x_delta != 0.0)
     {
-        float value = static_cast<float>(m_sensitivity * x_delta / 1024.0);
+        const float value = static_cast<float>(m_sensitivity * x_delta / 1024.0);
         m_camera_controller.rotate_y.adjust(value);
         m_mouse_x = pointer_context.mouse_x;
     }
 
     if (y_delta != 0.0)
     {
-        float value = static_cast<float>(m_sensitivity * y_delta / 1024.0);
+        const float value = static_cast<float>(m_sensitivity * y_delta / 1024.0);
         m_camera_controller.rotate_x.adjust(value);
         m_mouse_y = pointer_context.mouse_y;
     }
@@ -211,7 +218,7 @@ auto Fly_camera_tool::begin(Pointer_context& pointer_context) -> bool
 
     // Reject drags near edge of viewport.
     // This avoids window resize being misinterpreted as drag.
-    static constexpr const float border = 32.0f;
+    constexpr float border = 32.0f;
     if ((pointer_context.pointer_x < border) ||
         (pointer_context.pointer_y < border) ||
         (pointer_context.pointer_x >= pointer_context.viewport.width  - border) ||
@@ -234,7 +241,7 @@ auto Fly_camera_tool::end(Pointer_context&) -> bool
         return false;
     }
 
-    bool consume_event = m_state == State::Active;
+    const bool consume_event = m_state == State::Active;
     cancel_ready();
     return consume_event;
 }

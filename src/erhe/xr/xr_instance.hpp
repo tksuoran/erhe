@@ -44,8 +44,9 @@ public:
                                         XrDebugUtilsMessageTypeFlagsEXT             messageTypes,
                                         const XrDebugUtilsMessengerCallbackDataEXT* callbackData) const -> XrBool32;
 
-    struct Paths
+    class Paths
     {
+    public:
         Xr_path user_hand_left;
         Xr_path user_hand_right;
         Xr_path interaction_profile_vive_controller;
@@ -53,6 +54,7 @@ public:
         Xr_path menu_click;    
         Xr_path trigger_click; 
         Xr_path trigger_value; 
+        Xr_path squeeze_click;
         Xr_path trackpad_x;    
         Xr_path trackpad_y;    
         Xr_path trackpad_click;
@@ -61,15 +63,19 @@ public:
         Xr_path aim_pose;      
         Xr_path haptic;        
     };
-    struct Actions
+
+    class Actions
     {
-        XrActionSet        action_set;
-        XrAction           trigger_position;
-        XrActionStateFloat trigger_position_state;
-        XrAction           aim_pose;
-        XrActionStatePose  aim_pose_state;
-        XrSpace            aim_pose_space;
-        XrSpaceLocation    aim_pose_space_location;
+    public:
+        XrActionSet          action_set;
+        XrAction             trigger_value;
+        XrActionStateFloat   trigger_value_state;
+        XrAction             squeeze_click;
+        XrActionStateBoolean squeeze_click_state;
+        XrAction             aim_pose;
+        XrActionStatePose    aim_pose_state;
+        XrSpace              aim_pose_space;
+        XrSpaceLocation      aim_pose_space_location;
     };
 
     Paths   paths;

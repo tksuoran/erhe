@@ -29,13 +29,13 @@ public:
         return m_node;
     }
 
-    static constexpr const uint64_t c_visibility_content     = (1ul << 0ul);
-    static constexpr const uint64_t c_visibility_shadow_cast = (1ul << 1ul);
-    static constexpr const uint64_t c_visibility_id          = (1ul << 2ul);
-    static constexpr const uint64_t c_visibility_tool        = (1ul << 3ul);
-    static constexpr const uint64_t c_visibility_brush       = (1ul << 4ul);
-    static constexpr const uint64_t c_visibility_selection   = (1ul << 5ul);
-    static constexpr const uint64_t c_visibility_all         = ~uint64_t(0);
+    static constexpr uint64_t c_visibility_content     = (1ul << 0ul);
+    static constexpr uint64_t c_visibility_shadow_cast = (1ul << 1ul);
+    static constexpr uint64_t c_visibility_id          = (1ul << 2ul);
+    static constexpr uint64_t c_visibility_tool        = (1ul << 3ul);
+    static constexpr uint64_t c_visibility_brush       = (1ul << 4ul);
+    static constexpr uint64_t c_visibility_selection   = (1ul << 5ul);
+    static constexpr uint64_t c_visibility_all         = ~uint64_t(0);
 
     std::string                             m_name;
     std::shared_ptr<Node>                   m_node;

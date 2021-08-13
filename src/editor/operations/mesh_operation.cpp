@@ -34,8 +34,8 @@ void Mesh_operation::undo()
     }
 }
 
-void Mesh_operation::make_entries(const Context&                      context,
-                                  const function<Geometry(Geometry&)> operation)
+void Mesh_operation::make_entries(const Context&                                                      context,
+                                  const function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation)
 {
     m_selection_tool = context.selection_tool;
     for (auto item : context.selection_tool->selection())
@@ -64,10 +64,10 @@ void Mesh_operation::make_entries(const Context&                      context,
             auto result_geometry = operation(gr);
             result_geometry.sanity_check();
             auto result_primitive_geometry = make_primitive_shared(result_geometry,
-                                                                   context.primitive_build_context,
+                                                                   context.geometry_uploader,
                                                                    primitive.primitive_geometry->source_normal_style);
             primitive.primitive_geometry = result_primitive_geometry;
-            primitive.primitive_geometry->source_geometry = make_shared<Geometry>(move(result_geometry));
+            primitive.primitive_geometry->source_geometry = make_shared<erhe::geometry::Geometry>(move(result_geometry));
         }
         add_entry(std::move(entry));
     }

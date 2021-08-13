@@ -6,7 +6,7 @@
 namespace erhe::geometry::shapes
 {
 
-auto make_triangle(double r)
+auto make_triangle(const double r)
 -> Geometry
 {
     ZoneScoped;
@@ -25,7 +25,7 @@ auto make_triangle(double r)
     });
 }
 
-auto make_quad(double edge)
+auto make_quad(const double edge)
 -> Geometry
 {
     ZoneScoped;

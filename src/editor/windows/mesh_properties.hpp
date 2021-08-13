@@ -4,11 +4,13 @@
 
 #include <memory>
 
-namespace erhe::geometry {
+namespace erhe::geometry
+{
     class Geometry;
 }
 
-namespace erhe::scene {
+namespace erhe::scene
+{
     class Mesh;
 }
 

@@ -8,8 +8,9 @@ namespace erhe::graphics
 class Texture;
 class Sampler;
 
-struct Texture_unit_bindings
+class Texture_unit_bindings
 {
+public:
     Texture* texture{nullptr};
     Sampler* sampler{nullptr};
 };
@@ -20,13 +21,15 @@ auto operator==(const Texture_unit_bindings& lhs, const Texture_unit_bindings& r
 auto operator!=(const Texture_unit_bindings& lhs, const Texture_unit_bindings& rhs) noexcept
 -> bool;
 
-struct Texture_bindings
+class Texture_bindings
 {
+public:
     std::array<Texture_unit_bindings, 16> texture_units;
 };
 
-struct Texture_bindings_hash
+class Texture_bindings_hash
 {
+public:
     auto operator()(const Texture_bindings& texture_bindings) const noexcept
     -> size_t;
 };

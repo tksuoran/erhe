@@ -10,8 +10,9 @@ template <typename Key_type>
 class Property_map_collection
 {
 private:
-    struct Entry final
+    class Entry final
     {
+    public:
         Entry() = default;
         ~Entry() = default;
 
@@ -77,8 +78,8 @@ public:
 
     void remap_keys(const std::vector<Key_type>& key_new_to_old);
 
-    void interpolate(Property_map_collection<Key_type>&                   destination,
-                     std::vector<std::vector<std::pair<float, Key_type>>> key_new_to_olds);
+    void interpolate(Property_map_collection<Key_type>&                          destination,
+                     const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds);
 
     void merge_to(Property_map_collection<Key_type>& source, glm::mat4 transform);
 

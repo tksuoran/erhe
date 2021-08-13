@@ -11,7 +11,7 @@ namespace erhe::ui
 class Rectangle
 {
 public:
-    Rectangle(float min_x, float min_y, float max_x, float max_y) noexcept
+    Rectangle(const float min_x, const float min_y, const float max_x, const float max_y) noexcept
     {
         m_min.x = min_x;
         m_max.x = max_x;
@@ -19,7 +19,7 @@ public:
         m_max.y = max_y;
     }
 
-    Rectangle(float width, float height) noexcept
+    Rectangle(const float width, const float height) noexcept
     {
         m_min.x = 0.0f;
         m_min.y = 0.0f;
@@ -32,7 +32,7 @@ public:
         reset_for_grow();
     }
 
-    Rectangle(glm::vec2 min, glm::vec2 max) noexcept
+    Rectangle(const glm::vec2 min, const glm::vec2 max) noexcept
         : m_min{min}
         , m_max{max}
     {
@@ -71,12 +71,12 @@ public:
     }
 
     auto min() noexcept
-    -> glm::vec2&
+    -> const glm::vec2&
     {
         return m_min;
     }
 
-    void set_min(glm::vec2 value) noexcept
+    void set_min(const glm::vec2 value) noexcept
     {
         m_min = value;
     }
@@ -93,32 +93,32 @@ public:
         return m_max;
     }
 
-    void set_max(glm::vec2 value) noexcept
+    void set_max(const glm::vec2 value) noexcept
     {
         m_max = value;
     }
 
     auto size() const noexcept
-    -> glm::vec2
+    -> const glm::vec2
     {
         return glm::vec2(m_max.x - m_min.x + 1.0f,
                          m_max.y - m_min.y + 1.0f);
     }
 
-    void set_size(glm::vec2 value) noexcept
+    void set_size(const glm::vec2 value) noexcept
     {
         m_max.x = m_min.x + value.x - 1.0f;
         m_max.y = m_min.y + value.y + 1.0f;
     }
 
     inline auto half_size() const noexcept
-    -> glm::vec2
+    -> const glm::vec2
     {
         return size() / 2.0f;
     }
 
     inline auto center() const noexcept
-    -> glm::vec2
+    -> const glm::vec2
     {
         return min() + half_size();
     }
@@ -131,7 +131,7 @@ public:
         m_max.y = -std::numeric_limits<float>::max();
     }
 
-    auto hit(const glm::vec2& hit_position) const noexcept
+    auto hit(const glm::vec2 hit_position) const noexcept
     -> bool
     {
         if ((hit_position.x < m_min.x) ||
@@ -144,7 +144,7 @@ public:
         return true;
     }
 
-    auto hit(const glm::ivec2& hit_position) const noexcept
+    auto hit(const glm::ivec2 hit_position) const noexcept
     -> bool
     {
         if ((hit_position.x < m_min.x) ||
@@ -157,7 +157,7 @@ public:
         return true;
     }
 
-    void extend_by(float x, float y) noexcept
+    void extend_by(const float x, const float y) noexcept
     {
         m_min.x = std::min(m_min.x, x);
         m_max.x = std::max(m_max.x, x);
@@ -165,7 +165,7 @@ public:
         m_max.y = std::max(m_max.y, y);
     }
 
-    void clip_to(Rectangle reference) noexcept
+    void clip_to(const Rectangle reference) noexcept
     {
         m_min.x = std::max(m_min.x, reference.min().x);
         m_max.x = std::min(m_max.x, reference.max().x);
@@ -173,13 +173,13 @@ public:
         m_max.y = std::min(m_max.y, reference.max().y);
     }
 
-    auto shrink(glm::vec2 padding) noexcept
+    auto shrink(const glm::vec2 padding) noexcept
     -> Rectangle
     {
         return Rectangle(m_min + padding, m_max - padding);
     }
 
-    void grow_by(float padding_x, float padding_y) noexcept
+    void grow_by(const float padding_x, const float padding_y) noexcept
     {
         m_min.x -= padding_x;
         m_min.y -= padding_y;

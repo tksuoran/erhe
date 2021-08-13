@@ -34,10 +34,10 @@ namespace erhe::graphics
 
 namespace erhe::primitive
 {
-    struct Material;
-    struct Primitive_build_context;
-    struct Primitive_geometry;
-    struct Primitive;
+    class Material;
+    class Geometry_uploader;
+    class Primitive_geometry;
+    class Primitive;
 }
 
 namespace erhe::scene
@@ -66,8 +66,9 @@ class Scene_root;
 class Brush;
 
 
-struct Camera_rig
+class Camera_rig
 {
+public:
     Camera_rig(Scene_root&                          scene_root,
                std::shared_ptr<erhe::scene::Camera> camera);
 
@@ -112,24 +113,24 @@ public:
     auto selection_layers   () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_selection_layers; }
     auto tool_layers        () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_tool_layers; }
 
-    auto make_mesh_node(std::string_view                                     name,
-                        std::shared_ptr<erhe::primitive::Primitive_geometry> primitive_geometry,
-                        std::shared_ptr<erhe::primitive::Material>           material,
-                        erhe::scene::Node*                                   parent   = nullptr,
-                        const glm::vec3                                      position = glm::vec3(0.0f))
+    auto make_mesh_node(std::string_view                                            name,
+                        const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry,
+                        const std::shared_ptr<erhe::primitive::Material>&           material,
+                        erhe::scene::Node*                                          parent   = nullptr,
+                        const glm::vec3                                             position = glm::vec3(0.0f))
     -> std::shared_ptr<erhe::scene::Mesh>;
 
-    auto make_mesh_node(std::string_view                                     name,
-                        std::shared_ptr<erhe::primitive::Primitive_geometry> primitive_geometry,
-                        std::shared_ptr<erhe::primitive::Material>           material,
-                        erhe::scene::Layer&                                  layer,
-                        erhe::scene::Node*                                   parent = nullptr,
-                        const glm::vec3                                      position = glm::vec3(0.0f))
+    auto make_mesh_node(std::string_view                                            name,
+                        const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry,
+                        const std::shared_ptr<erhe::primitive::Material>&           material,
+                        erhe::scene::Layer&                                         layer,
+                        erhe::scene::Node*                                          parent   = nullptr,
+                        const glm::vec3                                             position = glm::vec3(0.0f))
     -> std::shared_ptr<erhe::scene::Mesh>;
 
-    auto add          (std::shared_ptr<erhe::primitive::Material> material) -> std::shared_ptr<erhe::primitive::Material>;
-    auto add          (std::shared_ptr<erhe::scene::Mesh> mesh) -> std::shared_ptr<erhe::scene::Mesh>;
-    auto add          (std::shared_ptr<erhe::scene::Light> light) -> std::shared_ptr<erhe::scene::Light>;
+    auto add          (const std::shared_ptr<erhe::primitive::Material>& material) -> std::shared_ptr<erhe::primitive::Material>;
+    auto add          (const std::shared_ptr<erhe::scene::Mesh>&         mesh)     -> std::shared_ptr<erhe::scene::Mesh>;
+    auto add          (const std::shared_ptr<erhe::scene::Light>&        light)    -> std::shared_ptr<erhe::scene::Light>;
     auto materials    () -> std::vector<std::shared_ptr<erhe::primitive::Material>>&;
     auto materials    () const -> const std::vector<std::shared_ptr<erhe::primitive::Material>>&;
     auto physics_world() -> erhe::physics::World&;

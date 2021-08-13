@@ -5,15 +5,16 @@ namespace erhe::graphics
 
 class Shader_stages;
 class Vertex_input_state;
-struct Input_assembly_state;
-struct Rasterization_state;
-struct Depth_stencil_state;
-struct Color_blend_state;
-struct Viewport_state;
+class Input_assembly_state;
+class Rasterization_state;
+class Depth_stencil_state;
+class Color_blend_state;
+class Viewport_state;
 
 
-struct Pipeline
+class Pipeline
 {
+public:
     const Shader_stages*        shader_stages {nullptr};
     const Vertex_input_state*   vertex_input  {nullptr};
     const Input_assembly_state* input_assembly{nullptr};

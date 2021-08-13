@@ -13,9 +13,9 @@ class Fragment_outputs
 public:
     void clear();
 
-    void add(const std::string&              name,
-             gl::Fragment_shader_output_type type,
-             unsigned int                    location);
+    void add(const std::string&                    name,
+             const gl::Fragment_shader_output_type type,
+             const unsigned int                    location);
 
     auto source() const
     -> std::string;

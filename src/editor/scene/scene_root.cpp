@@ -121,7 +121,7 @@ auto Scene_root::content_layer() -> erhe::scene::Layer&
     return *m_content_layer.get();
 }
 
-auto Scene_root::add(shared_ptr<Material> material)
+auto Scene_root::add(const shared_ptr<Material>& material)
 -> shared_ptr<Material>
 {
     VERIFY(material);
@@ -131,14 +131,14 @@ auto Scene_root::add(shared_ptr<Material> material)
     return material;
 }
 
-auto Scene_root::add(shared_ptr<Mesh> mesh)
+auto Scene_root::add(const shared_ptr<Mesh>& mesh)
 -> shared_ptr<Mesh>
 {
     m_content_layer->meshes.push_back(mesh);
     return mesh;
 }
 
-auto Scene_root::add(shared_ptr<Light> light)
+auto Scene_root::add(const shared_ptr<Light>& light)
 -> shared_ptr<Light>
 {
     m_content_layer->lights.push_back(light);
@@ -165,22 +165,22 @@ auto Scene_root::tool_layer() const -> std::shared_ptr<erhe::scene::Layer>
     return m_tool_layer;
 }
 
-auto Scene_root::make_mesh_node(string_view                    name,
-                                shared_ptr<Primitive_geometry> primitive_geometry,
-                                shared_ptr<Material>           material,
-                                Node*                          parent,
-                                const glm::vec3                position)
+auto Scene_root::make_mesh_node(string_view                           name,
+                                const shared_ptr<Primitive_geometry>& primitive_geometry,
+                                const shared_ptr<Material>&           material,
+                                Node*                                 parent,
+                                const glm::vec3                       position)
 -> shared_ptr<Mesh>
 {
     return make_mesh_node(name, primitive_geometry, material, content_layer(), parent, position);
 }
 
-auto Scene_root::make_mesh_node(string_view                    name,
-                                shared_ptr<Primitive_geometry> primitive_geometry,
-                                shared_ptr<Material>           material,
-                                Layer&                         layer,
-                                Node*                          parent,
-                                const glm::vec3                position)
+auto Scene_root::make_mesh_node(string_view                           name,
+                                const shared_ptr<Primitive_geometry>& primitive_geometry,
+                                const shared_ptr<Material>&           material,
+                                Layer&                                layer,
+                                Node*                                 parent,
+                                const glm::vec3                       position)
 -> shared_ptr<Mesh>
 {
     const glm::mat4 transform = erhe::toolkit::create_translation(position);

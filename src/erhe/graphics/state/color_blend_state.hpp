@@ -8,15 +8,17 @@
 namespace erhe::graphics
 {
 
-struct Blend_state_component
+class Blend_state_component
 {
+public:
     gl::Blend_equation_mode equation_mode     {gl::Blend_equation_mode::func_add};
     gl::Blending_factor     source_factor     {gl::Blending_factor::one};
     gl::Blending_factor     destination_factor{gl::Blending_factor::zero};
 };
 
-struct Blend_state_component_hash
+class Blend_state_component_hash
 {
+public:
     auto operator()(const Blend_state_component& blend_state_component) const noexcept
     -> size_t
     {
@@ -34,8 +36,9 @@ auto operator!=(const Blend_state_component& lhs,
                 const Blend_state_component& rhs) noexcept
 -> bool;
 
-struct Color_blend_state
+class Color_blend_state
 {
+public:
     Color_blend_state();
     Color_blend_state(bool                  enabled,
                       Blend_state_component rgb,
@@ -65,8 +68,9 @@ struct Color_blend_state
     static Color_blend_state color_writes_disabled;
 };
 
-struct Blend_state_hash
+class Blend_state_hash
 {
+public:
     auto operator()(const Color_blend_state& state) const noexcept -> size_t;
 };
 

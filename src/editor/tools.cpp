@@ -134,25 +134,28 @@ void Editor_tools::set_priority_action(Action action)
     m_priority_action = action;
     auto* tool        = get_action_tool(action);
 
+    if (m_trs_tool)
+    {
     switch (action)
     {
         case Action::translate:
         {
             m_trs_tool->set_rotate(false);
-            m_trs_tool->set_translate(true);
-            break;
-        }
-        case Action::rotate:
-        {
-            m_trs_tool->set_rotate(true);
-            m_trs_tool->set_translate(false);
-            break;
-        }
-        default:
-        {
-            m_trs_tool->set_rotate(false);
-            m_trs_tool->set_translate(false);
-            break;
+                m_trs_tool->set_translate(true);
+                break;
+            }
+            case Action::rotate:
+            {
+                m_trs_tool->set_rotate(true);
+                m_trs_tool->set_translate(false);
+                break;
+            }
+            default:
+            {
+                m_trs_tool->set_rotate(false);
+                m_trs_tool->set_translate(false);
+                break;
+            }
         }
     }
 
@@ -192,7 +195,7 @@ void Editor_tools::register_tool(Tool* tool)
 {
     lock_guard<mutex> lock(m_mutex);
     m_tools.emplace_back(tool);
-    Window* window = dynamic_cast<Window*>(tool);
+    auto* window = dynamic_cast<Window*>(tool);
     if (window != nullptr)
     {
         m_windows.emplace_back(window);
@@ -203,7 +206,7 @@ void Editor_tools::register_background_tool(Tool* tool)
 {
     lock_guard<mutex> lock(m_mutex);
     m_background_tools.emplace_back(tool);
-    Window* window = dynamic_cast<Window*>(tool);
+    auto* window = dynamic_cast<Window*>(tool);
     if (window != nullptr)
     {
         m_windows.emplace_back(window);
@@ -220,7 +223,7 @@ void Editor_tools::imgui()
 {
     auto initial_priority_action = get_priority_action();
     auto& pointer_context = m_editor_view->pointer_context;
-    for (auto* window : m_windows)
+    for (auto* const window : m_windows)
     {
         window->window(pointer_context);
     }

@@ -37,11 +37,10 @@ auto unproject(const mat4  world_from_clip,
     const float s                 = depth_range_far - depth_range_near;
     const float b                 = depth_range_near;
 
-    vec4 ndc;
-    ndc.x = (window.x - viewport_center_x) / (viewport_width * 0.5f);
-    ndc.y = (window.y - viewport_center_y) / (viewport_height * 0.5f);
-    ndc.z = (window.z - b) / s;
-    ndc.w = 1.0f;
+    const vec4 ndc{(window.x - viewport_center_x) / (viewport_width  * 0.5f),
+                   (window.y - viewport_center_y) / (viewport_height * 0.5f),
+                   (window.z - b) / s,
+                   1.0f};
 
     const vec4 world_homogeneous = world_from_clip * ndc;
     if (world_homogeneous.w == 0.0f)
@@ -521,7 +520,7 @@ void hsv_to_rgb(float h, float s, float v, float& r, float& g, float& b)
     }
 }
 
-void rgb_to_hsv(float r, float g, float b, float& h, float& s, float& v)
+void rgb_to_hsv(const float r, const float g, const float b, float& h, float& s, float& v)
 {
     h = 0;
     s = 1.0f;

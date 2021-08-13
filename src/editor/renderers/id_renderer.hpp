@@ -35,8 +35,9 @@ class Id_renderer
       public Base_renderer
 {
 public:
-    struct Mesh_primitive
+    class Mesh_primitive
     {
+    public:
         std::shared_ptr<erhe::scene::Mesh> mesh                {nullptr};
         erhe::scene::Layer*                layer               {nullptr};
         size_t                             mesh_primitive_index{0};
@@ -60,9 +61,9 @@ public:
                 const int                   x,
                 const int                   y);
 
-    auto get(int x, int y, uint32_t& id, float& depth) -> bool;
+    auto get(const int x, const int y, uint32_t& id, float& depth) -> bool;
 
-    auto get(int x, int y, float& depth) -> Mesh_primitive;
+    auto get(const int x, const int y, float& depth) -> Mesh_primitive;
 
     void next_frame();
 
@@ -71,8 +72,9 @@ private:
     static constexpr size_t s_extent                = 64;
     static constexpr size_t s_id_buffer_size        = s_extent * s_extent * 8; // RGBA + depth
 
-    struct Id_frame_resources
+    class Id_frame_resources
     {
+    public:
         static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_coherent_bit   |
                                                               gl::Buffer_storage_mask::map_persistent_bit |
                                                               gl::Buffer_storage_mask::map_read_bit};
@@ -133,7 +135,7 @@ private:
 
     void create_id_frame_resources ();
     auto current_id_frame_resources() -> Id_frame_resources&;
-    void update_framebuffer        (erhe::scene::Viewport viewport);
+    void update_framebuffer        (const erhe::scene::Viewport viewport);
     void render_layer              (erhe::scene::Layer* layer);
 
     erhe::scene::Viewport                                 m_viewport;
@@ -151,16 +153,18 @@ private:
     std::vector<Id_frame_resources>                       m_id_frame_resources;
     size_t                                                m_current_id_frame_resource_slot{0};
 
-    struct Range
+    class Range
     {
+    public:
         uint32_t                           offset   {0};
         uint32_t                           length   {0};
         std::shared_ptr<erhe::scene::Mesh> mesh     {nullptr};
         size_t                             mesh_primitive_index{0};
     };
 
-    struct Layer_range
+    class Layer_range
     {
+    public:
         uint32_t            offset{0};
         uint32_t            end   {0};
         erhe::scene::Layer* layer {nullptr};

@@ -18,13 +18,13 @@ using glm::vec4;
 namespace
 {
 
-auto sign(float x)
+auto sign(const float x)
 -> float
 {
     return x < 0.0f ? -1.0f : 1.0f;
 }
 
-auto signed_pow(float x, float p)
+auto signed_pow(const float x, const float p)
 -> float
 {
     return sign(x) * std::pow(std::abs(x), p);
@@ -32,7 +32,7 @@ auto signed_pow(float x, float p)
 
 } // namespace
 
-auto make_box(double x_size, double y_size, double z_size)
+auto make_box(const double x_size, const double y_size, const double z_size)
 -> Geometry
 {
     const double x = x_size / 2.0;
@@ -60,10 +60,11 @@ auto make_box(double x_size, double y_size, double z_size)
         geometry.build_edges();
         geometry.compute_polygon_normals();
         geometry.compute_polygon_centroids();
+        geometry.compute_tangents();
     });
 }
 
-auto make_box(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z)
+auto make_box(const float min_x, const float max_x, const float min_y, const float max_y, const float min_z, const float max_z)
 -> Geometry
 {
     return Geometry("box", [=](auto& geometry) {
@@ -87,18 +88,20 @@ auto make_box(float min_x, float max_x, float min_y, float max_y, float min_z, f
         geometry.build_edges();
         geometry.compute_polygon_normals();
         geometry.compute_polygon_centroids();
+        geometry.compute_tangents();
     });
 }
 
-auto make_box(double r)
+auto make_box(const double r)
 -> Geometry
 {
     const double sq3 = std::sqrt(3.0);
     return make_box(2.0 * r / sq3, 2.0 * r / sq3, 2.0 * r / sq3);
 }
 
-struct Box_builder
+class Box_builder
 {
+public:
     Geometry& geometry;
     vec3      size{0.0f};
     ivec3     div {0};
@@ -109,12 +112,33 @@ struct Box_builder
     Property_map<Point_id  , vec3>* point_locations  {nullptr};
     Property_map<Point_id  , vec3>* point_normals    {nullptr};
     Property_map<Point_id  , vec2>* point_texcoords  {nullptr};
+    Property_map<Point_id  , vec4>* point_tangents   {nullptr};
+    Property_map<Point_id  , vec4>* point_bitangents {nullptr};
     Property_map<Corner_id , vec3>* corner_normals   {nullptr};
     Property_map<Corner_id , vec2>* corner_texcoords {nullptr};
+    Property_map<Corner_id , vec4>* corner_tangents  {nullptr};
+    Property_map<Corner_id , vec4>* corner_bitangents{nullptr};
     Property_map<Polygon_id, vec3>* polygon_centroids{nullptr};
     Property_map<Polygon_id, vec3>* polygon_normals  {nullptr};
 
-    auto make_point(int x, int y, int z, glm::vec3 n, float s, float t)
+    void ortho_basis_pixar_r1(const vec3 N, vec4& T, vec4& B)
+    {
+        const float sz = sign(N.z);
+        const float a  = 1.0f / (sz + N.z);
+        const float sx = sz * N.x;
+        const float b  = N.x * N.y * a;
+        const vec3  t_ = vec3{sx * N.x * a - 1.f, sz * b, sx};
+        const vec3  b_ = vec3{b, N.y * N.y * a - sz, N.y};
+
+        const vec3  t_xyz = glm::normalize(t_ - N * glm::dot(N, t_));
+        const float t_w   = (glm::dot(glm::cross(N, t_), b_) < 0.0f) ? -1.0f : 1.0f;
+        const vec3  b_xyz = glm::normalize(b_ - N * glm::dot(N, b_));
+        const float b_w   = (glm::dot(glm::cross(b_, N), t_) < 0.0f) ? -1.0f : 1.0f;
+        T = vec4{t_xyz, t_w};
+        B = vec4{b_xyz, b_w};
+    }
+
+    auto make_point(const int x, const int y, const int z, const glm::vec3 n, const float s, const float t)
     -> Point_id
     {
         const int key = y * (div.x * 4 * div.z * 4) +
@@ -148,6 +172,12 @@ struct Box_builder
         {
             point_normals->put(point_id, n);
             point_texcoords->put(point_id, vec2(s, t));
+
+            vec4 B;
+            vec4 T;
+            ortho_basis_pixar_r1(n, B, T);
+            point_tangents  ->put(point_id, T);
+            point_bitangents->put(point_id, B);
         }
 
         points[key] = point_id;
@@ -155,7 +185,7 @@ struct Box_builder
         return point_id;
     }
 
-    auto make_corner(Polygon_id polygon_id, int x, int y, int z, glm::vec3 n, float s, float t)
+    auto make_corner(const Polygon_id polygon_id, const int x, const int y, const int z, const glm::vec3 n, const float s, const float t)
     -> Corner_id
     {
         const int key = y * (div.x * 4 * div.z * 4) +
@@ -171,22 +201,31 @@ struct Box_builder
         {
             corner_normals->put(corner_id, n);
             corner_texcoords->put(corner_id, vec2(s, t));
+            vec4 B;
+            vec4 T;
+            ortho_basis_pixar_r1(n, B, T);
+            corner_tangents  ->put(corner_id, T);
+            corner_bitangents->put(corner_id, B);
         }
 
         return corner_id;
     }
 
-    Box_builder(Geometry& geometry, vec3 size, ivec3 div, float p)
+    Box_builder(Geometry& geometry, const vec3 size, const ivec3 div, const float p)
         : geometry{geometry}
         , size    {size}
         , div     {div}
         , p       {p}
     {
-        point_locations   = geometry.point_attributes()  .create<vec3>(c_point_locations  );
-        point_normals     = geometry.point_attributes()  .create<vec3>(c_point_normals    );
-        point_texcoords   = geometry.point_attributes()  .create<vec2>(c_point_texcoords  );
-        corner_normals    = geometry.corner_attributes() .create<vec3>(c_corner_normals   );
-        corner_texcoords  = geometry.corner_attributes() .create<vec2>(c_corner_texcoords );
+        point_locations   = geometry.point_attributes  ().create<vec3>(c_point_locations  );
+        point_normals     = geometry.point_attributes  ().create<vec3>(c_point_normals    );
+        point_texcoords   = geometry.point_attributes  ().create<vec2>(c_point_texcoords  );
+        point_tangents    = geometry.point_attributes  ().create<vec4>(c_point_tangents   );
+        point_bitangents  = geometry.point_attributes  ().create<vec4>(c_point_bitangents );
+        corner_normals    = geometry.corner_attributes ().create<vec3>(c_corner_normals   );
+        corner_texcoords  = geometry.corner_attributes ().create<vec2>(c_corner_texcoords );
+        corner_tangents   = geometry.corner_attributes ().create<vec4>(c_corner_tangents  );
+        corner_bitangents = geometry.corner_attributes ().create<vec4>(c_corner_bitangents);
         polygon_centroids = geometry.polygon_attributes().create<vec3>(c_polygon_centroids);
         polygon_normals   = geometry.polygon_attributes().create<vec3>(c_polygon_normals  );
     }
@@ -198,9 +237,9 @@ struct Box_builder
         int z;
 
         // Generate vertices
-        constexpr const vec3 unit_x(1.0f, 0.0f, 0.0f);
-        constexpr const vec3 unit_y(0.0f, 1.0f, 0.0f);
-        constexpr const vec3 unit_z(0.0f, 0.0f, 1.0f);
+        constexpr vec3 unit_x(1.0f, 0.0f, 0.0f);
+        constexpr vec3 unit_y(0.0f, 1.0f, 0.0f);
+        constexpr vec3 unit_z(0.0f, 0.0f, 1.0f);
         for (x = -div.x; x <= div.x; x++)
         {
             const float rel_x = 0.5f + static_cast<float>(x) / size.x;
@@ -311,7 +350,7 @@ struct Box_builder
     }
 };
 
-auto make_box(glm::vec3 size, glm::ivec3 div, float p)
+auto make_box(const glm::vec3 size, const glm::ivec3 div, const float p)
 -> Geometry
 {
     ZoneScoped;

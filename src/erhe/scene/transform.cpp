@@ -21,19 +21,19 @@ auto Transform::operator=(const Transform& t) -> Transform&
     return *this;
 }
 
-Transform::Transform(mat4 m)
+Transform::Transform(const mat4 m)
 {
     m_matrix         = m;
     m_inverse_matrix = glm::inverse(m);
 }
 
-Transform::Transform(mat4 matrix, mat4 inverse_matrix)
+Transform::Transform(const mat4 matrix, const mat4 inverse_matrix)
 {
     m_matrix         = matrix;
     m_inverse_matrix = inverse_matrix;
 }
 
-void Transform::set_translation(vec3 v)
+void Transform::set_translation(const vec3 v)
 {
     m_matrix = erhe::toolkit::create_translation(v);
     m_inverse_matrix = erhe::toolkit::create_translation(-v);
@@ -44,25 +44,25 @@ void Transform::fix_inverse()
     m_inverse_matrix = glm::inverse(m_matrix);
 }
 
-void Transform::set_translation(float x, float y, float z)
+void Transform::set_translation(const float x, const float y, const float z)
 {
-    m_matrix = erhe::toolkit::create_translation(x, y, z);
+    m_matrix         = erhe::toolkit::create_translation(x, y, z);
     m_inverse_matrix = erhe::toolkit::create_translation(-x, -y, -z);
 }
 
-void Transform::set_rotation(float angle_radians, vec3 axis)
+void Transform::set_rotation(const float angle_radians, const vec3 axis)
 {
     m_matrix = erhe::toolkit::create_rotation(angle_radians, axis);
     m_inverse_matrix = erhe::toolkit::create_rotation(-angle_radians, axis);
 }
 
-void Transform::set_scale(float s)
+void Transform::set_scale(const float s)
 {
     m_matrix = erhe::toolkit::create_scale(s);
     m_inverse_matrix = erhe::toolkit::create_scale(1.0f / s);
 }
 
-void Transform::set_scale(float x, float y, float z)
+void Transform::set_scale(const float x, const float y, const float z)
 {
     m_matrix = erhe::toolkit::create_scale(x, y, z);
     float x_scale = x != 0.0f ? x : 1.0f;
@@ -72,12 +72,12 @@ void Transform::set_scale(float x, float y, float z)
 }
 
 void Transform::set_projection(
-    float s,          // Stereo-scopic 3D eye separation
-    float p,          // Perspective (0 == parallel, 1 == perspective)
-    float n, float f, // Near and far z clip depths
-    float w, float h, // Width and height of viewport (at depth vz)
-    vec3 v,           // Center of viewport
-    vec3 e            // Center of projection (eye position)
+    const float s,                // Stereo-scopic 3D eye separation
+    const float p,                // Perspective (0 == parallel, 1 == perspective)
+          float n,       float f, // Near and far z clip depths
+    const float w, const float h, // Width and height of viewport (at depth vz)
+    const vec3 v,                 // Center of viewport
+    const vec3 e                  // Center of projection (eye position)
 )
 {
     if constexpr (erhe::graphics::Configuration::reverse_depth)
@@ -88,7 +88,7 @@ void Transform::set_projection(
     m_inverse_matrix = glm::inverse(m_matrix);
 }
 
-void Transform::set_orthographic(float left, float right, float bottom, float top, float z_near, float z_far)
+void Transform::set_orthographic(const float left, const float right, const float bottom, const float top, float z_near, float z_far)
 {
     if constexpr (erhe::graphics::Configuration::reverse_depth)
     {
@@ -99,7 +99,7 @@ void Transform::set_orthographic(float left, float right, float bottom, float to
     m_inverse_matrix = glm::inverse(m_matrix);
 }
 
-void Transform::set_orthographic_centered(float width, float height, float z_near, float z_far)
+void Transform::set_orthographic_centered(const float width, const float height, float z_near, float z_far)
 {
     if constexpr (erhe::graphics::Configuration::reverse_depth)
     {
@@ -110,7 +110,7 @@ void Transform::set_orthographic_centered(float width, float height, float z_nea
     m_inverse_matrix = glm::inverse(m_matrix);
 }
 
-void Transform::set_frustum(float left, float right, float bottom, float top, float z_near, float z_far)
+void Transform::set_frustum(const float left, const float right, const float bottom, const float top, float z_near, float z_far)
 {
     if constexpr (erhe::graphics::Configuration::reverse_depth)
     {
@@ -121,7 +121,7 @@ void Transform::set_frustum(float left, float right, float bottom, float top, fl
     m_inverse_matrix = glm::inverse(m_matrix);
 }
 
-void Transform::set_frustum_simple(float width, float height, float z_near, float z_far)
+void Transform::set_frustum_simple(const float width, const float height, float z_near, float z_far)
 {
     if constexpr (erhe::graphics::Configuration::reverse_depth)
     {
@@ -132,7 +132,7 @@ void Transform::set_frustum_simple(float width, float height, float z_near, floa
     m_inverse_matrix = glm::inverse(m_matrix);
 }
 
-void Transform::set_perspective(float fov_x, float fov_y, float z_near, float z_far)
+void Transform::set_perspective(const float fov_x, const float fov_y, float z_near, float z_far)
 {
     if constexpr (erhe::graphics::Configuration::reverse_depth)
     {
@@ -143,7 +143,7 @@ void Transform::set_perspective(float fov_x, float fov_y, float z_near, float z_
     m_inverse_matrix = glm::inverse(m_matrix);
 }
 
-void Transform::set_perspective_xr(float fov_left, float fov_right, float fov_up, float fov_down, float z_near, float z_far)
+void Transform::set_perspective_xr(const float fov_left, const float fov_right, const float fov_up, const float fov_down, float z_near, float z_far)
 {
     if constexpr (erhe::graphics::Configuration::reverse_depth)
     {
@@ -154,7 +154,7 @@ void Transform::set_perspective_xr(float fov_left, float fov_right, float fov_up
     m_inverse_matrix = glm::inverse(m_matrix);
 }
 
-void Transform::set_perspective_vertical(float fov_y, float aspect_ratio, float z_near, float z_far)
+void Transform::set_perspective_vertical(const float fov_y, const float aspect_ratio, float z_near, float z_far)
 {
     if constexpr (erhe::graphics::Configuration::reverse_depth)
     {
@@ -165,7 +165,7 @@ void Transform::set_perspective_vertical(float fov_y, float aspect_ratio, float 
     m_inverse_matrix = glm::inverse(m_matrix);
 }
 
-void Transform::set_perspective_horizontal(float fov_x, float aspect_ratio, float z_near, float z_far)
+void Transform::set_perspective_horizontal(const float fov_x, const float aspect_ratio, float z_near, float z_far)
 {
     if constexpr (erhe::graphics::Configuration::reverse_depth)
     {
@@ -176,19 +176,19 @@ void Transform::set_perspective_horizontal(float fov_x, float aspect_ratio, floa
     m_inverse_matrix = glm::inverse(m_matrix);
 }
 
-void Transform::set(mat4 matrix)
+void Transform::set(const mat4 matrix)
 {
     m_matrix         = matrix;
     m_inverse_matrix = glm::inverse(matrix);
 }
 
-void Transform::set(mat4 matrix, mat4 inverse_matrix)
+void Transform::set(const mat4 matrix, const mat4 inverse_matrix)
 {
     m_matrix         = matrix;
     m_inverse_matrix = inverse_matrix;
 }
 
-void Transform::catenate(mat4 m)
+void Transform::catenate(const mat4 m)
 {
     m_matrix         = m_matrix * m;
     m_inverse_matrix = glm::inverse(m_matrix);

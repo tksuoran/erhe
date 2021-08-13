@@ -1,11 +1,13 @@
 set(_target "erhe_primitive")
 
 set(source_list
+    buffer_info.hpp
+    buffer_writer.cpp
+    buffer_writer.hpp
     enums.hpp
     format_info.hpp
-    buffer_info.hpp
-    primitive_builder.cpp
-    primitive_builder.hpp
+    geometry_uploader.cpp
+    geometry_uploader.hpp
     index_range.cpp
     index_range.hpp
     log.cpp
@@ -14,6 +16,14 @@ set(source_list
     material.hpp
     primitive.cpp
     primitive.hpp
+    primitive_builder.cpp
+    primitive_builder.hpp
+    primitive_geometry.hpp
+    primitive_geometry.cpp
+    property_maps.hpp
+    property_maps.cpp
+    vertex_attribute_info.hpp
+    vertex_attribute_info.cpp
 )
 
 add_library(${_target} ${source_list})
@@ -22,6 +32,7 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(${_target}
     PUBLIC
+        embree
         fmt::fmt
         glm::glm
         Microsoft.GSL::GSL

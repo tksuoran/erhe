@@ -152,8 +152,8 @@ Property_map<Key_type, Value_type>::constructor(const Property_map_descriptor& d
 template <typename Key_type, typename Value_type>
 inline void
 Property_map<Key_type, Value_type>::interpolate(
-    Property_map_base<Key_type>*                         destination_base,
-    std::vector<std::vector<std::pair<float, Key_type>>> key_new_to_olds) const
+    Property_map_base<Key_type>*                                destination_base,
+    const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds) const
 {
     ZoneScoped;
 

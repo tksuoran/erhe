@@ -8,7 +8,7 @@ auto Controller::damp() const -> float
     return m_damp;
 }
 
-void Controller::set_damp(float value)
+void Controller::set_damp(const float value)
 {
     m_damp = value;
 }
@@ -18,7 +18,7 @@ auto Controller::max_value() const -> float
     return m_max_value;
 }
 
-void Controller::set_max_value(float value)
+void Controller::set_max_value(const float value)
 {
     m_max_value = value;
 }
@@ -28,15 +28,14 @@ auto Controller::max_delta() const -> float
     return m_max_delta;
 }
 
-void Controller::set_max_delta(float value)
+void Controller::set_max_delta(const float value)
 {
     m_max_delta = value;
 }
 
 void Controller::update()
 {
-    if ((m_active == true) &&
-        (m_inhibit == false))
+    if (m_active && !m_inhibit)
     {
         adjust(m_current_delta);
     }
@@ -44,7 +43,7 @@ void Controller::update()
     dampen();
 }
 
-void Controller::adjust(float delta)
+void Controller::adjust(const float delta)
 {
     m_current_value += delta;
     if (m_current_value > m_max_value)
@@ -62,7 +61,7 @@ void Controller::dampen()
     // Dampening by multiplying by a constant
     if (m_dampen_multiply)
     {
-        float old_value = m_current_value;
+        const float old_value = m_current_value;
         m_current_value = m_current_value * m_damp;
 
         if (m_current_value == old_value)
@@ -90,7 +89,7 @@ void Controller::dampen()
         }
         else // Close to 0.0
         {
-            float old_value = m_current_value;
+            const float old_value = m_current_value;
             m_current_value *= m_damp;
             if (m_current_value == old_value)
             {
@@ -100,7 +99,7 @@ void Controller::dampen()
     }
 }
 
-void Controller::set_inhibit(bool value)
+void Controller::set_inhibit(const bool value)
 {
     m_inhibit = value;
 }
@@ -110,7 +109,7 @@ auto Controller::more() const -> bool
     return m_more;
 }
 
-void Controller::set_more(bool value)
+void Controller::set_more(const bool value)
 {
     m_more = value;
     if (m_more)
@@ -137,7 +136,7 @@ auto Controller::less() const -> bool
     return m_less;
 }
 
-void Controller::set_less(bool value)
+void Controller::set_less(const bool value)
 {
     m_less = value;
     if (m_less)
@@ -164,7 +163,7 @@ auto Controller::stop() const -> bool
     return m_stop;
 }
 
-void Controller::set_stop(bool value)
+void Controller::set_stop(const bool value)
 {
     m_stop = value;
     if (m_stop)
@@ -196,7 +195,7 @@ Controller::Controller()
     clear();
 }
 
-Controller::Controller(bool linear, bool multiply)
+Controller::Controller(const bool linear, const bool multiply)
 {
     clear();
     set_damp_mode(linear, multiply);
@@ -223,13 +222,13 @@ auto Controller::current_value() const -> float
     return m_current_value;
 }
 
-void Controller::set_damp_mode(bool linear, bool multiply)
+void Controller::set_damp_mode(const bool linear, const bool multiply)
 {
     m_dampen_linear   = linear;
     m_dampen_multiply = multiply;
 }
 
-void Controller::set_damp_and_max_delta(float damp, float max_delta)
+void Controller::set_damp_and_max_delta(const float damp, const float max_delta)
 {
     m_damp      = damp;
     m_max_delta = max_delta;

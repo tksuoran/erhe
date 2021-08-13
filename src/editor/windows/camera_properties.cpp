@@ -36,13 +36,13 @@ void Camera_properties::window(Pointer_context& pointer_context)
     //for (auto item : m_selection_tool->selection())
     {
         //auto camera = dynamic_pointer_cast<erhe::scene::Camera>(item);
-        auto* camera = get<Scene_manager>()->get_view_camera().get();
+        auto* const camera = get<Scene_manager>()->get_view_camera().get();
         if (!camera)
         {
             //continue;
             return;
         }
-        auto* projection = camera->projection();
+        auto* const projection = camera->projection();
         if (projection != nullptr)
         {
             const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;

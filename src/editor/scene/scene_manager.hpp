@@ -27,9 +27,9 @@ namespace erhe::graphics
 
 namespace erhe::primitive
 {
-    struct Primitive_build_context;
-    struct Primitive_geometry;
-    struct Primitive;
+    class Geometry_uploader;
+    class Primitive;
+    class Primitive_eometry;
 }
 
 namespace erhe::scene
@@ -110,7 +110,7 @@ public:
 private:
     void initialize_camera        ();
     void animate_lights           (double time_d);
-    auto primitive_build_context  () -> erhe::primitive::Primitive_build_context&;
+    auto geometry_uploader        () -> erhe::primitive::Geometry_uploader&;
     auto buffer_transfer_queue    () -> erhe::graphics::Buffer_transfer_queue&;
     void add_floor                ();
     void make_brushes             ();

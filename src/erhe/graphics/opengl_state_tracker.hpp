@@ -17,7 +17,7 @@
 namespace erhe::graphics
 {
 
-struct Pipeline;
+class Pipeline;
 
 
 class OpenGL_state_tracker

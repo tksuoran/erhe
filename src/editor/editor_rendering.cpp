@@ -71,7 +71,7 @@ void Editor_rendering::begin_frame()
 {
     ZoneScoped;
 
-    if (m_enable_gui)
+    if constexpr (s_enable_gui)
     {
         m_editor_tools->gui_begin_frame();
         const auto size       = m_viewport_window->content_region_size();
@@ -87,7 +87,7 @@ void Editor_rendering::begin_frame()
 
 auto Editor_rendering::is_primary_scene_output_framebuffer_ready() -> bool
 {
-    if (m_enable_gui)
+    if constexpr (s_enable_gui)
     {
         return m_viewport_window->is_framebuffer_ready();
     }
@@ -120,12 +120,12 @@ void Editor_rendering::gui_render()
 
 auto Editor_rendering::is_content_in_focus() const -> bool
 {
-    return m_enable_gui ? m_viewport_window->is_focused() : true;
+    return s_enable_gui ? m_viewport_window->is_focused() : true;
 }
 
 auto Editor_rendering::to_scene_content(glm::vec2 position_in_root) const -> glm::vec2
 {
-    if (m_enable_gui)
+    if constexpr (s_enable_gui)
     {
         return m_viewport_window->to_scene_content(position_in_root);
     }
@@ -228,7 +228,7 @@ void Editor_rendering::render(double time)
         end_primary_framebuffer();
     }
 
-    if (m_enable_gui)
+    if constexpr (s_enable_gui)
     {
         pointer_context.priority_action = m_editor_tools->get_priority_action();
         m_editor_tools->imgui();
@@ -524,7 +524,7 @@ void Editor_rendering::render_tool_meshes()
 
 void Editor_rendering::bind_primary_scene_output_framebuffer()
 {
-    if (m_enable_gui)
+    if constexpr (s_enable_gui)
     {
         m_viewport_window->bind_multisample_framebuffer();
     }
@@ -539,7 +539,7 @@ void Editor_rendering::bind_primary_scene_output_framebuffer()
 // so that we can sample from the texture in GUI scene window.
 void Editor_rendering::end_primary_framebuffer()
 {
-    if (m_enable_gui)
+    if constexr (s_enable_gui)
     {
         m_viewport_window->multisample_resolve();
     }

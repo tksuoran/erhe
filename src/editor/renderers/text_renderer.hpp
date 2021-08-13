@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <deque>
 #include <memory>
+#include <string_view>
 #include <vector>
 
 namespace erhe::graphics
@@ -32,7 +33,7 @@ namespace erhe::graphics
 namespace erhe::scene
 {
     class Camera;
-    struct Viewport;
+    class Viewport;
 }
 
 namespace erhe::ui
@@ -59,9 +60,9 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-    void print(const std::string& text,
-               glm::vec3          text_position,
-               uint32_t           text_color);
+    void print(const glm::vec3  text_position,
+               const uint32_t   text_color,
+               std::string_view text);
 
     void render(erhe::scene::Viewport viewport);
     void next_frame();
@@ -69,8 +70,9 @@ public:
 private:
     static constexpr size_t s_frame_resources_count = 4;
 
-    struct Frame_resources
+    class Frame_resources
     {
+    public:
         static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_coherent_bit   |
                                                               gl::Buffer_storage_mask::map_persistent_bit |
                                                               gl::Buffer_storage_mask::map_write_bit};
@@ -144,13 +146,16 @@ private:
     std::deque<Frame_resources> m_frame_resources;
     size_t                      m_current_frame_resource_slot{0};
 
-    struct Buffer_range
+    class Buffer_range
     {
+    public:
         size_t first_byte_offset{0};
         size_t byte_count       {0};
     };
-    struct Buffer_writer
+
+    class Buffer_writer
     {
+    public:
         Buffer_range range;
         size_t       write_offset{0};
 

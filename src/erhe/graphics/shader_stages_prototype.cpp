@@ -11,7 +11,8 @@ namespace erhe::graphics
 
 using std::string;
 
-namespace {
+namespace
+{
 
 gl::Program_interface program_interfaces[]
 {
@@ -38,7 +39,7 @@ gl::Program_interface program_interfaces[]
     gl::Program_interface::vertex_subroutine_uniform           // GL 4.3
 };
 
-auto member_interface(gl::Program_interface interface)
+auto member_interface(const gl::Program_interface interface)
 -> std::optional<gl::Program_interface>
 {
     switch (interface)
@@ -105,8 +106,8 @@ is_in_list(const T& item, std::initializer_list<T> items)
 }
 
 // [OpenGL 4.6 (Core Profile)] Table 7.2 GetProgramResourceiv properties and supported interfaces
-auto is_program_interface_allowed(gl::Program_resource_property property,
-                                  gl::Program_interface         interface)
+auto is_program_interface_allowed(const gl::Program_resource_property property,
+                                  const gl::Program_interface         interface)
 -> bool
 {
     switch (property)
@@ -350,7 +351,7 @@ auto Shader_stages::Prototype::try_compile_shader(const Shader_stages::Create_in
 -> std::optional<Gl_shader>
 {
     Gl_shader gl_shader(shader.type);
-    auto gl_name = gl_shader.gl_name();
+    const auto gl_name = gl_shader.gl_name();
 
     string source = create_info.final_source(shader);
     VERIFY(source.length() > 0);
@@ -388,7 +389,7 @@ Shader_stages::Prototype::Prototype(const Shader_stages::Create_info& create_inf
 {
     Expects(m_handle.gl_name() != 0);
 
-    auto gl_name = m_handle.gl_name();
+    const auto gl_name = m_handle.gl_name();
     for (const auto& shader : create_info.shaders)
     {
         auto gl_shader = try_compile_shader(create_info, shader);
@@ -479,7 +480,7 @@ Shader_stages::Prototype::Prototype(const Shader_stages::Create_info& create_inf
 
 void Shader_stages::Prototype::dump_reflection() const
 {
-    int gl_name = m_handle.gl_name();
+    const int gl_name = m_handle.gl_name();
 
     int link_status                          {0};
     int validate_status                      {0};
@@ -603,7 +604,7 @@ void Shader_stages::Prototype::dump_reflection() const
                         {
                             log_program.trace(", ");
                         }
-                        auto member_interface_ = member_interface(interface);
+                        const auto member_interface_ = member_interface(interface);
                         if (member_interface_.has_value())
                         {
                             std::fill(begin(name_buffer), end(name_buffer), '\0');
@@ -654,7 +655,7 @@ void Shader_stages::Prototype::dump_reflection() const
         }
     }
 
-    int buffer_size = std::max(active_uniform_max_length, active_uniform_block_max_name_length);
+    const int buffer_size = std::max(active_uniform_max_length, active_uniform_block_max_name_length);
     std::vector<char> buffer(static_cast<size_t>(buffer_size) + 1);
 
     if (transform_feedback_varyings > 0)

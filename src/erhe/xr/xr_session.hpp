@@ -44,8 +44,9 @@ private:
     auto create_reference_space     () -> bool;
     auto attach_actions             () -> bool;
 
-    struct Swapchains
+    class Swapchains
     {
+    public:
         Swapchain color_swapchain;
         Swapchain depth_swapchain;
     };

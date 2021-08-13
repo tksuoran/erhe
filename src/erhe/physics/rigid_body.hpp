@@ -31,8 +31,9 @@ public:
         "Dynamic"
     };
 
-    struct Create_info
+    class Create_info
     {
+    public:
         float                             mass{1.0f};
         std::shared_ptr<btCollisionShape> collision_shape;
         btVector3                         local_inertia{btScalar(0.0), btScalar(0.0), btScalar(0.0)};

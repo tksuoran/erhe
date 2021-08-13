@@ -27,8 +27,9 @@ public:
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
-    struct Render_style
+    class Render_style
     {
+    public:
         bool                                  polygon_fill         {true};
         bool                                  edge_lines           {true};  // for selection
         bool                                  polygon_centroids    {false}; // for selection

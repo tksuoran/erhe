@@ -5,8 +5,9 @@
 namespace erhe::scene
 {
 
-struct Viewport
+class Viewport
 {
+public:
     auto aspect_ratio() const
     -> float
     {
@@ -14,16 +15,18 @@ struct Viewport
                                 : 1.0f;
     }
 
-    auto unproject(glm::mat4 world_from_clip,
-                   glm::vec3 window,
-                   float     depth_range_near,
-                   float     depth_range_far)
+    // TODO
+    auto unproject(const glm::mat4 world_from_clip,
+                   const glm::vec3 window,
+                   const float     depth_range_near,
+                   const float     depth_range_far)
     -> glm::vec3;
 
-    auto project_to_screen_space(glm::mat4 clip_from_world,
-                                 glm::vec3 position_in_world,
-                                 float     depth_range_near,
-                                 float     depth_range_far);
+    // TODO
+    auto project_to_screen_space(const glm::mat4 clip_from_world,
+                                 const glm::vec3 position_in_world,
+                                 const float     depth_range_near,
+                                 const float     depth_range_far);
 
     int x     {0};
     int y     {0};

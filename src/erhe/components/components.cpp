@@ -131,8 +131,8 @@ void Components::launch_component_initialization()
 
     log_components.info("Initializing {} Components:\n", count);
 
-    //m_execution_queue = std::make_unique<Concurrent_execution_queue>();
-    m_execution_queue = std::make_unique<Serial_execution_queue>();
+    m_execution_queue = std::make_unique<Concurrent_execution_queue>();
+    //m_execution_queue = std::make_unique<Serial_execution_queue>();
 
     for (size_t i = 0; i < count; ++i)
     {
@@ -184,12 +184,12 @@ auto Components::get_component_to_initialize() -> shared_ptr<Component>
     {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
-            auto i = std::find_if(m_uninitialized_components.begin(),
-                                  m_uninitialized_components.end(),
-                                  [](auto& component) {
-                                      return component->get_state() == Component::Component_state::Connected &&
-                                             component->is_ready_to_initialize();
-                                  });
+            const auto i = std::find_if(m_uninitialized_components.begin(),
+                                        m_uninitialized_components.end(),
+                                        [](auto& component) {
+                                            return component->get_state() == Component::Component_state::Connected &&
+                                                   component->is_ready_to_initialize();
+                                        });
             if (i != m_uninitialized_components.end())
             {
                 auto component = *i;

@@ -20,10 +20,10 @@ public:
     class Attachment
     {
     public:
-        Attachment(gl::Framebuffer_attachment attachment_point,
-                   gsl::not_null<Texture*>    texture,
-                   unsigned int               level,
-                   unsigned int               layer)
+        Attachment(const gl::Framebuffer_attachment attachment_point,
+                   const gsl::not_null<Texture*>    texture,
+                   const unsigned int               level,
+                   const unsigned int               layer)
             : attachment_point{attachment_point}
             , texture_level   {level}
             , texture_layer   {layer}
@@ -31,8 +31,8 @@ public:
         {
         }
 
-        Attachment(gl::Framebuffer_attachment   attachment_point,
-                   gsl::not_null<Renderbuffer*> renderbuffer)
+        Attachment(const gl::Framebuffer_attachment   attachment_point,
+                   const gsl::not_null<Renderbuffer*> renderbuffer)
             : attachment_point{attachment_point}
             , renderbuffer    {renderbuffer}
         {
@@ -48,13 +48,13 @@ public:
     class Create_info
     {
     public:
-        void attach(gl::Framebuffer_attachment attachment_point,
-                    gsl::not_null<Texture*>    texture,
-                    unsigned int               level = 0,
-                    unsigned int               layer = 0);
+        void attach(const gl::Framebuffer_attachment attachment_point,
+                    const gsl::not_null<Texture*>    texture,
+                    const unsigned int               level = 0,
+                    const unsigned int               layer = 0);
 
-        void attach(gl::Framebuffer_attachment   attachment_point,
-                    gsl::not_null<Renderbuffer*> renderbuffer);
+        void attach(const gl::Framebuffer_attachment   attachment_point,
+                    const gsl::not_null<Renderbuffer*> renderbuffer);
 
         std::vector<Attachment> attachments;
     };
@@ -69,6 +69,7 @@ public:
     static void on_thread_enter()
     {
         std::lock_guard lock{s_mutex};
+
         for (auto* framebuffer : s_all_framebuffers)
         {
             if (framebuffer->m_owner_thread == std::thread::id{})
@@ -81,6 +82,7 @@ public:
     static void on_thread_exit()
     {
         std::lock_guard lock{s_mutex};
+
         gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, 0);
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
         auto this_thread_id = std::this_thread::get_id();
@@ -93,10 +95,10 @@ public:
         }
     }
 
-    auto gl_name     () -> unsigned int;
+    auto gl_name     () const -> unsigned int;
     void create      ();
     void reset       ();
-    auto check_status() -> bool;
+    auto check_status() const -> bool;
 
     void set_debug_label(const std::string& label)
     {

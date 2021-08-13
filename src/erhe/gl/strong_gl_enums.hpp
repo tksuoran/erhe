@@ -10,16 +10,18 @@
 namespace gl
 {
 
-struct Draw_arrays_indirect_command
+class Draw_arrays_indirect_command
 {
+public:
     uint32_t count;
     uint32_t instance_count;
     uint32_t first;
     uint32_t base_instance;
 };
 
-struct Draw_elements_indirect_command
+class Draw_elements_indirect_command
 {
+public:
     uint32_t index_count;
     uint32_t instance_count;
     uint32_t first_index;

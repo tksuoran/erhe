@@ -81,10 +81,10 @@ void Line_renderer::initialize_component()
     m_viewport_offset               = m_view_block.add_vec4("viewport"              )->offset_in_parent();
     m_fov_offset                    = m_view_block.add_vec4("fov"                   )->offset_in_parent();
 
-    auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
-    std::filesystem::path vs_path = shader_path / std::filesystem::path("line.vert");
-    std::filesystem::path gs_path = shader_path / std::filesystem::path("line.geom");
-    std::filesystem::path fs_path = shader_path / std::filesystem::path("line.frag");
+    const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
+    const std::filesystem::path vs_path = shader_path / std::filesystem::path("line.vert");
+    const std::filesystem::path gs_path = shader_path / std::filesystem::path("line.geom");
+    const std::filesystem::path fs_path = shader_path / std::filesystem::path("line.frag");
     Shader_stages::Create_info create_info("line",
                                            &m_default_uniform_block,
                                            &m_attribute_mappings,
@@ -110,7 +110,7 @@ void Line_renderer::create_frame_resources()
 {
     ZoneScoped;
 
-    size_t vertex_count = 65536;
+    constexpr size_t vertex_count = 65536;
     for (size_t i = 0; i < s_frame_resources_count; ++i)
     {
         m_frame_resources.emplace_back(256, 16,
@@ -134,7 +134,7 @@ void Line_renderer::next_frame()
     m_line_count = 0;
 }
 
-void Line_renderer::add_lines(const std::initializer_list<Line> lines, float thickness)
+void Line_renderer::add_lines(const std::initializer_list<Line> lines, const float thickness)
 {
     auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
 
@@ -167,7 +167,7 @@ void Line_renderer::add_lines(const std::initializer_list<Line> lines, float thi
 }
 
 static constexpr const char* c_line_renderer_render = "Line_renderer::render()";
-void Line_renderer::render(erhe::scene::Viewport       viewport,
+void Line_renderer::render(const erhe::scene::Viewport viewport,
                            const erhe::scene::ICamera& camera)
 {
     if (m_line_count == 0)
@@ -216,7 +216,7 @@ void Line_renderer::render(erhe::scene::Viewport       viewport,
                           static_cast<GLintptr>  (m_view_writer.range.first_byte_offset),
                           static_cast<GLsizeiptr>(m_view_writer.range.byte_count));
 
-    if (false)
+    if constexpr (false) // Depth fail rendering is currently disabled - visually different effect
     {
         const auto& pipeline = current_frame_resources().pipeline_depth_fail;
         m_pipeline_state_tracker->execute(&pipeline);
@@ -226,7 +226,7 @@ void Line_renderer::render(erhe::scene::Viewport       viewport,
                         static_cast<GLsizei>(m_line_count * 2));
     }
 
-    if (true)
+    if constexpr (true) // Depth pass rendering is always enabled
     {
         const auto& pipeline = current_frame_resources().pipeline_depth_pass;
         m_pipeline_state_tracker->execute(&pipeline);

@@ -32,8 +32,9 @@ public:
 private:
     static constexpr size_t s_frame_resources_count = 4;
 
-    struct Framebuffer_capture_resources
+    class Framebuffer_capture_resources
     {
+    public:
         enum class State
         {
             unused           = 0,

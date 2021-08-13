@@ -40,9 +40,9 @@ void opengl_callback(GLenum        gl_source,
     {
         return;
     }
-    auto severity = static_cast<gl::Debug_severity>(gl_severity);
-    auto type     = static_cast<gl::Debug_type    >(gl_type);
-    auto source   = static_cast<gl::Debug_source  >(gl_source);
+    const auto severity = static_cast<gl::Debug_severity>(gl_severity);
+    const auto type     = static_cast<gl::Debug_type    >(gl_type);
+    const auto source   = static_cast<gl::Debug_source  >(gl_source);
     if (source == gl::Debug_source::debug_source_application)
     {
         return;
@@ -66,11 +66,11 @@ void opengl_callback(GLenum        gl_source,
     }
 }
 
-auto split(std::string text, char separator)
+auto split(std::string text, const char separator)
 -> std::vector<std::string>
 {
     std::vector<std::string> result;
-    size_t length     = text.size();
+    const size_t length = text.size();
     size_t span_start = std::string::npos;
     for (size_t i = 0; i < length; ++i)
     {
@@ -79,7 +79,7 @@ auto split(std::string text, char separator)
         {
             if (span_start != std::string::npos)
             {
-                size_t span_length = i - span_start;
+                const size_t span_length = i - span_start;
                 if (span_length > 0)
                 {
                     result.emplace_back(text.substr(span_start, span_length));
@@ -99,7 +99,7 @@ auto split(std::string text, char separator)
     {
         if (length > span_start)
         {
-            size_t span_length = length - span_start;
+            const size_t span_length = length - span_start;
             result.emplace_back(text.substr(span_start, span_length));
         }
     }
@@ -109,7 +109,7 @@ auto split(std::string text, char separator)
 auto digits_only(std::string s)
 -> std::string
 {
-    size_t size = s.size();
+    const size_t size = s.size();
     for (size_t i = 0; i < size; ++i)
     {
         if (::isdigit(s[i]) == 0)
@@ -123,7 +123,7 @@ auto digits_only(std::string s)
 auto contains(const std::vector<std::string>& collection, const std::string& key)
 -> bool
 {
-    auto i = std::find(collection.cbegin(), collection.cend(), key);
+    const auto i = std::find(collection.cbegin(), collection.cend(), key);
     return i != collection.cend();
 }
 
@@ -139,9 +139,9 @@ void Configuration::initialize(PFN_get_proc_address get_proc_address)
 {
     std::vector<std::string> extensions;
 
-    auto gl_vendor      = (get_string)(gl::String_name::vendor);
-    auto gl_renderer    = (get_string)(gl::String_name::renderer);
-    auto gl_version_str = (get_string)(gl::String_name::version);
+    const auto gl_vendor      = (get_string)(gl::String_name::vendor);
+    const auto gl_renderer    = (get_string)(gl::String_name::renderer);
+    const auto gl_version_str = (get_string)(gl::String_name::version);
 
     log_configuration.info("GL Vendor:     {}\n", gl_vendor);
     log_configuration.info("GL Renderer:   {}\n", gl_renderer);

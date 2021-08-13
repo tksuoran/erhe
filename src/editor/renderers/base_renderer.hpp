@@ -23,8 +23,8 @@ namespace erhe::graphics
 
 namespace erhe::primitive
 {
-    struct Primitive;
-    struct Material;
+    class Primitive;
+    class Material;
 }
 
 namespace erhe::scene
@@ -34,7 +34,7 @@ namespace erhe::scene
     class Layer;
     class Light;
     class Node;
-    struct Viewport;
+    class Viewport;
 }
 
 namespace editor
@@ -71,20 +71,23 @@ public:
     Primitive_size_source primitive_size_source  {Primitive_size_source::constant_size};
     float                 primitive_constant_size{1.0f};
 
-    struct Buffer_range
+    class Buffer_range
     {
+    public:
         size_t first_byte_offset{0};
         size_t byte_count       {0};
     };
 
-    struct Draw_indirect_buffer_range
+    class Draw_indirect_buffer_range
     {
+    public:
         Buffer_range range;
         size_t       draw_indirect_count{0};
     };
 
-    struct Id_range
+    class Id_range
     {
+    public:
         uint32_t                           offset         {0};
         uint32_t                           length         {0};
         std::shared_ptr<erhe::scene::Mesh> mesh           {nullptr};
@@ -147,8 +150,9 @@ public:
     auto max_index_count          () const -> int;
 
 protected:
-    struct Buffer_writer
+    class Buffer_writer
     {
+    public:
         Buffer_range range;
         size_t       write_offset{0};
 

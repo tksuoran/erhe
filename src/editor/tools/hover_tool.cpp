@@ -15,6 +15,12 @@
 
 #include "imgui.h"
 
+#include <fmt/core.h>
+
+#include <string>
+
+#include <fmt/format.h>
+
 namespace editor
 {
 
@@ -93,14 +99,23 @@ void Hover_tool::render(const Render_context& render_context)
             auto position = m_hover_position.value();
             position.x += 50.0f;
             position.z  = -0.5f;
-            render_context.text_renderer->print(m_hover_mesh->name(),
-                                                position,
-                                                text_color);
+            std::string text = fmt::format("{} {} {} {}",
+                                           m_hover_mesh->name(),
+                                           render_context.pointer_context->hover_primitive,
+                                           render_context.pointer_context->hover_local_index,
+                                           render_context.pointer_context->pointer_z);
+
+            render_context.text_renderer->print(position,
+                                                text_color,
+                                                text);
+                                                //"{}",
+                                                //m_hover_mesh->name());
+                                                //static_cast<int>(render_context.pointer_context->hover_primitive));
         }
         if (m_hover_position_world.has_value() && m_hover_normal.has_value())
         {
-            glm::vec3 p0 = m_hover_position_world.value();
-            glm::vec3 p1 = m_hover_position_world.value() + m_hover_normal.value();
+            const glm::vec3 p0 = m_hover_position_world.value();
+            const glm::vec3 p1 = m_hover_position_world.value() + m_hover_normal.value();
             render_context.line_renderer->set_line_color(0xffffffffu);
             render_context.line_renderer->add_lines( { {p0, p1} }, 10.0f);
         }

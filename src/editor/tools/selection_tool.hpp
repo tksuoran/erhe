@@ -46,7 +46,7 @@ public:
     class Subcription final
     {
     public:
-        Subcription(Selection_tool* tool, int handle)
+        Subcription(Selection_tool* tool, const int handle)
             : m_tool  {tool}
             , m_handle{handle}
         {
@@ -98,17 +98,18 @@ public:
         m_selection = selection;
         call_selection_change_subscriptions();
     }
-    auto clear_selection() -> bool;
-    auto is_in_selection(std::shared_ptr<erhe::scene::INode_attachment> item) -> bool;
-    auto add_to_selection(std::shared_ptr<erhe::scene::INode_attachment> item) -> bool;
+    auto clear_selection      () -> bool;
+    auto is_in_selection      (std::shared_ptr<erhe::scene::INode_attachment> item) -> bool;
+    auto add_to_selection     (std::shared_ptr<erhe::scene::INode_attachment> item) -> bool;
     auto remove_from_selection(std::shared_ptr<erhe::scene::INode_attachment> item) -> bool;
 
 private:
     void call_selection_change_subscriptions();
-    void toggle_selection(std::shared_ptr<erhe::scene::INode_attachment> item, bool clear_others);
+    void toggle_selection(std::shared_ptr<erhe::scene::INode_attachment> item, const bool clear_others);
 
-    struct Subscription_entry
+    class Subscription_entry
     {
+    public:
         On_selection_changed callback;
         int                  handle;
     };

@@ -24,9 +24,9 @@ public:
     void clear            ();
     void update           ();
     void update_fixed_step();
-    void set_position     (glm::vec3 position);
-    void set_elevation    (float value);
-    void set_heading      (float value);
+    void set_position     (const glm::vec3 position);
+    void set_elevation    (const float value);
+    void set_heading      (const float value);
     auto position         () const -> glm::vec3;
     auto elevation        () const -> float;
     auto heading          () const -> float;

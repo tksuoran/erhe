@@ -129,7 +129,7 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection& meshes,
             const auto* const primitive_geometry = primitive.primitive_geometry.get();
             log_render.trace("primitive_index = {}\n", primitive_index);
 
-            const uint32_t count        = static_cast<uint32_t>(primitive_geometry->fill_indices.index_count);
+            const uint32_t count        = static_cast<uint32_t>(primitive_geometry->triangle_fill_indices.index_count);
             const uint32_t power_of_two = next_power_of_two(count);
             const uint32_t mask         = power_of_two - 1;
             const uint32_t current_bits = m_id_offset & mask;

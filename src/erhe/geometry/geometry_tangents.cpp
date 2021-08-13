@@ -69,8 +69,9 @@ auto Geometry::compute_tangents(const bool corner_tangents,
         return false;
     }
 
-    struct Geometry_context
+    class Geometry_context
     {
+    public:
         Geometry* geometry{nullptr};
         int       triangle_count{0};
         bool      override_existing{false};
@@ -89,8 +90,9 @@ auto Geometry::compute_tangents(const bool corner_tangents,
         Property_map<Point_id, glm::vec2>*   point_texcoords     {nullptr};
 
         // Polygons are triangulated.
-        struct Triangle
+        class Triangle
         {
+        public:
             Polygon_id polygon_id;
             uint32_t   triangle_index;
         };
@@ -321,8 +323,8 @@ auto Geometry::compute_tangents(const bool corner_tangents,
     // MikkTSpace can only handle triangles or quads.
     // We triangulate all non-triangles by adding a virtual polygon centroid
     // and presenting N virtual triangles to MikkTSpace.
-    int    face_index     = 0;
-    size_t triangle_count = count_polygon_triangles();
+    int          face_index     = 0;
+    const size_t triangle_count = count_polygon_triangles();
     g.triangle_count = static_cast<int>(triangle_count);
     g.triangles.resize(triangle_count);
     for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
@@ -442,8 +444,6 @@ auto Geometry::compute_tangents(const bool corner_tangents,
             std::optional<glm::vec4> B;
             std::vector<glm::vec4> tangents;
             std::vector<glm::vec4> bitangents;
-            glm::vec4 tangent  {1.0, 0.0, 0.0, 1.0};
-            glm::vec4 bitangent{0.0, 0.0, 1.0, 1.0};
             for (uint32_t i = 0; i < polygon.corner_count; ++i)
             {
                 const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + i;
@@ -475,10 +475,14 @@ auto Geometry::compute_tangents(const bool corner_tangents,
                     bitangents.emplace_back(bitangent);
                 }
             }
+
+            glm::vec4 tangent{1.0, 0.0, 0.0, 1.0};
             if (T.has_value())
             {
                 tangent = T.value();
             }
+
+            glm::vec4 bitangent{0.0, 0.0, 1.0, 1.0};
             if (B.has_value())
             {
                 bitangent = B.value();

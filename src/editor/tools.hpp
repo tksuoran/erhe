@@ -11,14 +11,15 @@ class Brushes;
 class Editor_view;
 class Line_renderer;
 class Physics_tool;
-struct Pointer_context;
+class Pointer_context;
 class Scene_manager;
 class Text_renderer;
 class Tool;
 class Trs_tool;
 
-struct Render_context
+class Render_context
 {
+public:
     Pointer_context*      pointer_context{nullptr};
     Scene_manager*        scene_manager  {nullptr};
     Line_renderer*        line_renderer  {nullptr};

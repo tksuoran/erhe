@@ -15,19 +15,19 @@ using namespace glm;
 
 using namespace erhe::toolkit;
 
-void Frame_controller::set_position(vec3 position)
+void Frame_controller::set_position(const vec3 position)
 {
     m_position = position;
     update();
 }
 
-void Frame_controller::set_elevation(float value)
+void Frame_controller::set_elevation(const float value)
 {
     m_elevation = value;
     update();
 }
 
-void Frame_controller::set_heading(float value)
+void Frame_controller::set_heading(const float value)
 {
     m_heading = value;
     m_heading_matrix = create_rotation(m_heading, vec3_unit_y);
@@ -179,7 +179,7 @@ void Frame_controller::update_fixed_step()
     rotate_z.update();
     speed_modifier.update();
 
-    float speed = 0.8f + speed_modifier.current_value();
+    const float speed = 0.8f + speed_modifier.current_value();
 
     if (translate_x.current_value() != 0.0f)
     {

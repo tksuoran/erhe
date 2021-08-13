@@ -75,12 +75,12 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-    void render(erhe::scene::Viewport       viewport,
-                erhe::scene::ICamera&       camera,
-                Layer_collection&           layers,
-                const Material_collection&  materials,
-                std::initializer_list<Pass> passes,
-                uint64_t                    visibility_mask);
+    void render(erhe::scene::Viewport             viewport,
+                erhe::scene::ICamera&             camera,
+                Layer_collection&                 layers,
+                const Material_collection&        materials,
+                const std::initializer_list<Pass> passes,
+                const uint64_t                    visibility_mask);
 
 private:
     auto select_pipeline      (Pass pass) const -> const erhe::graphics::Pipeline*;

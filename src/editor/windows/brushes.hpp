@@ -16,9 +16,9 @@ namespace erhe::geometry
 
 namespace erhe::primitive
 {
-    struct Material;
-    struct Primitive_build_context;
-    struct Primitive_geometry;
+    class Geometry_uploader;
+    class Material;
+    class Primitive_geometry;
 }
 
 namespace erhe::scene
@@ -39,16 +39,17 @@ class Operation_stack;
 class Scene_root;
 class Selection_tool;
 
-struct Brush_create_context
+class Brush_create_context
 {
-    Brush_create_context(erhe::primitive::Primitive_build_context& primitive_build_context,
-                         erhe::primitive::Normal_style             normal_style = erhe::primitive::Normal_style::corner_normals)
-        : primitive_build_context{primitive_build_context}
-        , normal_style           {normal_style}
+public:
+    Brush_create_context(erhe::primitive::Geometry_uploader& geometry_uploader,
+                         erhe::primitive::Normal_style       normal_style = erhe::primitive::Normal_style::corner_normals)
+        : geometry_uploader{geometry_uploader}
+        , normal_style     {normal_style}
     {
     }
-    erhe::primitive::Primitive_build_context& primitive_build_context;
-    erhe::primitive::Normal_style             normal_style{erhe::primitive::Normal_style::corner_normals};
+    erhe::primitive::Geometry_uploader& geometry_uploader;
+    erhe::primitive::Normal_style       normal_style{erhe::primitive::Normal_style::corner_normals};
 };
 
 class Brushes
@@ -77,9 +78,9 @@ public:
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
-    void add_brush     (const std::shared_ptr<erhe::primitive::Primitive_geometry>& geometry);
+    void add_brush     (const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry);
     void add_material  (const std::shared_ptr<erhe::primitive::Material>& material);
-    auto allocate_brush(const erhe::primitive::Primitive_build_context& context) -> std::shared_ptr<Brush>;
+    auto allocate_brush(const erhe::primitive::Geometry_uploader& geometry_uploader) -> std::shared_ptr<Brush>;
     auto make_brush    (erhe::geometry::Geometry&&               geometry,
                         const Brush_create_context&              context,
                         const std::shared_ptr<btCollisionShape>& collision_shape = {})
@@ -105,39 +106,40 @@ private:
     void remove_hover_mesh         ();
     void update_mesh_node_transform();
 
-    std::shared_ptr<Editor>            m_editor;
-    std::shared_ptr<Operation_stack>   m_operation_stack;
-    std::shared_ptr<Scene_root>        m_scene_root;
-    std::shared_ptr<Selection_tool>    m_selection_tool;
-    std::shared_ptr<Grid_tool>         m_grid_tool;
+    std::shared_ptr<Editor>             m_editor;
+    std::shared_ptr<Operation_stack>    m_operation_stack;
+    std::shared_ptr<Scene_root>         m_scene_root;
+    std::shared_ptr<Selection_tool>     m_selection_tool;
+    std::shared_ptr<Grid_tool>          m_grid_tool;
 
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
-    std::vector<const char*>           m_material_names;
+    std::vector<const char*>            m_material_names;
 
     std::mutex                          m_brush_mutex;
     std::vector<std::shared_ptr<Brush>> m_brushes;
 
-    Brush*                             m_brush{nullptr};
-    int                                m_selected_brush_index{0};
-    int                                m_selected_material   {0};
+    Brush*                              m_brush{nullptr};
+    int                                 m_selected_brush_index{0};
+    int                                 m_selected_material   {0};
 
-    bool                               m_snap_to_hover_polygon{true};
-    bool                               m_snap_to_grid         {false};
-    bool                               m_hover_content        {false};
-    bool                               m_hover_tool           {false};
-    std::optional<glm::vec3>           m_hover_position;
-    std::optional<glm::vec3>           m_hover_normal;
-    std::shared_ptr<erhe::scene::Node> m_hover_node;
-    erhe::geometry::Geometry*          m_hover_geometry   {nullptr};
-    size_t                             m_hover_primitive  {0};
-    size_t                             m_hover_local_index{0};
-    State                              m_state            {State::Passive};
-    std::shared_ptr<erhe::scene::Mesh> m_brush_mesh;
-    float                              m_scale            {1.0f};
-    float                              m_transform_scale  {1.0f};
+    bool                                m_snap_to_hover_polygon{true};
+    bool                                m_snap_to_grid         {false};
+    bool                                m_hover_content        {false};
+    bool                                m_hover_tool           {false};
+    std::optional<glm::vec3>            m_hover_position;
+    std::optional<glm::vec3>            m_hover_normal;
+    std::shared_ptr<erhe::scene::Node>  m_hover_node;
+    erhe::geometry::Geometry*           m_hover_geometry   {nullptr};
+    size_t                              m_hover_primitive  {0};
+    size_t                              m_hover_local_index{0};
+    State                               m_state            {State::Passive};
+    std::shared_ptr<erhe::scene::Mesh>  m_brush_mesh;
+    float                               m_scale            {1.0f};
+    float                               m_transform_scale  {1.0f};
 
-    struct Debug_info
+    class Debug_info
     {
+    public:
         float hover_frame_scale{0.0f};
         float brush_frame_scale{0.0f};
         float transform_scale{0.0f};

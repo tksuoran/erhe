@@ -27,13 +27,13 @@ public:
         class Shader_stage
         {
         public:
-            Shader_stage(gl::Shader_type type, std::string_view source)
+            Shader_stage(const gl::Shader_type type, std::string_view source)
                 : type  {type}
                 , source{source}
             {
             }
 
-            Shader_stage(gl::Shader_type type, std::filesystem::path path)
+            Shader_stage(const gl::Shader_type type, std::filesystem::path path)
                 : type{type}
                 , path{std::move(path)}
             {
@@ -127,8 +127,9 @@ private:
     std::vector<Gl_shader> m_attached_shaders;
 };
 
-struct Shader_stages_hash
+class Shader_stages_hash
 {
+public:
     auto operator()(const Shader_stages& program) const noexcept
     -> size_t
     {
@@ -143,7 +144,7 @@ auto operator!=(const Shader_stages& lhs, const Shader_stages& rhs) noexcept
 -> bool;
 
 
-struct Shader_stages_tracker
+class Shader_stages_tracker
 {
 public:
     void reset()

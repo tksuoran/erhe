@@ -17,8 +17,8 @@ namespace erhe::physics
 
 namespace erhe::primitive
 {
-    struct Primitive_geometry;
-    struct Material;
+    class Geometry;
+    class Material;
 }
 
 namespace erhe::scene
@@ -26,7 +26,7 @@ namespace erhe::scene
     class ICamera;
     class Mesh;
     class Node;
-    struct Viewport;
+    class Viewport;
 }
 
 namespace editor
@@ -79,14 +79,14 @@ public:
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
-    void set_translate(bool enabled);
-    void set_rotate   (bool enabled);
+    void set_translate(const bool enabled);
+    void set_rotate   (const bool enabled);
 
 private:
     void snap_translate       (glm::vec3& translation) const;
     auto begin                (Pointer_context& pointer_context) -> bool;
     auto end                  (Pointer_context& pointer_context) -> bool;
-    void set_node             (std::shared_ptr<erhe::scene::Node> node);
+    void set_node             (const std::shared_ptr<erhe::scene::Node>& node);
     auto is_x_translate_active() const -> bool;
     auto is_y_translate_active() const -> bool;
     auto is_z_translate_active() const -> bool;
@@ -124,11 +124,11 @@ private:
 
     auto get_handle(erhe::scene::Mesh* mesh) const -> Trs_tool::Handle;
 
-    auto get_handle_type(Handle handle) const -> Handle_type;
+    auto get_handle_type(const Handle handle) const -> Handle_type;
 
-    auto offset_plane_origo(Handle handle, glm::vec3 p) const -> glm::vec3;
+    auto offset_plane_origo(const Handle handle, const glm::vec3 p) const -> glm::vec3;
 
-    auto project_to_offset_plane(Handle handle, glm::vec3 p, glm::vec3 q) const -> glm::vec3;
+    auto project_to_offset_plane(const Handle handle, const glm::vec3 p, const glm::vec3 q) const -> glm::vec3;
 
     auto get_axis_direction() const -> glm::vec3;
 
@@ -144,9 +144,9 @@ private:
 
     // Casts ray from current pointer context position
     // and intersects it to plane of current handle;
-    auto project_pointer_to_plane(Pointer_context& pointer_context, glm::vec3 p, glm::vec3& q) -> bool;
+    auto project_pointer_to_plane(const Pointer_context& pointer_context, const glm::vec3 p, glm::vec3& q) -> bool;
 
-    void set_node_world_transform(glm::mat4 world_from_node);
+    void set_node_world_transform(const glm::mat4 world_from_node);
 
     void update_transforms();
 
@@ -173,8 +173,9 @@ private:
     erhe::scene::Node::Transforms              m_before;
 
     // These are for debug rendering
-    struct Debug_rendering
+    class Debug_rendering
     {
+    public:
         glm::vec3 m_P0;
         glm::vec3 m_P1;
         glm::vec3 m_Q0;
@@ -190,8 +191,9 @@ private:
     };
     Debug_rendering m_debug_rendering;
 
-    struct Drag
+    class Drag
     {
+    public:
         glm::mat4 initial_world_from_local {1.0f};
         glm::mat4 initial_local_from_world {1.0f};
         glm::vec3 initial_position_in_world{0.0f, 0.0f, 0.0f};
@@ -202,8 +204,9 @@ private:
     };
     Drag m_drag;
 
-    struct Rotation_context
+    class Rotation_context
     {
+    public:
         auto angle_of_rotation_for_point(glm::vec3 q) -> float;
 
         glm::vec3 normal; // also rotation axis
@@ -219,8 +222,9 @@ private:
     };
     Rotation_context m_rotation;
 
-    struct Visualization
+    class Visualization
     {
+    public:
         Visualization();
 
         void initialize       (Mesh_memory& mesh_memory, Scene_root& scene_root);
@@ -256,8 +260,9 @@ private:
     };
     Visualization m_visualization;
 
-    struct Debug_info
+    class Debug_info
     {
+    public:
         float distance;
     };
     //Debug_info m_debug_info;

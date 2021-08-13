@@ -17,12 +17,12 @@ namespace erhe::ui
 {
 
 
-Glyph::Glyph(FT_Library    library,
-             FT_Face       font_face,
-             unsigned char c,
-             float         bolding,
-             float         outline_thickness,
-             int           hint_mode)
+Glyph::Glyph(FT_Library          library,
+             FT_Face             font_face,
+             const unsigned char c,
+             const float         bolding,
+             const float         outline_thickness,
+             const int           hint_mode)
     : char_code        {c}
     , outline_thickness{outline_thickness}
 {
@@ -32,14 +32,14 @@ Glyph::Glyph(FT_Library    library,
         return;
     }
 
-    bool outline = outline_thickness > 0.0f;
-    FT_Int32 load_flags = outline ? 0 : FT_LOAD_RENDER;
+    const bool outline = outline_thickness > 0.0f;
+    const FT_Int32 load_flags = outline ? 0 : FT_LOAD_RENDER;
 
     validate(FT_Load_Glyph(font_face, glyph_index, load_flags | hint_mode));
 
-    bool has_width  = (font_face->glyph->metrics.width != 0);
-    bool has_height = (font_face->glyph->metrics.height != 0);
-    bool render     = has_width && has_height;
+    const bool has_width  = (font_face->glyph->metrics.width != 0);
+    const bool has_height = (font_face->glyph->metrics.height != 0);
+    const bool render     = has_width && has_height;
 
     metrics.bearing_x          = static_cast<float>(font_face->glyph->metrics.horiBearingX / 64.0f);
     metrics.width              = static_cast<float>(font_face->glyph->metrics.width        / 64.0f);
@@ -100,7 +100,7 @@ Glyph::Glyph(FT_Library    library,
 
     if (bolding > 0.0f)
     {
-        int i_bolding = static_cast<int>(bolding * 64.0f);
+        const int i_bolding = static_cast<int>(bolding * 64.0f);
         validate(FT_Bitmap_Embolden(library, &ft_bitmap, i_bolding, 0));
     }
 
@@ -116,11 +116,11 @@ Glyph::Glyph(FT_Library    library,
     {
         for (int ix = 0; ix < bitmap.width; ++ix)
         {
-            int           src_x   = ix;
-            int           src_y   = bitmap.height - 1 - iy;
-            size_t        address = src_x + (src_y * bitmap.pitch);
-            unsigned char value   = ft_bitmap.buffer[address];
-            m_buffer[address]     = value;
+            const int           src_x   = ix;
+            const int           src_y   = bitmap.height - 1 - iy;
+            const size_t        address = src_x + (src_y * bitmap.pitch);
+            const unsigned char value   = ft_bitmap.buffer[address];
+            m_buffer[address] = value;
         }
     }
     FT_Bitmap_Done(library, &ft_bitmap);
@@ -138,8 +138,8 @@ void Glyph::dump() const
         fputc('|', stdout);
         for (int ix = 0; ix < bitmap.width; ++ix)
         {
-            auto offset = ix + (iy * bitmap.pitch);
-            auto value  = m_buffer[offset];
+            const auto offset = ix + (iy * bitmap.pitch);
+            const auto value  = m_buffer[offset];
             fputc(shades[value / 64], stdout);
         }
         fputc('|', stdout);

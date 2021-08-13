@@ -4,9 +4,9 @@
 namespace erhe::geometry::shapes
 {
 
-auto make_torus(double major_radius, double minor_radius, int major_axis_steps, int minor_axis_steps)
+auto make_torus(const double major_radius, const double minor_radius, const int major_axis_steps, const int minor_axis_steps)
 -> Geometry;
 
-auto torus_volume(float major_radius, float minor_radius) -> float;
+auto torus_volume(const float major_radius, const float minor_radius) -> float;
 
 } // namespace erhe::geometry::shapes

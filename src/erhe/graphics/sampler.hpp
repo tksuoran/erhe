@@ -12,12 +12,12 @@ class Sampler
 public:
     Sampler();
 
-    Sampler(gl::Texture_min_filter min_filter,
-            gl::Texture_mag_filter mag_filter);
+    Sampler(const gl::Texture_min_filter min_filter,
+            const gl::Texture_mag_filter mag_filter);
 
-    Sampler(gl::Texture_min_filter min_filter,
-            gl::Texture_mag_filter mag_filter,
-            gl::Texture_wrap_mode  wrap_mode);
+    Sampler(const gl::Texture_min_filter min_filter,
+            const gl::Texture_mag_filter mag_filter,
+            const gl::Texture_wrap_mode  wrap_mode);
 
     ~Sampler() = default;
 
@@ -46,8 +46,9 @@ private:
     Gl_sampler m_handle;
 };
 
-struct Sampler_hash
+class Sampler_hash
 {
+public:
     auto operator()(const Sampler& sampler) const noexcept
     -> size_t
     {

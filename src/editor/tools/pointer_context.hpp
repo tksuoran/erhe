@@ -46,17 +46,18 @@ static constexpr const char* c_action_strings[] =
     "Drag"
 };
 
-struct Pointer_context;
+class Pointer_context;
 class Scene_manager;
 class Line_renderer;
 class Text_renderer;
 
-struct Pointer_context
+class Pointer_context
 {
+public:
     auto position_in_world      () const -> glm::vec3;
-    auto position_in_world      (float z) const -> glm::vec3;
-    auto position_in_world      (glm::vec3 position_in_window) const -> glm::vec3;
-    auto position_in_window     (glm::vec3 position_in_world) const -> glm::vec3;
+    auto position_in_world      (const float z) const -> glm::vec3;
+    auto position_in_world      (const glm::vec3 position_in_window) const -> glm::vec3;
+    auto position_in_window     (const glm::vec3 position_in_world) const -> glm::vec3;
     auto pointer_in_content_area() const -> bool
     {
         return (pointer_x >= 0) &&
@@ -72,11 +73,14 @@ struct Pointer_context
     bool  control         {false};
     bool  alt             {false};
     bool  scene_view_focus{false};
-    struct Mouse_button
+
+    class Mouse_button
     {
+    public:
         bool pressed {false};
         bool released{false};
     };
+
     Action                             priority_action{Action::select};
     Mouse_button                       mouse_button[static_cast<int>(erhe::toolkit::Mouse_button_count)];
     bool                               mouse_moved     {false};

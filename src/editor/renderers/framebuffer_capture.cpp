@@ -159,7 +159,7 @@ void Id_renderer::render_layer(erhe::scene::Layer* layer)
     layer_range.layer  = layer;
     update_primitive_buffer(layer->meshes);
     auto draw_indirect_buffer_range = update_draw_indirect_buffer(layer->meshes,
-                                                                  Primitive_geometry::Mode::polygon_fill);
+                                                                  erhe::primitive::Mode::polygon_fill);
 
     bind_primitive_buffer();
     bind_draw_indirect_buffer();

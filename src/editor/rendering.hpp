@@ -42,8 +42,9 @@ class Text_renderer;
 class Viewport_config;
 class Viewport_window;
 
-struct Headset_view_resources
+class Headset_view_resources
 {
+public:
     Headset_view_resources(erhe::xr::Render_view& render_view,
                            Editor_rendering&      rendering);
 
@@ -76,6 +77,9 @@ class Editor_rendering
     : public erhe::components::Component
 {
 public:
+    static constexpr bool s_enable_gui    {true};
+    static constexpr bool s_enable_headset{false};
+
     static constexpr const char* c_name = "Editor_rendering";
 
     Editor_rendering ();
@@ -86,8 +90,8 @@ public:
     void initialize_component() override;
 
     void init_state         ();
-    void render             (double time);
-    auto to_scene_content   (glm::vec2 position_in_root) const -> glm::vec2;
+    void render             (const double time);
+    auto to_scene_content   (const glm::vec2 position_in_root) const -> glm::vec2;
     auto is_content_in_focus() const -> bool;
     void render_headset     ();
 
@@ -95,11 +99,11 @@ public:
 
 private:
     void render_shadowmaps   ();
-    void render_id           (double time);
+    void render_id           (const double time);
     void render_clear_primary();
-    void render_content      (erhe::scene::ICamera* camera, erhe::scene::Viewport viewport);
-    void render_selection    (erhe::scene::ICamera* camera, erhe::scene::Viewport viewport);
-    void render_tool_meshes  (erhe::scene::ICamera* camera, erhe::scene::Viewport viewport);
+    void render_content      (erhe::scene::ICamera* camera, const erhe::scene::Viewport viewport);
+    void render_selection    (erhe::scene::ICamera* camera, const erhe::scene::Viewport viewport);
+    void render_tool_meshes  (erhe::scene::ICamera* camera, const erhe::scene::Viewport viewport);
     void begin_frame         ();
     void gui_render          ();
 
@@ -132,8 +136,6 @@ private:
     std::unique_ptr<Controller_visualization>             m_controller_visualization;
 
     bool                                                  m_trigger_capture{false};
-    bool                                                  m_enable_gui     {true};
-    bool                                                  m_enable_headset {true};
 };
 
 }

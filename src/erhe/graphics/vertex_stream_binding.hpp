@@ -1,3 +1,5 @@
+
+
 #pragma once
 
 #include <cstddef>
@@ -16,7 +18,7 @@ public:
     Vertex_stream_binding(Buffer*                                          vertex_buffer,
                           const std::shared_ptr<Vertex_attribute_mapping>& mapping,
                           const Vertex_attribute*                          attribute,
-                          size_t                                           stride);
+                          const size_t                                     stride);
 
     Vertex_stream_binding(const Vertex_stream_binding& other);
 

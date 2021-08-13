@@ -29,7 +29,7 @@ auto from_mango(const mango::Format& format)
     FATAL("unsupported PNG image color type");
 }
 
-auto to_mango(gl::Internal_format format)
+auto to_mango(const gl::Internal_format format)
 -> mango::Format
 {
     switch (format)
@@ -42,7 +42,7 @@ auto to_mango(gl::Internal_format format)
     FATAL("unsupported PNG image color type");
 }
 
-auto to_mango(Image_format format)
+auto to_mango(const Image_format format)
 -> mango::Format
 {
     switch (format)

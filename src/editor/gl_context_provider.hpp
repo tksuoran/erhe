@@ -23,8 +23,9 @@ namespace erhe::toolkit
 
 namespace editor {
 
-struct Gl_worker_context
+class Gl_worker_context
 {
+public:
     int                            id{0};
     erhe::toolkit::Context_window* context{nullptr};
 };

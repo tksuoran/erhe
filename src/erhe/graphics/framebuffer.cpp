@@ -10,16 +10,16 @@ namespace erhe::graphics
 std::mutex                Framebuffer::s_mutex;
 std::vector<Framebuffer*> Framebuffer::s_all_framebuffers;
 
-void Framebuffer::Create_info::attach(gl::Framebuffer_attachment attachment_point,
-                                      gsl::not_null<Texture*>    texture,
-                                      unsigned int               level,
-                                      unsigned int               layer)
+void Framebuffer::Create_info::attach(const gl::Framebuffer_attachment attachment_point,
+                                      const gsl::not_null<Texture*>    texture,
+                                      const unsigned int               level,
+                                      const unsigned int               layer)
 {
     attachments.emplace_back(attachment_point, texture, level, layer);
 }
 
-void Framebuffer::Create_info::attach(gl::Framebuffer_attachment   attachment_point,
-                                      gsl::not_null<Renderbuffer*> renderbuffer)
+void Framebuffer::Create_info::attach(const gl::Framebuffer_attachment   attachment_point,
+                                      const gsl::not_null<Renderbuffer*> renderbuffer)
 {
     attachments.emplace_back(attachment_point, renderbuffer);
 }
@@ -90,7 +90,7 @@ void Framebuffer::create()
     Ensures(check_status());
 }
 
-auto Framebuffer::check_status()
+auto Framebuffer::check_status() const
 -> bool
 {
     const auto status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::draw_framebuffer);
@@ -101,7 +101,7 @@ auto Framebuffer::check_status()
     return status == gl::Framebuffer_status::framebuffer_complete;
 }
 
-auto Framebuffer::gl_name()
+auto Framebuffer::gl_name() const
 -> unsigned int
 {
     return m_gl_framebuffer.has_value() ? m_gl_framebuffer.value().gl_name()

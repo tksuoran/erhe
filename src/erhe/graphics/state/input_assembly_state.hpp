@@ -5,8 +5,9 @@
 namespace erhe::graphics
 {
 
-struct Input_assembly_state
+class Input_assembly_state
 {
+public:
     Input_assembly_state();
     Input_assembly_state(gl::Primitive_type primitive_topology,
                          bool               primitive_restart);
@@ -34,8 +35,9 @@ auto operator==(const Input_assembly_state& lhs, const Input_assembly_state& rhs
 auto operator!=(const Input_assembly_state& lhs, const Input_assembly_state& rhs) noexcept
 -> bool;
 
-struct Input_assembly_state_tracker
+class Input_assembly_state_tracker
 {
+public:
     void reset  ();
     void execute(const Input_assembly_state* state);
 

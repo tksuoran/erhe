@@ -5,8 +5,8 @@ namespace erhe::graphics
 
 Sampler::Sampler() = default;
 
-Sampler::Sampler(gl::Texture_min_filter min_filter,
-                 gl::Texture_mag_filter mag_filter)
+Sampler::Sampler(const gl::Texture_min_filter min_filter,
+                 const gl::Texture_mag_filter mag_filter)
     : min_filter{min_filter}
     , mag_filter{mag_filter}
 {
@@ -15,9 +15,9 @@ Sampler::Sampler(gl::Texture_min_filter min_filter,
     apply();
 }
 
-Sampler::Sampler(gl::Texture_min_filter min_filter,
-                 gl::Texture_mag_filter mag_filter,
-                 gl::Texture_wrap_mode  wrap_mode)
+Sampler::Sampler(const gl::Texture_min_filter min_filter,
+                 const gl::Texture_mag_filter mag_filter,
+                 const gl::Texture_wrap_mode  wrap_mode)
     : min_filter{min_filter}
     , mag_filter{mag_filter}
     , wrap_mode {wrap_mode, wrap_mode, wrap_mode}

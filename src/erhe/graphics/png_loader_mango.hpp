@@ -22,8 +22,9 @@ enum Image_format
     rgba8,
 };
 
-struct Image_info
+class Image_info
 {
+public:
     int          width      {0};
     int          height     {0};
     int          depth      {0};

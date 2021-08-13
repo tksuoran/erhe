@@ -26,7 +26,12 @@ auto Headset::controller_pose() const -> Pose
 
 auto Headset::trigger_value() const -> float
 {
-    return m_xr_instance->actions.trigger_position_state.currentState;
+    return m_xr_instance->actions.trigger_value_state.currentState;
+}
+
+auto Headset::squeeze_click() const -> bool
+{
+    return m_xr_instance->actions.squeeze_click_state.currentState == XR_TRUE;
 }
 
 auto Headset::begin_frame() -> Frame_timing

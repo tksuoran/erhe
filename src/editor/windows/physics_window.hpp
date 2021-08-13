@@ -34,8 +34,9 @@ public:
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
-    struct Debug_draw_parameters
+    class Debug_draw_parameters
     {
+    public:
         bool enable           {false};
         bool wireframe        {false};
         bool aabb             {true};
@@ -46,8 +47,9 @@ public:
         bool normals          {false};
         bool frames           {true};
 
-        struct Default_colors
+        class Default_colors
         {
+        public:
             glm::vec3 active_object               {1.0f, 1.0f, 1.0f};
             glm::vec3 deactivated_object          {0.0f, 1.0f, 0.0f};
             glm::vec3 wants_deactivation_object   {0.0f, 1.0f, 1.0f};

@@ -14,20 +14,20 @@ Vertex_attribute_mappings::Vertex_attribute_mappings() = default;
 
 Vertex_attribute_mappings::~Vertex_attribute_mappings() = default;
 
-void Vertex_attribute_mappings::add(gl::Attribute_type      shader_type,
-                                    string_view             name,
-                                    Vertex_attribute::Usage usage,
-                                    size_t                  layout_location)
+void Vertex_attribute_mappings::add(const gl::Attribute_type      shader_type,
+                                    const string_view             name,
+                                    const Vertex_attribute::Usage usage,
+                                    const size_t                  layout_location)
 {
     auto mapping = std::make_shared<Vertex_attribute_mapping>(shader_type, name, usage, layout_location);
     mappings.emplace_back(mapping);
 }
 
-void Vertex_attribute_mappings::add(gl::Attribute_type           shader_type,
-                                    string_view                  name,
-                                    Vertex_attribute::Usage      src_usage,
-                                    Vertex_attribute::Usage_type dst_usage_type,
-                                    size_t                       layout_location)
+void Vertex_attribute_mappings::add(const gl::Attribute_type           shader_type,
+                                    const string_view                  name,
+                                    const Vertex_attribute::Usage      src_usage,
+                                    const Vertex_attribute::Usage_type dst_usage_type,
+                                    const size_t                       layout_location)
 {
     auto mapping = std::make_shared<Vertex_attribute_mapping>(shader_type, name, src_usage, dst_usage_type, layout_location);
     mappings.emplace_back(mapping);

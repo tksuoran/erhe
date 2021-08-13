@@ -95,7 +95,7 @@ auto Physics_tool::update(Pointer_context& pointer_context) -> bool
                 m_original_angular_damping = m_drag_node_physics->rigid_body.bullet_rigid_body.getAngularDamping();
                 m_drag_node_physics->rigid_body.bullet_rigid_body.setDamping(m_linear_damping,
                                                                              m_angular_damping);
-                btVector3 pivot{m_drag_position_in_mesh.x, m_drag_position_in_mesh.y, m_drag_position_in_mesh.z};
+                const btVector3 pivot{m_drag_position_in_mesh.x, m_drag_position_in_mesh.y, m_drag_position_in_mesh.z};
                 m_drag_constraint = std::make_unique<btPoint2PointConstraint>(m_drag_node_physics->rigid_body.bullet_rigid_body,
                                                                               pivot);
                 m_drag_constraint->m_setting.m_impulseClamp = m_impulse_clamp;

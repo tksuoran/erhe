@@ -34,7 +34,7 @@ namespace erhe::graphics
 namespace erhe::scene
 {
     class ICamera;
-    struct Viewport;
+    class Viewport;
 }
 
 namespace erhe::ui
@@ -45,8 +45,9 @@ namespace erhe::ui
 namespace editor
 {
 
-struct Line
+class Line
 {
+public:
     glm::vec3 p0;
     glm::vec3 p1;
 };
@@ -63,7 +64,7 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-    void render(erhe::scene::Viewport       camera_viewport,
+    void render(const erhe::scene::Viewport camera_viewport,
                 const erhe::scene::ICamera& camera);
 
     void set_line_color(uint32_t color)
@@ -71,15 +72,16 @@ public:
         m_line_color = color;
     }
 
-    void add_lines(const std::initializer_list<Line> lines, float thickness = 2.0f);
+    void add_lines(const std::initializer_list<Line> lines, const float thickness = 2.0f);
 
     void next_frame();
 
 private:
     static constexpr size_t s_frame_resources_count = 4;
 
-    struct Frame_resources
+    class Frame_resources
     {
+    public:
         static inline const erhe::graphics::Color_blend_state color_blend_visible_lines{
             true, // enabled
             { // rgb
@@ -193,14 +195,16 @@ private:
     std::deque<Frame_resources> m_frame_resources;
     size_t                      m_current_frame_resource_slot{0};
 
-    struct Buffer_range
+    class Buffer_range
     {
+    public:
         size_t first_byte_offset{0};
         size_t byte_count       {0};
     };
 
-    struct Buffer_writer
+    class Buffer_writer
     {
+    public:
         Buffer_range range;
         size_t       write_offset{0};
 

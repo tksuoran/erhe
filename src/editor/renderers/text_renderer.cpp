@@ -64,13 +64,11 @@ void Text_renderer::initialize_component()
                          static_cast<GLsizei>(strlen(c_text_renderer_initialize_component)),
                          c_text_renderer_initialize_component);
 
-    static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
-
-    static constexpr gl::Map_buffer_access_mask access_mask{gl::Map_buffer_access_mask::map_write_bit};
-
-    const size_t max_quad_count = 65536 / 4; // each quad consumes 4 indices
-    const size_t index_count    = 65536 * 5;
-    const size_t index_stride   = 2;
+    constexpr gl::Buffer_storage_mask    storage_mask  {gl::Buffer_storage_mask::map_write_bit};
+    constexpr gl::Map_buffer_access_mask access_mask   {gl::Map_buffer_access_mask::map_write_bit};
+    constexpr size_t                     max_quad_count{65536 / 4}; // each quad consumes 4 indices
+    constexpr size_t                     index_count   {65536 * 5};
+    constexpr size_t                     index_stride  {2};
 
     m_index_buffer = std::make_unique<erhe::graphics::Buffer>(gl::Buffer_target::element_array_buffer,
                                                               index_stride * index_count,
@@ -78,7 +76,7 @@ void Text_renderer::initialize_component()
 
     erhe::graphics::Scoped_buffer_mapping<uint16_t> index_buffer_map(*m_index_buffer.get(), 0, index_count, access_mask);
     auto     gpu_index_data = index_buffer_map.span();
-    size_t   offset{0};
+    size_t   offset      {0};
     uint16_t vertex_index{0};
     for (unsigned int i = 0; i < max_quad_count; ++i)
     {
@@ -138,7 +136,7 @@ void Text_renderer::create_frame_resources()
 {
     ZoneScoped;
 
-    const size_t vertex_count = 65536;
+    constexpr size_t vertex_count = 65536;
     for (size_t i = 0; i < s_frame_resources_count; ++i)
     {
         m_frame_resources.emplace_back(vertex_count,
@@ -162,9 +160,9 @@ void Text_renderer::next_frame()
     m_quad_count = 0;
 }
 
-void Text_renderer::print(const std::string& text,
-                          glm::vec3          text_position,
-                          uint32_t           text_color)
+void Text_renderer::print(const glm::vec3  text_position,
+                          const uint32_t   text_color,
+                          std::string_view text)
 {
     ZoneScoped;
 
@@ -189,6 +187,16 @@ void Text_renderer::print(const std::string& text,
     m_quad_count += quad_count;
     m_vertex_writer.end();
 }
+
+//void Text_renderer::print(const glm::vec3  text_position,
+//                          const uint32_t   text_color,
+//                          const char*      format,
+//                          fmt::format_args args)
+//{
+//    std::string text = fmt::vformat(format, args);
+//
+//    print(text_position, text_color, text);
+//}
 
 static constexpr const char* c_text_renderer_render = "Text_renderer::render()";
 void Text_renderer::render(erhe::scene::Viewport viewport)

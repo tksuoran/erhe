@@ -394,7 +394,7 @@ auto Geometry::compute_point_normal(const Point_id point_id)
     Expects(point_id < points.size());
 
     compute_polygon_normals();
-    auto* polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
+    const auto* polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
 
     vec3 normal_sum(0.0f, 0.0f, 0.0f);
 
@@ -426,11 +426,11 @@ auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) 
         return true;
     }
 
-    auto* point_normals   = point_attributes().find_or_create<vec3>(descriptor);
-    auto* polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
+    auto*       point_normals   = point_attributes().find_or_create<vec3>(descriptor);
+    const auto* polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
     if (polygon_normals == nullptr)
     {
-        bool polygon_normals_ok = compute_polygon_normals();
+        const bool polygon_normals_ok = compute_polygon_normals();
         if (!polygon_normals_ok)
         {
             return false;
@@ -462,7 +462,7 @@ void Geometry::transform(const mat4& m)
 {
     ZoneScoped;
 
-    mat4 it = glm::transpose(glm::inverse(m));
+    const mat4 it = glm::transpose(glm::inverse(m));
 
     // Check.. Did I forget something?
     auto* polygon_centroids = polygon_attributes().find<vec3>(c_polygon_centroids);
@@ -507,9 +507,9 @@ void Geometry::transform(const mat4& m)
 
         if ((corner_tangents != nullptr) && corner_tangents->has(corner_id))
         {
-            vec4  t0_sign = corner_tangents->get(corner_id);
-            vec3  t0      = vec3(t0_sign);
-            float sign    = t0_sign.w;
+            const vec4  t0_sign = corner_tangents->get(corner_id);
+            const vec3  t0      = vec3(t0_sign);
+            const float sign    = t0_sign.w;
             corner_tangents->put(corner_id, vec4(vec3(it * vec4(t0, 0.0f)), sign));
         }
     }
@@ -545,12 +545,12 @@ void Geometry::generate_texture_coordinates_spherical()
 
     compute_polygon_normals();
     compute_point_normals(c_point_normals);
-    auto* polygon_normals      = polygon_attributes().find          <vec3>(c_polygon_normals     );
-    auto* corner_normals       = corner_attributes ().find          <vec3>(c_corner_normals      );
-    auto* point_normals        = point_attributes  ().find          <vec3>(c_point_normals       );
-    auto* point_normals_smooth = point_attributes  ().find          <vec3>(c_point_normals_smooth);
-    auto* corner_texcoords     = corner_attributes ().find_or_create<vec2>(c_corner_texcoords    );
-    auto* point_locations      = point_attributes  ().find          <vec3>(c_point_locations     );
+    const auto* polygon_normals      = polygon_attributes().find          <vec3>(c_polygon_normals     );
+    const auto* corner_normals       = corner_attributes ().find          <vec3>(c_corner_normals      );
+    const auto* point_normals        = point_attributes  ().find          <vec3>(c_point_normals       );
+    const auto* point_normals_smooth = point_attributes  ().find          <vec3>(c_point_normals_smooth);
+          auto* corner_texcoords     = corner_attributes ().find_or_create<vec2>(c_corner_texcoords    );
+    const auto* point_locations      = point_attributes  ().find          <vec3>(c_point_locations     );
 
     for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
     {
@@ -560,9 +560,10 @@ void Geometry::generate_texture_coordinates_spherical()
              polygon_corner_id < end;
              ++polygon_corner_id)
         {
-            Corner_id corner_id = polygon_corners[polygon_corner_id];
-            Corner&   corner    = corners[corner_id];
-            Point_id  point_id  = corner.point_id;
+            const Corner_id corner_id = polygon_corners[polygon_corner_id];
+            const Corner&   corner    = corners[corner_id];
+            const Point_id  point_id  = corner.point_id;
+
             glm::vec3 normal{0.0f, 1.0f, 0.0f};
             if ((point_locations != nullptr) && point_locations->has(point_id))
             {
@@ -588,6 +589,7 @@ void Geometry::generate_texture_coordinates_spherical()
             {
                 FATAL("No normal sources\n");
             }
+
             float u;
             float v;
             //if (std::abs(normal.x) >= std::abs(normal.y) && std::abs(normal.x) >= normal.z)
@@ -628,10 +630,10 @@ auto Geometry::generate_polygon_texture_coordinates(const bool overwrite_existin
 
     compute_polygon_normals();
     compute_polygon_centroids();
-    auto* polygon_normals   = polygon_attributes().find          <vec3>(c_polygon_normals  );
-    auto* polygon_centroids = polygon_attributes().find          <vec3>(c_polygon_centroids);
-    auto* point_locations   = point_attributes  ().find          <vec3>(c_point_locations  );
-    auto* corner_texcoords  = corner_attributes ().find_or_create<vec2>(c_corner_texcoords );
+    const auto* polygon_normals   = polygon_attributes().find          <vec3>(c_polygon_normals  );
+    const auto* polygon_centroids = polygon_attributes().find          <vec3>(c_polygon_centroids);
+    const auto* point_locations   = point_attributes  ().find          <vec3>(c_point_locations  );
+          auto* corner_texcoords  = corner_attributes ().find_or_create<vec2>(c_corner_texcoords );
 
     if (point_locations == nullptr)
     {
@@ -803,8 +805,8 @@ auto Geometry::volume() -> float
         return 0.0f;
     }
 
-    auto* point_locations   = point_attributes  ().find<vec3>(c_point_locations);
-    auto* polygon_centroids = polygon_attributes().find<vec3>(c_polygon_centroids);
+    const auto* point_locations   = point_attributes  ().find<vec3>(c_point_locations);
+    const auto* polygon_centroids = polygon_attributes().find<vec3>(c_polygon_centroids);
 
     float sum{0.0f};
     for_each_polygon([&](auto& i)

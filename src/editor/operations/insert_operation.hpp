@@ -32,8 +32,9 @@ class Node_transform_operation
     : public IOperation
 {
 public:
-    struct Context
+    class Context
     {
+    public:
         erhe::scene::Layer&                layer;
         erhe::scene::Scene&                scene;
         erhe::physics::World&              physics_world;
@@ -80,8 +81,9 @@ class Mesh_insert_remove_operation
     : public Scene_item_operation
 {
 public:
-    struct Context
+    class Context
     {
+    public:
         std::shared_ptr<Selection_tool>    selection_tool;
         erhe::scene::Layer&                layer;
         erhe::scene::Scene&                scene;
@@ -109,8 +111,9 @@ class Light_insert_remove_operation
     : public Scene_item_operation
 {
 public:
-    struct Context
+    class Context
     {
+    public:
         erhe::scene::Layer&                 layer;
         erhe::scene::Scene&                 scene;
         std::shared_ptr<erhe::scene::Light> light;

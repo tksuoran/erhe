@@ -286,8 +286,9 @@ public:
                 unsigned int bits{0};
                 for (component_t c = 0; c < m_components; ++c)
                 {
-                    auto value = get(ix, iy, c);
-                    if (value > 127) {
+                    const auto value = get(ix, iy, c);
+                    if (value > 127)
+                    {
                         bits |= 1 << (c);
                     }
                 }

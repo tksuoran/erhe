@@ -711,7 +711,7 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 //      .../output/haptic
 
 // 6.4.3. HTC Vive Controller Profile
-// 
+
 // Path:
 //      /interaction_profiles/htc/vive_controller
 // 
@@ -743,6 +743,7 @@ constexpr const char* c_user_hand_left  = "/user/hand/left";
 constexpr const char* c_user_hand_right = "/user/hand/right";
 
 constexpr const char* c_trigger_value   = "/user/hand/right/input/trigger/value";
+constexpr const char* c_squeeze_click   = "/user/hand/right/input/squeeze/click";
 constexpr const char* c_aim_pose        = "/user/hand/right/input/aim/pose";
 
 Xr_path::Xr_path() = default;
@@ -809,7 +810,37 @@ auto Xr_instance::initialize_actions() -> bool
     if (!check("xrCreateAction",
                xrCreateAction(actions.action_set,
                               &trigger_value_action_create_info,
-                              &actions.trigger_position)))
+                              &actions.trigger_value)))
+    {
+        return false;
+    }
+
+    XrActionCreateInfo squeeze_click_action_create_info;
+    squeeze_click_action_create_info.type                   = XR_TYPE_ACTION_CREATE_INFO;
+    squeeze_click_action_create_info.next                   = nullptr;
+    squeeze_click_action_create_info.actionName[0]          = 's';
+    squeeze_click_action_create_info.actionName[1]          = 'q';
+    squeeze_click_action_create_info.actionName[2]          = 'u';
+    squeeze_click_action_create_info.actionName[3]          = 'e';
+    squeeze_click_action_create_info.actionName[4]          = 'e';
+    squeeze_click_action_create_info.actionName[5]          = 'z';
+    squeeze_click_action_create_info.actionName[6]          = 'e';
+    squeeze_click_action_create_info.actionName[7]          = '\0';
+    squeeze_click_action_create_info.actionType             = XR_ACTION_TYPE_BOOLEAN_INPUT;
+    squeeze_click_action_create_info.countSubactionPaths    = 0;
+    squeeze_click_action_create_info.subactionPaths         = nullptr;
+    squeeze_click_action_create_info.localizedActionName[0] = 's';
+    squeeze_click_action_create_info.localizedActionName[1] = 'q';
+    squeeze_click_action_create_info.localizedActionName[2] = 'u';
+    squeeze_click_action_create_info.localizedActionName[3] = 'e';
+    squeeze_click_action_create_info.localizedActionName[4] = 'e';
+    squeeze_click_action_create_info.localizedActionName[5] = 'z';
+    squeeze_click_action_create_info.localizedActionName[6] = 'e';
+    squeeze_click_action_create_info.localizedActionName[7] = '\0';
+    if (!check("xrCreateAction",
+               xrCreateAction(actions.action_set,
+                              &squeeze_click_action_create_info,
+                              &actions.squeeze_click)))
     {
         return false;
     }
@@ -839,14 +870,17 @@ auto Xr_instance::initialize_actions() -> bool
     paths.user_hand_left                      = path(c_user_hand_left);
     paths.user_hand_right                     = path(c_user_hand_right);
     paths.trigger_value                       = path(c_trigger_value);
+    paths.squeeze_click                       = path(c_squeeze_click);
     paths.aim_pose                            = path(c_aim_pose);
     paths.interaction_profile_vive_controller = path(c_interaction_profile_vive_controller);
 
-    std::array<XrActionSuggestedBinding,2> vive_controller_trigger_value_suggested_bindings;
-    vive_controller_trigger_value_suggested_bindings[0].action  = actions.trigger_position;
+    std::array<XrActionSuggestedBinding, 3> vive_controller_trigger_value_suggested_bindings;
+    vive_controller_trigger_value_suggested_bindings[0].action  = actions.trigger_value;
     vive_controller_trigger_value_suggested_bindings[0].binding = paths.trigger_value.xr_path;
-    vive_controller_trigger_value_suggested_bindings[1].action  = actions.aim_pose;
-    vive_controller_trigger_value_suggested_bindings[1].binding = paths.aim_pose.xr_path;
+    vive_controller_trigger_value_suggested_bindings[1].action  = actions.squeeze_click;
+    vive_controller_trigger_value_suggested_bindings[1].binding = paths.squeeze_click.xr_path;
+    vive_controller_trigger_value_suggested_bindings[2].action  = actions.aim_pose;
+    vive_controller_trigger_value_suggested_bindings[2].binding = paths.aim_pose.xr_path;
 
     XrInteractionProfileSuggestedBinding interaction_profile_suggested_binding;
     interaction_profile_suggested_binding.type                   = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING;
@@ -868,12 +902,19 @@ auto Xr_instance::initialize_actions() -> bool
     session_action_sets_attach_info.countActionSets = 1;
     session_action_sets_attach_info.actionSets      = &actions.action_set;
 
-    actions.trigger_position_state.type                 = XR_TYPE_ACTION_STATE_FLOAT;
-    actions.trigger_position_state.next                 = nullptr;
-    actions.trigger_position_state.currentState         = 0.0f;
-    actions.trigger_position_state.changedSinceLastSync = false;
-    actions.trigger_position_state.lastChangeTime       = {};
-    actions.trigger_position_state.isActive             = XR_FALSE;
+    actions.trigger_value_state.type                 = XR_TYPE_ACTION_STATE_FLOAT;
+    actions.trigger_value_state.next                 = nullptr;
+    actions.trigger_value_state.currentState         = 0.0f;
+    actions.trigger_value_state.changedSinceLastSync = false;
+    actions.trigger_value_state.lastChangeTime       = {};
+    actions.trigger_value_state.isActive             = XR_FALSE;
+
+    actions.squeeze_click_state.type                 = XR_TYPE_ACTION_STATE_BOOLEAN;
+    actions.squeeze_click_state.next                 = nullptr;
+    actions.squeeze_click_state.currentState         = XR_FALSE;
+    actions.squeeze_click_state.changedSinceLastSync = false;
+    actions.squeeze_click_state.lastChangeTime       = {};
+    actions.squeeze_click_state.isActive             = XR_FALSE;
 
     return true;
 }
@@ -901,7 +942,8 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
         case XR_SESSION_LOSS_PENDING:
         case XR_SESSION_NOT_FOCUSED:
             // TODO 
-            actions.trigger_position_state.isActive = XR_FALSE;
+            actions.trigger_value_state.isActive = XR_FALSE;
+            actions.squeeze_click_state.isActive = XR_FALSE;
             return true;
 
         default:
@@ -914,13 +956,29 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
         XrActionStateGetInfo action_state_get_info;
         action_state_get_info.type          = XR_TYPE_ACTION_STATE_GET_INFO;
         action_state_get_info.next          = nullptr;
-        action_state_get_info.action        = actions.trigger_position;
+        action_state_get_info.action        = actions.trigger_value;
         action_state_get_info.subactionPath = XR_NULL_PATH;
     
         if (!check("xrGetActionStateFloat",
                    xrGetActionStateFloat(session.get_xr_session(),
                                          &action_state_get_info,
-                                         &actions.trigger_position_state)))
+                                         &actions.trigger_value_state)))
+        {
+            return false;
+        }
+    }
+
+    {
+        XrActionStateGetInfo action_state_get_info;
+        action_state_get_info.type          = XR_TYPE_ACTION_STATE_GET_INFO;
+        action_state_get_info.next          = nullptr;
+        action_state_get_info.action        = actions.squeeze_click;
+        action_state_get_info.subactionPath = XR_NULL_PATH;
+    
+        if (!check("xrGetActionStateBoolean",
+                   xrGetActionStateBoolean(session.get_xr_session(),
+                                           &action_state_get_info,
+                                           &actions.squeeze_click_state)))
         {
             return false;
         }

@@ -7,8 +7,9 @@
 namespace erhe::graphics
 {
 
-struct Viewport_state
+class Viewport_state
 {
+public:
     Viewport_state()
         : serial{get_next_serial()}
     {
@@ -61,8 +62,9 @@ struct Viewport_state
     static size_t s_serial;
 };
 
-struct Viewport_state_hash
+class Viewport_state_hash
 {
+public:
     auto operator()(const Viewport_state& state) const noexcept
     -> std::size_t
     {

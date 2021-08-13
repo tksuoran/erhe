@@ -12,8 +12,9 @@ namespace editor {
 class Json_library
 {
 public:
-    struct Category
+    class Category
     {
+    public:
         Category(std::string&& category_name)
             : category_name{std::move(category_name)}
         {

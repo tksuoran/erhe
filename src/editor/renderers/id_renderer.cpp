@@ -123,7 +123,7 @@ void Id_renderer::next_frame()
     m_current_id_frame_resource_slot = (m_current_id_frame_resource_slot + 1) % s_frame_resources_count;
 }
 
-void Id_renderer::update_framebuffer(erhe::scene::Viewport viewport)
+void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
 {
     VERIFY(m_use_renderbuffers != m_use_textures);
 
@@ -160,7 +160,7 @@ void Id_renderer::update_framebuffer(erhe::scene::Viewport viewport)
             create_info.attach(gl::Framebuffer_attachment::depth_attachment,  m_depth_texture.get());
             m_framebuffer = std::make_unique<Framebuffer>(create_info);
             m_framebuffer->set_debug_label("ID Renderer");
-            float clear_value[4] = {1.0f, 0.0f, 0.0f, 1.0f };
+            constexpr float clear_value[4] = {1.0f, 0.0f, 0.0f, 1.0f };
             gl::clear_tex_image(m_color_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
         }
     }
@@ -275,7 +275,7 @@ void Id_renderer::render(const erhe::scene::Viewport viewport,
     }
 
     // Clear depth for tool pixels
-    if (true)
+    if constexpr (true)
     {
         TracyGpuZone(c_id_renderer_render_tool)
         m_pipeline_state_tracker->execute(&m_selective_depth_clear_pipeline);
@@ -319,7 +319,7 @@ void Id_renderer::render(const erhe::scene::Viewport viewport,
     gl::pop_debug_group();
 }
 
-bool Id_renderer::get(int x, int y, uint32_t& id, float& depth)
+bool Id_renderer::get(const int x, const int y, uint32_t& id, float& depth)
 {
     int slot = static_cast<int>(m_current_id_frame_resource_slot);
 
@@ -351,19 +351,22 @@ bool Id_renderer::get(int x, int y, uint32_t& id, float& depth)
 
         if (idr.state == Id_frame_resources::State::Read_complete)
         {
-            const size_t x_ = x - idr.x_offset;
-            const size_t y_ = y - idr.y_offset;
-            if ((x_ >= 0) && (y_ >= 0) && (x_ < s_extent) && (y_ < s_extent))
+            if ((x >= idr.x_offset) && (y >= idr.y_offset))
             {
-                const uint32_t       stride      = s_extent * 4;
-                const uint8_t        r           = idr.data[x_ * 4 + y_ * stride + 0];
-                const uint8_t        g           = idr.data[x_ * 4 + y_ * stride + 1];
-                const uint8_t        b           = idr.data[x_ * 4 + y_ * stride + 2];
-                const uint8_t* const depth_ptr   = &idr.data[s_extent * s_extent * 4 + x_ * 4 + y_ * stride];
-                const float* const   depth_f_ptr = reinterpret_cast<const float*>(depth_ptr);
-                id                         = (r << 16) | (g << 8) | b;
-                depth                       = *depth_f_ptr;
-                return true;
+                const size_t x_ = x - idr.x_offset;
+                const size_t y_ = y - idr.y_offset;
+                if ((x_ < s_extent) && (y_ < s_extent))
+                {
+                    const uint32_t       stride      = s_extent * 4;
+                    const uint8_t        r           = idr.data[x_ * 4 + y_ * stride + 0];
+                    const uint8_t        g           = idr.data[x_ * 4 + y_ * stride + 1];
+                    const uint8_t        b           = idr.data[x_ * 4 + y_ * stride + 2];
+                    const uint8_t* const depth_ptr   = &idr.data[s_extent * s_extent * 4 + x_ * 4 + y_ * stride];
+                    const float* const   depth_f_ptr = reinterpret_cast<const float*>(depth_ptr);
+                    id                               = (r << 16) | (g << 8) | b;
+                    depth                            = *depth_f_ptr;
+                    return true;
+                }
             }
         }
     }
@@ -371,11 +374,11 @@ bool Id_renderer::get(int x, int y, uint32_t& id, float& depth)
     return false;
 }
 
-Id_renderer::Mesh_primitive Id_renderer::get(int x, int y, float& depth)
+Id_renderer::Mesh_primitive Id_renderer::get(const int x, const int y, float& depth)
 {
     Mesh_primitive result;
-    uint32_t id;
-    bool ok = get(x, y, id, depth);
+    uint32_t id{0};
+    const bool ok = get(x, y, id, depth);
     if (!ok)
     {
         return result;

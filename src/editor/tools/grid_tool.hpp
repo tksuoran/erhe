@@ -29,10 +29,10 @@ public:
     // Implements Window
     void window(Pointer_context& pointer_context) override;
 
-    auto snap(glm::vec3 v) const -> glm::vec3;
+    auto snap(const glm::vec3 v) const -> glm::vec3;
 
 private:
-    bool  m_enable    {true};
+    bool  m_enable    {false};
     float m_cell_size {1.0f};
     int   m_cell_div  {10};
     int   m_cell_count{20};

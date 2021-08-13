@@ -88,7 +88,7 @@ auto Xr_session::create_session() -> bool
         return false;
     }
 
-    XrGraphicsRequirementsOpenGLKHR  xr_graphics_requirements_opengl;
+    XrGraphicsRequirementsOpenGLKHR xr_graphics_requirements_opengl;
     xr_graphics_requirements_opengl.type = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_KHR;
     xr_graphics_requirements_opengl.next = nullptr;
 
@@ -163,7 +163,7 @@ auto Xr_session::get_xr_frame_state() const -> const XrFrameState&
     return m_xr_frame_state;
 }
 
-int color_format_score(gl::Internal_format image_format)
+int color_format_score(const gl::Internal_format image_format)
 {
     switch (image_format)
     {

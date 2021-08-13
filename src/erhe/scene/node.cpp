@@ -28,9 +28,9 @@ auto Node::detach(const std::shared_ptr<INode_attachment>& attachment) -> bool
         return false;
     }
 
-    auto i = std::remove(m_attachments.begin(),
-                            m_attachments.end(),
-                            attachment);
+    const auto i = std::remove(m_attachments.begin(),
+                               m_attachments.end(),
+                               attachment);
     if (i != m_attachments.end())
     {
         log.trace("Removing attachment {} from selection\n", attachment->name());
@@ -43,7 +43,7 @@ auto Node::detach(const std::shared_ptr<INode_attachment>& attachment) -> bool
     return false;
 }
 
-void Node::update(uint32_t update_serial, bool cache_enable)
+void Node::update(const uint32_t update_serial, const bool cache_enable)
 {
     if (cache_enable)
     {

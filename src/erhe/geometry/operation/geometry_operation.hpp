@@ -22,7 +22,7 @@ public:
     {
     }
 
-    static constexpr const size_t s_grow_size = 4096;
+    static constexpr size_t s_grow_size = 4096;
     Geometry&                                              source;
     Geometry&                                              destination;
     std::vector<Point_id  >                                point_old_to_new;
@@ -37,7 +37,7 @@ public:
     std::vector<std::vector<std::pair<float, Edge_id   >>> new_edge_sources;
 
 private:
-    static constexpr const size_t s_max_edge_point_slots = 300;
+    static constexpr size_t s_max_edge_point_slots = 300;
     std::vector<Point_id> m_old_edge_to_new_points;
 
 public:

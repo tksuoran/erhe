@@ -54,9 +54,9 @@ inline auto vec3_from_uint(const uint32_t i)
                      b / 255.0f};
 }
 
-constexpr const glm::vec3 vec3_unit_x{1.0f, 0.0f, 0.0f};
-constexpr const glm::vec3 vec3_unit_y{0.0f, 1.0f, 0.0f};
-constexpr const glm::vec3 vec3_unit_z{0.0f, 0.0f, 1.0f};
+constexpr glm::vec3 vec3_unit_x{1.0f, 0.0f, 0.0f};
+constexpr glm::vec3 vec3_unit_y{0.0f, 1.0f, 0.0f};
+constexpr glm::vec3 vec3_unit_z{0.0f, 0.0f, 1.0f};
 
 inline auto max_axis(const glm::vec3 v)
 -> glm::vec3
@@ -119,30 +119,30 @@ inline auto min_axis_index(const glm::vec3 v)
     return glm::vec3::length_type{2};
 }
 
-constexpr const glm::mat4 mat4_swap_xy{0.0f, 1.0f, 0.0f, 0.0f,
-                                       1.0f, 0.0f, 0.0f, 0.0f,
-                                       0.0f, 0.0f, 1.0f, 0.0f,
-                                       0.0f, 0.0f, 0.0f, 1.0f};
+constexpr glm::mat4 mat4_swap_xy{0.0f, 1.0f, 0.0f, 0.0f,
+                                 1.0f, 0.0f, 0.0f, 0.0f,
+                                 0.0f, 0.0f, 1.0f, 0.0f,
+                                 0.0f, 0.0f, 0.0f, 1.0f};
 
-constexpr const glm::mat4 mat4_swap_xz{0.0f, 0.0f, 1.0f, 0.0f,
-                                       0.0f, 1.0f, 0.0f, 0.0f,
-                                       1.0f, 0.0f, 0.0f, 0.0f,
-                                       0.0f, 0.0f, 0.0f, 1.0f};
+constexpr glm::mat4 mat4_swap_xz{0.0f, 0.0f, 1.0f, 0.0f,
+                                 0.0f, 1.0f, 0.0f, 0.0f,
+                                 1.0f, 0.0f, 0.0f, 0.0f,
+                                 0.0f, 0.0f, 0.0f, 1.0f};
 
-constexpr const glm::mat4 mat4_swap_yz{1.0f, 0.0f, 0.0f, 0.0f,
-                                       0.0f, 0.0f, 1.0f, 0.0f,
-                                       0.0f, 1.0f, 0.0f, 0.0f,
-                                       0.0f, 0.0f, 0.0f, 1.0f};
+constexpr glm::mat4 mat4_swap_yz{1.0f, 0.0f, 0.0f, 0.0f,
+                                 0.0f, 0.0f, 1.0f, 0.0f,
+                                 0.0f, 1.0f, 0.0f, 0.0f,
+                                 0.0f, 0.0f, 0.0f, 1.0f};
 
-constexpr const glm::mat4 mat4_rotate_xy_cw{0.0f, -1.0f, 0.0f, 0.0f,
-                                            1.0f,  0.0f, 0.0f, 0.0f,
-                                            0.0f,  0.0f, 1.0f, 0.0f,
-                                            0.0f,  0.0f, 0.0f, 1.0f};
+constexpr glm::mat4 mat4_rotate_xy_cw{0.0f, -1.0f, 0.0f, 0.0f,
+                                      1.0f,  0.0f, 0.0f, 0.0f,
+                                      0.0f,  0.0f, 1.0f, 0.0f,
+                                      0.0f,  0.0f, 0.0f, 1.0f};
 
-constexpr const glm::mat4 mat4_rotate_xz_cw{0.0f, 0.0f, -1.0f, 0.0f,
-                                            0.0f, 1.0f,  0.0f, 0.0f,
-                                            1.0f, 0.0f,  0.0f, 0.0f,
-                                            0.0f, 0.0f,  0.0f, 1.0f};
+constexpr glm::mat4 mat4_rotate_xz_cw{0.0f, 0.0f, -1.0f, 0.0f,
+                                      0.0f, 1.0f,  0.0f, 0.0f,
+                                      1.0f, 0.0f,  0.0f, 0.0f,
+                                      0.0f, 0.0f,  0.0f, 1.0f};
 
 auto unproject(const glm::mat4 world_from_clip,
                const glm::vec3 window,

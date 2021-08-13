@@ -45,22 +45,23 @@ void Operations::window(Pointer_context& pointer_context)
 
     ImGui::Begin("Tools");
 
-    auto button_size   = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
-    auto active_action = pointer_context.priority_action;
+    const auto button_size   = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
+    const auto active_action = pointer_context.priority_action;
     for (unsigned int i = 0; i < static_cast<unsigned int>(Action::count); ++i)
     {
-        auto button_action = static_cast<Action>(i);
-        bool buttonPressed = make_button(c_action_strings[i],
-                                         (button_action == active_action) ? Item_mode::active
-                                                                          : Item_mode::normal,
-                                         button_size);
-        if (buttonPressed && (active_action != button_action)) {
+        const auto button_action  = static_cast<Action>(i);
+        const bool button_pressed = make_button(c_action_strings[i],
+                                                (button_action == active_action) ? Item_mode::active
+                                                                                 : Item_mode::normal,
+                                                button_size);
+        if (button_pressed && (active_action != button_action))
+        {
             log_tools.trace("Setting priority action to {}", c_action_strings[i]);
             pointer_context.priority_action = button_action;
         }
     }
 
-    Mesh_operation::Context context{m_mesh_memory->primitive_build_context(),
+    Mesh_operation::Context context{m_mesh_memory->geometry_uploader(),
                                     m_scene_root->content_layer(),
                                     m_scene_root->scene(),
                                     m_scene_root->physics_world(),
@@ -78,7 +79,7 @@ void Operations::window(Pointer_context& pointer_context)
 
     if (ImGui::Button("Merge", button_size))
     {
-        Merge_operation::Context merge_context{m_mesh_memory->primitive_build_context(),
+        Merge_operation::Context merge_context{m_mesh_memory->geometry_uploader(),
                                                m_scene_root->content_layer(),
                                                m_scene_root->scene(),
                                                m_scene_root->physics_world(),

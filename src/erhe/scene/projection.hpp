@@ -8,7 +8,7 @@ namespace erhe::scene
 {
 
 class Transform;
-struct Viewport;
+class Viewport;
 
 class Projection
 {
@@ -40,11 +40,12 @@ public:
         "Generic Frustum"
     };
 
-    void update(Transform& transform, Viewport viewport) const;
+    void update(Transform& transform, const Viewport viewport) const;
 
-    struct Fov_sides
+    class Fov_sides
     {
-        Fov_sides(float left, float right, float up, float down)
+    public:
+        Fov_sides(const float left, const float right, const float up, const float down)
             : left {left}
             , right{right}
             , up   {up}
@@ -58,7 +59,7 @@ public:
         float down;
     };
 
-    auto get_fov_sides(Viewport viewport) const -> Fov_sides;
+    auto get_fov_sides(const Viewport viewport) const -> Fov_sides;
 
     Type  projection_type{Type::perspective_vertical};
     float z_near         {  1.0f};

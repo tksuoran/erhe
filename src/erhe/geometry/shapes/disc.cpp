@@ -11,8 +11,9 @@ namespace erhe::geometry::shapes
 using glm::vec2;
 using glm::vec3;
 
-struct Disc_builder
+class Disc_builder
 {
+public:
     Geometry& geometry;
 
     double inner_radius;
@@ -39,7 +40,7 @@ struct Disc_builder
 
     // relStackIn is in range -1..1
     // relStack is in range 0..1
-    auto make_point(double rel_slice, double rel_stack)
+    auto make_point(const double rel_slice, const double rel_stack)
     -> Point_id
     {
         const double phi                 = glm::pi<double>() * 2.0 * rel_slice;
@@ -62,7 +63,7 @@ struct Disc_builder
         return point_id;
     }
 
-    auto make_corner(Polygon_id polygon_id, int slice, int stack)
+    auto make_corner(const Polygon_id polygon_id, const int slice, const int stack)
     -> Corner_id
     {
         const double rel_slice           = static_cast<double>(slice) / static_cast<double>(slice_count);
@@ -101,11 +102,11 @@ struct Disc_builder
         return corner_id;
     }
 
-    Disc_builder(Geometry& geometry,
-                 double    inner_radius,
-                 double    outer_radius,
-                 int       slice_count,
-                 int       stack_count)
+    Disc_builder(Geometry&    geometry,
+                 const double inner_radius,
+                 const double outer_radius,
+                 const int    slice_count,
+                 const int    stack_count)
         : geometry    {geometry}
         , inner_radius{inner_radius}
         , outer_radius{outer_radius}
@@ -194,10 +195,10 @@ struct Disc_builder
     }
 };
 
-auto make_disc(double outer_radius,
-               double inner_radius,
-               int    slice_count,
-               int    stack_count)
+auto make_disc(const double outer_radius,
+               const double inner_radius,
+               const int    slice_count,
+               const int    stack_count)
 -> Geometry
 {
     ZoneScoped;

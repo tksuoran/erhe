@@ -8,10 +8,11 @@
 namespace erhe::graphics
 {
 
-struct Depth_stencil_state;
+class Depth_stencil_state;
 
-struct Stencil_op_state
+class Stencil_op_state
 {
+public:
     gl::Stencil_op       stencil_fail_op{gl::Stencil_op::keep};
     gl::Stencil_op       z_fail_op      {gl::Stencil_op::keep};
     gl::Stencil_op       z_pass_op      {gl::Stencil_op::keep};
@@ -21,8 +22,9 @@ struct Stencil_op_state
     unsigned int         write_mask     {0xffffU};
 };
 
-struct Stencil_state_component_hash
+class Stencil_state_component_hash
 {
+public:
     auto operator()(const Stencil_op_state& stencil_state_component) const noexcept -> size_t;
 };
 
@@ -39,8 +41,9 @@ namespace Maybe_reversed {
     static constexpr gl::Depth_function gequal  = Configuration::reverse_depth ? gl::Depth_function::lequal  : gl::Depth_function::gequal;
 }
 
-struct Depth_stencil_state
+class Depth_stencil_state
 {
+public:
     Depth_stencil_state();
     Depth_stencil_state(bool               depth_test_enable,
                         bool               depth_write_enable,
@@ -68,8 +71,9 @@ struct Depth_stencil_state
     static Depth_stencil_state depth_test_always_stencil_test_disabled;
 };
 
-struct Depth_stencil_state_hash
+class Depth_stencil_state_hash
 {
+public:
     auto operator()(const Depth_stencil_state& state) const noexcept -> size_t;
 };
 

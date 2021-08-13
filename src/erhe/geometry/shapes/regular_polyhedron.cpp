@@ -6,7 +6,7 @@
 namespace erhe::geometry::shapes
 {
 
-auto make_cuboctahedron(double r)
+auto make_cuboctahedron(const double r)
 -> Geometry
 {
     ZoneScoped;
@@ -49,7 +49,7 @@ auto make_cuboctahedron(double r)
     });
 }
 
-auto make_dodecahedron(double r)
+auto make_dodecahedron(const double r)
 -> Geometry
 {
     ZoneScoped;
@@ -101,7 +101,7 @@ auto make_dodecahedron(double r)
     });
 }
 
-auto make_icosahedron(double r)
+auto make_icosahedron(const double r)
 -> Geometry
 {
     ZoneScoped;
@@ -153,7 +153,7 @@ auto make_icosahedron(double r)
     });
 }
 
-auto make_octahedron(double r)
+auto make_octahedron(const double r)
 -> Geometry
 {
     ZoneScoped;
@@ -188,8 +188,8 @@ auto make_tetrahedron(double r)
     ZoneScoped;
 
     return Geometry("tetrahedron", [=](auto& geometry) {
-        double sq2 = std::sqrt(2.0);
-        double sq3 = std::sqrt(3.0);
+        const double sq2 = std::sqrt(2.0);
+        const double sq3 = std::sqrt(3.0);
 
         geometry.make_point( 0,                    r,        0                  );
         geometry.make_point( 0,                   -r / 3.0,  r * 2.0 * sq2 / 3.0);
@@ -208,14 +208,14 @@ auto make_tetrahedron(double r)
     });
 }
 
-auto make_cube(double r)
+auto make_cube(const double r)
 -> Geometry
 {
     ZoneScoped;
 
     return Geometry("cube", [=](auto& geometry) {
-        double a =  0.5 * r;
-        double b = -0.5 * r;                  
+        const double a =  0.5 * r;
+        const double b = -0.5 * r;                  
         geometry.make_point(b, b, b); // 0    6------7  
         geometry.make_point(a, b, b); // 1   /|     /|  
         geometry.make_point(b, a, b); // 2  2-+----4 |  

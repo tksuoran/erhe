@@ -10,8 +10,9 @@ class Compound_operation
     : public IOperation
 {
 public:
-    struct Context
+    class Context
     {
+    public:
         std::vector<std::shared_ptr<IOperation>> operations;
     };
 

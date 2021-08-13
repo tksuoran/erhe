@@ -3,32 +3,32 @@
 namespace erhe::graphics
 {
 
-Renderbuffer::Renderbuffer(gl::Internal_format internal_format,
-                           unsigned int        width,
-                           unsigned int        height)
+Renderbuffer::Renderbuffer(const gl::Internal_format internal_format,
+                           const unsigned int        width,
+                           const unsigned int        height)
     : m_internal_format{internal_format}
     , m_sample_count   {0}
     , m_width          {width}
     , m_height         {height}
 {
     Expects(gl_name() != 0);
-    Expects(m_width > 0);
+    Expects(m_width  > 0);
     Expects(m_height > 0);
 
     gl::named_renderbuffer_storage_multisample(gl_name(), 0, internal_format, width, height);
 }
 
-Renderbuffer::Renderbuffer(gl::Internal_format internal_format,
-                           unsigned int        sample_count,
-                           unsigned int        width,
-                           unsigned int        height)
+Renderbuffer::Renderbuffer(const gl::Internal_format internal_format,
+                           const unsigned int        sample_count,
+                           const unsigned int        width,
+                           const unsigned int        height)
     : m_internal_format{internal_format}
     , m_sample_count   {sample_count}
     , m_width          {width}
     , m_height         {height}
 {
     Expects(gl_name() != 0);
-    Expects(m_width > 0);
+    Expects(m_width  > 0);
     Expects(m_height > 0);
 
     gl::named_renderbuffer_storage_multisample(gl_name(), sample_count, internal_format, width, height);

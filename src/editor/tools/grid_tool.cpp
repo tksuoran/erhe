@@ -83,12 +83,11 @@ void Grid_tool::window(Pointer_context&)
     ImGui::End        ();
 }
 
-auto Grid_tool::snap(glm::vec3 v) const -> glm::vec3
+auto Grid_tool::snap(const glm::vec3 v) const -> glm::vec3
 {
-    v.x = std::floor((v.x + m_cell_size * 0.5f) / m_cell_size) * m_cell_size;
-    v.y = std::floor((v.y + m_cell_size * 0.5f) / m_cell_size) * m_cell_size;
-    v.z = std::floor((v.z + m_cell_size * 0.5f) / m_cell_size) * m_cell_size;
-    return v;
+    return glm::vec3{std::floor((v.x + m_cell_size * 0.5f) / m_cell_size) * m_cell_size,
+                     std::floor((v.y + m_cell_size * 0.5f) / m_cell_size) * m_cell_size,
+                     std::floor((v.z + m_cell_size * 0.5f) / m_cell_size) * m_cell_size};
 }
 
 } // namespace editor

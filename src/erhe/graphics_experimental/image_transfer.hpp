@@ -14,8 +14,9 @@ class Image_transfer
     : public erhe::components::Component
 {
 public:
-    struct Slot
+    class Slot
     {
+    public:
         Slot();
 
         auto span_for(int                 width,

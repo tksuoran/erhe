@@ -33,18 +33,18 @@ void Mesh_memory::initialize_component()
 
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 
-    const size_t vertex_byte_count  = 256 * 1024 * 1024;
-    const size_t index_byte_count   =  64 * 1024 * 1024;
-    m_buffer_info.index_type    = gl::Draw_elements_type::unsigned_int;
-    m_buffer_info.vertex_buffer = make_shared<Buffer>(gl::Buffer_target::array_buffer,
-                                                      vertex_byte_count,
-                                                      storage_mask);
-    m_buffer_info.index_buffer = make_shared<Buffer>(gl::Buffer_target::element_array_buffer,
-                                                     index_byte_count,
-                                                     storage_mask);
+    constexpr size_t vertex_byte_count  = 256 * 1024 * 1024;
+    constexpr size_t index_byte_count   =  64 * 1024 * 1024;
+    m_buffer_info.index_type       = gl::Draw_elements_type::unsigned_int;
+    m_buffer_info.gl_vertex_buffer = make_shared<Buffer>(gl::Buffer_target::array_buffer,
+                                                         vertex_byte_count,
+                                                         storage_mask);
+    m_buffer_info.gl_index_buffer = make_shared<Buffer>(gl::Buffer_target::element_array_buffer,
+                                                        index_byte_count,
+                                                        storage_mask);
 
-    m_buffer_info.vertex_buffer->set_debug_label("Scene Manager Vertex");
-    m_buffer_info.index_buffer ->set_debug_label("Scene Manager Index");
+    m_buffer_info.gl_vertex_buffer->set_debug_label("Scene Manager Vertex");
+    m_buffer_info.gl_index_buffer ->set_debug_label("Scene Manager Index");
 
     m_format_info.want_fill_triangles       = true;
     m_format_info.want_edge_lines           = true;
@@ -63,18 +63,18 @@ void Mesh_memory::initialize_component()
 
     Primitive_builder::prepare_vertex_format(m_format_info, m_buffer_info);
 
-    m_buffer_transfer_queue   = make_unique<Buffer_transfer_queue>();
-    m_primitive_build_context = make_unique<Primitive_build_context>(*m_buffer_transfer_queue.get(), m_format_info, m_buffer_info);
+    m_buffer_transfer_queue = make_unique<Buffer_transfer_queue>();
+    m_geometry_uploader     = make_unique<Gl_geometry_uploader>(*m_buffer_transfer_queue.get(), m_format_info, m_buffer_info);
 }
 
 auto Mesh_memory::vertex_buffer() -> Buffer*
 {
-    return m_buffer_info.vertex_buffer.get();
+    return m_buffer_info.gl_vertex_buffer.get();
 }
 
 auto Mesh_memory::index_buffer() -> Buffer*
 {
-    return m_buffer_info.index_buffer.get();
+    return m_buffer_info.gl_index_buffer.get();
 }
 
 auto Mesh_memory::index_type() -> gl::Draw_elements_type
@@ -97,10 +97,10 @@ auto Mesh_memory::vertex_buffer_info() -> erhe::primitive::Buffer_info&
     return m_buffer_info;
 }
 
-auto Mesh_memory::primitive_build_context() -> erhe::primitive::Primitive_build_context&
+auto Mesh_memory::geometry_uploader() -> erhe::primitive::Geometry_uploader&
 {
-    VERIFY(m_primitive_build_context);
-    return *m_primitive_build_context.get();
+    VERIFY(m_geometry_uploader);
+    return *m_geometry_uploader.get();
 }
 
 auto Mesh_memory::buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&

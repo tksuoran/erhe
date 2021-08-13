@@ -41,8 +41,8 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     RectangleBinPack
-    GIT_REPOSITORY https://github.com/juj/RectangleBinPack.git
-    GIT_TAG        master
+    GIT_REPOSITORY https://github.com/tksuoran/RectangleBinPack.git
+    GIT_TAG        fix-win32
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -65,10 +65,10 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     tracy
-    GIT_REPOSITORY https://github.com/tksuoran/tracy.git
-    GIT_TAG        cmake-client
-    #GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-    #GIT_TAG        master
+    #GIT_REPOSITORY https://github.com/tksuoran/tracy.git
+    #GIT_TAG        cmake-client
+    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+    GIT_TAG        master
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -110,6 +110,14 @@ FetchContent_Declare(
     libigl
     GIT_REPOSITORY https://github.com/libigl/libigl.git
     GIT_TAG        v2.3.0
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+FetchContent_Declare(
+    embree
+    GIT_REPOSITORY https://github.com/embree/embree.git
+    GIT_TAG        v3.13.0
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -200,6 +208,7 @@ FetchContent_MakeAvailable(ImGui)
 FetchContent_MakeAvailable(tracy)
 #FetchContent_MakeAvailable(reactphysics3d)
 FetchContent_MakeAvailable(bullet3)
+FetchContent_MakeAvailable(embree)
 
 FetchContent_MakeAvailable(OpenXR-SDK)
 #FetchContent_MakeAvailable(eigen)
@@ -266,7 +275,7 @@ elseif(DEFINED MSVC)
     # add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/fsanitize=address>)
 endif()
 
-add_definitions(-DTRACY_ENABLE)
+#add_definitions(-DTRACY_ENABLE)
 
 add_definitions(-DFMT_HEADER_ONLY)
 

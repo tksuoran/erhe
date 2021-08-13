@@ -43,7 +43,7 @@ void Node_properties::window(Pointer_context&)
         {
             continue;
         }
-        auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
         if (!mesh)
         {
             continue;
@@ -52,16 +52,18 @@ void Node_properties::window(Pointer_context&)
         auto* node = mesh->node().get();
         if (node != nullptr)
         {
-            glm::mat4 transform = node->world_from_node();
+            const glm::mat4 transform = node->world_from_node();
             glm::vec3 scale;
             glm::quat orientation;
             glm::vec3 translation;
             glm::vec3 skew;
             glm::vec4 perspective;
             glm::decompose(transform, scale, orientation, translation, skew, perspective);
-            glm::mat4 orientation_matrix(orientation);
+
+            const glm::mat4 orientation_matrix(orientation);
             glm::vec3 euler_angles;
             glm::extractEulerAngleZYX(orientation_matrix, euler_angles.x, euler_angles.y, euler_angles.z);
+
             ImGui::Text("Node: %s", node->name.c_str());
 
             {
@@ -69,15 +71,10 @@ void Node_properties::window(Pointer_context&)
                 ImGui::Text("Transform Matrix");
                 for (int row = 0; row < 4; row++)
                 {
-                    std::string label = fmt::format("M{}", row);
-                    glm::vec4 rowVector = glm::vec4(transform[0][row], transform[1][row], transform[2][row], transform[3][row]);
+                    const std::string label     = fmt::format("M{}", row);
+                    glm::vec4   rowVector = glm::vec4(transform[0][row], transform[1][row], transform[2][row], transform[3][row]);
                     ImGui::InputFloat4(label.c_str(), &rowVector.x, "%.3f");
-                    //for (int column = 0; column < 4; column++)
-                    //{
-                    //    std::string label = fmt::format("M{}{}", row, column);
-                    //    ImGui::TableSetColumnIndex(column);
-                    //    ImGui::InputFloat(label.c_str(), &transform[row][column], 0.0f, 0.0f, "%.2f", 0);
-                    //}
+                    // TODO rowVector back to matrix?
                 }
                 ImGui::EndGroup();
             }

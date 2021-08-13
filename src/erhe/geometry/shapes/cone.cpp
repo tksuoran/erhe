@@ -21,10 +21,10 @@ using glm::vec4;
 
 // Note that cylinder requires use_geometric_centroids at least during
 // generation, so do not turn this to false.
-constexpr const bool use_geometric_centroids = true;
+constexpr bool use_geometric_centroids = true;
 
 // Using flat centroids ensures centroids are on polygon.
-constexpr const bool use_flat_centroids      = true;
+constexpr bool use_flat_centroids      = true;
 
 // Stack numbering example
 // with stackDivision = 2
@@ -43,8 +43,9 @@ constexpr const bool use_flat_centroids      = true;
 // bottom: relStack = -1.0  <=>  stack = -stackDivision - 1
 // top:    relStack =  1.0  <=>  stack =  stackDivision + 1
 
-struct Conical_frustum_builder
+class Conical_frustum_builder
 {
+public:
     Geometry& geometry;
 
     double min_x         {0.0};
@@ -77,7 +78,7 @@ struct Conical_frustum_builder
     Property_map<Polygon_id, vec3>* polygon_centroids{nullptr};
     Property_map<Polygon_id, vec3>* polygon_normals  {nullptr};
 
-    auto get_point(int slice, int stack)
+    auto get_point(const int slice, const int stack)
     -> Point_id
     {
         return points[std::make_pair(slice, stack)];
@@ -85,7 +86,7 @@ struct Conical_frustum_builder
 
     // relStackIn is in range -1..1
     // relStack is in range 0..1
-    auto cone_point(double rel_slice, double rel_stack_minus_one_to_one)
+    auto cone_point(const double rel_slice, const double rel_stack_minus_one_to_one)
     -> Point_id
     {
         const double phi                 = glm::pi<double>() * 2.0 * rel_slice;
@@ -136,13 +137,13 @@ struct Conical_frustum_builder
         return point_id;
     }
 
-    auto make_corner(Polygon_id polygon, int slice, int stack)
+    auto make_corner(const Polygon_id polygon, const int slice, const int stack)
     -> Corner_id
     {
         return make_corner(polygon, slice, stack, false);
     }
 
-    auto make_corner(Polygon_id polygon_id, int slice, int stack, bool base)
+    auto make_corner(const Polygon_id polygon_id, const int slice, const int stack, const bool base)
     -> Corner_id
     {
         const auto rel_slice                  = static_cast<double>(slice) / static_cast<double>(slice_count);
@@ -232,15 +233,15 @@ struct Conical_frustum_builder
         return corner_id;
     }
 
-    Conical_frustum_builder(Geometry& geometry,
-                            double    min_x,
-                            double    max_x,
-                            double    bottom_radius,
-                            double    top_radius,
-                            bool      use_bottom,
-                            bool      use_top,
-                            int       slice_count,
-                            int       stack_division)
+    Conical_frustum_builder(Geometry&    geometry,
+                            const double min_x,
+                            const double max_x,
+                            const double bottom_radius,
+                            const double top_radius,
+                            const bool   use_bottom,
+                            const bool   use_top,
+                            const int    slice_count,
+                            const int    stack_division)
         : geometry           {geometry}
         , min_x              {min_x}
         , max_x              {max_x}
@@ -251,7 +252,7 @@ struct Conical_frustum_builder
         , slice_count        {slice_count}
         , stack_division     {stack_division}
         , bottom_not_singular{(bottom_radius != 0.0) ? 1 : 0}
-        , top_not_singular   {(top_radius != 0.0) ? 1 : 0}
+        , top_not_singular   {(top_radius    != 0.0) ? 1 : 0}
         , stack_count        {(2 * stack_division) + 1 + bottom_not_singular + top_not_singular}
     {
         point_locations   = geometry.point_attributes  ().create<vec3>(c_point_locations  );
@@ -488,14 +489,14 @@ struct Conical_frustum_builder
     }
 };
 
-auto make_conical_frustum(double min_x,
-                          double max_x,
-                          double bottom_radius,
-                          double top_radius,
-                          bool   use_bottom,
-                          bool   use_top,
-                          int    slice_count,
-                          int    stack_division)
+auto make_conical_frustum(const double min_x,
+                          const double max_x,
+                          const double bottom_radius,
+                          const double top_radius,
+                          const bool   use_bottom,
+                          const bool   use_top,
+                          const int    slice_count,
+                          const int    stack_division)
 -> Geometry
 {
     ZoneScoped;
@@ -514,12 +515,12 @@ auto make_conical_frustum(double min_x,
     });
 }
 
-auto make_cone(double min_x,
-               double max_x,
-               double bottom_radius,
-               bool   use_bottom,
-               int    slice_count,
-               int    stack_division)
+auto make_cone(const double min_x,
+               const double max_x,
+               const double bottom_radius,
+               const bool   use_bottom,
+               const int    slice_count,
+               const int    stack_division)
 -> Geometry
 {
     ZoneScoped;
@@ -538,13 +539,13 @@ auto make_cone(double min_x,
     });
 }
 
-auto make_cylinder(double min_x,
-                   double max_x,
-                   double radius,
-                   bool   use_bottom,
-                   bool   use_top,
-                   int    slice_count,
-                   int    stack_division)
+auto make_cylinder(const double min_x,
+                   const double max_x,
+                   const double radius,
+                   const bool   use_bottom,
+                   const bool   use_top,
+                   const int    slice_count,
+                   const int    stack_division)
 -> Geometry
 {
     ZoneScoped;

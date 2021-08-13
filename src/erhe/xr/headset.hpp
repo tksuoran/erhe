@@ -18,12 +18,13 @@ class Context_window;
 
 namespace erhe::xr {
 
-struct Render_view;
+class Render_view;
 class Xr_instance;
 class Xr_session;
 
-struct Frame_timing
+class Frame_timing
 {
+public:
     uint64_t predicted_display_time  {0};
     uint64_t predicted_display_pediod{0};
     bool     should_render           {false};
@@ -39,6 +40,7 @@ public:
     auto render         (std::function<bool(Render_view&)> render_view_callback) -> bool;
     auto end_frame      () -> bool;
     auto trigger_value  () const -> float;
+    auto squeeze_click  () const -> bool;
     auto controller_pose() const -> Pose;
 
 private:

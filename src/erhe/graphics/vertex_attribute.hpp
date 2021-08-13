@@ -26,9 +26,10 @@ public:
         id             = 256
     };
 
-    struct Usage
+    class Usage
     {
-        Usage(Usage_type type, size_t index)
+    public:
+        Usage(const Usage_type type, const size_t index)
             : type {type}
             , index{index}
         {
@@ -51,11 +52,12 @@ public:
         size_t     index{0};
     };
 
-    struct Data_type
+    class Data_type
     {
-        Data_type(gl::Vertex_attrib_type type,
-                  bool                   normalized,
-                  size_t                 dimension)
+    public:
+        Data_type(const gl::Vertex_attrib_type type,
+                  const bool                   normalized,
+                  const size_t                 dimension)
             : type      {type}
             , normalized{normalized}
             , dimension {dimension}
@@ -81,14 +83,14 @@ public:
         size_t                 dimension {0};
     };
 
-    static auto desc(Usage_type usage)
+    static auto desc(const Usage_type usage)
     -> const char*;
 
-    Vertex_attribute(Usage              usage,
-                     gl::Attribute_type shader_type,
-                     Data_type          data_type,
-                     size_t             offset  = 0,
-                     unsigned int       divisor = 0)
+    Vertex_attribute(const Usage              usage,
+                     const gl::Attribute_type shader_type,
+                     const Data_type          data_type,
+                     const size_t             offset  = 0,
+                     const unsigned int       divisor = 0)
         : usage      {usage}
         , shader_type{shader_type}
         , data_type  {data_type}
@@ -122,8 +124,8 @@ public:
     Usage              usage;
     gl::Attribute_type shader_type;
     Data_type          data_type;
-    size_t             offset    {0};
-    unsigned int       divisor   {0};
+    size_t             offset {0};
+    unsigned int       divisor{0};
 };
 
 template<typename Enum>

@@ -6,10 +6,10 @@
 namespace erhe::geometry::shapes
 {
 
-auto make_disc(double outer_radius,
-               double inner_radius,
-               int    slice_count,
-               int    stack_count)
+auto make_disc(const double outer_radius,
+               const double inner_radius,
+               const int    slice_count,
+               const int    stack_count)
 -> Geometry;
 
 } // namespace erhe::geometry::shapes
