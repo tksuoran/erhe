@@ -48,7 +48,7 @@ class Mesh_memory
     : public erhe::components::Component
 {
 public:
-    static constexpr const char* c_name = "Mesh_memory";
+    static constexpr std::string_view c_name{"Mesh_memory"};
     Mesh_memory ();
     ~Mesh_memory() override;
 

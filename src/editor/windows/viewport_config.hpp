@@ -16,7 +16,7 @@ class Viewport_config
     , public Window
 {
 public:
-    static constexpr const char* c_name = "Viewport_config";
+    static constexpr std::string_view c_name{"Viewport_config"};
 
     Viewport_config ();
     ~Viewport_config() override;

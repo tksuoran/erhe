@@ -52,7 +52,7 @@ void Line_renderer::connect()
     m_shader_monitor         = require<Shader_monitor>();
 }
 
-static constexpr const char* c_line_renderer_initialize_component = "Line_renderer::initialize_component()";
+static constexpr std::string_view c_line_renderer_initialize_component{"Line_renderer::initialize_component()"};
 void Line_renderer::initialize_component()
 {
     ZoneScoped;
@@ -61,8 +61,8 @@ void Line_renderer::initialize_component()
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
-                         static_cast<GLsizei>(strlen(c_line_renderer_initialize_component)),
-                         c_line_renderer_initialize_component);
+                         static_cast<GLsizei>(c_line_renderer_initialize_component.length()),
+                         c_line_renderer_initialize_component.data());
 
     m_fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 
@@ -166,7 +166,7 @@ void Line_renderer::add_lines(const std::initializer_list<Line> lines, const flo
     m_vertex_writer.end();
 }
 
-static constexpr const char* c_line_renderer_render = "Line_renderer::render()";
+static constexpr std::string_view c_line_renderer_render{"Line_renderer::render()"};
 void Line_renderer::render(const erhe::scene::Viewport viewport,
                            const erhe::scene::ICamera& camera)
 {
@@ -176,12 +176,12 @@ void Line_renderer::render(const erhe::scene::Viewport viewport,
     }
 
     ZoneScoped;
-    TracyGpuZone(c_line_renderer_render)
+    TracyGpuZone(c_line_renderer_render.data())
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
-                         static_cast<GLsizei>(strlen(c_line_renderer_render)),
-                         c_line_renderer_render);
+                         static_cast<GLsizei>(c_line_renderer_render.length()),
+                         c_line_renderer_render.data());
 
     m_view_writer.begin();
 

@@ -73,8 +73,8 @@ class Program_interface
     : public erhe::components::Component
 {
 public:
-    static constexpr size_t            c_max_light_count = 120;
-    static constexpr const char* const c_name            = "Program_interface";
+    static constexpr size_t           c_max_light_count{120};
+    static constexpr std::string_view c_name           {"Program_interface"};
 
     Program_interface ();
     ~Program_interface() override;

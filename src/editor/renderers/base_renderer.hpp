@@ -52,11 +52,15 @@ public:
         constant_color,
     };
 
-    static constexpr const char* c_primitive_color_source_strings[] =
+    static constexpr std::array<std::string_view, 3> c_primitive_color_source_strings =
     {
         "ID Offset",
         "Mesh Wireframe color",
         "Constant Color"
+    };
+
+    static constexpr std::array<const char*, 3> c_primitive_color_source_strings_data{
+        std::apply([](auto&&... s) { return std::array{s.data()...}; }, c_primitive_color_source_strings)
     };
 
     Primitive_color_source primitive_color_source  {Primitive_color_source::constant_color};

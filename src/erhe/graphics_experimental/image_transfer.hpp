@@ -19,9 +19,9 @@ public:
     public:
         Slot();
 
-        auto span_for(int                 width,
-                      int                 height,
-                      gl::Internal_format internal_format)
+        auto span_for(const int                 width,
+                      const int                 height,
+                      const gl::Internal_format internal_format)
         -> gsl::span<std::byte>;
 
         auto gl_name()
@@ -41,7 +41,7 @@ public:
         gl::Pixel_type       type           {gl::Pixel_type::unsigned_byte};
     };
 
-    static constexpr const char* c_name = "erhe::graphics::ImageTransfer";
+    static constexpr std::string_view c_name{"erhe::graphics::ImageTransfer"};
     Image_transfer();
     ~Image_transfer() override;
 

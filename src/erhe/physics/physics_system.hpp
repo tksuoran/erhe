@@ -9,7 +9,7 @@ class Physics_system
     : public erhe::components::Component
 {
 public:
-    static constexpr const char* c_name = "Physics_system";
+    static constexpr std::string_view c_name{"Physics_system"};
     Physics_system();
     virtual ~Physics_system() = default;
 };

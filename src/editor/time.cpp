@@ -36,7 +36,7 @@ void Editor_time::start_time()
     m_current_time = chrono::steady_clock::now();
 }
 
-static constexpr const char* c_swap_buffers = "swap buffers";
+static constexpr std::string_view c_swap_buffers{"swap buffers"};
 
 
 void Editor_time::update()
@@ -64,7 +64,7 @@ void Editor_time::update()
     m_editor_rendering->render(m_time);
 
     {
-        ZoneScopedN(c_swap_buffers);
+        ZoneScopedN(c_swap_buffers.data());
         m_application->get_context_window()->swap_buffers();
     }
 

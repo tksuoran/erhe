@@ -14,7 +14,7 @@ class Debug_draw
     , public btIDebugDraw
 {
 public:
-    static constexpr const char* c_name = "Debug_draw";
+    static constexpr std::string_view c_name{"Debug_draw"};
     Debug_draw();
     ~Debug_draw() override;
 

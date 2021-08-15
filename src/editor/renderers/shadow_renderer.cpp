@@ -55,7 +55,7 @@ void Shadow_renderer::connect()
     m_mesh_memory            = require<Mesh_memory>();
 }
 
-static constexpr const char* c_shadow_renderer_initialize_component = "Shadow_renderer::initialize_component()";
+static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow_renderer::initialize_component()"};
 
 void Shadow_renderer::initialize_component()
 {
@@ -65,8 +65,8 @@ void Shadow_renderer::initialize_component()
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
-                         static_cast<GLsizei>(strlen(c_shadow_renderer_initialize_component)),
-                         c_shadow_renderer_initialize_component);
+                         static_cast<GLsizei>(c_shadow_renderer_initialize_component.length()),
+                         c_shadow_renderer_initialize_component.data());
 
     create_frame_resources(1, 256, 256, 1000, 1000);
 
@@ -113,7 +113,7 @@ void Shadow_renderer::initialize_component()
     gl::pop_debug_group();
 }
 
-static constexpr const char* c_shadow_renderer_render = "Shadow_renderer::render()";
+static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::render()"};
 void Shadow_renderer::render(Layer_collection& layers,
                              const ICamera&    camera)
 {
@@ -123,12 +123,12 @@ void Shadow_renderer::render(Layer_collection& layers,
     }
 
     ZoneScoped;
-    TracyGpuZone(c_shadow_renderer_render)
+    TracyGpuZone(c_shadow_renderer_render.data())
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
-                         static_cast<GLsizei>(strlen(c_shadow_renderer_render)),
-                         c_shadow_renderer_render);
+                         static_cast<GLsizei>(c_shadow_renderer_render.length()),
+                         c_shadow_renderer_render.data());
 
     // For now, camera is ignored.
     static_cast<void>(camera);

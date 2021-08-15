@@ -442,7 +442,7 @@ void ImGui_ImplErhe_NewFrame()
     }
 }
 
-static constexpr const char* c_imgui_render = "ImGui_ImplErhe_RenderDrawData()";
+static constexpr std::string_view c_imgui_render{"ImGui_ImplErhe_RenderDrawData()"};
 void ImGui_ImplErhe_RenderDrawData(ImDrawData* draw_data)
 {
     if (draw_data == nullptr)
@@ -459,8 +459,8 @@ void ImGui_ImplErhe_RenderDrawData(ImDrawData* draw_data)
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
-                         static_cast<GLsizei>(strlen(c_imgui_render)),
-                         c_imgui_render);
+                         static_cast<GLsizei>(c_imgui_render.length()),
+                         c_imgui_render.data());
 
     auto& frame_resources       = imgui_renderer.current_frame_resources();
     auto& draw_parameter_buffer = frame_resources.draw_parameter_buffer;

@@ -9,8 +9,10 @@ namespace editor {
 using std::shared_ptr;
 using View = erhe::toolkit::View;
 
+static constexpr std::string_view c_application{"Application"};
+
 Application::Application(RENDERDOC_API_1_1_2* renderdoc_api)
-    : erhe::components::Component{"Application"}
+    : erhe::components::Component{c_application}
     , m_renderdoc_api{renderdoc_api}
 {
 }

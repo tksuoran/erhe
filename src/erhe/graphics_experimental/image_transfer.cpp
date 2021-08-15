@@ -32,7 +32,7 @@ Image_transfer::Slot::Slot()
                      capacity);
 }
 
-auto Image_transfer::Slot::span_for(int width, int height, gl::Internal_format internal_format)
+auto Image_transfer::Slot::span_for(const int width, const int height, const gl::Internal_format internal_format)
 -> gsl::span<std::byte>
 {
     Expects(width >= 1);

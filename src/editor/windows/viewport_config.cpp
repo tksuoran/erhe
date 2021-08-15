@@ -42,7 +42,10 @@ void Viewport_config::render_style_ui(Render_style& render_style)
         {
             ImGui::SliderFloat("Width",          &render_style.line_width, 0.0f, 20.0f);
             ImGui::ColorEdit4 ("Constant Color", &render_style.line_color.x,     ImGuiColorEditFlags_Float);
-            make_combo("Color Source", render_style.edge_lines_color_source, Base_renderer::c_primitive_color_source_strings, IM_ARRAYSIZE(Base_renderer::c_primitive_color_source_strings));
+            make_combo("Color Source",
+                       render_style.edge_lines_color_source,
+                       Base_renderer::c_primitive_color_source_strings_data.data(),
+                       static_cast<int>(Base_renderer::c_primitive_color_source_strings_data.size()));
         }
     }
 
@@ -52,7 +55,10 @@ void Viewport_config::render_style_ui(Render_style& render_style)
         if (render_style.polygon_centroids)
         {
             ImGui::ColorEdit4("Constant Color", &render_style.centroid_color.x, ImGuiColorEditFlags_Float);
-            make_combo("Color Source", render_style.polygon_centroids_color_source, Base_renderer::c_primitive_color_source_strings, IM_ARRAYSIZE(Base_renderer::c_primitive_color_source_strings));
+            make_combo("Color Source",
+                       render_style.polygon_centroids_color_source,
+                       Base_renderer::c_primitive_color_source_strings_data.data(),
+                       static_cast<int>(Base_renderer::c_primitive_color_source_strings_data.size()));
         }
     }
 
@@ -60,7 +66,10 @@ void Viewport_config::render_style_ui(Render_style& render_style)
     {
         ImGui::Checkbox  ("Visible",        &render_style.corner_points);
         ImGui::ColorEdit4("Constant Color", &render_style.corner_color.x,   ImGuiColorEditFlags_Float);
-        make_combo("Color Source", render_style.corner_points_color_source, Base_renderer::c_primitive_color_source_strings, IM_ARRAYSIZE(Base_renderer::c_primitive_color_source_strings));
+        make_combo("Color Source",
+                   render_style.corner_points_color_source,
+                   Base_renderer::c_primitive_color_source_strings_data.data(),
+                   static_cast<int>(Base_renderer::c_primitive_color_source_strings_data.size()));
     }
 
     if (render_style.polygon_centroids || render_style.corner_points)

@@ -13,7 +13,7 @@ class Grid_tool
     , public Window
 {
 public:
-    static constexpr const char* c_name = "Grid_tool";
+    static constexpr std::string_view c_name{"Grid_tool"};
 
     Grid_tool ();
     ~Grid_tool() override;

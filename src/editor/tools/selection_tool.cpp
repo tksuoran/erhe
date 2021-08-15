@@ -33,7 +33,7 @@ void Selection_tool::initialize_component()
 
 auto Selection_tool::description() -> const char*
 {
-    return c_name;
+    return c_name.data();
 }
 
 auto Selection_tool::state() const -> State

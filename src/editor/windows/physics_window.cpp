@@ -41,7 +41,7 @@ auto Physics_window::state() const -> State
 
 auto Physics_window::description() -> const char*
 {
-    return c_name;
+    return c_name.data();
 }
 
 auto to_bullet(glm::vec3 glm_vec3) -> btVector3

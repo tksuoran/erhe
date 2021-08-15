@@ -25,7 +25,7 @@ class Physics_tool
     , public Window
 {
 public:
-    static constexpr const char* c_name = "Physics_tool";
+    static constexpr std::string_view c_name{"Physics_tool"};
 
     Physics_tool ();
     ~Physics_tool() override;

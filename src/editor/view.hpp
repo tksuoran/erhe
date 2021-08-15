@@ -20,7 +20,7 @@ class Editor_view
     , public erhe::toolkit::View
 {
 public:
-    static constexpr const char* c_name = "Editor_view";
+    static constexpr std::string_view c_name{"Editor_view"};
     Editor_view();
     ~Editor_view() override;
 

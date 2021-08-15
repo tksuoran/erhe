@@ -14,7 +14,7 @@ class Textures
     : public erhe::components::Component
 {
 public:
-    static constexpr const char* c_name = "Textures";
+    static constexpr std::string_view c_name{"Textures"};
     Textures();
     ~Textures() override;
 

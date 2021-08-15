@@ -25,7 +25,7 @@ class Programs
     : public erhe::components::Component
 {
 public:
-    static constexpr const char* c_name = "Programs";
+    static constexpr std::string_view c_name{"Programs"};
     Programs      ();
     ~Programs     () override;
     Programs      (const Programs&) = delete;

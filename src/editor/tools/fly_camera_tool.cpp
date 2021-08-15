@@ -94,7 +94,7 @@ void Fly_camera_tool::initialize_component()
 
 auto Fly_camera_tool::description() -> const char*
 {
-    return c_name;
+    return c_name.data();
 }
 
 void Fly_camera_tool::translation(const int tx, const int ty, const int tz)

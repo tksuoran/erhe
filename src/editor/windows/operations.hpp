@@ -17,7 +17,7 @@ class Operations
     , public Window
 {
 public:
-    static constexpr const char* c_name = "Operations";
+    static constexpr std::string_view c_name{"Operations"};
 
     Operations ();
     ~Operations() override;

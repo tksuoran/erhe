@@ -32,7 +32,7 @@ class Editor_tools
     : public erhe::components::Component
 {
 public:
-    static constexpr const char* c_name = "Editor_tools";
+    static constexpr std::string_view c_name{"Editor_tools"};
 
     Editor_tools ();
     ~Editor_tools() override;

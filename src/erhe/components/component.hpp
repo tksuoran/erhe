@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <set>
+#include <string_view>
 
 namespace erhe::components
 {
@@ -52,7 +53,7 @@ protected:
     void operator=(const Component&) = delete;
     void operator=(Component&&)      = delete;
 
-    explicit Component(const char* name);
+    explicit Component(const std::string_view name);
 
     virtual ~Component() = default;
 
@@ -92,17 +93,14 @@ public:
 
     virtual void on_thread_enter() {}
 
-    auto name() const
-    -> const char*
+    auto name() const -> std::string_view
     {
         return m_name;
     }
 
-    auto get_state() const
-    -> Component_state;
+    auto get_state() const -> Component_state;
 
-    auto is_registered() const
-    -> bool
+    auto is_registered() const -> bool
     {
         return m_components != nullptr;
     }
@@ -117,8 +115,7 @@ public:
         m_components = nullptr;
     }
 
-    auto is_ready_to_initialize() const
-    -> bool;
+    auto is_ready_to_initialize() const -> bool;
 
     void remove_dependency(const std::shared_ptr<Component>& component);
 
@@ -138,8 +135,8 @@ protected:
     Components*                          m_components{nullptr};
 
 private:
-    const char*                          m_name      {nullptr};
-    Component_state                      m_state     {Component_state::Constructed};
+    std::string_view                     m_name;
+    Component_state                      m_state      {Component_state::Constructed};
     std::set<std::shared_ptr<Component>> m_dependencies;
 };
 

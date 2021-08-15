@@ -45,7 +45,7 @@ public:
         bool                               valid               {false};
     };
 
-    static constexpr const char* c_name = "Id_renderer";
+    static constexpr std::string_view c_name{"Id_renderer"};
     Id_renderer ();
     ~Id_renderer() override;
 

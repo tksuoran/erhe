@@ -8,7 +8,7 @@
 namespace erhe::components
 {
 
-Component::Component(const char* name)
+Component::Component(const std::string_view name)
     : m_name{name}
 {
     ZoneScoped;

@@ -58,7 +58,7 @@ void Forward_renderer::connect()
     m_shadow_renderer        = get<Shadow_renderer>();
 }
 
-static constexpr const char* c_forward_renderer_initialize_component = "Forward_renderer::initialize_component()";
+static constexpr std::string_view c_forward_renderer_initialize_component{"Forward_renderer::initialize_component()"};
 void Forward_renderer::initialize_component()
 {
     ZoneScoped;
@@ -67,8 +67,8 @@ void Forward_renderer::initialize_component()
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
-                         static_cast<GLsizei>(strlen(c_forward_renderer_initialize_component)),
-                         c_forward_renderer_initialize_component);
+                         static_cast<GLsizei>(c_forward_renderer_initialize_component.length()),
+                         c_forward_renderer_initialize_component.data());
 
     create_frame_resources(256, 256, 256, 8000, 8000);
 
@@ -376,7 +376,7 @@ auto Forward_renderer::select_primitive_mode(Pass pass) const -> erhe::primitive
     }
 }
 
-static constexpr const char* c_forward_renderer_render = "Forward_renderer::render()";
+static constexpr std::string_view c_forward_renderer_render{"Forward_renderer::render()"};
 void Forward_renderer::render(Viewport                          viewport,
                               ICamera&                          camera,
                               Layer_collection&                 layers,
@@ -388,8 +388,8 @@ void Forward_renderer::render(Viewport                          viewport,
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
-                         static_cast<GLsizei>(strlen(c_forward_renderer_render)),
-                         c_forward_renderer_render);
+                         static_cast<GLsizei>(c_forward_renderer_render.length()),
+                         c_forward_renderer_render.data());
     const unsigned int shadow_texture_unit = 0;
     const unsigned int shadow_texture_name = m_shadow_renderer->texture()->gl_name();
     gl::bind_sampler (shadow_texture_unit, m_programs->nearest_sampler->gl_name());
@@ -410,11 +410,11 @@ void Forward_renderer::render(Viewport                          viewport,
             gl::depth_range(0.0f, 0.0f);
         }
 
-        const char* const pass_name = c_pass_strings[static_cast<size_t>(pass)];
+        const auto& pass_name = c_pass_strings[static_cast<size_t>(pass)];
         gl::push_debug_group(gl::Debug_source::debug_source_application,
                              0,
-                             static_cast<GLsizei>(strlen(pass_name)),
-                             pass_name);
+                             static_cast<GLsizei>(pass_name.length()),
+                             pass_name.data());
 
         m_pipeline_state_tracker->execute(pipeline);
         gl::program_uniform_1i(pipeline->shader_stages->gl_name(),
@@ -426,7 +426,7 @@ void Forward_renderer::render(Viewport                          viewport,
         bind_camera_buffer();
         for (auto layer : layers)
         {
-            TracyGpuZone(c_forward_renderer_render)
+            TracyGpuZone(c_forward_renderer_render.data())
 
             update_light_buffer    (layer->lights, m_shadow_renderer->viewport(), layer->ambient_light);
             update_primitive_buffer(layer->meshes, visibility_mask);

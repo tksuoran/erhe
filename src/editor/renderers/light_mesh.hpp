@@ -25,7 +25,7 @@ class Light_mesh
     : public erhe::components::Component
 {
 public:
-    static constexpr const char* c_name = "Light_mesh";
+    static constexpr std::string_view c_name{"Light_mesh"};
     Light_mesh ();
     ~Light_mesh() override;
 

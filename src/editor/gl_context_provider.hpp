@@ -34,7 +34,7 @@ class Gl_context_provider
     : public erhe::components::Component
 {
 public:
-    static constexpr const char* c_name = "Gl_context_provider";
+    static constexpr std::string_view c_name{"Gl_context_provider"};
     Gl_context_provider ();
     ~Gl_context_provider() override;
     Gl_context_provider (const Gl_context_provider&) = delete;

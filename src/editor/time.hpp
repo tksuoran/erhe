@@ -11,7 +11,7 @@ class Editor_time
     : public erhe::components::Component
 {
 public:
-    static constexpr const char* c_name = "Editor_time";
+    static constexpr std::string_view c_name{"Editor_time"};
     Editor_time();
     ~Editor_time() override;
 

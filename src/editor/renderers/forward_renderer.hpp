@@ -52,7 +52,7 @@ public:
         hidden_line_with_blend
     };
 
-    static constexpr const char* c_pass_strings[] =
+    static constexpr std::array<std::string_view, 11> c_pass_strings =
     {
         "Polygon Fill",
         "Edge Lines",
@@ -67,7 +67,7 @@ public:
         "Hidden Line with Blend",
     };
 
-    static constexpr const char* c_name = "Forward_renderer";
+    static constexpr std::string_view c_name{"Forward_renderer"};
     Forward_renderer ();
     ~Forward_renderer() override;
 

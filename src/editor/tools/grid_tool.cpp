@@ -22,7 +22,7 @@ void Grid_tool::initialize_component()
 
 auto Grid_tool::description() -> const char*
 {
-   return c_name;
+   return c_name.data();
 }
 
 auto Grid_tool::state() const -> State

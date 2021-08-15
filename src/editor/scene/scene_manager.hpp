@@ -62,7 +62,7 @@ class Scene_manager
     , public erhe::components::IUpdate_once_per_frame
 {
 public:
-    static constexpr const char* c_name = "Scene_manager";
+    static constexpr std::string_view c_name{"Scene_manager"};
     Scene_manager();
     ~Scene_manager() override;
 

@@ -42,7 +42,7 @@ auto Physics_tool::state() const -> State
 
 auto Physics_tool::description() -> const char*
 {
-    return c_name;
+    return c_name.data();
 }
 
 void Physics_tool::window(Pointer_context&)

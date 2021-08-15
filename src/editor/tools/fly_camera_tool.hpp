@@ -44,7 +44,7 @@ class Fly_camera_tool
     , public Window
 {
 public:
-    static constexpr const char* c_name = "Fly_camera_tool";
+    static constexpr std::string_view c_name{"Fly_camera_tool"};
 
     Fly_camera_tool ();
     ~Fly_camera_tool() override;

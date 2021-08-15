@@ -15,7 +15,7 @@ class Node_properties
     , public Window
 {
 public:
-    static constexpr const char* c_name = "Node_properties";
+    static constexpr std::string_view c_name{"Node_properties"};
 
     Node_properties ();
     ~Node_properties() override;

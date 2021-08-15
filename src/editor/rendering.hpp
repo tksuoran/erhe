@@ -80,7 +80,7 @@ public:
     static constexpr bool s_enable_gui    {true};
     static constexpr bool s_enable_headset{false};
 
-    static constexpr const char* c_name = "Editor_rendering";
+    static constexpr std::string_view c_name{"Editor_rendering"};
 
     Editor_rendering ();
     ~Editor_rendering() override;

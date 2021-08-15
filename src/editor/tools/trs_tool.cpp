@@ -45,7 +45,7 @@ Trs_tool::~Trs_tool() = default;
 
 auto Trs_tool::description() -> const char*
 {
-    return c_name;
+    return c_name.data();
 }
 
 auto Trs_tool::state() const -> State

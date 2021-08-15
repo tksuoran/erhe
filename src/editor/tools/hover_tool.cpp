@@ -36,7 +36,7 @@ Hover_tool::~Hover_tool() = default;
 
 auto Hover_tool::description() -> const char*
 {
-    return c_name;
+    return c_name.data();
 }
 
 auto Hover_tool::state() const -> State

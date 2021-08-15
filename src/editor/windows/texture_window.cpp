@@ -144,7 +144,7 @@ void Viewport_window::bind_multisample_framebuffer()
     VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
 }
 
-static constexpr const char* c_multisample_resolve = "Viewport_window::multisample_resolve()";
+static constexpr std::string_view c_multisample_resolve{"Viewport_window::multisample_resolve()"};
 void Viewport_window::multisample_resolve()
 {
     if (!m_framebuffer_multisample || !m_framebuffer_resolved)
@@ -154,8 +154,8 @@ void Viewport_window::multisample_resolve()
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
-                         static_cast<GLsizei>(strlen(c_multisample_resolve)),
-                         c_multisample_resolve);
+                         static_cast<GLsizei>(c_multisample_resolve.length()),
+                         c_multisample_resolve.data());
 
     {
         gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_framebuffer_multisample->gl_name());

@@ -15,7 +15,7 @@ class Camera_properties
     , public Window
 {
 public:
-    static constexpr const char* c_name = "Camera_properties";
+    static constexpr std::string_view c_name{"Camera_properties"};
     Camera_properties();
     ~Camera_properties() override;
 

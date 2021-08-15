@@ -56,7 +56,7 @@ class Line_renderer
     : public erhe::components::Component
 {
 public:
-    static constexpr const char* c_name = "Line_renderer";
+    static constexpr std::string_view c_name{"Line_renderer"};
     Line_renderer ();
     ~Line_renderer() override;
 

@@ -52,7 +52,7 @@ void Text_renderer::connect()
     m_pipeline_state_tracker = get<OpenGL_state_tracker>();
 }
 
-static constexpr const char* c_text_renderer_initialize_component = "Text_renderer::initialize_component()";
+static constexpr std::string_view c_text_renderer_initialize_component{"Text_renderer::initialize_component()"};
 void Text_renderer::initialize_component()
 {
     ZoneScoped;
@@ -61,8 +61,8 @@ void Text_renderer::initialize_component()
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
-                         static_cast<GLsizei>(strlen(c_text_renderer_initialize_component)),
-                         c_text_renderer_initialize_component);
+                         static_cast<GLsizei>(c_text_renderer_initialize_component.length()),
+                         c_text_renderer_initialize_component.data());
 
     constexpr gl::Buffer_storage_mask    storage_mask  {gl::Buffer_storage_mask::map_write_bit};
     constexpr gl::Map_buffer_access_mask access_mask   {gl::Map_buffer_access_mask::map_write_bit};
@@ -188,17 +188,7 @@ void Text_renderer::print(const glm::vec3  text_position,
     m_vertex_writer.end();
 }
 
-//void Text_renderer::print(const glm::vec3  text_position,
-//                          const uint32_t   text_color,
-//                          const char*      format,
-//                          fmt::format_args args)
-//{
-//    std::string text = fmt::vformat(format, args);
-//
-//    print(text_position, text_color, text);
-//}
-
-static constexpr const char* c_text_renderer_render = "Text_renderer::render()";
+static constexpr std::string_view c_text_renderer_render{"Text_renderer::render()"};
 void Text_renderer::render(erhe::scene::Viewport viewport)
 {
     if (m_quad_count == 0)
@@ -207,12 +197,12 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
     }
 
     ZoneScoped;
-    TracyGpuZone(c_text_renderer_render)
+    TracyGpuZone(c_text_renderer_render.data())
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
-                         static_cast<GLsizei>(strlen(c_text_renderer_render)),
-                         c_text_renderer_render);
+                         static_cast<GLsizei>(c_text_renderer_render.length()),
+                         c_text_renderer_render.data());
 
     const mat4 clip_from_window = erhe::toolkit::create_orthographic(static_cast<float>(viewport.x), static_cast<float>(viewport.width),
                                                                      static_cast<float>(viewport.y), static_cast<float>(viewport.height),

@@ -53,7 +53,7 @@ void Id_renderer::connect(std::shared_ptr<erhe::graphics::OpenGL_state_tracker> 
     initialization_depends_on(programs);
 }
 
-static constexpr const char* c_id_renderer_initialize_component = "Id_renderer::initialize_component()";
+static constexpr std::string_view c_id_renderer_initialize_component{"Id_renderer::initialize_component()"};
 void Id_renderer::initialize_component()
 {
     create_frame_resources(1, 1, 1, 1000, 1000);
@@ -81,8 +81,8 @@ void Id_renderer::initialize_component()
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
-                         static_cast<GLsizei>(strlen(c_id_renderer_initialize_component)),
-                         c_id_renderer_initialize_component);
+                         static_cast<GLsizei>(c_id_renderer_initialize_component.length()),
+                         c_id_renderer_initialize_component.data());
 
     create_id_frame_resources();
 
@@ -173,8 +173,8 @@ void Id_renderer::render_layer(erhe::scene::Layer* layer)
     m_layer_ranges.emplace_back(layer_range);
 }
 
-static constexpr const char* c_id_renderer_render_content = "Id_renderer::render() content";
-static constexpr const char* c_id_renderer_render_tool = "Id_renderer::render() tool";
+static constexpr std::string_view c_id_renderer_render_content{"Id_renderer::render() content"};
+static constexpr std::string_view c_id_renderer_render_tool   {"Id_renderer::render() tool"};
 void Id_renderer::render(erhe::scene::Viewport   viewport,
                          const Layer_collection& content_layers,
                          const Layer_collection& tool_layers,
@@ -192,8 +192,8 @@ void Id_renderer::render(erhe::scene::Viewport   viewport,
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
-                         static_cast<GLsizei>(strlen(c_id_renderer_render_content)),
-                         c_id_renderer_render_content);
+                         static_cast<GLsizei>(c_id_renderer_render_content.length()),
+                         c_id_renderer_render_content.data());
 
     update_framebuffer(viewport);
 

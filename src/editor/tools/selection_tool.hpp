@@ -22,7 +22,7 @@ class Selection_tool
     , public Window
 {
 public:
-    static constexpr const char* c_name = "Selection_tool";
+    static constexpr std::string_view c_name{"Selection_tool"};
     Selection_tool();
     ~Selection_tool() override;
 

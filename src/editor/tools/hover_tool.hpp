@@ -26,7 +26,7 @@ class Hover_tool
     , public Window
 {
 public:
-    static constexpr const char* c_name = "Hover_tool";
+    static constexpr std::string_view c_name{"Hover_tool"};
 
     Hover_tool ();
     ~Hover_tool() override;

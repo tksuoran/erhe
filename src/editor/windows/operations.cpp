@@ -50,7 +50,7 @@ void Operations::window(Pointer_context& pointer_context)
     for (unsigned int i = 0; i < static_cast<unsigned int>(Action::count); ++i)
     {
         const auto button_action  = static_cast<Action>(i);
-        const bool button_pressed = make_button(c_action_strings[i],
+        const bool button_pressed = make_button(c_action_strings[i].data(),
                                                 (button_action == active_action) ? Item_mode::active
                                                                                  : Item_mode::normal,
                                                 button_size);

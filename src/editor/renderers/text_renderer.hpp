@@ -48,7 +48,7 @@ class Text_renderer
     : public erhe::components::Component
 {
 public:
-    static constexpr const char* c_name = "Text_renderer";
+    static constexpr std::string_view c_name{"Text_renderer"};
     Text_renderer ();
     ~Text_renderer() override;
     Text_renderer (const Text_renderer&) = delete;

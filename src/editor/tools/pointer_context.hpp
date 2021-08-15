@@ -5,8 +5,10 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
 #include <memory>
 #include <optional>
+#include <string_view>
 
 namespace erhe::geometry
 {
@@ -36,7 +38,8 @@ enum class Action : unsigned int
     drag,
     count
 };
-static constexpr const char* c_action_strings[] =
+
+static constexpr std::array<std::string_view, 6> c_action_strings =
 {
     "Select",
     "Translate",

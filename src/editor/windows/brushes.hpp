@@ -58,7 +58,7 @@ class Brushes
     , public Window
 {
 public:
-    static constexpr const char* c_name = "Brushes";
+    static constexpr std::string_view c_name{"Brushes"};
 
     Brushes ();
     ~Brushes() override;
@@ -72,7 +72,7 @@ public:
     void render       (const Render_context& render_context) override;
     auto state        () const -> State override;
     void cancel_ready () override;
-    auto description  () -> const char* override { return c_name; }
+    auto description  () -> const char* override { return c_name.data(); }
     void render_update(const Render_context&) override;
 
     // Implements Window

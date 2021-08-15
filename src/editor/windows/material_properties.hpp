@@ -15,7 +15,7 @@ class Material_properties
     , public Window
 {
 public:
-    static constexpr const char* c_name = "Light_properties";
+    static constexpr std::string_view c_name{"Light_properties"};
 
     Material_properties ();
     ~Material_properties() override;

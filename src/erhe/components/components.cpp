@@ -145,7 +145,7 @@ void Components::launch_component_initialization()
                 log_components.info("{}\n", component->name());
                 component->initialize_component();
                 {
-                    ZoneName(component->name(), strlen(component->name()));
+                    ZoneName(component->name().data(), component->name().length());
 
                     std::lock_guard<std::mutex> lock(m_mutex);
                     component->set_ready();

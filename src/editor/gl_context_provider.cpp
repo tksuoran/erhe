@@ -14,7 +14,7 @@ namespace editor {
 
 using namespace std;
 
-static constexpr const char* c_name = "Gl_context_provider";
+static constexpr std::string_view c_name{"Gl_context_provider"};
 Gl_context_provider::Gl_context_provider()
     : erhe::components::Component{c_name}
     , m_main_thread_id           {std::this_thread::get_id()}

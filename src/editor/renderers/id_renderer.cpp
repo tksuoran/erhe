@@ -59,7 +59,7 @@ void Id_renderer::connect()
     m_programs               = require<Programs>();
 }
 
-static constexpr const char* c_id_renderer_initialize_component = "Id_renderer::initialize_component()";
+static constexpr std::string_view c_id_renderer_initialize_component{"Id_renderer::initialize_component()"};
 void Id_renderer::initialize_component()
 {
     ZoneScoped;
@@ -93,8 +93,8 @@ void Id_renderer::initialize_component()
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
-                         static_cast<GLsizei>(strlen(c_id_renderer_initialize_component)),
-                         c_id_renderer_initialize_component);
+                         static_cast<GLsizei>(c_id_renderer_initialize_component.length()),
+                         c_id_renderer_initialize_component.data());
 
     create_id_frame_resources();
 
@@ -190,10 +190,10 @@ void Id_renderer::render_layer(erhe::scene::Layer* layer)
     m_layer_ranges.emplace_back(layer_range);
 }
 
-static constexpr const char* const c_id_renderer_render_clear   = "Id_renderer::render() clear";
-static constexpr const char* const c_id_renderer_render_content = "Id_renderer::render() content";
-static constexpr const char* const c_id_renderer_render_tool    = "Id_renderer::render() tool";
-static constexpr const char* const c_id_renderer_render_read    = "Id_renderer::render() read";
+static constexpr std::string_view c_id_renderer_render_clear  {"Id_renderer::render() clear"  };
+static constexpr std::string_view c_id_renderer_render_content{"Id_renderer::render() content"};
+static constexpr std::string_view c_id_renderer_render_tool   {"Id_renderer::render() tool"   };
+static constexpr std::string_view c_id_renderer_render_read   {"Id_renderer::render() read"   };
 void Id_renderer::render(const erhe::scene::Viewport viewport,
                          const Layer_collection&     content_layers,
                          const Layer_collection&     tool_layers,
@@ -213,8 +213,8 @@ void Id_renderer::render(const erhe::scene::Viewport viewport,
 
     gl::push_debug_group(gl::Debug_source::debug_source_application,
                          0,
-                         static_cast<GLsizei>(strlen(c_id_renderer_render_content)),
-                         c_id_renderer_render_content);
+                         static_cast<GLsizei>(c_id_renderer_render_content.length()),
+                         c_id_renderer_render_content.data());
 
     update_framebuffer(viewport);
 
@@ -230,7 +230,7 @@ void Id_renderer::render(const erhe::scene::Viewport viewport,
     bind_camera_buffer();
 
     {
-        TracyGpuZone(c_id_renderer_render_clear)
+        TracyGpuZone(c_id_renderer_render_clear.data())
 
         m_pipeline_state_tracker->shader_stages.reset();
         m_pipeline_state_tracker->color_blend.execute(&erhe::graphics::Color_blend_state::color_blend_disabled);
@@ -270,14 +270,14 @@ void Id_renderer::render(const erhe::scene::Viewport viewport,
     m_pipeline_state_tracker->execute(&m_pipeline);
     for (auto layer : content_layers)
     {
-        TracyGpuZone(c_id_renderer_render_content)
+        TracyGpuZone(c_id_renderer_render_content.data())
         render_layer(layer.get());
     }
 
     // Clear depth for tool pixels
     if constexpr (true)
     {
-        TracyGpuZone(c_id_renderer_render_tool)
+        TracyGpuZone(c_id_renderer_render_tool.data())
         m_pipeline_state_tracker->execute(&m_selective_depth_clear_pipeline);
         gl::depth_range(0.0f, 0.0f);
         for (auto layer : tool_layers)
@@ -288,7 +288,7 @@ void Id_renderer::render(const erhe::scene::Viewport viewport,
 
     // Resume normal depth usage
     {
-        TracyGpuZone(c_id_renderer_render_tool)
+        TracyGpuZone(c_id_renderer_render_tool.data())
 
         m_pipeline_state_tracker->execute(&m_pipeline);
         gl::depth_range(0.0f, 1.0f);
@@ -300,7 +300,7 @@ void Id_renderer::render(const erhe::scene::Viewport viewport,
     }
 
     {
-        TracyGpuZone(c_id_renderer_render_read)
+        TracyGpuZone(c_id_renderer_render_read.data())
 
         if (m_use_scissor)
         {

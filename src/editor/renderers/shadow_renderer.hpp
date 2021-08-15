@@ -31,7 +31,7 @@ class Shadow_renderer
       public Base_renderer
 {
 public:
-    static constexpr const char* c_name = "Shadow_renderer";
+    static constexpr std::string_view c_name{"Shadow_renderer"};
     Shadow_renderer ();
     ~Shadow_renderer() override;
 

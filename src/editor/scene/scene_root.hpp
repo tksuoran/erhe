@@ -82,7 +82,7 @@ class Scene_root
     : public erhe::components::Component
 {
 public:
-    static constexpr const char* c_name = "Scene_root";
+    static constexpr std::string_view c_name{"Scene_root"};
     
     Scene_root ();
     ~Scene_root() override;

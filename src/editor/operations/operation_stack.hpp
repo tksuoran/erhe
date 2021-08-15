@@ -14,7 +14,7 @@ class Operation_stack
     : public erhe::components::Component
 {
 public:
-    static constexpr const char* c_name = "Operation_stack";
+    static constexpr std::string_view c_name{"Operation_stack"};
     Operation_stack ();
     ~Operation_stack() override;
 

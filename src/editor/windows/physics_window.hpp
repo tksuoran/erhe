@@ -17,7 +17,7 @@ class Physics_window
     , public Window
 {
 public:
-    static constexpr const char* c_name = "Physics_window";
+    static constexpr std::string_view c_name{"Physics_window"};
 
     Physics_window ();
     ~Physics_window() override;

@@ -6,9 +6,11 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
 #include <map>
 #include <memory>
 #include <optional>
+#include <string_view>
 
 namespace erhe::physics
 {
@@ -52,14 +54,14 @@ public:
         world,
     };
 
-    static constexpr const char* c_reference_mode_strings[] =
+    static constexpr std::array<std::string_view, 3> c_reference_mode_strings =
     {
         "Local",
         "Parent",
         "World"
     };
 
-    static constexpr const char* c_name = "Trs_tool";
+    static constexpr std::string_view c_name{"Trs_tool"};
 
     Trs_tool ();
     ~Trs_tool() override;

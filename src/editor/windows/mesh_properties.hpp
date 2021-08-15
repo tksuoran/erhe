@@ -27,7 +27,7 @@ class Mesh_properties
     , public Window
 {
 public:
-    static constexpr const char* c_name = "Mesh_properties";
+    static constexpr std::string_view c_name{"Mesh_properties"};
 
     Mesh_properties ();
     ~Mesh_properties() override;
@@ -37,7 +37,7 @@ public:
     void initialize_component() override;
 
     // Implements Tool
-    auto description() -> const char* override { return c_name; }
+    auto description() -> const char* override { return c_name.data(); }
     void render     (const Render_context& render_context) override;
     auto state      () const -> State override;
 
