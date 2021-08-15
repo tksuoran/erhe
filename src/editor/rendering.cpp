@@ -360,8 +360,8 @@ Controller_visualization::Controller_visualization(Mesh_memory&       mesh_memor
                                                    erhe::scene::Node* view_root)
 {
     auto controller_material = scene_root.make_material("Controller", glm::vec4(0.1f, 0.1f, 0.2f, 1.0f));
-    constexpr float length = 0.05f;
-    constexpr float radius = 0.02f;
+    //constexpr float length = 0.05f;
+    //constexpr float radius = 0.02f;
     auto controller_geometry = erhe::geometry::shapes::make_torus(0.05f, 0.0025f, 22, 8);
     controller_geometry.transform(erhe::toolkit::mat4_swap_yz);
     controller_geometry.reverse_polygons();

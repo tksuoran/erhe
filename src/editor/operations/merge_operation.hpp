@@ -52,7 +52,7 @@ private:
     class Source_entry
     {
     public:
-        Source_entry(erhe::primitive::Geometry_uploader&     geometry_uplaoder,
+        Source_entry(erhe::primitive::Geometry_uploader&     geometry_uploader,
                      erhe::scene::Layer&                     layer,
                      erhe::scene::Scene&                     scene,
                      erhe::physics::World&                   physics_world,

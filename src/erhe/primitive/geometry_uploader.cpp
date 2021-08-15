@@ -96,17 +96,19 @@ Embree_geometry_uploader::Embree_geometry_uploader(Embree_geometry_uploader&& ot
 
 void Embree_geometry_uploader::end(Vertex_buffer_writer& writer) const
 {
-    auto*       buffer = writer.primitive_geometry.embree_vertex_buffer.get();
-    const auto  offset = writer.primitive_geometry.vertex_byte_offset;
-    const auto& data   = writer.vertex_data;
+    static_cast<void>(writer);
+    // auto*       buffer = writer.primitive_geometry.embree_vertex_buffer.get();
+    // const auto  offset = writer.primitive_geometry.vertex_byte_offset;
+    // const auto& data   = writer.vertex_data;
     // TODO
 }
 
 void Embree_geometry_uploader::end(Index_buffer_writer& writer) const
 {
-    auto*       buffer = writer.primitive_geometry.embree_index_buffer.get();
-    const auto  offset = writer.primitive_geometry.index_byte_offset;
-    const auto& data   = writer.index_data;
+    static_cast<void>(writer);
+    // auto*       buffer = writer.primitive_geometry.embree_index_buffer.get();
+    // const auto  offset = writer.primitive_geometry.index_byte_offset;
+    // const auto& data   = writer.index_data;
     // TODO
 }
 

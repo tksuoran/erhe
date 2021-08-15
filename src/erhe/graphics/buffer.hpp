@@ -84,7 +84,8 @@ private:
 
 class Ring_buffer
 {
-    Ring_buffer(const size_t capacity)
+public:
+    explicit Ring_buffer(const size_t capacity)
     {
         m_buffer.resize(capacity);
         m_max_size = capacity;
@@ -98,17 +99,17 @@ class Ring_buffer
         m_full = false;
     }
 
-    bool empty() const
+    auto empty() const -> bool
     {
         return !m_full && (m_read_offset == m_write_offset);
     }
 
-    bool full() const
+    auto full() const -> bool
     {
         return m_full;
     }
 
-    size_t max_size() const
+    auto max_size() const -> size_t
     {
         return m_max_size;
     }
@@ -140,14 +141,14 @@ class Ring_buffer
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
-        size_t can_write_count = std::min(size_available_for_write(), byte_count);
+        const size_t can_write_count = std::min(size_available_for_write(), byte_count);
         if (can_write_count == 0)
         {
             return 0;
         }
-        size_t max_count_before_wrap = m_max_size - m_write_offset;
-        size_t count_before_wrap = std::min(can_write_count, max_count_before_wrap);
-        size_t count_after_wrap = (count_before_wrap < can_write_count) ? (can_write_count - count_before_wrap) : 0;
+        const size_t max_count_before_wrap = m_max_size - m_write_offset;
+        const size_t count_before_wrap     = std::min(can_write_count, max_count_before_wrap);
+        const size_t count_after_wrap      = (count_before_wrap < can_write_count) ? (can_write_count - count_before_wrap) : 0;
         memcpy(&m_buffer[m_write_offset], src, count_before_wrap);
         if (count_after_wrap > 0)
         {
@@ -163,14 +164,14 @@ class Ring_buffer
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
-        size_t can_read_count = std::min(size_available_for_read(), byte_count);
+        const size_t can_read_count = std::min(size_available_for_read(), byte_count);
         if (can_read_count == 0)
         {
             return 0;
         }
-        size_t max_count_before_wrap = m_max_size - m_read_offset;
-        size_t count_before_wrap = std::min(can_read_count, max_count_before_wrap);
-        size_t count_after_wrap = (count_before_wrap < can_read_count) ? (can_read_count - count_before_wrap) : 0;
+        const size_t max_count_before_wrap = m_max_size - m_read_offset;
+        const size_t count_before_wrap     = std::min(can_read_count, max_count_before_wrap);
+        const size_t count_after_wrap      = (count_before_wrap < can_read_count) ? (can_read_count - count_before_wrap) : 0;
         memcpy(dst, &m_buffer[m_read_offset], count_before_wrap);
         if (count_after_wrap > 0)
         {
@@ -186,13 +187,13 @@ class Ring_buffer
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
-        size_t can_discard_count = std::min(size_available_for_read(), byte_count);
+        const size_t can_discard_count = std::min(size_available_for_read(), byte_count);
         if (can_discard_count == 0)
         {
             return 0;
         }
         m_read_offset = (m_read_offset + can_discard_count) % m_max_size;
-        m_full = false;
+        m_full        = false;
         return can_discard_count;
     }
 

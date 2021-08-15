@@ -42,8 +42,8 @@ class Selection_tool;
 class Brush_create_context
 {
 public:
-    Brush_create_context(erhe::primitive::Geometry_uploader& geometry_uploader,
-                         erhe::primitive::Normal_style       normal_style = erhe::primitive::Normal_style::corner_normals)
+    explicit Brush_create_context(erhe::primitive::Geometry_uploader& geometry_uploader,
+                                  erhe::primitive::Normal_style       normal_style = erhe::primitive::Normal_style::corner_normals)
         : geometry_uploader{geometry_uploader}
         , normal_style     {normal_style}
     {
