@@ -71,9 +71,9 @@ void Shadow_renderer::initialize_component()
     create_frame_resources(1, 256, 256, 1000, 1000);
 
     m_vertex_input = std::make_unique<Vertex_input_state>(get<Program_interface>()->attribute_mappings,
-                                                          *m_mesh_memory->vertex_format(),
-                                                          m_mesh_memory->vertex_buffer(),
-                                                          m_mesh_memory->index_buffer());
+                                                          m_mesh_memory->gl_vertex_format(),
+                                                          m_mesh_memory->gl_vertex_buffer.get(),
+                                                          m_mesh_memory->gl_index_buffer.get());
 
     m_pipeline.shader_stages  = get<Programs>()->depth.get();
     m_pipeline.vertex_input   = m_vertex_input.get();
@@ -165,7 +165,7 @@ void Shadow_renderer::render(Layer_collection& layers,
             bind_camera_buffer();
 
             gl::multi_draw_elements_indirect(m_pipeline.input_assembly->primitive_topology,
-                                             m_mesh_memory->index_type(),
+                                             m_mesh_memory->gl_index_type(),
                                              reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
                                              static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
                                              static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command)));

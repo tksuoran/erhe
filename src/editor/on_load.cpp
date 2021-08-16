@@ -9,6 +9,7 @@
 #include "operations/operation_stack.hpp"
 
 #include "renderers/forward_renderer.hpp"
+#include "renderers/headset_renderer.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
@@ -71,8 +72,8 @@ auto Application::create_gl_window()
 
     constexpr int msaa_sample_count = Editor_rendering::s_enable_gui ? 0 : 16;
 
-    //m_context_window = std::make_unique<erhe::toolkit::Context_window>(1920, 1080, msaa_sample_count); // 1080p
-    m_context_window = std::make_unique<erhe::toolkit::Context_window>(1280,  720, msaa_sample_count); // 720p
+    m_context_window = std::make_unique<erhe::toolkit::Context_window>(1920, 1080, msaa_sample_count); // 1080p
+    //m_context_window = std::make_unique<erhe::toolkit::Context_window>(1280,  720, msaa_sample_count); // 720p
 
 #if defined(ERHE_WINDOW_TOOLKIT_GLFW)
     erhe::graphics::PNG_loader loader;
@@ -171,6 +172,7 @@ auto Application::initialize_components()
         m_components.add(make_shared<Fly_camera_tool     >());
         m_components.add(make_shared<Forward_renderer    >());
         m_components.add(make_shared<Grid_tool           >());
+        m_components.add(make_shared<Headset_renderer    >());
         m_components.add(make_shared<Hover_tool          >());
         m_components.add(make_shared<Id_renderer         >());
         m_components.add(make_shared<Light_properties    >());

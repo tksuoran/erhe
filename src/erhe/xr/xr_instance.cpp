@@ -49,6 +49,11 @@ Xr_instance::Xr_instance()
     }
 }
 
+auto Xr_instance::is_available() const -> bool
+{
+    return m_xr_instance != XR_NULL_HANDLE;
+}
+
 auto xr_debug_utils_messenger_callback(XrDebugUtilsMessageSeverityFlagsEXT         messageSeverity,
                                        XrDebugUtilsMessageTypeFlagsEXT             messageTypes,
                                        const XrDebugUtilsMessengerCallbackDataEXT* callbackData,
@@ -263,9 +268,9 @@ auto Xr_instance::enumerate_layers() -> bool
     for (const auto& api_layer : m_xr_api_layer_properties)
     {
         log_xr.info("    {} layer version {} spec version\n",
-                 api_layer.layerName,
-                 api_layer.layerVersion,
-                 api_layer.specVersion);
+                    api_layer.layerName,
+                    api_layer.layerVersion,
+                    api_layer.specVersion);
     }
     return true;
 }
@@ -293,7 +298,7 @@ auto Xr_instance::enumerate_extensions() -> bool
     {
         extension.type = XR_TYPE_EXTENSION_PROPERTIES;
     }
-    
+
     if (!check("xrEnumerateInstanceExtensionProperties",
                xrEnumerateInstanceExtensionProperties(nullptr,
                                                       instance_extension_count,
@@ -420,7 +425,7 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     }
 
     std::vector<XrViewConfigurationType> view_configuration_types{view_configuration_type_count};
-    
+
     if (!check("xrEnumerateViewConfigurations",
                xrEnumerateViewConfigurations(m_xr_instance,
                                              m_xr_system_id,
@@ -509,29 +514,29 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 // Standard identifiers
 
 // trackpad         A 2D input source that usually includes click and touch component.
-// 
+//
 // thumbstick       A small 2D joystick that is meant to be used with the user’s thumb.
 //                  These sometimes include click and/or touch components.
-// 
+//
 // joystick         A 2D joystick that is meant to be used with the user’s entire hand,
 //                  such as a flight stick. These generally do not have click component,
 //                  but might have touch components.
-// 
+//
 // trigger          A 1D analog input component that returns to a rest state when the user stops
 //                  interacting with it. These sometimes include touch and/or click components.
-// 
+//
 // throttle         A 1D analog input component that remains in position when the user stops
 //                  interacting with it.
-// 
+//
 // trackball        A 2D relative input source. These sometimes include click components.
-// 
+//
 // pedal            A 1D analog input component that is similar to a trigger but meant to be
 //                  operated by a foot
-// 
+//
 // system           A button with the specialised meaning that it enables the user to access
 //                  system-level functions and UI. Input data from system buttons is generally
 //                  used internally by runtimes and may not be available to applications.
-// 
+//
 // dpad_up          A set of buttons arranged in a plus shape.
 // dpad_down
 // dpad_left
@@ -542,13 +547,13 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 // diamond_left     arrangement is consistent. These names are used for the A/B/X/Y buttons
 // diamond_right    on a Xbox controller, and the square/cross/circle/triangle button on
 //                  a PlayStation controller.
-// 
+//
 // a                Standalone buttons are named for their physical labels. These are the
 // b                standard identifiers for such buttons. Extensions may add new identifiers
 // x                as detailed in the next section. Groups of four buttons in a diamond shape
 // y                should use the diamond-prefix names above instead of using the labels on
 // start            the buttons themselves.
-// 
+//
 // home             Some other standard controls are often identified by icons.
 // end              These are their standard names.
 // select
@@ -558,65 +563,65 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 // play_pause
 // menu
 // view
-// 
+//
 // thumbrest        Some controllers have a place for the user to rest their thumb.
-// 
+//
 // shoulder         A button that is usually pressed with the index finger and is often
 //                  positioned above a trigger.
-// 
+//
 // squeeze          An input source that indicates that the user is squeezing their fist
 //                  closed. This could be a simple button or act more like a trigger.
 //                  Sources with this identifier should either follow button or trigger
 //                  conventions for their components.
-// 
+//
 // wheel            A steering wheel.
 
 // Input sources whose orientation and/or position are tracked also expose pose identifiers.
 
 // Standard pose identifiers for tracked hands or motion controllers as
 // represented by /user/hand/left and /user/hand/right are:
-// 
-// grip     
+//
+// grip
 //      A pose that allows applications to reliably render a virtual object
 //      held in the user’s hand, whether it is tracked directly or by a motion
 //      controller. The grip pose is defined as follows:
-// 
+//
 //          The grip position:
-// 
+//
 //              For tracked hands:
 //                  The user’s palm centroid when closing the fist,
 //                  at the surface of the palm.
-// 
+//
 //              For handheld motion controllers:
 //                  A fixed position within the controller that generally lines up
 //                  with the palm centroid when held by a hand in a neutral position.
 //                  This position should be adjusted left or right to center the
 //                  position within the controller’s grip.
-// 
+//
 //          The grip orientation’s +X axis:
 //                  When you completely open your hand to form a flat 5-finger pose,
 //                  the ray that is normal to the user’s palm (away from the palm
 //                  in the left hand, into the palm in the right hand).
-// 
+//
 //          The grip orientation’s -Z axis:
 //                  When you close your hand partially (as if holding the controller),
 //                  the ray that goes through the center of the tube formed by your
 //                  non-thumb fingers, in the direction of little finger to thumb.
-// 
+//
 //          The grip orientation’s +Y axis:
 //                  orthogonal to +Z and +X using the right-hand rule.
-// 
+//
 // aim
 //      A pose that allows applications to point in the world using the input source,
 //      according to the platform’s conventions for aiming with that kind of source.
 //      The aim pose is defined as follows:
-// 
+//
 //          For tracked hands:
 //              The ray that follows platform conventions for how the user aims at
 //              objects in the world with their entire hand, with +Y up, +X to the
 //              right, and -Z forward. The ray chosen will be runtime-dependent,
 //              for example, a ray emerging from the palm parallel to the forearm.
-// 
+//
 //          For handheld motion controllers:
 //              The ray that follows platform conventions for how the user targets
 //              objects in the world with the motion controller, with +Y up, +X to
@@ -632,9 +637,9 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 
 // When a single device contains multiple input sources that use the same identifier,
 // a location suffix is added to create a unique identifier for that input source.
-// 
+//
 // Standard locations are:
-// 
+//
 // left
 // right
 // left_upper
@@ -648,27 +653,27 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 
 // Components are named for the specific boolean, scalar, or other value of the
 // input source. Standard components are:
-// 
+//
 //  click
 //      A physical switch has been pressed by the user.
 //      This is valid for all buttons, and is common for trackpads,
 //      thumbsticks, triggers, and dpads. "click" components are always boolean.
-// 
+//
 //  touch
 //      The user has touched the input source. This is valid for all trackpads,
 //      and may be present for any other kind of input source if the device
 //      includes the necessary sensor. "touch" components are always boolean.
-// 
+//
 //  force
 //      A 1D scalar value that represents the user applying force to the input.
 //      It varies from 0 to 1, with 0 being the rest state. This is present
 //          for any input source with a force sensor.
-// 
+//
 //  value
 //      A 1D scalar value that varies from 0 to 1, with 0 being the rest state.
 //      This is present for triggers, throttles, and pedals. It may also be
 //      present for squeeze or other components.
-// 
+//
 //  x, y
 //      scalar components of 2D values. These vary in value from -1 to 1.
 //      These represent the 2D position of the input source with 0 being
@@ -676,12 +681,12 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 //      or all the way down for y axis. +1 means all the way right for x
 //      axis or all the way up for y axis. x and y components are present
 //      for trackpads, thumbsticks, and joysticks.
-// 
+//
 // twist
 //      Some sources, such as flight sticks, have a sensor that allows the
 //      user to twist the input left or right. For this component -1 means
 //      all the way left and 1 means all the way right.
-// 
+//
 // pose
 //      The orientation and/or position of this input source. This component
 //      may exist for dedicated pose identifiers like grip and aim, or may
@@ -693,16 +698,16 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 
 // Path:
 //      /interaction_profiles/khr/simple_controller
-// 
+//
 // Valid for user paths:
 //      /user/hand/left
 //      /user/hand/right
-// 
+//
 // This interaction profile provides basic pose, button, and haptic support
 // for applications with simple input needs. There is no hardware associated
 // with the profile, and runtimes which support this profile should map the
 // input paths provided to whatever the appropriate paths are on the actual hardware.
-// 
+//
 // Supported component paths:
 //      .../input/select/click
 //      .../input/menu/click
@@ -714,13 +719,13 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 
 // Path:
 //      /interaction_profiles/htc/vive_controller
-// 
+//
 // Valid for user paths:
 //      /user/hand/left
 //      /user/hand/right
-// 
+//
 // This interaction profile represents the input sources and haptics on the Vive Controller.
-// 
+//
 // Supported component paths:
 //      .../input/system/click (may not be available for application use)
 //      .../input/squeeze/click
@@ -924,7 +929,7 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
     XrActiveActionSet active_action_set;
     active_action_set.actionSet     = actions.action_set;
     active_action_set.subactionPath = XR_NULL_PATH;
-    
+
     XrActionsSyncInfo actions_sync_info;
     actions_sync_info.type                  = XR_TYPE_ACTIONS_SYNC_INFO;
     actions_sync_info.next                  = nullptr;
@@ -941,7 +946,7 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
 
         case XR_SESSION_LOSS_PENDING:
         case XR_SESSION_NOT_FOCUSED:
-            // TODO 
+            // TODO
             actions.trigger_value_state.isActive = XR_FALSE;
             actions.squeeze_click_state.isActive = XR_FALSE;
             return true;
@@ -958,7 +963,7 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
         action_state_get_info.next          = nullptr;
         action_state_get_info.action        = actions.trigger_value;
         action_state_get_info.subactionPath = XR_NULL_PATH;
-    
+
         if (!check("xrGetActionStateFloat",
                    xrGetActionStateFloat(session.get_xr_session(),
                                          &action_state_get_info,
@@ -974,7 +979,7 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
         action_state_get_info.next          = nullptr;
         action_state_get_info.action        = actions.squeeze_click;
         action_state_get_info.subactionPath = XR_NULL_PATH;
-    
+
         if (!check("xrGetActionStateBoolean",
                    xrGetActionStateBoolean(session.get_xr_session(),
                                            &action_state_get_info,
@@ -990,7 +995,7 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
         action_state_get_info.next          = nullptr;
         action_state_get_info.action        = actions.aim_pose;
         action_state_get_info.subactionPath = XR_NULL_PATH;
-    
+
         if (!check("xrGetActionStatePose",
                    xrGetActionStatePose(session.get_xr_session(),
                                         &action_state_get_info,
@@ -1017,7 +1022,7 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
 
     if (!check("xrLocateSpace",
                xrLocateSpace(space,
-                             baseSpace, 
+                             baseSpace,
                              time,
                              &location)))
     {
@@ -1035,7 +1040,7 @@ auto Xr_instance::get_current_interaction_profile(Xr_session& session) -> bool
     interation_profile_state.type               = XR_TYPE_INTERACTION_PROFILE_STATE;
     interation_profile_state.next               = nullptr;
     interation_profile_state.interactionProfile = XR_NULL_PATH;
-            
+
     if (!check("xrGetCurrentInteractionProfile",
                 xrGetCurrentInteractionProfile(session.get_xr_session(),
                                                paths.user_hand_left.xr_path,

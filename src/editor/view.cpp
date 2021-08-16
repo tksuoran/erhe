@@ -4,10 +4,12 @@
 #include "view.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/id_renderer.hpp"
+#include "erhe/scene/camera.hpp"
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "erhe/imgui/imgui_impl_erhe.hpp"
+#include "erhe/toolkit/math_util.hpp"
 #include "backends/imgui_impl_glfw.h"
 
 namespace editor {

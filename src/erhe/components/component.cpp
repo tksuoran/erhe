@@ -54,10 +54,14 @@ auto Component::get_state() const
     return m_state;
 }
 
-auto Component::is_ready_to_initialize() const
+auto Component::is_ready_to_initialize(const bool in_worker_thread) const
 -> bool
 {
-    return m_dependencies.empty();
+    return
+        m_dependencies.empty() &&
+        (
+            in_worker_thread != initialization_requires_main_thread()
+        );
 }
 
 void Component::remove_dependency(const std::shared_ptr<Component>& dependency)

@@ -5,6 +5,7 @@
 #include "erhe/xr/xr_swapchain_image.hpp"
 #include <openxr/openxr.h>
 
+#include <functional>
 #include <vector>
 
 namespace erhe::toolkit {
@@ -47,6 +48,12 @@ private:
     class Swapchains
     {
     public:
+        Swapchains(XrSwapchain color_swapchain, XrSwapchain depth_swapchain)
+            : color_swapchain{color_swapchain}
+            , depth_swapchain{depth_swapchain}
+        {
+        }
+
         Swapchain color_swapchain;
         Swapchain depth_swapchain;
     };

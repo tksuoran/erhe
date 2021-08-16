@@ -10,7 +10,13 @@ Headset::Headset(erhe::toolkit::Context_window* context_window)
     VERIFY(context_window != nullptr);
 
     m_xr_instance = std::make_unique<Xr_instance>();
-    m_xr_session  = std::make_unique<Xr_session>(*m_xr_instance.get(), *context_window);
+    if (!m_xr_instance->is_available())
+    {
+        m_xr_instance.reset();
+        return;
+    }
+
+    m_xr_session = std::make_unique<Xr_session>(*m_xr_instance.get(), *context_window);
 
     m_xr_instance->get_current_interaction_profile(*m_xr_session.get());
 }
@@ -26,11 +32,21 @@ auto Headset::controller_pose() const -> Pose
 
 auto Headset::trigger_value() const -> float
 {
+    if (!m_xr_instance)
+    {
+        return 0.0f;
+    }
+
     return m_xr_instance->actions.trigger_value_state.currentState;
 }
 
 auto Headset::squeeze_click() const -> bool
 {
+    if (!m_xr_instance)
+    {
+        return false;
+    }
+
     return m_xr_instance->actions.squeeze_click_state.currentState == XR_TRUE;
 }
 
@@ -87,6 +103,11 @@ auto Headset::render(std::function<bool(Render_view&)> render_view_callback) -> 
 
 auto Headset::end_frame() -> bool
 {
+    if (!m_xr_instance)
+    {
+        return false;
+    }
+
     return m_xr_session->end_frame();
 }
 

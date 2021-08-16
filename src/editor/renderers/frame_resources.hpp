@@ -51,12 +51,12 @@ public:
     void operator= (const Frame_resources&) = delete;
 
     Frame_resources(Frame_resources&& other) noexcept
+        : material_buffer     {std::move(other.material_buffer     )}
+        , light_buffer        {std::move(other.light_buffer        )}
+        , camera_buffer       {std::move(other.camera_buffer       )}
+        , primitive_buffer    {std::move(other.primitive_buffer    )}
+        , draw_indirect_buffer{std::move(other.draw_indirect_buffer)}
     {
-        material_buffer      = std::move(other.material_buffer);
-        light_buffer         = std::move(other.light_buffer);
-        camera_buffer        = std::move(other.camera_buffer);
-        primitive_buffer     = std::move(other.primitive_buffer);
-        draw_indirect_buffer = std::move(other.draw_indirect_buffer);
     }
 
     auto operator=(Frame_resources&& other) noexcept

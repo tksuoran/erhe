@@ -16,6 +16,7 @@
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/graphics/buffer.hpp"
+#include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/physics/rigid_body.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/camera.hpp"
@@ -188,13 +189,10 @@ void Trs_tool::Visualization::initialize(Mesh_memory& mesh_memory, Scene_root& s
     rotate_ring_geometry.reverse_polygons();
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
-    Gl_geometry_uploader uploader{buffer_transfer_queue,
-                                  mesh_memory.vertex_format_info(),
-                                  mesh_memory.vertex_buffer_info()};
-    auto  arrow_cylinder_pg = make_primitive_shared(arrow_cylinder_geometry, uploader);
-    auto  arrow_cone_pg     = make_primitive_shared(arrow_cone_geometry    , uploader);
-    auto  box_pg            = make_primitive_shared(box_geometry           , uploader);
-    auto  rotate_ring_pg    = make_primitive_shared(rotate_ring_geometry   , uploader);
+    auto  arrow_cylinder_pg = make_primitive_shared(arrow_cylinder_geometry, mesh_memory.build_info_set.gl);
+    auto  arrow_cone_pg     = make_primitive_shared(arrow_cone_geometry    , mesh_memory.build_info_set.gl);
+    auto  box_pg            = make_primitive_shared(box_geometry           , mesh_memory.build_info_set.gl);
+    auto  rotate_ring_pg    = make_primitive_shared(rotate_ring_geometry   , mesh_memory.build_info_set.gl);
     auto& tool_layer        = *scene_root.tool_layer().get();
     const vec3 pos{0.0f, 1.0f, 0.0f};
     x_arrow_cylinder_mesh  = scene_root.make_mesh_node("X arrow cylinder", arrow_cylinder_pg, x_material, tool_layer, &tool_node, pos);

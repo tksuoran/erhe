@@ -13,7 +13,7 @@ class Swapchain;
 class Swapchain_image
 {
 public:
-    Swapchain_image (Swapchain* swapchain, uint32_t image_index);
+    Swapchain_image (Swapchain* swapchain, const uint32_t image_index);
     ~Swapchain_image();
     Swapchain_image (const Swapchain_image&) = delete;
     void operator=  (const Swapchain_image&) = delete;
@@ -31,7 +31,7 @@ private:
 class Swapchain
 {
 public:
-    Swapchain(XrSwapchain xr_swapchain);
+    explicit Swapchain(XrSwapchain xr_swapchain);
     ~Swapchain();
     Swapchain     (const Swapchain&) = delete;
     void operator=(const Swapchain&) = delete;
@@ -41,7 +41,7 @@ public:
     auto acquire         () -> std::optional<Swapchain_image>;
     auto release         () -> bool;
     auto wait            () -> bool;
-    auto get_gl_texture  (uint32_t image_index) const -> unsigned int;
+    auto get_gl_texture  (const uint32_t image_index) const -> unsigned int;
     auto get_xr_swapchain() const -> XrSwapchain;
 
 private:

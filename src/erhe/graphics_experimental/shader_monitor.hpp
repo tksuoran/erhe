@@ -2,9 +2,10 @@
 
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/components/component.hpp"
-#include <thread>
-#include <mutex>
+
 #include <condition_variable>
+#include <mutex>
+#include <thread>
 
 namespace erhe::graphics
 {

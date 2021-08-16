@@ -171,7 +171,7 @@ void Category::write(bool indent, const std::string& text)
                         //fflush(stdout);
                         prev = c;
                         ++p;
-                        ++span_len;
+                        //++span_len;
                         span = p;
                         span_len = 0;
                         Log::set_text_color(m_color[1]);

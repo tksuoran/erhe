@@ -16,7 +16,7 @@ namespace erhe::geometry
 
 namespace erhe::primitive
 {
-    class Geometry_uploader;
+    class Build_info_set;
     class Material;
     class Primitive_geometry;
 }
@@ -42,14 +42,11 @@ class Selection_tool;
 class Brush_create_context
 {
 public:
-    explicit Brush_create_context(erhe::primitive::Geometry_uploader& geometry_uploader,
-                                  erhe::primitive::Normal_style       normal_style = erhe::primitive::Normal_style::corner_normals)
-        : geometry_uploader{geometry_uploader}
-        , normal_style     {normal_style}
-    {
-    }
-    erhe::primitive::Geometry_uploader& geometry_uploader;
-    erhe::primitive::Normal_style       normal_style{erhe::primitive::Normal_style::corner_normals};
+    explicit Brush_create_context(erhe::primitive::Build_info_set&    build_info_set,
+                                  const erhe::primitive::Normal_style normal_style = erhe::primitive::Normal_style::corner_normals);
+
+    erhe::primitive::Build_info_set& build_info_set;
+    erhe::primitive::Normal_style    normal_style{erhe::primitive::Normal_style::corner_normals};
 };
 
 class Brushes
@@ -80,7 +77,7 @@ public:
 
     void add_brush     (const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry);
     void add_material  (const std::shared_ptr<erhe::primitive::Material>& material);
-    auto allocate_brush(const erhe::primitive::Geometry_uploader& geometry_uploader) -> std::shared_ptr<Brush>;
+    auto allocate_brush(erhe::primitive::Build_info_set& build_info_set) -> std::shared_ptr<Brush>;
     auto make_brush    (erhe::geometry::Geometry&&               geometry,
                         const Brush_create_context&              context,
                         const std::shared_ptr<btCollisionShape>& collision_shape = {})

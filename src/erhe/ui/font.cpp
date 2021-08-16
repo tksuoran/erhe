@@ -55,7 +55,7 @@ Font::Font(const std::filesystem::path& path, const unsigned int size, const flo
 {
     ZoneScoped;
 
-    log_font.trace("Font::Font(path = {}, size = {}, outline_thickness = {})\n", path, size, outline_thickness);
+    log_font.trace("Font::Font(path = {}, size = {}, outline_thickness = {})\n", path.string(), size, outline_thickness);
 
     if (m_hinting)
     {
@@ -434,7 +434,7 @@ void Font::post_process()
                                            false,
                                            m_texture_width,
                                            m_texture_height};
-                
+
     m_texture = std::make_unique<Texture>(create_info);
 
     m_texture->upload(create_info.internal_format, bm.as_span(), create_info.width, create_info.height);

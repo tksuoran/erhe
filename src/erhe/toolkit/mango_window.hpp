@@ -310,7 +310,7 @@ public:
     {
         int version = m_mango_context->getVersion();
         int major_version = version / 100;
-        int minor_version = (version - (major_version * 100)) / 10;
+        //int minor_version = (version - (major_version * 100)) / 10;
         return major_version;
     }
 

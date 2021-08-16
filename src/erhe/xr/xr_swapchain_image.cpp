@@ -11,7 +11,7 @@
 
 namespace erhe::xr {
 
-Swapchain_image::Swapchain_image(Swapchain* swapchain, uint32_t image_index)
+Swapchain_image::Swapchain_image(Swapchain* swapchain, const uint32_t image_index)
     : m_swapchain  {swapchain}
     , m_image_index{image_index}
 {
@@ -63,6 +63,7 @@ Swapchain::~Swapchain()
 {
     if (m_xr_swapchain != XR_NULL_HANDLE)
     {
+        check_gl_context_in_current_in_this_thread();
         check("xrDestroySwapchain", xrDestroySwapchain(m_xr_swapchain));
     }
 }
@@ -89,6 +90,7 @@ auto Swapchain::acquire() -> std::optional<Swapchain_image>
 
     uint32_t image_index = 0;
 
+    check_gl_context_in_current_in_this_thread();
     if (!check("xrAcquireSwapchainImage",
                xrAcquireSwapchainImage(m_xr_swapchain,
                                        &swapchain_image_acquire_info,
@@ -111,6 +113,7 @@ auto Swapchain::release() -> bool
     swapchain_image_release_info.type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO;
     swapchain_image_release_info.next = nullptr;
 
+    check_gl_context_in_current_in_this_thread();
     return check("xrReleaseSwapchainImage",
                  xrReleaseSwapchainImage(m_xr_swapchain, &swapchain_image_release_info));
 }
@@ -127,11 +130,12 @@ auto Swapchain::wait() -> bool
     swapchain_image_wait_info.next    = nullptr;
     swapchain_image_wait_info.timeout = XR_INFINITE_DURATION;
 
+    check_gl_context_in_current_in_this_thread();
     return check("xrWaitSwapchainImage",
                  xrWaitSwapchainImage(m_xr_swapchain, &swapchain_image_wait_info));
 }
 
-auto Swapchain::get_gl_texture(uint32_t image_index) const -> unsigned int
+auto Swapchain::get_gl_texture(const uint32_t image_index) const -> unsigned int
 {
     VERIFY(image_index < m_gl_textures.size());
 
@@ -147,6 +151,7 @@ auto Swapchain::enumerate_images() -> bool
 {
     uint32_t image_count{0};
 
+    check_gl_context_in_current_in_this_thread();
     if (!check("xrEnumerateSwapchainImages",
                xrEnumerateSwapchainImages(m_xr_swapchain, 0, &image_count, nullptr)))
     {
@@ -162,6 +167,7 @@ auto Swapchain::enumerate_images() -> bool
         swapchain_images[i].image = 0;
     }
 
+    check_gl_context_in_current_in_this_thread();
     if (!check("xrEnumerateSwapchainImages",
                xrEnumerateSwapchainImages(m_xr_swapchain,
                                           image_count,

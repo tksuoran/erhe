@@ -64,7 +64,7 @@ void Mesh_operation::make_entries(const Context&                                
             auto result_geometry = operation(gr);
             result_geometry.sanity_check();
             auto result_primitive_geometry = make_primitive_shared(result_geometry,
-                                                                   context.geometry_uploader,
+                                                                   context.build_info_set.gl,
                                                                    primitive.primitive_geometry->source_normal_style);
             primitive.primitive_geometry = result_primitive_geometry;
             primitive.primitive_geometry->source_geometry = make_shared<erhe::geometry::Geometry>(move(result_geometry));

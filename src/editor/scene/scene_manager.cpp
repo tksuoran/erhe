@@ -21,6 +21,7 @@
 #include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/geometry/shapes/regular_polyhedron.hpp"
 #include "erhe/graphics/buffer.hpp"
+#include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/material.hpp"
@@ -106,12 +107,16 @@ void Scene_manager::initialize_camera()
     set_view_camera(m_camera);
 }
 
+auto Scene_manager::build_info_set() -> erhe::primitive::Build_info_set&
+{
+    return m_mesh_memory->build_info_set;
+};
 void Scene_manager::make_brushes()
 {
     ZoneScoped;
-
-    const Brush_create_context brush_create_context{geometry_uploader()};
+    const Brush_create_context brush_create_context{build_info_set()};
     mango::ConcurrentQueue     execution_queue;
+    //mango::SerialQueue         execution_queue;
 
     auto floor_box_shape = make_shared<btBoxShape>(btVector3{20.0f, 0.5f, 20.0f});
 
@@ -121,17 +126,16 @@ void Scene_manager::make_brushes()
     execution_queue.enqueue([this, &floor_box_shape]() {
         ZoneScopedN("Floor brush");
 
-        const Brush_create_context context{geometry_uploader(), Normal_style::polygon_normals};
+        Brush_create_context context{build_info_set()}; //, Normal_style::polygon_normals};
+        context.normal_style = Normal_style::polygon_normals;
 
         auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(std::move(make_box(vec3(40.0f, 1.0f, 40.0f),
                                                                                             ivec3(40, 1, 40))));
-        //auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(std::move(make_box(vec3(40.0f, 1.0f, 40.0f),
-        //                                                                                    ivec3(1, 1, 1))));
         floor_geometry->name = "floor";
         floor_geometry->build_edges();
 
         const Brush::Create_info brush_create_info{floor_geometry,
-                                                   geometry_uploader(),
+                                                   build_info_set(),
                                                    Normal_style::polygon_normals,
                                                    0.0f, // density for static object
                                                    0.0f, // volume for static object
@@ -145,14 +149,15 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue([this]() {
             ZoneScopedN("teapot from .obj");
 
-            const Brush_create_context context{geometry_uploader(), Normal_style::point_normals};
+            const Brush_create_context context{build_info_set(), Normal_style::point_normals};
+            constexpr bool instantiate = true;
 
             auto geometry = parse_obj_geometry("res/models/teapot.obj");
             geometry.compute_polygon_normals();
             // The real teapot is ~33% taller (ratio 4:3)
             const mat4 scale_t = erhe::toolkit::create_scale(0.5f, 0.5f * 4.0f / 3.0f, 0.5f);
             geometry.transform(scale_t);
-            make_brush(false, move(geometry), context);
+            make_brush(instantiate, move(geometry), context);
         });
     }
 
@@ -161,7 +166,7 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue([this]() {
             ZoneScopedN("platonic solids");
 
-            const Brush_create_context context{geometry_uploader(), Normal_style::polygon_normals};
+            const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
             constexpr bool instantiate = true;
 
             constexpr float original_scale = 1.0f;
@@ -182,7 +187,7 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue([this]() {
             ZoneScopedN("Sphere");
 
-            const Brush_create_context context{geometry_uploader(), Normal_style::polygon_normals};
+            const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
             constexpr bool instantiate = true;
 
             make_brush(instantiate,
@@ -194,7 +199,7 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue([this]() {
             ZoneScopedN("Torus");
 
-            const Brush_create_context context{geometry_uploader(), Normal_style::polygon_normals};
+            const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
             constexpr bool instantiate = true;
 
             constexpr float major_radius = 1.0f;
@@ -245,7 +250,7 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue([this]() {
             ZoneScopedN("Cylinder");
 
-            const Brush_create_context context{geometry_uploader(), Normal_style::polygon_normals};
+            const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
             constexpr bool instantiate = true;
 
             make_brush(instantiate,
@@ -257,7 +262,7 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue([this]() {
             ZoneScopedN("Cone");
 
-            const Brush_create_context context{geometry_uploader(), Normal_style::polygon_normals};
+            const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
             constexpr bool instantiate = true;
 
             make_brush(instantiate,
@@ -281,7 +286,7 @@ void Scene_manager::make_brushes()
         ring_geometry.transform(erhe::toolkit::mat4_swap_xy);
         ring_geometry.reverse_polygons();
         //auto ring_geometry = make_shared<Geometry>(move(ring_geometry));
-        auto rotate_ring_pg = make_primitive_shared(ring_geometry, geometry_uploader());
+        auto rotate_ring_pg = make_primitive_shared(ring_geometry, build_info_set().gl);
 
         const vec3 pos{0.0f, 0.0f, 0.0f};
         auto x_rotate_ring_mesh = m_scene_root->make_mesh_node("X ring", rotate_ring_pg, x_material, nullptr, pos);
@@ -298,7 +303,7 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue([this]() {
             ZoneScopedN("Johnson solids");
 
-            const Brush_create_context context{geometry_uploader(), Normal_style::polygon_normals};
+            const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
             constexpr bool instantiate = true;
 
             const Json_library library("res/polyhedra/johnson.json");
@@ -310,7 +315,7 @@ void Scene_manager::make_brushes()
                     continue;
                 }
                 geometry.compute_polygon_normals();
-    
+
                 make_brush(instantiate, move(geometry), context);
             }
         });
@@ -322,16 +327,12 @@ void Scene_manager::make_brushes()
     buffer_transfer_queue().flush();
 }
 
-auto Scene_manager::geometry_uploader()
--> erhe::primitive::Geometry_uploader&
-{
-    return m_mesh_memory->geometry_uploader();
-}
-
 auto Scene_manager::buffer_transfer_queue()
 -> erhe::graphics::Buffer_transfer_queue&
 {
-    return m_mesh_memory->buffer_transfer_queue();
+    Expects(m_mesh_memory->gl_buffer_transfer_queue);
+
+    return *m_mesh_memory->gl_buffer_transfer_queue.get();
 }
 
 void Scene_manager::add_floor()
@@ -521,12 +522,12 @@ auto Scene_manager::make_spot_light(string_view name,
 
 void Scene_manager::make_punctual_light_nodes()
 {
-    size_t directional_light_count = 1;
+    constexpr size_t directional_light_count = 1;
     for (size_t i = 0; i < directional_light_count; ++i)
     {
         const float rel = i / static_cast<float>(directional_light_count);
         const float h   = rel * 90.0f;
-        const float s   = directional_light_count == 1 ? 0.0f : 1.0f;
+        const float s   = (directional_light_count == 1) ? 0.0f : 1.0f;
         const float v   = 1.0f;
         float r, g, b;
         erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);

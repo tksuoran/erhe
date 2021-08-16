@@ -10,17 +10,17 @@ using namespace erhe::log;
 
 Category log_space_mouse(Color::YELLOW, Color::GRAY, Level::LEVEL_INFO);
 
-static const uint16_t USB_VENDOR_ID_LOGITECH                = 0x046du;
-static const uint16_t USB_VENDOR_ID_3DCONNECTION            = 0x256Fu;
-static const uint16_t USB_DEVICE_ID_TRAVELER                = 0xC623u;
-static const uint16_t USB_DEVICE_ID_NAVIGATOR               = 0xC626u;
-static const uint16_t USB_DEVICE_ID_NAVIGATOR_FOR_NOTEBOOKS = 0xc628u;
-static const uint16_t USB_DEVICE_ID_SPACEEXPLORER           = 0xc627u;
-static const uint16_t USB_DEVICE_ID_SPACEMOUSE              = 0xC603u;
-static const uint16_t USB_DEVICE_ID_SPACEMOUSEPRO           = 0xC62Bu;
-static const uint16_t USB_DEVICE_ID_SPACEBALL5000           = 0xc621u;
-static const uint16_t USB_DEVICE_ID_SPACEPILOT              = 0xc625u;
-static const uint16_t USB_DEVICE_ID_SPACEPILOTPRO           = 0xc629u;
+static constexpr uint16_t USB_VENDOR_ID_LOGITECH                = 0x046du;
+static constexpr uint16_t USB_VENDOR_ID_3DCONNECTION            = 0x256Fu;
+static constexpr uint16_t USB_DEVICE_ID_TRAVELER                = 0xC623u;
+static constexpr uint16_t USB_DEVICE_ID_NAVIGATOR               = 0xC626u;
+static constexpr uint16_t USB_DEVICE_ID_NAVIGATOR_FOR_NOTEBOOKS = 0xc628u;
+static constexpr uint16_t USB_DEVICE_ID_SPACEEXPLORER           = 0xc627u;
+static constexpr uint16_t USB_DEVICE_ID_SPACEMOUSE              = 0xC603u;
+static constexpr uint16_t USB_DEVICE_ID_SPACEMOUSEPRO           = 0xC62Bu;
+static constexpr uint16_t USB_DEVICE_ID_SPACEBALL5000           = 0xc621u;
+static constexpr uint16_t USB_DEVICE_ID_SPACEPILOT              = 0xc625u;
+static constexpr uint16_t USB_DEVICE_ID_SPACEPILOTPRO           = 0xc629u;
 
 Space_mouse_controller::Space_mouse_controller(Space_mouse_listener& listener)
     : m_listener{listener}
@@ -49,7 +49,7 @@ Space_mouse_controller::~Space_mouse_controller()
     }
 }
 
-bool Space_mouse_controller::initialize()
+auto Space_mouse_controller::initialize() -> bool
 {
     hid_device_info* const device_list = hid_enumerate(0x0u, 0x0u);
     hid_device_info* device = device_list;
@@ -90,14 +90,14 @@ bool Space_mouse_controller::initialize()
     return true;
 }
 
-int remap(const unsigned char first, const unsigned char val)
+auto remap(const unsigned char first, const unsigned char val) -> int
 {
     switch (val)
     {
-        case 0:   return first;
-        case 1:   return first + 255;
-        case 254: return -512 + first;
-        case 255: return -255 + first;
+        case   0u: return first;
+        case   1u: return first + 255;
+        case 254u: return -512 + first;
+        case 255u: return -255 + first;
         default:
             return 0;
     }

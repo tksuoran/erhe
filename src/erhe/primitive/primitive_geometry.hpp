@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe/primitive/buffer_range.hpp"
 #include "erhe/primitive/index_range.hpp"
 #include "erhe/primitive/enums.hpp"
 
@@ -27,7 +28,6 @@ namespace erhe::primitive
 {
 
 class Index_range;
-class Geometry_uploader;
 
 class Primitive_geometry
 {
@@ -42,23 +42,15 @@ public:
     // Specifies a constant that should be added to each element of indices when chosing elements from the enabled vertex arrays.
     auto base_vertex() const -> uint32_t
     {
-        return static_cast<uint32_t>(vertex_byte_offset / vertex_element_size);
+        return static_cast<uint32_t>(vertex_buffer_range.byte_offset / vertex_buffer_range.element_size);
     }
 
     // Value that should be added in index range first index
     auto base_index() const
     -> uint32_t
     {
-        return static_cast<uint32_t>(index_byte_offset / index_element_size);
+        return static_cast<uint32_t>(index_buffer_range.byte_offset / index_buffer_range.element_size);
     }
-
-    void allocate_vertex_buffer(const Geometry_uploader& uploader,
-                                const size_t             vertex_count,
-                                const size_t             vertex_element_size);
-
-    void allocate_index_buffer(const Geometry_uploader& uploader,
-                               const size_t             index_count,
-                               const size_t             index_element_size);
 
     auto index_range(Primitive_mode primitive_mode) const -> Index_range;
 
@@ -69,20 +61,11 @@ public:
     Index_range corner_point_indices;
     Index_range polygon_centroid_indices;
 
-    size_t      vertex_byte_offset {0};
-    size_t      index_byte_offset  {0};
-    size_t      vertex_element_size{0};
-    size_t      index_element_size {0};
-    size_t      vertex_count       {0};
-    size_t      index_count        {0};
+    Buffer_range vertex_buffer_range;
+    Buffer_range index_buffer_range;
 
     std::shared_ptr<erhe::geometry::Geometry> source_geometry;
     Normal_style                              source_normal_style{Normal_style::corner_normals};
-
-    std::shared_ptr<erhe::graphics::Buffer>   gl_vertex_buffer;
-    std::shared_ptr<erhe::graphics::Buffer>   gl_index_buffer;
-    std::shared_ptr<erhe::raytrace::Buffer>   embree_vertex_buffer;
-    std::shared_ptr<erhe::raytrace::Buffer>   embree_index_buffer;
 };
 
 } // namespace erhe::primitive

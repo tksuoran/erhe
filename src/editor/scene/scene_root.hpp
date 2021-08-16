@@ -35,7 +35,6 @@ namespace erhe::graphics
 namespace erhe::primitive
 {
     class Material;
-    class Geometry_uploader;
     class Primitive_geometry;
     class Primitive;
 }

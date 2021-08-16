@@ -41,7 +41,7 @@ Property_maps::Property_maps(const erhe::geometry::Geometry& geometry,
         return;
     }
 
-    if (format_info.want_id)
+    if (format_info.features.id)
     {
         polygon_ids_vector3 = polygon_attributes.create<vec3>(erhe::geometry::c_polygon_ids_vec3);
         log_primitive_builder.trace("-created polygon_ids_vec3\n");
@@ -53,7 +53,7 @@ Property_maps::Property_maps(const erhe::geometry::Geometry& geometry,
         }
     }
 
-    if (format_info.want_normal)
+    if (format_info.features.normal)
     {
         if (polygon_normals == nullptr)
         {
@@ -75,7 +75,7 @@ Property_maps::Property_maps(const erhe::geometry::Geometry& geometry,
         }
     }
 
-    if (format_info.want_normal_smooth && (point_normals_smooth == nullptr))
+    if (format_info.features.normal_smooth && (point_normals_smooth == nullptr))
     {
         log_primitive_builder.trace("-computing point_normals_smooth\n");
         point_normals_smooth = point_attributes.create<vec3>(erhe::geometry::c_point_normals_smooth);
@@ -99,7 +99,7 @@ Property_maps::Property_maps(const erhe::geometry::Geometry& geometry,
         });
     }
 
-    if (format_info.want_centroid_points)
+    if (format_info.features.centroid_points)
     {
         if (polygon_centroids == nullptr)
         {

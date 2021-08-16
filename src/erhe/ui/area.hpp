@@ -3,8 +3,10 @@
 
 #include "erhe/ui/rectangle.hpp"
 #include "erhe/ui/style.hpp"
+
 #include <glm/glm.hpp>
 #include <gsl/pointers>
+
 #include <string>
 #include <vector>
 

@@ -27,6 +27,7 @@ public:
     Xr_instance   (Xr_instance&&)      = delete;
     void operator=(Xr_instance&&)      = delete;
 
+    auto is_available                   () const -> bool;
     auto poll_xr_events                 (Xr_session& session) -> bool;
     auto get_xr_instance                () const -> XrInstance;
     auto get_xr_system_id               () const -> XrSystemId;
@@ -50,18 +51,18 @@ public:
         Xr_path user_hand_left;
         Xr_path user_hand_right;
         Xr_path interaction_profile_vive_controller;
-        Xr_path head;          
-        Xr_path menu_click;    
-        Xr_path trigger_click; 
-        Xr_path trigger_value; 
+        Xr_path head;
+        Xr_path menu_click;
+        Xr_path trigger_click;
+        Xr_path trigger_value;
         Xr_path squeeze_click;
-        Xr_path trackpad_x;    
-        Xr_path trackpad_y;    
+        Xr_path trackpad_x;
+        Xr_path trackpad_y;
         Xr_path trackpad_click;
         Xr_path trackpad_touch;
-        Xr_path grip_pose;     
-        Xr_path aim_pose;      
-        Xr_path haptic;        
+        Xr_path grip_pose;
+        Xr_path aim_pose;
+        Xr_path haptic;
     };
 
     class Actions

@@ -7,11 +7,9 @@
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
-#include "erhe/primitive/buffer_info.hpp"
 #include "erhe/primitive/buffer_writer.hpp"
 #include "erhe/primitive/enums.hpp"
-#include "erhe/primitive/format_info.hpp"
-#include "erhe/primitive/geometry_uploader.hpp"
+#include "erhe/primitive/build_info.hpp"
 #include "erhe/primitive/index_range.hpp"
 #include "erhe/primitive/log.hpp"
 #include "erhe/primitive/primitive.hpp"
@@ -27,10 +25,15 @@
 #include <memory>
 #include <string>
 
+namespace erhe::graphics
+{
+    class Buffer;
+    class Buffer_transfer_queue;
+}
+
 namespace erhe::primitive
 {
 
-class Geometry_uploader;
 class Index_range;
 class Material;
 
@@ -53,20 +56,20 @@ class Build_context_root
 {
 public:
     Build_context_root(const erhe::geometry::Geometry& geometry,
-                       const Geometry_uploader&        geometry_uploader,
+                       Build_info&                     build_info,
                        Primitive_geometry*             primitive_geometry);
 
-    void get_mesh_info();
-    void get_vertex_attributes();
+    void get_mesh_info         ();
+    void get_vertex_attributes ();
     void calculate_bounding_box(erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec3>* point_locations);
     void allocate_vertex_buffer();
     void allocate_index_buffer ();
-    void allocate_index_range(gl::Primitive_type primitive_type,
-                              size_t             index_count,
-                              Index_range&       range);
+    void allocate_index_range  (gl::Primitive_type primitive_type,
+                                size_t             index_count,
+                                Index_range&       range);
 
     const erhe::geometry::Geometry& geometry;
-    const Geometry_uploader&        geometry_uploader;
+    Build_info&                     build_info;
     Primitive_geometry*             primitive_geometry{nullptr};
     size_t                          next_index_range_start{0};
     Vertex_attributes               attributes;
@@ -81,14 +84,16 @@ class Build_context
 {
 public:
     Build_context(const erhe::geometry::Geometry& geometry,
-                  const Geometry_uploader&        geometry_uploader,
+                  Build_info&                     build_info,
                   const Normal_style              normal_style,
                   Primitive_geometry*             primitive_geometry);
     ~Build_context();
 
-    void build_polygon_fill      ();
-    void build_edge_lines        ();
-    void build_centroid_points   ();
+    void build_polygon_fill   ();
+    void build_edge_lines     ();
+    void build_centroid_points();
+
+    Build_context_root root;
 
 private:
     void build_polygon_id        ();
@@ -107,7 +112,6 @@ private:
     void build_corner_point_index ();
     void build_triangle_fill_index();
 
-    Build_context_root                root;
     erhe::geometry::Polygon_id        polygon_id       {0};
     erhe::geometry::Polygon_corner_id polygon_corner_id{0};
     erhe::geometry::Point_id          point_id         {0};
@@ -135,7 +139,7 @@ public:
     Primitive_builder() = delete;
 
     Primitive_builder(const erhe::geometry::Geometry& geometry,
-                      const Geometry_uploader&        geometry_uploader,
+                      Build_info&                     build_info,
                       const Normal_style              normal_style);
 
     ~Primitive_builder();
@@ -144,23 +148,21 @@ public:
 
     void build(Primitive_geometry* primitive_geometry);
 
-    static void prepare_vertex_format(const Format_info& format_info,
-                                      Buffer_info&       buffer_info);
+    static void prepare_vertex_format(Build_info& build_info);
 
 private:
     const erhe::geometry::Geometry& m_geometry;
-    const Geometry_uploader&        m_geometry_uploader;
-    //Format_info                     m_format_info;
+    Build_info&                     m_build_info;
     Normal_style                    m_normal_style;
 };
 
 auto make_primitive(const erhe::geometry::Geometry& geometry,
-                    const Geometry_uploader&        geometry_uploader,
+                    Build_info&                     build_info,
                     const Normal_style              normal_style = Normal_style::corner_normals)
 -> Primitive_geometry;
 
 auto make_primitive_shared(const erhe::geometry::Geometry& geometry,
-                           const Geometry_uploader&        geometry_uploader,
+                           Build_info&                     build_info,
                            const Normal_style              normal_style = Normal_style::corner_normals)
 -> std::shared_ptr<Primitive_geometry>;
 

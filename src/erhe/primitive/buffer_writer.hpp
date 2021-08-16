@@ -1,9 +1,11 @@
 #pragma once
 
+#include "erhe/primitive/buffer_range.hpp"
 #include "erhe/primitive/vertex_attribute_info.hpp"
 
 #include <glm/glm.hpp>
 
+#include <gsl/pointers>
 #include <gsl/span>
 
 namespace erhe::geometry
@@ -15,18 +17,18 @@ namespace erhe::geometry
 namespace erhe::primitive
 {
 
+class Build_context;
+class Buffer_sink;
 class Primitive_geometry;
-class Geometry_uploader;
 
 /// Writes vertex attribute values to byte buffer/memory.
-/// Memory is passed to Geometry_uploader when writer is destructed.
-/// 
+///
 /// Vertex_buffer_writer is target API agnostic.
 class Vertex_buffer_writer
 {
 public:
-    explicit Vertex_buffer_writer(const Primitive_geometry& primitive_geometry,
-                                  const Geometry_uploader&  geometry_uploader);
+    explicit Vertex_buffer_writer(Build_context&              build_context,
+                                  gsl::not_null<Buffer_sink*> buffer_sink);
     virtual ~Vertex_buffer_writer();
 
     void write(const Vertex_attribute_info& attribute, const glm::vec2 value);
@@ -35,11 +37,14 @@ public:
     void write(const Vertex_attribute_info& attribute, const uint32_t value);
     void move (const size_t relative_offset);
 
-    const Primitive_geometry& primitive_geometry;
-    const Geometry_uploader&  uploader;
-    std::vector<std::uint8_t> vertex_data;
-    gsl::span<std::uint8_t>   vertex_data_span;
-    size_t                    vertex_write_offset{0};
+    auto start_offset() -> size_t;
+
+    Build_context&              build_context;
+    gsl::not_null<Buffer_sink*> buffer_sink;
+    Buffer_range                buffer_range;
+    std::vector<std::uint8_t>   vertex_data;
+    gsl::span<std::uint8_t>     vertex_data_span;
+    size_t                      vertex_write_offset{0};
 };
 
 /// Writes 8/16/32 -bit indices to byte buffer/memory
@@ -48,9 +53,8 @@ public:
 class Index_buffer_writer
 {
 public:
-    Index_buffer_writer(const Primitive_geometry&  primitive_geometry,
-                        const Geometry_uploader&   geometry_uploader,
-                        erhe::geometry::Mesh_info& mesh_info);
+    Index_buffer_writer(Build_context&              build_context,
+                        gsl::not_null<Buffer_sink*> buffer_sink);
     virtual ~Index_buffer_writer();
 
     void write_corner  (const uint32_t v0);
@@ -59,8 +63,11 @@ public:
     void write_edge    (const uint32_t v0, const uint32_t v1);
     void write_centroid(const uint32_t v0);
 
-    const Primitive_geometry&    primitive_geometry;
-    const Geometry_uploader&     uploader;
+    auto start_offset  () -> size_t;
+
+    Build_context&               build_context;
+    gsl::not_null<Buffer_sink*>  buffer_sink;
+    Buffer_range                 buffer_range;
     const gl::Draw_elements_type index_type;
     const size_t                 index_type_size{0};
     std::vector<std::uint8_t>    index_data;

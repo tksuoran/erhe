@@ -2,18 +2,40 @@
 #include "erhe/raytrace/device.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+#include <gsl/gsl_assert>
+
 namespace erhe::raytrace
 {
 
-Buffer::Buffer(const Device& device, const size_t capacity_bytes_count)
+Buffer::Buffer(const size_t capacity_bytes_count)
 {
-    rtcNewBuffer(device.get_rtc_device(), capacity_bytes_count);
+    Expects(capacity_bytes_count > 0);
+    m_buffer.resize(capacity_bytes_count);
+    m_span = gsl::span<std::byte>(m_buffer.data(), m_buffer.size());
+    //rtcNewBuffer(device.get_rtc_device(), capacity_bytes_count);
     //rtcNewSharedBuffer(device.get_rtc_device(), data, byte_count);
+}
+
+Buffer::Buffer(Buffer&& other)
+    : m_capacity_byte_count{other.m_capacity_byte_count}
+    , m_next_free_byte     {other.m_next_free_byte}
+    , m_buffer             {std::move(other.m_buffer)}
+    , m_span               {m_buffer.data(), m_buffer.size()}
+{
+}
+
+Buffer& Buffer::operator=(Buffer&& other)
+{
+    m_capacity_byte_count = other.m_capacity_byte_count;
+    m_next_free_byte      = other.m_next_free_byte;
+    m_buffer              = std::move(other.m_buffer);
+    m_span                = gsl::span<std::byte>(m_buffer.data(), m_buffer.size());
+    return *this;
 }
 
 Buffer::~Buffer()
 {
-    rtcReleaseBuffer(m_buffer);
+    //rtcReleaseBuffer(m_buffer);
 }
 
 auto Buffer::capacity_byte_count() const noexcept
@@ -36,6 +58,11 @@ auto Buffer::allocate_bytes(const size_t byte_count, const size_t alignment) noe
     VERIFY(m_next_free_byte <= m_capacity_byte_count);
 
     return offset;
+}
+
+auto Buffer::span() noexcept -> gsl::span<std::byte>
+{
+    return m_span;
 }
 
 // void* rtcGetBufferData(RTCBuffer buffer);

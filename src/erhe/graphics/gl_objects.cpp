@@ -20,7 +20,7 @@ Gl_texture::Gl_texture(gl::Texture_target target, GLuint wrap_name)
     {
         gl::create_textures(target, 1, &m_gl_name);
     }
-    Ensures(m_gl_name != 0);
+    Ensures((wrap_name == 0) || (m_gl_name != 0));
 }
 
 Gl_texture::Gl_texture(Gl_texture&& other) noexcept

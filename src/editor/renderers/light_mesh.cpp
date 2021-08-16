@@ -2,7 +2,10 @@
 #include "renderers/program_interface.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/regular_polygon.hpp"
+#include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/graphics/vertex_format.hpp"
+#include "erhe/primitive/buffer_info.hpp"
+#include "erhe/primitive/buffer_sink.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/light.hpp"
@@ -33,22 +36,26 @@ void Light_mesh::connect()
 
 void Light_mesh::initialize_component()
 {
-    Buffer_info buffer_info;
-    Format_info format_info;
-    format_info.want_fill_triangles       = true;
-    format_info.want_edge_lines           = true;
-    format_info.want_position             = true;
+    erhe::graphics::Buffer_transfer_queue queue;
+
+    Gl_buffer_sink buffer_sink{queue, {}, {}};
+
+    erhe::primitive::Build_info build_info;
+    auto& format_info = build_info.format;
+    auto& buffer_info = build_info.buffer;
+    format_info.features.fill_triangles   = true;
+    format_info.features.edge_lines       = true;
+    format_info.features.position         = true;
     format_info.vertex_attribute_mappings = &m_program_interface->attribute_mappings;
 
-    erhe::graphics::Buffer_transfer_queue queue;
-    erhe::primitive::Gl_geometry_uploader uploader{queue, format_info, buffer_info};
+    buffer_info.buffer_sink = &buffer_sink;
 
     // Full screen quad
     {
         // -1 .. 1
         auto quad_geometry = erhe::geometry::shapes::make_quad(2.0f);
         quad_geometry.build_edges();
-        m_quad_mesh = make_primitive(quad_geometry, uploader, Normal_style::none);
+        m_quad_mesh = make_primitive(quad_geometry, build_info, Normal_style::none);
     }
 
     // Spot light cone
@@ -68,8 +75,7 @@ void Light_mesh::initialize_component()
 
         cone_geometry.transform(mat4_rotate_xz_cw);
         cone_geometry.build_edges();
-        Buffer_info buffer_info;
-        m_cone_mesh = make_primitive(cone_geometry, uploader);
+        m_cone_mesh = make_primitive(cone_geometry, build_info);
     }
 }
 

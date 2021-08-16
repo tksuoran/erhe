@@ -298,7 +298,7 @@ void Editor_rendering::render_headset()
             {
                 log_headset.error("view framebuffer status = {}\n", c_str(status));
             }
-    
+
             // TODO
             return true;
         };

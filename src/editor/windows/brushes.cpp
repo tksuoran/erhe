@@ -33,6 +33,13 @@ using namespace erhe::primitive;
 using namespace erhe::scene;
 using namespace erhe::toolkit;
 
+Brush_create_context::Brush_create_context(erhe::primitive::Build_info_set& build_info_set,
+                                           erhe::primitive::Normal_style    normal_style)
+    : build_info_set{build_info_set}
+    , normal_style  {normal_style}
+{
+}
+
 Brushes::Brushes()
     : erhe::components::Component(c_name)
 {
@@ -91,11 +98,11 @@ void Brushes::make_materials()
     }
 }
 
-auto Brushes::allocate_brush(const Geometry_uploader& geometry_uploader)
+auto Brushes::allocate_brush(Build_info_set& build_info_set)
 -> std::shared_ptr<Brush>
 {
     std::lock_guard<std::mutex> lock(m_brush_mutex);
-    const auto brush = std::make_shared<Brush>(geometry_uploader);
+    const auto brush = std::make_shared<Brush>(build_info_set);
     m_brushes.push_back(brush);
     return brush;
 }
@@ -124,21 +131,16 @@ auto Brushes::make_brush(shared_ptr<erhe::geometry::Geometry> geometry,
     geometry->compute_polygon_centroids();
     geometry->compute_point_normals(c_point_normals_smooth);
 
-    const std::shared_ptr<erhe::geometry::Geometry>& geometry_          = geometry;
-    erhe::primitive::Geometry_uploader&              geometry_uploader_ = context.geometry_uploader;
-    const erhe::primitive::Normal_style              normal_style       = context.normal_style;
-    const float                                      density            = 1.0f;
-    const float                                      volume             = geometry->volume();
-    const std::shared_ptr<btCollisionShape>&         collision_shape_   = collision_shape;
+    const float density = 1.0f;
 
-    Brush::Create_info create_info{geometry_,
-                                   geometry_uploader_,
-                                   normal_style,
+    Brush::Create_info create_info{geometry,
+                                   context.build_info_set,
+                                   context.normal_style,
                                    density,
-                                   volume,
-                                   collision_shape_};
+                                   geometry->volume(),
+                                   collision_shape};
 
-    const auto brush = allocate_brush(context.geometry_uploader);
+    const auto brush = allocate_brush(context.build_info_set);
     brush->initialize(create_info);
     return brush;
 }
@@ -157,13 +159,13 @@ auto Brushes::make_brush(shared_ptr<erhe::geometry::Geometry> geometry,
     geometry->compute_polygon_centroids();
     geometry->compute_point_normals(c_point_normals_smooth);
     const Brush::Create_info create_info{geometry,
-                                         context.geometry_uploader,
+                                         context.build_info_set,
                                          context.normal_style,
                                          1.0f, // density
                                          collision_volume_calculator,
                                          collision_shape_generator};
                 
-    const auto brush = allocate_brush(context.geometry_uploader);
+    const auto brush = allocate_brush(context.build_info_set);
     brush->initialize(create_info);
     return brush;
 }

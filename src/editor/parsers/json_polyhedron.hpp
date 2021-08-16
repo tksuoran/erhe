@@ -15,7 +15,7 @@ public:
     class Category
     {
     public:
-        Category(std::string&& category_name)
+        explicit Category(std::string&& category_name)
             : category_name{std::move(category_name)}
         {
         }
@@ -23,7 +23,7 @@ public:
         std::vector<std::string> key_names;
     };
 
-    Json_library(const std::filesystem::path& path);
+    explicit Json_library(const std::filesystem::path& path);
 
     auto make_geometry(const std::string& key_name) const -> erhe::geometry::Geometry;
 

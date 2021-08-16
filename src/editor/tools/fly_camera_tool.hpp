@@ -22,7 +22,7 @@ class Fly_camera_space_mouse_listener
     : public erhe::toolkit::Space_mouse_listener
 {
 public:
-    Fly_camera_space_mouse_listener (Fly_camera_tool& fly_camera_tool);
+    explicit Fly_camera_space_mouse_listener(Fly_camera_tool& fly_camera_tool);
     ~Fly_camera_space_mouse_listener();
 
     auto is_active     () -> bool                                 override;

@@ -3,6 +3,7 @@
 #include "log.hpp"
 
 #include "erhe/graphics/buffer.hpp"
+#include "erhe/graphics/scoped_buffer_mapping.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/shader_stages.hpp"

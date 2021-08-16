@@ -137,8 +137,6 @@ void Menu::initialize_component()
                                                            m_vertex_buffer.get(),
                                                            m_index_buffer.get());
 
-    auto vertex_input = m_vertex_input_state.get();
-
     initialize_background();
 
     m_font        = make_unique<Font>(std::filesystem::path("res/fonts/Ubuntu-R.ttf"), 100, 20.0f);
@@ -237,7 +235,7 @@ void Menu::resize(float w, float h)
         vertex_data[offset++] = 0.0f;
         vertex_data[offset++] = max_y;
         vertex_data[offset++] = 0.0f;
-        vertex_data[offset++] = 1.0f;
+        vertex_data[offset  ] = 1.0f;
     }
 
     {

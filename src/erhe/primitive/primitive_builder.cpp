@@ -1,6 +1,6 @@
 #include "erhe/primitive/primitive_builder.hpp"
+#include "erhe/primitive/buffer_sink.hpp"
 #include "erhe/primitive/buffer_writer.hpp"
-#include "erhe/primitive/geometry_uploader.hpp"
 #include "erhe/primitive/index_range.hpp"
 #include "erhe/primitive/log.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
@@ -52,23 +52,22 @@ using glm::mat4;
 
 
 Primitive_builder::Primitive_builder(const erhe::geometry::Geometry& geometry,
-                                     const Geometry_uploader&        geometry_uploader,
+                                     Build_info&                     build_info,
                                      const Normal_style              normal_style)
-    : m_geometry         {geometry}
-    , m_geometry_uploader{geometry_uploader}
-    , m_normal_style     {normal_style}
+    : m_geometry    {geometry}
+    , m_build_info  {build_info}
+    , m_normal_style{normal_style}
 {
 }
 
 Primitive_builder::~Primitive_builder() = default;
 
 
-void Primitive_builder::prepare_vertex_format(const Format_info& format_info,
-                                              Buffer_info&       buffer_info)
+void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 {
     ZoneScoped;
 
-    auto vf = buffer_info.vertex_format;
+    auto vf = build_info.buffer.vertex_format;
     if (vf)
     {
         return;
@@ -76,58 +75,61 @@ void Primitive_builder::prepare_vertex_format(const Format_info& format_info,
 
     vf = std::make_shared<erhe::graphics::Vertex_format>();
 
-    buffer_info.vertex_format = vf;
+    build_info.buffer.vertex_format = vf;
 
-    if (format_info.want_position)
+    const auto& format_info = build_info.format;
+    const auto& features    = format_info.features;
+
+    if (features.position)
     {
         vf->make_attribute({Vertex_attribute::Usage_type::position, 0},
                             gl::Attribute_type::float_vec3,
                             {format_info.position_type, false, 3});
     }
 
-    if (format_info.want_normal)
+    if (features.normal)
     {
         vf->make_attribute({Vertex_attribute::Usage_type::normal, 0},
                             gl::Attribute_type::float_vec3,
                             {format_info.normal_type, false, 3});
     }
 
-    if (format_info.want_normal_flat)
+    if (features.normal_flat)
     {
         vf->make_attribute({Vertex_attribute::Usage_type::normal, 1},
                             gl::Attribute_type::float_vec3,
                             {format_info.normal_flat_type, false, 3});
     }
 
-    if (format_info.want_normal_smooth)
+    if (features.normal_smooth)
     {
         vf->make_attribute({Vertex_attribute::Usage_type::normal, 2},
                             gl::Attribute_type::float_vec3,
                             {format_info.normal_smooth_type, false, 3});
     }
 
-    if (format_info.want_tangent)
+    if (features.tangent)
     {
         vf->make_attribute({Vertex_attribute::Usage_type::tangent, 0},
                             gl::Attribute_type::float_vec4,
                             {format_info.tangent_type, false, 4});
     }
 
-    if (format_info.want_bitangent)
+    if (features.bitangent)
     {
         vf->make_attribute({Vertex_attribute::Usage_type::bitangent, 0},
                             gl::Attribute_type::float_vec4,
                             {format_info.bitangent_type, false, 4});
     }
 
-    if (format_info.want_color)
+    if (features.color)
     {
         vf->make_attribute({Vertex_attribute::Usage_type::color, 0},
                             gl::Attribute_type::float_vec4,
                             {format_info.color_type, false, 4});
     }
 
-    if (format_info.want_id)
+    if (features.id)
     {
         vf->make_attribute({Vertex_attribute::Usage_type::id, 0},
                             gl::Attribute_type::float_vec3,
@@ -141,7 +143,7 @@ void Primitive_builder::prepare_vertex_format(const Format_info& format_info,
         }
     }
 
-    if (format_info.want_texcoord)
+    if (features.texcoord)
     {
         vf->make_attribute({Vertex_attribute::Usage_type::tex_coord, 0},
                             gl::Attribute_type::float_vec2,
@@ -150,12 +152,12 @@ void Primitive_builder::prepare_vertex_format(const Format_info& format_info,
 }
 
 Build_context_root::Build_context_root(const erhe::geometry::Geometry& geometry,
-                                       const Geometry_uploader&        geometry_uploader,
+                                       Build_info&                     build_info,
                                        Primitive_geometry*             primitive_geometry)
     : geometry          {geometry}
-    , geometry_uploader {geometry_uploader}
+    , build_info        {build_info}
     , primitive_geometry{primitive_geometry}
-    , vertex_format     {geometry_uploader.buffer_info.vertex_format.get()}
+    , vertex_format     {build_info.buffer.vertex_format.get()}
     , vertex_stride     {vertex_format->stride()}
 {
     ZoneScoped;
@@ -173,15 +175,17 @@ void Build_context_root::get_mesh_info()
     geometry.info(mi);
     mi.trace(log_primitive_builder);
 
+    const auto& features = build_info.format.features;
+
     // Count vertices
     total_vertex_count += mi.vertex_count_corners;
-    if (geometry_uploader.format_info.want_centroid_points)
+    if (features.centroid_points)
     {
         total_vertex_count += mi.vertex_count_centroids;
     }
 
     // Count indices
-    if (geometry_uploader.format_info.want_fill_triangles)
+    if (features.fill_triangles)
     {
         total_index_count += mi.index_count_fill_triangles;
         log_primitive_builder.trace("{} triangle fill indices\n", mi.index_count_fill_triangles);
@@ -190,7 +194,7 @@ void Build_context_root::get_mesh_info()
                              primitive_geometry->triangle_fill_indices);
     }
 
-    if (geometry_uploader.format_info.want_edge_lines)
+    if (features.edge_lines)
     {
         total_index_count += mi.index_count_edge_lines;
         log_primitive_builder.trace("{} edge line indices\n", mi.index_count_edge_lines);
@@ -199,7 +203,7 @@ void Build_context_root::get_mesh_info()
                              primitive_geometry->edge_line_indices);
     }
 
-    if (geometry_uploader.format_info.want_corner_points)
+    if (features.corner_points)
     {
         total_index_count += mi.index_count_corner_points;
         log_primitive_builder.trace("{} corner point indices\n", mi.index_count_corner_points);
@@ -208,7 +212,7 @@ void Build_context_root::get_mesh_info()
                              primitive_geometry->corner_point_indices);
     }
 
-    if (geometry_uploader.format_info.want_centroid_points)
+    if (features.centroid_points)
     {
         total_index_count += mi.index_count_centroid_points;
         log_primitive_builder.trace("{} centroid point indices\n", mi.index_count_centroid_points);
@@ -224,7 +228,7 @@ void Build_context_root::get_vertex_attributes()
 {
     ZoneScoped;
 
-    const auto& format_info = geometry_uploader.format_info;
+    const auto& format_info = build_info.format;
     attributes.position      = Vertex_attribute_info(vertex_format, format_info.position_type,      3, Vertex_attribute::Usage_type::position,  0);
     attributes.normal        = Vertex_attribute_info(vertex_format, format_info.normal_type,        3, Vertex_attribute::Usage_type::normal,    0); // content normals
     attributes.normal_flat   = Vertex_attribute_info(vertex_format, format_info.normal_flat_type,   3, Vertex_attribute::Usage_type::normal,    1); // flat normals
@@ -245,9 +249,7 @@ void Build_context_root::allocate_vertex_buffer()
 {
     Expects(total_vertex_count > 0);
 
-    primitive_geometry->allocate_vertex_buffer(geometry_uploader,
-                                               total_vertex_count, vertex_stride);
-    primitive_geometry->vertex_count = total_vertex_count;
+    primitive_geometry->vertex_buffer_range = build_info.buffer.buffer_sink->allocate_vertex_buffer(total_vertex_count, vertex_stride);
 }
 
 void Build_context_root::allocate_index_buffer()
@@ -256,13 +258,14 @@ void Build_context_root::allocate_index_buffer()
 
     Expects(total_index_count > 0);
 
-    const gl::Draw_elements_type index_type = geometry_uploader.buffer_info.index_type;
+    const gl::Draw_elements_type index_type = build_info.buffer.index_type;
     const size_t index_type_size{size_of_type(index_type)};
 
     log_primitive_builder.trace("allocating index buffer "
                                 "total_index_count = {}, index type size = {}\n",
                                 total_index_count, index_type_size);
-    primitive_geometry->allocate_index_buffer(geometry_uploader, total_index_count, index_type_size);
+
+    primitive_geometry->index_buffer_range = build_info.buffer.buffer_sink->allocate_index_buffer(total_index_count, index_type_size);
 }
 
 void Build_context_root::calculate_bounding_box(erhe::geometry::Property_map<Point_id, vec3>* point_locations)
@@ -312,41 +315,43 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
 
     //m_primitive_geometry = primitive_geometry;
     log_primitive_builder.trace("Primitive_builder::build(usage = {}, normal_style = {}) geometry = {}\n",
-                                gl::c_str(m_geometry_uploader.buffer_info.usage),
+                                gl::c_str(m_build_info.buffer.usage),
                                 c_str(m_normal_style),
                                 m_geometry.name);
     erhe::log::Indenter indenter;
 
     Build_context build_context{m_geometry,
-                                m_geometry_uploader,
+                                m_build_info,
                                 m_normal_style,
                                 primitive_geometry};
 
-    if (m_geometry_uploader.format_info.want_fill_triangles)
+    const auto &features = m_build_info.format.features;
+
+    if (features.fill_triangles)
     {
         build_context.build_polygon_fill();
     }
 
-    if (m_geometry_uploader.format_info.want_edge_lines)
+    if (features.edge_lines)
     {
         build_context.build_edge_lines();
     }
 
-    if (m_geometry_uploader.format_info.want_centroid_points)
+    if (features.centroid_points)
     {
         build_context.build_centroid_points();
     }
 }
 
 Build_context::Build_context(const erhe::geometry::Geometry& geometry,
-                             const Geometry_uploader&        geometry_uploader,
+                             Build_info&                     build_info,
                              const Normal_style              normal_style,
                              Primitive_geometry*             primitive_geometry)
-    : root         {geometry, geometry_uploader, primitive_geometry} 
+    : root         {geometry, build_info, primitive_geometry}
     , normal_style {normal_style}
-    , vertex_writer{*primitive_geometry, geometry_uploader}
-    , index_writer {*primitive_geometry, geometry_uploader, root.mesh_info}
-    , property_maps{geometry, geometry_uploader.format_info}
+    , vertex_writer{*this, build_info.buffer.buffer_sink}
+    , index_writer {*this, build_info.buffer.buffer_sink}
+    , property_maps{geometry, build_info.format}
 {
     Expects(property_maps.point_locations != nullptr);
 
@@ -360,7 +365,7 @@ Build_context::~Build_context()
 
 void Build_context::build_polygon_id()
 {
-    if (!root.geometry_uploader.format_info.want_id)
+    if (!root.build_info.format.features.id)
     {
         return;
     }
@@ -390,7 +395,7 @@ auto Build_context::get_polygon_normal() -> glm::vec3
 
 void Build_context::build_vertex_position()
 {
-    if (!root.geometry_uploader.format_info.want_position || !root.attributes.position.is_valid())
+    if (!root.build_info.format.features.position || !root.attributes.position.is_valid())
     {
         return;
     }
@@ -407,6 +412,8 @@ void Build_context::build_vertex_normal()
 {
     const vec3 polygon_normal = get_polygon_normal();
     vec3 normal{0.0f, 1.0f, 0.0f};
+
+    const auto& features = root.build_info.format.features;
 
     if ((property_maps.corner_normals != nullptr) && property_maps.corner_normals->has(corner_id))
     {
@@ -431,7 +438,7 @@ void Build_context::build_vertex_normal()
         point_normal = property_maps.point_normals_smooth->get(point_id);
     }
 
-    if (root.geometry_uploader.format_info.want_normal && root.attributes.normal.is_valid())
+    if (features.normal && root.attributes.normal.is_valid())
     {
         switch (normal_style)
         {
@@ -469,13 +476,13 @@ void Build_context::build_vertex_normal()
         }
     }
 
-    if (root.geometry_uploader.format_info.want_normal_flat && root.attributes.normal_flat.is_valid())
+    if (features.normal_flat && root.attributes.normal_flat.is_valid())
     {
         vertex_writer.write(root.attributes.normal_flat, polygon_normal);
         log_primitive_builder.trace("point {} corner {} flat polygon normal {}\n", point_id, corner_id, polygon_normal);
     }
 
-    if (root.geometry_uploader.format_info.want_normal_smooth && root.attributes.normal_smooth.is_valid())
+    if (features.normal_smooth && root.attributes.normal_smooth.is_valid())
     {
         vec3 smooth_point_normal{0.0f, 1.0f, 0.0f};
 
@@ -496,7 +503,7 @@ void Build_context::build_vertex_normal()
 
 void Build_context::build_vertex_tangent()
 {
-    if (!root.geometry_uploader.format_info.want_tangent || !root.attributes.tangent.is_valid())
+    if (!root.build_info.format.features.tangent || !root.attributes.tangent.is_valid())
     {
         return;
     }
@@ -523,7 +530,7 @@ void Build_context::build_vertex_tangent()
 
 void Build_context::build_vertex_bitangent()
 {
-    if (!root.geometry_uploader.format_info.want_bitangent || !root.attributes.bitangent.is_valid())
+    if (!root.build_info.format.features.bitangent || !root.attributes.bitangent.is_valid())
     {
         return;
     }
@@ -550,7 +557,7 @@ void Build_context::build_vertex_bitangent()
 
 void Build_context::build_vertex_texcoord()
 {
-    if (!root.geometry_uploader.format_info.want_texcoord || !root.attributes.texcoord.is_valid())
+    if (!root.build_info.format.features.texcoord || !root.attributes.texcoord.is_valid())
     {
         return;
     }
@@ -577,7 +584,7 @@ void Build_context::build_vertex_texcoord()
 
 void Build_context::build_vertex_color()
 {
-    if (!root.geometry_uploader.format_info.want_color || !root.attributes.color.is_valid())
+    if (!root.build_info.format.features.color || !root.attributes.color.is_valid())
     {
         return;
     }
@@ -595,7 +602,7 @@ void Build_context::build_vertex_color()
     }
     else
     {
-        color = root.geometry_uploader.format_info.constant_color;
+        color = root.build_info.format.constant_color;
         log_primitive_builder.trace("point {} corner {} constant color {}\n", point_id, corner_id, color);
     }
 
@@ -604,7 +611,7 @@ void Build_context::build_vertex_color()
 
 void Build_context::build_centroid_position()
 {
-    if (!root.geometry_uploader.format_info.want_centroid_points || !root.attributes.position.is_valid())
+    if (!root.build_info.format.features.centroid_points || !root.attributes.position.is_valid())
     {
         return;
     }
@@ -620,7 +627,9 @@ void Build_context::build_centroid_position()
 
 void Build_context::build_centroid_normal()
 {
-    if (!root.geometry_uploader.format_info.want_centroid_points)
+    const auto& features = root.build_info.format.features;
+
+    if (!features.centroid_points)
     {
         return;
     }
@@ -631,12 +640,12 @@ void Build_context::build_centroid_normal()
         normal = property_maps.polygon_normals->get(polygon_id);
     }
 
-    if (root.geometry_uploader.format_info.want_normal && root.attributes.normal.is_valid())
+    if (features.normal && root.attributes.normal.is_valid())
     {
         vertex_writer.write(root.attributes.normal, normal);
     }
 
-    if (root.geometry_uploader.format_info.want_normal_flat && root.attributes.normal_flat.is_valid())
+    if (features.normal_flat && root.attributes.normal_flat.is_valid())
     {
         vertex_writer.write(root.attributes.normal_flat, normal);
     }
@@ -644,7 +653,7 @@ void Build_context::build_centroid_normal()
 
 void Build_context::build_corner_point_index()
 {
-    if (root.geometry_uploader.format_info.want_corner_points)
+    if (root.build_info.format.features.corner_points)
     {
         index_writer.write_corner(vertex_index);
     }
@@ -652,7 +661,7 @@ void Build_context::build_corner_point_index()
 
 void Build_context::build_triangle_fill_index()
 {
-    if (root.geometry_uploader.format_info.want_fill_triangles)
+    if (root.build_info.format.features.fill_triangles)
     {
         if (previous_index != first_index)
         {
@@ -668,10 +677,6 @@ void Build_context::build_polygon_fill()
     // TODO property_maps.corner_indices needs to be setup
     //      also if edge lines are wanted.
     //
-    //if (!root.geometry_uploader.format_info.want_fill_triangles)
-    //{
-    //    return;
-    //}
 
     property_maps.corner_indices->clear();
 
@@ -745,7 +750,7 @@ void Build_context::build_polygon_fill()
 
 void Build_context::build_edge_lines()
 {
-    if (!root.geometry_uploader.format_info.want_edge_lines)
+    if (!root.build_info.format.features.edge_lines)
     {
         return;
     }
@@ -778,7 +783,7 @@ void Build_context::build_edge_lines()
 
 void Build_context::build_centroid_points()
 {
-    if (!root.geometry_uploader.format_info.want_centroid_points)
+    if (!root.build_info.format.features.centroid_points)
     {
         return;
     }
@@ -807,30 +812,30 @@ void Build_context_root::allocate_index_range(const gl::Primitive_type primitive
     next_index_range_start += index_count;
 
     // If index buffer has not yet been allocated, no check for enough room for index range
-    VERIFY((primitive_geometry->index_count == 0) ||
-           (next_index_range_start <= primitive_geometry->index_count));
+    VERIFY((primitive_geometry->index_buffer_range.count == 0) ||
+           (next_index_range_start <= primitive_geometry->index_buffer_range.count));
 }
 
 
 auto make_primitive(const erhe::geometry::Geometry& geometry,
-                    const Geometry_uploader&        geometry_uploader,
+                    Build_info&                     build_info,
                     const Normal_style              normal_style)
 -> Primitive_geometry
 {
     //Primitive_builder::prepare_vertex_format(context.format_info, context.buffer_info);
-    Primitive_builder builder(geometry, geometry_uploader, normal_style);
+    Primitive_builder builder(geometry, build_info, normal_style);
     return builder.build();
 }
 
 auto make_primitive_shared(const erhe::geometry::Geometry& geometry,
-                           const Geometry_uploader&        geometry_uploader,
+                           Build_info&                     build_info,
                            const Normal_style              normal_style)
 -> std::shared_ptr<Primitive_geometry>
 {
     auto result = std::make_shared<Primitive_geometry>();
-    Primitive_builder builder(geometry, geometry_uploader, normal_style);
+    Primitive_builder builder(geometry, build_info, normal_style);
     builder.build(result.get());
-    result->source_normal_style = geometry_uploader.format_info.normal_style;
+    result->source_normal_style = build_info.format.normal_style;
     return result;
 }
 

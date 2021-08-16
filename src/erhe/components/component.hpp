@@ -93,6 +93,8 @@ public:
 
     virtual void on_thread_enter() {}
 
+    virtual auto initialization_requires_main_thread() const -> bool { return false; }
+
     auto name() const -> std::string_view
     {
         return m_name;
@@ -115,7 +117,7 @@ public:
         m_components = nullptr;
     }
 
-    auto is_ready_to_initialize() const -> bool;
+    auto is_ready_to_initialize(const bool in_worker_thread) const -> bool;
 
     void remove_dependency(const std::shared_ptr<Component>& component);
 

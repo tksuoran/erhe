@@ -18,7 +18,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     freetype
     GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype.git
-    GIT_TAG        VER-2-10-4
+    GIT_TAG        VER-2-11-0
 )
 
 FetchContent_Declare(
@@ -34,7 +34,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     fmt
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-    GIT_TAG        7.1.3
+    GIT_TAG        8.0.1
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -73,21 +73,21 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 
-FetchContent_Declare(
-    reactphysics3d
-    GIT_REPOSITORY https://github.com/DanielChappuis/reactphysics3d.git
-    GIT_TAG        v0.8.0
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
+# FetchContent_Declare(
+#     reactphysics3d
+#     GIT_REPOSITORY https://github.com/DanielChappuis/reactphysics3d.git
+#     GIT_TAG        v0.8.0
+#     GIT_SHALLOW    TRUE
+#     GIT_PROGRESS   TRUE
+# )
 
-FetchContent_Declare(
-    spdlog
-    GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG        v1.8.5
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
+# FetchContent_Declare(
+#     spdlog
+#     GIT_REPOSITORY https://github.com/gabime/spdlog.git
+#     GIT_TAG        v1.8.5
+#     GIT_SHALLOW    TRUE
+#     GIT_PROGRESS   TRUE
+# )
 
 FetchContent_Declare(
     bullet3
@@ -101,23 +101,23 @@ FetchContent_Declare(
 FetchContent_Declare(
     eigen
     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-    GIT_TAG        3.3.9
+    GIT_TAG        3.4.0
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
 
-FetchContent_Declare(
-    libigl
-    GIT_REPOSITORY https://github.com/libigl/libigl.git
-    GIT_TAG        v2.3.0
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
+# FetchContent_Declare(
+#     libigl
+#     GIT_REPOSITORY https://github.com/libigl/libigl.git
+#     GIT_TAG        v2.3.0
+#     GIT_SHALLOW    TRUE
+#     GIT_PROGRESS   TRUE
+# )
 
 FetchContent_Declare(
     embree
     GIT_REPOSITORY https://github.com/embree/embree.git
-    GIT_TAG        v3.13.0
+    GIT_TAG        v3.13.1
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -137,7 +137,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
-    GIT_TAG        3.3.2
+    GIT_TAG        3.3.4
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -158,14 +158,13 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 
-FetchContent_Declare(
-    googletest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG        master
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
+# FetchContent_Declare(
+#     googletest
+#     GIT_REPOSITORY https://github.com/google/googletest.git
+#     GIT_TAG        master
+#     GIT_SHALLOW    TRUE
+#     GIT_PROGRESS   TRUE
+# )
 
 FetchContent_Declare(
     OpenXR-SDK
@@ -205,7 +204,12 @@ FetchContent_MakeAvailable(glm)
 FetchContent_MakeAvailable(GSL)
 #FetchContent_MakeAvailable(googletest)
 FetchContent_MakeAvailable(ImGui)
+
+# TODO Figure out how to disable Tracy profiling properly
+set(TRACY_ENABLE OFF CACHE BOOL "Enable profiling")
+option(TRACY_ENABLE "Enable profiling" OFF)
 FetchContent_MakeAvailable(tracy)
+
 #FetchContent_MakeAvailable(reactphysics3d)
 FetchContent_MakeAvailable(bullet3)
 FetchContent_MakeAvailable(embree)

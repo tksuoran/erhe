@@ -76,7 +76,7 @@ class Property_map
     : public Property_map_base<Key_type>
 {
 public:
-    Property_map(const Property_map_descriptor& descriptor)
+    explicit Property_map(const Property_map_descriptor& descriptor)
         : m_descriptor(descriptor)
     {
     };

@@ -16,11 +16,6 @@
 #include <vector>
 
 
-namespace erhe::graphics
-{
-    class buffer;
-}
-
 namespace erhe::primitive
 {
     class Primitive;

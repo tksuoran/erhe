@@ -24,14 +24,14 @@ public:
 class Space_mouse_controller
 {
 public:
-    Space_mouse_controller(Space_mouse_listener& spacemouse_listener);
+    explicit Space_mouse_controller(Space_mouse_listener& spacemouse_listener);
     ~Space_mouse_controller();
 
     void run ();
     void stop();
 
 private:
-    bool initialize();
+    auto initialize() -> bool;
 
     Space_mouse_listener&        m_listener;
     bool                         m_mouse_found{false};

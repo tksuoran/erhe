@@ -71,9 +71,9 @@ void Id_renderer::initialize_component()
     create_frame_resources(1, 1, 1, 1000, 1000);
 
     m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(Component::get<Program_interface>()->attribute_mappings,
-                                                                          *(m_mesh_memory->vertex_format()),
-                                                                          m_mesh_memory->vertex_buffer(),
-                                                                          m_mesh_memory->index_buffer());
+                                                                          m_mesh_memory->gl_vertex_format(),
+                                                                          m_mesh_memory->gl_vertex_buffer.get(),
+                                                                          m_mesh_memory->gl_index_buffer.get());
 
     m_pipeline.shader_stages  = m_programs->id.get();
     m_pipeline.vertex_input   = m_vertex_input.get();
@@ -182,7 +182,7 @@ void Id_renderer::render_layer(erhe::scene::Layer* layer)
     bind_draw_indirect_buffer();
 
     gl::multi_draw_elements_indirect(m_pipeline.input_assembly->primitive_topology,
-                                     m_mesh_memory->index_type(),
+                                     m_mesh_memory->gl_index_type(),
                                      reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
                                      static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
                                      static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command)));
@@ -319,6 +319,15 @@ void Id_renderer::render(const erhe::scene::Viewport viewport,
     gl::pop_debug_group();
 }
 
+template<typename T>
+inline T read_as(uint8_t const* raw_memory)
+{
+    static_assert(std::is_trivially_copyable<T>());
+    T result;
+    memcpy(&result, raw_memory, sizeof(T));
+    return result;
+}
+
 bool Id_renderer::get(const int x, const int y, uint32_t& id, float& depth)
 {
     int slot = static_cast<int>(m_current_id_frame_resource_slot);
@@ -362,9 +371,11 @@ bool Id_renderer::get(const int x, const int y, uint32_t& id, float& depth)
                     const uint8_t        g           = idr.data[x_ * 4 + y_ * stride + 1];
                     const uint8_t        b           = idr.data[x_ * 4 + y_ * stride + 2];
                     const uint8_t* const depth_ptr   = &idr.data[s_extent * s_extent * 4 + x_ * 4 + y_ * stride];
-                    const float* const   depth_f_ptr = reinterpret_cast<const float*>(depth_ptr);
                     id                               = (r << 16) | (g << 8) | b;
-                    depth                            = *depth_f_ptr;
+                    //const float* const   depth_f_ptr = reinterpret_cast<const float*>(depth_ptr);
+                    //float*   depth_f_ptr = reinterpret_cast<float*>(depth_ptr);
+                    //depth                = *depth_f_ptr;
+                    depth                = read_as<float>(depth_ptr);
                     return true;
                 }
             }

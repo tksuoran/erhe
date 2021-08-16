@@ -283,6 +283,15 @@ void Id_renderer::render(erhe::scene::Viewport   viewport,
     gl::pop_debug_group();
 }
 
+template<typename T>
+inline T read_as(uint8_t const* raw_memory)
+{
+    static_assert(std::is_trivially_copyable<T>());
+    T result;
+    memcpy(&result, raw_memory, sizeof(T));
+    return result;
+}
+
 bool Id_renderer::get(int x, int y, uint32_t& id, float& depth)
 {
     int slot = static_cast<int>(m_current_id_frame_resource_slot);
@@ -325,8 +334,9 @@ bool Id_renderer::get(int x, int y, uint32_t& id, float& depth)
                 uint8_t  b           = idr.data[x_ * 4 + y_ * stride + 2];
                 id                   = (r << 16) | (g << 8) | b;
                 uint8_t* depth_ptr   = &idr.data[s_extent * s_extent * 4 + x_ * 4 + y_ * stride];
-                float*   depth_f_ptr = reinterpret_cast<float*>(depth_ptr);
-                depth                = *depth_f_ptr;
+                //float*   depth_f_ptr = reinterpret_cast<float*>(depth_ptr);
+                //depth                = *depth_f_ptr;
+                depth                = read_as<float>(depth_f_ptr);
                 return true;
             }
         }

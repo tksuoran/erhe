@@ -3,6 +3,8 @@ set(_target "erhe_graphics")
 set(source_list
     buffer.cpp
     buffer.hpp
+    buffer_transfer_queue.cpp
+    buffer_transfer_queue.hpp
     configuration.cpp
     configuration.hpp
     fragment_output.cpp

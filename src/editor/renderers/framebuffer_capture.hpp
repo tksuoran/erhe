@@ -52,24 +52,24 @@ private:
         auto operator=(const Framebuffer_capture_resources&) -> Framebuffer_capture_resources& = delete;
 
         Framebuffer_capture_resources(Framebuffer_capture_resources&& other) noexcept
+            : pixel_pack_buffer{std::move(other.pixel_pack_buffer)}
+            , framebuffer      {other.framebuffer                 }
+            , data             {std::move(other.data             )}
+            , time             {other.time                        }
+            , sync             {other.sync                        }
+            , x_offset         {other.x_offset                    }
+            , y_offset         {other.y_offset                    }
+            , state            {other.state                       }
         {
-            pixel_pack_buffer = std::move(other.pixel_pack_buffer);
-            data              = std::move(other.data             );
-            time              = other.time;
-            sync              = other.sync;
-            clip_from_world   = other.clip_from_world;
-            x_offset          = other.x_offset;
-            y_offset          = other.y_offset;
-            state             = other.state;
         }
 
         auto operator=(Framebuffer_capture_resources&& other) noexcept -> Framebuffer_capture_resources&
         {
             pixel_pack_buffer = std::move(other.pixel_pack_buffer);
-            data              = std::move(other.data             );
+            framebuffer       = other.framebuffer;
+            data              = std::move(other.data);
             time              = other.time;
             sync              = other.sync;
-            clip_from_world   = other.clip_from_world;
             x_offset          = other.x_offset;
             y_offset          = other.y_offset;
             state             = other.state;

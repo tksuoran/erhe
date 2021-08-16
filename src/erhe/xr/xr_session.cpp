@@ -119,6 +119,7 @@ auto Xr_session::create_session() -> bool
     session_create_info.createFlags = 0;
     session_create_info.systemId    = m_instance.get_xr_system_id();
 
+    check_gl_context_in_current_in_this_thread();
     if (!check("xrCreateSession",
                xrCreateSession(xr_instance, &session_create_info, &m_xr_session)))
     {
@@ -145,6 +146,8 @@ Xr_session::~Xr_session()
     }
 
     check("xrEndSession",     xrEndSession    (m_xr_session));
+
+    check_gl_context_in_current_in_this_thread();
     check("xrDestroySession", xrDestroySession(m_xr_session));
 }
 
@@ -273,6 +276,7 @@ auto Xr_session::create_swapchains() -> bool
 
         XrSwapchain color_swapchain{XR_NULL_HANDLE};
 
+        check_gl_context_in_current_in_this_thread();
         if (!check("xrCreateSwapchain",
                    xrCreateSwapchain(m_xr_session, &swapchain_create_info, &color_swapchain)))
         {
@@ -283,6 +287,7 @@ auto Xr_session::create_swapchains() -> bool
         swapchain_create_info.format      = static_cast<int64_t>(m_swapchain_depth_format);
         XrSwapchain depth_swapchain{XR_NULL_HANDLE};
 
+        check_gl_context_in_current_in_this_thread();
         if (!check("xrCreateSwapchain",
                    xrCreateSwapchain(m_xr_session, &swapchain_create_info, &depth_swapchain)))
         {
@@ -379,6 +384,7 @@ auto Xr_session::begin_frame() -> bool
     frame_begin_info.type = XR_TYPE_FRAME_BEGIN_INFO;
     frame_begin_info.next = nullptr;
     {
+        check_gl_context_in_current_in_this_thread();
         const auto result = xrBeginFrame(m_xr_session, &frame_begin_info);
         if (result == XR_SUCCESS)
         {
@@ -547,7 +553,7 @@ auto Xr_session::end_frame() -> bool
     layer.viewCount  = static_cast<uint32_t>(m_xr_views.size());
     layer.views      = m_xr_composition_layer_projection_views.data();
     layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-    
+
     XrCompositionLayerBaseHeader* layers[] = {
         reinterpret_cast<XrCompositionLayerBaseHeader*>(&layer)
     };
@@ -560,6 +566,7 @@ auto Xr_session::end_frame() -> bool
     frame_end_info.layerCount           = 1;
     frame_end_info.layers               = layers;
 
+    check_gl_context_in_current_in_this_thread();
     if (!check("xrEndFrame", xrEndFrame(m_xr_session, &frame_end_info)))
     {
         return false;

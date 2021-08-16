@@ -61,7 +61,7 @@ void Operations::window(Pointer_context& pointer_context)
         }
     }
 
-    Mesh_operation::Context context{m_mesh_memory->geometry_uploader(),
+    Mesh_operation::Context context{m_mesh_memory->build_info_set,
                                     m_scene_root->content_layer(),
                                     m_scene_root->scene(),
                                     m_scene_root->physics_world(),
@@ -79,7 +79,7 @@ void Operations::window(Pointer_context& pointer_context)
 
     if (ImGui::Button("Merge", button_size))
     {
-        Merge_operation::Context merge_context{m_mesh_memory->geometry_uploader(),
+        Merge_operation::Context merge_context{m_mesh_memory->build_info_set,
                                                m_scene_root->content_layer(),
                                                m_scene_root->scene(),
                                                m_scene_root->physics_world(),

@@ -5,8 +5,7 @@
 #include "erhe/geometry/types.hpp"
 #include "erhe/primitive/enums.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/primitive/buffer_info.hpp"
-#include "erhe/primitive/format_info.hpp"
+#include "erhe/primitive/build_info.hpp"
 
 #include "LinearMath/btVector3.h"
 
@@ -25,7 +24,6 @@ namespace erhe::physics
 
 namespace erhe::primitive
 {
-    class Geometry_uploader;
     class Material;
     class Primitive_geometry;
 }
@@ -71,14 +69,14 @@ class Brush_create_info final
 {
 public:
     Brush_create_info(const std::shared_ptr<erhe::geometry::Geometry>& geometry,
-                      erhe::primitive::Geometry_uploader&              geometry_uploader,
+                      erhe::primitive::Build_info_set&                 build_info_set,
                       const erhe::primitive::Normal_style              normal_style,
                       const float                                      density,
                       const float                                      volume,
                       const std::shared_ptr<btCollisionShape>&         collision_shape);
 
     Brush_create_info(const std::shared_ptr<erhe::geometry::Geometry>& geometry,
-                      erhe::primitive::Geometry_uploader&              geometry_uploader,
+                      erhe::primitive::Build_info_set&                 build_info_set,
                       const erhe::primitive::Normal_style              normal_style,
                       const float                                      density,
                       const Collision_volume_calculator                collision_volume_calculator,
@@ -87,7 +85,7 @@ public:
     ~Brush_create_info();
 
     std::shared_ptr<erhe::geometry::Geometry> geometry;
-    erhe::primitive::Geometry_uploader&       geometry_uploader;
+    erhe::primitive::Build_info_set&          build_info_set;
     erhe::primitive::Normal_style             normal_style;
     float                                     density{1.0f};
     float                                     volume{1.0f};
@@ -109,7 +107,7 @@ class Brush final
 public:
     using Create_info = Brush_create_info;
 
-    explicit Brush(const erhe::primitive::Geometry_uploader& geometry_uploader);
+    explicit Brush(erhe::primitive::Build_info_set& build_info_set);
     explicit Brush(const Create_info& create_info);
     ~Brush        ();
     Brush         (const Brush&) = delete;
@@ -149,7 +147,7 @@ public:
     -> Instance;
 
     std::shared_ptr<erhe::geometry::Geometry>            geometry;
-    const erhe::primitive::Geometry_uploader&            geometry_uploader;
+    erhe::primitive::Build_info_set                      build_info_set;
     std::shared_ptr<erhe::primitive::Primitive_geometry> primitive_geometry;
     erhe::primitive::Normal_style                        normal_style{erhe::primitive::Normal_style::corner_normals};
     std::shared_ptr<btCollisionShape>                    collision_shape;

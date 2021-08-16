@@ -27,7 +27,6 @@ namespace erhe::graphics
 
 namespace erhe::primitive
 {
-    class Geometry_uploader;
     class Primitive;
     class Primitive_eometry;
 }
@@ -108,9 +107,9 @@ public:
     void update_fixed_step(const erhe::components::Time_context& time_context);
 
 private:
+    auto build_info_set           () -> erhe::primitive::Build_info_set&;
     void initialize_camera        ();
     void animate_lights           (double time_d);
-    auto geometry_uploader        () -> erhe::primitive::Geometry_uploader&;
     auto buffer_transfer_queue    () -> erhe::graphics::Buffer_transfer_queue&;
     void add_floor                ();
     void make_brushes             ();

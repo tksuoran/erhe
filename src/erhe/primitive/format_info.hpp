@@ -13,22 +13,29 @@ namespace erhe::graphics
 namespace erhe::primitive
 {
 
+class Requested_features
+{
+public:
+    bool fill_triangles {false};
+    bool edge_lines     {false};
+    bool corner_points  {false};
+    bool centroid_points{false};
+    bool position       {false};
+    bool normal         {false};
+    bool normal_flat    {false};
+    bool normal_smooth  {false};
+    bool tangent        {false};
+    bool bitangent      {false};
+    bool color          {false};
+    bool texcoord       {false};
+    bool id             {false};
+};
+
 class Format_info
 {
 public:
-    bool want_fill_triangles {false};
-    bool want_edge_lines     {false};
-    bool want_corner_points  {false};
-    bool want_centroid_points{false};
-    bool want_position       {false};
-    bool want_normal         {false};
-    bool want_normal_flat    {false};
-    bool want_normal_smooth  {false};
-    bool want_tangent        {false};
-    bool want_bitangent      {false};
-    bool want_color          {false};
-    bool want_texcoord       {false};
-    bool want_id             {false};
+    Requested_features features;
+    //Requested_features embree_features;
 
     gl::Vertex_attrib_type position_type     {gl::Vertex_attrib_type::float_};
     gl::Vertex_attrib_type normal_type       {gl::Vertex_attrib_type::float_};
@@ -41,9 +48,9 @@ public:
     gl::Vertex_attrib_type id_vec3_type      {gl::Vertex_attrib_type::float_};
     gl::Vertex_attrib_type id_uint_type      {gl::Vertex_attrib_type::float_};
 
-    glm::vec4                                  constant_color{1.0f};
-    bool                                       keep_geometry {false};
-    Normal_style                               normal_style  {Normal_style::corner_normals};
+    glm::vec4                                  constant_color           {1.0f};
+    bool                                       keep_geometry            {false};
+    Normal_style                               normal_style             {Normal_style::corner_normals};
     erhe::graphics::Vertex_attribute_mappings* vertex_attribute_mappings{nullptr};
 };
 

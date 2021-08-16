@@ -60,6 +60,8 @@ auto to_string_message_type    (XrDebugUtilsMessageTypeFlagsEXT     type_flags) 
 
 auto check(const char* function_name, XrResult result) -> bool;
 
+void check_gl_context_in_current_in_this_thread();
+
 extern erhe::log::Category log_xr;
 
 extern constexpr const char* c_str(::XrActionType            e) noexcept;

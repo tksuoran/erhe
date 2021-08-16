@@ -26,6 +26,8 @@ set(source_list
     renderers/forward_renderer.hpp
     renderers/frame_resources.cpp
     renderers/frame_resources.hpp
+    renderers/headset_renderer.cpp
+    renderers/headset_renderer.hpp
     renderers/id_renderer.cpp
     renderers/id_renderer.hpp
     renderers/light_mesh.cpp

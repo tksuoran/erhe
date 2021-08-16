@@ -24,7 +24,7 @@ using erhe::graphics::Draw_key;
 using erhe::log::Log;
 
 Text_buffer::Text_buffer(gsl::not_null<const Style*> style,
-                         unsigned int                max_chars)
+                         const unsigned int          max_chars)
     : m_style    {style}
     , m_max_chars{max_chars}
 {
@@ -49,15 +49,14 @@ Text_buffer::Text_buffer(gsl::not_null<const Style*> style,
     }
 }
 
-Text_buffer::Text_buffer(
-                         gsl::not_null<const Style*> style,
-                         unsigned int                max_chars)
+Text_buffer::Text_buffer(gsl::not_null<const Style*> style,
+                         const unsigned int          max_chars)
     : Text_buffer{renderer.vertex_buffer(), renderer.index_buffer(), style, max_chars}
 {
 }
 
 Text_buffer::Text_buffer(gsl::not_null<const Style*> style,
-                         unsigned int                max_chars)
+                         const unsigned int          max_chars)
     : Text_buffer{{}, {}, style, max_chars}
 {
 }
@@ -92,7 +91,7 @@ auto Text_buffer::end_print()
     return m_chars_printed;
 }
 
-void Text_buffer::print(const std::string& text, int x, int y)
+void Text_buffer::print(const std::string& text, const int x, const int y)
 {
     Expects(m_chars_printed <= m_max_chars);
 
@@ -129,7 +128,7 @@ void Text_buffer::measure(const std::string& text)
     m_style->font->measure(text, m_bounding_box);
 }
 
-void Text_buffer::print_center(const std::string& text, float x, float y)
+void Text_buffer::print_center(const std::string& text, const float x, const float y)
 {
     measure(text);
     glm::vec2 p(x, y);

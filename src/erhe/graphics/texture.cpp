@@ -2,6 +2,7 @@
 #include "erhe/gl/gl.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <algorithm>
@@ -273,14 +274,12 @@ auto Texture::operator=(Texture&& other) noexcept
     return *this;
 }
 
-auto Texture::gl_name() const
--> GLuint
+auto Texture::gl_name() const -> GLuint
 {
     return m_handle.gl_name();
 }
 
-auto Texture::size_level_count(int size)
--> int
+auto Texture::size_level_count(int size) -> int
 {
     int level_count = size > 0 ? 1 : 0;
 
@@ -401,11 +400,11 @@ Texture::Texture(const Create_info& create_info)
         gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_height, &height);
         gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_DEPTH),                  &depth);
         gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_SAMPLES),                &samples);
-        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_FIXED_SAMPLE_LOCATIONS), &fixed_sample_locations);      
+        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_FIXED_SAMPLE_LOCATIONS), &fixed_sample_locations);
         gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_INTERNAL_FORMAT),        &internal_format_i);
         gl::Internal_format internal_format = static_cast<gl::Internal_format>(internal_format_i);
-        VERIFY(width  >= create_info.width);
-        VERIFY(height >= create_info.height);
+        VERIFY(width == create_info.width);
+        VERIFY(height == create_info.height);
         m_width           = width;
         m_height          = height;
         m_depth           = depth;
@@ -419,7 +418,7 @@ Texture::Texture(const Create_info& create_info)
         m_target       = texture_target;
         gl::get_texture_parameter_iv(gl_name(), static_cast<gl::Get_texture_parameter>(GL_TEXTURE_IMMUTABLE_FORMAT), &immutable_format_i);
         gl::get_texture_parameter_iv(gl_name(), static_cast<gl::Get_texture_parameter>(GL_TEXTURE_IMMUTABLE_LEVELS), &immutable_levels);
-        gl::Internal_format immutable_internal_format = static_cast<gl::Internal_format>(immutable_format_i);
+        //gl::Internal_format immutable_internal_format = static_cast<gl::Internal_format>(immutable_format_i);
         gl::texture_parameter_i(gl_name(), gl::Texture_parameter_name::texture_min_filter, GL_NEAREST);
         gl::texture_parameter_i(gl_name(), gl::Texture_parameter_name::texture_mag_filter, GL_NEAREST);
 

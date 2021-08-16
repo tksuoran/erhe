@@ -61,7 +61,7 @@ Merge_operation::Merge_operation(Context& context)
             }
         }
 
-        m_source_entries.emplace_back(context.geometry_uploader,
+        m_source_entries.emplace_back(context.build_info_set,
                                       context.layer,
                                       context.scene,
                                       context.physics_world,
@@ -80,7 +80,7 @@ Merge_operation::Merge_operation(Context& context)
     combined_geometry.build_edges();
 
     m_combined_primitive_geometry = make_primitive_shared(combined_geometry,
-                                                          context.geometry_uploader,
+                                                          context.build_info_set.gl,
                                                           normal_style);
     m_combined_primitive_geometry->source_geometry     = std::make_shared<erhe::geometry::Geometry>(std::move(combined_geometry));
     m_combined_primitive_geometry->source_normal_style = normal_style;

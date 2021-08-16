@@ -655,8 +655,8 @@ void Shader_stages::Prototype::dump_reflection() const
         }
     }
 
-    const int buffer_size = std::max(active_uniform_max_length, active_uniform_block_max_name_length);
-    std::vector<char> buffer(static_cast<size_t>(buffer_size) + 1);
+    //const int buffer_size = std::max(active_uniform_max_length, active_uniform_block_max_name_length);
+    //std::vector<char> buffer(static_cast<size_t>(buffer_size) + 1);
 
     if (transform_feedback_varyings > 0)
     {

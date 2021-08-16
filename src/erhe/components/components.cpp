@@ -106,10 +106,56 @@ void Components::show_dependencies() const
     log_components.info("Component dependencies:\n");
     for (auto const& component : components)
     {
-        log_components.info("    {}:\n", component->name());
+        log_components.info("    {} - {}:\n",
+                            component->name(),
+                            component->initialization_requires_main_thread()
+                                ? "main"
+                                : "worker");
         for (auto const& dependency : component->dependencies())
         {
-            log_components.info("        {}\n", dependency->name());
+            log_components.info("        {} - {}\n",
+                                dependency->name(),
+                                dependency->initialization_requires_main_thread()
+                                    ? "main"
+                                    : "worker");
+        }
+    }
+}
+
+void Components::initialize_component(const bool in_worker_thread)
+{
+    ZoneScoped;
+
+    auto component = get_component_to_initialize(in_worker_thread);
+    if (!component)
+    {
+        return;
+    }
+
+    log_components.info("Initializing {} {}\n",
+                        component->name(),
+                        in_worker_thread
+                            ? "in worker thread"
+                            : "in main thread");
+    component->initialize_component();
+
+    {
+        ZoneName(component->name().data(), component->name().length());
+
+        std::lock_guard<std::mutex> lock(m_mutex);
+        component->set_ready();
+        m_uninitialized_components.erase(component);
+        for (auto component_ : m_uninitialized_components)
+        {
+            component_->remove_dependency(component);
+        }
+        const std::string message_text = fmt::format("{} initialized", component->name());
+        TracyMessage(message_text.c_str(), message_text.length());
+        m_component_initialized.notify_all();
+        if (m_uninitialized_components.empty())
+        {
+            m_is_ready = true;
+            TracyMessageL("all components initialized");
         }
     }
 }
@@ -118,57 +164,48 @@ void Components::launch_component_initialization()
 {
     ZoneScoped;
 
+    m_initialize_component_count_worker_thread = 0;
+    m_initialize_component_count_main_thread   = 0;
     for (auto const& component : components)
     {
         component->connect();
         component->set_connected();
+        if (component->initialization_requires_main_thread())
+        {
+            ++m_initialize_component_count_main_thread;
+        }
+        else
+        {
+            ++m_initialize_component_count_worker_thread;
+        }
     }
 
     show_dependencies();
 
     m_uninitialized_components = components;
-    const size_t count = m_uninitialized_components.size();
 
-    log_components.info("Initializing {} Components:\n", count);
+    log_components.info("Initializing {} Components:\n", m_initialize_component_count_worker_thread);
 
-    m_execution_queue = std::make_unique<Concurrent_execution_queue>();
-    //m_execution_queue = std::make_unique<Serial_execution_queue>();
+    if constexpr (s_parallel_component_initialization)
+    {
+        m_execution_queue = std::make_unique<Concurrent_execution_queue>();
+    }
+    else
+    {
+        m_execution_queue = std::make_unique<Serial_execution_queue>();
+    }
 
-    for (size_t i = 0; i < count; ++i)
+    constexpr bool in_worker_thread = s_parallel_component_initialization;
+
+    for (size_t i = 0; i < m_initialize_component_count_worker_thread; ++i)
     {
         m_execution_queue->enqueue([this]() {
-            ZoneScoped;
-
-            auto component = get_component_to_initialize();
-            if (component)
-            {
-                log_components.info("{}\n", component->name());
-                component->initialize_component();
-                {
-                    ZoneName(component->name().data(), component->name().length());
-
-                    std::lock_guard<std::mutex> lock(m_mutex);
-                    component->set_ready();
-                    m_uninitialized_components.erase(component);
-                    for (auto component_ : m_uninitialized_components)
-                    {
-                        component_->remove_dependency(component);
-                    }
-                    const std::string message_text = fmt::format("{} initialized", component->name());
-                    TracyMessage(message_text.c_str(), message_text.length());
-                    m_component_initialized.notify_all();
-                    if (m_uninitialized_components.empty())
-                    {
-                        m_is_ready = true;
-                        TracyMessageL("all components initialized");
-                    }
-                }
-            }
+            initialize_component(in_worker_thread);
         });
     }
 }
 
-auto Components::get_component_to_initialize() -> shared_ptr<Component>
+auto Components::get_component_to_initialize(const bool in_worker_thread) -> shared_ptr<Component>
 {
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -186,9 +223,9 @@ auto Components::get_component_to_initialize() -> shared_ptr<Component>
             std::lock_guard<std::mutex> lock(m_mutex);
             const auto i = std::find_if(m_uninitialized_components.begin(),
                                         m_uninitialized_components.end(),
-                                        [](auto& component) {
+                                        [in_worker_thread](auto& component) {
                                             return component->get_state() == Component::Component_state::Connected &&
-                                                   component->is_ready_to_initialize();
+                                                   component->is_ready_to_initialize(in_worker_thread);
                                         });
             if (i != m_uninitialized_components.end())
             {
@@ -219,6 +256,14 @@ void Components::wait_component_initialization_complete()
     ZoneScoped;
 
     VERIFY(m_execution_queue);
+
+    // Initialize main thread components
+    constexpr bool in_worker_thread{false};
+    for (size_t i = 0; i < m_initialize_component_count_main_thread; ++i)
+    {
+        initialize_component(in_worker_thread);
+    }
+
     m_execution_queue->wait();
     std::lock_guard<std::mutex> lock(m_mutex);
     m_is_ready = true;

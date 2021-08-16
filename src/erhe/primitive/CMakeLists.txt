@@ -2,12 +2,15 @@ set(_target "erhe_primitive")
 
 set(source_list
     buffer_info.hpp
+    buffer_range.cpp
+    buffer_range.hpp
+    buffer_sink.cpp
+    buffer_sink.hpp
     buffer_writer.cpp
     buffer_writer.hpp
+    build_info.hpp
     enums.hpp
     format_info.hpp
-    geometry_uploader.cpp
-    geometry_uploader.hpp
     index_range.cpp
     index_range.hpp
     log.cpp
@@ -39,6 +42,7 @@ target_link_libraries(${_target}
         erhe_geometry
         erhe_gl
         erhe_log
+        erhe_raytrace
 )
 
 foreach(source IN LISTS source_list)

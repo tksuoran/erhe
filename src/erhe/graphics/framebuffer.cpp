@@ -1,4 +1,5 @@
 #include "erhe/graphics/framebuffer.hpp"
+#include "erhe/graphics/log.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/configuration.hpp"
@@ -96,6 +97,7 @@ auto Framebuffer::check_status() const
     const auto status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::draw_framebuffer);
     if (status != gl::Framebuffer_status::framebuffer_complete)
     {
+        log_framebuffer.warn("Framebuffer {} not complete: {}\n", gl_name(), gl::c_str(status));
         return false;
     }
     return status == gl::Framebuffer_status::framebuffer_complete;

@@ -115,6 +115,39 @@ auto create_frustum(const float left, const float right, const float bottom, con
     result[3][1] = 0;
     result[0][2] = 0;
     result[1][2] = 0;
+    result[2][2] = c; // inf far: zero to one = -1.0         minus one to one = -1.0
+    result[3][2] = d; // inf far: zero to one = -1.0 * near  minus one to one = -2.0 * near
+    result[0][3] = 0;
+    result[1][3] = 0;
+    result[2][3] = -1.0f;
+    result[3][3] = 0;
+    return result;
+}
+
+auto create_frustum_infinite_far(const float left, const float right, const float bottom, const float top, const float z_near)
+-> mat4
+{
+    assert(z_near >= -0.0f);
+    const float x =  (2.0f  * z_near        ) / (right  - left  );
+    const float y =  (2.0f  * z_near        ) / (top    - bottom);
+    const float a =  (right + left          ) / (right  - left  );
+    const float b =  (top   + bottom        ) / (top    - bottom);
+  //const float c = -1.0f;           -- negative one to one
+    const float c = -1.0f;           // zero to one
+  //const float d = -2.0f * z_near;  -- negative one to one
+    const float d = -z_near;         // zero to one
+
+    mat4 result;
+    result[0][0] = x;
+    result[1][0] = 0;
+    result[2][0] = a;
+    result[3][0] = 0;
+    result[0][1] = 0;
+    result[1][1] = y;
+    result[2][1] = b;
+    result[3][1] = 0;
+    result[0][2] = 0;
+    result[1][2] = 0;
     result[2][2] = c;
     result[3][2] = d;
     result[0][3] = 0;

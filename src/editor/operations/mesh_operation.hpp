@@ -18,7 +18,7 @@ namespace erhe::physics
 
 namespace erhe::primitive
 {
-    class Geometry_uploader;
+    class Build_info_set;
 }
 
 namespace erhe::scene
@@ -42,11 +42,11 @@ public:
     class Context
     {
     public:
-        erhe::primitive::Geometry_uploader& geometry_uploader;
-        erhe::scene::Layer&                 layer;
-        erhe::scene::Scene&                 scene;
-        erhe::physics::World&               physics_world;
-        std::shared_ptr<Selection_tool>     selection_tool;
+        erhe::primitive::Build_info_set& build_info_set;
+        erhe::scene::Layer&              layer;
+        erhe::scene::Scene&              scene;
+        erhe::physics::World&            physics_world;
+        std::shared_ptr<Selection_tool>  selection_tool;
     };
 
 protected:
@@ -65,7 +65,7 @@ protected:
     Mesh_operation ();
     ~Mesh_operation() override;
 
-    void make_entries(const Context& context,
+    void make_entries(const Context&                                                           context,
                       const std::function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation);
 
     // Implements IOperation

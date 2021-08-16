@@ -66,7 +66,7 @@ auto to_string_message_severity(XrDebugUtilsMessageSeverityFlagsEXT severity) ->
             ss << " | ";
         }
         ss << "verbose";
-        first = false;
+        //first = false;
     }
     return ss.str();
 }
@@ -106,7 +106,7 @@ auto to_string_message_type(XrDebugUtilsMessageTypeFlagsEXT type_flags) -> std::
             ss << " | ";
         }
         ss << "conformance";
-        first = false;
+        //first = false;
     }
     return ss.str();
 }
@@ -121,8 +121,17 @@ auto check(const char* function_name, XrResult result) -> bool
     return true;
 }
 
+void check_gl_context_in_current_in_this_thread()
+{
+    static std::thread::id xr_gl_thread_id{std::this_thread::get_id()};
+
+    if (xr_gl_thread_id != std::this_thread::get_id())
+    {
+        log_xr.error("XR GL thread error");
+    }
+}
+
 }
 
 #undef GEN_C_STR_CASE
 #undef GEN_C_STR
-

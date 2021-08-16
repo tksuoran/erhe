@@ -83,7 +83,7 @@ auto Scene::get_hit_position(const RTCRayHit& ray_hit) -> std::optional<glm::vec
     {
         return {};
     }
-    auto geometry = rtcGetGeometry(m_scene, ray_hit.hit.geomID);
+    //auto geometry = rtcGetGeometry(m_scene, ray_hit.hit.geomID);
     //rtcInterpolate0(geometry, ray_hit.hit.primID, ray_hit.hit.u, ray_hit.hit.v, RTC_BUFFER_TYPE_VERTEX,
     return {};
 
