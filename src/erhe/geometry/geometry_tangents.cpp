@@ -112,7 +112,7 @@ auto Geometry::compute_tangents(const bool corner_tangents,
             return get_triangle(iFace).polygon_id;
         }
 
-        auto get_polygon(const int iFace) -> Polygon& 
+        auto get_polygon(const int iFace) -> Polygon&
         {
             return geometry->polygons[get_polygon_id(iFace)];
         }
@@ -169,7 +169,7 @@ auto Geometry::compute_tangents(const bool corner_tangents,
             return position;
         }
 
-        auto get_normal(const int iFace, const int iVert) const -> glm::vec3 
+        auto get_normal(const int iFace, const int iVert) const -> glm::vec3
         {
             const Polygon_id polygon_id = get_polygon_id(iFace);
             if (iVert == 0)
@@ -439,7 +439,7 @@ auto Geometry::compute_tangents(const bool corner_tangents,
             {
                 continue;
             }
-        
+
             std::optional<glm::vec4> T;
             std::optional<glm::vec4> B;
             std::vector<glm::vec4> tangents;

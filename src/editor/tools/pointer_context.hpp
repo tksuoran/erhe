@@ -90,7 +90,7 @@ public:
     double                             mouse_x         {0.0f};
     double                             mouse_y         {0.0f};
     const erhe::scene::ICamera*        camera          {nullptr};
-    erhe::scene::Viewport              viewport        {0, 0, 0, 0};
+    erhe::scene::Viewport              viewport        {0, 0, 0, 0, true};
     bool                               hover_valid     {false};
     std::shared_ptr<erhe::scene::Mesh> hover_mesh;
     std::optional<glm::vec3>           hover_normal;

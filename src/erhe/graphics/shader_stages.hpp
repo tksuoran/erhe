@@ -16,6 +16,7 @@ class Shader_resource;
 class Vertex_attribute_mappings;
 class Gl_shader;
 
+// Shader program
 class Shader_stages
 {
 public:
@@ -44,28 +45,28 @@ public:
             std::filesystem::path path;
         };
 
-        Create_info(std::string_view           name,
-                    Shader_resource*           default_uniform_block, // containing sampler uniforms
-                    Vertex_attribute_mappings* vertex_attribute_mappings,
-                    Fragment_outputs*          fragment_outputs);
+        Create_info(const std::string_view           name,
+                    const Shader_resource*           default_uniform_block, // containing sampler uniforms
+                    const Vertex_attribute_mappings* vertex_attribute_mappings,
+                    const Fragment_outputs*          fragment_outputs);
 
         // Adds #version, #defines, fragment outputs, uniform blocks, samplers,
         // and source (possibly read from file).
         auto final_source(const Shader_stage& shader) const
         -> std::string;
 
-        void add_interface_block(gsl::not_null<Shader_resource*> uniform_block);
+        void add_interface_block(gsl::not_null<const Shader_resource*> uniform_block);
 
         std::string                                         name;
 
         // https://stackoverflow.com/questions/35525777/use-of-string-view-for-map-lookup
         std::vector<std::pair<std::string, std::string>>    defines;
-        std::map<std::string, gsl::not_null<Shader_resource*>, std::less<>>
+        std::map<std::string, gsl::not_null<const Shader_resource*>, std::less<>>
                                                             interface_blocks;
-        std::vector<Shader_resource*>                       struct_types;
-        Vertex_attribute_mappings*                          vertex_attribute_mappings{nullptr};
-        Fragment_outputs*                                   fragment_outputs         {nullptr};
-        Shader_resource*                                    default_uniform_block    {nullptr}; // contains sampler uniforms
+        std::vector<const Shader_resource*>                 struct_types;
+        const Vertex_attribute_mappings*                    vertex_attribute_mappings{nullptr};
+        const Fragment_outputs*                             fragment_outputs         {nullptr};
+        const Shader_resource*                              default_uniform_block    {nullptr}; // contains sampler uniforms
         std::vector<std::string>                            transform_feedback_varyings;
         gl::Transform_feedback_buffer_mode                  transform_feedback_buffer_mode{gl::Transform_feedback_buffer_mode::separate_attribs};
         std::vector<Shader_stage>                           shaders;

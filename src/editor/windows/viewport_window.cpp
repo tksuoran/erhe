@@ -102,10 +102,10 @@ Viewport_window::~Viewport_window() = default;
 
 void Viewport_window::initialize_component()
 {
-    get<Editor_tools>()->register_window(this);
+    get<Editor_tools>()->register_imgui_window(this);
 }
 
-void Viewport_window::window(Pointer_context& pointer_context)
+void Viewport_window::imgui(Pointer_context& pointer_context)
 {
     ZoneScoped;
 

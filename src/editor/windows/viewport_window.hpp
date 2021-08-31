@@ -2,7 +2,7 @@
 
 #include "erhe/scene/viewport.hpp"
 
-#include "windows/window.hpp"
+#include "windows/imgui_window.hpp"
 
 #include <glm/glm.hpp>
 
@@ -22,7 +22,7 @@ class Scene_manager;
 
 class Viewport_window
     : public erhe::components::Component
-    , public Window
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name{"Viewport_window"};
@@ -33,8 +33,8 @@ public:
     // Implements Component
     void initialize_component() override;
 
-    // Implements Window
-    void window(Pointer_context& pointer_context) override;
+    // Implements Imgui_window
+    void imgui(Pointer_context& pointer_context) override;
 
     auto to_scene_content            (glm::vec2 position_in_root) -> glm::vec2;
     void bind_multisample_framebuffer();

@@ -1,10 +1,12 @@
 #include "application.hpp"
+#include "configuration.hpp"
 #include "gl_context_provider.hpp"
 #include "log.hpp"
 #include "rendering.hpp"
 #include "time.hpp"
 #include "tools.hpp"
 #include "view.hpp"
+#include "window.hpp"
 
 #include "operations/operation_stack.hpp"
 
@@ -31,6 +33,7 @@
 #include "windows/material_properties.hpp"
 #include "windows/mesh_properties.hpp"
 #include "windows/node_properties.hpp"
+#include "windows/node_tree_window.hpp"
 #include "windows/operations.hpp"
 #include "windows/physics_window.hpp"
 #include "windows/viewport_config.hpp"
@@ -40,10 +43,8 @@
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/pipeline.hpp"
-#include "erhe/graphics/png_loader.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/graphics_experimental/image_transfer.hpp"
 #include "erhe/graphics_experimental/shader_monitor.hpp"
@@ -51,115 +52,34 @@
 #include "erhe/toolkit/window.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 
-#if defined(ERHE_WINDOW_TOOLKIT_GLFW)
-#   include <GLFW/glfw3.h>
-#endif
-
 #include <future>
 
 namespace editor {
 
 using erhe::graphics::OpenGL_state_tracker;
-using erhe::graphics::Configuration;
 using erhe::graphics::Shader_monitor;
 using std::shared_ptr;
 using std::make_shared;
 
-auto Application::create_gl_window()
--> bool
-{
-    ZoneScoped;
-
-    constexpr int msaa_sample_count = Editor_rendering::s_enable_gui ? 0 : 16;
-
-    m_context_window = std::make_unique<erhe::toolkit::Context_window>(1920, 1080, msaa_sample_count); // 1080p
-    //m_context_window = std::make_unique<erhe::toolkit::Context_window>(1280,  720, msaa_sample_count); // 720p
-
-#if defined(ERHE_WINDOW_TOOLKIT_GLFW)
-    erhe::graphics::PNG_loader loader;
-    erhe::graphics::Image_info image_info;
-    std::filesystem::path current_path = std::filesystem::current_path();
-    log_startup.trace("current directory is {}\n", current_path.string());
-    std::filesystem::path path = current_path / "res" / "images" / "gl32w.png";
-    bool exists          = std::filesystem::exists(path);
-    bool is_regular_file = std::filesystem::is_regular_file(path);
-    if (exists && is_regular_file)
-    {
-        ZoneScopedN("icon");
-
-        bool ok = loader.open(path, image_info);
-        if (ok)
-        {
-            std::vector<std::byte> data;
-            data.resize(image_info.width * image_info.height * 4);
-            auto span = gsl::span<std::byte>(data.data(), data.size());
-            ok = loader.load(span);
-            loader.close();
-            if (ok)
-            {
-                GLFWimage icons[1];
-                icons[0].width  = image_info.width;
-                icons[0].height = image_info.height;
-                icons[0].pixels = reinterpret_cast<unsigned char*>(span.data());
-                glfwSetWindowIcon(reinterpret_cast<GLFWwindow*>(m_context_window->get_glfw_window()), 1, &icons[0]);
-            }
-        }
-    }
-#endif
-
-    TracyGpuContext;
-
-    Configuration::initialize(glfwGetProcAddress);
-
-    return true;
-}
-
-auto Application::on_load()
--> bool
-{
-    TracyMessageL("component initialized");
-
-    if (!create_gl_window())
-    {
-        return false;
-    }
-
-    if (!initialize_components())
-    {
-        return false;
-    }
-
-    return true;
-}
-
 void Application::run()
 {
-    Expects(m_context_window);
-
-    TracyMessageL("component initialized");
-
-    m_context_window->enter_event_loop();
+    get<Window>()->get_context_window()->enter_event_loop();
 }
 
-auto Application::initialize_components()
+auto Application::initialize_components(int argc, char** argv)
 -> bool
 {
     ZoneScoped;
 
-    shared_ptr<OpenGL_state_tracker> opengl_state_tracker;
-    shared_ptr<Gl_context_provider > gl_context_provider;
-
-    {
-        ZoneScopedN("OpenGL state tracker");
-        opengl_state_tracker = make_shared<OpenGL_state_tracker>();
-    }
-    {
-        ZoneScopedN("GL context provider constructor");
-        gl_context_provider = make_shared<Gl_context_provider>();
-    }
+    auto configuration        = make_shared<Configuration>(argc, argv);
+    auto window               = make_shared<Window>();
+    auto opengl_state_tracker = make_shared<OpenGL_state_tracker>();
+    auto gl_context_provider  = make_shared<Gl_context_provider>();
 
     {
         ZoneScopedN("add components");
+        m_components.add(configuration);
+        m_components.add(window);
         m_components.add(shared_from_this());
         m_components.add(gl_context_provider);
         m_components.add(make_shared<Brushes             >());
@@ -181,6 +101,7 @@ auto Application::initialize_components()
         m_components.add(make_shared<Mesh_memory         >());
         m_components.add(make_shared<Mesh_properties     >());
         m_components.add(make_shared<Node_properties     >());
+        m_components.add(make_shared<Node_tree_window    >());
         m_components.add(make_shared<OpenGL_state_tracker>());
         m_components.add(make_shared<Operations          >());
         m_components.add(make_shared<Operation_stack     >());
@@ -199,10 +120,16 @@ auto Application::initialize_components()
         m_components.add(make_shared<Viewport_window     >());
     }
 
+    if (!window->create_gl_window())
+    {
+        log_startup.error("GL window creation failed, aborting\n");
+        return false;
+    }
+
     m_components.launch_component_initialization();
 
     gl_context_provider->provide_worker_contexts(opengl_state_tracker,
-                                                 get_context_window(),
+                                                 window->get_context_window(),
                                                  [this]() -> bool {
                                                      return !m_components.is_component_initialization_complete();
                                                  });
@@ -222,7 +149,22 @@ void Application::component_initialization_complete(bool initialization_succeede
     {
         gl::enable(gl::Enable_cap::primitive_restart);
         gl::primitive_restart_index(0xffffu);
-        m_context_window->get_root_view().reset_view(get<Editor_view>());
+
+        auto window = get<Window>();
+        if (!window)
+        {
+            return;
+        }
+
+        auto* context_window = window->get_context_window();
+        if (context_window == nullptr)
+        {
+            return;
+        }
+
+        auto& root_view = context_window->get_root_view();
+
+        root_view.reset_view(get<Editor_view>());
     }
 }
 

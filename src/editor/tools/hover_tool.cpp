@@ -174,7 +174,7 @@ void Hover_tool::select(Pointer_context& pointer_context)
     }
 }
 
-void Hover_tool::window(Pointer_context&)
+void Hover_tool::imgui(Pointer_context&)
 {
 
     //ImGui::Begin("Hover");

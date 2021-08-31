@@ -57,12 +57,14 @@ void Base_renderer::create_frame_resources(const size_t material_count,
 {
     ZoneScoped;
 
+    const auto& shader_resources = *m_program_interface->shader_resources.get();
+
     for (size_t i = 0; i < s_frame_resources_count; ++i)
     {
-        m_frame_resources.emplace_back(m_program_interface->material_block .size_bytes(), material_count,
-                                       m_program_interface->light_block    .size_bytes(), light_count,
-                                       m_program_interface->camera_block   .size_bytes(), camera_count,
-                                       m_program_interface->primitive_block.size_bytes(), primitive_count,
+        m_frame_resources.emplace_back(shader_resources.material_block .size_bytes(), material_count,
+                                       shader_resources.light_block    .size_bytes(), light_count,
+                                       shader_resources.camera_block   .size_bytes(), camera_count,
+                                       shader_resources.primitive_block.size_bytes(), primitive_count,
                                        sizeof(gl::Draw_elements_indirect_command),        draw_count);
     }
 }
@@ -98,10 +100,10 @@ auto Base_renderer::id_offset() const -> uint32_t
 auto Base_renderer::id_ranges() const -> const std::vector<Id_range>&
 {
     return m_id_ranges;
-} 
+}
 
-auto Base_renderer::update_primitive_buffer(const Mesh_collection& meshes,
-                                            const uint64_t         visibility_mask)
+auto Base_renderer::update_primitive_buffer(const Mesh_collection&   meshes,
+                                            const Visibility_filter& visibility_filter)
 -> Base_renderer::Buffer_range
 {
     ZoneScoped;
@@ -109,13 +111,14 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection& meshes,
     log_render.trace("{}(meshes.size() = {})\n", __func__, meshes.size());
 
     m_primitive_writer.begin();
-    const size_t entry_size         = m_program_interface->primitive_struct.size_bytes();
+    const auto&  shader_resources   = *m_program_interface->shader_resources.get();
+    const size_t entry_size         = shader_resources.primitive_struct.size_bytes();
     auto         primitive_gpu_data = current_frame_resources().primitive_buffer.map();
-    const auto&  offsets            = m_program_interface->primitive_block_offsets;
+    const auto&  offsets            = shader_resources.primitive_block_offsets;
     size_t       primitive_index    = 0;
     for (auto mesh : meshes)
     {
-        if ((mesh->visibility_mask & visibility_mask) == 0)
+        if (!visibility_filter(mesh->visibility_mask))
         {
             continue;
         }
@@ -186,10 +189,11 @@ auto Base_renderer::update_light_buffer(const Light_collection& lights,
 
     log_render.trace("{}(lights.size() = {})\n", __func__, lights.size());
 
-    const size_t entry_size     = m_program_interface->light_struct.size_bytes();
-    const auto&  offsets        = m_program_interface->light_block_offsets;
-    auto         light_gpu_data = current_frame_resources().light_buffer.map();
-    int          light_index    = 0;
+    const auto&  shader_resources = *m_program_interface->shader_resources.get();
+    const size_t entry_size       = shader_resources.light_struct.size_bytes();
+    const auto&  offsets          = shader_resources.light_block_offsets;
+    auto         light_gpu_data   = current_frame_resources().light_buffer.map();
+    int          light_index      = 0;
     uint32_t     directional_light_count{0};
     uint32_t     spot_light_count{0};
     uint32_t     point_light_count{0};
@@ -244,8 +248,9 @@ auto Base_renderer::update_material_buffer(const Material_collection& materials)
 
     log_render.trace("{}(materials.size() = {})\n", __func__, materials.size());
 
-    const size_t entry_size        = m_program_interface->material_struct.size_bytes();
-    const auto&  offsets           = m_program_interface->material_block_offsets;
+    const auto&  shader_resources  = *m_program_interface->shader_resources.get();
+    const size_t entry_size        = shader_resources.material_struct.size_bytes();
+    const auto&  offsets           = shader_resources.material_block_offsets;
     auto         material_gpu_data = current_frame_resources().material_buffer.map();
     size_t       material_index    = 0;
     m_material_writer.begin();
@@ -277,12 +282,13 @@ auto Base_renderer::update_camera_buffer(ICamera&       camera,
 
     camera.update(viewport);
 
-    auto        camera_gpu_data = current_frame_resources().camera_buffer.map();
-    const auto& offsets         = m_program_interface->camera_block_offsets;
-    const mat4  world_from_node = camera.node()->world_from_node();
-    const mat4  world_from_clip = camera.world_from_clip();
-    const mat4  clip_from_world = camera.clip_from_world();
-    const float exposure        = 1.0f;
+    const auto& shader_resources = *m_program_interface->shader_resources.get();
+    auto        camera_gpu_data  = current_frame_resources().camera_buffer.map();
+    const auto& offsets          = shader_resources.camera_block_offsets;
+    const mat4  world_from_node  = camera.node()->world_from_node();
+    const mat4  world_from_clip  = camera.world_from_clip();
+    const mat4  clip_from_world  = camera.clip_from_world();
+    const float exposure         = 1.0f;
 
     m_camera_writer.begin();
     const float viewport_floats[4] { static_cast<float>(viewport.x),
@@ -294,22 +300,28 @@ auto Base_renderer::update_camera_buffer(ICamera&       camera,
                                 fov_sides.right,
                                 fov_sides.up,
                                 fov_sides.down };
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.world_from_node, as_span(world_from_node));
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.world_from_clip, as_span(world_from_clip));
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.clip_from_world, as_span(clip_from_world));
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.viewport,        as_span(viewport_floats));
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.fov,             as_span(fov_floats     ));
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.exposure,        as_span(exposure)       );
-    m_camera_writer.write_offset += m_program_interface->camera_block.size_bytes();
+    const float clip_depth_direction = viewport.reverse_depth ? -1.0f : 1.0f;
+    const float view_depth_near      = camera.projection()->z_near;
+    const float view_depth_far       = camera.projection()->z_far;
+    write(camera_gpu_data, m_camera_writer.write_offset + offsets.world_from_node,      as_span(world_from_node     ));
+    write(camera_gpu_data, m_camera_writer.write_offset + offsets.world_from_clip,      as_span(world_from_clip     ));
+    write(camera_gpu_data, m_camera_writer.write_offset + offsets.clip_from_world,      as_span(clip_from_world     ));
+    write(camera_gpu_data, m_camera_writer.write_offset + offsets.viewport,             as_span(viewport_floats     ));
+    write(camera_gpu_data, m_camera_writer.write_offset + offsets.fov,                  as_span(fov_floats          ));
+    write(camera_gpu_data, m_camera_writer.write_offset + offsets.clip_depth_direction, as_span(clip_depth_direction));
+    write(camera_gpu_data, m_camera_writer.write_offset + offsets.view_depth_near,      as_span(view_depth_near     ));
+    write(camera_gpu_data, m_camera_writer.write_offset + offsets.view_depth_far,       as_span(view_depth_far      ));
+    write(camera_gpu_data, m_camera_writer.write_offset + offsets.exposure,             as_span(exposure            ));
+    m_camera_writer.write_offset += shader_resources.camera_block.size_bytes();
     m_camera_writer.end();
 
     return m_camera_writer.range;
 }
 
 
-auto Base_renderer::update_draw_indirect_buffer(const Mesh_collection& meshes,
-                                                const Primitive_mode   primitive_mode,
-                                                const uint64_t         visibility_mask)
+auto Base_renderer::update_draw_indirect_buffer(const Mesh_collection&   meshes,
+                                                const Primitive_mode     primitive_mode,
+                                                const Visibility_filter& visibility_filter)
 -> Base_renderer::Draw_indirect_buffer_range
 {
     ZoneScoped;
@@ -321,7 +333,7 @@ auto Base_renderer::update_draw_indirect_buffer(const Mesh_collection& meshes,
     m_draw_indirect_writer.begin();
     for (auto mesh : meshes)
     {
-        if ((mesh->visibility_mask & visibility_mask) == 0)
+        if (!visibility_filter(mesh->visibility_mask))
         {
             continue;
         }
@@ -371,9 +383,10 @@ void Base_renderer::bind_material_buffer()
         return;
     }
 
-    const auto& material_buffer = current_frame_resources().material_buffer;
+    const auto& shader_resources = *m_program_interface->shader_resources.get();
+    const auto& material_buffer  = current_frame_resources().material_buffer;
     gl::bind_buffer_range(material_buffer.target(),
-                          static_cast<GLuint>    (m_program_interface->material_block.binding_point()),
+                          static_cast<GLuint>    (shader_resources.material_block.binding_point()),
                           static_cast<GLuint>    (material_buffer.gl_name()),
                           static_cast<GLintptr>  (m_material_writer.range.first_byte_offset),
                           static_cast<GLsizeiptr>(m_material_writer.range.byte_count));
@@ -386,9 +399,10 @@ void Base_renderer::bind_light_buffer()
         return;
     }
 
-    const auto& buffer = current_frame_resources().light_buffer;
+    const auto& shader_resources = *m_program_interface->shader_resources.get();
+    const auto& buffer           = current_frame_resources().light_buffer;
     gl::bind_buffer_range(buffer.target(),
-                          static_cast<GLuint>    (m_program_interface->light_block.binding_point()),
+                          static_cast<GLuint>    (shader_resources.light_block.binding_point()),
                           static_cast<GLuint>    (buffer.gl_name()),
                           static_cast<GLintptr>  (m_light_writer.range.first_byte_offset),
                           static_cast<GLsizeiptr>(m_light_writer.range.byte_count));
@@ -401,9 +415,10 @@ void Base_renderer::bind_camera_buffer()
         return;
     }
 
-    const auto& buffer = current_frame_resources().camera_buffer;
+    const auto& shader_resources = *m_program_interface->shader_resources.get();
+    const auto& buffer           = current_frame_resources().camera_buffer;
     gl::bind_buffer_range(buffer.target(),
-                          static_cast<GLuint>    (m_program_interface->camera_block.binding_point()),
+                          static_cast<GLuint>    (shader_resources.camera_block.binding_point()),
                           static_cast<GLuint>    (buffer.gl_name()),
                           static_cast<GLintptr>  (m_camera_writer.range.first_byte_offset),
                           static_cast<GLsizeiptr>(m_camera_writer.range.byte_count));
@@ -416,9 +431,10 @@ void Base_renderer::bind_primitive_buffer()
         return;
     }
 
-    const auto& buffer = current_frame_resources().primitive_buffer;
+    const auto& shader_resources = *m_program_interface->shader_resources.get();
+    const auto& buffer           = current_frame_resources().primitive_buffer;
     gl::bind_buffer_range(buffer.target(),
-                          static_cast<GLuint>    (m_program_interface->primitive_block.binding_point()),
+                          static_cast<GLuint>    (shader_resources.primitive_block.binding_point()),
                           static_cast<GLuint>    (buffer.gl_name()),
                           static_cast<GLintptr>  (m_primitive_writer.range.first_byte_offset),
                           static_cast<GLsizeiptr>(m_primitive_writer.range.byte_count));

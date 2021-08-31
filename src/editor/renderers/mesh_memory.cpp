@@ -78,7 +78,7 @@ void Mesh_memory::initialize_component()
     gl_format_info.features.color            = true;
     gl_format_info.features.id               = true;
     gl_format_info.normal_style              = Normal_style::corner_normals;
-    gl_format_info.vertex_attribute_mappings = &Component::get<Program_interface>()->attribute_mappings;
+    gl_format_info.vertex_attribute_mappings = &Component::get<Program_interface>()->shader_resources->attribute_mappings;
 
     //embree_vertex_buffer = make_shared<erhe::raytrace::Buffer>(vertex_byte_count);
     //embree_index_buffer  = make_shared<erhe::raytrace::Buffer>(index_byte_count);

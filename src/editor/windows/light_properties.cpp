@@ -23,7 +23,7 @@ void Light_properties::connect()
 
 void Light_properties::initialize_component()
 {
-    get<Editor_tools>()->register_window(this);
+    get<Editor_tools>()->register_imgui_window(this);
 }
 
 auto Light_properties::animation() const -> bool
@@ -31,7 +31,7 @@ auto Light_properties::animation() const -> bool
     return m_animation;
 }
 
-void Light_properties::window(Pointer_context&)
+void Light_properties::imgui(Pointer_context&)
 {
     ImGui::Begin("Lights");
     ImGui::Checkbox("Animation", &m_animation);

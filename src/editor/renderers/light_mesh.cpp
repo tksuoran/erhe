@@ -46,7 +46,7 @@ void Light_mesh::initialize_component()
     format_info.features.fill_triangles   = true;
     format_info.features.edge_lines       = true;
     format_info.features.position         = true;
-    format_info.vertex_attribute_mappings = &m_program_interface->attribute_mappings;
+    format_info.vertex_attribute_mappings = &m_program_interface->shader_resources->attribute_mappings;
 
     buffer_info.buffer_sink = &buffer_sink;
 

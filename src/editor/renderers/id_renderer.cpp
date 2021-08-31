@@ -1,4 +1,5 @@
 #include "renderers/id_renderer.hpp"
+#include "configuration.hpp"
 #include "gl_context_provider.hpp"
 #include "renderers/program_interface.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -51,6 +52,7 @@ void Id_renderer::connect()
 {
     base_connect(this);
 
+    require<Configuration>();
     require<Gl_context_provider>();
     require<Program_interface>();
 
@@ -60,6 +62,7 @@ void Id_renderer::connect()
 }
 
 static constexpr std::string_view c_id_renderer_initialize_component{"Id_renderer::initialize_component()"};
+
 void Id_renderer::initialize_component()
 {
     ZoneScoped;
@@ -70,7 +73,10 @@ void Id_renderer::initialize_component()
 
     create_frame_resources(1, 1, 1, 1000, 1000);
 
-    m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(Component::get<Program_interface>()->attribute_mappings,
+    const auto  reverse_depth    = erhe::components::Component::get<Configuration>()->reverse_depth;
+    const auto& shader_resources = *Component::get<Program_interface>()->shader_resources.get();
+
+    m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(shader_resources.attribute_mappings,
                                                                           m_mesh_memory->gl_vertex_format(),
                                                                           m_mesh_memory->gl_vertex_buffer.get(),
                                                                           m_mesh_memory->gl_index_buffer.get());
@@ -79,7 +85,7 @@ void Id_renderer::initialize_component()
     m_pipeline.vertex_input   = m_vertex_input.get();
     m_pipeline.input_assembly = &erhe::graphics::Input_assembly_state::triangles;
     m_pipeline.rasterization  = &erhe::graphics::Rasterization_state::cull_mode_back_ccw;
-    m_pipeline.depth_stencil  = &erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled;
+    m_pipeline.depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth);
     m_pipeline.color_blend    = &erhe::graphics::Color_blend_state::color_blend_disabled;
     m_pipeline.viewport       = nullptr;
 
@@ -173,10 +179,17 @@ void Id_renderer::render_layer(erhe::scene::Layer* layer)
     Layer_range layer_range;
     layer_range.offset = id_offset();
     layer_range.layer  = layer;
-    update_primitive_buffer(layer->meshes, erhe::scene::Mesh::c_visibility_id);
+
+    erhe::scene::Visibility_filter id_filter{
+        erhe::scene::Mesh::c_visibility_id,
+        0u,
+        0u,
+        0u
+    };
+    update_primitive_buffer(layer->meshes, id_filter);
     auto draw_indirect_buffer_range = update_draw_indirect_buffer(layer->meshes,
                                                                   Primitive_mode::polygon_fill,
-                                                                  erhe::scene::Mesh::c_visibility_id);
+                                                                  id_filter);
 
     bind_primitive_buffer();
     bind_draw_indirect_buffer();

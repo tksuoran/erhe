@@ -46,7 +46,7 @@ Property_maps::Property_maps(const erhe::geometry::Geometry& geometry,
         polygon_ids_vector3 = polygon_attributes.create<vec3>(erhe::geometry::c_polygon_ids_vec3);
         log_primitive_builder.trace("-created polygon_ids_vec3\n");
 
-        if (erhe::graphics::Configuration::info.use_integer_polygon_ids)
+        if (erhe::graphics::Instance::info.use_integer_polygon_ids)
         {
             polygon_ids_uint32 = polygon_attributes.create<unsigned int>(erhe::geometry::c_polygon_ids_uint);
             log_primitive_builder.trace("-created polygon_ids_uint\n");

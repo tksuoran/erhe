@@ -7,6 +7,36 @@
 namespace erhe::graphics
 {
 
+constexpr auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function
+{
+    switch (depth_function)
+    {
+        case gl::Depth_function::always  : return gl::Depth_function::always  ;
+        case gl::Depth_function::equal   : return gl::Depth_function::equal   ;
+        case gl::Depth_function::gequal  : return gl::Depth_function::lequal  ;
+        case gl::Depth_function::greater : return gl::Depth_function::less    ;
+        case gl::Depth_function::lequal  : return gl::Depth_function::gequal  ;
+        case gl::Depth_function::less    : return gl::Depth_function::greater ;
+        case gl::Depth_function::never   : return gl::Depth_function::never   ;
+        case gl::Depth_function::notequal: return gl::Depth_function::notequal;
+        default:
+        {
+            FATAL("bad gl::Depth_function");
+        }
+    }
+}
+
+//auto reverse(const Depth_stencil_state& depth_stencil_state) -> Depth_stencil_state
+//{
+//    return Depth_stencil_state{
+//        depth_stencil_state.depth_test_enable,
+//        depth_stencil_state.depth_write_enable,
+//        reverse(depth_stencil_state.depth_compare_op),
+//        depth_stencil_state.stencil_test_enable,
+//        depth_stencil_state.front,
+//        depth_stencil_state.back};
+//}
+
 auto Stencil_state_component_hash::operator()(const Stencil_op_state& stencil_state_component) const noexcept
 -> size_t
 {
@@ -83,10 +113,11 @@ auto Depth_stencil_state_hash::operator()(const Depth_stencil_state& state) cons
 size_t Depth_stencil_state::s_serial{0};
 
 Depth_stencil_state Depth_stencil_state::depth_test_disabled_stencil_test_disabled = Depth_stencil_state{};
-Depth_stencil_state Depth_stencil_state::depth_test_enabled_stencil_test_disabled = Depth_stencil_state{
+
+Depth_stencil_state Depth_stencil_state::s_depth_test_enabled_stencil_test_disabled_forward_depth = Depth_stencil_state{
     true,
     true,
-    Maybe_reversed::less,
+    gl::Depth_function::less,
     false,
     {
         gl::Stencil_op::keep,
@@ -107,10 +138,11 @@ Depth_stencil_state Depth_stencil_state::depth_test_enabled_stencil_test_disable
         0xffffu
     },
 };
-Depth_stencil_state Depth_stencil_state::depth_test_enabled_greater_or_equal_stencil_test_disabled = Depth_stencil_state{
+
+Depth_stencil_state Depth_stencil_state::s_depth_test_enabled_stencil_test_disabled_reverse_depth = Depth_stencil_state{
     true,
     true,
-    Maybe_reversed::gequal,
+    reverse(gl::Depth_function::less),
     false,
     {
         gl::Stencil_op::keep,
@@ -131,6 +163,71 @@ Depth_stencil_state Depth_stencil_state::depth_test_enabled_greater_or_equal_ste
         0xffffu
     },
 };
+
+Depth_stencil_state Depth_stencil_state::s_depth_test_enabled_greater_or_equal_stencil_test_disabled_forward_depth = Depth_stencil_state{
+    true,
+    true,
+    gl::Depth_function::gequal,
+    false,
+    {
+        gl::Stencil_op::keep,
+        gl::Stencil_op::keep,
+        gl::Stencil_op::keep,
+        gl::Stencil_function::always,
+        0u,
+        0xffffu,
+        0xffffu
+    },
+    {
+        gl::Stencil_op::keep,
+        gl::Stencil_op::keep,
+        gl::Stencil_op::keep,
+        gl::Stencil_function::always,
+        0u,
+        0xffffu,
+        0xffffu
+    },
+};
+
+Depth_stencil_state Depth_stencil_state::s_depth_test_enabled_greater_or_equal_stencil_test_disabled_reverse_depth = Depth_stencil_state{
+    true,
+    true,
+    reverse(gl::Depth_function::gequal),
+    false,
+    {
+        gl::Stencil_op::keep,
+        gl::Stencil_op::keep,
+        gl::Stencil_op::keep,
+        gl::Stencil_function::always,
+        0u,
+        0xffffu,
+        0xffffu
+    },
+    {
+        gl::Stencil_op::keep,
+        gl::Stencil_op::keep,
+        gl::Stencil_op::keep,
+        gl::Stencil_function::always,
+        0u,
+        0xffffu,
+        0xffffu
+    },
+};
+
+auto Depth_stencil_state::depth_test_enabled_stencil_test_disabled(bool reverse_depth)
+-> Depth_stencil_state*
+{
+    return reverse_depth ? &s_depth_test_enabled_stencil_test_disabled_reverse_depth
+                         : &s_depth_test_enabled_stencil_test_disabled_forward_depth;
+}
+
+auto Depth_stencil_state::depth_test_enabled_greater_or_equal_stencil_test_disabled(bool reverse_depth)
+-> Depth_stencil_state*
+{
+    return reverse_depth ? &s_depth_test_enabled_stencil_test_disabled_reverse_depth
+                         : &s_depth_test_enabled_stencil_test_disabled_forward_depth;
+}
+
 Depth_stencil_state Depth_stencil_state::depth_test_always_stencil_test_disabled = Depth_stencil_state{
     true,
     true,

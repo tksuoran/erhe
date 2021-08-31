@@ -13,9 +13,9 @@ namespace erhe::graphics
 
 using erhe::log::Log;
 
-Configuration::info_t                   Configuration::info;
-Configuration::limits_t                 Configuration::limits;
-Configuration::implementation_defined_t Configuration::implementation_defined;
+Instance::Info                   Instance::info;
+Instance::Limits                 Instance::limits;
+Instance::Implementation_defined Instance::implementation_defined;
 
 namespace
 {
@@ -135,7 +135,7 @@ auto get_string(gl::String_name string_name)
     return (c_str != nullptr) ? std::string{c_str} : std::string{};
 }
 
-void Configuration::initialize(PFN_get_proc_address get_proc_address)
+void Instance::initialize(PFN_get_proc_address get_proc_address)
 {
     std::vector<std::string> extensions;
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tools/tool.hpp"
+#include "windows/imgui_window.hpp"
 
 namespace editor
 {
@@ -10,7 +11,7 @@ class Line_renderer;
 class Grid_tool
     : public erhe::components::Component
     , public Tool
-    , public Window
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name{"Grid_tool"};
@@ -26,8 +27,8 @@ public:
     auto state      () const -> State                      override;
     auto description() -> const char*                      override;
 
-    // Implements Window
-    void window(Pointer_context& pointer_context) override;
+    // Implements Imgui_window
+    void imgui(Pointer_context& pointer_context) override;
 
     auto snap(const glm::vec3 v) const -> glm::vec3;
 

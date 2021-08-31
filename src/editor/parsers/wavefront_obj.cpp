@@ -41,7 +41,7 @@ Command tokenize(const std::string& text)
 // v 0 2.43544 -1.38593
 // vt -0.108459 1.75572
 // vn -1.64188e-16 -0.284002 0.958824
-// f 1/1/1 2/2/2 3/3/3 4/4/4 
+// f 1/1/1 2/2/2 3/3/3 4/4/4
 
 Geometry parse_obj_geometry(const std::filesystem::path& path)
 {
@@ -298,9 +298,9 @@ Geometry parse_obj_geometry(const std::filesystem::path& path)
 
 
 // mtllib teapot.mtl
-// 
+//
 // g Mesh1 Teapot Model
-// 
+//
 // usemtl FrontColor
 // v 0 2.4 -1.4
 // vt -0.109561 1.71761
@@ -314,4 +314,4 @@ Geometry parse_obj_geometry(const std::filesystem::path& path)
 // v 0 2.43544 -1.38593
 // vt -0.108459 1.75572
 // vn -1.64188e-16 -0.284002 0.958824
-// f 1/1/1 2/2/2 3/3/3 4/4/4 
+// f 1/1/1 2/2/2 3/3/3 4/4/4

@@ -97,7 +97,7 @@ auto Buffer::operator=(Buffer&& other) noexcept
     return *this;
 }
 
-auto Buffer::map() -> gsl::span<std::byte>
+auto Buffer::map() const -> gsl::span<std::byte>
 {
     return m_map;
 }

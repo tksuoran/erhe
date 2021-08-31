@@ -63,7 +63,7 @@ public:
         {
             if (i.primary == primary)
             {
-                return &i; 
+                return &i;
             }
         }
         return nullptr;
@@ -74,7 +74,7 @@ public:
         {
             if (i.secondary == secondary)
             {
-                return &i; 
+                return &i;
             }
         }
         return nullptr;
@@ -203,9 +203,9 @@ public:
         //log_weld.trace("New {:2} old {:2} is being removed - swapping with new {:2} old {:2}\n",
         //                secondary_new_id, secondary_old_id,
         //                keep_new_id, keep_old_id);
-        std::swap(old_from_new[secondary_new_id], 
+        std::swap(old_from_new[secondary_new_id],
                   old_from_new[keep_new_id]);
-        std::swap(new_from_old[secondary_old_id], 
+        std::swap(new_from_old[secondary_old_id],
                   new_from_old[keep_old_id]);
 
         for (size_t i = 0; i < merge.size(); ++i)

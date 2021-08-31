@@ -23,11 +23,13 @@ namespace erhe::scene
     class Light;
     class Mesh;
     class Node;
+    class Visibility_filter;
 }
 
 namespace editor
 {
 
+class Configuration;
 class Programs;
 class Mesh_memory;
 class Shadow_renderer;
@@ -75,17 +77,18 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-    void render(erhe::scene::Viewport             viewport,
-                erhe::scene::ICamera&             camera,
-                Layer_collection&                 layers,
-                const Material_collection&        materials,
-                const std::initializer_list<Pass> passes,
-                const uint64_t                    visibility_mask);
+    void render(erhe::scene::Viewport                 viewport,
+                erhe::scene::ICamera&                 camera,
+                Layer_collection&                     layers,
+                const Material_collection&            materials,
+                const std::initializer_list<Pass>     passes,
+                const erhe::scene::Visibility_filter& visibility_mask);
 
 private:
     auto select_pipeline      (Pass pass) const -> const erhe::graphics::Pipeline*;
     auto select_primitive_mode(Pass pass) const -> erhe::primitive::Primitive_mode;
 
+    std::shared_ptr<Configuration>                        m_configuration;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Mesh_memory>                          m_mesh_memory;
     std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;

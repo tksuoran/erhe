@@ -99,20 +99,14 @@ set(source_list
     windows/viewport_config.hpp
     windows/viewport_window.cpp
     windows/viewport_window.hpp
-    windows/window.cpp
-    windows/window.hpp
+    windows/imgui_window.cpp
+    windows/imgui_window.hpp
 
     application.cpp
     application.hpp
     concurrentqueue.h
-    rendering.cpp
-    rendering.hpp
-    time.cpp
-    time.hpp
-    tools.cpp
-    tools.hpp
-    view.cpp
-    view.hpp
+    configuration.cpp
+    configuration.hpp
     editor.hpp
     gl_context_provider.cpp
     gl_context_provider.hpp
@@ -120,8 +114,20 @@ set(source_list
     log.hpp
     main.cpp
     on_load.cpp
+    renderdoc_capture_support.cpp
+    renderdoc_capture_support.hpp
+    rendering.cpp
+    rendering.hpp
     textures.cpp
     textures.hpp
+    time.cpp
+    time.hpp
+    tools.cpp
+    tools.hpp
+    view.cpp
+    view.hpp
+    window.cpp
+    window.hpp
     #TracyClient.cpp
 
     res/shaders/anisotropic.vert
@@ -155,6 +161,7 @@ add_executable(editor ${source_list})
 target_link_libraries(
     editor
     PRIVATE
+    cxxopts
     erhe_components
     erhe_geometry
     erhe_gl

@@ -17,8 +17,7 @@ public:
              const gl::Fragment_shader_output_type type,
              const unsigned int                    location);
 
-    auto source() const
-    -> std::string;
+    auto source() const -> std::string;
 
 private:
     std::vector<Fragment_output> m_outputs;

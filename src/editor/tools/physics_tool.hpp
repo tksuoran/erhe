@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tools/tool.hpp"
+#include "windows/imgui_window.hpp"
 
 #include <glm/glm.hpp>
 
@@ -22,7 +23,7 @@ class Scene_root;
 class Physics_tool
     : public erhe::components::Component
     , public Tool
-    , public Window
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name{"Physics_tool"};
@@ -41,8 +42,8 @@ public:
     void cancel_ready()                                         override;
     auto description () -> const char*                          override;
 
-    // Implements Window
-    void window(Pointer_context& pointer_context) override;
+    // Implements Imgui_window
+    void imgui(Pointer_context& pointer_context) override;
 
 private:
     State                                    m_state{State::Passive};

@@ -59,7 +59,7 @@ void Selection_tool::unsubscribe_selection_change_notification(int handle)
                                            m_selection_change_subscriptions.end());
 }
 
-void Selection_tool::window(Pointer_context&)
+void Selection_tool::imgui(Pointer_context&)
 {
     ImGui::Begin("Selection");
     for (const auto& item : m_selection)
@@ -77,7 +77,7 @@ void Selection_tool::window(Pointer_context&)
         const auto* node = mesh->node().get();
         if (node != nullptr)
         {
-            ImGui::Text("Node: %s", node->name.c_str());
+            ImGui::Text("Node: %s", node->name().c_str());
         }
         ImGui::Separator();
     }
@@ -111,7 +111,7 @@ auto Selection_tool::update(Pointer_context& pointer_context) -> bool
                                  pointer_context.pointer_z);
     m_hover_content  = pointer_context.hover_content;
     m_hover_tool     = pointer_context.hover_tool;
-    
+
     if (m_state == State::Passive)
     {
         if (m_hover_content && pointer_context.mouse_button[Mouse_button_left].pressed)
@@ -159,6 +159,11 @@ auto Selection_tool::clear_selection() -> bool
         return false;
     }
 
+    for (auto item : m_selection)
+    {
+        item->visibility_mask &= ~erhe::scene::INode_attachment::c_visibility_selected;
+    }
+
     log_selection.trace("Clearing selection ({} items were selected)\n", m_selection.size());
     m_selection.clear();
     call_selection_change_subscriptions();
@@ -171,6 +176,7 @@ void Selection_tool::toggle_selection(std::shared_ptr<erhe::scene::INode_attachm
     if (clear_others)
     {
         const bool was_selected = is_in_selection(item);
+
         clear_selection();
         if (!was_selected && item)
         {
@@ -207,6 +213,8 @@ auto Selection_tool::add_to_selection(std::shared_ptr<erhe::scene::INode_attachm
         return false;
     }
 
+    item->visibility_mask |= erhe::scene::INode_attachment::c_visibility_selected;
+
     if (!is_in_selection(item))
     {
         log_selection.trace("Adding mesh {} to selection\n", item->name());
@@ -225,6 +233,8 @@ auto Selection_tool::remove_from_selection(std::shared_ptr<erhe::scene::INode_at
         log_selection.warn("Trying to remove empty item from selection\n");
         return false;
     }
+
+    item->visibility_mask &= ~erhe::scene::INode_attachment::c_visibility_selected;
 
     const auto i = std::remove(m_selection.begin(),
                                m_selection.end(),

@@ -40,7 +40,6 @@ using Point             = erhe::geometry::Point;
 using Polygon           = erhe::geometry::Polygon;
 using Edge              = erhe::geometry::Edge;
 using Mesh_info         = erhe::geometry::Mesh_info;
-using erhe::graphics::Configuration;
 using erhe::graphics::Vertex_attribute;
 using gl::size_of_type;
 using erhe::log::Log;
@@ -135,7 +134,7 @@ void Primitive_builder::prepare_vertex_format(Build_info& build_info)
                             gl::Attribute_type::float_vec3,
                             {format_info.id_vec3_type, false, 3});
 
-        if (Configuration::info.use_integer_polygon_ids)
+        if (erhe::graphics::Instance::info.use_integer_polygon_ids)
         {
             vf->make_attribute({Vertex_attribute::Usage_type::id, 0},
                                 gl::Attribute_type::unsigned_int,
@@ -238,7 +237,7 @@ void Build_context_root::get_vertex_attributes()
     attributes.color         = Vertex_attribute_info(vertex_format, format_info.color_type,         4, Vertex_attribute::Usage_type::color,     0);
     attributes.texcoord      = Vertex_attribute_info(vertex_format, format_info.texcoord_type,      2, Vertex_attribute::Usage_type::tex_coord, 0);
     attributes.id_vec3       = Vertex_attribute_info(vertex_format, format_info.id_vec3_type,       3, Vertex_attribute::Usage_type::id,        0);
-    if (Configuration::info.use_integer_polygon_ids)
+    if (erhe::graphics::Instance::info.use_integer_polygon_ids)
     {
         attributes.attribute_id_uint = Vertex_attribute_info(vertex_format, format_info.id_uint_type, 1, Vertex_attribute::Usage_type::id, 0);
     }
@@ -370,7 +369,7 @@ void Build_context::build_polygon_id()
         return;
     }
 
-    if (Configuration::info.use_integer_polygon_ids && root.attributes.attribute_id_uint.is_valid())
+    if (erhe::graphics::Instance::info.use_integer_polygon_ids && root.attributes.attribute_id_uint.is_valid())
     {
         vertex_writer.write(root.attributes.attribute_id_uint, polygon_index);
     }

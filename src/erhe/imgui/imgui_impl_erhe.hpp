@@ -7,4 +7,4 @@
 bool ImGui_ImplErhe_Init(std::shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker);
 void ImGui_ImplErhe_Shutdown();
 void ImGui_ImplErhe_NewFrame();
-void ImGui_ImplErhe_RenderDrawData(ImDrawData* draw_data);
+void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data);

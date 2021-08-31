@@ -17,6 +17,8 @@
 #include "mango/core/thread.hpp"
 #include "glm/gtx/color_space.hpp"
 
+#include <algorithm>
+
 namespace editor
 {
 
@@ -41,7 +43,7 @@ Camera_rig::Camera_rig(Scene_root&                          scene_root,
     // scene_root.scene().cameras.push_back(position_fps_heading          );
     // scene_root.scene().cameras.push_back(position_fps_heading_elevation);
     // scene_root.scene().cameras.push_back(position_fps_heading);
-    // 
+    //
     // auto position_fps_heading_node = make_shared<erhe::scene::Node>();
     // scene_root.scene().nodes.emplace_back(position_fps_heading_node);
     // const glm::mat4 identity{1.0f};
@@ -69,24 +71,20 @@ void Scene_root::initialize_component()
     // Layer configuration
     m_content_layer    = make_shared<Layer>();
     m_controller_layer = make_shared<Layer>();
-    m_selection_layer  = make_shared<Layer>();
     m_tool_layer       = make_shared<Layer>();
     m_brush_layer      = make_shared<Layer>();
     m_scene            = std::make_unique<Scene>();
     m_scene->layers      .push_back(m_content_layer);
     m_scene->layers      .push_back(m_controller_layer);
-    m_scene->layers      .push_back(m_selection_layer);
     m_scene->layers      .push_back(m_tool_layer);
     m_scene->layers      .push_back(m_brush_layer);
     m_all_layers         .push_back(m_content_layer);
     m_all_layers         .push_back(m_controller_layer);
-    m_all_layers         .push_back(m_selection_layer);
     m_all_layers         .push_back(m_tool_layer);
     m_all_layers         .push_back(m_brush_layer);
     m_content_layers     .push_back(m_content_layer);
     m_content_fill_layers.push_back(m_content_layer);
     m_content_fill_layers.push_back(m_controller_layer);
-    m_selection_layers   .push_back(m_selection_layer);
     m_tool_layers        .push_back(m_tool_layer);
     m_brush_layers       .push_back(m_brush_layer);
 
@@ -155,11 +153,6 @@ auto Scene_root::controller_layer() const -> std::shared_ptr<erhe::scene::Layer>
     return m_controller_layer;
 }
 
-auto Scene_root::selection_layer() const -> std::shared_ptr<erhe::scene::Layer>
-{
-    return m_selection_layer;
-}
-
 auto Scene_root::tool_layer() const -> std::shared_ptr<erhe::scene::Layer>
 {
     return m_tool_layer;
@@ -188,7 +181,7 @@ auto Scene_root::make_mesh_node(string_view                           name,
     auto mesh = make_shared<Mesh>(name);
     mesh->primitives.emplace_back(primitive_geometry, material);
 
-    auto node = make_shared<Node>();
+    auto node = make_shared<Node>(name);
     node->parent = parent;
     node->transforms.parent_from_node.set(transform);
     node->update();

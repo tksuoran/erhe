@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tools/tool.hpp"
+#include "windows/imgui_window.hpp"
 #include "erhe/scene/node.hpp"
 
 #include <functional>
@@ -19,7 +20,7 @@ class Scene_manager;
 class Selection_tool
     : public erhe::components::Component
     , public Tool
-    , public Window
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name{"Selection_tool"};
@@ -38,7 +39,7 @@ public:
     auto description () -> const char*                          override;
 
     // Implements Window
-    void window(Pointer_context& pointer_context) override;
+    void imgui(Pointer_context& pointer_context) override;
 
     using Selection            = std::vector<std::shared_ptr<erhe::scene::INode_attachment>>;
     using On_selection_changed = std::function<void(const Selection&)>;

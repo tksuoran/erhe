@@ -49,16 +49,17 @@ void Editor_view::update_pointer()
     auto* camera = m_scene_manager->get_view_camera().get();
 
     float z{1.0f};
-    pointer_context.camera           = camera;
-    pointer_context.pointer_x        = static_cast<int>(pointer.x);
-    pointer_context.pointer_y        = static_cast<int>(pointer.y);
-    pointer_context.pointer_z        = z;
-    pointer_context.viewport.x       = 0;
-    pointer_context.viewport.y       = 0;
-    pointer_context.viewport.width   = m_editor_rendering->scene_viewport.width;
-    pointer_context.viewport.height  = m_editor_rendering->scene_viewport.height;
-    pointer_context.scene_view_focus = m_editor_rendering->is_content_in_focus();
-    pointer_context.geometry         = nullptr;
+    pointer_context.camera                 = camera;
+    pointer_context.pointer_x              = static_cast<int>(pointer.x);
+    pointer_context.pointer_y              = static_cast<int>(pointer.y);
+    pointer_context.pointer_z              = z;
+    pointer_context.viewport.x             = 0;
+    pointer_context.viewport.y             = 0;
+    pointer_context.viewport.width         = m_editor_rendering->scene_viewport.width;
+    pointer_context.viewport.height        = m_editor_rendering->scene_viewport.height;
+    pointer_context.viewport.reverse_depth = m_editor_rendering->scene_viewport.reverse_depth;
+    pointer_context.scene_view_focus       = m_editor_rendering->is_content_in_focus();
+    pointer_context.geometry               = nullptr;
 
     if (pointer_context.pointer_in_content_area() && m_id_renderer)
     {

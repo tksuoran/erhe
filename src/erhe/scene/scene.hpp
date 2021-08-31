@@ -16,9 +16,9 @@ class Light;
 class Layer
 {
 public:
-    std::vector<std::shared_ptr<Mesh>>   meshes;
-    std::vector<std::shared_ptr<Light>>  lights;
-    glm::vec4                            ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
+    std::vector<std::shared_ptr<Mesh>>  meshes;
+    std::vector<std::shared_ptr<Light>> lights;
+    glm::vec4                           ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
 };
 
 class Scene

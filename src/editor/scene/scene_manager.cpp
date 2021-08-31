@@ -97,10 +97,11 @@ void Scene_manager::initialize_camera()
     m_camera->projection()->z_far           = 200.0f;
     m_scene_root->scene().cameras.push_back(m_camera);
 
-    auto node = make_shared<erhe::scene::Node>();
+    auto node = make_shared<erhe::scene::Node>("Camera");
     m_scene_root->scene().nodes.emplace_back(node);
-    const glm::mat4 identity{1.0f};
-    node->transforms.parent_from_node.set(identity);
+    //const glm::mat4 identity{1.0f};
+    //node->transforms.parent_from_node.set(identity);
+    node->transforms.parent_from_node.set_translation(0.0f, 1.65f, 0.0f);
     node->update();
     node->attach(m_camera);
 
@@ -111,6 +112,7 @@ auto Scene_manager::build_info_set() -> erhe::primitive::Build_info_set&
 {
     return m_mesh_memory->build_info_set;
 };
+
 void Scene_manager::make_brushes()
 {
     ZoneScoped;
@@ -182,7 +184,7 @@ void Scene_manager::make_brushes()
         });
     }
 
-    if constexpr (false)
+    if constexpr (true)
     {
         execution_queue.enqueue([this]() {
             ZoneScopedN("Sphere");
@@ -348,9 +350,12 @@ void Scene_manager::add_floor()
                                                  m_scene_root->scene(),
                                                  m_scene_root->physics_world(),
                                                  {},
-                                                 erhe::toolkit::create_translation(0, -1.5001f, 0.0f),
+                                                 erhe::toolkit::create_translation(0, -0.5001f, 0.0f),
                                                  floor_material,
                                                  1.0f);
+    instance.mesh->visibility_mask |= (INode_attachment::c_visibility_content     |
+                                       INode_attachment::c_visibility_shadow_cast | // Optional for flat floor
+                                       INode_attachment::c_visibility_id);
     attach(m_scene_root->content_layer(),
            m_scene_root->scene(),
            m_scene_root->physics_world(),
@@ -444,6 +449,10 @@ void Scene_manager::make_mesh_nodes()
                                              erhe::toolkit::create_translation(x, y, z),
                                              material,
                                              1.0f);
+        instance.mesh->visibility_mask |= (INode_attachment::c_visibility_content     |
+                                           INode_attachment::c_visibility_shadow_cast |
+                                           INode_attachment::c_visibility_id);
+
         attach(m_scene_root->content_layer(),
                m_scene_root->scene(),
                m_scene_root->physics_world(),
@@ -473,7 +482,7 @@ auto Scene_manager::make_directional_light(string_view name,
     light->projection()->z_near          =  20.0f;
     light->projection()->z_far           =  60.0f;
 
-    auto node = make_shared<Node>();
+    auto node = make_shared<Node>(name);
     mat4 m = erhe::toolkit::create_look_at(position,                 // eye
                                            vec3(0.0f,  0.0f, 0.0f),  // center
                                            vec3(0.0f,  0.0f, 1.0f)); // up
@@ -508,7 +517,7 @@ auto Scene_manager::make_spot_light(string_view name,
     light->projection()->z_near          =   1.0f;
     light->projection()->z_far           = 100.0f;
 
-    auto node = make_shared<Node>();
+    auto node = make_shared<Node>(name);
     const mat4 m = erhe::toolkit::create_look_at(position, target, vec3(0.0f, 0.0f, 1.0f));
     node->transforms.parent_from_node.set(m);
 

@@ -24,11 +24,11 @@ void main()
     vec3  v               = normalize(view_position_in_world - position.xyz);
     float NdotV           = dot(normal, v);
     float d               = distance(view_position_in_world, position.xyz);
-    float bias            = 0.0005 * NdotV * NdotV;
+    float bias            = 0.0005 * NdotV * NdotV * camera.cameras[0].clip_depth_direction;
     float max_size        = min(4.0 * primitive.primitives[gl_DrawID].size, 2.0);
 
     gl_Position   = clip_from_world * position;
-    gl_Position.z += bias; // reverse depth uses += bias, non-reverse should use -= bias
+    gl_Position.z -= bias;
     vs_color      = a_color * primitive.primitives[gl_DrawID].color;
     //vs_color      = vec4(0.5 * normal + vec3(0.5), 1.0);
     //vs_color      = vec4(0.0, 0.0, 0.0, 1.0);

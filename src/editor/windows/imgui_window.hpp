@@ -11,10 +11,10 @@ namespace editor
 class Pointer_context;
 class Scene_manager;
 
-class Window
+class Imgui_window
 {
 public:
-    virtual void window(Pointer_context& pointer_context) = 0;
+    virtual void imgui(Pointer_context& pointer_context) = 0;
 
     enum class Item_mode : unsigned int
     {
@@ -32,7 +32,7 @@ public:
 
     static bool make_button   (const char* label, const Item_mode mode, const ImVec2 size);
     static void make_check_box(const char* label, bool* value, const Item_mode mode = Item_mode::normal);
-   
+
     template <typename T>
     static void make_combo(const char* label, T& value, const char* const items[], const int items_count, const int popup_max_height_in_items = -1)
     {

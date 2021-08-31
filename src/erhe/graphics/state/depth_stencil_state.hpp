@@ -34,13 +34,6 @@ auto operator==(const Stencil_op_state& lhs, const Stencil_op_state& rhs) noexce
 auto operator!=(const Stencil_op_state& lhs, const Stencil_op_state& rhs) noexcept
 -> bool;
 
-namespace Maybe_reversed {
-    static constexpr gl::Depth_function less    = Configuration::reverse_depth ? gl::Depth_function::greater : gl::Depth_function::less;
-    static constexpr gl::Depth_function lequal  = Configuration::reverse_depth ? gl::Depth_function::gequal  : gl::Depth_function::lequal;
-    static constexpr gl::Depth_function greater = Configuration::reverse_depth ? gl::Depth_function::less    : gl::Depth_function::greater;
-    static constexpr gl::Depth_function gequal  = Configuration::reverse_depth ? gl::Depth_function::lequal  : gl::Depth_function::gequal;
-}
-
 class Depth_stencil_state
 {
 public:
@@ -66,10 +59,20 @@ public:
     static size_t s_serial;
 
     static Depth_stencil_state depth_test_disabled_stencil_test_disabled;
-    static Depth_stencil_state depth_test_enabled_stencil_test_disabled;
-    static Depth_stencil_state depth_test_enabled_greater_or_equal_stencil_test_disabled;
     static Depth_stencil_state depth_test_always_stencil_test_disabled;
+
+    static auto depth_test_enabled_stencil_test_disabled                 (bool reverse_depth) -> Depth_stencil_state*;
+    static auto depth_test_enabled_greater_or_equal_stencil_test_disabled(bool reverse_depth) -> Depth_stencil_state*;
+
+private:
+    static Depth_stencil_state s_depth_test_enabled_stencil_test_disabled_forward_depth;
+    static Depth_stencil_state s_depth_test_enabled_stencil_test_disabled_reverse_depth;
+    static Depth_stencil_state s_depth_test_enabled_greater_or_equal_stencil_test_disabled_forward_depth;
+    static Depth_stencil_state s_depth_test_enabled_greater_or_equal_stencil_test_disabled_reverse_depth;
 };
+
+constexpr auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function;
+//auto reverse(const Depth_stencil_state& depth_stencil_state) -> Depth_stencil_state;
 
 class Depth_stencil_state_hash
 {

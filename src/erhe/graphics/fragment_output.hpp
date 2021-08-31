@@ -14,14 +14,9 @@ public:
                     const gl::Fragment_shader_output_type type,
                     const unsigned int                    location);
 
-    auto name() const
-    -> const std::string&;
-
-    auto type() const
-    -> gl::Fragment_shader_output_type;
-
-    auto location() const
-    -> unsigned int;
+    auto name    () const -> const std::string&;
+    auto type    () const -> gl::Fragment_shader_output_type;
+    auto location() const -> unsigned int;
 
 private:
     std::string                     m_name;

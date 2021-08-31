@@ -33,10 +33,10 @@ void Operations::connect()
 
 void Operations::initialize_component()
 {
-    get<Editor_tools>()->register_window(this);
+    get<Editor_tools>()->register_imgui_window(this);
 }
 
-void Operations::window(Pointer_context& pointer_context)
+void Operations::imgui(Pointer_context& pointer_context)
 {
     if (m_selection_tool.get() == nullptr)
     {

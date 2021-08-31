@@ -66,9 +66,9 @@ public:
 
     // scale, translation, clip rectangle, texture indices
     static constexpr size_t draw_parameters_block_size = vec2_size + vec2_size + vec4_size + uivec4_size;
-    static constexpr size_t max_draw_count             =  6000;
-    static constexpr size_t max_index_count            = 65536;
-    static constexpr size_t max_vertex_count           = 65536;
+    static constexpr size_t max_draw_count             =   6'000;
+    static constexpr size_t max_index_count            = 300'000;
+    static constexpr size_t max_vertex_count           = 800'000;
 
     Imgui_renderer()
     {
@@ -120,7 +120,7 @@ public:
                        &vertex_input_state,
                        &erhe::graphics::Input_assembly_state::triangles,
                        &erhe::graphics::Rasterization_state::cull_mode_none,
-                       &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled, 
+                       &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
                        &imgui_renderer.color_blend_state,
                        nullptr}
         {
@@ -227,11 +227,11 @@ public:
             linear_to_srgb[i] = static_cast<uint8_t>(srgb_u8);
         }
 
-        size_t pixel_count = static_cast<size_t>(create_info.width) * static_cast<size_t>(create_info.height);
-        size_t byte_count  = 4 * pixel_count;
+        const size_t pixel_count = static_cast<size_t>(create_info.width) * static_cast<size_t>(create_info.height);
+        const size_t byte_count  = 4 * pixel_count;
         std::vector<uint8_t> post_processed_data;
         post_processed_data.resize(byte_count);
-        uint8_t* src = reinterpret_cast<uint8_t*>(pixels);
+        const uint8_t* src = reinterpret_cast<const uint8_t*>(pixels);
         for (size_t i = 0; i < pixel_count; ++i)
         {
             post_processed_data[i * 4 + 0] = linear_to_srgb[*src++];
@@ -263,7 +263,7 @@ public:
 
         // Point shader uniforms to texture units.
         // Also apply nearest filter, non-mipmapped sampler.
-        int location = samplers->location();
+        const int location = samplers->location();
         for (int texture_unit = 0;
              texture_unit < static_cast<int>(samplers->array_size().value());
              ++texture_unit)
@@ -362,7 +362,7 @@ public:
         m_used_textures.clear();
     }
 
-    auto allocate_texture_unit(erhe::graphics::Texture* texture)
+    auto allocate_texture_unit(const erhe::graphics::Texture* texture)
     -> std::optional<std::size_t>
     {
         for (size_t texture_unit = 0;
@@ -411,8 +411,8 @@ public:
     }
 
 private:
-    std::vector<erhe::graphics::Texture*> m_textures;
-    std::vector<GLuint>                   m_used_textures;
+    std::vector<const erhe::graphics::Texture*> m_textures;
+    std::vector<GLuint>                         m_used_textures;
 };
 
 
@@ -426,6 +426,63 @@ bool ImGui_ImplErhe_Init(shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeli
     io.BackendRendererName = "imgui_impl_erhe";
     io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
     //io.Fonts->AddFontFromFileTTF("res\\fonts\\Ubuntu-R.ttf", 20);
+
+    ImVec4* colors = ImGui::GetStyle().Colors;
+    colors[ImGuiCol_Text]                   = ImVec4(1.00f, 1.00f, 1.00f, 0.89f);
+    colors[ImGuiCol_TextDisabled]           = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
+    colors[ImGuiCol_WindowBg]               = ImVec4(0.10f, 0.14f, 0.13f, 0.94f);
+    colors[ImGuiCol_ChildBg]                = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    colors[ImGuiCol_PopupBg]                = ImVec4(0.08f, 0.08f, 0.08f, 0.94f);
+    colors[ImGuiCol_Border]                 = ImVec4(0.21f, 0.35f, 0.36f, 0.51f);
+    colors[ImGuiCol_BorderShadow]           = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    colors[ImGuiCol_FrameBg]                = ImVec4(0.20f, 0.26f, 0.25f, 0.54f);
+    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.25f, 0.34f, 0.33f, 0.54f);
+    colors[ImGuiCol_FrameBgActive]          = ImVec4(0.29f, 0.40f, 0.39f, 0.54f);
+    colors[ImGuiCol_TitleBg]                = ImVec4(0.17f, 0.27f, 0.28f, 1.00f);
+    colors[ImGuiCol_TitleBgActive]          = ImVec4(0.14f, 0.36f, 0.49f, 1.00f);
+    colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.00f, 0.00f, 0.00f, 0.51f);
+    colors[ImGuiCol_MenuBarBg]              = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
+    colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.02f, 0.02f, 0.02f, 0.53f);
+    colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.31f, 0.31f, 0.31f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.41f, 0.41f, 0.41f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.51f, 0.51f, 0.51f, 1.00f);
+    colors[ImGuiCol_CheckMark]              = ImVec4(0.64f, 0.83f, 0.31f, 1.00f);
+    colors[ImGuiCol_SliderGrab]             = ImVec4(0.33f, 0.78f, 0.67f, 0.51f);
+    colors[ImGuiCol_SliderGrabActive]       = ImVec4(0.34f, 0.90f, 0.76f, 0.51f);
+    colors[ImGuiCol_Button]                 = ImVec4(0.28f, 0.30f, 0.31f, 1.00f);
+    colors[ImGuiCol_ButtonHovered]          = ImVec4(0.30f, 0.36f, 0.37f, 1.00f);
+    colors[ImGuiCol_ButtonActive]           = ImVec4(0.42f, 0.45f, 0.48f, 1.00f);
+    colors[ImGuiCol_Header]                 = ImVec4(0.65f, 0.47f, 0.33f, 0.31f);
+    colors[ImGuiCol_HeaderHovered]          = ImVec4(0.65f, 0.47f, 0.33f, 0.42f);
+    colors[ImGuiCol_HeaderActive]           = ImVec4(0.65f, 0.47f, 0.33f, 0.57f);
+    colors[ImGuiCol_Separator]              = ImVec4(0.50f, 0.50f, 0.50f, 0.50f);
+    colors[ImGuiCol_SeparatorHovered]       = ImVec4(0.75f, 0.75f, 0.75f, 0.78f);
+    colors[ImGuiCol_SeparatorActive]        = ImVec4(0.75f, 0.75f, 0.75f, 1.00f);
+    colors[ImGuiCol_ResizeGrip]             = ImVec4(0.98f, 0.98f, 0.98f, 0.20f);
+    colors[ImGuiCol_ResizeGripHovered]      = ImVec4(0.98f, 0.98f, 0.98f, 0.67f);
+    colors[ImGuiCol_ResizeGripActive]       = ImVec4(1.00f, 0.98f, 0.98f, 0.95f);
+    colors[ImGuiCol_Tab]                    = ImVec4(1.00f, 1.00f, 1.00f, 0.04f);
+    colors[ImGuiCol_TabHovered]             = ImVec4(1.00f, 1.00f, 1.00f, 0.14f);
+    colors[ImGuiCol_TabActive]              = ImVec4(1.00f, 1.00f, 1.00f, 0.18f);
+    colors[ImGuiCol_TabUnfocused]           = ImVec4(0.15f, 0.15f, 0.15f, 0.00f);
+    colors[ImGuiCol_TabUnfocusedActive]     = ImVec4(0.15f, 0.15f, 0.15f, 0.00f);
+    colors[ImGuiCol_DockingPreview]         = ImVec4(0.20f, 0.59f, 0.97f, 0.70f);
+    colors[ImGuiCol_DockingEmptyBg]         = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
+    colors[ImGuiCol_PlotLines]              = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
+    colors[ImGuiCol_PlotLinesHovered]       = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
+    colors[ImGuiCol_PlotHistogram]          = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
+    colors[ImGuiCol_PlotHistogramHovered]   = ImVec4(1.00f, 0.60f, 0.00f, 1.00f);
+    colors[ImGuiCol_TableHeaderBg]          = ImVec4(0.09f, 0.19f, 0.22f, 1.00f);
+    colors[ImGuiCol_TableBorderStrong]      = ImVec4(0.17f, 0.32f, 0.36f, 1.00f);
+    colors[ImGuiCol_TableBorderLight]       = ImVec4(0.26f, 0.36f, 0.36f, 1.00f);
+    colors[ImGuiCol_TableRowBg]             = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    colors[ImGuiCol_TableRowBgAlt]          = ImVec4(1.00f, 1.00f, 1.00f, 0.06f);
+    colors[ImGuiCol_TextSelectedBg]         = ImVec4(0.26f, 0.59f, 0.98f, 0.35f);
+    colors[ImGuiCol_DragDropTarget]         = ImVec4(1.00f, 1.00f, 0.00f, 0.90f);
+    colors[ImGuiCol_NavHighlight]           = ImVec4(0.26f, 0.59f, 0.98f, 1.00f);
+    colors[ImGuiCol_NavWindowingHighlight]  = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
+    colors[ImGuiCol_NavWindowingDimBg]      = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
+    colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
 
     return true;
 }
@@ -443,15 +500,15 @@ void ImGui_ImplErhe_NewFrame()
 }
 
 static constexpr std::string_view c_imgui_render{"ImGui_ImplErhe_RenderDrawData()"};
-void ImGui_ImplErhe_RenderDrawData(ImDrawData* draw_data)
+void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
 {
     if (draw_data == nullptr)
     {
         return;
     }
 
-    int fb_width  = (int)(draw_data->DisplaySize.x * draw_data->FramebufferScale.x);
-    int fb_height = (int)(draw_data->DisplaySize.y * draw_data->FramebufferScale.y);
+    const int fb_width  = (int)(draw_data->DisplaySize.x * draw_data->FramebufferScale.x);
+    const int fb_height = (int)(draw_data->DisplaySize.y * draw_data->FramebufferScale.y);
     if (fb_width <= 0 || fb_height <= 0)
     {
         return;
@@ -462,12 +519,12 @@ void ImGui_ImplErhe_RenderDrawData(ImDrawData* draw_data)
                          static_cast<GLsizei>(c_imgui_render.length()),
                          c_imgui_render.data());
 
-    auto& frame_resources       = imgui_renderer.current_frame_resources();
-    auto& draw_parameter_buffer = frame_resources.draw_parameter_buffer;
-    auto& vertex_buffer         = frame_resources.vertex_buffer;
-    auto& index_buffer          = frame_resources.index_buffer;
-    auto& draw_indirect_buffer  = frame_resources.draw_indirect_buffer;
-    auto& pipeline              = frame_resources.pipeline;
+    const auto& frame_resources       = imgui_renderer.current_frame_resources();
+    const auto& draw_parameter_buffer = frame_resources.draw_parameter_buffer;
+    const auto& vertex_buffer         = frame_resources.vertex_buffer;
+    const auto& index_buffer          = frame_resources.index_buffer;
+    const auto& draw_indirect_buffer  = frame_resources.draw_indirect_buffer;
+    const auto& pipeline              = frame_resources.pipeline;
 
     auto draw_parameter_gpu_data = draw_parameter_buffer.map();
     auto vertex_gpu_data         = vertex_buffer.map();
@@ -475,22 +532,20 @@ void ImGui_ImplErhe_RenderDrawData(ImDrawData* draw_data)
     auto draw_indirect_gpu_data  = draw_indirect_buffer.map();
 
     size_t draw_parameter_byte_offset{0};
-    size_t vertex_byte_offset{0};
-    size_t index_byte_offset{0};
-    size_t draw_indirect_byte_offset{0};
-    size_t list_vertex_offset{0};
-    size_t list_index_offset{0};
-    size_t draw_indirect_count{0};
+    size_t vertex_byte_offset        {0};
+    size_t index_byte_offset         {0};
+    size_t draw_indirect_byte_offset {0};
+    size_t list_vertex_offset        {0};
+    size_t list_index_offset         {0};
+    size_t draw_indirect_count       {0};
 
-    float scale[2];
-    scale[0] = 2.0f / draw_data->DisplaySize.x;
-    scale[1] = 2.0f / draw_data->DisplaySize.y;
-    float translate[2];
-    translate[0] = -1.0f - draw_data->DisplayPos.x * scale[0];
-    translate[1] = -1.0f - draw_data->DisplayPos.y * scale[1];
+    const float scale[2] = { 2.0f / draw_data->DisplaySize.x,
+                             2.0f / draw_data->DisplaySize.y};
+    float translate[2] = { -1.0f - draw_data->DisplayPos.x * scale[0],
+                           -1.0f - draw_data->DisplayPos.y * scale[1]};
 
     // Projection block repeats only once
-    size_t start_of_projection_block = draw_parameter_byte_offset;
+    const size_t start_of_projection_block = draw_parameter_byte_offset;
 
     // Write scale
     gsl::span<const float> scale_cpu_data(&scale[0], 2);
@@ -502,10 +557,10 @@ void ImGui_ImplErhe_RenderDrawData(ImDrawData* draw_data)
     erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, translate_cpu_data);
     draw_parameter_byte_offset += translate_cpu_data.size_bytes();
 
-    size_t start_of_draw_parameter_block = draw_parameter_byte_offset;
+    const size_t start_of_draw_parameter_block = draw_parameter_byte_offset;
 
-    ImVec2 clip_off   = draw_data->DisplayPos;
-    ImVec2 clip_scale = draw_data->FramebufferScale;
+    const ImVec2 clip_off   = draw_data->DisplayPos;
+    const ImVec2 clip_scale = draw_data->FramebufferScale;
     Texture_unit_cache texture_unit_cache{imgui_renderer.samplers->array_size().value()};
 
     gl::enable(gl::Enable_cap::clip_distance0);
@@ -546,11 +601,10 @@ void ImGui_ImplErhe_RenderDrawData(ImDrawData* draw_data)
             else
             {
                 // Project scissor/clipping rectangles into framebuffer space
-                ImVec4 clip_rect;
-                clip_rect.x = (pcmd->ClipRect.x - clip_off.x) * clip_scale.x;
-                clip_rect.y = (pcmd->ClipRect.y - clip_off.y) * clip_scale.y;
-                clip_rect.z = (pcmd->ClipRect.z - clip_off.x) * clip_scale.x;
-                clip_rect.w = (pcmd->ClipRect.w - clip_off.y) * clip_scale.y;
+                ImVec4 clip_rect { (pcmd->ClipRect.x - clip_off.x) * clip_scale.x,
+                                   (pcmd->ClipRect.y - clip_off.y) * clip_scale.y,
+                                   (pcmd->ClipRect.z - clip_off.x) * clip_scale.x,
+                                   (pcmd->ClipRect.w - clip_off.y) * clip_scale.y };
 
                 if ((clip_rect.x < fb_width)  &&
                     (clip_rect.y < fb_height) &&
@@ -563,15 +617,15 @@ void ImGui_ImplErhe_RenderDrawData(ImDrawData* draw_data)
                     draw_parameter_byte_offset += Imgui_renderer::vec4_size;
 
                     // Write texture indices
-                    auto* texture = reinterpret_cast<erhe::graphics::Texture*>(pcmd->TextureId);
+                    const auto* texture = reinterpret_cast<erhe::graphics::Texture*>(pcmd->TextureId);
                     auto texture_unit = texture_unit_cache.allocate_texture_unit(texture);
                     VERIFY(texture_unit.has_value());
-                    uint32_t texture_indices[4] = { static_cast<uint32_t>(texture_unit.value()), 0, 0, 0 };
+                    const uint32_t texture_indices[4] = { static_cast<uint32_t>(texture_unit.value()), 0, 0, 0 };
                     gsl::span<const uint32_t> texture_indices_cpu_data(&texture_indices[0], 4);
                     erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, texture_indices_cpu_data);
                     draw_parameter_byte_offset += Imgui_renderer::uivec4_size;
 
-                    auto draw_command = gl::Draw_elements_indirect_command{
+                    const auto draw_command = gl::Draw_elements_indirect_command{
                         pcmd->ElemCount,
                         1,
                         pcmd->IdxOffset + static_cast<const uint32_t>(list_index_offset),

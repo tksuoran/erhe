@@ -107,7 +107,10 @@ void Trs_tool::set_node(const std::shared_ptr<Node>& node)
     update_visibility();
 }
 
-Trs_tool::Visualization::Visualization() = default;
+Trs_tool::Visualization::Visualization()
+    : tool_node{"Trs"}
+{
+}
 
 void Trs_tool::Visualization::update_scale(const vec3 view_position_in_world)
 {
@@ -238,7 +241,7 @@ void Trs_tool::connect()
     m_selection_tool  = require<Selection_tool>();
 }
 
-void Trs_tool::initialize_component()      
+void Trs_tool::initialize_component()
 {
     ZoneScoped;
 
@@ -291,7 +294,7 @@ void Trs_tool::initialize_component()
     get<Editor_tools>()->register_tool(this);
 }
 
-void Trs_tool::window(Pointer_context&)
+void Trs_tool::imgui(Pointer_context&)
 {
     ZoneScoped;
 
@@ -340,7 +343,7 @@ auto Trs_tool::update(Pointer_context& pointer_context) -> bool
 {
     ZoneScoped;
 
-    if ((m_state == State::Passive) && pointer_context.mouse_button[Mouse_button_left].pressed) 
+    if ((m_state == State::Passive) && pointer_context.mouse_button[Mouse_button_left].pressed)
     {
         return begin(pointer_context);
     }
@@ -762,7 +765,7 @@ void Trs_tool::render(const Render_context& render_context)
     }
 
     return; // currently broken
-    
+
     auto* line_renderer     = render_context.line_renderer;
     auto& camera            = *render_context.pointer_context->camera;
     vec3  position_in_world = root()->position_in_world();
@@ -807,7 +810,7 @@ void Trs_tool::render(const Render_context& render_context)
                 float rel   = static_cast<float>(i) / static_cast<float>(sector_count);
                 float angle = rel * 2.0f * pi<float>();
                 float r0    = (i == 0) ? 0.0f
-                                       : (i % 10 == 0) ? 4.0f * scale 
+                                       : (i % 10 == 0) ? 4.0f * scale
                                                        : 8.0f * scale;
 
                 angle += r_angle;

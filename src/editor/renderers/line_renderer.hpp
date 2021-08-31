@@ -126,7 +126,9 @@ private:
                                                                 gl::Map_buffer_access_mask::map_persistent_bit |
                                                                 gl::Map_buffer_access_mask::map_write_bit};
 
-        Frame_resources(size_t view_stride, size_t view_count,
+        Frame_resources(bool                                      reverse_depth,
+                        size_t                                    view_stride,
+                        size_t                                    view_count,
                         size_t                                    vertex_count,
                         erhe::graphics::Shader_stages*            shader_stages,
                         erhe::graphics::Vertex_attribute_mappings attribute_mappings,
@@ -151,7 +153,7 @@ private:
                                   &vertex_input_state,
                                   &erhe::graphics::Input_assembly_state::lines,
                                   &erhe::graphics::Rasterization_state::cull_mode_none,
-                                  &erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled,
+                                  erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
                                   &erhe::graphics::Color_blend_state::color_blend_premultiplied,
                                   nullptr}
             , pipeline_depth_fail{shader_stages,
@@ -188,7 +190,7 @@ private:
     erhe::graphics::Fragment_outputs                      m_fragment_outputs;
     erhe::graphics::Vertex_attribute_mappings             m_attribute_mappings;
     erhe::graphics::Vertex_format                         m_vertex_format;
-    erhe::graphics::Shader_resource                       m_view_block{"view", 0, erhe::graphics::Shader_resource::Type::uniform_block};
+    std::unique_ptr<erhe::graphics::Shader_resource>      m_view_block;
     std::unique_ptr<erhe::graphics::Shader_stages>        m_shader_stages;
     erhe::graphics::Shader_resource                       m_default_uniform_block; // containing sampler uniforms
 

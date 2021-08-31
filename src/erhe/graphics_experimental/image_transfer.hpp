@@ -24,8 +24,7 @@ public:
                       const gl::Internal_format internal_format)
         -> gsl::span<std::byte>;
 
-        auto gl_name()
-        -> unsigned int
+        auto gl_name() -> unsigned int
         {
             return pbo.gl_name();
         }
@@ -45,8 +44,7 @@ public:
     Image_transfer();
     ~Image_transfer() override;
 
-    auto get_slot()
-    -> Slot&;
+    auto get_slot() -> Slot&;
 
 private:
     size_t              m_index{0};

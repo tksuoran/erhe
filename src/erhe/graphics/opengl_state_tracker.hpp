@@ -38,13 +38,13 @@ public:
     Shader_stages_tracker        shader_stages;
     Vertex_input_state_tracker   vertex_input;
     Input_assembly_state_tracker input_assembly;
-    // tessellation
+    // TODO Tessellation state
     Viewport_state_tracker       viewport;
     Rasterization_state_tracker  rasterization;
-    // multisample
+    // TODO Multisample state?
     Depth_stencil_state_tracker  depth_stencil;
     Color_blend_state_tracker    color_blend;
-    // dynamic
+    // RODO Dynamic state
 };
 
 } // namespace erhe::graphics

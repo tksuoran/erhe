@@ -160,8 +160,8 @@ void Geometry::sort_point_corners()
     class Point_corner_info
     {
     public:
-        Point_corner_id point_corner_id;
-        Corner_id       corner_id;
+        Point_corner_id point_corner_id{0};
+        Corner_id       corner_id{0};
         Point_id        point_ids[3];
         bool            used{false};
     };

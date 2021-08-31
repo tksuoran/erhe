@@ -3,14 +3,13 @@
 namespace erhe::graphics
 {
 
-class Configuration
+class Instance
 {
 public:
-    static inline constexpr bool reverse_depth = true;
+    // static inline constexpr bool reverse_depth = true;
+    // static inline constexpr float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
 
-    static inline constexpr float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
-
-    class info_t
+    class Info
     {
     public:
         int  gl_version             {0};
@@ -25,7 +24,7 @@ public:
         bool use_integer_polygon_ids{false};
     };
 
-    class limits_t
+    class Limits
     {
     public:
         int max_vertex_attribs                {0};
@@ -44,15 +43,15 @@ public:
         int max_tess_evaluation_uniform_blocks{0};
     };
 
-    class implementation_defined_t
+    class Implementation_defined
     {
     public:
         unsigned int uniform_buffer_offset_alignment{1024};
     };
 
-    static info_t                   info;
-    static limits_t                 limits;
-    static implementation_defined_t implementation_defined;
+    static Info                   info;
+    static Limits                 limits;
+    static Implementation_defined implementation_defined;
 
     using PFN_generic          = void (*) ();
     using PFN_get_proc_address = PFN_generic (*) (const char*);

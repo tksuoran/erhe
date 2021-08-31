@@ -8,7 +8,7 @@
 #include <memory>
 
 struct XrCompositionLayerProjectionView;
-struct XrFrameState;
+//struct XrFrameState;
 
 namespace erhe::toolkit {
 

@@ -2,6 +2,7 @@
 
 #include "scene/collision_generator.hpp"
 #include "tools/tool.hpp"
+#include "windows/imgui_window.hpp"
 #include "erhe/primitive/enums.hpp"
 
 #include <memory>
@@ -52,7 +53,7 @@ public:
 class Brushes
     : public erhe::components::Component
     , public Tool
-    , public Window
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name{"Brushes"};
@@ -72,10 +73,10 @@ public:
     auto description  () -> const char* override { return c_name.data(); }
     void render_update(const Render_context&) override;
 
-    // Implements Window
-    void window(Pointer_context& pointer_context) override;
+    // Implements Imgui_window
+    void imgui(Pointer_context& pointer_context) override;
 
-    void add_brush     (const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry);
+    //void add_brush     (const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry);
     void add_material  (const std::shared_ptr<erhe::primitive::Material>& material);
     auto allocate_brush(erhe::primitive::Build_info_set& build_info_set) -> std::shared_ptr<Brush>;
     auto make_brush    (erhe::geometry::Geometry&&               geometry,

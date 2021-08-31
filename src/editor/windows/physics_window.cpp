@@ -49,7 +49,7 @@ auto to_bullet(glm::vec3 glm_vec3) -> btVector3
     return btVector3{btScalar{glm_vec3.x}, btScalar{glm_vec3.y}, btScalar{glm_vec3.z}};
 }
 
-void Physics_window::window(Pointer_context& pointer_context)
+void Physics_window::imgui(Pointer_context& pointer_context)
 {
     if (m_selection_tool.get() == nullptr)
     {
@@ -79,7 +79,7 @@ void Physics_window::window(Pointer_context& pointer_context)
                 ImGui::Checkbox("Normals",           &m_debug_draw.normals          );
                 ImGui::Checkbox("Frames",            &m_debug_draw.frames           );
             }
-            
+
             const ImVec2 color_button_size{32.0f, 32.0f};
             ImGui::SliderFloat("Line Width", &debug_drawer->line_width, 0.0f, 10.0f);
             ImGui::ColorEdit3("Active",                &m_debug_draw.default_colors.active_object               .x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);

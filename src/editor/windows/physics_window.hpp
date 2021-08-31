@@ -1,7 +1,7 @@
 #pragma once
 
 #include "tools/tool.hpp"
-#include "windows/window.hpp"
+#include "windows/imgui_window.hpp"
 
 #include <memory>
 
@@ -14,7 +14,7 @@ class Scene_root;
 class Physics_window
     : public erhe::components::Component
     , public Tool
-    , public Window
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name{"Physics_window"};
@@ -32,7 +32,7 @@ public:
     auto description() -> const char*                      override;
 
     // Implements Window
-    void window(Pointer_context& pointer_context) override;
+    void imgui(Pointer_context& pointer_context) override;
 
     class Debug_draw_parameters
     {

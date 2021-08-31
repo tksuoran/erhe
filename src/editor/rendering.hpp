@@ -22,6 +22,7 @@ namespace editor
 {
 
 class Application;
+class Configuration;
 class Editor_view;
 class Editor_rendering;
 class Editor_tools;
@@ -41,23 +42,20 @@ class Editor_rendering
     : public erhe::components::Component
 {
 public:
-    static constexpr bool s_enable_gui    {true};
-    static constexpr bool s_enable_headset{true};
-
     static constexpr std::string_view c_name{"Editor_rendering"};
 
     Editor_rendering ();
     ~Editor_rendering() override;
 
     // Implements Component
-    void connect             () override;
+    void connect() override;
 
     void init_state         ();
     void render             (const double time);
     auto to_scene_content   (const glm::vec2 position_in_root) const -> glm::vec2;
     auto is_content_in_focus() const -> bool;
 
-    erhe::scene::Viewport scene_viewport{0, 0, 0, 0};
+    erhe::scene::Viewport scene_viewport{0, 0, 0, 0, true};
 
     void render_clear_primary();
     void render_content      (erhe::scene::ICamera* camera, const erhe::scene::Viewport viewport);
@@ -78,6 +76,7 @@ private:
     auto height() const -> int;
 
     std::shared_ptr<Application>                          m_application;
+    std::shared_ptr<Configuration>                        m_configuration;
     std::shared_ptr<Editor_view>                          m_editor_view;
     std::shared_ptr<Editor_tools>                         m_editor_tools;
     std::shared_ptr<Forward_renderer>                     m_forward_renderer;

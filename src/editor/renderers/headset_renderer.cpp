@@ -1,7 +1,9 @@
 #include "renderers/headset_renderer.hpp"
 #include "application.hpp"
+#include "configuration.hpp"
 #include "log.hpp"
 #include "rendering.hpp"
+#include "window.hpp"
 #include "renderers/line_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/scene_manager.hpp"
@@ -84,7 +86,7 @@ Headset_view_resources::Headset_view_resources(erhe::xr::Render_view& render_vie
     auto scene_root = rendering.get<Scene_root>();
     scene_root->scene().cameras.push_back(camera);
 
-    camera_node = std::make_shared<erhe::scene::Node>();
+    camera_node = std::make_shared<erhe::scene::Node>("Camera");
     scene_root->scene().nodes.emplace_back(camera_node);
     camera_node->parent = rendering.get<Scene_manager>()->get_view_camera()->node().get();
     //camera_node->parent = nullptr;
@@ -219,10 +221,11 @@ void Headset_renderer::render()
                 log_headset.error("view framebuffer status = {}\n", c_str(status));
             }
             erhe::scene::Viewport viewport;
-            viewport.x      = 0;
-            viewport.y      = 0;
-            viewport.width  = render_view.width;
-            viewport.height = render_view.height;
+            viewport.x             = 0;
+            viewport.y             = 0;
+            viewport.width         = render_view.width;
+            viewport.height        = render_view.height;
+            viewport.reverse_depth = get<Configuration>()->reverse_depth;
             gl::viewport(0, 0, render_view.width, render_view.height);
 
             m_editor_rendering->render_clear_primary();
@@ -253,11 +256,19 @@ void Headset_renderer::connect()
     m_line_renderer    = get<Line_renderer   >();
     m_scene_manager    = require<Scene_manager>();
     m_scene_root       = require<Scene_root   >();
+
+    require<Window>();
+    require<Configuration>();
 }
 
 void Headset_renderer::initialize_component()
 {
-    m_headset = std::make_unique<erhe::xr::Headset>(m_application->get_context_window());
+    if (!get<Configuration>()->openxr)
+    {
+        return;
+    }
+
+    m_headset = std::make_unique<erhe::xr::Headset>(get<Window>()->get_context_window());
 
     auto  mesh_memory = get<Mesh_memory>();
     auto* view_root   = m_scene_manager->get_view_camera()->node().get();

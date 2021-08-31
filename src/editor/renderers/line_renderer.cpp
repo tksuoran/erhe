@@ -1,4 +1,5 @@
 #include "renderers/line_renderer.hpp"
+#include "configuration.hpp"
 #include "gl_context_provider.hpp"
 #include "log.hpp"
 
@@ -47,6 +48,7 @@ Line_renderer::~Line_renderer() = default;
 void Line_renderer::connect()
 {
     require<Gl_context_provider>();
+    require<Configuration>();
 
     m_pipeline_state_tracker = get<OpenGL_state_tracker>();
     m_shader_monitor         = require<Shader_monitor>();
@@ -76,10 +78,15 @@ void Line_renderer::initialize_component()
                                     gl::Attribute_type::float_vec4,
                                     {gl::Vertex_attrib_type::unsigned_byte, true, 4});
 
-    m_clip_from_world_offset        = m_view_block.add_mat4("clip_from_world"       )->offset_in_parent();
-    m_view_position_in_world_offset = m_view_block.add_vec4("view_position_in_world")->offset_in_parent();
-    m_viewport_offset               = m_view_block.add_vec4("viewport"              )->offset_in_parent();
-    m_fov_offset                    = m_view_block.add_vec4("fov"                   )->offset_in_parent();
+    m_view_block = std::make_unique<erhe::graphics::Shader_resource>(
+        "view",
+        0,
+        erhe::graphics::Shader_resource::Type::uniform_block);
+
+    m_clip_from_world_offset        = m_view_block->add_mat4("clip_from_world"       )->offset_in_parent();
+    m_view_position_in_world_offset = m_view_block->add_vec4("view_position_in_world")->offset_in_parent();
+    m_viewport_offset               = m_view_block->add_vec4("viewport"              )->offset_in_parent();
+    m_fov_offset                    = m_view_block->add_vec4("fov"                   )->offset_in_parent();
 
     const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
     const std::filesystem::path vs_path = shader_path / std::filesystem::path("line.vert");
@@ -89,7 +96,7 @@ void Line_renderer::initialize_component()
                                            &m_default_uniform_block,
                                            &m_attribute_mappings,
                                            &m_fragment_outputs);
-    create_info.add_interface_block(&m_view_block);
+    create_info.add_interface_block(m_view_block.get());
     create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
     create_info.shaders.emplace_back(gl::Shader_type::geometry_shader, gs_path);
     create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
@@ -110,10 +117,13 @@ void Line_renderer::create_frame_resources()
 {
     ZoneScoped;
 
-    constexpr size_t vertex_count = 65536;
+    const auto       reverse_depth = get<Configuration>()->reverse_depth;
+    constexpr size_t vertex_count  = 65536;
     for (size_t i = 0; i < s_frame_resources_count; ++i)
     {
-        m_frame_resources.emplace_back(256, 16,
+        m_frame_resources.emplace_back(reverse_depth,
+                                       256,
+                                       16,
                                        vertex_count,
                                        m_shader_stages.get(),
                                        m_attribute_mappings,
@@ -204,14 +214,14 @@ void Line_renderer::render(const erhe::scene::Viewport viewport,
     write(view_gpu_data, m_view_writer.write_offset + m_viewport_offset,               as_span(viewport_floats       ));
     write(view_gpu_data, m_view_writer.write_offset + m_fov_offset,                    as_span(fov_floats            ));
 
-    m_view_writer.write_offset += m_view_block.size_bytes();
+    m_view_writer.write_offset += m_view_block->size_bytes();
     m_view_writer.end();
 
     gl::disable          (gl::Enable_cap::framebuffer_srgb);
     gl::disable          (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport         (viewport.x, viewport.y, viewport.width, viewport.height);
     gl::bind_buffer_range(view_buffer->target(),
-                          static_cast<GLuint>    (m_view_block.binding_point()),
+                          static_cast<GLuint>    (m_view_block->binding_point()),
                           static_cast<GLuint>    (view_buffer->gl_name()),
                           static_cast<GLintptr>  (m_view_writer.range.first_byte_offset),
                           static_cast<GLsizeiptr>(m_view_writer.range.byte_count));

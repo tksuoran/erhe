@@ -24,10 +24,10 @@ void main()
     float d        = distance(view_position_in_world, position.xyz);
     //float max_size = (NdotV > 0.0) ? primitive.primitives[gl_DrawID].size : 0.0; // cull back facing points
     float max_size = primitive.primitives[gl_DrawID].size;
-    float bias     = 0.0005 * abs(NdotV);
+    float bias     = camera.cameras[0].clip_depth_direction * 0.0005 * abs(NdotV);
     v_normal       = normal;
     v_color        = primitive.primitives[gl_DrawID].color;
     gl_Position    = clip_from_world * position;
-    gl_Position.z += bias; // reverse depth uses += bias, non-reverse should use -= bias
+    gl_Position.z -= bias;
     gl_PointSize   = max(max_size / d, 2.0);
 }

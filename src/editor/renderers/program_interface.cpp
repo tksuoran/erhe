@@ -1,5 +1,6 @@
 #include "renderers/program_interface.hpp"
 #include "log.hpp"
+#include "window.hpp"
 
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/sampler.hpp"
@@ -8,7 +9,6 @@
 
 namespace editor {
 
-using erhe::graphics::Configuration;
 using erhe::graphics::Shader_stages;
 using erhe::graphics::Vertex_attribute;
 
@@ -19,10 +19,16 @@ Program_interface::Program_interface()
 
 Program_interface::~Program_interface() = default;
 
-void Program_interface::initialize_component()
-{
-    ZoneScoped;
 
+void Program_interface::connect()
+{
+    require<Window>(); // ensures we have graphics::Instance info
+
+    // TODO Make erhe::graphics::Instance a component
+}
+
+Program_interface::Shader_resources::Shader_resources()
+{
     fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 
     attribute_mappings.add(gl::Attribute_type::float_vec4, "a_position_texcoord", {Vertex_attribute::Usage_type::position | Vertex_attribute::Usage_type::tex_coord, 0}, 0);
@@ -55,12 +61,15 @@ void Program_interface::initialize_component()
     light_block_offsets.light.radiance_and_range           = light_struct.add_vec4 ("radiance_and_range"          )->offset_in_parent();
     light_block_offsets.light_struct                       = light_block.add_struct("lights", &light_struct, c_max_light_count)->offset_in_parent();
 
-    camera_block_offsets.world_from_node = camera_struct.add_mat4 ("world_from_node")->offset_in_parent();
-    camera_block_offsets.world_from_clip = camera_struct.add_mat4 ("world_from_clip")->offset_in_parent();
-    camera_block_offsets.clip_from_world = camera_struct.add_mat4 ("clip_from_world")->offset_in_parent();
-    camera_block_offsets.viewport        = camera_struct.add_vec4 ("viewport"       )->offset_in_parent();
-    camera_block_offsets.fov             = camera_struct.add_vec4 ("fov"            )->offset_in_parent();
-    camera_block_offsets.exposure        = camera_struct.add_float("exposure"       )->offset_in_parent();
+    camera_block_offsets.world_from_node      = camera_struct.add_mat4 ("world_from_node"     )->offset_in_parent();
+    camera_block_offsets.world_from_clip      = camera_struct.add_mat4 ("world_from_clip"     )->offset_in_parent();
+    camera_block_offsets.clip_from_world      = camera_struct.add_mat4 ("clip_from_world"     )->offset_in_parent();
+    camera_block_offsets.viewport             = camera_struct.add_vec4 ("viewport"            )->offset_in_parent();
+    camera_block_offsets.fov                  = camera_struct.add_vec4 ("fov"                 )->offset_in_parent();
+    camera_block_offsets.clip_depth_direction = camera_struct.add_float("clip_depth_direction")->offset_in_parent();
+    camera_block_offsets.view_depth_near      = camera_struct.add_float("view_depth_near"     )->offset_in_parent();
+    camera_block_offsets.view_depth_far       = camera_struct.add_float("view_depth_far"      )->offset_in_parent();
+    camera_block_offsets.exposure             = camera_struct.add_float("exposure"            )->offset_in_parent();
     camera_block.add_struct("cameras", &camera_struct, 1);
 
     primitive_block_offsets.world_from_node = primitive_struct.add_mat4 ("world_from_node")->offset_in_parent();
@@ -70,6 +79,13 @@ void Program_interface::initialize_component()
     primitive_block_offsets.extra2          = primitive_struct.add_uint ("extra2"         )->offset_in_parent();
     primitive_block_offsets.extra3          = primitive_struct.add_uint ("extra3"         )->offset_in_parent();
     primitive_block.add_struct("primitives", &primitive_struct, 1000);
+}
+
+void Program_interface::initialize_component()
+{
+    ZoneScoped;
+
+    shader_resources = std::make_unique<Shader_resources>();
 }
 
 }

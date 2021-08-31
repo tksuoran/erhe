@@ -1,6 +1,5 @@
 #pragma once
 
-#include "windows/window.hpp"
 #include "erhe/scene/viewport.hpp"
 
 namespace editor

@@ -16,7 +16,7 @@ Buffer::Buffer(const size_t capacity_bytes_count)
     //rtcNewSharedBuffer(device.get_rtc_device(), data, byte_count);
 }
 
-Buffer::Buffer(Buffer&& other)
+Buffer::Buffer(Buffer&& other) noexcept
     : m_capacity_byte_count{other.m_capacity_byte_count}
     , m_next_free_byte     {other.m_next_free_byte}
     , m_buffer             {std::move(other.m_buffer)}
@@ -24,7 +24,7 @@ Buffer::Buffer(Buffer&& other)
 {
 }
 
-Buffer& Buffer::operator=(Buffer&& other)
+Buffer& Buffer::operator=(Buffer&& other) noexcept
 {
     m_capacity_byte_count = other.m_capacity_byte_count;
     m_next_free_byte      = other.m_next_free_byte;

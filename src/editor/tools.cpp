@@ -2,6 +2,7 @@
 #include "application.hpp"
 #include "log.hpp"
 #include "view.hpp"
+#include "window.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -34,6 +35,7 @@ void Editor_tools::connect()
 {
     require<Application>();
     require<erhe::graphics::OpenGL_state_tracker>();
+    require<Window>();
     m_brushes        = get<Brushes       >();
     m_editor_view    = get<Editor_view   >();
     m_physics_tool   = get<Physics_tool  >();
@@ -43,26 +45,6 @@ void Editor_tools::connect()
 
 void Editor_tools::initialize_component()
 {
-    if (m_selection_tool)
-    {
-        auto callback = [this](const Selection_tool::Selection& selection)
-        {
-            auto  scene_root   = get<Scene_root>();
-            auto& layer_meshes = scene_root->selection_layer()->meshes;
-            layer_meshes.clear();
-            for (auto item : selection)
-            {
-                auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
-                if (!mesh)
-                {
-                    continue;
-                }
-                layer_meshes.push_back(mesh);
-            }
-        };
-        m_selection_layer_update_subscription = m_selection_tool->subscribe_selection_change_notification(callback);
-    }
-
     IMGUI_CHECKVERSION();
     m_imgui_context = ImGui::CreateContext();
     ImGuiIO& io     = ImGui::GetIO();
@@ -71,7 +53,7 @@ void Editor_tools::initialize_component()
     io.ConfigWindowsMoveFromTitleBarOnly = true;
     io.Fonts->AddFontFromFileTTF("res/fonts/ProximaNova-Regular.otf", 16.0f);
     ImGui::StyleColorsDark();
-    auto* const glfw_window = reinterpret_cast<GLFWwindow*>(get<Application>()->get_context_window()->get_glfw_window());
+    auto* const glfw_window = reinterpret_cast<GLFWwindow*>(get<Window>()->get_context_window()->get_glfw_window());
     ImGui_ImplGlfw_InitForOther(glfw_window, true);
     ImGui_ImplErhe_Init(get<erhe::graphics::OpenGL_state_tracker>());
 }
@@ -92,7 +74,7 @@ void Editor_tools::imgui_render()
 
 void Editor_tools::cancel_ready_tools(Tool* keep)
 {
-    for (auto* tool : m_tools)
+    for (auto tool : m_tools)
     {
         if (tool == keep)
         {
@@ -195,10 +177,10 @@ void Editor_tools::register_tool(Tool* tool)
 {
     lock_guard<mutex> lock(m_mutex);
     m_tools.emplace_back(tool);
-    auto* window = dynamic_cast<Window*>(tool);
-    if (window != nullptr)
+    auto* imgui_window = dynamic_cast<Imgui_window*>(tool);
+    if (imgui_window != nullptr)
     {
-        m_windows.emplace_back(window);
+        m_imgui_windows.emplace_back(imgui_window);
     }
 }
 
@@ -206,26 +188,26 @@ void Editor_tools::register_background_tool(Tool* tool)
 {
     lock_guard<mutex> lock(m_mutex);
     m_background_tools.emplace_back(tool);
-    auto* window = dynamic_cast<Window*>(tool);
-    if (window != nullptr)
+    auto* imgui_window = dynamic_cast<Imgui_window*>(tool);
+    if (imgui_window != nullptr)
     {
-        m_windows.emplace_back(window);
+        m_imgui_windows.emplace_back(imgui_window);
     }
 }
 
-void Editor_tools::register_window(Window* window)
+void Editor_tools::register_imgui_window(Imgui_window* window)
 {
     lock_guard<mutex> lock(m_mutex);
-    m_windows.emplace_back(window);
+    m_imgui_windows.emplace_back(window);
 }
 
 void Editor_tools::imgui()
 {
-    auto initial_priority_action = get_priority_action();
+    const auto initial_priority_action = get_priority_action();
     auto& pointer_context = m_editor_view->pointer_context;
-    for (auto* const window : m_windows)
+    for (auto imgui_window : m_imgui_windows)
     {
-        window->window(pointer_context);
+        imgui_window->imgui(pointer_context);
     }
     if (pointer_context.priority_action != initial_priority_action)
     {
@@ -242,12 +224,12 @@ void Editor_tools::update_and_render_tools(const Render_context& render_context)
     ZoneScoped;
 
     auto& pointer_context = m_editor_view->pointer_context;
-    for (auto* tool : m_background_tools)
+    for (auto tool : m_background_tools)
     {
         tool->update(pointer_context);
         tool->render(render_context);
     }
-    for (auto* tool : m_tools)
+    for (auto tool : m_tools)
     {
         tool->render(render_context);
     }
@@ -257,11 +239,11 @@ void Editor_tools::render_update_tools(const Render_context& render_context)
 {
     ZoneScoped;
 
-    for (auto* tool : m_background_tools)
+    for (auto tool : m_background_tools)
     {
         tool->render_update(render_context);
     }
-    for (auto* tool : m_tools)
+    for (auto tool : m_tools)
     {
         tool->render_update(render_context);
     }
@@ -272,7 +254,7 @@ void Editor_tools::on_pointer()
     auto& pointer_context = m_editor_view->pointer_context;
 
     // Pass 1: Active tools
-    for (auto* tool : m_tools)
+    for (auto tool : m_tools)
     {
         if ((tool->state() == Tool::State::Active) && tool->update(pointer_context))
         {
@@ -283,7 +265,7 @@ void Editor_tools::on_pointer()
     }
 
     // Pass 2: Ready tools
-    for (auto* tool : m_tools)
+    for (auto tool : m_tools)
     {
         if ((tool->state() == Tool::State::Ready) && tool->update(pointer_context))
         {
@@ -294,7 +276,7 @@ void Editor_tools::on_pointer()
     }
 
     // Oass 3: Passive tools
-    for (auto* tool : m_tools)
+    for (auto tool : m_tools)
     {
         if ((tool->state() == Tool::State::Passive) && tool->update(pointer_context))
         {
@@ -322,18 +304,18 @@ void Editor_tools::delete_selected_meshes()
     Compound_operation::Context compound_context;
     for (auto item : selection)
     {
-        auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        const auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
         if (!mesh)
         {
             continue;
         }
-        auto node = mesh->node();
+        const auto node = mesh->node();
         if (!node)
         {
             continue;
         }
         Mesh_insert_remove_operation::Context context{m_selection_tool,
-                                                      scene_root->content_layer(),  
+                                                      scene_root->content_layer(),
                                                       scene_root->scene(),
                                                       scene_root->physics_world(),
                                                       mesh,

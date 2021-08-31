@@ -371,6 +371,8 @@ auto Brush::create_scaled(const int scale_key)
 
 }
 
+const std::string empty_string = {};
+
 auto Brush::make_instance(erhe::scene::Layer&                               layer,
                           erhe::scene::Scene&                               scene,
                           erhe::physics::World&                             physics_world,
@@ -382,13 +384,14 @@ auto Brush::make_instance(erhe::scene::Layer&                               laye
 {
     ZoneScoped;
 
-    const auto& scaled = get_scaled(scale);
-    auto        mesh   = std::make_shared<Mesh>(scaled.primitive_geometry->source_geometry ? scaled.primitive_geometry->source_geometry->name
-                                                                                           : "");
+    const auto&        scaled = get_scaled(scale);
+    const std::string& name   = scaled.primitive_geometry->source_geometry ? scaled.primitive_geometry->source_geometry->name
+                                                                           : empty_string;
+    auto               mesh   = std::make_shared<Mesh>(name);
     mesh->primitives.emplace_back(scaled.primitive_geometry, material);
     layer.meshes.push_back(mesh);
 
-    auto node = make_shared<Node>();
+    auto node = make_shared<Node>(name);
     node->parent = parent.get();
     node->transforms.parent_from_node.set(local_to_parent);
     node->update();

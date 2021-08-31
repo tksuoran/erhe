@@ -3,6 +3,7 @@
 #include "erhe/scene/node.hpp"
 #include "tools/tool.hpp"
 #include "tools/selection_tool.hpp"
+#include "windows/imgui_window.hpp"
 
 #include <glm/glm.hpp>
 
@@ -44,7 +45,7 @@ class Text_renderer;
 class Trs_tool
     : public erhe::components::Component
     , public Tool
-    , public Window
+    , public Imgui_window
 {
 public:
     enum class Reference_mode : unsigned int
@@ -78,8 +79,8 @@ public:
     void cancel_ready ()                                         override;
     auto description  () -> const char*                          override;
 
-    // Implements Window
-    void window(Pointer_context& pointer_context) override;
+    // Implements Imgui_window
+    void imgui(Pointer_context& pointer_context) override;
 
     void set_translate(const bool enabled);
     void set_rotate   (const bool enabled);
@@ -178,18 +179,18 @@ private:
     class Debug_rendering
     {
     public:
-        glm::vec3 m_P0;
-        glm::vec3 m_P1;
-        glm::vec3 m_Q0;
-        glm::vec3 m_Q1;
-        glm::vec3 m_R0;
-        glm::vec3 m_R1;
-        glm::vec2 m_ss_closest;
+        glm::vec3 m_P0{};
+        glm::vec3 m_P1{};
+        glm::vec3 m_Q0{};
+        glm::vec3 m_Q1{};
+        glm::vec3 m_R0{};
+        glm::vec3 m_R1{};
+        glm::vec2 m_ss_closest{};
         uint32_t  m_debug_color{0x00000000u};
         float     m_v_dot_n{0.0f};
-        glm::vec3 m_pw;
-        glm::vec3 m_q0;
-        glm::vec3 m_q;
+        glm::vec3 m_pw{};
+        glm::vec3 m_q0{};
+        glm::vec3 m_q{} ;
     };
     Debug_rendering m_debug_rendering;
 

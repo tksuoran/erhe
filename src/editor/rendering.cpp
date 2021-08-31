@@ -1,13 +1,14 @@
 #include "rendering.hpp"
 #include "application.hpp"
+#include "configuration.hpp"
 #include "log.hpp"
 #include "tools.hpp"
 #include "view.hpp"
+#include "window.hpp"
 #include "renderers/forward_renderer.hpp"
 #include "renderers/headset_renderer.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/line_renderer.hpp"
-#include "renderers/mesh_memory.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "renderers/text_renderer.hpp"
 #include "scene/scene_manager.hpp"
@@ -43,6 +44,7 @@ Editor_rendering::~Editor_rendering()
 void Editor_rendering::connect()
 {
     m_application            = get<Application     >();
+    m_configuration          = get<Configuration   >();
     m_editor_view            = get<Editor_view     >();
     m_editor_tools           = get<Editor_tools    >();
     m_forward_renderer       = get<Forward_renderer>();
@@ -50,14 +52,12 @@ void Editor_rendering::connect()
     m_id_renderer            = get<Id_renderer     >();
     m_line_renderer          = get<Line_renderer   >();
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-    m_scene_manager          = require<Scene_manager>();
-    m_scene_root             = require<Scene_root   >();
+    m_scene_manager          = get<Scene_manager  >();
+    m_scene_root             = get<Scene_root     >();
     m_shadow_renderer        = get<Shadow_renderer>();
     m_text_renderer          = get<Text_renderer  >();
     m_viewport_config        = get<Viewport_config>();
     m_viewport_window        = get<Viewport_window>();
-
-    require<Mesh_memory>();
 }
 
 void Editor_rendering::init_state()
@@ -82,7 +82,7 @@ void Editor_rendering::begin_frame()
 {
     ZoneScoped;
 
-    if constexpr (s_enable_gui)
+    if (m_configuration->gui)
     {
         m_editor_tools->gui_begin_frame();
         const auto size       = m_viewport_window->content_region_size();
@@ -94,6 +94,7 @@ void Editor_rendering::begin_frame()
         scene_viewport.width  = width();
         scene_viewport.height = height();
     }
+    scene_viewport.reverse_depth = m_configuration->reverse_depth;
 
     if (m_headset_renderer)
     {
@@ -103,7 +104,7 @@ void Editor_rendering::begin_frame()
 
 auto Editor_rendering::is_primary_scene_output_framebuffer_ready() -> bool
 {
-    if constexpr (s_enable_gui)
+    if (m_configuration->gui)
     {
         return m_viewport_window->is_framebuffer_ready();
     }
@@ -136,12 +137,12 @@ void Editor_rendering::gui_render()
 
 auto Editor_rendering::is_content_in_focus() const -> bool
 {
-    return s_enable_gui ? m_viewport_window->is_focused() : true;
+    return m_configuration->gui ? m_viewport_window->is_focused() : true;
 }
 
 auto Editor_rendering::to_scene_content(const glm::vec2 position_in_root) const -> glm::vec2
 {
-    if constexpr (s_enable_gui)
+    if (m_configuration->gui)
     {
         return m_viewport_window->to_scene_content(position_in_root);
     }
@@ -170,7 +171,7 @@ void Editor_rendering::render(const double time)
 
     if (m_trigger_capture)
     {
-        m_application->begin_renderdoc_capture();
+        get<Window>()->begin_renderdoc_capture();
     }
 
     begin_frame();
@@ -238,7 +239,7 @@ void Editor_rendering::render(const double time)
         end_primary_framebuffer();
     }
 
-    if constexpr (s_enable_gui)
+    if (m_configuration->gui)
     {
         pointer_context.priority_action = m_editor_tools->get_priority_action();
         m_editor_tools->imgui();
@@ -304,7 +305,7 @@ void Editor_rendering::render_clear_primary()
                     m_viewport_config->clear_color[1],
                     m_viewport_config->clear_color[2],
                     m_viewport_config->clear_color[3]);
-    gl::clear_depth_f(erhe::graphics::Configuration::depth_clear_value);
+    gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
     gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 }
 
@@ -325,23 +326,30 @@ void Editor_rendering::render_content(erhe::scene::ICamera*       camera,
 
     auto& render_style = m_viewport_config->render_style_not_selected;
 
+    constexpr erhe::scene::Visibility_filter content_not_selected_filter{
+        erhe::scene::Mesh::c_visibility_content,    // all set
+        0u,                                         // at least one set
+        erhe::scene::Mesh::c_visibility_selected,   // all clear
+        0u};                                        // at least one cler
+
     if (render_style.polygon_fill)
     {
-        if (render_style.polygon_offset_enable)
-        {
-            gl::enable(gl::Enable_cap::polygon_offset_fill);
-            gl::polygon_offset_clamp(render_style.polygon_offset_factor,
-                                     render_style.polygon_offset_units,
-                                     render_style.polygon_offset_clamp);
-        }
+        //if (render_style.polygon_offset_enable)
+        //{
+        //    gl::enable(gl::Enable_cap::polygon_offset_fill);
+        //    gl::polygon_offset_clamp(render_style.polygon_offset_factor,
+        //                             render_style.polygon_offset_units,
+        //                             render_style.polygon_offset_clamp);
+        //}
         m_forward_renderer->render(viewport,
                                    *camera,
                                    m_scene_root->content_layers(),
                                    m_scene_root->materials(),
                                    { Forward_renderer::Pass::polygon_fill },
-                                   erhe::scene::Mesh::c_visibility_content);
-        gl::disable(gl::Enable_cap::polygon_offset_line);
+                                   content_not_selected_filter);
+        //gl::disable(gl::Enable_cap::polygon_offset_line);
     }
+
     if (render_style.edge_lines)
     {
         gl::enable(gl::Enable_cap::sample_alpha_to_coverage);
@@ -354,7 +362,7 @@ void Editor_rendering::render_content(erhe::scene::ICamera*       camera,
                                    m_scene_root->content_fill_layers(),
                                    m_scene_root->materials(),
                                    { Forward_renderer::Pass::edge_lines },
-                                   erhe::scene::Mesh::c_visibility_content);
+                                   content_not_selected_filter);
         gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
     }
     if (render_style.polygon_centroids)
@@ -368,7 +376,7 @@ void Editor_rendering::render_content(erhe::scene::ICamera*       camera,
                                    m_scene_root->content_layers(),
                                    m_scene_root->materials(),
                                    { Forward_renderer::Pass::polygon_centroids },
-                                   erhe::scene::Mesh::c_visibility_content);
+                                   content_not_selected_filter);
     }
     if (render_style.corner_points)
     {
@@ -381,7 +389,7 @@ void Editor_rendering::render_content(erhe::scene::ICamera*       camera,
                                    m_scene_root->content_layers(),
                                    m_scene_root->materials(),
                                    { Forward_renderer::Pass::corner_points },
-                                   erhe::scene::Mesh::c_visibility_content);
+                                   content_not_selected_filter);
     }
 }
 
@@ -393,7 +401,34 @@ void Editor_rendering::render_selection(erhe::scene::ICamera*       camera,
         return;
     }
 
-    auto& render_style = m_viewport_config->render_style_selected;;
+    const auto& render_style = m_viewport_config->render_style_selected;
+
+    constexpr erhe::scene::Visibility_filter content_selected_filter{
+        (erhe::scene::Mesh::c_visibility_content |  // all set
+         erhe::scene::Mesh::c_visibility_selected), 
+        0u,                                         // at least one set
+        0u,                                         // all clear
+        0u};                                        // at least one cler
+
+    if (m_viewport_config && render_style.polygon_fill)
+    {
+        //if (render_style.polygon_offset_enable)
+        //{
+        //    gl::enable(gl::Enable_cap::polygon_offset_fill);
+        //    gl::polygon_offset_clamp(render_style.polygon_offset_factor,
+        //                             render_style.polygon_offset_units,
+        //                             render_style.polygon_offset_clamp);
+        //}
+        //m_forward_renderer->primitive_color_source   = Base_renderer::Primitive_color_source::constant_color;
+        //m_forward_renderer->primitive_constant_color = render_style.line_color;
+        m_forward_renderer->render(viewport,
+                                   *camera,
+                                   m_scene_root->content_layers(),
+                                   m_scene_root->materials(),
+                                   { Forward_renderer::Pass::polygon_fill },
+                                   content_selected_filter);
+        //gl::disable(gl::Enable_cap::polygon_offset_line);
+    }
 
     if (m_viewport_config && render_style.edge_lines)
     {
@@ -406,12 +441,12 @@ void Editor_rendering::render_selection(erhe::scene::ICamera*       camera,
         m_forward_renderer->primitive_constant_size  = render_style.line_width;
         m_forward_renderer->render(viewport,
                                    *camera,
-                                   m_scene_root->selection_layers(),
+                                   m_scene_root->content_layers(),
                                    m_scene_root->materials(),
                                    { Forward_renderer::Pass::edge_lines,
                                      Forward_renderer::Pass::hidden_line_with_blend
                                    },
-                                   erhe::scene::Mesh::c_visibility_selection);
+                                   content_selected_filter);
         gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
     }
 
@@ -425,10 +460,10 @@ void Editor_rendering::render_selection(erhe::scene::ICamera*       camera,
         m_forward_renderer->primitive_constant_size  = render_style.point_size;
         m_forward_renderer->render(viewport,
                                    *camera,
-                                   m_scene_root->selection_layers(),
+                                   m_scene_root->content_layers(),
                                    m_scene_root->materials(),
                                    { Forward_renderer::Pass::polygon_centroids },
-                                   erhe::scene::Mesh::c_visibility_selection);
+                                   content_selected_filter);
     }
     if (m_viewport_config && render_style.corner_points)
     {
@@ -439,10 +474,10 @@ void Editor_rendering::render_selection(erhe::scene::ICamera*       camera,
         m_forward_renderer->primitive_constant_size  = render_style.point_size;
         m_forward_renderer->render(viewport,
                                    *camera,
-                                   m_scene_root->selection_layers(),
+                                   m_scene_root->content_layers(),
                                    m_scene_root->materials(),
                                    { Forward_renderer::Pass::corner_points },
-                                   erhe::scene::Mesh::c_visibility_selection);
+                                   content_selected_filter);
     }
     gl::disable(gl::Enable_cap::program_point_size);
 }
@@ -457,6 +492,12 @@ void Editor_rendering::render_tool_meshes(erhe::scene::ICamera*       camera,
         return;
     }
 
+    constexpr erhe::scene::Visibility_filter tool_filter{
+        erhe::scene::Mesh::c_visibility_tool,  // all set
+        0u,                                    // at least one set
+        0u,                                    // all clear
+        0u};                                   // at least one cler
+
     m_forward_renderer->render(viewport,
                                *camera,
                                m_scene_root->tool_layers(),
@@ -469,12 +510,12 @@ void Editor_rendering::render_tool_meshes(erhe::scene::ICamera*       camera,
                                    Forward_renderer::Pass::require_stencil_tag_depth_visible,
                                    Forward_renderer::Pass::require_stencil_tag_depth_hidden_and_blend,
                                },
-                               erhe::scene::Mesh::c_visibility_tool);
+                               tool_filter);
 }
 
 void Editor_rendering::bind_primary_scene_output_framebuffer()
 {
-    if constexpr (s_enable_gui)
+    if (m_configuration->gui)
     {
         m_viewport_window->bind_multisample_framebuffer();
     }
@@ -489,7 +530,7 @@ void Editor_rendering::bind_primary_scene_output_framebuffer()
 // so that we can sample from the texture in GUI scene window.
 void Editor_rendering::end_primary_framebuffer()
 {
-    if constexpr (s_enable_gui)
+    if (m_configuration->gui)
     {
         m_viewport_window->multisample_resolve();
     }

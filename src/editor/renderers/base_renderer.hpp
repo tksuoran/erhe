@@ -30,6 +30,7 @@ namespace erhe::scene
     class Light;
     class Node;
     class Viewport;
+    class Visibility_filter;
 }
 
 namespace editor
@@ -115,8 +116,8 @@ public:
 
     void base_connect(const erhe::components::Component* component);
 
-    auto update_primitive_buffer(const Mesh_collection& meshes,
-                                 const uint64_t         visibility_mask = erhe::scene::Mesh::c_visibility_all)
+    auto update_primitive_buffer(const Mesh_collection&                meshes,
+                                 const erhe::scene::Visibility_filter& visibility_filter)
     -> Buffer_range;
 
     auto update_light_buffer(const Light_collection&     lights,
@@ -133,7 +134,7 @@ public:
 
     auto update_draw_indirect_buffer(const Mesh_collection&                meshes,
                                      const erhe::primitive::Primitive_mode primitive_mode,
-                                     const uint64_t                        visibility_mask = erhe::scene::Mesh::c_visibility_all)
+                                     const erhe::scene::Visibility_filter& visibility_filter)
     -> Draw_indirect_buffer_range;
 
     void bind_material_buffer     ();
@@ -157,7 +158,7 @@ protected:
 
         void align()
         {
-            while (write_offset % erhe::graphics::Configuration::implementation_defined.uniform_buffer_offset_alignment)
+            while (write_offset % erhe::graphics::Instance::implementation_defined.uniform_buffer_offset_alignment)
             {
                 write_offset++;
             }

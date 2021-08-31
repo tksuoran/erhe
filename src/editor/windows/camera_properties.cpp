@@ -26,10 +26,10 @@ void Camera_properties::connect()
 
 void Camera_properties::initialize_component()
 {
-    get<Editor_tools>()->register_window(this);
+    get<Editor_tools>()->register_imgui_window(this);
 }
 
-void Camera_properties::window(Pointer_context& pointer_context)
+void Camera_properties::imgui(Pointer_context& pointer_context)
 {
     ImGui::Begin("Camera");
 
@@ -46,7 +46,7 @@ void Camera_properties::window(Pointer_context& pointer_context)
         if (projection != nullptr)
         {
             const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
-            ImGui::Text("%s", camera->node()->name.c_str());
+            ImGui::Text("%s", camera->node()->name().c_str());
             ImGui::Separator();
             ImGui::SetNextItemWidth(200);
             make_combo("Type", projection->projection_type, erhe::scene::Projection::c_type_strings, IM_ARRAYSIZE(erhe::scene::Projection::c_type_strings));

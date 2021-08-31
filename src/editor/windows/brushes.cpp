@@ -164,7 +164,7 @@ auto Brushes::make_brush(shared_ptr<erhe::geometry::Geometry> geometry,
                                          1.0f, // density
                                          collision_volume_calculator,
                                          collision_shape_generator};
-                
+
     const auto brush = allocate_brush(context.build_info_set);
     brush->initialize(create_info);
     return brush;
@@ -330,6 +330,10 @@ void Brushes::do_insert_operation()
                                                   transform,
                                                   material,
                                                   m_transform_scale);
+    instance.mesh->visibility_mask |= (INode_attachment::c_visibility_content     |
+                                       INode_attachment::c_visibility_shadow_cast |
+                                       INode_attachment::c_visibility_id);
+
     const Mesh_insert_remove_operation::Context context{m_selection_tool,
                                                         m_scene_root->content_layer(),
                                                         m_scene_root->scene(),
@@ -391,7 +395,7 @@ void Brushes::update_mesh()
     update_mesh_node_transform();
 }
 
-void Brushes::window(Pointer_context&)
+void Brushes::imgui(Pointer_context&)
 {
     ImGui::Begin("Brushes");
 
@@ -417,8 +421,10 @@ void Brushes::window(Pointer_context&)
     }
     ImGui::SliderFloat("Scale", &m_scale, 0.0f, 2.0f);
     make_check_box("Snap to Polygon", &m_snap_to_hover_polygon);
-    make_check_box("Snap to Grid",    &m_snap_to_grid, m_snap_to_hover_polygon ? Window::Item_mode::disabled
-                                                                               : Window::Item_mode::normal);
+    make_check_box("Snap to Grid",
+                   &m_snap_to_grid,
+                   m_snap_to_hover_polygon ? Imgui_window::Item_mode::disabled
+                                           : Imgui_window::Item_mode::normal);
     ImGui::End();
 
     ImGui::Begin("Materials");

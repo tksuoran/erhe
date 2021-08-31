@@ -1,4 +1,4 @@
-    #pragma once
+#pragma once
 
 #include "scene/collision_generator.hpp"
 #include "scene/frame_controller.hpp"
@@ -104,12 +104,10 @@ public:
 
     auto content_layer      () const -> std::shared_ptr<erhe::scene::Layer>;
     auto controller_layer   () const -> std::shared_ptr<erhe::scene::Layer>;
-    auto selection_layer    () const -> std::shared_ptr<erhe::scene::Layer>;
     auto tool_layer         () const -> std::shared_ptr<erhe::scene::Layer>;
     auto all_layers         () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_all_layers; }
     auto content_fill_layers() -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_content_fill_layers; }
     auto content_layers     () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_content_layers; }
-    auto selection_layers   () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_selection_layers; }
     auto tool_layers        () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_tool_layers; }
 
     auto make_mesh_node(std::string_view                                            name,
@@ -144,7 +142,6 @@ private:
     std::unique_ptr<erhe::scene::Scene>              m_scene;
     std::shared_ptr<erhe::scene::Layer>              m_content_layer;
     std::shared_ptr<erhe::scene::Layer>              m_controller_layer;
-    std::shared_ptr<erhe::scene::Layer>              m_selection_layer;
     std::shared_ptr<erhe::scene::Layer>              m_tool_layer;
     std::shared_ptr<erhe::scene::Layer>              m_brush_layer;
     std::shared_ptr<erhe::scene::Camera>             m_camera;
@@ -153,7 +150,6 @@ private:
     std::vector<std::shared_ptr<erhe::scene::Layer>> m_all_layers;
     std::vector<std::shared_ptr<erhe::scene::Layer>> m_content_fill_layers;
     std::vector<std::shared_ptr<erhe::scene::Layer>> m_content_layers;
-    std::vector<std::shared_ptr<erhe::scene::Layer>> m_selection_layers;
     std::vector<std::shared_ptr<erhe::scene::Layer>> m_tool_layers;
     std::vector<std::shared_ptr<erhe::scene::Layer>> m_brush_layers;
 };

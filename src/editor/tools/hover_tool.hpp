@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tools/tool.hpp"
+#include "windows/imgui_window.hpp"
 
 #include <glm/glm.hpp>
 
@@ -23,7 +24,7 @@ class Scene_root;
 class Hover_tool
     : public erhe::components::Component
     , public Tool
-    , public Window
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name{"Hover_tool"};
@@ -41,8 +42,8 @@ public:
     auto state      () const -> State                          override;
     auto description() -> const char*                          override;
 
-    // Implements Window
-    void window(Pointer_context& pointer_context) override;
+    // Implements Imgui_window
+    void imgui(Pointer_context& pointer_context) override;
 
 private:
     void deselect();

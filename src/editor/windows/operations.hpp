@@ -1,6 +1,6 @@
 #pragma once
 
-#include "windows/window.hpp"
+#include "windows/imgui_window.hpp"
 
 #include <memory>
 
@@ -14,7 +14,7 @@ class Scene_root;
 
 class Operations
     : public erhe::components::Component
-    , public Window
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name{"Operations"};
@@ -27,7 +27,7 @@ public:
     void initialize_component() override;
 
     // Implements Window
-    void window(Pointer_context& pointer_context) override;
+    void imgui(Pointer_context& pointer_context) override;
 
 private:
     std::shared_ptr<Mesh_memory>     m_mesh_memory;

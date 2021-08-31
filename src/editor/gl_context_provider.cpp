@@ -1,5 +1,6 @@
 #include "gl_context_provider.hpp"
 #include "log.hpp"
+#include "window.hpp"
 
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
@@ -29,6 +30,8 @@ void Gl_context_provider::provide_worker_contexts(const shared_ptr<erhe::graphic
 {
     ZoneScoped;
 
+    log_startup.info("Starting to provide worked GL contexts\n");
+
     VERIFY(m_main_thread_id == this_thread::get_id());
     m_opengl_state_tracker = opengl_state_tracker;
     m_main_window = main_window;
@@ -47,6 +50,7 @@ void Gl_context_provider::provide_worker_contexts(const shared_ptr<erhe::graphic
         if (!worker_contexts_still_needed_callback())
         {
             TracyMessageL("No more GL worker thread contexts needed");
+            log_startup.info("No more GL worker thread contexts needed\n");
             break;
         }
 
@@ -64,6 +68,7 @@ void Gl_context_provider::provide_worker_contexts(const shared_ptr<erhe::graphic
     }
 
     TracyMessageL("Done creating GL worker thread contexts");
+    log_startup.info("Done creating GL worker thread contexts\n");
 
     {
         ZoneScopedN("main_window->make_current()");

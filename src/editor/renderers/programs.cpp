@@ -12,7 +12,6 @@
 
 namespace editor {
 
-using erhe::graphics::Configuration;
 using erhe::graphics::Shader_stages;
 
 Programs::Programs()
@@ -91,18 +90,20 @@ auto Programs::make_program(std::string_view name, const std::vector<std::string
     const bool gs_exists = std::filesystem::exists(gs_path);
     const bool fs_exists = std::filesystem::exists(fs_path);
 
+    const auto& shader_resources = *m_program_interface->shader_resources.get();
+
     Shader_stages::Create_info create_info(name,
                                            default_uniform_block.get(),
-                                           &m_program_interface->attribute_mappings,
-                                           &m_program_interface->fragment_outputs);
-    create_info.add_interface_block(&m_program_interface->material_block);
-    create_info.add_interface_block(&m_program_interface->light_block);
-    create_info.add_interface_block(&m_program_interface->camera_block);
-    create_info.add_interface_block(&m_program_interface->primitive_block);
-    create_info.struct_types.push_back(&m_program_interface->material_struct);
-    create_info.struct_types.push_back(&m_program_interface->light_struct);
-    create_info.struct_types.push_back(&m_program_interface->camera_struct);
-    create_info.struct_types.push_back(&m_program_interface->primitive_struct);
+                                           &shader_resources.attribute_mappings,
+                                           &shader_resources.fragment_outputs);
+    create_info.add_interface_block(&shader_resources.material_block);
+    create_info.add_interface_block(&shader_resources.light_block);
+    create_info.add_interface_block(&shader_resources.camera_block);
+    create_info.add_interface_block(&shader_resources.primitive_block);
+    create_info.struct_types.push_back(&shader_resources.material_struct);
+    create_info.struct_types.push_back(&shader_resources.light_struct);
+    create_info.struct_types.push_back(&shader_resources.camera_struct);
+    create_info.struct_types.push_back(&shader_resources.primitive_struct);
     for (auto j : defines)
     {
         create_info.defines.emplace_back(j, "1");

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "windows/window.hpp"
+#include "windows/imgui_window.hpp"
 
 #include <memory>
 
@@ -11,7 +11,7 @@ class Scene_root;
 
 class Light_properties
     : public erhe::components::Component
-    , public Window
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name{"Light_properties"};
@@ -23,8 +23,8 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-    // Implements Window
-    void window(Pointer_context& pointer_context) override;
+    // Implements Imgui_window
+    void imgui(Pointer_context& pointer_context) override;
 
     auto animation() const -> bool;
 

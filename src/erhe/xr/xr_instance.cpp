@@ -137,18 +137,18 @@ auto Xr_instance::create_instance() -> bool
     create_info.enabledExtensionCount              = 5;
     create_info.enabledExtensionNames              = required_extensions;
 
-    for (;;)
-    {
+    //for (;;)
+    //{
         if (!check("xrCreateInstance",
                    xrCreateInstance(&create_info,
                                     &m_xr_instance)))
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));
-            continue;
-            //return false;
+            //continue;
+            return false;
         }
-        break;
-    }
+    //    break;
+    //}
 
     // m_xrSetEnvironmentDepthEstimationVARJO = nullptr;
     // if (!check("xrGetInstanceProcAddr",
@@ -280,6 +280,14 @@ auto Xr_instance::enumerate_extensions() -> bool
     log_xr.trace("{}\n", __func__);
 
     uint32_t instance_extension_count{0};
+    //const auto res = xrEnumerateInstanceExtensionProperties(nullptr,
+    //                                                        0,
+    //                                                        &instance_extension_count,
+    //                                                        nullptr);
+    //if (res == XR_ERROR_RUNTIME_UNAVAILABLE)
+    //{
+    //    return false;
+    //}
     if (!check("xrEnumerateInstanceExtensionProperties",
                xrEnumerateInstanceExtensionProperties(nullptr,
                                                       0,

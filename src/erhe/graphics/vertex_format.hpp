@@ -31,14 +31,12 @@ public:
     auto find_attribute(const Vertex_attribute::Usage_type usage_type, const unsigned int index = 0) const
     -> gsl::not_null<const Vertex_attribute*>;
 
-    auto stride() const
-    -> size_t
+    auto stride() const -> size_t
     {
         return m_stride;
     }
 
-    auto match(const Vertex_format& other) const
-    -> bool;
+    auto match(const Vertex_format& other) const -> bool;
 
 private:
     std::vector<Vertex_attribute> m_attributes;

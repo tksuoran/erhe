@@ -28,10 +28,11 @@ public:
                                  const float     depth_range_near,
                                  const float     depth_range_far);
 
-    int x     {0};
-    int y     {0};
-    int width {0};
-    int height{0};
+    int  x     {0};
+    int  y     {0};
+    int  width {0};
+    int  height{0};
+    bool reverse_depth{true};
 };
 
 } // namespace erhe::scene

@@ -32,10 +32,10 @@ auto glsl_token(gl::Attribute_type type)
         }
     }
 }
-Shader_stages::Create_info::Create_info(std::string_view           name,
-                                        Shader_resource*           default_uniform_block, // containing samplers
-                                        Vertex_attribute_mappings* vertex_attribute_mappings,
-                                        Fragment_outputs*          fragment_outputs)
+Shader_stages::Create_info::Create_info(const std::string_view           name,
+                                        const Shader_resource*           default_uniform_block, // containing samplers
+                                        const Vertex_attribute_mappings* vertex_attribute_mappings,
+                                        const Fragment_outputs*          fragment_outputs)
     : name                     {name}
     , vertex_attribute_mappings{vertex_attribute_mappings}
     , fragment_outputs         {fragment_outputs}
@@ -148,7 +148,7 @@ auto Shader_stages::Create_info::final_source(const Shader_stage& shader) const
     return sb.str(); // shaders.emplace_back(type, source, sb.str());
 }
 
-void Shader_stages::Create_info::add_interface_block(gsl::not_null<Shader_resource*> interface_block)
+void Shader_stages::Create_info::add_interface_block(gsl::not_null<const Shader_resource*> interface_block)
 {
     interface_blocks.emplace(interface_block->name() + "_block", interface_block);
 }

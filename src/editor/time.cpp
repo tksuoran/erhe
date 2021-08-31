@@ -1,6 +1,7 @@
 #include "time.hpp"
-#include "rendering.hpp"
 #include "gl_context_provider.hpp"
+#include "rendering.hpp"
+#include "window.hpp"
 
 #include "application.hpp"
 #include "log.hpp"
@@ -27,8 +28,9 @@ Editor_time::~Editor_time() = default;
 
 void Editor_time::connect()
 {
-    m_editor_rendering = get<Editor_rendering>();
     m_application      = get<Application     >();
+    m_editor_rendering = get<Editor_rendering>();
+    m_window           = get<Window          >();
 }
 
 void Editor_time::start_time()
@@ -65,7 +67,7 @@ void Editor_time::update()
 
     {
         ZoneScopedN(c_swap_buffers.data());
-        m_application->get_context_window()->swap_buffers();
+        m_window->get_context_window()->swap_buffers();
     }
 
     //if (m_trigger_capture)

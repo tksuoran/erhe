@@ -4,7 +4,10 @@ in mat3      v_TBN;
 in flat uint v_material_index;
 in float     v_tangent_scale;
 
-float sample_light_visibility(vec4 position, uint light_index, float NdotL) {
+float sample_light_visibility(vec4  position,
+                              uint  light_index,
+                              float NdotL)
+{
     Light light = light_block.lights[light_index];
     vec4  position_in_light_texture_homogeneous = light.texture_from_world * position;
 
@@ -18,14 +21,25 @@ float sample_light_visibility(vec4 position, uint light_index, float NdotL) {
 
     float bias = 0.0005 * sqrt(1.0 - NdotL * NdotL) / NdotL; // tan(acos(NdotL))
     bias = clamp(bias, 0.0, 0.01);
-    if (depth_in_light_texture + bias >= sampled_depth) // reverse depth
+    if (camera.cameras[0].clip_depth_direction < 0.0)
     {
-        return 1.0;
+        if (depth_in_light_texture + bias >= sampled_depth) // reverse depth
+        {
+            return 1.0;
+        }
+    }
+    else
+    {
+        if (depth_in_light_texture - bias <= sampled_depth) // forward depth
+        {
+            return 1.0;
+        }
     }
     return 0.0;
 }
 
-float srgb_to_linear(float x) {
+float srgb_to_linear(float x)
+{
     if (x <= 0.04045)
     {
         return x / 12.92;
@@ -36,35 +50,41 @@ float srgb_to_linear(float x) {
     }
 }
 
-vec3 srgb_to_linear(vec3 v) {
+vec3 srgb_to_linear(vec3 v)
+{
     return vec3(srgb_to_linear(v.r),
                 srgb_to_linear(v.g),
                 srgb_to_linear(v.b));
 }
 
-vec2 srgb_to_linear(vec2 v) {
+vec2 srgb_to_linear(vec2 v)
+{
     return vec2(srgb_to_linear(v.r),
                 srgb_to_linear(v.g));
 }
 
 const float M_PI = 3.141592653589793;
 
-struct NormalInfo {
+struct NormalInfo
+{
     vec3 ng;   // Geometric normal
     vec3 n;    // Pertubed normal
     vec3 t;    // Pertubed tangent
     vec3 b;    // Pertubed bitangent
 };
 
-float clampedDot(vec3 x, vec3 y) {
+float clampedDot(vec3 x, vec3 y)
+{
     return clamp(dot(x, y), 0.0, 1.0);
 }
 
-float max3(vec3 v) {
+float max3(vec3 v)
+{
     return max(max(v.x, v.y), v.z);
 }
 
-struct MaterialInfo {
+struct MaterialInfo
+{
     float perceptualRoughness;  // roughness value, as authored by the model creator (input to shader)
     vec3  f0;                   // full reflectance color (n incidence angle)
     float alphaRoughness;       // roughness mapped to a more linear change in the roughness (proposed by [2])
@@ -75,11 +95,15 @@ struct MaterialInfo {
     vec3  baseColor;            // getBaseColor()
 };
 
-vec3 F_Schlick(vec3 f0, vec3 f90, float VdotH) {
+vec3 F_Schlick(vec3 f0, vec3 f90, float VdotH)
+{
     return f0 + (f90 - f0) * pow(clamp(1.0 - VdotH, 0.0, 1.0), 5.0);
 }
 
-float V_GGX(float NdotL, float NdotV, float alphaRoughness) {
+float V_GGX(float NdotL,
+            float NdotV,
+            float alphaRoughness)
+{
     float alphaRoughnessSq = alphaRoughness * alphaRoughness;
     float GGXV             = NdotL * sqrt(NdotV * NdotV * (1.0 - alphaRoughnessSq) + alphaRoughnessSq);
     float GGXL             = NdotV * sqrt(NdotL * NdotL * (1.0 - alphaRoughnessSq) + alphaRoughnessSq);
@@ -91,27 +115,39 @@ float V_GGX(float NdotL, float NdotV, float alphaRoughness) {
     return 0.0;
 }
 
-float V_GGX_anisotropic(float NdotL, float NdotV, float BdotV, float TdotV, float TdotL, float BdotL, float anisotropy, float at, float ab) {
+float V_GGX_anisotropic(float NdotL,
+                        float NdotV,
+                        float BdotV,
+                        float TdotV,
+                        float TdotL,
+                        float BdotL,
+                        float anisotropy,
+                        float at,
+                        float ab)
+{
     float GGXV = NdotL * length(vec3(at * TdotV, ab * BdotV, NdotV));
     float GGXL = NdotV * length(vec3(at * TdotL, ab * BdotL, NdotL));
     float v    = 0.5 / (GGXV + GGXL);
     return clamp(v, 0.0, 1.0);
 }
 
-float D_GGX(float NdotH, float alphaRoughness) {
+float D_GGX(float NdotH, float alphaRoughness)
+{
     float alphaRoughnessSq = alphaRoughness * alphaRoughness;
     float f                = (NdotH * NdotH) * (alphaRoughnessSq - 1.0) + 1.0;
     return alphaRoughnessSq / (M_PI * f * f);
 }
 
-float D_GGX_anisotropic(float NdotH, float TdotH, float BdotH, float anisotropy, float at, float ab) {
+float D_GGX_anisotropic(float NdotH, float TdotH, float BdotH, float anisotropy, float at, float ab)
+{
     float  a2 = at * ab;
     vec3   f  = vec3(ab * TdotH, at * BdotH, a2 * NdotH);
     float  w2 = a2 / dot(f, f);
     return a2 * w2 * w2 / M_PI;
 }
 
-vec3 BRDF_specularGGX(vec3 f0, vec3 f90, float alphaRoughness, float VdotH, float NdotL, float NdotV, float NdotH) {
+vec3 BRDF_specularGGX(vec3 f0, vec3 f90, float alphaRoughness, float VdotH, float NdotL, float NdotV, float NdotH)
+{
     vec3   F   = F_Schlick(f0, f90, VdotH);
     float  Vis = V_GGX(NdotL, NdotV, alphaRoughness);
     float  D   = D_GGX(NdotH, alphaRoughness);
@@ -120,7 +156,8 @@ vec3 BRDF_specularGGX(vec3 f0, vec3 f90, float alphaRoughness, float VdotH, floa
 
 vec3 BRDF_specularAnisotropicGGX(vec3 f0, vec3 f90, float alphaRoughness,
                                  float VdotH, float NdotL, float NdotV, float NdotH, float BdotV, float TdotV,
-                                 float TdotL, float BdotL, float TdotH, float BdotH, float anisotropy) {
+                                 float TdotL, float BdotL, float TdotH, float BdotH, float anisotropy)
+{
     vec3  F  = F_Schlick(f0, f90, VdotH);
 
     float  i_V = V_GGX(NdotL, NdotV, alphaRoughness);
@@ -140,11 +177,13 @@ vec3 BRDF_specularAnisotropicGGX(vec3 f0, vec3 f90, float alphaRoughness,
     return mix(iggx, aggx, 0.0);
 }
 
-vec3 BRDF_lambertian(vec3 f0, vec3 f90, vec3 diffuseColor, float VdotH) {
+vec3 BRDF_lambertian(vec3 f0, vec3 f90, vec3 diffuseColor, float VdotH)
+{
     return (1.0 - F_Schlick(f0, f90, VdotH)) * (diffuseColor / M_PI);
 }
 
-float getRangeAttenuation(float range, float distance) {
+float getRangeAttenuation(float range, float distance)
+{
     if (range <= 0.0)
     {
         return 1.0 / pow(distance, 2.0); // negative range means unlimited
@@ -152,7 +191,8 @@ float getRangeAttenuation(float range, float distance) {
     return max(min(1.0 - pow(distance / range, 4.0), 1.0), 0.0) / pow(distance, 2.0);
 }
 
-float getSpotAttenuation(vec3 pointToLight, vec3 spotDirection, float outerConeCos, float innerConeCos) {
+float getSpotAttenuation(vec3 pointToLight, vec3 spotDirection, float outerConeCos, float innerConeCos)
+{
     float actualCos = dot(normalize(spotDirection), normalize(-pointToLight));
     if (actualCos > outerConeCos)
     {
@@ -165,7 +205,8 @@ float getSpotAttenuation(vec3 pointToLight, vec3 spotDirection, float outerConeC
     return 0.0;
 }
 
-NormalInfo getNormalInfo(vec3 v) {
+NormalInfo getNormalInfo(vec3 v)
+{
     vec3 t  = normalize(v_TBN[0]);
     vec3 b  = normalize(v_TBN[1]);
     vec3 ng = normalize(v_TBN[2]);
@@ -179,11 +220,13 @@ NormalInfo getNormalInfo(vec3 v) {
     return info;
 }
 
-vec3 getBaseColor() {
+vec3 getBaseColor()
+{
     return material.materials[v_material_index].base_color.rgb;
 }
 
-MaterialInfo getSpecularGlossinessInfo(MaterialInfo info) {
+MaterialInfo getSpecularGlossinessInfo(MaterialInfo info)
+{
     //info.f0                  = material.materials[v_material_index].specular_and_roughness.rgb;
     //info.perceptualRoughness = material.materials[v_material_index].glossiness;
     //info.perceptualRoughness = 1.0 - info.perceptualRoughness; // 1 - glossiness
@@ -191,7 +234,8 @@ MaterialInfo getSpecularGlossinessInfo(MaterialInfo info) {
     return info;
 }
 
-MaterialInfo getMetallicRoughnessInfo(MaterialInfo info, float f0_ior) {
+MaterialInfo getMetallicRoughnessInfo(MaterialInfo info, float f0_ior)
+{
     info.metallic            = material.materials[v_material_index].metallic;
     info.perceptualRoughness = material.materials[v_material_index].roughness;
     vec3 f0 = vec3(f0_ior); // Achromatic f0 based on IOR.
@@ -200,7 +244,8 @@ MaterialInfo getMetallicRoughnessInfo(MaterialInfo info, float f0_ior) {
     return info;
 }
 
-void main() {
+void main()
+{
     vec3 view_position_in_world = vec3(
         camera.cameras[0].world_from_node[3][0],
         camera.cameras[0].world_from_node[3][1],
@@ -248,7 +293,8 @@ void main() {
 
     vec3 color = vec3(0);
 
-    for (uint i = 0; i < directional_light_count; ++i) {
+    for (uint i = 0; i < directional_light_count; ++i)
+    {
         uint  light_index  = directional_light_offset + i;
         Light light        = light_block.lights[light_index];
         vec3  pointToLight = light.direction_and_outer_spot_cos.xyz;
@@ -272,7 +318,9 @@ void main() {
                                                                           BdotV, TdotV, TdotL, BdotL, TdotH, BdotH, anisotropy);
         }
     }
-    for (uint i = 0; i < spot_light_count; ++i) {
+
+    for (uint i = 0; i < spot_light_count; ++i)
+    {
         uint  light_index  = spot_light_offset + i;
         Light light        = light_block.lights[light_index];
         vec3  pointToLight = light.position_and_inner_spot_cos.xyz - v_position.xyz;

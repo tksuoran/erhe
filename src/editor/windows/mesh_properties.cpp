@@ -31,7 +31,7 @@ void Mesh_properties::connect()
 
 void Mesh_properties::initialize_component()
 {
-    get<Editor_tools>()->register_window(this);
+    get<Editor_tools>()->register_imgui_window(this);
 }
 
 auto Mesh_properties::state() const -> State
@@ -39,7 +39,7 @@ auto Mesh_properties::state() const -> State
     return State::Passive;
 }
 
-void Mesh_properties::window(Pointer_context&)
+void Mesh_properties::imgui(Pointer_context&)
 {
     ImGui::Begin("Mesh");
     for (auto item : m_selection_tool->selection())

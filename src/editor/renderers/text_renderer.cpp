@@ -65,6 +65,8 @@ void Text_renderer::initialize_component()
                          static_cast<GLsizei>(c_text_renderer_initialize_component.length()),
                          c_text_renderer_initialize_component.data());
 
+    m_projection_block = std::make_unique<erhe::graphics::Shader_resource>("projection", 0, erhe::graphics::Shader_resource::Type::uniform_block);
+
     constexpr gl::Buffer_storage_mask    storage_mask  {gl::Buffer_storage_mask::map_write_bit};
     constexpr gl::Map_buffer_access_mask access_mask   {gl::Map_buffer_access_mask::map_write_bit};
     constexpr size_t                     max_quad_count{65536 / 4}; // each quad consumes 4 indices
@@ -111,7 +113,7 @@ void Text_renderer::initialize_component()
 
     m_font_sampler_location = m_default_uniform_block.add_sampler("s_texture", gl::Uniform_type::sampler_2d)->location();
 
-    m_projection_block.add_mat4("clip_from_window");
+    m_projection_block->add_mat4("clip_from_window");
 
     m_font = std::make_unique<erhe::ui::Font>("res/fonts/Ubuntu-R.ttf", 12, 0.4f);
 
@@ -122,7 +124,7 @@ void Text_renderer::initialize_component()
                                            &m_default_uniform_block,
                                            &m_attribute_mappings,
                                            &m_fragment_outputs);
-    create_info.add_interface_block(&m_projection_block);
+    create_info.add_interface_block(m_projection_block.get());
     create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
     create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
     Shader_stages::Prototype prototype(create_info);
@@ -231,7 +233,7 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
     gl::bind_textures(font_texture_unit, 1, &font_texture_name);
 
     gl::bind_buffer_range(projection_buffer->target(),
-                          static_cast<GLuint>    (m_projection_block.binding_point()),
+                          static_cast<GLuint>    (m_projection_block->binding_point()),
                           static_cast<GLuint>    (projection_buffer->gl_name()),
                           static_cast<GLintptr>  (0),
                           static_cast<GLsizeiptr>(4 * 4 * sizeof(float)));

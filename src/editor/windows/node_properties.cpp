@@ -30,10 +30,10 @@ void Node_properties::connect()
 
 void Node_properties::initialize_component()
 {
-    get<Editor_tools>()->register_window(this);
+    get<Editor_tools>()->register_imgui_window(this);
 }
-    
-void Node_properties::window(Pointer_context&)
+
+void Node_properties::imgui(Pointer_context&)
 {
     const auto& selection = m_selection_tool->selection();
     ImGui::Begin("Node");
@@ -64,7 +64,7 @@ void Node_properties::window(Pointer_context&)
             glm::vec3 euler_angles;
             glm::extractEulerAngleZYX(orientation_matrix, euler_angles.x, euler_angles.y, euler_angles.z);
 
-            ImGui::Text("Node: %s", node->name.c_str());
+            ImGui::Text("Node: %s", node->name().c_str());
 
             {
                 ImGui::BeginGroup();

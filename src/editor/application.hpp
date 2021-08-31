@@ -13,37 +13,19 @@ class Application
     , public std::enable_shared_from_this<Application>
 {
 public:
-    Application(RENDERDOC_API_1_1_2* renderdoc_api = nullptr);
+    static constexpr std::string_view c_name{"Application"};
 
+    Application ();
     ~Application() override;
 
+    auto initialize_components(int argc, char** argv) -> bool;
     void run();
-
-    auto on_load()
-    -> bool;
 
     void component_initialization_complete(bool initialization_succeeded);
 
-    auto get_context_window()
-    -> erhe::toolkit::Context_window*
-    {
-        return m_context_window.get();
-    }
-
-    void begin_renderdoc_capture();
-
-    void end_renderdoc_capture();
-
 private:
-    auto create_gl_window()
-    -> bool;
 
-    auto initialize_components()
-    -> bool;
-
-    std::unique_ptr<erhe::toolkit::Context_window> m_context_window;
-    erhe::components::Components                   m_components;
-    RENDERDOC_API_1_1_2*                           m_renderdoc_api;
+    erhe::components::Components m_components;
 };
 
 }

@@ -97,7 +97,7 @@ private:
 
     auto current_frame_resources() -> Id_frame_resources&;
 
-    erhe::scene::Viewport           m_viewport;
+    erhe::scene::Viewport           m_viewport{0, 0, 0, 0, true};
     erhe::graphics::Pipeline        m_pipeline;
     erhe::graphics::Pipeline        m_selective_depth_clear_pipeline;
     std::vector<Id_frame_resources> m_frame_resources;

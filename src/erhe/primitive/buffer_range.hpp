@@ -15,8 +15,8 @@ public:
     Buffer_range(const Buffer_range&& other) noexcept;
     Buffer_range& operator=(const Buffer_range&& other) noexcept;
 
-    size_t element_size{0};
     size_t count       {0};
+    size_t element_size{0};
     size_t byte_offset {0};
 };
 

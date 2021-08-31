@@ -33,7 +33,7 @@ public:
     class Binding
     {
     public:
-        Binding(Buffer*                                          vertex_buffer,
+        Binding(const Buffer*                                    vertex_buffer,
                 const std::shared_ptr<Vertex_attribute_mapping>& mapping,
                 const Vertex_attribute*                          attribute,
                 size_t                                           stride)
@@ -54,7 +54,7 @@ public:
 
         void operator=(const Binding&) = delete;
 
-        Buffer*                                   vertex_buffer   {nullptr};
+        const Buffer*                             vertex_buffer   {nullptr};
         std::shared_ptr<Vertex_attribute_mapping> vertex_attribute_mapping;
         const Vertex_attribute*                   vertex_attribute{nullptr};
         size_t                                    stride          {0};
@@ -64,10 +64,10 @@ public:
 
     Vertex_input_state();
 
-    Vertex_input_state(Vertex_attribute_mappings& attribute_mappings,
-                       Vertex_format&             vertex_format,
-                       gsl::not_null<Buffer*>     vertex_buffer,
-                       Buffer*                    index_buffer);
+    Vertex_input_state(const Vertex_attribute_mappings& attribute_mappings,
+                       const Vertex_format&             vertex_format,
+                       gsl::not_null<const Buffer*>     vertex_buffer,
+                       const Buffer*                    index_buffer);
 
     void touch()
     {
@@ -98,24 +98,22 @@ public:
     //}
 
 
-    void emplace_back(gsl::not_null<Buffer*>                           vertex_buffer,
+    void emplace_back(gsl::not_null<const Buffer*>                     vertex_buffer,
                       const std::shared_ptr<Vertex_attribute_mapping>& vertex_attribute_mapping,
                       const Vertex_attribute*                          attribute,
-                      size_t                                           stride);
+                      const size_t                                     stride);
     //-> Binding&;
 
     void use() const;
 
-    void set_index_buffer(Buffer* buffer);
+    void set_index_buffer(const Buffer* buffer);
 
-    auto index_buffer()
-    -> Buffer*
+    auto index_buffer() -> const Buffer*
     {
         return m_index_buffer;
     }
 
-    auto gl_name() const
-    -> unsigned int;
+    auto gl_name() const -> unsigned int;
 
     void create();
 
@@ -135,7 +133,7 @@ public:
         for (auto* vertex_input_state : s_all_vertex_input_states)
         {
             log_threads.trace("{}: on thread enter: vertex input state @ {} owned by thread {}\n",
-                              std::this_thread::get_id(), 
+                              std::this_thread::get_id(),
                               fmt::ptr(vertex_input_state),
                               vertex_input_state->m_owner_thread);
             if (vertex_input_state->m_owner_thread == std::thread::id{})
@@ -153,7 +151,7 @@ public:
         for (auto* vertex_input_state : s_all_vertex_input_states)
         {
             log_threads.trace("{}: on thread exit: vertex input state @ {} owned by thread {}\n",
-                              std::this_thread::get_id(), 
+                              std::this_thread::get_id(),
                               fmt::ptr(vertex_input_state),
                               vertex_input_state->m_owner_thread);
             if (vertex_input_state->m_owner_thread == this_thread_id)
@@ -185,7 +183,7 @@ public:
 
 private:
     Binding_collection             m_bindings;
-    Buffer*                        m_index_buffer{nullptr};
+    const Buffer*                  m_index_buffer{nullptr};
     std::optional<Gl_vertex_array> m_gl_vertex_array;
     size_t                         m_serial;
     std::thread::id                m_owner_thread;

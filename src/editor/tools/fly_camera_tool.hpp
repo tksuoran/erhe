@@ -2,6 +2,7 @@
 
 #include "scene/frame_controller.hpp"
 #include "tools/tool.hpp"
+#include "windows/imgui_window.hpp"
 #include "erhe/toolkit/space_mouse.hpp"
 
 namespace erhe::scene
@@ -41,7 +42,7 @@ class Fly_camera_tool
     , public erhe::components::IUpdate_fixed_step
     , public erhe::components::IUpdate_once_per_frame
     , public Tool
-    , public Window
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name{"Fly_camera_tool"};
@@ -60,7 +61,7 @@ public:
     auto description () -> const char*                          override;
 
     // Implements Window
-    void window(Pointer_context& pointer_context) override;
+    void imgui(Pointer_context& pointer_context) override;
 
     // Implements IUpdate_fixed_step
     void update_fixed_step    (const erhe::components::Time_context& time_context) override;

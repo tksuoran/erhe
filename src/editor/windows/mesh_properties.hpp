@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tools/tool.hpp"
+#include "windows/imgui_window.hpp"
 
 #include <memory>
 
@@ -24,7 +25,7 @@ class Selection_tool;
 class Mesh_properties
     : public erhe::components::Component
     , public Tool
-    , public Window
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name{"Mesh_properties"};
@@ -41,8 +42,8 @@ public:
     void render     (const Render_context& render_context) override;
     auto state      () const -> State override;
 
-    // Implements Window
-    void window(Pointer_context& pointer_context) override;
+    // Implements Imgui_window
+    void imgui(Pointer_context& pointer_context) override;
 
 private:
     std::shared_ptr<Scene_manager>  m_scene_manager;

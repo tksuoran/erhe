@@ -1,4 +1,5 @@
 #include "renderers/shadow_renderer.hpp"
+#include "configuration.hpp"
 #include "gl_context_provider.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/program_interface.hpp"
@@ -51,8 +52,9 @@ void Shadow_renderer::connect()
     require<Program_interface>();
     require<Programs>();
 
-    m_pipeline_state_tracker = require<OpenGL_state_tracker>();
     m_mesh_memory            = require<Mesh_memory>();
+    m_configuration          = require<Configuration>();
+    m_pipeline_state_tracker = get<OpenGL_state_tracker>();
 }
 
 static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow_renderer::initialize_component()"};
@@ -70,7 +72,8 @@ void Shadow_renderer::initialize_component()
 
     create_frame_resources(1, 256, 256, 1000, 1000);
 
-    m_vertex_input = std::make_unique<Vertex_input_state>(get<Program_interface>()->attribute_mappings,
+    const auto& shader_resources = *get<Program_interface>()->shader_resources.get();
+    m_vertex_input = std::make_unique<Vertex_input_state>(shader_resources.attribute_mappings,
                                                           m_mesh_memory->gl_vertex_format(),
                                                           m_mesh_memory->gl_vertex_buffer.get(),
                                                           m_mesh_memory->gl_index_buffer.get());
@@ -79,7 +82,7 @@ void Shadow_renderer::initialize_component()
     m_pipeline.vertex_input   = m_vertex_input.get();
     m_pipeline.input_assembly = &Input_assembly_state::triangles;
     m_pipeline.rasterization  = &Rasterization_state::cull_mode_none; //cull_mode_back_ccw;
-    m_pipeline.depth_stencil  = &Depth_stencil_state::depth_test_enabled_stencil_test_disabled;
+    m_pipeline.depth_stencil  =  Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
     m_pipeline.color_blend    = &Color_blend_state::color_writes_disabled;
     m_pipeline.viewport       = nullptr;
 
@@ -93,7 +96,7 @@ void Shadow_renderer::initialize_component()
         create_info.depth           = s_max_light_count;
         m_texture = std::make_unique<Texture>(create_info);
         m_texture->set_debug_label("Shadow texture");
-        //float depth_clear_value = erhe::graphics::Configuration::depth_clear_value;
+        //float depth_clear_value = erhe::graphics::Instance::depth_clear_value;
         //gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
     }
 
@@ -105,10 +108,11 @@ void Shadow_renderer::initialize_component()
         m_framebuffers.emplace_back(std::make_unique<Framebuffer>(create_info));
     }
 
-    m_viewport.x      = 0;
-    m_viewport.y      = 0;
-    m_viewport.width  = m_texture->width();
-    m_viewport.height = m_texture->height();
+    m_viewport.x             = 0;
+    m_viewport.y             = 0;
+    m_viewport.width         = m_texture->width();
+    m_viewport.height        = m_texture->height();
+    m_viewport.reverse_depth = m_configuration->reverse_depth;
 
     gl::pop_debug_group();
 }
@@ -136,13 +140,20 @@ void Shadow_renderer::render(Layer_collection& layers,
     m_pipeline_state_tracker->execute(&m_pipeline);
     gl::viewport(m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
 
+    erhe::scene::Visibility_filter shadow_filter{
+        erhe::scene::Mesh::c_visibility_shadow_cast,
+        0u,
+        0u,
+        0u
+    };
+
     for (auto layer : layers)
     {
         update_light_buffer(layer->lights, m_viewport);
-        update_primitive_buffer(layer->meshes, erhe::scene::Mesh::c_visibility_shadow_cast);
+        update_primitive_buffer(layer->meshes, shadow_filter);
         auto draw_indirect_buffer_range = update_draw_indirect_buffer(layer->meshes,
                                                                       Primitive_mode::polygon_fill,
-                                                                      erhe::scene::Mesh::c_visibility_shadow_cast);
+                                                                      shadow_filter);
 
         bind_light_buffer();
         bind_primitive_buffer();
@@ -160,7 +171,7 @@ void Shadow_renderer::render(Layer_collection& layers,
             update_camera_buffer(*light.get(), m_viewport);
 
             gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffers[light_index]->gl_name());
-            gl::clear_buffer_fv(gl::Buffer::depth, 0, &erhe::graphics::Configuration::depth_clear_value);
+            gl::clear_buffer_fv(gl::Buffer::depth, 0, m_configuration->depth_clear_value_pointer());
 
             bind_camera_buffer();
 

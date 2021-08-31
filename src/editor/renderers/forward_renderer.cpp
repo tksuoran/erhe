@@ -1,4 +1,5 @@
 #include "renderers/forward_renderer.hpp"
+#include "configuration.hpp"
 #include "gl_context_provider.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/program_interface.hpp"
@@ -27,6 +28,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <functional>
+
 namespace editor
 {
 
@@ -52,6 +55,7 @@ void Forward_renderer::connect()
     require<Gl_context_provider>();
     require<Program_interface  >();
 
+    m_configuration          = require<Configuration>();
     m_mesh_memory            = require<Mesh_memory>();
     m_programs               = require<Programs   >();
     m_pipeline_state_tracker = get<OpenGL_state_tracker>();
@@ -72,7 +76,9 @@ void Forward_renderer::initialize_component()
 
     create_frame_resources(256, 256, 256, 8000, 8000);
 
-    m_vertex_input = std::make_unique<Vertex_input_state>(get<Program_interface>()->attribute_mappings,
+    const auto& shader_resources = *get<Program_interface>()->shader_resources.get();
+
+    m_vertex_input = std::make_unique<Vertex_input_state>(shader_resources.attribute_mappings,
                                                           m_mesh_memory->gl_vertex_format(),
                                                           m_mesh_memory->gl_vertex_buffer.get(),
                                                           m_mesh_memory->gl_index_buffer.get());
@@ -81,14 +87,14 @@ void Forward_renderer::initialize_component()
     m_pipeline_fill.vertex_input   = m_vertex_input.get();
     m_pipeline_fill.input_assembly = &Input_assembly_state::triangles;
     m_pipeline_fill.rasterization  = &Rasterization_state::cull_mode_back_ccw;
-    m_pipeline_fill.depth_stencil  = &Depth_stencil_state::depth_test_enabled_stencil_test_disabled;
+    m_pipeline_fill.depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
     m_pipeline_fill.color_blend    = &Color_blend_state::color_blend_disabled;
     m_pipeline_fill.viewport       = nullptr;
 
     m_depth_stencil_tool_set_hidden = Depth_stencil_state{
         true,                     // depth test enabled
         false,                    // depth writes disabled
-        Maybe_reversed::greater,  // where depth is further
+        m_configuration->depth_function(gl::Depth_function::greater),  // where depth is further
         true,                     // enable stencil operation
         {
             gl::Stencil_op::keep,         // on stencil test fail, do nothing
@@ -113,12 +119,12 @@ void Forward_renderer::initialize_component()
     m_depth_stencil_tool_set_visible = Depth_stencil_state{
         true,                   // depth test enabled
         false,                  // depth writes disabled
-        Maybe_reversed::lequal, // where depth is closer
+        m_configuration->depth_function(gl::Depth_function::lequal), // where depth is closer
         true,                   // enable stencil operation
         {
             gl::Stencil_op::keep,         // on stencil test fail, do nothing
             gl::Stencil_op::keep,         // on depth test fail, do nothing
-            gl::Stencil_op::replace,      // on depth test pass, set stencil 
+            gl::Stencil_op::replace,      // on depth test pass, set stencil
             gl::Stencil_function::always, // stencil test always passes
             2u,
             0xffffu,
@@ -138,7 +144,7 @@ void Forward_renderer::initialize_component()
     m_depth_stencil_tool_test_for_hidden = Depth_stencil_state{
         true,                     // depth test enabled
         true,                     //
-        Maybe_reversed::lequal,   //
+        m_configuration->depth_function(gl::Depth_function::lequal),   //
         true,                     // enable stencil operation
         {
             gl::Stencil_op::keep,        // on stencil test fail, do nothing
@@ -163,7 +169,7 @@ void Forward_renderer::initialize_component()
     m_depth_stencil_tool_test_for_visible = Depth_stencil_state{
         true,                     // depth test enabled
         true,                     //
-        Maybe_reversed::lequal,   //
+        m_configuration->depth_function(gl::Depth_function::lequal),   //
         true,                     // enable stencil operation
         {
             gl::Stencil_op::keep,        // on stencil test fail, do nothing
@@ -226,7 +232,7 @@ void Forward_renderer::initialize_component()
     m_depth_hidden = Depth_stencil_state{
         true,                     // depth test enabled
         false,                    // depth writes disabled
-        Maybe_reversed::greater,  // where depth is further
+        m_configuration->depth_function(gl::Depth_function::greater),  // where depth is further
         false,                    // no stencil test
         {
             gl::Stencil_op::keep,
@@ -284,7 +290,7 @@ void Forward_renderer::initialize_component()
     m_pipeline_tool_depth_pass.vertex_input             = m_vertex_input.get();
     m_pipeline_tool_depth_pass.input_assembly           = &Input_assembly_state::triangles;
     m_pipeline_tool_depth_pass.rasterization            = &Rasterization_state::cull_mode_back_ccw;
-    m_pipeline_tool_depth_pass.depth_stencil            = &Depth_stencil_state::depth_test_enabled_stencil_test_disabled;
+    m_pipeline_tool_depth_pass.depth_stencil            = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
     m_pipeline_tool_depth_pass.color_blend              = &Color_blend_state::color_writes_disabled;
     m_pipeline_tool_depth_pass.viewport                 = nullptr;
 
@@ -313,7 +319,7 @@ void Forward_renderer::initialize_component()
     m_pipeline_edge_lines.vertex_input   = m_vertex_input.get();
     m_pipeline_edge_lines.input_assembly = &Input_assembly_state::lines;
     m_pipeline_edge_lines.rasterization  = &Rasterization_state::cull_mode_back_ccw;
-    m_pipeline_edge_lines.depth_stencil  = &Depth_stencil_state::depth_test_enabled_stencil_test_disabled;
+    m_pipeline_edge_lines.depth_stencil  =  Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
     m_pipeline_edge_lines.color_blend    = &Color_blend_state::color_blend_premultiplied;
     m_pipeline_edge_lines.viewport       = nullptr;
 
@@ -321,7 +327,7 @@ void Forward_renderer::initialize_component()
     m_pipeline_points.vertex_input   = m_vertex_input.get();
     m_pipeline_points.input_assembly = &Input_assembly_state::points;
     m_pipeline_points.rasterization  = &Rasterization_state::cull_mode_back_ccw;
-    m_pipeline_points.depth_stencil  = &Depth_stencil_state::depth_test_enabled_stencil_test_disabled;
+    m_pipeline_points.depth_stencil  =  Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
     m_pipeline_points.color_blend    = &Color_blend_state::color_blend_disabled;
     m_pipeline_points.viewport       = nullptr;
 
@@ -377,12 +383,12 @@ auto Forward_renderer::select_primitive_mode(Pass pass) const -> erhe::primitive
 }
 
 static constexpr std::string_view c_forward_renderer_render{"Forward_renderer::render()"};
-void Forward_renderer::render(Viewport                          viewport,
-                              ICamera&                          camera,
-                              Layer_collection&                 layers,
-                              const Material_collection&        materials,
-                              const std::initializer_list<Pass> passes,
-                              const uint64_t                    visibility_mask)
+void Forward_renderer::render(Viewport                              viewport,
+                              ICamera&                              camera,
+                              Layer_collection&                     layers,
+                              const Material_collection&            materials,
+                              const std::initializer_list<Pass>     passes,
+                              const erhe::scene::Visibility_filter& visibility_filter)
 {
     ZoneScoped;
 
@@ -429,8 +435,8 @@ void Forward_renderer::render(Viewport                          viewport,
             TracyGpuZone(c_forward_renderer_render.data())
 
             update_light_buffer    (layer->lights, m_shadow_renderer->viewport(), layer->ambient_light);
-            update_primitive_buffer(layer->meshes, visibility_mask);
-            const auto draw_indirect_buffer_range = update_draw_indirect_buffer(layer->meshes, primitive_mode, visibility_mask);
+            update_primitive_buffer(layer->meshes, visibility_filter);
+            const auto draw_indirect_buffer_range = update_draw_indirect_buffer(layer->meshes, primitive_mode, visibility_filter);
 
             bind_light_buffer();
             bind_primitive_buffer();

@@ -14,9 +14,9 @@ class Buffer
 public:
     explicit Buffer(const size_t capacity_bytes_count);
     Buffer(const Buffer&)             = delete;
-    explicit Buffer(Buffer&& other);
+    explicit Buffer(Buffer&& other) noexcept;
     Buffer& operator=(const Buffer&)  = delete;
-    Buffer& operator=(Buffer&& other);
+    Buffer& operator=(Buffer&& other) noexcept;
     ~Buffer();
 
     auto capacity_byte_count() const noexcept -> size_t;

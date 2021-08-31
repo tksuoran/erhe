@@ -31,7 +31,7 @@ public:
     Buffer        (Buffer&& other) noexcept;
     auto operator=(Buffer&& other) noexcept -> Buffer&;
 
-    auto map                  ()                -> gsl::span<std::byte>;
+    auto map                  () const          -> gsl::span<std::byte>;
     auto debug_label          () const noexcept -> const std::string&;
     auto capacity_byte_count  () const noexcept -> size_t;
     auto allocate_bytes       (const size_t byte_count, const size_t alignment = 64) noexcept -> size_t;

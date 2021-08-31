@@ -43,20 +43,11 @@ public:
         shader_storage_block  = 6
     };
 
-    static auto is_basic(const Type type)
-    -> bool;
-
-    static auto is_aggregate(const Type type)
-    -> bool;
-
-    static auto should_emit_members(const Type type)
-    -> bool;
-
-    static auto is_block(const Type type)
-    -> bool;
-
-    static auto uses_binding_points(const Type type)
-    -> bool;
+    static auto is_basic           (const Type type) -> bool;
+    static auto is_aggregate       (const Type type) -> bool;
+    static auto should_emit_members(const Type type) -> bool;
+    static auto is_block           (const Type type) -> bool;
+    static auto uses_binding_points(const Type type) -> bool;
 
     enum class Precision : unsigned int
     {
@@ -68,8 +59,7 @@ public:
 
     using Member_collection = std::vector<std::unique_ptr<Shader_resource>>;
 
-    static auto c_str(Precision v)
-    -> const char*;
+    static auto c_str(Precision v) -> const char*;
 
     // Struct definition
     explicit Shader_resource(std::string_view struct_type_name,
@@ -110,69 +100,32 @@ public:
 
     Shader_resource(Shader_resource&& other) = default;
 
-    auto is_array() const
-    -> bool;
-
-    auto dedicated_texture_unit_index() const
-    -> std::optional<int>;
-
-    auto type() const
-    -> Type;
-
-    auto name() const
-    -> const std::string&;
-
-    auto array_size() const
-    -> std::optional<size_t>;
-
-    auto basic_type() const
-    -> gl::Uniform_type;
+    auto is_array                    () const -> bool;
+    auto dedicated_texture_unit_index() const -> std::optional<int>;
+    auto type                        () const -> Type;
+    auto name                        () const -> const std::string&;
+    auto array_size                  () const -> std::optional<size_t>;
+    auto basic_type                  () const -> gl::Uniform_type;
 
     // Only? for uniforms in default uniform block
     // For default uniform block, this is the next available location.
-    auto location() const
-    -> int;
-
-    auto index_in_parent() const
-    -> size_t;
-
-    auto offset_in_parent() const
-    -> size_t;
-
-    auto parent() const
-    -> Shader_resource*;
-
-    auto member_count() const
-    -> size_t;
-
-    // auto members() const
-    // -> const Member_collection&;
-
-    auto member(std::string_view name) const
-    -> Shader_resource*;
-
-    auto binding_point() const
-    -> unsigned int;
+    auto location        () const -> int;
+    auto index_in_parent () const -> size_t;
+    auto offset_in_parent() const -> size_t;
+    auto parent          () const -> Shader_resource*;
+    auto member_count    () const -> size_t;
+    auto member          (std::string_view name) const -> Shader_resource*;
+    auto binding_point   () const -> unsigned int;
 
     // Returns size of block.
     // For arrays, size of one element is returned.
-    auto size_bytes() const
-    -> size_t;
+    auto size_bytes        () const -> size_t;
+    auto offset            () const -> size_t;
+    auto next_member_offset() const -> size_t;
+    auto type_string       () const -> std::string;
+    auto layout_string     () const -> std::string;
 
-    auto offset() const
-    -> size_t;
-
-    auto next_member_offset() const
-    -> size_t;
-
-    auto type_string() const
-    -> std::string;
-
-    auto layout_string() const
-    -> std::string;
-
-    auto source(int indent_level = 0) const
-    -> std::string;
+    auto source(int indent_level = 0) const -> std::string;
 
     auto add_struct(std::string_view                name,
                     gsl::not_null<Shader_resource*> struct_type,

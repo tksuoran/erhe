@@ -24,10 +24,10 @@ void Material_properties::connect()
 
 void Material_properties::initialize_component()
 {
-    get<Editor_tools>()->register_window(this);
+    get<Editor_tools>()->register_imgui_window(this);
 }
 
-void Material_properties::window(Pointer_context&)
+void Material_properties::imgui(Pointer_context&)
 {
     const auto& materials = m_scene_root->materials();
     const int   last      = static_cast<int>(materials.size()) - 1;

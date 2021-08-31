@@ -28,10 +28,10 @@ Vertex_input_state::Vertex_input_state()
     s_all_vertex_input_states.push_back(this);
 }
 
-Vertex_input_state::Vertex_input_state(Vertex_attribute_mappings& attribute_mappings,
-                                       Vertex_format&             vertex_format,
-                                       gsl::not_null<Buffer*>     vertex_buffer,
-                                       Buffer*                    index_buffer)
+Vertex_input_state::Vertex_input_state(const Vertex_attribute_mappings& attribute_mappings,
+                                       const Vertex_format&             vertex_format,
+                                       gsl::not_null<const Buffer*>     vertex_buffer,
+                                       const Buffer*                    index_buffer)
     : m_index_buffer{index_buffer}
     , m_serial      {get_next_serial()}
 {
@@ -53,10 +53,10 @@ Vertex_input_state::~Vertex_input_state()
                                     s_all_vertex_input_states.end());
 }
 
-void Vertex_input_state::emplace_back(gsl::not_null<Buffer*>                           vertex_buffer,
+void Vertex_input_state::emplace_back(gsl::not_null<const Buffer*>                     vertex_buffer,
                                       const std::shared_ptr<Vertex_attribute_mapping>& mapping,
                                       const Vertex_attribute*                          attribute,
-                                      size_t                                           stride)
+                                      const size_t                                     stride)
 //-> Vertex_input_state::Binding&
 {
     //return
@@ -74,7 +74,7 @@ void Vertex_input_state::reset()
     Ensures(!m_gl_vertex_array.has_value());
 }
 
-void Vertex_input_state::set_index_buffer(Buffer* buffer)
+void Vertex_input_state::set_index_buffer(const Buffer* buffer)
 {
     Expects(m_index_buffer == nullptr);
 
@@ -105,7 +105,7 @@ void Vertex_input_state::update()
     Expects(gl_name() > 0);
 
     unsigned int max_attribute_count = std::min(MAX_ATTRIBUTE_COUNT,
-                                                Configuration::limits.max_vertex_attribs);
+                                                erhe::graphics::Instance::limits.max_vertex_attribs);
 
     {
         auto ibo_gl_name = (m_index_buffer != nullptr) ? m_index_buffer->gl_name() : 0;

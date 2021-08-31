@@ -25,7 +25,7 @@ namespace scene
 {
 class Camera;
 class Light;
-struct Viewport;
+class Viewport;
 } // namespace scene
 } // namespace renderstack
 

@@ -5,17 +5,30 @@
 namespace erhe::scene
 {
 
+Node::Node(std::string_view name)
+    : m_name{name}
+    , m_id{}
+    , m_label{fmt::format("{}::{}", name, m_id.get_id())}
+{
+}
+
 Node::~Node()
 {
-    for (const auto& attachment : m_attachments)
+    for (const auto& attachment : attachments)
     {
         attachment->on_detach(*this);
     }
 }
 
+void Node::set_name(std::string_view name)
+{
+    m_name = name;
+    m_label = fmt::format("{}##Node{}", name, m_id.get_id());
+}
+
 void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
 {
-    m_attachments.push_back(attachment);
+    attachments.push_back(attachment);
     attachment->on_attach(*this);
 }
 
@@ -28,13 +41,13 @@ auto Node::detach(const std::shared_ptr<INode_attachment>& attachment) -> bool
         return false;
     }
 
-    const auto i = std::remove(m_attachments.begin(),
-                               m_attachments.end(),
+    const auto i = std::remove(attachments.begin(),
+                               attachments.end(),
                                attachment);
-    if (i != m_attachments.end())
+    if (i != attachments.end())
     {
-        log.trace("Removing attachment {} from selection\n", attachment->name());
-        m_attachments.erase(i, m_attachments.end());
+        log.trace("Removing attachment {} from node\n", attachment->name());
+        attachments.erase(i, attachments.end());
         attachment->on_detach(*this);
         return true;
     }

@@ -71,7 +71,7 @@ void Grid_tool::render(const Render_context& render_context)
                                {glm::vec3(-extent, 0.0f,      xz), glm::vec3(extent, 0.0f,      xz)}  } );
 }
 
-void Grid_tool::window(Pointer_context&)
+void Grid_tool::imgui(Pointer_context&)
 {
     ZoneScoped;
 

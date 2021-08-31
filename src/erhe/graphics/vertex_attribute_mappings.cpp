@@ -33,9 +33,9 @@ void Vertex_attribute_mappings::add(const gl::Attribute_type           shader_ty
     mappings.emplace_back(mapping);
 }
 
-void Vertex_attribute_mappings::apply_to_vertex_input_state(Vertex_input_state&    vertex_input_state,
-                                                            gsl::not_null<Buffer*> vertex_buffer,
-                                                            Vertex_format&         vertex_format) const
+void Vertex_attribute_mappings::apply_to_vertex_input_state(Vertex_input_state&          vertex_input_state,
+                                                            gsl::not_null<const Buffer*> vertex_buffer,
+                                                            const Vertex_format&         vertex_format) const
 {
     Expects(vertex_input_state.bindings().empty());
 

@@ -45,7 +45,7 @@ auto Physics_tool::description() -> const char*
     return c_name.data();
 }
 
-void Physics_tool::window(Pointer_context&)
+void Physics_tool::imgui(Pointer_context&)
 {
     ImGui::Begin("Physics Tool");
 

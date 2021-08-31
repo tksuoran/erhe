@@ -5,6 +5,8 @@
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 
+#include <memory>
+
 namespace erhe::graphics
 {
 
@@ -29,12 +31,15 @@ public:
 class Camera_struct
 {
 public:
-    size_t world_from_node; // mat4
-    size_t world_from_clip; // mat4
-    size_t clip_from_world; // mat4
-    size_t viewport;        // vec4
-    size_t fov;             // vec4
-    size_t exposure;
+    size_t world_from_node;      // mat4
+    size_t world_from_clip;      // mat4
+    size_t clip_from_world;      // mat4
+    size_t viewport;             // vec4
+    size_t fov;                  // vec4
+    size_t clip_depth_direction; // float 1.0 = forward depth, -1.0 = reverse depth
+    size_t view_depth_near;      // float
+    size_t view_depth_far;       // float
+    size_t exposure;             // float
 };
 
 class Light_struct
@@ -84,28 +89,37 @@ public:
     void operator=    (Program_interface&&)      = delete;
 
     // Implements Component
+    void connect             () override;
     void initialize_component() override;
 
-    Material_struct  material_block_offsets {};
-    Light_block      light_block_offsets    {};
-    Camera_struct    camera_block_offsets   {};
-    Primitive_struct primitive_block_offsets{};
+    class Shader_resources
+    {
+    public:
+        Shader_resources();
 
-    erhe::graphics::Shader_resource           material_block {"material",    0, erhe::graphics::Shader_resource::Type::uniform_block};
-    erhe::graphics::Shader_resource           light_block    {"light_block", 1, erhe::graphics::Shader_resource::Type::uniform_block};
-    erhe::graphics::Shader_resource           camera_block   {"camera",      2, erhe::graphics::Shader_resource::Type::uniform_block};
-    erhe::graphics::Shader_resource           primitive_block{"primitive",   3, erhe::graphics::Shader_resource::Type::shader_storage_block};
+        erhe::graphics::Vertex_attribute_mappings attribute_mappings;
+        erhe::graphics::Fragment_outputs          fragment_outputs;
 
-    erhe::graphics::Shader_resource           material_struct {"Material"};
-    erhe::graphics::Shader_resource           light_struct    {"Light"};
-    erhe::graphics::Shader_resource           camera_struct   {"Camera"};
-    erhe::graphics::Shader_resource           primitive_struct{"Primitive"};
+        erhe::graphics::Shader_resource           default_uniform_block; // containing sampler uniforms
+        int                                       shadow_sampler_location{0};
 
-    erhe::graphics::Vertex_attribute_mappings attribute_mappings;
-    erhe::graphics::Fragment_outputs          fragment_outputs;
+        Material_struct  material_block_offsets {};
+        Light_block      light_block_offsets    {};
+        Camera_struct    camera_block_offsets   {};
+        Primitive_struct primitive_block_offsets{};
 
-    erhe::graphics::Shader_resource           default_uniform_block; // containing sampler uniforms
-    int                                       shadow_sampler_location{0};
+        erhe::graphics::Shader_resource material_block {"material",    0, erhe::graphics::Shader_resource::Type::uniform_block};
+        erhe::graphics::Shader_resource light_block    {"light_block", 1, erhe::graphics::Shader_resource::Type::uniform_block};
+        erhe::graphics::Shader_resource camera_block   {"camera",      2, erhe::graphics::Shader_resource::Type::uniform_block};
+        erhe::graphics::Shader_resource primitive_block{"primitive",   3, erhe::graphics::Shader_resource::Type::shader_storage_block};
+
+        erhe::graphics::Shader_resource material_struct {"Material"};
+        erhe::graphics::Shader_resource light_struct    {"Light"};
+        erhe::graphics::Shader_resource camera_struct   {"Camera"};
+        erhe::graphics::Shader_resource primitive_struct{"Primitive"};
+    };
+
+    std::unique_ptr<Shader_resources>         shader_resources;
 };
 
 }

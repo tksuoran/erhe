@@ -24,6 +24,7 @@ namespace erhe::scene
 namespace editor
 {
 
+class Configuration;
 class Mesh_memory;
 
 class Shadow_renderer
@@ -48,7 +49,8 @@ public:
     static constexpr bool   s_enable             = true;
 
 private:
-    erhe::scene::Viewport                                     m_viewport;
+    erhe::scene::Viewport                                     m_viewport{0, 0, 0, 0, true};
+    std::shared_ptr<Configuration>                            m_configuration;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker>     m_pipeline_state_tracker;
     std::shared_ptr<Mesh_memory>                              m_mesh_memory;
     erhe::graphics::Pipeline                                  m_pipeline;

@@ -266,7 +266,7 @@ void Fly_camera_tool::update_once_per_frame(const erhe::components::Time_context
     m_camera_controller.update();
 }
 
-void Fly_camera_tool::window(Pointer_context&)
+void Fly_camera_tool::imgui(Pointer_context&)
 {
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
 

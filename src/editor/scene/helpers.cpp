@@ -37,6 +37,10 @@ void attach(Layer&                   layer,
         node->attach(node_physics);
         physics_world.add_rigid_body(&node_physics->rigid_body);
     }
+    if (node->parent)
+    {
+        node->parent->attach(node);
+    }
 }
 
 void detach(Layer&                   layer,
@@ -52,6 +56,10 @@ void detach(Layer&                   layer,
     auto& meshes = layer.meshes;
     auto& nodes  = scene.nodes;
 
+    if (node->parent)
+    {
+        node->parent->detach(node);
+    }
     node->detach(mesh);
     if (node_physics)
     {

@@ -1,76 +1,17 @@
 #include "application.hpp"
-#include "log.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "renderdoc_capture_support.hpp"
 
-#if defined(_WIN32)
-#   ifndef _CRT_SECURE_NO_WARNINGS
-#       define _CRT_SECURE_NO_WARNINGS
-#   endif
-#   ifndef WIN32_LEAN_AND_MEAN
-#       define WIN32_LEAN_AND_MEAN
-#   endif
-#   define VC_EXTRALEAN
-#   ifndef STRICT
-#       define STRICT
-#   endif
-#   ifndef NOMINMAX
-#       define NOMINMAX       // Macros min(a,b) and max(a,b)
-#   endif
-#   include <windows.h>
-#endif
+#include "erhe/log/log.hpp"
 
-#if __unix__
-#   include <dlfcn.h>
-#endif
-using namespace editor;
-
-#include "renderdoc_app.h"
-
-RENDERDOC_API_1_1_2* renderdoc_api{nullptr};
-
-auto main(int argc, char** argv)
--> int
+auto main(int argc, char** argv) -> int
 {
     erhe::log::Log::console_init();
-
-    static_cast<void>(argc);
-    static_cast<void>(argv);
-
-#if 1
-#if defined(_WIN32) || defined(WIN32)
-    HMODULE renderdoc_module = LoadLibraryExA("C:\\Program Files\\RenderDoc\\renderdoc.dll", NULL, 0);
-    if (renderdoc_module)
-    {
-        pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(renderdoc_module, "RENDERDOC_GetAPI");
-        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&renderdoc_api);
-        log_renderdoc.trace("Loaded RenderDoc DLL, RENDERDOC_GetAPI() return value = {}\n", ret);
-        VERIFY(ret == 1);
-    }
-#elif __unix__
-    // For android replace librenderdoc.so with libVkLayer_GLES_RenderDoc.so
-    void* renderdoc_so = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD);
-    if (renderdoc_so != nullptr)
-    {
-        pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(renderdoc_so, "RENDERDOC_GetAPI");
-        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&renderdoc_api);
-        log_renderdoc.trace("Loaded RenderDoc DLL, RENDERDOC_GetAPI() return value = {}\n", ret);
-        VERIFY(ret == 1);
-    }
-#endif
-#endif
-    if (renderdoc_api != nullptr)
-    {
-        log_renderdoc.trace("RenderDoc: SetCaptureKeys(nullptr, 0)\n");
-        RENDERDOC_InputButton capture_keys[] = { eRENDERDOC_Key_F1 };
-        renderdoc_api->SetCaptureKeys(&capture_keys[0], 1);
-    }
-
-    std::shared_ptr<Application> g_application;
+    editor::initialize_renderdoc_capture_support();
 
     int return_value = EXIT_FAILURE;
 
-    g_application = std::make_shared<Application>(renderdoc_api);
-    if (g_application->on_load())
+    auto g_application = std::make_shared<editor::Application>();
+    if (g_application->initialize_components(argc, argv))
     {
         g_application->run();
         return_value = EXIT_SUCCESS;
@@ -82,5 +23,5 @@ auto main(int argc, char** argv)
 
     g_application.reset();
 
-    exit(return_value);
+    return return_value;
 }

@@ -147,7 +147,7 @@ auto get_type_details(const gl::Uniform_type type)
         case gl::Uniform_type::sampler_2d:                                  return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_2d,        2, 0);
         case gl::Uniform_type::sampler_3d:                                  return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_3d,        3, 0);
         case gl::Uniform_type::sampler_cube:                                return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_cube_map,  2, sampler_cube);
- 
+
         case gl::Uniform_type::sampler_1d_shadow:                           return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_1d,        1, sampler_shadow);
         case gl::Uniform_type::sampler_2d_shadow:                           return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_2d,        2, sampler_shadow);
         case gl::Uniform_type::sampler_2d_rect:                             return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_rectangle, 2, sampler_rectangle);
@@ -379,7 +379,7 @@ Shader_resource::Shader_resource(std::string_view            block_name,
     , m_array_size   {array_size}
     , m_binding_point{binding_point}
 {
-    Expects((int)binding_point < Configuration::limits.max_uniform_buffer_bindings);
+    Expects((int)binding_point < Instance::limits.max_uniform_buffer_bindings);
 
     VERIFY((block_type == Type::uniform_block) || (block_type == Type::shader_storage_block));
 }
@@ -549,7 +549,7 @@ auto Shader_resource::size_bytes() const
     if (is_block(m_type))
     {
         size_t padded_size = m_offset;
-        while ((padded_size % Configuration::implementation_defined.uniform_buffer_offset_alignment) != 0)
+        while ((padded_size % Instance::implementation_defined.uniform_buffer_offset_alignment) != 0)
         {
             ++padded_size;
         }
@@ -624,7 +624,7 @@ auto Shader_resource::type_string() const
             return "";
         }
 
-        case Type::uniform_block: 
+        case Type::uniform_block:
         {
             Expects(m_parent == nullptr);
             return "uniform ";
@@ -655,7 +655,7 @@ auto Shader_resource::layout_string() const
     {
         return {};
     }
- 
+
     std::stringstream ss;
     bool first{true};
 
@@ -711,7 +711,7 @@ auto Shader_resource::source(const int indent_level /* = 0 */) const
     if (m_type != Type::default_uniform_block)
     {
         ss << layout_string();
-        ss << type_string();                        
+        ss << type_string();
     }
 
     if (should_emit_members(m_type))
@@ -739,7 +739,7 @@ auto Shader_resource::source(const int indent_level /* = 0 */) const
     }
     else if (m_type == Type::struct_member)
     {
-        // nada ss << m_struct_type->name(); 
+        // nada ss << m_struct_type->name();
     }
     else
     {

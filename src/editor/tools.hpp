@@ -5,6 +5,8 @@
 #include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
 
+#include <gsl/gsl>
+
 namespace editor {
 
 class Brushes;
@@ -24,7 +26,7 @@ public:
     Scene_manager*        scene_manager  {nullptr};
     Line_renderer*        line_renderer  {nullptr};
     Text_renderer*        text_renderer  {nullptr};
-    erhe::scene::Viewport viewport       {0, 0, 0, 0};
+    erhe::scene::Viewport viewport       {0, 0, 0, 0, true};
     double                time           {0.0};
 };
 
@@ -58,7 +60,7 @@ public:
 
     void register_tool           (Tool* tool);
     void register_background_tool(Tool* tool);
-    void register_window         (Window* window);
+    void register_imgui_window   (Imgui_window* window);
 
 private:
     Action m_priority_action{Action::select};
@@ -71,11 +73,11 @@ private:
 
     std::optional<Selection_tool::Subcription> m_selection_layer_update_subscription;
 
-    std::mutex                      m_mutex;
-    std::vector<Tool*>              m_tools;
-    std::vector<Tool*>              m_background_tools;
-    std::vector<Window*>            m_windows;
-    ImGuiContext*                   m_imgui_context{nullptr};
+    std::mutex                                m_mutex;
+    std::vector<gsl::not_null<Tool*>>         m_tools;
+    std::vector<gsl::not_null<Tool*>>         m_background_tools;
+    std::vector<gsl::not_null<Imgui_window*>> m_imgui_windows;
+    ImGuiContext*                             m_imgui_context{nullptr};
 };
 
 }

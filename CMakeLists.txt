@@ -73,6 +73,15 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 
+FetchContent_Declare(
+    cxxopts
+    GIT_REPOSITORY https://github.com/jarro2783/cxxopts.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+
 # FetchContent_Declare(
 #     reactphysics3d
 #     GIT_REPOSITORY https://github.com/DanielChappuis/reactphysics3d.git
@@ -209,6 +218,8 @@ FetchContent_MakeAvailable(ImGui)
 set(TRACY_ENABLE OFF CACHE BOOL "Enable profiling")
 option(TRACY_ENABLE "Enable profiling" OFF)
 FetchContent_MakeAvailable(tracy)
+
+FetchContent_MakeAvailable(cxxopts)
 
 #FetchContent_MakeAvailable(reactphysics3d)
 FetchContent_MakeAvailable(bullet3)

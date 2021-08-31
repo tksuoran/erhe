@@ -136,7 +136,7 @@ private:
     erhe::graphics::Vertex_attribute_mappings             m_attribute_mappings;
     erhe::graphics::Vertex_format                         m_vertex_format;
     std::shared_ptr<erhe::graphics::Buffer>               m_index_buffer;
-    erhe::graphics::Shader_resource                       m_projection_block{"projection", 0, erhe::graphics::Shader_resource::Type::uniform_block};
+    std::unique_ptr<erhe::graphics::Shader_resource>      m_projection_block;
     std::unique_ptr<erhe::graphics::Shader_stages>        m_shader_stages;
     std::unique_ptr<erhe::ui::Font>                       m_font;
     erhe::graphics::Shader_resource                       m_default_uniform_block; // containing sampler uniforms

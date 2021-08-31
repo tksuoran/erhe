@@ -138,7 +138,7 @@ private:
     void update_framebuffer        (const erhe::scene::Viewport viewport);
     void render_layer              (erhe::scene::Layer* layer);
 
-    erhe::scene::Viewport                                 m_viewport;
+    erhe::scene::Viewport                                 m_viewport{0, 0, 0, 0, true};
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Programs>                             m_programs;
     std::shared_ptr<Mesh_memory>                          m_mesh_memory;
