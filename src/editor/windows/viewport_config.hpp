@@ -17,7 +17,8 @@ class Render_style
 {
 public:
     Render_style();
-    Render_style(const Configuration& configuration);
+
+    explicit Render_style(const Configuration& configuration);
 
     bool                                  polygon_fill         {true};
     bool                                  edge_lines           {true};  // for selection

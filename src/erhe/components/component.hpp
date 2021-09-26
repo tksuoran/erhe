@@ -53,7 +53,7 @@ protected:
     void operator=(const Component&) = delete;
     void operator=(Component&&)      = delete;
 
-    Component(const std::string_view name);
+    explicit Component(const std::string_view name);
 
     virtual ~Component() = default;
 

@@ -36,7 +36,8 @@ class Node
     , public INode_attachment
 {
 public:
-    Node(std::string_view name);
+    explicit Node(std::string_view name);
+
     virtual ~Node();
 
     void update(const uint32_t update_serial = 0, const bool cache_enable = false);
