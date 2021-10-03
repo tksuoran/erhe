@@ -5,10 +5,11 @@
 
 namespace erhe::graphics {
     class Texture;
-    class Image_transfer;
 }
 
 namespace editor {
+
+class Image_transfer;
 
 class Textures
     : public erhe::components::Component
@@ -18,17 +19,20 @@ public:
     Textures();
     ~Textures() override;
 
-    // Implements COmponent
+    // Implements Component
     void connect() override;
     void initialize_component() override;
 
     auto load(const std::filesystem::path& path)
     -> std::shared_ptr<erhe::graphics::Texture>;
 
-    std::shared_ptr<erhe::graphics::Texture> background_texture;
+    std::shared_ptr<erhe::graphics::Texture> background;
+    std::shared_ptr<erhe::graphics::Texture> camera_icon;
+    std::shared_ptr<erhe::graphics::Texture> light_icon;
+    std::shared_ptr<erhe::graphics::Texture> mesh_icon;
 
 private:
-    std::shared_ptr<erhe::graphics::Image_transfer> m_image_transfer;
+    std::shared_ptr<Image_transfer> m_image_transfer;
 };
 
 }

@@ -1,10 +1,10 @@
-#include "erhe/graphics_experimental/shader_monitor.hpp"
+#include "graphics/shader_monitor.hpp"
 #include "Tracy.hpp"
 #include "erhe/log/log.hpp"
 #include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-namespace erhe::graphics
+namespace editor
 {
 
 erhe::log::Category log_shader_monitor(erhe::log::Color::CYAN, erhe::log::Color::GRAY, erhe::log::Level::LEVEL_WARN);
@@ -36,8 +36,8 @@ void Shader_monitor::initialize_component()
     m_poll_filesystem_thread = std::thread(&Shader_monitor::poll_thread, this);
 }
 
-void Shader_monitor::add(Shader_stages::Create_info    create_info,
-                         gsl::not_null<Shader_stages*> shader_stages)
+void Shader_monitor::add(erhe::graphics::Shader_stages::Create_info    create_info,
+                         gsl::not_null<erhe::graphics::Shader_stages*> shader_stages)
 {
     for (const auto& shader : create_info.shaders)
     {
@@ -48,9 +48,9 @@ void Shader_monitor::add(Shader_stages::Create_info    create_info,
     }
 }
 
-void Shader_monitor::add(const std::filesystem::path&  path,
-                         Shader_stages::Create_info    create_info,
-                         gsl::not_null<Shader_stages*> shader_stages)
+void Shader_monitor::add(const std::filesystem::path&                  path,
+                         erhe::graphics::Shader_stages::Create_info    create_info,
+                         gsl::not_null<erhe::graphics::Shader_stages*> shader_stages)
 {
     const std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -131,7 +131,7 @@ void Shader_monitor::update_once_per_frame(const erhe::components::Time_context&
         for (const auto& entry : f->reload_entries)
         {
             const auto& create_info = entry.create_info;
-            auto prototype = Shader_stages::Prototype(create_info);
+            auto prototype = erhe::graphics::Shader_stages::Prototype(create_info);
             if (prototype.is_valid())
             {
                 entry.shader_stages->reload(std::move(prototype));
@@ -143,4 +143,4 @@ void Shader_monitor::update_once_per_frame(const erhe::components::Time_context&
     m_reload_list.clear();
 }
 
-} // namespace erhe::graphics
+} // namespace editor

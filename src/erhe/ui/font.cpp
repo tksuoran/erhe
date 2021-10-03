@@ -439,7 +439,7 @@ void Font::post_process()
 
     m_texture->upload(create_info.internal_format, bm.as_span(), create_info.width, create_info.height);
 
-    m_texture->set_debug_label("font");
+    m_texture->set_debug_label(m_path.filename().generic_string());
 }
 
 // https://en.wikipedia.org/wiki/List_of_typographic_features

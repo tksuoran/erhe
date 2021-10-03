@@ -1,6 +1,6 @@
-#include "gl_context_provider.hpp"
-#include "renderers/program_interface.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "graphics/gl_context_provider.hpp"
+#include "renderers/program_interface.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/primitive/buffer_sink.hpp"

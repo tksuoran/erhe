@@ -7,10 +7,12 @@
 #include <mutex>
 #include <thread>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
+    class Shader_stages;
+}
 
-class Shader_stages;
+namespace editor
+{
 
 class Shader_monitor
     : public erhe::components::Component
@@ -27,8 +29,8 @@ public:
     // Implements IUpdate_once_per_frame
     void update_once_per_frame(const erhe::components::Time_context& time_context);
 
-    void add(Shader_stages::Create_info    create_info,
-             gsl::not_null<Shader_stages*> program);
+    void add(erhe::graphics::Shader_stages::Create_info    create_info,
+             gsl::not_null<erhe::graphics::Shader_stages*> program);
 
 private:
     void set_run(bool value)
@@ -39,22 +41,22 @@ private:
 
     void poll_thread();
 
-    void add(const std::filesystem::path&  path,
-             Shader_stages::Create_info    create_info,
-             gsl::not_null<Shader_stages*> program);
+    void add(const std::filesystem::path&                  path,
+             erhe::graphics::Shader_stages::Create_info    create_info,
+             gsl::not_null<erhe::graphics::Shader_stages*> program);
 
     class Reload_entry
     {
     public:
-        Reload_entry(Shader_stages::Create_info    create_info,
-                     gsl::not_null<Shader_stages*> shader_stages)
+        Reload_entry(erhe::graphics::Shader_stages::Create_info    create_info,
+                     gsl::not_null<erhe::graphics::Shader_stages*> shader_stages)
             : create_info  {std::move(create_info)}
             , shader_stages{shader_stages}
         {
         }
 
-        Shader_stages::Create_info    create_info;
-        gsl::not_null<Shader_stages*> shader_stages;
+        erhe::graphics::Shader_stages::Create_info    create_info;
+        gsl::not_null<erhe::graphics::Shader_stages*> shader_stages;
     };
 
     class Compare_object
@@ -82,4 +84,4 @@ private:
     bool                                  m_run{false};
 };
 
-} // namespace erhe::graphics
+} // namespace editor

@@ -1,5 +1,5 @@
 #include "renderers/text_renderer.hpp"
-#include "gl_context_provider.hpp"
+#include "graphics/gl_context_provider.hpp"
 #include "log.hpp"
 
 #include "erhe/graphics/buffer.hpp"

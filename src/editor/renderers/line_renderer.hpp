@@ -28,7 +28,6 @@ namespace erhe::graphics
     class OpenGL_state_tracker;
     class Sampler;
     class Shader_stages;
-    class Shader_monitor;
 }
 
 namespace erhe::scene
@@ -44,6 +43,8 @@ namespace erhe::ui
 
 namespace editor
 {
+
+class Shader_monitor;
 
 class Line
 {
@@ -186,7 +187,7 @@ private:
     uint32_t m_line_color{0xffffffffu};
 
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<erhe::graphics::Shader_monitor>       m_shader_monitor;
+    std::shared_ptr<Shader_monitor>                       m_shader_monitor;
     erhe::graphics::Fragment_outputs                      m_fragment_outputs;
     erhe::graphics::Vertex_attribute_mappings             m_attribute_mappings;
     erhe::graphics::Vertex_format                         m_vertex_format;

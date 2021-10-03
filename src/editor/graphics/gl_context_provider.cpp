@@ -1,4 +1,4 @@
-#include "gl_context_provider.hpp"
+#include "graphics/gl_context_provider.hpp"
 #include "log.hpp"
 #include "window.hpp"
 

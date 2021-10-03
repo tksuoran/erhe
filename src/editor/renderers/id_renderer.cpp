@@ -1,6 +1,6 @@
 #include "renderers/id_renderer.hpp"
 #include "configuration.hpp"
-#include "gl_context_provider.hpp"
+#include "graphics/gl_context_provider.hpp"
 #include "renderers/program_interface.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "log.hpp"

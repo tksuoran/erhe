@@ -1,5 +1,5 @@
 #include "scene/scene_manager.hpp"
-#include "gl_context_provider.hpp"
+#include "graphics/gl_context_provider.hpp"
 #include "parsers/json_polyhedron.hpp"
 #include "parsers/wavefront_obj.hpp"
 #include "renderers/mesh_memory.hpp"

@@ -1,12 +1,11 @@
 #include "renderers/programs.hpp"
-#include "renderers/program_interface.hpp"
-#include "gl_context_provider.hpp"
-
+#include "graphics/gl_context_provider.hpp"
+#include "graphics/shader_monitor.hpp"
 #include "log.hpp"
+#include "renderers/program_interface.hpp"
 
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/sampler.hpp"
-#include "erhe/graphics_experimental/shader_monitor.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -26,7 +25,7 @@ void Programs::connect()
     require<Gl_context_provider>();
 
     m_program_interface = require<Program_interface>();
-    m_shader_monitor    = require<erhe::graphics::Shader_monitor>();
+    m_shader_monitor    = require<Shader_monitor>();
 }
 
 

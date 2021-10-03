@@ -48,6 +48,7 @@ Headset_view_resources::Headset_view_resources(erhe::xr::Render_view& render_vie
     color_texture_create_info.use_mipmaps       = false;
     color_texture_create_info.level_count       = 1;
     color_texture = std::make_shared<Texture>(color_texture_create_info);
+    color_texture->set_debug_label("Headset_view_resources::color_texture");
 
     Texture_create_info depth_texture_create_info;
     depth_texture_create_info.target            = gl::Texture_target::texture_2d;
@@ -58,6 +59,7 @@ Headset_view_resources::Headset_view_resources(erhe::xr::Render_view& render_vie
     depth_texture_create_info.use_mipmaps       = false;
     depth_texture_create_info.level_count       = 1;
     depth_texture = std::make_shared<Texture>(depth_texture_create_info);
+    depth_texture->set_debug_label("Headset_view_resources::depth_texture");
 
     // depth_stencil_renderbuffer = std::make_unique<Renderbuffer>(gl::Internal_format::depth24_stencil8,
     //                                                             texture_create_info.sample_count,
@@ -69,7 +71,7 @@ Headset_view_resources::Headset_view_resources(erhe::xr::Render_view& render_vie
     create_info.attach(gl::Framebuffer_attachment::depth_attachment,   depth_texture.get());
     //create_info.attach(gl::Framebuffer_attachment::stencil_attachment, depth_stencil_renderbuffer.get());
     framebuffer = std::make_unique<Framebuffer>(create_info);
-    framebuffer->set_debug_label("Headset view");
+    framebuffer->set_debug_label("Headset_view_resources");
 
     if (!framebuffer->check_status())
     {

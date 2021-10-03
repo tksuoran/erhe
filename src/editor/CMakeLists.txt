@@ -1,4 +1,15 @@
 set(source_list
+    graphics/gl_context_provider.cpp
+    graphics/gl_context_provider.hpp
+    graphics/icon_set.cpp
+    graphics/icon_set.hpp
+    graphics/image_transfer.cpp
+    graphics/image_transfer.hpp
+    graphics/shader_monitor.cpp
+    graphics/shader_monitor.hpp
+    graphics/textures.cpp
+    graphics/textures.hpp
+
     operations/compound_operation.cpp
     operations/compound_operation.hpp
     operations/geometry_operations.cpp
@@ -91,6 +102,8 @@ set(source_list
     windows/mesh_properties.hpp
     windows/node_properties.cpp
     windows/node_properties.hpp
+    windows/node_tree_window.cpp
+    windows/node_tree_window.hpp
     windows/operations.cpp
     windows/operations.hpp
     windows/physics_window.cpp
@@ -108,8 +121,6 @@ set(source_list
     configuration.cpp
     configuration.hpp
     editor.hpp
-    gl_context_provider.cpp
-    gl_context_provider.hpp
     log.cpp
     log.hpp
     main.cpp
@@ -118,8 +129,6 @@ set(source_list
     renderdoc_capture_support.hpp
     rendering.cpp
     rendering.hpp
-    textures.cpp
-    textures.hpp
     time.cpp
     time.hpp
     tools.cpp
@@ -129,6 +138,10 @@ set(source_list
     window.cpp
     window.hpp
     #TracyClient.cpp
+
+    res/icons/camera.svg
+    res/icons/light.svg
+    res/icons/mesh.svg
 
     res/shaders/anisotropic.vert
     res/shaders/anisotropic.frag
@@ -166,7 +179,6 @@ target_link_libraries(
     erhe_geometry
     erhe_gl
     erhe_graphics
-    erhe_graphics_experimental
     erhe_imgui
     erhe_log
     erhe_physics
@@ -175,6 +187,7 @@ target_link_libraries(
     erhe_toolkit
     erhe_ui
     erhe_xr
+    lunasvg
     mango
     nlohmann_json::nlohmann_json
     openxr_loader

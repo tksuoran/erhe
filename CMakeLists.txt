@@ -57,11 +57,22 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     avir
-    GIT_REPOSITORY https://github.com/avaneev/avir.git
-    GIT_TAG        master
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
+    #GIT_REPOSITORY https://github.com/avaneev/avir.git
+    #GIT_TAG        master
+    GIT_REPOSITORY  https://github.com/tksuoran/avir.git
+    GIT_TAG         cmake
+    GIT_SHALLOW     TRUE
+    GIT_PROGRESS    TRUE
 )
+
+FetchContent_Declare(
+    lunasvg
+    GIT_REPOSITORY  https://github.com/sammycage/lunasvg.git
+    GIT_TAG         master
+    GIT_SHALLOW     TRUE
+    GIT_PROGRESS    TRUE
+)
+
 
 FetchContent_Declare(
     tracy
@@ -229,6 +240,8 @@ FetchContent_MakeAvailable(OpenXR-SDK)
 #FetchContent_MakeAvailable(eigen)
 #FetchContent_MakeAvailable(libigl)
 #FetchContent_MakeAvailable(concurrentqueue)
+FetchContent_MakeAvailable(avir)
+FetchContent_MakeAvailable(lunasvg)
 
 ### Require out-of-source builds
 file(TO_CMAKE_PATH "${PROJECT_BINARY_DIR}/CMakeLists.txt" LOC_PATH)

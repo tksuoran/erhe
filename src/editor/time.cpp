@@ -1,5 +1,4 @@
 #include "time.hpp"
-#include "gl_context_provider.hpp"
 #include "rendering.hpp"
 #include "window.hpp"
 

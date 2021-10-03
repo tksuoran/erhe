@@ -69,6 +69,7 @@ public:
     static constexpr size_t max_draw_count             =   6'000;
     static constexpr size_t max_index_count            = 300'000;
     static constexpr size_t max_vertex_count           = 800'000;
+    static constexpr size_t texture_unit_count         = 16;
 
     Imgui_renderer()
     {
@@ -190,7 +191,7 @@ public:
         fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 
         // sampler2d textures[16];
-        samplers = default_uniform_block.add_sampler("s_textures", gl::Uniform_type::sampler_2d, 2);
+        samplers = default_uniform_block.add_sampler("s_textures", gl::Uniform_type::sampler_2d, texture_unit_count);
 
         erhe::graphics::Shader_stages::Create_info create_info("ImGui Renderer",
                                                                &default_uniform_block,
@@ -561,7 +562,8 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
 
     const ImVec2 clip_off   = draw_data->DisplayPos;
     const ImVec2 clip_scale = draw_data->FramebufferScale;
-    Texture_unit_cache texture_unit_cache{imgui_renderer.samplers->array_size().value()};
+    Expects(imgui_renderer.samplers->array_size().value() <= Imgui_renderer::texture_unit_count);
+    Texture_unit_cache texture_unit_cache{Imgui_renderer::texture_unit_count};
 
     gl::enable(gl::Enable_cap::clip_distance0);
     gl::enable(gl::Enable_cap::clip_distance1);

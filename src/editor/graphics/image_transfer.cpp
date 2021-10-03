@@ -1,10 +1,38 @@
-#include "erhe/graphics_experimental/image_transfer.hpp"
+#include "graphics/image_transfer.hpp"
+#include "graphics/gl_context_provider.hpp"
+
 #include "erhe/gl/gl.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-namespace erhe::graphics
+namespace editor
 {
+
+Image_transfer::Image_transfer()
+    : erhe::components::Component{c_name}
+{
+}
+
+Image_transfer::~Image_transfer() = default;
+
+void Image_transfer::connect()
+{
+    require<Gl_context_provider>();
+}
+
+void Image_transfer::initialize_component()
+{
+    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+
+    m_slots = std::make_unique<std::array<Slot, 4>>();
+}
+
+auto Image_transfer::get_slot()
+-> Slot&
+{
+    m_index = (m_index + 1) % m_slots->size();
+    return m_slots->at(m_index);
+}
 
 Image_transfer::Slot::Slot()
 {
@@ -38,25 +66,11 @@ auto Image_transfer::Slot::span_for(const int width, const int height, const gl:
     Expects(width >= 1);
     Expects(height >= 1);
 
-    row_stride = width * get_upload_pixel_byte_count(internal_format);
+    row_stride = width * erhe::graphics::get_upload_pixel_byte_count(internal_format);
     auto byte_count = row_stride * height;
     Expects(byte_count >= 1);
     Expects(byte_count <= capacity);
     return span.subspan(0, byte_count);
-}
-
-Image_transfer::Image_transfer()
-    : erhe::components::Component{c_name}
-{
-}
-
-Image_transfer::~Image_transfer() = default;
-
-auto Image_transfer::get_slot()
--> Slot&
-{
-    m_index = (m_index + 1) % m_slots.size();
-    return m_slots[m_index];;
 }
 
 } // namespace erhe::graphics

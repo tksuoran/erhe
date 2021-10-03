@@ -13,13 +13,13 @@ namespace erhe::graphics
 class Sampler;
 class Shader_resource;
 class Shader_stages;
-class Shader_monitor;
 
 } // namespace erhe::graphics
 
 namespace editor {
 
 class Program_interface;
+class Shader_monitor;
 
 class Programs
     : public erhe::components::Component
@@ -65,9 +65,9 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages> tool;
 
 private:
-    std::shared_ptr<Program_interface>              m_program_interface;
-    std::shared_ptr<erhe::graphics::Shader_monitor> m_shader_monitor;
-    std::filesystem::path                           m_shader_path;
+    std::shared_ptr<Program_interface> m_program_interface;
+    std::shared_ptr<Shader_monitor>    m_shader_monitor;
+    std::filesystem::path              m_shader_path;
 };
 
 }

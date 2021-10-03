@@ -56,8 +56,21 @@ public:
     Texture         (Texture&& other) noexcept;
     auto operator=  (Texture&& other) noexcept -> Texture&;
 
-    void upload         (const gl::Internal_format internal_format, const int width, const int height = 0, const int depth = 0);
-    void upload         (const gl::Internal_format internal_format, const gsl::span<const std::byte> data, const int width, const int height = 0, const int depth = 0);
+    void upload         (const gl::Internal_format internal_format,
+                         const int                 width,
+                         const int                 height = 1,
+                         const int                 depth = 1);
+
+    void upload         (const gl::Internal_format        internal_format,
+                         const gsl::span<const std::byte> data,
+                         const int                        width,
+                         const int                        height = 1,
+                         const int                        depth = 1,
+                         const int                        level = 0,
+                         const int                        x = 0,
+                         const int                        y = 0,
+                         const int                        z = 0);
+
     void set_debug_label(std::string_view value);
     auto debug_label    () const -> const std::string&;
     auto width          () const -> int;

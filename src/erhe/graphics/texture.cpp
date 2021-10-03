@@ -514,7 +514,11 @@ void Texture::upload(const gl::Internal_format        internal_format,
                      const gsl::span<const std::byte> data,
                      const int                        width,
                      const int                        height,
-                     const int                        depth)
+                     const int                        depth,
+                     const int                        level,
+                     const int                        x,
+                     const int                        y,
+                     const int                        z)
 {
     Expects(internal_format == m_internal_format);
     Expects(width  >= 1);
@@ -535,19 +539,19 @@ void Texture::upload(const gl::Internal_format        internal_format,
     {
         case 1:
         {
-            gl::texture_sub_image_1d(gl_name(), 0, 0, width, format, type, data_pointer);
+            gl::texture_sub_image_1d(gl_name(), level, x, width, format, type, data_pointer);
             break;
         }
 
         case 2:
         {
-            gl::texture_sub_image_2d(gl_name(), 0, 0, 0, width, height, format, type, data_pointer);
+            gl::texture_sub_image_2d(gl_name(), level, x, y, width, height, format, type, data_pointer);
             break;
         }
 
         case 3:
         {
-            gl::texture_sub_image_3d(gl_name(), 0, 0, 0, 0, width, height, depth, format, type, data_pointer);
+            gl::texture_sub_image_3d(gl_name(), level, x, y, z, width, height, depth, format, type, data_pointer);
             break;
         }
 

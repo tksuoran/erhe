@@ -1,6 +1,6 @@
 #include "renderers/forward_renderer.hpp"
 #include "configuration.hpp"
-#include "gl_context_provider.hpp"
+#include "graphics/gl_context_provider.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/program_interface.hpp"
 #include "renderers/shadow_renderer.hpp"

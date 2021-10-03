@@ -4,6 +4,11 @@
 
 #include <memory>
 
+namespace erhe::graphics
+{
+    class Texture;
+}
+
 namespace erhe::scene
 {
     class Node;
@@ -12,7 +17,9 @@ namespace erhe::scene
 namespace editor
 {
 
+class Icon_set;
 class Scene_root;
+//class Textures;
 
 class Node_tree_window
     : public erhe::components::Component
@@ -33,8 +40,12 @@ public:
 
 private:
     void node_imgui(const std::shared_ptr<erhe::scene::Node>& node);
+    void icon(ImVec2 uv0);
 
     std::shared_ptr<Scene_root> m_scene_root;
+    std::shared_ptr<Icon_set>   m_icon_set;
+
+    //std::shared_ptr<Textures>   m_textures;
 };
 
 } // namespace editor

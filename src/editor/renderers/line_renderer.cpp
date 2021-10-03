@@ -1,6 +1,7 @@
 #include "renderers/line_renderer.hpp"
 #include "configuration.hpp"
-#include "gl_context_provider.hpp"
+#include "graphics/gl_context_provider.hpp"
+#include "graphics/shader_monitor.hpp"
 #include "log.hpp"
 
 #include "erhe/graphics/buffer.hpp"
@@ -10,7 +11,6 @@
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/graphics_experimental/shader_monitor.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/viewport.hpp"
 #include "erhe/gl/gl.hpp"

@@ -11,7 +11,6 @@ namespace erhe::graphics
 {
 
 class Fragment_outputs;
-class Shader_monitor;
 class Shader_resource;
 class Vertex_attribute_mappings;
 class Gl_shader;

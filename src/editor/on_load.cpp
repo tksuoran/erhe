@@ -1,6 +1,11 @@
 #include "application.hpp"
+#include "graphics/gl_context_provider.hpp"
+#include "graphics/icon_set.hpp"
+#include "graphics/image_transfer.hpp"
+#include "graphics/shader_monitor.hpp"
+#include "graphics/textures.hpp"
+
 #include "configuration.hpp"
-#include "gl_context_provider.hpp"
 #include "log.hpp"
 #include "rendering.hpp"
 #include "time.hpp"
@@ -46,8 +51,6 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
-#include "erhe/graphics_experimental/image_transfer.hpp"
-#include "erhe/graphics_experimental/shader_monitor.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 #include "erhe/toolkit/window.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
@@ -57,7 +60,6 @@
 namespace editor {
 
 using erhe::graphics::OpenGL_state_tracker;
-using erhe::graphics::Shader_monitor;
 using std::shared_ptr;
 using std::make_shared;
 
@@ -94,6 +96,7 @@ auto Application::initialize_components(int argc, char** argv)
         m_components.add(make_shared<Grid_tool           >());
         m_components.add(make_shared<Headset_renderer    >());
         m_components.add(make_shared<Hover_tool          >());
+        m_components.add(make_shared<Icon_set            >());
         m_components.add(make_shared<Id_renderer         >());
         m_components.add(make_shared<Light_properties    >());
         m_components.add(make_shared<Line_renderer       >());
@@ -102,6 +105,7 @@ auto Application::initialize_components(int argc, char** argv)
         m_components.add(make_shared<Mesh_properties     >());
         m_components.add(make_shared<Node_properties     >());
         m_components.add(make_shared<Node_tree_window    >());
+        m_components.add(make_shared<Image_transfer      >());
         m_components.add(make_shared<OpenGL_state_tracker>());
         m_components.add(make_shared<Operations          >());
         m_components.add(make_shared<Operation_stack     >());
@@ -114,6 +118,7 @@ auto Application::initialize_components(int argc, char** argv)
         m_components.add(make_shared<Shadow_renderer     >());
         m_components.add(make_shared<Scene_root          >());
         m_components.add(make_shared<Scene_manager       >());
+        m_components.add(make_shared<Textures            >());
         m_components.add(make_shared<Text_renderer       >());
         m_components.add(make_shared<Trs_tool            >());
         m_components.add(make_shared<Viewport_config     >());

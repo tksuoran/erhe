@@ -17,7 +17,6 @@ namespace erhe::graphics
     class Framebuffer;
     class OpenGL_state_tracker;
     class Renderbuffer;
-    class Shader_monitor;
     class Texture;
 }
 
@@ -49,6 +48,7 @@ class Physics_window;
 class Scene_manager;
 class Scene_root;
 class Selection_tool;
+class Shader_monitor;
 class Shadow_renderer;
 class Text_renderer;
 class Tool;

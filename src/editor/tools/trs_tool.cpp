@@ -1,5 +1,5 @@
 #include "tools/trs_tool.hpp"
-#include "gl_context_provider.hpp"
+#include "graphics/gl_context_provider.hpp"
 #include "log.hpp"
 #include "tools.hpp"
 #include "operations/operation_stack.hpp"

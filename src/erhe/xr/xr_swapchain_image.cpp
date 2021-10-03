@@ -99,6 +99,7 @@ auto Swapchain::acquire() -> std::optional<Swapchain_image>
         return {};
     }
 
+    assert(image_index < 16);
     return Swapchain_image(this, image_index);
 }
 
