@@ -34,8 +34,11 @@ public:
     struct Icons
     {
         ImVec2 camera{};
-        ImVec2 light{};
+        ImVec2 directional_light{};
+        ImVec2 point_light{};
+        ImVec2 spot_light{};
         ImVec2 mesh{};
+        ImVec2 node{};
     };
 
     Icons icons;

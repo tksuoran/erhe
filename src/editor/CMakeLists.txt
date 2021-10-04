@@ -140,8 +140,11 @@ set(source_list
     #TracyClient.cpp
 
     res/icons/camera.svg
-    res/icons/light.svg
+    res/icons/directional_light.svg
     res/icons/mesh.svg
+    res/icons/node.svg
+    res/icons/point_light.svg
+    res/icons/spot_light.svg
 
     res/shaders/anisotropic.vert
     res/shaders/anisotropic.frag

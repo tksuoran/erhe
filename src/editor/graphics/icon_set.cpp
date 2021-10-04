@@ -40,9 +40,12 @@ void Icon_set::initialize_component()
 
     const auto icon_directory = std::filesystem::path("res") / "icons";
 
-    icons.camera = load(icon_directory / "camera.svg");
-    icons.light  = load(icon_directory / "light.svg");
-    icons.mesh   = load(icon_directory / "mesh.svg");
+    icons.camera            = load(icon_directory / "camera.svg");
+    icons.directional_light = load(icon_directory / "directional_light.svg");
+    icons.spot_light        = load(icon_directory / "spot_light.svg");
+    icons.point_light       = load(icon_directory / "point_light.svg");
+    icons.mesh              = load(icon_directory / "mesh.svg");
+    icons.node              = load(icon_directory / "node.svg");
 }
 
 auto Icon_set::load(const std::filesystem::path& path)

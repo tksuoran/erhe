@@ -13,17 +13,19 @@
 namespace erhe::scene
 {
 
+enum class Light_type : unsigned int
+{
+    directional = 0,
+    point,
+    spot
+};
+
 class Light
     : public ICamera
     , public INode_attachment
 {
 public:
-    enum class Type : unsigned int
-    {
-        directional = 0,
-        point,
-        spot
-    };
+    using Type = Light_type;
 
     static constexpr const char* c_type_strings[] =
     {

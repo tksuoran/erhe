@@ -256,7 +256,7 @@ void Viewport_window::update_framebuffer()
         create_info.height          = m_content_region_size.y;
         m_color_texture_multisample = make_unique<Texture>(create_info);
         m_color_texture_multisample->set_debug_label("Viewport Window Multisample Color");
-        float clear_value[4] = {1.0f, 0.0f, 1.0f, 1.0f };
+        const float clear_value[4] = {1.0f, 0.0f, 1.0f, 1.0f };
         gl::clear_tex_image(m_color_texture_multisample->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
     }
 

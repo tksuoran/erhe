@@ -2,6 +2,8 @@
 
 #include "windows/imgui_window.hpp"
 
+#include <glm/glm.hpp>
+
 #include <memory>
 
 namespace erhe::graphics
@@ -12,6 +14,7 @@ namespace erhe::graphics
 namespace erhe::scene
 {
     class Node;
+    enum class Light_type : unsigned int;
 }
 
 namespace editor
@@ -19,7 +22,7 @@ namespace editor
 
 class Icon_set;
 class Scene_root;
-//class Textures;
+class Selection_tool;
 
 class Node_tree_window
     : public erhe::components::Component
@@ -39,13 +42,13 @@ public:
     void imgui(Pointer_context& pointer_context) override;
 
 private:
+    auto get_icon  (const erhe::scene::Light_type type) const -> const ImVec2;
     void node_imgui(const std::shared_ptr<erhe::scene::Node>& node);
-    void icon(ImVec2 uv0);
+    void icon      (ImVec2 uv0, glm::vec4 tint_color = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f});
 
-    std::shared_ptr<Scene_root> m_scene_root;
-    std::shared_ptr<Icon_set>   m_icon_set;
-
-    //std::shared_ptr<Textures>   m_textures;
+    std::shared_ptr<Scene_root>     m_scene_root;
+    std::shared_ptr<Selection_tool> m_selection_tool;
+    std::shared_ptr<Icon_set>       m_icon_set;
 };
 
 } // namespace editor

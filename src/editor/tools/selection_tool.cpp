@@ -209,7 +209,7 @@ auto Selection_tool::add_to_selection(std::shared_ptr<erhe::scene::INode_attachm
 {
     if (!item)
     {
-        log_selection.warn("Trying to add empty mesh to selection\n");
+        log_selection.warn("Trying to add empty item to selection\n");
         return false;
     }
 
@@ -217,12 +217,12 @@ auto Selection_tool::add_to_selection(std::shared_ptr<erhe::scene::INode_attachm
 
     if (!is_in_selection(item))
     {
-        log_selection.trace("Adding mesh {} to selection\n", item->name());
+        log_selection.trace("Adding {} to selection\n", item->name());
         m_selection.push_back(item);
         return true;
     }
 
-    log_selection.warn("Adding mesh {} to selection failed - was already in selection\n", item->name());
+    log_selection.warn("Adding {} to selection failed - was already in selection\n", item->name());
     return false;
 }
 

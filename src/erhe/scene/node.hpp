@@ -28,6 +28,11 @@ public:
     static constexpr uint64_t c_visibility_selected     = (1ul << 5ul);
     static constexpr uint64_t c_visibility_none         = uint64_t(0);
 
+    auto is_selected() const -> bool
+    {
+        return (visibility_mask & c_visibility_selected) == c_visibility_selected;
+    }
+
     uint64_t visibility_mask{c_visibility_none};
 };
 

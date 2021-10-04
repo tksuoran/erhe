@@ -4,6 +4,9 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 cmake_policy(SET CMP0079 NEW)
 
+# Globally use fastlink
+add_link_options($<$<COMPILE_LANGUAGE:CXX>:/DEBUG:FASTLINK>)
+
 include(FetchContent)
 
 FetchContent_Declare(
