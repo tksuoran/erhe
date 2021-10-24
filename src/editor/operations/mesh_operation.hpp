@@ -65,8 +65,10 @@ protected:
     Mesh_operation ();
     ~Mesh_operation() override;
 
-    void make_entries(const Context&                                                           context,
-                      const std::function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation);
+    void make_entries(
+        const Context&                                                           context,
+        const std::function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation
+    );
 
     // Implements IOperation
     void execute() override;

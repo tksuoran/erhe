@@ -12,8 +12,10 @@ namespace erhe::geometry
 
 using glm::vec3;
 
-auto Polygon::compute_normal(const Geometry&                          geometry,
-                             const Property_map<Point_id, glm::vec3>& point_locations) const -> glm::vec3
+auto Polygon::compute_normal(
+    const Geometry&                          geometry,
+    const Property_map<Point_id, glm::vec3>& point_locations
+) const -> glm::vec3
 {
     ZoneScoped;
 
@@ -49,10 +51,12 @@ auto Polygon::compute_normal(const Geometry&                          geometry,
     return glm::normalize(normal);
  }
 
-void Polygon::compute_normal(const Polygon_id                    this_polygon_id,
-                             const Geometry&                     geometry,
-                             Property_map<Polygon_id, vec3>&     polygon_normals,
-                             const Property_map<Point_id, vec3>& point_locations) const
+void Polygon::compute_normal(
+    const Polygon_id                    this_polygon_id,
+    const Geometry&                     geometry,
+    Property_map<Polygon_id, vec3>&     polygon_normals,
+    const Property_map<Point_id, vec3>& point_locations
+) const
 {
     ZoneScoped;
 
@@ -65,25 +69,32 @@ void Polygon::compute_normal(const Polygon_id                    this_polygon_id
     polygon_normals.put(this_polygon_id, normal);
 }
 
-auto Polygon::compute_centroid(const Geometry&                     geometry,
-                               const Property_map<Point_id, vec3>& point_locations) const -> glm::vec3
+auto Polygon::compute_centroid(
+    const Geometry&                     geometry,
+    const Property_map<Point_id, vec3>& point_locations
+) const -> glm::vec3
 {
     vec3 centroid(0.0f, 0.0f, 0.0f);
     int  count{0};
 
-    for_each_corner_const(geometry, [&geometry, &centroid, &count, &point_locations](const Polygon_corner_context_const& i)
-    {
-        const Point_id point_id = geometry.corners[i.corner_id].point_id;
-        const auto     pos0     = point_locations.get(point_id);
-        centroid += pos0;
-        ++count;
-    });
+    for_each_corner_const(
+        geometry,
+        [&geometry, &centroid, &count, &point_locations](const Polygon_corner_context_const& i)
+        {
+            const Point_id point_id = geometry.corners[i.corner_id].point_id;
+            const auto     pos0     = point_locations.get(point_id);
+            centroid += pos0;
+            ++count;
+        }
+    );
 
     return centroid /= static_cast<float>(count);
 }
 
-auto Polygon::compute_edge_midpoint(const Geometry&                          geometry,
-                                    const Property_map<Point_id, glm::vec3>& point_locations) const -> glm::vec3
+auto Polygon::compute_edge_midpoint(
+    const Geometry&                          geometry,
+    const Property_map<Point_id, glm::vec3>& point_locations
+) const -> glm::vec3
 {
     if (corner_count >= 2)
     {
@@ -105,10 +116,12 @@ auto Polygon::compute_edge_midpoint(const Geometry&                          geo
     return glm::vec3{0.0f, 0.0f, 0.0f};
 }
 
-void Polygon::compute_centroid(const Polygon_id                    this_polygon_id,
-                               const Geometry&                     geometry,
-                               Property_map<Polygon_id, vec3>&     polygon_centroids,
-                               const Property_map<Point_id, vec3>& point_locations) const
+void Polygon::compute_centroid(
+    const Polygon_id                    this_polygon_id,
+    const Geometry&                     geometry,
+    Property_map<Polygon_id, vec3>&     polygon_centroids,
+    const Property_map<Point_id, vec3>& point_locations
+) const
 {
     if (corner_count < 1)
     {
@@ -174,17 +187,21 @@ auto Polygon::prev_corner(const Geometry& geometry, const Corner_id anchor_corne
 
 void Polygon::reverse(Geometry& geometry)
 {
-    std::reverse(&geometry.polygon_corners[first_polygon_corner_id],
-                 &geometry.polygon_corners[first_polygon_corner_id + corner_count]);
+    std::reverse(
+        &geometry.polygon_corners[first_polygon_corner_id],
+        &geometry.polygon_corners[first_polygon_corner_id + corner_count]
+    );
 }
 
-void Polygon::compute_planar_texture_coordinates(const Polygon_id                           this_polygon_id,
-                                                 const Geometry&                            geometry,
-                                                 Property_map<Corner_id, glm::vec2>&        corner_texcoords,
-                                                 const Property_map<Polygon_id, glm::vec3>& polygon_centroids,
-                                                 const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-                                                 const Property_map<Point_id, glm::vec3>&   point_locations,
-                                                 const bool                                 overwrite) const
+void Polygon::compute_planar_texture_coordinates(
+    const Polygon_id                           this_polygon_id,
+    const Geometry&                            geometry,
+    Property_map<Corner_id, glm::vec2>&        corner_texcoords,
+    const Property_map<Polygon_id, glm::vec3>& polygon_centroids,
+    const Property_map<Polygon_id, glm::vec3>& polygon_normals,
+    const Property_map<Point_id, glm::vec3>&   point_locations,
+    const bool                                 overwrite
+) const
 {
     ZoneScoped;
 
@@ -239,14 +256,14 @@ void Polygon::compute_planar_texture_coordinates(const Polygon_id               
         const Corner&           corner            = geometry.corners[corner_id];
         const Point_id          point_id          = corner.point_id;
         const glm::vec3         position          = point_locations.get(point_id);
-        const glm::vec3         planar_position   = glm::vec3(inverse_transform * glm::vec4(position, 1.0f));
+        const glm::vec3         planar_position   = glm::vec3{inverse_transform * glm::vec4{position, 1.0f}};
         // log_polygon_texcoords.trace("polygon {:2} corner {:2} point {:2} "
         //                             "{} -> "
         //                             "{}\n",
         //                             this_polygon_id, corner_id, point_id,
         //                             position,
         //                             planar_position);
-        const glm::vec2 uv = glm::vec2(planar_position);
+        const glm::vec2 uv = glm::vec2{planar_position};
         unscaled_uvs.emplace_back(corner_id, uv);
         const float distance = glm::length(uv);
         max_distance = std::max(distance, max_distance);

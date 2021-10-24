@@ -11,8 +11,10 @@
 
 namespace erhe::xr {
 
-Swapchain_image::Swapchain_image(gsl::not_null<Swapchain*> swapchain,
-                                 const uint32_t            image_index)
+Swapchain_image::Swapchain_image(
+    gsl::not_null<Swapchain*> swapchain,
+    const uint32_t            image_index
+)
     : m_swapchain  {swapchain}
     , m_image_index{image_index}
 {
@@ -104,10 +106,16 @@ auto Swapchain::acquire() -> std::optional<Swapchain_image>
     uint32_t image_index = 0;
 
     check_gl_context_in_current_in_this_thread();
-    if (!check("xrAcquireSwapchainImage",
-               xrAcquireSwapchainImage(m_xr_swapchain,
-                                       &swapchain_image_acquire_info,
-                                       &image_index)))
+    if (
+        !check(
+            "xrAcquireSwapchainImage",
+            xrAcquireSwapchainImage(
+                m_xr_swapchain,
+                &swapchain_image_acquire_info,
+                &image_index
+            )
+        )
+    )
     {
         return {};
     }
@@ -128,8 +136,10 @@ auto Swapchain::release() -> bool
     swapchain_image_release_info.next = nullptr;
 
     check_gl_context_in_current_in_this_thread();
-    return check("xrReleaseSwapchainImage",
-                 xrReleaseSwapchainImage(m_xr_swapchain, &swapchain_image_release_info));
+    return check(
+        "xrReleaseSwapchainImage",
+        xrReleaseSwapchainImage(m_xr_swapchain, &swapchain_image_release_info)
+    );
 }
 
 auto Swapchain::wait() -> bool
@@ -145,8 +155,10 @@ auto Swapchain::wait() -> bool
     swapchain_image_wait_info.timeout = XR_INFINITE_DURATION;
 
     check_gl_context_in_current_in_this_thread();
-    return check("xrWaitSwapchainImage",
-                 xrWaitSwapchainImage(m_xr_swapchain, &swapchain_image_wait_info));
+    return check(
+        "xrWaitSwapchainImage",
+        xrWaitSwapchainImage(m_xr_swapchain, &swapchain_image_wait_info)
+    );
 }
 
 auto Swapchain::get_gl_texture(const uint32_t image_index) const -> unsigned int
@@ -171,8 +183,12 @@ auto Swapchain::enumerate_images() -> bool
     uint32_t image_count{0};
 
     check_gl_context_in_current_in_this_thread();
-    if (!check("xrEnumerateSwapchainImages",
-               xrEnumerateSwapchainImages(m_xr_swapchain, 0, &image_count, nullptr)))
+    if (
+        !check(
+            "xrEnumerateSwapchainImages",
+            xrEnumerateSwapchainImages(m_xr_swapchain, 0, &image_count, nullptr)
+        )
+    )
     {
         return false;
     }
@@ -187,11 +203,17 @@ auto Swapchain::enumerate_images() -> bool
     }
 
     check_gl_context_in_current_in_this_thread();
-    if (!check("xrEnumerateSwapchainImages",
-               xrEnumerateSwapchainImages(m_xr_swapchain,
-                                          image_count,
-                                          &image_count,
-                                          reinterpret_cast<XrSwapchainImageBaseHeader*>(swapchain_images.data()))))
+    if (
+        !check(
+            "xrEnumerateSwapchainImages",
+            xrEnumerateSwapchainImages(
+                m_xr_swapchain,
+                image_count,
+                &image_count,
+                reinterpret_cast<XrSwapchainImageBaseHeader*>(swapchain_images.data())
+            )
+        )
+    )
     {
         return false;
     }

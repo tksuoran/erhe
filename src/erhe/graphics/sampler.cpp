@@ -5,8 +5,10 @@ namespace erhe::graphics
 
 Sampler::Sampler() = default;
 
-Sampler::Sampler(const gl::Texture_min_filter min_filter,
-                 const gl::Texture_mag_filter mag_filter)
+Sampler::Sampler(
+    const gl::Texture_min_filter min_filter,
+    const gl::Texture_mag_filter mag_filter
+)
     : min_filter{min_filter}
     , mag_filter{mag_filter}
 {
@@ -15,9 +17,11 @@ Sampler::Sampler(const gl::Texture_min_filter min_filter,
     apply();
 }
 
-Sampler::Sampler(const gl::Texture_min_filter min_filter,
-                 const gl::Texture_mag_filter mag_filter,
-                 const gl::Texture_wrap_mode  wrap_mode)
+Sampler::Sampler(
+    const gl::Texture_min_filter min_filter,
+    const gl::Texture_mag_filter mag_filter,
+    const gl::Texture_wrap_mode  wrap_mode
+)
     : min_filter{min_filter}
     , mag_filter{mag_filter}
     , wrap_mode {wrap_mode, wrap_mode, wrap_mode}
@@ -45,8 +49,7 @@ void Sampler::apply()
     gl::sampler_parameter_f(name, gl::Sampler_parameter_f::texture_max_anisotropy, max_anisotropy);
 }
 
-auto operator==(const Sampler& lhs, const Sampler& rhs) noexcept
--> bool
+auto operator==(const Sampler& lhs, const Sampler& rhs) noexcept -> bool
 {
     Expects(lhs.gl_name() != 0);
     Expects(rhs.gl_name() != 0);
@@ -54,8 +57,7 @@ auto operator==(const Sampler& lhs, const Sampler& rhs) noexcept
     return lhs.gl_name() == rhs.gl_name();
 }
 
-auto operator!=(const Sampler& lhs, const Sampler& rhs) noexcept
--> bool
+auto operator!=(const Sampler& lhs, const Sampler& rhs) noexcept -> bool
 {
     return !(lhs == rhs);
 }

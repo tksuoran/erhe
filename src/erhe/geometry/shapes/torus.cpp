@@ -80,11 +80,11 @@ public:
 
         point_locations ->put(point_id, V);
         point_normals   ->put(point_id, N);
-        point_tangents  ->put(point_id, vec4(t_xyz, t_w));
-        point_bitangents->put(point_id, vec4(b_xyz, b_w));
+        point_tangents  ->put(point_id, vec4{t_xyz, t_w});
+        point_bitangents->put(point_id, vec4{b_xyz, b_w});
         if (!is_uv_discontinuity)
         {
-            point_texcoords->put(point_id, vec2(rel_major, rel_minor));
+            point_texcoords->put(point_id, vec2{rel_major, rel_minor});
         }
 
         // log_torus.trace("point_id = {:3}, rel_major = {: 3.1}, rel_minor = {: 3.1}, position = {}\n",
@@ -111,8 +111,12 @@ public:
             minor = 0;
         }
 
-        const Point_id point_id = points[(static_cast<size_t>(major) * static_cast<size_t>(minor_axis_steps)) +
-                                         static_cast<size_t>(minor)];
+        const Point_id point_id = points[
+            (
+                static_cast<size_t>(major) * static_cast<size_t>(minor_axis_steps)
+            ) +
+            static_cast<size_t>(minor)
+        ];
 
         const Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
 
@@ -121,7 +125,7 @@ public:
             const auto t = static_cast<float>(rel_minor);
             const auto s = static_cast<float>(rel_major);
 
-            corner_texcoords->put(corner_id, vec2(s, t));
+            corner_texcoords->put(corner_id, vec2{s, t});
         }
 
         // log_torus.trace("polygon_id = {:2}, major = {: 3}, minor = {: 3}, rel_major = {: 3.1}, rel_minor = {: 3.1}, "
@@ -130,11 +134,13 @@ public:
         //                 is_major_seam, is_minor_seam, point_id, corner_id);
     }
 
-    Torus_builder(Geometry&    geometry,
-                  const double major_radius,
-                  const double minor_radius,
-                  const int    major_axis_steps,
-                  const int    minor_axis_steps)
+    Torus_builder(
+        Geometry&    geometry,
+        const double minor_radius,
+        const double major_radius,
+        const int    major_axis_steps,
+        const int    minor_axis_steps
+    )
         : geometry        {geometry}
         , major_radius    {major_radius}
         , minor_radius    {minor_radius}
@@ -206,22 +212,24 @@ public:
     }
 };
 
-auto make_torus(const double major_radius,
-                const double minor_radius,
-                const int    major_axis_steps,
-                const int    minor_axis_steps)
+auto make_torus(
+    const double major_radius,
+    const double minor_radius,
+    const int    major_axis_steps,
+    const int    minor_axis_steps
+)
 -> Geometry
 {
     ZoneScoped;
 
-    return Geometry(
+    return Geometry{
         "torus",
         [=](auto& geometry)
         {
             Torus_builder builder(geometry, major_radius, minor_radius, major_axis_steps, minor_axis_steps);
             builder.build();
         }
-    );
+    };
 }
 
 auto torus_volume(const float major_radius, const float minor_radius) -> float

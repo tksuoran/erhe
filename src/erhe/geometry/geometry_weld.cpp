@@ -500,26 +500,27 @@ void Geometry::weld(const Weld_settings& weld_settings)
 
         Remapper<Polygon_id> polygon_remapper(m_next_polygon_id);
 
-        std::sort(polygon_remapper.old_from_new.begin(),
-                  polygon_remapper.old_from_new.end(),
-                  [axis0, axis1, axis2, polygon_attribute_maps](const Polygon_id& lhs, const Polygon_id& rhs)
-                  {
-                      if (!polygon_attribute_maps.centroids->has(lhs) || !polygon_attribute_maps.centroids->has(rhs))
-                      {
-                          return false;
-                      }
-                      const glm::vec3 position_lhs = polygon_attribute_maps.centroids->get(lhs);
-                      const glm::vec3 position_rhs = polygon_attribute_maps.centroids->get(rhs);
-                      if (position_lhs[axis0] != position_rhs[axis0])
-                      {
-                          return position_lhs[axis0] < position_rhs[axis0];;
-                      }
-                      if (position_lhs[axis1] != position_rhs[axis1])
-                      {
-                          return position_lhs[axis1] < position_rhs[axis1];;
-                      }
-                      return position_lhs[axis2] < position_rhs[axis2];;
-                  }
+        std::sort(
+            polygon_remapper.old_from_new.begin(),
+            polygon_remapper.old_from_new.end(),
+            [axis0, axis1, axis2, polygon_attribute_maps](const Polygon_id& lhs, const Polygon_id& rhs)
+            {
+                if (!polygon_attribute_maps.centroids->has(lhs) || !polygon_attribute_maps.centroids->has(rhs))
+                {
+                    return false;
+                }
+                const glm::vec3 position_lhs = polygon_attribute_maps.centroids->get(lhs);
+                const glm::vec3 position_rhs = polygon_attribute_maps.centroids->get(rhs);
+                if (position_lhs[axis0] != position_rhs[axis0])
+                {
+                    return position_lhs[axis0] < position_rhs[axis0];;
+                }
+                if (position_lhs[axis1] != position_rhs[axis1])
+                {
+                    return position_lhs[axis1] < position_rhs[axis1];;
+                }
+                return position_lhs[axis2] < position_rhs[axis2];;
+            }
         );
 
         polygon_remapper.create_new_from_old_mapping();
@@ -567,11 +568,13 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 continue;
             }
             const Polygon_data primary_attributes(primary_old_id, polygon_attribute_maps);
-            log_weld.trace("primary   new {:2} old {:2} centroid {} normal {}\n",
-                           primary_new_id,
-                           primary_old_id,
-                           primary_attributes.centroid,
-                           primary_attributes.normal);
+            log_weld.trace(
+                "primary   new {:2} old {:2} centroid {} normal {}\n",
+                primary_new_id,
+                primary_old_id,
+                primary_attributes.centroid,
+                primary_attributes.normal
+            );
             for (Polygon_id secondary_new_id = primary_new_id + 1; secondary_new_id < m_next_polygon_id; ++secondary_new_id)
             {
                 if (polygon_remapper.merge.find_secondary(secondary_new_id) != nullptr)
@@ -580,32 +583,40 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 }
                 const Polygon_id   secondary_old_id = polygon_remapper.old_id(secondary_new_id);
                 const Polygon_data secondary_attributes(secondary_old_id, polygon_attribute_maps);
-                log_weld.trace("secondary new {:2} old {:2} centroid {} normal {}\n",
-                               secondary_new_id,
-                               secondary_old_id,
-                               secondary_attributes.centroid,
-                               secondary_attributes.normal);
+                log_weld.trace(
+                    "secondary new {:2} old {:2} centroid {} normal {}\n",
+                    secondary_new_id,
+                    secondary_old_id,
+                    secondary_attributes.centroid,
+                    secondary_attributes.normal
+                );
 
                 const float diff = std::abs(primary_attributes.centroid[axis0] - secondary_attributes.centroid[axis0]);
                 if (diff > 0.001f)
                 {
-                    log_weld.trace("group end: primary new {:2} old {:2} secondary new {:2} old {:2} diff {}\n",
-                                   primary_new_id, primary_old_id, secondary_new_id, secondary_old_id, diff);
+                    log_weld.trace(
+                        "group end: primary new {:2} old {:2} secondary new {:2} old {:2} diff {}\n",
+                        primary_new_id, primary_old_id, secondary_new_id, secondary_old_id, diff
+                    );
                     break;
                 }
 
                 const float distance = glm::distance(primary_attributes.centroid, secondary_attributes.centroid);
                 if (distance > weld_settings.max_point_distance)
                 {
-                    log_weld.trace("primary new {:2} old {:2} secondary new {:2} old {:2} centroid distance {}\n",
-                                   primary_new_id, primary_old_id, secondary_new_id, secondary_old_id, distance);
+                    log_weld.trace(
+                        "primary new {:2} old {:2} secondary new {:2} old {:2} centroid distance {}\n",
+                        primary_new_id, primary_old_id, secondary_new_id, secondary_old_id, distance
+                    );
                     continue;
                 }
                 const float dot_product = glm::dot(primary_attributes.normal, secondary_attributes.normal);
                 if (std::abs(dot_product) < weld_settings.min_normal_dot_product)
                 {
-                    log_weld.trace("primary new {:2} old {:2} secondary new {:2} old {:2} normal dot product {}\n",
-                                   primary_new_id, primary_old_id, secondary_new_id, secondary_old_id, dot_product);
+                    log_weld.trace(
+                        "primary new {:2} old {:2} secondary new {:2} old {:2} normal dot product {}\n",
+                        primary_new_id, primary_old_id, secondary_new_id, secondary_old_id, dot_product
+                    );
                     continue;
                 }
 
@@ -613,8 +624,10 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 // TODO check polygons have matching corners
                 if (dot_product >= weld_settings.min_normal_dot_product)
                 {
-                    log_weld.trace("merging new polygon {:2} old polygon {:2} to new polygon {:2} old polygon {:2}\n",
-                                   secondary_new_id, secondary_old_id, primary_new_id, primary_old_id);
+                    log_weld.trace(
+                        "merging new polygon {:2} old polygon {:2} to new polygon {:2} old polygon {:2}\n",
+                        secondary_new_id, secondary_old_id, primary_new_id, primary_old_id
+                    );
                     polygon_remapper.merge.insert(primary_new_id, secondary_new_id);
                 }
 
@@ -622,8 +635,10 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 // TODO check polygons have matching corners
                 if (dot_product <= -weld_settings.min_normal_dot_product)
                 {
-                    log_weld.trace("eliminate polygons new {:2} old polygon {:2} and new polygon {:2} old polygon {:2}\n",
-                                   secondary_new_id, secondary_old_id, primary_new_id, primary_old_id);
+                    log_weld.trace(
+                        "eliminate polygons new {:2} old polygon {:2} and new polygon {:2} old polygon {:2}\n",
+                        secondary_new_id, secondary_old_id, primary_new_id, primary_old_id
+                    );
                     polygon_remapper.eliminate.push_back(primary_new_id);
                     polygon_remapper.eliminate.push_back(secondary_new_id);
                     //{
@@ -735,38 +750,39 @@ void Geometry::weld(const Weld_settings& weld_settings)
         erhe::log::Indenter scope_indent;
 
         Remapper<Point_id> point_remapper(m_next_point_id);
-        std::sort(point_remapper.old_from_new.begin(),
-                  point_remapper.old_from_new.end(),
-                  [axis0, axis1, axis2, point_attribute_maps](const Point_id& lhs, const Point_id& rhs)
-                  {
-                      if (!point_attribute_maps.locations->has(lhs) || !point_attribute_maps.locations->has(rhs))
-                      {
-                          return false;
-                      }
-                      const glm::vec3 position_lhs = point_attribute_maps.locations->get(lhs);
-                      const glm::vec3 position_rhs = point_attribute_maps.locations->get(rhs);
-                      if (position_lhs[axis0] != position_rhs[axis0])
-                      {
-                          const bool is_less = position_lhs[axis0] < position_rhs[axis0];
-                          //log_weld.trace("{:2} vs {:2} {} [ {} ] {} {} [ {} ]\n",
-                          //               lhs, rhs, position_lhs, axis0, is_less ? "< " : ">=", position_rhs, axis0);
-                          return is_less;
-                      }
-                      const bool is_not_same = position_lhs[axis1] != position_rhs[axis1];
-                      //log_weld.trace("position_lhs[axis1] = {}, position_rhs[axis1] = {}, is not same = {}\n",
-                      //               position_lhs[axis1], position_rhs[axis1], is_not_same);
-                      if (is_not_same)
-                      {
-                          const bool is_less = position_lhs[axis1] < position_rhs[axis1];
-                          //log_weld.trace("{:2} vs {:2} {} [ {} ] {} {} [ {} ]\n",
-                          //               lhs, rhs, position_lhs, axis1, is_less ? "< " : ">=", position_rhs, axis1);
-                          return is_less;
-                      }
-                      const bool is_less = position_lhs[axis2] < position_rhs[axis2];
-                      //log_weld.trace("{:2} vs {:2} {} [ {} ] {} {} [ {} ]\n",
-                      //               lhs, rhs, position_lhs, axis2, is_less ? "< " : ">=", position_rhs, axis2);
-                      return is_less;
-                  }
+        std::sort(
+            point_remapper.old_from_new.begin(),
+            point_remapper.old_from_new.end(),
+            [axis0, axis1, axis2, point_attribute_maps](const Point_id& lhs, const Point_id& rhs)
+            {
+                if (!point_attribute_maps.locations->has(lhs) || !point_attribute_maps.locations->has(rhs))
+                {
+                    return false;
+                }
+                const glm::vec3 position_lhs = point_attribute_maps.locations->get(lhs);
+                const glm::vec3 position_rhs = point_attribute_maps.locations->get(rhs);
+                if (position_lhs[axis0] != position_rhs[axis0])
+                {
+                    const bool is_less = position_lhs[axis0] < position_rhs[axis0];
+                    //log_weld.trace("{:2} vs {:2} {} [ {} ] {} {} [ {} ]\n",
+                    //               lhs, rhs, position_lhs, axis0, is_less ? "< " : ">=", position_rhs, axis0);
+                    return is_less;
+                }
+                const bool is_not_same = position_lhs[axis1] != position_rhs[axis1];
+                //log_weld.trace("position_lhs[axis1] = {}, position_rhs[axis1] = {}, is not same = {}\n",
+                //               position_lhs[axis1], position_rhs[axis1], is_not_same);
+                if (is_not_same)
+                {
+                    const bool is_less = position_lhs[axis1] < position_rhs[axis1];
+                    //log_weld.trace("{:2} vs {:2} {} [ {} ] {} {} [ {} ]\n",
+                    //               lhs, rhs, position_lhs, axis1, is_less ? "< " : ">=", position_rhs, axis1);
+                    return is_less;
+                }
+                const bool is_less = position_lhs[axis2] < position_rhs[axis2];
+                //log_weld.trace("{:2} vs {:2} {} [ {} ] {} {} [ {} ]\n",
+                //               lhs, rhs, position_lhs, axis2, is_less ? "< " : ">=", position_rhs, axis2);
+                return is_less;
+            }
         );
 
         // log_weld.trace("Points after sort:\n");
@@ -891,8 +907,10 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 }
 #endif
 
-                log_weld.trace("merging new point {:2} old point {:2} to new point {:2} old point {:2}\n",
-                               secondary_new_id, secondary_old_id, primary_new_id, primary_old_id);
+                log_weld.trace(
+                    "merging new point {:2} old point {:2} to new point {:2} old point {:2}\n",
+                    secondary_new_id, secondary_old_id, primary_new_id, primary_old_id
+                );
                 point_remapper.merge.insert(primary_new_id, secondary_new_id);
             }
         }
@@ -1030,19 +1048,20 @@ void Geometry::weld(const Weld_settings& weld_settings)
             }
         }
 
-        std::sort(corner_remapper.old_from_new.begin(),
-                  corner_remapper.old_from_new.end(),
-                  [&corner_remapper, this]
-                  (const Corner_id& lhs, const Corner_id& rhs)
-                  {
-                      // Drop corners pointing to removed polygons
-                      if (corner_remapper.old_used[lhs] && !corner_remapper.old_used[rhs])
-                      {
-                          VERIFY(corners[lhs].polygon_id < m_next_polygon_id);
-                          return true;
-                      }
-                      return false;
-                  }
+        std::sort(
+            corner_remapper.old_from_new.begin(),
+            corner_remapper.old_from_new.end(),
+            [&corner_remapper, this]
+            (const Corner_id& lhs, const Corner_id& rhs)
+            {
+                // Drop corners pointing to removed polygons
+                if (corner_remapper.old_used[lhs] && !corner_remapper.old_used[rhs])
+                {
+                    VERIFY(corners[lhs].polygon_id < m_next_polygon_id);
+                    return true;
+                }
+                return false;
+            }
         );
 
         corner_remapper.create_new_from_old_mapping();

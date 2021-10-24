@@ -6,10 +6,12 @@ namespace erhe::geometry
 {
 
 template <typename T>
-void Polygon::copy_to_corners(const Polygon_id                   this_polygon_id,
-                              const Geometry&                    geometry,
-                              Property_map<Corner_id, T>&        corner_attribute,
-                              const Property_map<Polygon_id, T>& polygon_attribute) const
+void Polygon::copy_to_corners(
+    const Polygon_id                   this_polygon_id,
+    const Geometry&                    geometry,
+    Property_map<Corner_id, T>&        corner_attribute,
+    const Property_map<Polygon_id, T>& polygon_attribute
+) const
 {
     ZoneScoped;
 
@@ -24,11 +26,13 @@ void Polygon::copy_to_corners(const Polygon_id                   this_polygon_id
 }
 
 template <typename T>
-void Polygon::smooth_normalize(const Geometry&                            geometry,
-                               Property_map<Corner_id, T>&                corner_attribute,
-                               const Property_map<Polygon_id, T>&         polygon_attribute,
-                               const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-                               const float                                cos_max_smoothing_angle) const
+void Polygon::smooth_normalize(
+    const Geometry&                            geometry,
+    Property_map<Corner_id, T>&                corner_attribute,
+    const Property_map<Polygon_id, T>&         polygon_attribute,
+    const Property_map<Polygon_id, glm::vec3>& polygon_normals,
+    const float                                cos_max_smoothing_angle
+) const
 {
     ZoneScoped;
 
@@ -39,21 +43,25 @@ void Polygon::smooth_normalize(const Geometry&                            geomet
     {
         const Corner_id corner_id = geometry.polygon_corners[polygon_corner_id];
         const Corner&   corner    = geometry.corners[corner_id];
-        corner.smooth_normalize(corner_id,
-                                geometry,
-                                corner_attribute,
-                                polygon_attribute,
-                                polygon_normals,
-                                cos_max_smoothing_angle);
+        corner.smooth_normalize(
+            corner_id,
+            geometry,
+            corner_attribute,
+            polygon_attribute,
+            polygon_normals,
+            cos_max_smoothing_angle
+        );
     }
 }
 
 template <typename T>
-void Polygon::smooth_average(const Geometry&                           geometry,
-                             Property_map<Corner_id, T>&               new_corner_attribute,
-                             const Property_map<Corner_id, T>&         old_corner_attribute,
-                             const Property_map<Corner_id, glm::vec3>& normer_normals,
-                             const Property_map<Point_id, glm::vec3>&  point_normals) const
+void Polygon::smooth_average(
+    const Geometry&                           geometry,
+    Property_map<Corner_id, T>&               new_corner_attribute,
+    const Property_map<Corner_id, T>&         old_corner_attribute,
+    const Property_map<Corner_id, glm::vec3>& normer_normals,
+    const Property_map<Point_id, glm::vec3>&  point_normals
+) const
 {
     ZoneScoped;
 
@@ -64,12 +72,14 @@ void Polygon::smooth_average(const Geometry&                           geometry,
     {
         const Corner_id corner_id = geometry.polygon_corners[polygon_corner_id];
         const Corner&   corner    = geometry.corners[corner_id];
-        corner.smooth_average(corner_id,
-                              geometry,
-                              new_corner_attribute,
-                              old_corner_attribute,
-                              normer_normals,
-                              point_normals);
+        corner.smooth_average(
+            corner_id,
+            geometry,
+            new_corner_attribute,
+            old_corner_attribute,
+            normer_normals,
+            point_normals
+        );
     }
 }
 

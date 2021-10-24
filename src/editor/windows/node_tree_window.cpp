@@ -53,11 +53,13 @@ void Node_tree_window::icon(ImVec2 uv0, glm::vec4 tint_color)
     const float size      = ImGui::GetTextLineHeight();
     const auto  icon_size = ImVec2(size, size);
 
-    ImGui::Image(reinterpret_cast<ImTextureID>(m_icon_set->texture.get()),
-                 icon_size,
-                 uv0,
-                 m_icon_set->uv1(uv0),
-                 imvec_from_glm(tint_color));
+    ImGui::Image(
+        reinterpret_cast<ImTextureID>(m_icon_set->texture.get()),
+        icon_size,
+        uv0,
+        m_icon_set->uv1(uv0),
+        imvec_from_glm(tint_color)
+    );
     ImGui::SameLine();
 }
 
@@ -109,10 +111,12 @@ void Node_tree_window::node_imgui(const std::shared_ptr<erhe::scene::Node>& node
 {    
     const auto node_selection_bit = node->is_selected() ? ImGuiTreeNodeFlags_Selected
                                                         : ImGuiTreeNodeFlags_None;
-    const ImGuiTreeNodeFlags node_flags{ImGuiTreeNodeFlags_OpenOnArrow       |
-                                        ImGuiTreeNodeFlags_OpenOnDoubleClick |
-                                        ImGuiTreeNodeFlags_SpanFullWidth     |
-                                        node_selection_bit};
+    const ImGuiTreeNodeFlags node_flags{
+        ImGuiTreeNodeFlags_OpenOnArrow       |
+        ImGuiTreeNodeFlags_OpenOnDoubleClick |
+        ImGuiTreeNodeFlags_SpanFullWidth     |
+        node_selection_bit
+    };
     icon(m_icon_set->icons.node);
     std::shared_ptr<erhe::scene::INode_attachment> item_clicked{nullptr};
 
@@ -125,13 +129,16 @@ void Node_tree_window::node_imgui(const std::shared_ptr<erhe::scene::Node>& node
         }
         for (const auto& attachment : node->attachments)
         {
-            const auto attachment_selection_bit = attachment->is_selected() ? ImGuiTreeNodeFlags_Selected
-                                                                            : ImGuiTreeNodeFlags_None;
+            const auto attachment_selection_bit =
+                attachment->is_selected() ? ImGuiTreeNodeFlags_Selected
+                                          : ImGuiTreeNodeFlags_None;
 
-            const ImGuiTreeNodeFlags leaf_flags{ImGuiTreeNodeFlags_SpanFullWidth    |
-                                                ImGuiTreeNodeFlags_NoTreePushOnOpen |
-                                                ImGuiTreeNodeFlags_Leaf             |
-                                                attachment_selection_bit};
+            const ImGuiTreeNodeFlags leaf_flags{
+                ImGuiTreeNodeFlags_SpanFullWidth    |
+                ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                ImGuiTreeNodeFlags_Leaf             |
+                attachment_selection_bit
+            };
             const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(attachment);
             if (mesh)
             {

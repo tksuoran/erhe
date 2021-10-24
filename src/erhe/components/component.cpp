@@ -25,9 +25,11 @@ void Component::initialization_depends_on(const std::shared_ptr<Component>& depe
 
     if (!dependency->is_registered())
     {
-        log_components.error("Component {} dependency {} has not been registered as a Component",
-                             name(),
-                             dependency->name());
+        log_components.error(
+            "Component {} dependency {} has not been registered as a Component",
+            name(),
+            dependency->name()
+        );
         FATAL("Dependency has not been registered");
     }
     m_dependencies.insert(dependency);

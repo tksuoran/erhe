@@ -39,11 +39,15 @@ void Light::update(Viewport viewport)
     m_node->update();
 
     // Update clip from world / world from clip
-    m_transforms.clip_from_world.set(clip_from_node() * m_node->node_from_world(),
-                                     m_node->world_from_node() * node_from_clip());
+    m_transforms.clip_from_world.set(
+        clip_from_node() * m_node->node_from_world(),
+        m_node->world_from_node() * node_from_clip()
+    );
 
-    m_transforms.texture_from_world.set(texture_from_clip * clip_from_world(),
-                                        world_from_clip() * clip_from_texture);
+    m_transforms.texture_from_world.set(
+        texture_from_clip * clip_from_world(),
+        world_from_clip() * clip_from_texture
+    );
 }
 
 auto Light::node() const -> const std::shared_ptr<Node>&

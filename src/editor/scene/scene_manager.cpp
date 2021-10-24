@@ -74,7 +74,7 @@ void Scene_manager::initialize_component()
 {
     ZoneScoped;
 
-    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
 
     m_scene_root = Component::get<Scene_root>();
 
@@ -321,7 +321,6 @@ void Scene_manager::make_brushes()
             }
         );
 #endif
-
 
     // cylinder and cone
     if constexpr (true)

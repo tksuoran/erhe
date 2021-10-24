@@ -32,7 +32,7 @@ void Mesh_memory::initialize_component()
 {
     ZoneScoped;
 
-    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
 
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 
@@ -41,18 +41,24 @@ void Mesh_memory::initialize_component()
 
     gl_buffer_transfer_queue = make_unique<Buffer_transfer_queue>();
 
-    gl_vertex_buffer = make_shared<erhe::graphics::Buffer>(gl::Buffer_target::array_buffer,
-                                                           vertex_byte_count,
-                                                           storage_mask);
-    gl_index_buffer = make_shared<erhe::graphics::Buffer>(gl::Buffer_target::element_array_buffer,
-                                                          index_byte_count,
-                                                          storage_mask);
+    gl_vertex_buffer = make_shared<erhe::graphics::Buffer>(
+        gl::Buffer_target::array_buffer,
+        vertex_byte_count,
+        storage_mask
+    );
+    gl_index_buffer = make_shared<erhe::graphics::Buffer>(
+        gl::Buffer_target::element_array_buffer,
+        index_byte_count,
+        storage_mask
+    );
     gl_vertex_buffer->set_debug_label("Scene Manager Vertex");
     gl_index_buffer ->set_debug_label("Scene Manager Index");
 
-    gl_buffer_sink = make_unique<erhe::primitive::Gl_buffer_sink>(*gl_buffer_transfer_queue.get(),
-                                                                  gl_vertex_buffer,
-                                                                  gl_index_buffer);
+    gl_buffer_sink = make_unique<erhe::primitive::Gl_buffer_sink>(
+        *gl_buffer_transfer_queue.get(),
+        gl_vertex_buffer,
+        gl_index_buffer
+    );
     embree_vertex_buffer = erhe::raytrace::IBuffer::create_shared(vertex_byte_count);
     embree_index_buffer  = erhe::raytrace::IBuffer::create_shared(index_byte_count);
     embree_buffer_sink   = make_unique<erhe::primitive::Embree_buffer_sink>(embree_vertex_buffer, embree_index_buffer);

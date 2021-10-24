@@ -106,18 +106,22 @@ void Components::show_dependencies() const
     log_components.info("Component dependencies:\n");
     for (auto const& component : components)
     {
-        log_components.info("    {} - {}:\n",
-                            component->name(),
-                            component->initialization_requires_main_thread()
-                                ? "main"
-                                : "worker");
+        log_components.info(
+            "    {} - {}:\n",
+            component->name(),
+            component->initialization_requires_main_thread()
+                ? "main"
+                : "worker"
+        );
         for (auto const& dependency : component->dependencies())
         {
-            log_components.info("        {} - {}\n",
-                                dependency->name(),
-                                dependency->initialization_requires_main_thread()
-                                    ? "main"
-                                    : "worker");
+            log_components.info(
+                "        {} - {}\n",
+                dependency->name(),
+                dependency->initialization_requires_main_thread()
+                    ? "main"
+                    : "worker"
+            );
         }
     }
 }
@@ -132,11 +136,13 @@ void Components::initialize_component(const bool in_worker_thread)
         return;
     }
 
-    log_components.info("Initializing {} {}\n",
-                        component->name(),
-                        in_worker_thread
-                            ? "in worker thread"
-                            : "in main thread");
+    log_components.info(
+        "Initializing {} {}\n",
+        component->name(),
+        in_worker_thread
+            ? "in worker thread"
+            : "in main thread"
+    );
     component->initialize_component();
 
     {
@@ -224,13 +230,16 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> sha
     {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
-            const auto i = std::find_if(m_uninitialized_components.begin(),
-                                        m_uninitialized_components.end(),
-                                        [in_worker_thread](auto& component)
-                                        {
-                                            return component->get_state() == Component::Component_state::Connected &&
-                                                   component->is_ready_to_initialize(in_worker_thread);
-                                        });
+            const auto i = std::find_if(
+                m_uninitialized_components.begin(),
+                m_uninitialized_components.end(),
+                [in_worker_thread](auto& component)
+                {
+                    return
+                        component->get_state() == Component::Component_state::Connected &&
+                        component->is_ready_to_initialize(in_worker_thread);
+                }
+            );
             if (i != m_uninitialized_components.end())
             {
                 auto component = *i;

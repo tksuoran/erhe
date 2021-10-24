@@ -82,21 +82,24 @@ public:
     //void add_brush     (const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry);
     void add_material  (const std::shared_ptr<erhe::primitive::Material>& material);
     auto allocate_brush(erhe::primitive::Build_info_set& build_info_set) -> std::shared_ptr<Brush>;
-    auto make_brush    (erhe::geometry::Geometry&&                              geometry,
-                        const Brush_create_context&                             context,
-                        const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape = {})
-    -> std::shared_ptr<Brush>;
+    auto make_brush    (
+        erhe::geometry::Geometry&&                              geometry,
+        const Brush_create_context&                             context,
+        const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape = {}
+    ) -> std::shared_ptr<Brush>;
 
-    auto make_brush(std::shared_ptr<erhe::geometry::Geometry>               geometry,
-                    const Brush_create_context&                             context,
-                    const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape = {})
-    -> std::shared_ptr<Brush>;
+    auto make_brush(
+        std::shared_ptr<erhe::geometry::Geometry>               geometry,
+        const Brush_create_context&                             context,
+        const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape = {}
+    ) -> std::shared_ptr<Brush>;
 
-    auto make_brush(std::shared_ptr<erhe::geometry::Geometry> geometry,
-                    const Brush_create_context&               context,
-                    Collision_volume_calculator               collision_volume_calculator,
-                    Collision_shape_generator                 collision_shape_generator)
-    -> std::shared_ptr<Brush>;
+    auto make_brush(
+        std::shared_ptr<erhe::geometry::Geometry> geometry,
+        const Brush_create_context&               context,
+        Collision_volume_calculator               collision_volume_calculator,
+        Collision_shape_generator                 collision_shape_generator
+    ) -> std::shared_ptr<Brush>;
 
 private:
     void make_materials            ();

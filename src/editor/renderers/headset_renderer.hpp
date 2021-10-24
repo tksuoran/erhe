@@ -31,11 +31,15 @@ class Scene_root;
 class Headset_view_resources
 {
 public:
-    Headset_view_resources(erhe::xr::Render_view& render_view,
-                           Editor_rendering&      rendering);
+    Headset_view_resources(
+        erhe::xr::Render_view& render_view,
+        Editor_rendering&      rendering
+    );
 
-    void update(erhe::xr::Render_view& render_view,
-                Editor_rendering&      rendering);
+    void update(
+        erhe::xr::Render_view& render_view,
+        Editor_rendering&      rendering
+    );
 
     std::shared_ptr<erhe::graphics::Texture>      color_texture;
     std::shared_ptr<erhe::graphics::Texture>      depth_texture;
@@ -49,9 +53,11 @@ public:
 class Controller_visualization
 {
 public:
-    Controller_visualization(Mesh_memory&       mesh_memory,
-                             Scene_root&        scene_root,
-                             erhe::scene::Node* view_root);
+    Controller_visualization(
+        Mesh_memory&       mesh_memory,
+        Scene_root&        scene_root,
+        erhe::scene::Node* view_root
+    );
 
     void update  (const erhe::xr::Pose& pose);
     auto get_node() const -> erhe::scene::Node*;

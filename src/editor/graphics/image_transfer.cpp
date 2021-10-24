@@ -22,7 +22,7 @@ void Image_transfer::connect()
 
 void Image_transfer::initialize_component()
 {
-    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
 
     m_slots = std::make_unique<std::array<Slot, 4>>();
 }
@@ -40,28 +40,37 @@ Image_transfer::Slot::Slot()
 
     capacity = 8 * 1024 * 1024;
 
-    gl::named_buffer_storage(pbo.gl_name(),
-                             capacity,
-                             nullptr,
-                             gl::Buffer_storage_mask::map_write_bit |
-                             gl::Buffer_storage_mask::map_persistent_bit);
+    gl::named_buffer_storage(
+        pbo.gl_name(),
+        capacity,
+        nullptr,
+        gl::Buffer_storage_mask::map_write_bit |
+        gl::Buffer_storage_mask::map_persistent_bit
+    );
 
-    auto* map_pointer = gl::map_named_buffer_range(pbo.gl_name(),
-                                                   0,
-                                                   capacity,
-                                                   gl::Map_buffer_access_mask::map_invalidate_buffer_bit |
-                                                   gl::Map_buffer_access_mask::map_flush_explicit_bit    |
-                                                   gl::Map_buffer_access_mask::map_persistent_bit        |
-                                                   gl::Map_buffer_access_mask::map_write_bit);
+    auto* map_pointer = gl::map_named_buffer_range(
+        pbo.gl_name(),
+        0,
+        capacity,
+        gl::Map_buffer_access_mask::map_invalidate_buffer_bit |
+        gl::Map_buffer_access_mask::map_flush_explicit_bit    |
+        gl::Map_buffer_access_mask::map_persistent_bit        |
+        gl::Map_buffer_access_mask::map_write_bit
+    );
 
     VERIFY(map_pointer != nullptr);
 
-    span = gsl::span(reinterpret_cast<std::byte*>(map_pointer),
-                     capacity);
+    span = gsl::span(
+        reinterpret_cast<std::byte*>(map_pointer),
+        capacity
+    );
 }
 
-auto Image_transfer::Slot::span_for(const int width, const int height, const gl::Internal_format internal_format)
--> gsl::span<std::byte>
+auto Image_transfer::Slot::span_for(
+    const int                 width,
+    const int                 height,
+    const gl::Internal_format internal_format
+) -> gsl::span<std::byte>
 {
     Expects(width >= 1);
     Expects(height >= 1);

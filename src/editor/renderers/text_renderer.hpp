@@ -60,9 +60,11 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-    void print(const glm::vec3  text_position,
-               const uint32_t   text_color,
-               std::string_view text);
+    void print(
+        const glm::vec3  text_position,
+        const uint32_t   text_color,
+        std::string_view text
+    );
 
     void render(erhe::scene::Viewport viewport);
     void next_frame();
@@ -73,43 +75,53 @@ private:
     class Frame_resources
     {
     public:
-        static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_coherent_bit   |
-                                                              gl::Buffer_storage_mask::map_persistent_bit |
-                                                              gl::Buffer_storage_mask::map_write_bit};
+        static constexpr gl::Buffer_storage_mask storage_mask{
+            gl::Buffer_storage_mask::map_coherent_bit   |
+            gl::Buffer_storage_mask::map_persistent_bit |
+            gl::Buffer_storage_mask::map_write_bit
+        };
 
-        static constexpr gl::Map_buffer_access_mask access_mask{gl::Map_buffer_access_mask::map_coherent_bit   |
-                                                                gl::Map_buffer_access_mask::map_persistent_bit |
-                                                                gl::Map_buffer_access_mask::map_write_bit};
+        static constexpr gl::Map_buffer_access_mask access_mask{
+            gl::Map_buffer_access_mask::map_coherent_bit   |
+            gl::Map_buffer_access_mask::map_persistent_bit |
+            gl::Map_buffer_access_mask::map_write_bit
+        };
 
-        Frame_resources(size_t                                    vertex_count,
-                        erhe::graphics::Shader_stages*            shader_stages,
-                        erhe::graphics::Vertex_attribute_mappings attribute_mappings,
-                        erhe::graphics::Vertex_format&            vertex_format,
-                        erhe::graphics::Buffer*                   index_buffer)
-
-            : vertex_buffer     {gl::Buffer_target::array_buffer,
-                                 vertex_format.stride() * vertex_count,
-                                 storage_mask,
-                                 access_mask}
-
-            , projection_buffer {gl::Buffer_target::uniform_buffer,
-                                 256,
-                                 storage_mask,
-                                 access_mask}
-
-            , vertex_input_state{attribute_mappings,
-                                 vertex_format,
-                                 &vertex_buffer,
-                                 index_buffer}
-
-            , pipeline{shader_stages,
-                       &vertex_input_state,
-                       &erhe::graphics::Input_assembly_state::triangle_fan,
-                       &erhe::graphics::Rasterization_state::cull_mode_none,
-                       //&erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled,
-                       &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                       &erhe::graphics::Color_blend_state::color_blend_premultiplied,
-                       nullptr}
+        Frame_resources(
+            size_t                                    vertex_count,
+            erhe::graphics::Shader_stages*            shader_stages,
+            erhe::graphics::Vertex_attribute_mappings attribute_mappings,
+            erhe::graphics::Vertex_format&            vertex_format,
+            erhe::graphics::Buffer*                   index_buffer
+        )
+            : vertex_buffer{
+                gl::Buffer_target::array_buffer,
+                vertex_format.stride() * vertex_count,
+                storage_mask,
+                access_mask
+            }
+            , projection_buffer{
+                gl::Buffer_target::uniform_buffer,
+                256,
+                storage_mask,
+                access_mask
+            }
+            , vertex_input_state{
+                attribute_mappings,
+                vertex_format,
+                &vertex_buffer,
+                index_buffer
+            }
+            , pipeline{
+                shader_stages,
+                &vertex_input_state,
+                &erhe::graphics::Input_assembly_state::triangle_fan,
+                &erhe::graphics::Rasterization_state::cull_mode_none,
+                //&erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled,
+                &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+                &erhe::graphics::Color_blend_state::color_blend_premultiplied,
+                nullptr
+            }
         {
             vertex_buffer.set_debug_label("Text Renderer Vertex");
             vertex_buffer.set_debug_label("Projection Vertex");

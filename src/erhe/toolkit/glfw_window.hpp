@@ -19,9 +19,15 @@ public:
     explicit Context_window(Context_window* share);
     virtual ~Context_window();
 
-    auto open(const int width, const int height, const int msaa_sample_count, const std::string& title,
-              const int opengl_major_version, const int opengl_minor_version, Context_window* share)
-    -> bool;
+    auto open(
+        const int          width,
+        const int          height,
+        const int          msaa_sample_count,
+        const std::string& title,
+        const int          opengl_major_version,
+        const int          opengl_minor_version,
+        Context_window*    share
+    ) -> bool;
 
     void make_current() const;
 
@@ -33,14 +39,11 @@ public:
 
     void enter_event_loop();
 
-    auto get_width() const
-    -> int;
+    auto get_width() const -> int;
 
-    auto get_height() const
-    -> int;
+    auto get_height() const -> int;
 
-    auto get_root_view()
-    -> Root_view&
+    auto get_root_view() -> Root_view&
     {
         return m_root_view;
     }
@@ -53,20 +56,16 @@ public:
 
     void capture_mouse(const bool capture);
 
-    auto is_mouse_captured() const
-    -> bool;
+    auto is_mouse_captured() const -> bool;
 
-    auto get_glfw_window() const
-    -> GLFWwindow*;
+    auto get_glfw_window() const -> GLFWwindow*;
 
-    auto get_opengl_major_version() const
-    -> int
+    auto get_opengl_major_version() const -> int
     {
         return m_opengl_major_version;
     }
 
-    auto get_opengl_minor_version() const
-    -> int
+    auto get_opengl_minor_version() const -> int
     {
         return m_opengl_minor_version;
     }

@@ -56,7 +56,12 @@ public:
     };
 
     static constexpr std::array<const char*, 3> c_primitive_color_source_strings_data{
-        std::apply([](auto&&... s) { return std::array{s.data()...}; }, c_primitive_color_source_strings)
+        std::apply(
+            [](auto&&... s) {
+                return std::array{s.data()...};
+            },
+            c_primitive_color_source_strings
+        )
     };
 
     Primitive_color_source primitive_color_source  {Primitive_color_source::constant_color};
@@ -104,11 +109,13 @@ public:
 
     static constexpr size_t s_frame_resources_count = 4;
 
-    void create_frame_resources(const size_t material_count,
-                                const size_t light_count,
-                                const size_t camera_count,
-                                const size_t primitive_count,
-                                const size_t draw_count);
+    void create_frame_resources(
+        const size_t material_count,
+        const size_t light_count,
+        const size_t camera_count,
+        const size_t primitive_count,
+        const size_t draw_count
+    );
 
     auto current_frame_resources() -> Frame_resources&;
 
@@ -116,26 +123,30 @@ public:
 
     void base_connect(const erhe::components::Component* component);
 
-    auto update_primitive_buffer(const Mesh_collection&                meshes,
-                                 const erhe::scene::Visibility_filter& visibility_filter)
-    -> Buffer_range;
+    auto update_primitive_buffer(
+        const Mesh_collection&                meshes,
+        const erhe::scene::Visibility_filter& visibility_filter
+    ) -> Buffer_range;
 
-    auto update_light_buffer(const Light_collection&     lights,
-                             const erhe::scene::Viewport light_texture_viewport,
-                             const glm::vec4             ambient_light = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f))
-    -> Buffer_range;
+    auto update_light_buffer(
+        const Light_collection&     lights,
+        const erhe::scene::Viewport light_texture_viewport,
+        const glm::vec4             ambient_light = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f)
+    ) -> Buffer_range;
 
     auto update_material_buffer(const Material_collection& materials)
-    -> Buffer_range;
+        -> Buffer_range;
 
-    auto update_camera_buffer(erhe::scene::ICamera&       camera,
-                              const erhe::scene::Viewport viewport)
-    -> Buffer_range;
+    auto update_camera_buffer(
+        erhe::scene::ICamera&       camera,
+        const erhe::scene::Viewport viewport
+    ) -> Buffer_range;
 
-    auto update_draw_indirect_buffer(const Mesh_collection&                meshes,
-                                     const erhe::primitive::Primitive_mode primitive_mode,
-                                     const erhe::scene::Visibility_filter& visibility_filter)
-    -> Draw_indirect_buffer_range;
+    auto update_draw_indirect_buffer(
+        const Mesh_collection&                meshes,
+        const erhe::primitive::Primitive_mode primitive_mode,
+        const erhe::scene::Visibility_filter& visibility_filter
+    ) -> Draw_indirect_buffer_range;
 
     void bind_material_buffer     ();
     void bind_light_buffer        ();

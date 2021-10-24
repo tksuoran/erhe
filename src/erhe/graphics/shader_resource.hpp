@@ -62,34 +62,44 @@ public:
     static auto c_str(Precision v) -> const char*;
 
     // Struct definition
-    explicit Shader_resource(std::string_view struct_type_name,
-                             Shader_resource* parent = nullptr);
+    explicit Shader_resource(
+        std::string_view struct_type_name,
+        Shader_resource* parent = nullptr
+    );
 
     // Struct member
-    Shader_resource(std::string_view                struct_member_name,
-                    gsl::not_null<Shader_resource*> struct_type,
-                    const std::optional<size_t>     array_size = {},
-                    Shader_resource*                parent = nullptr);
+    Shader_resource(
+        std::string_view                struct_member_name,
+        gsl::not_null<Shader_resource*> struct_type,
+        const std::optional<size_t>     array_size = {},
+        Shader_resource*                parent = nullptr
+    );
 
     // Block (uniform block or shader storage block)
-    Shader_resource(std::string_view            block_name,
-                    const int                   binding_point,
-                    const Type                  block_type,
-                    const std::optional<size_t> array_size = {});
+    Shader_resource(
+        std::string_view            block_name,
+        const int                   binding_point,
+        const Type                  block_type,
+        const std::optional<size_t> array_size = {}
+    );
 
     // Basic type
-    Shader_resource(std::string_view            basic_name,
-                    const gl::Uniform_type      basic_type,
-                    const std::optional<size_t> array_size = {},
-                    Shader_resource*            parent = nullptr);
+    Shader_resource(
+        std::string_view            basic_name,
+        const gl::Uniform_type      basic_type,
+        const std::optional<size_t> array_size = {},
+        Shader_resource*            parent = nullptr
+    );
 
     // Sampler
-    Shader_resource(std::string_view                sampler_name,
-                    gsl::not_null<Shader_resource*> parent,
-                    const int                       location,
-                    const gl::Uniform_type          sampler_type,
-                    const std::optional<size_t>     array_size = {},
-                    const std::optional<int>        dedicated_texture_unit = {});
+    Shader_resource(
+        std::string_view                sampler_name,
+        gsl::not_null<Shader_resource*> parent,
+        const int                       location,
+        const gl::Uniform_type          sampler_type,
+        const std::optional<size_t>     array_size = {},
+        const std::optional<int>        dedicated_texture_unit = {}
+    );
 
     // Constructor with no arguments creates default uniform block
     Shader_resource();
@@ -127,37 +137,39 @@ public:
 
     auto source(int indent_level = 0) const -> std::string;
 
-    auto add_struct(std::string_view                name,
-                    gsl::not_null<Shader_resource*> struct_type,
-                    const std::optional<size_t>     array_size = {})
-    -> Shader_resource*;
+    auto add_struct(
+        std::string_view                name,
+        gsl::not_null<Shader_resource*> struct_type,
+        const std::optional<size_t>     array_size = {}
+    ) -> Shader_resource*;
 
-    auto add_sampler(std::string_view            name,
-                     const gl::Uniform_type      sampler_type,
-                     const std::optional<size_t> array_size = {},
-                     const std::optional<int>    dedicated_texture_unit = {})
-    -> Shader_resource*;
+    auto add_sampler(
+        std::string_view            name,
+        const gl::Uniform_type      sampler_type,
+        const std::optional<size_t> array_size = {},
+        const std::optional<int>    dedicated_texture_unit = {}
+    ) -> Shader_resource*;
 
     auto add_float(std::string_view name, const std::optional<size_t> array_size = {})
-    -> Shader_resource*;
+        -> Shader_resource*;
 
     auto add_vec2(std::string_view name, const std::optional<size_t> array_size = {})
-    -> Shader_resource*;
+        -> Shader_resource*;
 
     auto add_vec3(std::string_view name, const std::optional<size_t> array_size = {})
-    -> Shader_resource*;
+        -> Shader_resource*;
 
     auto add_vec4(std::string_view name, const std::optional<size_t> array_size = {})
-    -> Shader_resource*;
+        -> Shader_resource*;
 
     auto add_mat4(std::string_view name, const std::optional<size_t> array_size = {})
-    -> Shader_resource*;
+        -> Shader_resource*;
 
     auto add_int(std::string_view name, const std::optional<size_t> array_size = {})
-    -> Shader_resource*;
+        -> Shader_resource*;
 
     auto add_uint(std::string_view name, const std::optional<size_t> array_size = {})
-    -> Shader_resource*;
+        -> Shader_resource*;
 
 private:
     void align_offset_to(const unsigned int alignment);

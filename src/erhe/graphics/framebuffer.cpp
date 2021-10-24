@@ -11,16 +11,19 @@ namespace erhe::graphics
 std::mutex                Framebuffer::s_mutex;
 std::vector<Framebuffer*> Framebuffer::s_all_framebuffers;
 
-void Framebuffer::Create_info::attach(const gl::Framebuffer_attachment attachment_point,
-                                      const gsl::not_null<Texture*>    texture,
-                                      const unsigned int               level,
-                                      const unsigned int               layer)
+void Framebuffer::Create_info::attach(
+    const gl::Framebuffer_attachment attachment_point,
+    const gsl::not_null<Texture*>    texture,
+    const unsigned int               level,
+    const unsigned int               layer
+)
 {
     attachments.emplace_back(attachment_point, texture, level, layer);
 }
 
-void Framebuffer::Create_info::attach(const gl::Framebuffer_attachment   attachment_point,
-                                      const gsl::not_null<Renderbuffer*> renderbuffer)
+void Framebuffer::Create_info::attach(
+    const gl::Framebuffer_attachment   attachment_point,
+    const gsl::not_null<Renderbuffer*> renderbuffer)
 {
     attachments.emplace_back(attachment_point, renderbuffer);
 }
@@ -37,10 +40,14 @@ Framebuffer::Framebuffer(const Create_info& create_info)
 Framebuffer::~Framebuffer()
 {
     std::lock_guard lock{s_mutex};
-    s_all_framebuffers.erase(std::remove(s_all_framebuffers.begin(),
-                                         s_all_framebuffers.end(),
-                                         this),
-                             s_all_framebuffers.end());
+    s_all_framebuffers.erase(
+        std::remove(
+            s_all_framebuffers.begin(),
+            s_all_framebuffers.end(),
+            this
+        ),
+        s_all_framebuffers.end()
+    );
 }
 
 void Framebuffer::reset()
@@ -65,26 +72,32 @@ void Framebuffer::create()
         {
             if (attachment.texture->is_layered())
             {
-                gl::named_framebuffer_texture_layer(gl_name(),
-                                                    attachment.attachment_point,
-                                                    attachment.texture->gl_name(),
-                                                    attachment.texture_level,
-                                                    attachment.texture_layer);
+                gl::named_framebuffer_texture_layer(
+                    gl_name(),
+                    attachment.attachment_point,
+                    attachment.texture->gl_name(),
+                    attachment.texture_level,
+                    attachment.texture_layer
+                );
             }
             else
             {
-                gl::named_framebuffer_texture(gl_name(),
-                                              attachment.attachment_point,
-                                              attachment.texture->gl_name(),
-                                              attachment.texture_level);
+                gl::named_framebuffer_texture(
+                    gl_name(),
+                    attachment.attachment_point,
+                    attachment.texture->gl_name(),
+                    attachment.texture_level
+                );
             }
         }
         else if (attachment.renderbuffer != nullptr)
         {
-            gl::named_framebuffer_renderbuffer(gl_name(),
-                                               attachment.attachment_point,
-                                               gl::Renderbuffer_target::renderbuffer,
-                                               attachment.renderbuffer->gl_name());
+            gl::named_framebuffer_renderbuffer(
+                gl_name(),
+                attachment.attachment_point,
+                gl::Renderbuffer_target::renderbuffer,
+                attachment.renderbuffer->gl_name()
+            );
         }
     }
 
@@ -94,7 +107,10 @@ void Framebuffer::create()
 auto Framebuffer::check_status() const
 -> bool
 {
-    const auto status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::draw_framebuffer);
+    const auto status = gl::check_named_framebuffer_status(
+        gl_name(),
+        gl::Framebuffer_target::draw_framebuffer
+    );
     if (status != gl::Framebuffer_status::framebuffer_complete)
     {
         log_framebuffer.warn("Framebuffer {} not complete: {}\n", gl_name(), gl::c_str(status));
@@ -106,8 +122,9 @@ auto Framebuffer::check_status() const
 auto Framebuffer::gl_name() const
 -> unsigned int
 {
-    return m_gl_framebuffer.has_value() ? m_gl_framebuffer.value().gl_name()
-                                        : 0;
+    return m_gl_framebuffer.has_value()
+        ? m_gl_framebuffer.value().gl_name()
+        : 0;
 }
 
 } // namespace erhe::graphics

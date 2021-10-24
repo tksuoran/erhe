@@ -52,13 +52,15 @@ private:
     class Source_entry
     {
     public:
-        Source_entry(erhe::primitive::Build_info_set&               build_info_set,
-                     erhe::scene::Layer&                            layer,
-                     erhe::scene::Scene&                            scene,
-                     erhe::physics::IWorld&                         physics_world,
-                     std::shared_ptr<erhe::scene::Mesh>             mesh,
-                     std::shared_ptr<erhe::scene::Node>             node,
-                     const std::vector<erhe::primitive::Primitive>& primitives)
+        Source_entry(
+            erhe::primitive::Build_info_set&               build_info_set,
+            erhe::scene::Layer&                            layer,
+            erhe::scene::Scene&                            scene,
+            erhe::physics::IWorld&                         physics_world,
+            std::shared_ptr<erhe::scene::Mesh>             mesh,
+            std::shared_ptr<erhe::scene::Node>             node,
+            const std::vector<erhe::primitive::Primitive>& primitives
+        )
             : build_info_set{build_info_set}
             , layer         {layer            }
             , scene         {scene            }

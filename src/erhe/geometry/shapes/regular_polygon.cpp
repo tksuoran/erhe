@@ -13,7 +13,7 @@ auto make_triangle(const double r)
 
     // 0.57735027 = sqrt(3) / 3
     // 0.28867513 = sqrt(3) / 6
-    return Geometry(
+    return Geometry{
         "triangle",
         [=](auto& geometry)
         {
@@ -26,7 +26,7 @@ auto make_triangle(const double r)
             geometry.make_point_corners();
             geometry.build_edges();
         }
-    );
+    };
 }
 
 auto make_quad(const double edge)
@@ -41,7 +41,7 @@ auto make_quad(const double edge)
     // make_point((float)(r *  0.707106781f), (float)(r * -0.707106781f), 0.0f, 1.0f, 0.0f);
     // make_point((float)(r *  0.707106781f), (float)(r *  0.707106781f), 0.0f, 1.0f, 1.0f);
     // make_point((float)(r * -0.707106781f), (float)(r *  0.707106781f), 0.0f, 0.0f, 1.0f);
-    return Geometry(
+    return Geometry{
         "quad",
         [=](auto& geometry)
         {
@@ -58,7 +58,7 @@ auto make_quad(const double edge)
             geometry.make_point_corners();
             geometry.build_edges();
         }
-    );
+    };
 }
 
 } // namespace erhe::geometry::shapes

@@ -53,13 +53,15 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-    void render(const erhe::scene::Viewport viewport,
-                const Layer_collection&     content_layers,
-                const Layer_collection&     tool_layers,
-                erhe::scene::ICamera&       camera,
-                const double                time,
-                const int                   x,
-                const int                   y);
+    void render(
+        const erhe::scene::Viewport viewport,
+        const Layer_collection&     content_layers,
+        const Layer_collection&     tool_layers,
+        erhe::scene::ICamera&       camera,
+        const double                time,
+        const int                   x,
+        const int                   y
+    );
 
     auto get(const int x, const int y, uint32_t& id, float& depth) -> bool;
 
@@ -75,13 +77,17 @@ private:
     class Id_frame_resources
     {
     public:
-        static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_coherent_bit   |
-                                                              gl::Buffer_storage_mask::map_persistent_bit |
-                                                              gl::Buffer_storage_mask::map_read_bit};
+        static constexpr gl::Buffer_storage_mask storage_mask{
+            gl::Buffer_storage_mask::map_coherent_bit   |
+            gl::Buffer_storage_mask::map_persistent_bit |
+            gl::Buffer_storage_mask::map_read_bit
+        };
 
-        static constexpr gl::Map_buffer_access_mask access_mask{gl::Map_buffer_access_mask::map_coherent_bit   |
-                                                                gl::Map_buffer_access_mask::map_persistent_bit |
-                                                                gl::Map_buffer_access_mask::map_read_bit};
+        static constexpr gl::Map_buffer_access_mask access_mask{
+            gl::Map_buffer_access_mask::map_coherent_bit   |
+            gl::Map_buffer_access_mask::map_persistent_bit |
+            gl::Map_buffer_access_mask::map_read_bit
+        };
         enum class State : unsigned int
         {
             Unused = 0,
@@ -90,7 +96,12 @@ private:
         };
 
         Id_frame_resources()
-            : pixel_pack_buffer{gl::Buffer_target::pixel_pack_buffer, s_id_buffer_size, storage_mask, access_mask}
+            : pixel_pack_buffer{
+                gl::Buffer_target::pixel_pack_buffer,
+                s_id_buffer_size,
+                storage_mask,
+                access_mask
+            }
         {
             pixel_pack_buffer.set_debug_label("ID Renderer Pixel Pack");
         }

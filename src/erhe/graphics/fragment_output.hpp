@@ -10,9 +10,11 @@ namespace erhe::graphics
 class Fragment_output
 {
 public:
-    Fragment_output(std::string                           name,
-                    const gl::Fragment_shader_output_type type,
-                    const unsigned int                    location);
+    Fragment_output(
+        std::string                           name,
+        const gl::Fragment_shader_output_type type,
+        const unsigned int                    location
+    );
 
     auto name    () const -> const std::string&;
     auto type    () const -> gl::Fragment_shader_output_type;

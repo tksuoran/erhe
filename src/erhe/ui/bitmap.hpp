@@ -129,15 +129,17 @@ public:
     }
 
     template <bool Max>
-    void blit(Bitmap*     src,
-              int         src_x,
-              int         src_y,
-              int         width,
-              int         height,
-              int         dst_x,
-              int         dst_y,
-              component_t src_components,
-              component_t dst_component_offset)
+    void blit(
+        Bitmap*     src,
+        int         src_x,
+        int         src_y,
+        int         width,
+        int         height,
+        int         dst_x,
+        int         dst_y,
+        component_t src_components,
+        component_t dst_component_offset
+    )
     {
         if ((src == nullptr)                 ||
             (width  < 0)                     ||
@@ -193,16 +195,18 @@ public:
     }
 
     template <bool Max>
-    void blit(int                         width,
-              int                         height,
-              int                         dst_x,
-              int                         dst_y,
-              const std::vector<value_t>& src_buffer,
-              int                         src_pitch,
-              int                         src_byte_width,
-              int                         src_components,
-              int                         dst_component_offset,
-              bool                        rotated)
+    void blit(
+        int                         width,
+        int                         height,
+        int                         dst_x,
+        int                         dst_y,
+        const std::vector<value_t>& src_buffer,
+        int                         src_pitch,
+        int                         src_byte_width,
+        int                         src_components,
+        int                         dst_component_offset,
+        bool                        rotated
+    )
     {
         if (rotated)
         {
@@ -305,15 +309,17 @@ public:
     }
 
     template <bool Max>
-    void blit(int                         width,
-              int                         height,
-              int                         dst_x,
-              int                         dst_y,
-              const std::vector<value_t>& src_buffer,
-              int                         src_pitch,
-              int                         src_byte_width,
-              component_t                 src_components,
-              component_t                 dst_component_offset)
+    void blit(
+        int                         width,
+        int                         height,
+        int                         dst_x,
+        int                         dst_y,
+        const std::vector<value_t>& src_buffer,
+        int                         src_pitch,
+        int                         src_byte_width,
+        component_t                 src_components,
+        component_t                 dst_component_offset
+    )
     {
         if ((width < 0) ||
             (height < 0) ||
@@ -389,15 +395,17 @@ public:
     }
 
     template <bool Max>
-    void blit_rotated(int                         width,
-                      int                         height,
-                      int                         dst_x,
-                      int                         dst_y,
-                      const std::vector<value_t>& src_buffer,
-                      int                         src_pitch,
-                      int                         src_byte_width,
-                      component_t                 src_components,
-                      component_t                 dst_component_offset)
+    void blit_rotated(
+        int                         width,
+        int                         height,
+        int                         dst_x,
+        int                         dst_y,
+        const std::vector<value_t>& src_buffer,
+        int                         src_pitch,
+        int                         src_byte_width,
+        component_t                 src_components,
+        component_t                 dst_component_offset
+    )
     {
         if ((width < 0) ||
             (height < 0) ||
@@ -473,8 +481,10 @@ public:
     auto as_span()
     -> gsl::span<std::byte>
     {
-        return gsl::span<std::byte>(reinterpret_cast<std::byte*>(&m_data[0]),
-                                    m_data.size() * sizeof(value_t));
+        return gsl::span<std::byte>(
+            reinterpret_cast<std::byte*>(&m_data[0]),
+            m_data.size() * sizeof(value_t)
+        );
     }
 
 private:

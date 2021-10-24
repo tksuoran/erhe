@@ -108,11 +108,11 @@ public:
 
         point_locations ->put(point_id, P);
         point_normals   ->put(point_id, N);
-        point_tangents  ->put(point_id, vec4(t_xyz, t_w));
-        point_bitangents->put(point_id, vec4(b_xyz, b_w));
+        point_tangents  ->put(point_id, vec4{t_xyz, t_w});
+        point_bitangents->put(point_id, vec4{b_xyz, b_w});
         //if (!is_uv_discontinuity)
         {
-            point_texcoords->put(point_id, vec2(s, t));
+            point_texcoords->put(point_id, vec2{s, t});
         }
 
         //log_sphere.trace("point_id = {:3}, rel_slice = {: #07f}, rel_stack = {: #07f}, "
@@ -170,13 +170,18 @@ public:
             auto s = 1.0f - static_cast<float>(rel_slice);
             auto t = 1.0f - static_cast<float>(0.5 * (1.0 + rel_stack));
 
-            corner_texcoords->put(corner_id, vec2(s, t));
+            corner_texcoords->put(corner_id, vec2{s, t});
         }
 
         return corner_id;
     }
 
-    Sphere_builder(Geometry& geometry, const double radius, const int slice_count, const int stack_division)
+    Sphere_builder(
+        Geometry&    geometry,
+        const double radius,
+        const int    slice_count,
+        const int    stack_division
+    )
         : geometry          {geometry}
         , radius            {radius}
         , slice_count       {slice_count}
@@ -202,10 +207,10 @@ public:
     {
         bottom_point_id = sphere_point(0.5f, -1.0f);
         top_point_id    = sphere_point(0.5f,  1.0f);
-        point_normals->put(bottom_point_id,  vec3(0.0f,-1.0f, 0.0f));
-        point_normals->put(top_point_id,     vec3(0.0f, 1.0f, 0.0f));
-        point_tangents->put(bottom_point_id, vec4(0.0f, 0.0f, 0.0f, 0.0f));
-        point_tangents->put(top_point_id,    vec4(0.0f, 0.0f, 0.0f, 0.0f));
+        point_normals->put(bottom_point_id,  vec3{0.0f,-1.0f, 0.0f});
+        point_normals->put(top_point_id,     vec3{0.0f, 1.0f, 0.0f});
+        point_tangents->put(bottom_point_id, vec4{0.0f, 0.0f, 0.0f, 0.0f});
+        point_tangents->put(top_point_id,    vec4{0.0f, 0.0f, 0.0f, 0.0f});
 
         for (int slice = 0; slice < slice_count; ++slice)
         {
@@ -247,13 +252,13 @@ public:
 
                 const vec4 t1              = point_tangents->get(p0);
                 const vec4 t2              = point_tangents->get(p1);
-                const vec3 average_tangent = normalize(glm::vec3(t1) + glm::vec3(t2));
-                corner_tangents->put(tip_corner_id, glm::vec4(average_tangent, t1.w));
+                const vec3 average_tangent = normalize(glm::vec3{t1} + glm::vec3{t2});
+                corner_tangents->put(tip_corner_id, glm::vec4{average_tangent, t1.w});
 
                 const vec4 b1                = point_bitangents->get(p0);
                 const vec4 b2                = point_bitangents->get(p1);
-                const vec3 average_bitangent = normalize(glm::vec3(b1) + glm::vec3(b2));
-                corner_bitangents->put(tip_corner_id, glm::vec4(average_bitangent, b1.w));
+                const vec3 average_bitangent = normalize(glm::vec3{b1} + glm::vec3{b2});
+                corner_bitangents->put(tip_corner_id, glm::vec4{average_bitangent, b1.w});
 
                 const vec2 uv1              = point_texcoords->get(p0);
                 const vec2 uv2              = point_texcoords->get(p1);
@@ -318,13 +323,13 @@ public:
 
             const vec4 t1              = point_tangents->get(p0);
             const vec4 t2              = point_tangents->get(p1);
-            const vec3 average_tangent = normalize(glm::vec3(t1) + glm::vec3(t2));
-            corner_tangents->put(tip_corner_id, glm::vec4(average_tangent, t1.w));
+            const vec3 average_tangent = normalize(glm::vec3{t1} + glm::vec3{t2});
+            corner_tangents->put(tip_corner_id, glm::vec4{average_tangent, t1.w});
 
             const vec4 b1                = point_bitangents->get(p0);
             const vec4 b2                = point_bitangents->get(p1);
-            const vec3 average_bitangent = normalize(glm::vec3(b1) + glm::vec3(b2));
-            corner_bitangents->put(tip_corner_id, glm::vec4(average_bitangent, b1.w));
+            const vec3 average_bitangent = normalize(glm::vec3{b1} + glm::vec3{b2});
+            corner_bitangents->put(tip_corner_id, glm::vec4{average_bitangent, b1.w});
 
             const vec2 uv1              = point_texcoords->get(p0);
             const vec2 uv2              = point_texcoords->get(p1);
@@ -359,14 +364,14 @@ auto make_sphere(const double radius, const unsigned int slice_count, const unsi
 {
     ZoneScoped;
 
-    return Geometry(
+    return Geometry{
         "sphere",
         [=](auto& geometry)
         {
-            Sphere_builder builder(geometry, radius, static_cast<int>(slice_count), static_cast<int>(stack_division));
+            Sphere_builder builder{geometry, radius, static_cast<int>(slice_count), static_cast<int>(stack_division)};
             builder.build();
         }
-    );
+    };
 }
 
 } // namespace erhe::geometry::shapes

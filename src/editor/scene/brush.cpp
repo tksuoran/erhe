@@ -22,8 +22,10 @@ using namespace erhe::scene;
 using namespace std;
 using namespace glm;
 
-Reference_frame::Reference_frame(const erhe::geometry::Geometry& geometry,
-                                 erhe::geometry::Polygon_id      polygon_id)
+Reference_frame::Reference_frame(
+    const erhe::geometry::Geometry& geometry,
+    erhe::geometry::Polygon_id      polygon_id
+)
     : polygon_id(polygon_id)
 {
     const auto* const polygon_centroids = geometry.polygon_attributes().find<vec3>(c_polygon_centroids);
@@ -71,10 +73,12 @@ auto Reference_frame::scale() const -> float
 
 auto Reference_frame::transform() const -> mat4
 {
-    return mat4(vec4(B, 0.0f),
-                vec4(T, 0.0f),
-                vec4(N, 0.0f),
-                vec4(centroid, 1.0f));
+    return mat4{
+        vec4{B, 0.0f},
+        vec4{T, 0.0f},
+        vec4{N, 0.0f},
+        vec4{centroid, 1.0f}
+    };
 }
 
 Brush::~Brush()
@@ -85,12 +89,14 @@ Brush_create_info::~Brush_create_info()
 {
 }
 
-Brush_create_info::Brush_create_info(const shared_ptr<erhe::geometry::Geometry>&        geometry,
-                                     erhe::primitive::Build_info_set&                   build_info_set,
-                                     const Normal_style                                 normal_style,
-                                     const float                                        density,
-                                     const float                                        volume,
-                                     const shared_ptr<erhe::physics::ICollision_shape>& collision_shape)
+Brush_create_info::Brush_create_info(
+    const shared_ptr<erhe::geometry::Geometry>&        geometry,
+    erhe::primitive::Build_info_set&                   build_info_set,
+    const Normal_style                                 normal_style,
+    const float                                        density,
+    const float                                        volume,
+    const shared_ptr<erhe::physics::ICollision_shape>& collision_shape
+)
     : geometry       {geometry}
     , build_info_set {build_info_set}
     , normal_style   {normal_style}
@@ -100,12 +106,14 @@ Brush_create_info::Brush_create_info(const shared_ptr<erhe::geometry::Geometry>&
 {
 }
 
-Brush_create_info::Brush_create_info(const shared_ptr<erhe::geometry::Geometry>& geometry,
-                                     erhe::primitive::Build_info_set&            build_info_set,
-                                     const erhe::primitive::Normal_style         normal_style,
-                                     const float                                 density,
-                                     const Collision_volume_calculator           collision_volume_calculator,
-                                     const Collision_shape_generator             collision_shape_generator)
+Brush_create_info::Brush_create_info(
+    const shared_ptr<erhe::geometry::Geometry>& geometry,
+    erhe::primitive::Build_info_set&            build_info_set,
+    const erhe::primitive::Normal_style         normal_style,
+    const float                                 density,
+    const Collision_volume_calculator           collision_volume_calculator,
+    const Collision_shape_generator             collision_shape_generator
+)
     : geometry                   {geometry}
     , build_info_set             {build_info_set}
     , normal_style               {normal_style}
@@ -138,9 +146,11 @@ void Brush::initialize(const Create_info& create_info)
     {
         ZoneScopedN("make brush primitive");
 
-        primitive_geometry = make_primitive_shared(*create_info.geometry.get(),
-                                                   build_info_set.gl,
-                                                   normal_style);
+        primitive_geometry = make_primitive_shared(
+            *create_info.geometry.get(),
+            build_info_set.gl,
+            normal_style
+        );
         primitive_geometry->source_geometry = create_info.geometry;
     }
 
@@ -151,7 +161,8 @@ void Brush::initialize(const Create_info& create_info)
         this->collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
             reinterpret_cast<const float*>(geometry->point_attributes().find<vec3>(c_point_locations)->values.data()),
             static_cast<int>(geometry->point_count()),
-            static_cast<int>(sizeof(vec3)));
+            static_cast<int>(sizeof(vec3))
+        );
     }
 
     if (this->collision_volume_calculator)
@@ -179,9 +190,11 @@ Brush::Brush(const Create_info& create_info)
     {
         ZoneScopedN("make brush primitive");
 
-        primitive_geometry = make_primitive_shared(*create_info.geometry.get(),
-                                                   build_info_set.gl,
-                                                   normal_style);
+        primitive_geometry = make_primitive_shared(
+            *create_info.geometry.get(),
+            build_info_set.gl,
+            normal_style
+        );
 
         primitive_geometry->source_geometry = create_info.geometry;
     }
@@ -284,11 +297,13 @@ auto Brush::create_scaled(const int scale_key)
                 ZoneScopedN("calculateLocalInertia");
                 collision_shape->calculate_local_inertia(mass, local_inertia);
             }
-            return Scaled{scale_key,
-                          primitive_geometry,
-                          collision_shape,
-                          volume,
-                          local_inertia};
+            return Scaled{
+                scale_key,
+                primitive_geometry,
+                collision_shape,
+                volume,
+                local_inertia
+            };
         }
         else if (collision_shape_generator)
         {
@@ -299,11 +314,13 @@ auto Brush::create_scaled(const int scale_key)
                 ZoneScopedN("calculateLocalInertia");
                 collision_shape->calculate_local_inertia(mass, local_inertia);
             }
-            return Scaled{scale_key,
-                          primitive_geometry,
-                          collision_shape,
-                          volume,
-                          local_inertia};
+            return Scaled{
+                scale_key,
+                primitive_geometry,
+                collision_shape,
+                volume,
+                local_inertia
+            };
         }
         else
         {
@@ -314,12 +331,16 @@ auto Brush::create_scaled(const int scale_key)
     log_brush.trace("create_scaled() scale = {}\n", scale);
 
     const auto scale_transform = erhe::toolkit::create_scale(scale);
-    auto       scaled_geometry = erhe::geometry::operation::clone(*primitive_geometry->source_geometry.get(),
-                                                                                scale_transform);
+    auto       scaled_geometry = erhe::geometry::operation::clone(
+        *primitive_geometry->source_geometry.get(),
+        scale_transform
+    );
     scaled_geometry.name = fmt::format("{} scaled by {}", primitive_geometry->source_geometry->name, scale);
-    auto scaled_primitive_geometry = make_primitive_shared(scaled_geometry,
-                                                           build_info_set.gl,
-                                                           normal_style);
+    auto scaled_primitive_geometry = make_primitive_shared(
+        scaled_geometry,
+        build_info_set.gl,
+        normal_style
+    );
     scaled_primitive_geometry->source_geometry     = std::make_shared<erhe::geometry::Geometry>(std::move(scaled_geometry));
     scaled_primitive_geometry->source_normal_style = primitive_geometry->source_normal_style;
 
@@ -352,11 +373,13 @@ auto Brush::create_scaled(const int scale_key)
             ZoneScopedN("calculateLocalInertia");
             scaled_collision_shape->calculate_local_inertia(mass, local_inertia);
         }
-        return Scaled{scale_key,
-                      scaled_primitive_geometry,
-                      scaled_collision_shape,
-                      scaled_volume,
-                      local_inertia};
+        return Scaled{
+            scale_key,
+            scaled_primitive_geometry,
+            scaled_collision_shape,
+            scaled_volume,
+            local_inertia
+        };
     }
     else
     {
@@ -367,14 +390,15 @@ auto Brush::create_scaled(const int scale_key)
 
 const std::string empty_string = {};
 
-auto Brush::make_instance(erhe::scene::Layer&                               layer,
-                          erhe::scene::Scene&                               scene,
-                          erhe::physics::IWorld&                            physics_world,
-                          const std::shared_ptr<erhe::scene::Node>&         parent,
-                          const glm::mat4                                   local_to_parent,
-                          const std::shared_ptr<erhe::primitive::Material>& material,
-                          const float                                       scale)
--> Instance
+auto Brush::make_instance(
+    erhe::scene::Layer&                               layer,
+    erhe::scene::Scene&                               scene,
+    erhe::physics::IWorld&                            physics_world,
+    const std::shared_ptr<erhe::scene::Node>&         parent,
+    const glm::mat4                                   local_to_parent,
+    const std::shared_ptr<erhe::primitive::Material>& material,
+    const float                                       scale
+) -> Instance
 {
     ZoneScoped;
 
@@ -393,9 +417,11 @@ auto Brush::make_instance(erhe::scene::Layer&                               laye
     if (collision_shape || collision_shape_generator)
     {
         ZoneScopedN("make brush node physics");
-        erhe::physics::IRigid_body_create_info create_info{density * scaled.volume,
-                                                           scaled.collision_shape,
-                                                           scaled.local_inertia};
+        erhe::physics::IRigid_body_create_info create_info{
+            density * scaled.volume,
+            scaled.collision_shape,
+            scaled.local_inertia
+        };
         auto node_physics = make_shared<Node_physics>(create_info);
         return { node, mesh, node_physics };
     }

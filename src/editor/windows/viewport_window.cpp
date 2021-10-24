@@ -28,17 +28,21 @@ auto to_glm(ImVec2 v) -> glm::vec2
 void dump_fbo_attachment(int fbo_name, gl::Framebuffer_attachment attachment)
 {
     int type{0};
-    gl::get_named_framebuffer_attachment_parameter_iv(fbo_name,
-                                                      attachment,
-                                                      gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_type,
-                                                      &type);
+    gl::get_named_framebuffer_attachment_parameter_iv(
+        fbo_name,
+        attachment,
+        gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_type,
+        &type
+    );
     if (type != GL_NONE)
     {
         int name{0};
-        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name,
-                                                          attachment,
-                                                          gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_name,
-                                                          &name);
+        gl::get_named_framebuffer_attachment_parameter_iv(
+            fbo_name,
+            attachment,
+            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_name,
+            &name
+        );
         int samples        {0};
         int width          {0};
         int height         {0};
@@ -53,27 +57,33 @@ void dump_fbo_attachment(int fbo_name, gl::Framebuffer_attachment attachment)
         if (type == GL_TEXTURE)
         {
             int level{0};
-            gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
-                                                              gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_texture_level,
-                                                              &level);
+            gl::get_named_framebuffer_attachment_parameter_iv(
+                fbo_name, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_texture_level,
+                &level
+            );
             gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_width,           &width);
             gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_height,          &height);
             gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_internal_format, &internal_format);
-            gl::get_texture_level_parameter_iv(name,
-                                               level,
-//                                             gl::Get_texture_parameter::texture_samples,  Missing from gl.xml :/
-                                               static_cast<gl::Get_texture_parameter>(GL_TEXTURE_SAMPLES),
-                                               &samples);
+            gl::get_texture_level_parameter_iv(
+                name,
+                level,
+//              gl::Get_texture_parameter::texture_samples,  Missing from gl.xml :/
+                static_cast<gl::Get_texture_parameter>(GL_TEXTURE_SAMPLES),
+                &samples
+            );
         }
 
-        log_framebuffer.trace("\t{} {} attachment {} samples = {} size = {} x {} format = {}\n",
-                              c_str(attachment),
-                              gl::enum_string(type),
-                              name,
-                              samples,
-                              width,
-                              height,
-                              gl::enum_string(internal_format));
+        log_framebuffer.trace(
+            "\t{} {} attachment {} samples = {} size = {} x {} format = {}\n",
+            c_str(attachment),
+            gl::enum_string(type),
+            name,
+            samples,
+            width,
+            height,
+            gl::enum_string(internal_format)
+        );
     }
 }
 
@@ -118,10 +128,12 @@ void Viewport_window::imgui(Pointer_context& pointer_context)
         (m_color_texture_resolved_for_present->width() > 0) &&
         (m_color_texture_resolved_for_present->height() > 0))
     {
-        ImGui::Image(reinterpret_cast<ImTextureID>(m_color_texture_resolved_for_present.get()),
-                                                   size,
-                                                   ImVec2(0, 1),
-                                                   ImVec2(1, 0));
+        ImGui::Image(reinterpret_cast<ImTextureID>(
+            m_color_texture_resolved_for_present.get()),
+            size,
+            ImVec2(0, 1),
+            ImVec2(1, 0)
+        );
         m_content_region_min  = to_glm(ImGui::GetItemRectMin());
         m_content_region_max  = to_glm(ImGui::GetItemRectMax());
         m_content_region_size = m_content_region_max - m_content_region_min;
@@ -179,10 +191,12 @@ void Viewport_window::multisample_resolve()
         return;
     }
 
-    gl::push_debug_group(gl::Debug_source::debug_source_application,
-                         0,
-                         static_cast<GLsizei>(c_multisample_resolve.length()),
-                         c_multisample_resolve.data());
+    gl::push_debug_group(
+        gl::Debug_source::debug_source_application,
+        0,
+        static_cast<GLsizei>(c_multisample_resolve.length()),
+        c_multisample_resolve.data()
+    );
 
     gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_framebuffer_multisample->gl_name());
     if constexpr (true)
@@ -217,9 +231,11 @@ void Viewport_window::multisample_resolve()
 
     gl::disable(gl::Enable_cap::scissor_test);
     gl::disable(gl::Enable_cap::framebuffer_srgb);
-    gl::blit_framebuffer(0, 0, m_color_texture_multisample->width(), m_color_texture_multisample->height(),
-                         0, 0, m_color_texture_resolved   ->width(), m_color_texture_resolved   ->height(),
-                         gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest);
+    gl::blit_framebuffer(
+        0, 0, m_color_texture_multisample->width(), m_color_texture_multisample->height(),
+        0, 0, m_color_texture_resolved   ->width(), m_color_texture_resolved   ->height(),
+        gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
+    );
 
     gl::pop_debug_group();
 
@@ -277,10 +293,12 @@ void Viewport_window::update_framebuffer()
         }
     }
 
-    m_depth_stencil_renderbuffer = make_unique<Renderbuffer>(gl::Internal_format::depth24_stencil8,
-                                                             s_sample_count,
-                                                             m_content_region_size.x,
-                                                             m_content_region_size.y);
+    m_depth_stencil_renderbuffer = make_unique<Renderbuffer>(
+        gl::Internal_format::depth24_stencil8,
+        s_sample_count,
+        m_content_region_size.x,
+        m_content_region_size.y
+    );
     m_depth_stencil_renderbuffer->set_debug_label("Viewport Window Depth-Stencil");
     {
         Framebuffer::Create_info create_info;

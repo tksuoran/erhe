@@ -63,10 +63,11 @@ public:
     auto position_in_window     (const glm::vec3 position_in_world) const -> glm::vec3;
     auto pointer_in_content_area() const -> bool
     {
-        return (pointer_x >= 0) &&
-               (pointer_y >= 0) &&
-               (pointer_x < viewport.width) &&
-               (pointer_y < viewport.height);
+        return
+            (pointer_x >= 0) &&
+            (pointer_y >= 0) &&
+            (pointer_x < viewport.width) &&
+            (pointer_y < viewport.height);
     }
 
     int   pointer_x       {0};

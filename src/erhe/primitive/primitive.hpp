@@ -22,8 +22,10 @@ class Primitive
 {
 public:
     Primitive();
-    Primitive(std::shared_ptr<Primitive_geometry> primitive_geometry,
-              std::shared_ptr<Material>           material);
+    Primitive(
+        std::shared_ptr<Primitive_geometry> primitive_geometry,
+        std::shared_ptr<Material>           material
+    );
 
     std::shared_ptr<Primitive_geometry> primitive_geometry;
     std::shared_ptr<Material>           material;

@@ -36,29 +36,37 @@ namespace editor
 
 class Node_physics;
 
-void attach(erhe::scene::Layer&                layer,
-            erhe::scene::Scene&                scene,
-            erhe::physics::IWorld&             physics_world,
-            std::shared_ptr<erhe::scene::Node> node,
-            std::shared_ptr<erhe::scene::Mesh> mesh,
-            std::shared_ptr<Node_physics>      node_physics);
+void attach(
+    erhe::scene::Layer&                layer,
+    erhe::scene::Scene&                scene,
+    erhe::physics::IWorld&             physics_world,
+    std::shared_ptr<erhe::scene::Node> node,
+    std::shared_ptr<erhe::scene::Mesh> mesh,
+    std::shared_ptr<Node_physics>      node_physics
+);
 
-void detach(erhe::scene::Layer&                layer,
-            erhe::scene::Scene&                scene,
-            erhe::physics::IWorld&             physics_world,
-            std::shared_ptr<erhe::scene::Node> node,
-            std::shared_ptr<erhe::scene::Mesh> mesh,
-            std::shared_ptr<Node_physics>      node_physics);
+void detach(
+    erhe::scene::Layer&                layer,
+    erhe::scene::Scene&                scene,
+    erhe::physics::IWorld&             physics_world,
+    std::shared_ptr<erhe::scene::Node> node,
+    std::shared_ptr<erhe::scene::Mesh> mesh,
+    std::shared_ptr<Node_physics>      node_physics
+);
 
-void attach(erhe::scene::Layer&                 layer,
-            erhe::scene::Scene&                 scene,
-            std::shared_ptr<erhe::scene::Node>  node,
-            std::shared_ptr<erhe::scene::Light> light);
+void attach(
+    erhe::scene::Layer&                 layer,
+    erhe::scene::Scene&                 scene,
+    std::shared_ptr<erhe::scene::Node>  node,
+    std::shared_ptr<erhe::scene::Light> light
+);
 
-void detach(erhe::scene::Layer&                 layer,
-            erhe::scene::Scene&                 scene,
-            std::shared_ptr<erhe::scene::Node>  node,
-            std::shared_ptr<erhe::scene::Light> light);
+void detach(
+    erhe::scene::Layer&                 layer,
+    erhe::scene::Scene&                 scene,
+    std::shared_ptr<erhe::scene::Node>  node,
+    std::shared_ptr<erhe::scene::Light> light
+);
 
 
 } // namespace editor

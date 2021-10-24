@@ -28,13 +28,15 @@ auto to_int(const std::string& text)
 
 } // namespace
 
-void opengl_callback(GLenum        gl_source,
-                     GLenum        gl_type,
-                     GLuint        id,
-                     GLenum        gl_severity,
-                     GLsizei       /*length*/,
-                     const GLchar* message,
-                     const void*   /*userParam*/)
+void opengl_callback(
+    GLenum        gl_source,
+    GLenum        gl_type,
+    GLuint        id,
+    GLenum        gl_severity,
+    GLsizei       /*length*/,
+    const GLchar* message,
+    const void*   /*userParam*/
+)
 {
     if (id == 0x020071 || id == 0x020061)
     {
@@ -67,7 +69,7 @@ void opengl_callback(GLenum        gl_source,
 }
 
 auto split(std::string text, const char separator)
--> std::vector<std::string>
+    -> std::vector<std::string>
 {
     std::vector<std::string> result;
     const size_t length = text.size();
@@ -106,8 +108,7 @@ auto split(std::string text, const char separator)
     return result;
 }
 
-auto digits_only(std::string s)
--> std::string
+auto digits_only(std::string s) -> std::string
 {
     const size_t size = s.size();
     for (size_t i = 0; i < size; ++i)
@@ -120,15 +121,13 @@ auto digits_only(std::string s)
     return s;
 }
 
-auto contains(const std::vector<std::string>& collection, const std::string& key)
--> bool
+auto contains(const std::vector<std::string>& collection, const std::string& key) -> bool
 {
     const auto i = std::find(collection.cbegin(), collection.cend(), key);
     return i != collection.cend();
 }
 
-auto get_string(gl::String_name string_name)
--> std::string
+auto get_string(gl::String_name string_name) -> std::string
 {
     const GLubyte* gl_str = gl::get_string(string_name);
     const char*    c_str  = reinterpret_cast<const char*>(gl_str);
@@ -222,12 +221,14 @@ void Instance::initialize(PFN_get_proc_address get_proc_address)
     gl::get_integer_v(gl::Get_p_name::max_texture_buffer_size, &limits.max_texture_buffer_size);
 
     gl::debug_message_callback(opengl_callback, nullptr);
-    gl::debug_message_control(gl::Debug_source  ::dont_care,
-                              gl::Debug_type    ::dont_care,
-                              gl::Debug_severity::dont_care,
-                              0,
-                              nullptr,
-                              GL_TRUE);
+    gl::debug_message_control(
+        gl::Debug_source  ::dont_care,
+        gl::Debug_type    ::dont_care,
+        gl::Debug_severity::dont_care,
+        0,
+        nullptr,
+        GL_TRUE
+    );
     gl::enable(gl::Enable_cap::debug_output);
     gl::enable(gl::Enable_cap::debug_output_synchronous);
 

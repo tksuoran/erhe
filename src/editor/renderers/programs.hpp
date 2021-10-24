@@ -38,16 +38,18 @@ public:
     void initialize_component() override;
 
 private:
-    auto make_program(std::string_view                name,
-                      const std::vector<std::string>& defines)
-    -> std::unique_ptr<erhe::graphics::Shader_stages>;
+    auto make_program(
+        std::string_view                name,
+        const std::vector<std::string>& defines
+    ) -> std::unique_ptr<erhe::graphics::Shader_stages>;
 
-    auto make_program(std::string_view name,
-                      std::string_view define)
-    -> std::unique_ptr<erhe::graphics::Shader_stages>;
+    auto make_program(
+        std::string_view name,
+        std::string_view define
+    ) -> std::unique_ptr<erhe::graphics::Shader_stages>;
 
     auto make_program(std::string_view name)
-    -> std::unique_ptr<erhe::graphics::Shader_stages>;
+        -> std::unique_ptr<erhe::graphics::Shader_stages>;
 
 public:
     std::unique_ptr<erhe::graphics::Shader_resource> default_uniform_block; // containing sampler uniforms

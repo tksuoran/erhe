@@ -41,9 +41,11 @@ public:
 
     auto initialize_actions             () -> bool;
 
-    auto debug_utils_messenger_callback(XrDebugUtilsMessageSeverityFlagsEXT         messageSeverity,
-                                        XrDebugUtilsMessageTypeFlagsEXT             messageTypes,
-                                        const XrDebugUtilsMessengerCallbackDataEXT* callbackData) const -> XrBool32;
+    auto debug_utils_messenger_callback(
+        XrDebugUtilsMessageSeverityFlagsEXT         messageSeverity,
+        XrDebugUtilsMessageTypeFlagsEXT             messageTypes,
+        const XrDebugUtilsMessengerCallbackDataEXT* callbackData
+    ) const -> XrBool32;
 
     class Paths
     {

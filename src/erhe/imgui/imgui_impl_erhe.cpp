@@ -88,42 +88,58 @@ public:
     class Frame_resources
     {
     public:
-        static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_coherent_bit   |
-                                                              gl::Buffer_storage_mask::map_persistent_bit |
-                                                              gl::Buffer_storage_mask::map_write_bit};
+        static constexpr gl::Buffer_storage_mask storage_mask{
+            gl::Buffer_storage_mask::map_coherent_bit   |
+            gl::Buffer_storage_mask::map_persistent_bit |
+            gl::Buffer_storage_mask::map_write_bit
+        };
 
-        static constexpr gl::Map_buffer_access_mask access_mask{gl::Map_buffer_access_mask::map_coherent_bit   |
-                                                                gl::Map_buffer_access_mask::map_persistent_bit |
-                                                                gl::Map_buffer_access_mask::map_write_bit};
+        static constexpr gl::Map_buffer_access_mask access_mask{
+            gl::Map_buffer_access_mask::map_coherent_bit   |
+            gl::Map_buffer_access_mask::map_persistent_bit |
+            gl::Map_buffer_access_mask::map_write_bit
+        };
 
         explicit Frame_resources(Imgui_renderer& imgui_renderer)
-            : vertex_buffer{gl::Buffer_target::array_buffer,
-                            Imgui_renderer::max_vertex_count * imgui_renderer.vertex_format.stride(),
-                            storage_mask,
-                            access_mask}
-            , index_buffer{gl::Buffer_target::element_array_buffer,
-                           Imgui_renderer::max_index_count * sizeof(uint16_t),
-                           storage_mask,
-                           access_mask}
-            , draw_parameter_buffer{gl::Buffer_target::shader_storage_buffer,
-                                    Imgui_renderer::max_draw_count * imgui_renderer.draw_parameter_block->size_bytes(),
-                                    storage_mask,
-                                    access_mask}
-            , draw_indirect_buffer{gl::Buffer_target::draw_indirect_buffer,
-                                   Imgui_renderer::max_draw_count * sizeof(gl::Draw_elements_indirect_command),
-                                   storage_mask,
-                                   access_mask}
-            , vertex_input_state{imgui_renderer.attribute_mappings,
-                                 imgui_renderer.vertex_format,
-                                 &vertex_buffer,
-                                 &index_buffer}
-            , pipeline{imgui_renderer.shader_stages.get(),
-                       &vertex_input_state,
-                       &erhe::graphics::Input_assembly_state::triangles,
-                       &erhe::graphics::Rasterization_state::cull_mode_none,
-                       &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                       &imgui_renderer.color_blend_state,
-                       nullptr}
+            : vertex_buffer{
+                gl::Buffer_target::array_buffer,
+                Imgui_renderer::max_vertex_count * imgui_renderer.vertex_format.stride(),
+                storage_mask,
+                access_mask
+            }
+            , index_buffer{
+                gl::Buffer_target::element_array_buffer,
+                Imgui_renderer::max_index_count * sizeof(uint16_t),
+                storage_mask,
+                access_mask
+            }
+            , draw_parameter_buffer{
+                gl::Buffer_target::shader_storage_buffer,
+                Imgui_renderer::max_draw_count * imgui_renderer.draw_parameter_block->size_bytes(),
+                storage_mask,
+                access_mask
+            }
+            , draw_indirect_buffer{
+                gl::Buffer_target::draw_indirect_buffer,
+                Imgui_renderer::max_draw_count * sizeof(gl::Draw_elements_indirect_command),
+                storage_mask,
+                access_mask
+            }
+            , vertex_input_state{
+                imgui_renderer.attribute_mappings,
+                imgui_renderer.vertex_format,
+                &vertex_buffer,
+                &index_buffer
+            }
+            , pipeline{
+                imgui_renderer.shader_stages.get(),
+                &vertex_input_state,
+                &erhe::graphics::Input_assembly_state::triangles,
+                &erhe::graphics::Rasterization_state::cull_mode_none,
+                &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+                &imgui_renderer.color_blend_state,
+                nullptr
+            }
         {
             vertex_buffer        .set_debug_label("ImGui Renderer Vertex");
             index_buffer         .set_debug_label("ImGui Renderer Index");
@@ -150,15 +166,21 @@ public:
         attribute_mappings.add(gl::Attribute_type::float_vec2, "a_texcoord", {erhe::graphics::Vertex_attribute::Usage_type::tex_coord, 0}, 1);
         attribute_mappings.add(gl::Attribute_type::float_vec4, "a_color",    {erhe::graphics::Vertex_attribute::Usage_type::color,     0}, 2);
 
-        vertex_format.make_attribute({erhe::graphics::Vertex_attribute::Usage_type::position, 0},
-                                     gl::Attribute_type::float_vec2,
-                                     {gl::Vertex_attrib_type::float_, false, 2});
-        vertex_format.make_attribute({erhe::graphics::Vertex_attribute::Usage_type::tex_coord, 0},
-                                     gl::Attribute_type::float_vec2,
-                                     {gl::Vertex_attrib_type::float_, false, 2});
-        vertex_format.make_attribute({erhe::graphics::Vertex_attribute::Usage_type::color, 0},
-                                     gl::Attribute_type::float_vec4,
-                                     {gl::Vertex_attrib_type::unsigned_byte, true, 4});
+        vertex_format.make_attribute(
+            {erhe::graphics::Vertex_attribute::Usage_type::position, 0},
+            gl::Attribute_type::float_vec2,
+            {gl::Vertex_attrib_type::float_, false, 2}
+        );
+        vertex_format.make_attribute(
+            {erhe::graphics::Vertex_attribute::Usage_type::tex_coord, 0},
+            gl::Attribute_type::float_vec2,
+            {gl::Vertex_attrib_type::float_, false, 2}
+        );
+        vertex_format.make_attribute(
+            {erhe::graphics::Vertex_attribute::Usage_type::color, 0},
+            gl::Attribute_type::float_vec4,
+            {gl::Vertex_attrib_type::unsigned_byte, true, 4}
+        );
     }
 
     void create_blocks()
@@ -168,22 +190,28 @@ public:
         u_texture_indices_offset = draw_parameter_struct.add_uint("u_texture_indices", 4)->offset_in_parent();
 
         // Create uniform block for per draw data
-        projection_block = make_unique<erhe::graphics::Shader_resource>("projection", // block name
-                                                                        1,            // binding point
-                                                                        erhe::graphics::Shader_resource::Type::uniform_block);
+        projection_block = make_unique<erhe::graphics::Shader_resource>(
+            "projection", // block name
+            1,            // binding point
+            erhe::graphics::Shader_resource::Type::uniform_block
+        );
 
         // Projection block
         u_scale_offset     = projection_block->add_vec2("u_scale"    )->offset_in_parent();
         u_translate_offset = projection_block->add_vec2("u_translate")->offset_in_parent();
 
         // Create uniform block for per draw data
-        draw_parameter_block = make_unique<erhe::graphics::Shader_resource>("draw", // block name
-                                                                            0,      // binding point
-                                                                            erhe::graphics::Shader_resource::Type::shader_storage_block);
+        draw_parameter_block = make_unique<erhe::graphics::Shader_resource>(
+            "draw", // block name
+            0,      // binding point
+            erhe::graphics::Shader_resource::Type::shader_storage_block
+            );
 
-        draw_parameter_block->add_struct("draw_parameters",
-                                         &draw_parameter_struct,
-                                         0 /* unsized */);
+        draw_parameter_block->add_struct(
+            "draw_parameters",
+            &draw_parameter_struct,
+            0 /* unsized */
+        );
     }
 
     void create_shader_stages()
@@ -193,10 +221,12 @@ public:
         // sampler2d textures[16];
         samplers = default_uniform_block.add_sampler("s_textures", gl::Uniform_type::sampler_2d, texture_unit_count);
 
-        erhe::graphics::Shader_stages::Create_info create_info("ImGui Renderer",
-                                                               &default_uniform_block,
-                                                               &attribute_mappings,
-                                                               &fragment_outputs);
+        erhe::graphics::Shader_stages::Create_info create_info{
+            "ImGui Renderer",
+            &default_uniform_block,
+            &attribute_mappings,
+            &fragment_outputs
+        };
         create_info.add_interface_block(projection_block.get());
         create_info.add_interface_block(draw_parameter_block.get());
         create_info.struct_types.push_back(&draw_parameter_struct);
@@ -256,11 +286,15 @@ public:
     {
         Expects(shader_stages->gl_name() != 0);
 
-        nearest_sampler = make_unique<erhe::graphics::Sampler>(gl::Texture_min_filter::nearest,
-                                                               gl::Texture_mag_filter::nearest);
+        nearest_sampler = make_unique<erhe::graphics::Sampler>(
+            gl::Texture_min_filter::nearest,
+            gl::Texture_mag_filter::nearest
+        );
 
-        linear_sampler = make_unique<erhe::graphics::Sampler>(gl::Texture_min_filter::linear,
-                                                              gl::Texture_mag_filter::linear);
+        linear_sampler = make_unique<erhe::graphics::Sampler>(
+            gl::Texture_min_filter::linear,
+            gl::Texture_mag_filter::linear
+            );
 
         // Point shader uniforms to texture units.
         // Also apply nearest filter, non-mipmapped sampler.
@@ -269,10 +303,15 @@ public:
              texture_unit < static_cast<int>(samplers->array_size().value());
              ++texture_unit)
         {
-            gl::program_uniform_1i(shader_stages->gl_name(),
-                                   location + texture_unit,
-                                   texture_unit);
-            gl::bind_sampler(texture_unit, nearest_sampler->gl_name());
+            gl::program_uniform_1i(
+                shader_stages->gl_name(),
+                location + texture_unit,
+                texture_unit
+            );
+            gl::bind_sampler(
+                texture_unit,
+                nearest_sampler->gl_name()
+            );
         }
     }
 
@@ -284,8 +323,7 @@ public:
         }
     }
 
-    auto current_frame_resources()
-    -> Frame_resources&
+    auto current_frame_resources() -> Frame_resources&
     {
         return m_frame_resources[m_current_frame_resource_slot];
     }
@@ -406,9 +444,11 @@ public:
             }
             ss << texture;
         }
-        gl::bind_textures(0,
-                          static_cast<GLsizei>(m_used_textures.size()),
-                          reinterpret_cast<const GLuint *>(m_used_textures.data()));
+        gl::bind_textures(
+            0,
+            static_cast<GLsizei>(m_used_textures.size()),
+            reinterpret_cast<const GLuint *>(m_used_textures.data())
+        );
     }
 
 private:
@@ -515,10 +555,12 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
         return;
     }
 
-    gl::push_debug_group(gl::Debug_source::debug_source_application,
-                         0,
-                         static_cast<GLsizei>(c_imgui_render.length()),
-                         c_imgui_render.data());
+    gl::push_debug_group(
+        gl::Debug_source::debug_source_application,
+        0,
+        static_cast<GLsizei>(c_imgui_render.length()),
+        c_imgui_render.data()
+    );
 
     const auto& frame_resources       = imgui_renderer.current_frame_resources();
     const auto& draw_parameter_buffer = frame_resources.draw_parameter_buffer;
@@ -635,9 +677,11 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
                         0
                     };
 
-                    erhe::graphics::write(draw_indirect_gpu_data,
-                                          draw_indirect_byte_offset,
-                                          erhe::graphics::as_span(draw_command));
+                    erhe::graphics::write(
+                        draw_indirect_gpu_data,
+                        draw_indirect_byte_offset,
+                        erhe::graphics::as_span(draw_command)
+                    );
                     draw_indirect_byte_offset += sizeof(gl::Draw_elements_indirect_command);
                     ++draw_indirect_count;
                 }
@@ -667,26 +711,34 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
 
     VERIFY(draw_parameter_byte_offset > 0);
 
-    gl::bind_buffer_range(gl::Buffer_target::uniform_buffer,
-                          static_cast<GLuint>    (imgui_renderer.projection_block->binding_point()),
-                          static_cast<GLuint>    (draw_parameter_buffer.gl_name()),
-                          static_cast<GLintptr>  (start_of_projection_block),
-                          static_cast<GLsizeiptr>(draw_parameter_byte_offset));
+    gl::bind_buffer_range(
+        gl::Buffer_target::uniform_buffer,
+        static_cast<GLuint>    (imgui_renderer.projection_block->binding_point()),
+        static_cast<GLuint>    (draw_parameter_buffer.gl_name()),
+        static_cast<GLintptr>  (start_of_projection_block),
+        static_cast<GLsizeiptr>(draw_parameter_byte_offset)
+    );
 
-    gl::bind_buffer_range(gl::Buffer_target::shader_storage_buffer,
-                          static_cast<GLuint>    (imgui_renderer.draw_parameter_block->binding_point()),
-                          static_cast<GLuint>    (draw_parameter_buffer.gl_name()),
-                          static_cast<GLintptr>  (start_of_draw_parameter_block),
-                          static_cast<GLsizeiptr>(draw_parameter_byte_offset));
+    gl::bind_buffer_range(
+        gl::Buffer_target::shader_storage_buffer,
+        static_cast<GLuint>    (imgui_renderer.draw_parameter_block->binding_point()),
+        static_cast<GLuint>    (draw_parameter_buffer.gl_name()),
+        static_cast<GLintptr>  (start_of_draw_parameter_block),
+        static_cast<GLsizeiptr>(draw_parameter_byte_offset)
+    );
 
-    gl::bind_buffer(gl::Buffer_target::draw_indirect_buffer,
-                    static_cast<GLuint>(draw_indirect_buffer.gl_name()));
+    gl::bind_buffer(
+        gl::Buffer_target::draw_indirect_buffer,
+        static_cast<GLuint>(draw_indirect_buffer.gl_name())
+    );
 
-    gl::multi_draw_elements_indirect(pipeline.input_assembly->primitive_topology,
-                                     gl::Draw_elements_type::unsigned_short,
-                                     nullptr,
-                                     static_cast<GLsizei>(draw_indirect_count),
-                                     static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command)));
+    gl::multi_draw_elements_indirect(
+        pipeline.input_assembly->primitive_topology,
+        gl::Draw_elements_type::unsigned_short,
+        nullptr,
+        static_cast<GLsizei>(draw_indirect_count),
+        static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
+    );
 
 
     imgui_renderer.next_frame();

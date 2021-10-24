@@ -23,9 +23,11 @@ namespace erhe::ui
 class Font final
 {
 public:
-    Font(const std::filesystem::path& path,
-         const unsigned int           size,
-         const float                  outline_thickness = 0.0f);
+    Font(
+        const std::filesystem::path& path,
+        const unsigned int           size,
+        const float                  outline_thickness = 0.0f
+    );
 
     ~Font();
 
@@ -37,68 +39,60 @@ public:
         return m_line_height;
     }
 
-    auto print(gsl::span<float>    float_data,
-               gsl::span<uint32_t> uint_data,
-               std::string_view    text,
-               glm::vec3           text_position,
-               const uint32_t      text_color,
-               Rectangle&          out_bounds) const
-    -> size_t;
+    auto print(
+        gsl::span<float>    float_data,
+        gsl::span<uint32_t> uint_data,
+        std::string_view    text,
+        glm::vec3           text_position,
+        const uint32_t      text_color,
+        Rectangle&          out_bounds
+    ) const -> size_t;
 
     void measure(const std::string& text, Rectangle& bounds) const;
 
-    auto texture() const
-    -> gsl::not_null<erhe::graphics::Texture*>
+    auto texture() const -> gsl::not_null<erhe::graphics::Texture*>
     {
         Expects(m_texture);
 
         return m_texture.get();
     }
 
-    auto hinting() const
-    -> bool
+    auto hinting() const -> bool
     {
         return m_hinting;
     }
 
-    auto dpi() const
-    -> unsigned int
+    auto dpi() const -> unsigned int
     {
         return m_dpi;
     }
 
-    auto gamma() const
-    -> float
+    auto gamma() const -> float
     {
         return m_gamma;
     }
 
-    auto saturation() const
-    -> float
+    auto saturation() const -> float
     {
         return m_saturation;
     }
 
-    auto chars() const
-    -> const std::string&
+    auto chars() const -> const std::string&
     {
         return m_chars;
     }
 
-    auto pixel_size() const
-    -> unsigned int
+    auto pixel_size() const -> unsigned int
     {
         return m_pixel_size;
     }
 
-    auto bolding() const
-    -> float
+    auto bolding() const -> float
     {
         return m_bolding;
     }
 
-    auto outline_thickness() const
-    -> float
+    auto outline_thickness() const -> float
     {
         return m_outline_thickness;
     }

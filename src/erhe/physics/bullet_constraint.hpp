@@ -28,8 +28,12 @@ class Bullet_point_to_point_constraint
 public:
     Bullet_point_to_point_constraint(IRigid_body* rigid_body, const glm::vec3 pivot_in_a);
 
-    Bullet_point_to_point_constraint(IRigid_body*    rigid_body_a, IRigid_body*    rigid_body_b,
-                                     const glm::vec3 pivot_in_a,   const glm::vec3 pivot_in_b);
+    Bullet_point_to_point_constraint(
+        IRigid_body*    rigid_body_a,
+        IRigid_body*    rigid_body_b,
+        const glm::vec3 pivot_in_a,
+        const glm::vec3 pivot_in_b
+    );
 
     // Implements IConstraint
     void set_pivot_in_a   (const glm::vec3 pivot_in_a) override;

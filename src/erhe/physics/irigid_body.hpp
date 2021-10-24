@@ -41,11 +41,15 @@ public:
 class IRigid_body
 {
 public:
-    static auto create(IRigid_body_create_info& create_info,
-                       IMotion_state*           motion_state) -> IRigid_body*;
+    static auto create(
+        IRigid_body_create_info& create_info,
+        IMotion_state*           motion_state
+    ) -> IRigid_body*;
 
-    static auto create_shared(IRigid_body_create_info& create_info,
-                              IMotion_state*           motion_state) -> std::shared_ptr<IRigid_body>;
+    static auto create_shared(
+        IRigid_body_create_info& create_info,
+        IMotion_state*           motion_state
+    ) -> std::shared_ptr<IRigid_body>;
 
     //virtual auto get_node_transform() const -> glm::mat4 = 0;
     virtual void set_collision_mode  (Collision_mode collision_mode)                           = 0;

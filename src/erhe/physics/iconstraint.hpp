@@ -17,12 +17,26 @@ public:
     static auto create_point_to_point_constraint_shared(IRigid_body* rigid_body, const glm::vec3 point) -> std::shared_ptr<IConstraint>;
     static auto create_point_to_point_constraint_unique(IRigid_body* rigid_body, const glm::vec3 point) -> std::unique_ptr<IConstraint>;
 
-    static auto create_point_to_point_constraint(IRigid_body*    rigid_body_a, IRigid_body*    rigid_body_b, 
-                                                 const glm::vec3 pivot_in_a,   const glm::vec3 pivot_in_b) -> IConstraint*;
-    static auto create_point_to_point_constraint_shared(IRigid_body*    rigid_body_a, IRigid_body*    rigid_body_b,
-                                                        const glm::vec3 pivot_in_a,   const glm::vec3 pivot_in_b) -> std::shared_ptr<IConstraint>;
-    static auto create_point_to_point_constraint_unique(IRigid_body*    rigid_body_a, IRigid_body*    rigid_body_b,
-                                                        const glm::vec3 pivot_in_a,   const glm::vec3 pivot_in_b) -> std::unique_ptr<IConstraint>;
+    static auto create_point_to_point_constraint(
+        IRigid_body*    rigid_body_a,
+        IRigid_body*    rigid_body_b, 
+        const glm::vec3 pivot_in_a,
+        const glm::vec3 pivot_in_b
+    ) -> IConstraint*;
+
+    static auto create_point_to_point_constraint_shared(
+        IRigid_body*    rigid_body_a,
+        IRigid_body*    rigid_body_b,
+        const glm::vec3 pivot_in_a,
+        const glm::vec3 pivot_in_b
+    ) -> std::shared_ptr<IConstraint>;
+
+    static auto create_point_to_point_constraint_unique(
+        IRigid_body*    rigid_body_a,
+        IRigid_body*    rigid_body_b,
+        const glm::vec3 pivot_in_a,
+        const glm::vec3 pivot_in_b
+    ) -> std::unique_ptr<IConstraint>;
 
     virtual void set_pivot_in_a   (const glm::vec3 pivot_in_a) = 0;
     virtual void set_pivot_in_b   (const glm::vec3 pivot_in_b) = 0;

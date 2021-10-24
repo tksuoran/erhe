@@ -56,20 +56,24 @@ public:
     Polygon_id polygon_id{0};
 
     template<typename T>
-    void smooth_normalize(const Corner_id                            this_corner_id,
-                          const Geometry&                            geometry,
-                          Property_map<Corner_id, T>&                corner_attribute,
-                          const Property_map<Polygon_id, T>&         polygon_attribute,
-                          const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-                          const float                                cos_max_smoothing_angle) const;
+    void smooth_normalize(
+        const Corner_id                            this_corner_id,
+        const Geometry&                            geometry,
+        Property_map<Corner_id, T>&                corner_attribute,
+        const Property_map<Polygon_id, T>&         polygon_attribute,
+        const Property_map<Polygon_id, glm::vec3>& polygon_normals,
+        const float                                cos_max_smoothing_angle
+    ) const;
 
     template<typename T>
-    void smooth_average(const Corner_id                           this_corner_id,
-                        const Geometry&                           geometry,
-                        Property_map<Corner_id, T>&               new_corner_attribute,
-                        const Property_map<Corner_id, T>&         old_corner_attribute,
-                        const Property_map<Corner_id, glm::vec3>& corner_normals,
-                        const Property_map<Point_id,  glm::vec3>& point_normals) const;
+    void smooth_average(
+        const Corner_id                           this_corner_id,
+        const Geometry&                           geometry,
+        Property_map<Corner_id, T>&               new_corner_attribute,
+        const Property_map<Corner_id, T>&         old_corner_attribute,
+        const Property_map<Corner_id, glm::vec3>& corner_normals,
+        const Property_map<Point_id,  glm::vec3>& point_normals
+    ) const;
 };
 
 class Point
@@ -90,8 +94,10 @@ public:
         }
     };
 
-    void for_each_corner(Geometry&                                          geometry,
-                         std::function<void(Point_corner_context& context)> callback);
+    void for_each_corner(
+        Geometry&                                          geometry,
+        std::function<void(Point_corner_context& context)> callback
+    );
 
     class Point_corner_context_const
     {
@@ -108,8 +114,10 @@ public:
         }
     };
 
-    void for_each_corner_const(const Geometry&                                          geometry,
-                               std::function<void(Point_corner_context_const& context)> callback) const;
+    void for_each_corner_const(
+        const Geometry&                                          geometry,
+        std::function<void(Point_corner_context_const& context)> callback
+    ) const;
 
     class Point_corner_neighborhood_context
     {
@@ -153,11 +161,15 @@ public:
         }
     };
 
-    void for_each_corner_neighborhood(Geometry&                                                       geometry,
-                                      std::function<void(Point_corner_neighborhood_context& context)> callback);
+    void for_each_corner_neighborhood(
+        Geometry&                                                       geometry,
+        std::function<void(Point_corner_neighborhood_context& context)> callback
+    );
 
-    void for_each_corner_neighborhood_const(const Geometry&                                                       geometry,
-                                            std::function<void(Point_corner_neighborhood_context_const& context)> callback) const;
+    void for_each_corner_neighborhood_const(
+        const Geometry&                                                       geometry,
+        std::function<void(Point_corner_neighborhood_context_const& context)> callback
+    ) const;
 
     Point_corner_id first_point_corner_id{0};
     uint32_t        corner_count{0};
@@ -172,54 +184,69 @@ public:
 
     // Copies polygon property to corners
     template <typename T>
-    void copy_to_corners(const Polygon_id                   this_polygon_id,
-                         const Geometry&                    geometry,
-                         Property_map<Corner_id, T>&        corner_attribute,
-                         const Property_map<Polygon_id, T>& polygon_attribute) const;
+    void copy_to_corners(
+        const Polygon_id                   this_polygon_id,
+        const Geometry&                    geometry,
+        Property_map<Corner_id, T>&        corner_attribute,
+        const Property_map<Polygon_id, T>& polygon_attribute
+    ) const;
 
     template <typename T>
-    void smooth_normalize(const Geometry&                            geometry,
-                          Property_map<Corner_id, T>&                corner_attribute,
-                          const Property_map<Polygon_id, T>&         polygon_attribute,
-                          const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-                          const float                                cos_max_smoothing_angle) const;
+    void smooth_normalize(
+        const Geometry&                            geometry,
+        Property_map<Corner_id, T>&                corner_attribute,
+        const Property_map<Polygon_id, T>&         polygon_attribute,
+        const Property_map<Polygon_id, glm::vec3>& polygon_normals,
+        const float                                cos_max_smoothing_angle
+    ) const;
 
     template <typename T>
-    void smooth_average(const Geometry&                           geometry,
-                        Property_map<Corner_id, T>&               new_corner_attribute,
-                        const Property_map<Corner_id, T>&         old_corner_attribute,
-                        const Property_map<Corner_id, glm::vec3>& corner_normals,
-                        const Property_map<Point_id, glm::vec3>&  point_normals) const;
+    void smooth_average(
+        const Geometry&                           geometry,
+        Property_map<Corner_id, T>&               new_corner_attribute,
+        const Property_map<Corner_id, T>&         old_corner_attribute,
+        const Property_map<Corner_id, glm::vec3>& corner_normals,
+        const Property_map<Point_id, glm::vec3>&  point_normals
+    ) const;
 
-    void compute_normal(const Polygon_id                         this_polygon_id,
-                        const Geometry&                          geometry,
-                        Property_map<Polygon_id, glm::vec3>&     polygon_normals,
-                        const Property_map<Point_id, glm::vec3>& point_locations) const;
+    void compute_normal(
+        const Polygon_id                         this_polygon_id,
+        const Geometry&                          geometry,
+        Property_map<Polygon_id, glm::vec3>&     polygon_normals,
+        const Property_map<Point_id, glm::vec3>& point_locations
+    ) const;
 
-    auto compute_normal(const Geometry&                          geometry,
-                        const Property_map<Point_id, glm::vec3>& point_locations) const
-    -> glm::vec3;
+    auto compute_normal(
+        const Geometry&                          geometry,
+        const Property_map<Point_id, glm::vec3>& point_locations
+    ) const -> glm::vec3;
 
-    auto compute_centroid(const Geometry&                          geometry,
-                          const Property_map<Point_id, glm::vec3>& point_locations) const
-    -> glm::vec3;
+    auto compute_centroid(
+        const Geometry&                          geometry,
+        const Property_map<Point_id, glm::vec3>& point_locations
+    ) const -> glm::vec3;
 
-    auto compute_edge_midpoint(const Geometry&                          geometry,
-                               const Property_map<Point_id, glm::vec3>& point_locations) const
-    -> glm::vec3;
+    auto compute_edge_midpoint(
+        const Geometry&                          geometry,
+        const Property_map<Point_id, glm::vec3>& point_locations
+    ) const -> glm::vec3;
 
-    void compute_centroid(const Polygon_id                         this_polygon_id,
-                          const Geometry&                          geometry,
-                          Property_map<Polygon_id, glm::vec3>&     polygon_centroids,
-                          const Property_map<Point_id, glm::vec3>& point_locations) const;
+    void compute_centroid(
+        const Polygon_id                         this_polygon_id,
+        const Geometry&                          geometry,
+        Property_map<Polygon_id, glm::vec3>&     polygon_centroids,
+        const Property_map<Point_id, glm::vec3>& point_locations
+    ) const;
 
-    void compute_planar_texture_coordinates(const Polygon_id                           this_polygon_id,
-                                            const Geometry&                            geometry,
-                                            Property_map<Corner_id, glm::vec2>&        corner_texcoords,
-                                            const Property_map<Polygon_id, glm::vec3>& polygon_centroids,
-                                            const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-                                            const Property_map<Point_id, glm::vec3>&   point_locations,
-                                            const bool                                 overwrite = false) const;
+    void compute_planar_texture_coordinates(
+        const Polygon_id                           this_polygon_id,
+        const Geometry&                            geometry,
+        Property_map<Corner_id, glm::vec2>&        corner_texcoords,
+        const Property_map<Polygon_id, glm::vec3>& polygon_centroids,
+        const Property_map<Polygon_id, glm::vec3>& polygon_normals,
+        const Property_map<Point_id, glm::vec3>&   point_locations,
+        const bool                                 overwrite = false
+    ) const;
 
     auto corner(const Geometry& geometry, const Point_id point_id) const -> Corner_id;
 
@@ -259,11 +286,15 @@ public:
         }
     };
 
-    void for_each_corner(Geometry&                                            geometry,
-                         std::function<void(Polygon_corner_context& context)> callback);
+    void for_each_corner(
+        Geometry&                                            geometry,
+        std::function<void(Polygon_corner_context& context)> callback
+    );
 
-    void for_each_corner_const(const Geometry&                                            geometry,
-                               std::function<void(Polygon_corner_context_const& context)> callback) const;
+    void for_each_corner_const(
+        const Geometry&                                            geometry,
+        std::function<void(Polygon_corner_context_const& context)> callback
+    ) const;
 
     class Polygon_corner_neighborhood_context
     {
@@ -307,11 +338,15 @@ public:
         }
     };
 
-    void for_each_corner_neighborhood(Geometry&                                                         geometry,
-                                      std::function<void(Polygon_corner_neighborhood_context& context)> callback);
+    void for_each_corner_neighborhood(
+        Geometry&                                                         geometry,
+        std::function<void(Polygon_corner_neighborhood_context& context)> callback
+    );
 
-    void for_each_corner_neighborhood_const(const Geometry&                                                         geometry,
-                                            std::function<void(Polygon_corner_neighborhood_context_const& context)> callback) const;
+    void for_each_corner_neighborhood_const(
+        const Geometry&                                                         geometry,
+        std::function<void(Polygon_corner_neighborhood_context_const& context)> callback
+    ) const;
 };
 
 class Edge
@@ -352,11 +387,15 @@ public:
         }
     };
 
-    void for_each_polygon(Geometry&                                          geometry,
-                          std::function<void(Edge_polygon_context& context)> callback);
+    void for_each_polygon(
+        Geometry&                                          geometry,
+        std::function<void(Edge_polygon_context& context)> callback
+    );
 
-    void for_each_polygon_const(const Geometry&                                          geometry,
-                                std::function<void(Edge_polygon_context_const& context)> callback) const;
+    void for_each_polygon_const(
+        const Geometry&                                          geometry,
+        std::function<void(Edge_polygon_context_const& context)> callback
+    ) const;
 };
 
 class Mesh_info
@@ -593,12 +632,14 @@ public:
     auto has_corner_tangents() const -> bool;
     auto has_corner_bitangents() const -> bool;
 
-    auto compute_tangents(const bool corner_tangents    = true,
-                          const bool corner_bitangents  = true,
-                          const bool polygon_tangents   = false,
-                          const bool polygon_bitangents = false,
-                          const bool make_polygons_flat = true,
-                          const bool override_existing  = false) -> bool;
+    auto compute_tangents(
+        const bool corner_tangents    = true,
+        const bool corner_bitangents  = true,
+        const bool polygon_tangents   = false,
+        const bool polygon_bitangents = false,
+        const bool make_polygons_flat = true,
+        const bool override_existing  = false
+    ) -> bool;
 
     auto generate_polygon_texture_coordinates(const bool overwrite_existing_texture_coordinates = false) -> bool;
 
@@ -608,16 +649,20 @@ public:
     void generate_texture_coordinates_spherical();
 
     template <typename T>
-    void smooth_normalize(Property_map<Corner_id, T>&                corner_attribute,
-                          const Property_map<Polygon_id, T>&         polygon_attribute,
-                          const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-                          const float                                max_smoothing_angle_radians) const;
+    void smooth_normalize(
+        Property_map<Corner_id, T>&                corner_attribute,
+        const Property_map<Polygon_id, T>&         polygon_attribute,
+        const Property_map<Polygon_id, glm::vec3>& polygon_normals,
+        const float                                max_smoothing_angle_radians
+    ) const;
 
     template <typename T>
-    void smooth_average(Property_map<Corner_id, T>&                smoothed_corner_attribute,
-                        const Property_map<Corner_id, T>&          corner_attribute,
-                        const Property_map<Corner_id, glm::vec3>&  corner_normals,
-                        const Property_map<Polygon_id, glm::vec3>& point_normals) const;
+    void smooth_average(
+        Property_map<Corner_id, T>&                smoothed_corner_attribute,
+        const Property_map<Corner_id, T>&          corner_attribute,
+        const Property_map<Corner_id, glm::vec3>&  corner_normals,
+        const Property_map<Polygon_id, glm::vec3>& point_normals
+    ) const;
 
     void sort_point_corners();
 

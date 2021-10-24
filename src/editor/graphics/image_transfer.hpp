@@ -21,10 +21,11 @@ public:
     public:
         Slot();
 
-        auto span_for(const int                 width,
-                      const int                 height,
-                      const gl::Internal_format internal_format)
-        -> gsl::span<std::byte>;
+        auto span_for(
+            const int                 width,
+            const int                 height,
+            const gl::Internal_format internal_format
+        ) -> gsl::span<std::byte>;
 
         auto gl_name() -> unsigned int
         {

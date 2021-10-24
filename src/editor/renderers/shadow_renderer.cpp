@@ -63,20 +63,24 @@ void Shadow_renderer::initialize_component()
 {
     ZoneScoped;
 
-    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
 
-    gl::push_debug_group(gl::Debug_source::debug_source_application,
-                         0,
-                         static_cast<GLsizei>(c_shadow_renderer_initialize_component.length()),
-                         c_shadow_renderer_initialize_component.data());
+    gl::push_debug_group(
+        gl::Debug_source::debug_source_application,
+        0,
+        static_cast<GLsizei>(c_shadow_renderer_initialize_component.length()),
+        c_shadow_renderer_initialize_component.data()
+    );
 
     create_frame_resources(1, 256, 256, 1000, 1000);
 
     const auto& shader_resources = *get<Program_interface>()->shader_resources.get();
-    m_vertex_input = std::make_unique<Vertex_input_state>(shader_resources.attribute_mappings,
-                                                          m_mesh_memory->gl_vertex_format(),
-                                                          m_mesh_memory->gl_vertex_buffer.get(),
-                                                          m_mesh_memory->gl_index_buffer.get());
+    m_vertex_input = std::make_unique<Vertex_input_state>(
+        shader_resources.attribute_mappings,
+        m_mesh_memory->gl_vertex_format(),
+        m_mesh_memory->gl_vertex_buffer.get(),
+        m_mesh_memory->gl_index_buffer.get()
+    );
 
     m_pipeline.shader_stages  = get<Programs>()->depth.get();
     m_pipeline.vertex_input   = m_vertex_input.get();
@@ -129,10 +133,12 @@ void Shadow_renderer::render(Layer_collection& layers,
     ZoneScoped;
     TracyGpuZone(c_shadow_renderer_render.data())
 
-    gl::push_debug_group(gl::Debug_source::debug_source_application,
-                         0,
-                         static_cast<GLsizei>(c_shadow_renderer_render.length()),
-                         c_shadow_renderer_render.data());
+    gl::push_debug_group(
+        gl::Debug_source::debug_source_application,
+        0,
+        static_cast<GLsizei>(c_shadow_renderer_render.length()),
+        c_shadow_renderer_render.data()
+    );
 
     // For now, camera is ignored.
     static_cast<void>(camera);
@@ -151,9 +157,11 @@ void Shadow_renderer::render(Layer_collection& layers,
     {
         update_light_buffer(layer->lights, m_viewport);
         update_primitive_buffer(layer->meshes, shadow_filter);
-        auto draw_indirect_buffer_range = update_draw_indirect_buffer(layer->meshes,
-                                                                      Primitive_mode::polygon_fill,
-                                                                      shadow_filter);
+        auto draw_indirect_buffer_range = update_draw_indirect_buffer(
+            layer->meshes,
+            Primitive_mode::polygon_fill,
+            shadow_filter
+        );
 
         bind_light_buffer();
         bind_primitive_buffer();
@@ -175,11 +183,13 @@ void Shadow_renderer::render(Layer_collection& layers,
 
             bind_camera_buffer();
 
-            gl::multi_draw_elements_indirect(m_pipeline.input_assembly->primitive_topology,
-                                             m_mesh_memory->gl_index_type(),
-                                             reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
-                                             static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
-                                             static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command)));
+            gl::multi_draw_elements_indirect(
+                m_pipeline.input_assembly->primitive_topology,
+                m_mesh_memory->gl_index_type(),
+                reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
+                static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
+                static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
+            );
             ++light_index;
         }
     }

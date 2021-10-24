@@ -18,28 +18,29 @@ using glm::vec4;
 namespace
 {
 
-auto sign(const float x)
--> float
+auto sign(const float x) -> float
 {
     return x < 0.0f ? -1.0f : 1.0f;
 }
 
-auto signed_pow(const float x, const float p)
--> float
+auto signed_pow(const float x, const float p) -> float
 {
     return sign(x) * std::pow(std::abs(x), p);
 }
 
 } // namespace
 
-auto make_box(const double x_size, const double y_size, const double z_size)
--> Geometry
+auto make_box(
+    const double x_size,
+    const double y_size,
+    const double z_size
+) -> Geometry
 {
     const double x = x_size / 2.0;
     const double y = y_size / 2.0;
     const double z = z_size / 2.0;
 
-    return Geometry(
+    return Geometry{
         "box",
         [=](auto& geometry)
         {
@@ -65,13 +66,19 @@ auto make_box(const double x_size, const double y_size, const double z_size)
             geometry.compute_polygon_centroids();
             geometry.compute_tangents();
         }
-    );
+    };
 }
 
-auto make_box(const float min_x, const float max_x, const float min_y, const float max_y, const float min_z, const float max_z)
--> Geometry
+auto make_box(
+    const float min_x,
+    const float max_x,
+    const float min_y,
+    const float max_y,
+    const float min_z,
+    const float max_z
+) -> Geometry
 {
-    return Geometry(
+    return Geometry{
         "box",
         [=](auto& geometry)
         {
@@ -97,7 +104,7 @@ auto make_box(const float min_x, const float max_x, const float min_y, const flo
             geometry.compute_polygon_centroids();
             geometry.compute_tangents();
         }
-    );
+    };
 }
 
 auto make_box(const double r)
@@ -146,12 +153,19 @@ public:
         B = vec4{b_xyz, b_w};
     }
 
-    auto make_point(const int x, const int y, const int z, const glm::vec3 n, const float s, const float t)
-    -> Point_id
+    auto make_point(
+        const int       x,
+        const int       y,
+        const int       z,
+        const glm::vec3 n,
+        const float     s,
+        const float     t
+    ) -> Point_id
     {
-        const int key = y * (div.x * 4 * div.z * 4) +
-                        x * (div.z * 4) +
-                        z;
+        const int key =
+            y * (div.x * 4 * div.z * 4) +
+            x * (div.z * 4) +
+            z;
 
         const auto i = points.find(key);
         if (i != points.end())
@@ -171,15 +185,16 @@ public:
         const float z_p = rel_zp * size.z;
 
         const Point_id point_id         = geometry.make_point();
-        const bool     is_discontinuity = (x == -div.x) || (x == div.x) ||
-                                          (y == -div.y) || (y == div.y) ||
-                                          (z == -div.z) || (z == div.z);
+        const bool     is_discontinuity =
+            (x == -div.x) || (x == div.x) ||
+            (y == -div.y) || (y == div.y) ||
+            (z == -div.z) || (z == div.z);
 
-        point_locations->put(point_id, vec3(x_p, y_p, z_p));
+        point_locations->put(point_id, vec3{x_p, y_p, z_p});
         if (!is_discontinuity)
         {
             point_normals->put(point_id, n);
-            point_texcoords->put(point_id, vec2(s, t));
+            point_texcoords->put(point_id, vec2{s, t});
 
             vec4 B;
             vec4 T;
@@ -193,22 +208,31 @@ public:
         return point_id;
     }
 
-    auto make_corner(const Polygon_id polygon_id, const int x, const int y, const int z, const glm::vec3 n, const float s, const float t)
-    -> Corner_id
+    auto make_corner(
+        const Polygon_id polygon_id,
+        const int        x,
+        const int        y,
+        const int        z,
+        const glm::vec3  n,
+        const float      s,
+        const float      t
+    ) -> Corner_id
     {
-        const int key = y * (div.x * 4 * div.z * 4) +
-                        x * (div.z * 4) +
-                        z;
+        const int key =
+            y * (div.x * 4 * div.z * 4) +
+            x * (div.z * 4) +
+            z;
 
         const Point_id  point_id         = points[key];
         const Corner_id corner_id        = geometry.make_polygon_corner(polygon_id, point_id);
-        const bool      is_discontinuity = (x == -div.x) || (x == div.x) ||
-                                           (y == -div.y) || (y == div.y) ||
-                                           (z == -div.z) || (z == div.z);
+        const bool      is_discontinuity =
+            (x == -div.x) || (x == div.x) ||
+            (y == -div.y) || (y == div.y) ||
+            (z == -div.z) || (z == div.z);
         if (is_discontinuity)
         {
             corner_normals->put(corner_id, n);
-            corner_texcoords->put(corner_id, vec2(s, t));
+            corner_texcoords->put(corner_id, vec2{s, t});
             vec4 B;
             vec4 T;
             ortho_basis_pixar_r1(n, B, T);
@@ -363,10 +387,14 @@ auto make_box(const glm::vec3 size, const glm::ivec3 div, const float p)
 {
     ZoneScoped;
 
-    return Geometry("box", [size, div, p](auto& geometry){
-        Box_builder builder(geometry, size / 2.0f, div, p);
-        builder.build();
-    });
+    return Geometry{
+        "box",
+        [size, div, p](auto& geometry)
+        {
+            Box_builder builder{geometry, size / 2.0f, div, p};
+            builder.build();
+        }
+    };
 }
 
 } // namespace erhe::geometry::shapes

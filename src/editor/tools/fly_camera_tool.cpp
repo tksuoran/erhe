@@ -16,7 +16,9 @@ using namespace std;
 using namespace erhe::scene;
 using namespace erhe::toolkit;
 
-Fly_camera_space_mouse_listener::Fly_camera_space_mouse_listener(Fly_camera_tool& fly_camera_tool)
+Fly_camera_space_mouse_listener::Fly_camera_space_mouse_listener(
+    Fly_camera_tool& fly_camera_tool
+)
     : m_fly_camera_tool{fly_camera_tool}
 {
 }

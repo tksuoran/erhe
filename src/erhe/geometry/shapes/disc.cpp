@@ -48,23 +48,28 @@ public:
         const double cos_phi             = std::cos(phi);
         const double one_minus_rel_stack = 1.0 - rel_stack;
 
-        const vec3 position{static_cast<float>(one_minus_rel_stack * (outer_radius * cos_phi) + rel_stack * (inner_radius * cos_phi)),
-                            static_cast<float>(one_minus_rel_stack * (outer_radius * sin_phi) + rel_stack * (inner_radius * sin_phi)),
-                            0.0f};
+        const vec3 position{
+            static_cast<float>(one_minus_rel_stack * (outer_radius * cos_phi) + rel_stack * (inner_radius * cos_phi)),
+            static_cast<float>(one_minus_rel_stack * (outer_radius * sin_phi) + rel_stack * (inner_radius * sin_phi)),
+            0.0f
+        };
 
         const auto s = static_cast<float>(rel_slice);
         const auto t = static_cast<float>(rel_stack);
 
         const Point_id point_id = geometry.make_point();
-        point_locations->put(point_id, vec3(position.x, position.y, position.z));
-        point_normals  ->put(point_id, vec3(0.0f, 0.0f, 1.0f));
-        point_texcoords->put(point_id, vec2(s, t));
+        point_locations->put(point_id, vec3{position.x, position.y, position.z});
+        point_normals  ->put(point_id, vec3{0.0f, 0.0f, 1.0f});
+        point_texcoords->put(point_id, vec2{s, t});
 
         return point_id;
     }
 
-    auto make_corner(const Polygon_id polygon_id, const int slice, const int stack)
-    -> Corner_id
+    auto make_corner(
+        const Polygon_id polygon_id,
+        const int       slice,
+        const int       stack
+    ) -> Corner_id
     {
         const double rel_slice           = static_cast<double>(slice) / static_cast<double>(slice_count);
         const double rel_stack           = (stack_count == 1) ? 1.0 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
@@ -102,11 +107,13 @@ public:
         return corner_id;
     }
 
-    Disc_builder(Geometry&    geometry,
-                 const double inner_radius,
-                 const double outer_radius,
-                 const int    slice_count,
-                 const int    stack_count)
+    Disc_builder(
+        Geometry&    geometry,
+        const double inner_radius,
+        const double outer_radius,
+        const int    slice_count,
+        const int    stack_count
+    )
         : geometry    {geometry}
         , inner_radius{inner_radius}
         , outer_radius{outer_radius}
@@ -127,7 +134,10 @@ public:
         // Make points
         for (int stack = 0; stack < stack_count; ++stack)
         {
-            const double rel_stack = (stack_count == 1) ? 1.0 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
+            const double rel_stack =
+                (stack_count == 1)
+                    ? 1.0
+                    : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
             for (int slice = 0; slice <= slice_count; ++slice)
             {
                 const double rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
@@ -140,8 +150,8 @@ public:
         if (stack_count == 1)
         {
             const Polygon_id polygon_id = geometry.make_polygon();
-            polygon_centroids->put(polygon_id, vec3(0.0f, 0.0f, 0.0f));
-            polygon_normals->put(polygon_id, vec3(0.0f, 0.0f, 1.0f));
+            polygon_centroids->put(polygon_id, vec3{0.0f, 0.0f, 0.0f});
+            polygon_normals->put(polygon_id, vec3{0.0f, 0.0f, 1.0f});
 
             for (int slice = slice_count - 1; slice >= 0; --slice)
             {
@@ -168,7 +178,7 @@ public:
                 const Polygon_id polygon_id         = geometry.make_polygon();
 
                 polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
-                polygon_normals->put(polygon_id, vec3(0.0f, 0.0f, 1.0f));
+                polygon_normals->put(polygon_id, vec3{0.0f, 0.0f, 1.0f});
                 if ((stack == 0) && (inner_radius == 0.0))
                 {
                     const Corner_id tip_corner_id = make_corner(polygon_id, slice, stack);
@@ -195,22 +205,23 @@ public:
     }
 };
 
-auto make_disc(const double outer_radius,
-               const double inner_radius,
-               const int    slice_count,
-               const int    stack_count)
--> Geometry
+auto make_disc(
+    const double outer_radius,
+    const double inner_radius,
+    const int    slice_count,
+    const int    stack_count
+) -> Geometry
 {
     ZoneScoped;
 
-    return Geometry(
+    return Geometry{
         "disc",
         [=](auto& geometry)
         {
-            Disc_builder builder(geometry, outer_radius, inner_radius, slice_count, stack_count);
+        Disc_builder builder{geometry, outer_radius, inner_radius, slice_count, stack_count};
             builder.build();
         }
-    );
+    };
 }
 
 } // namespace erhe::geometry::shapes

@@ -4,15 +4,23 @@
 namespace erhe::physics
 {
 
-auto ICollision_shape::create_box_shape(const glm::vec3 half_extents) -> ICollision_shape*
+auto ICollision_shape::create_box_shape(const glm::vec3 half_extents)
+    -> ICollision_shape*
 {
     return new Bullet_box_shape(half_extents);
 }
-auto ICollision_shape::create_box_shape_shared(const glm::vec3 half_extents) -> std::shared_ptr<ICollision_shape>
+
+auto ICollision_shape::create_box_shape_shared(const glm::vec3 half_extents)
+    -> std::shared_ptr<ICollision_shape>
 {
     return std::make_shared<Bullet_box_shape>(half_extents);
 }
-auto ICollision_shape::create_capsule_shape(const Axis axis, const float radius, const float length) -> ICollision_shape*
+
+auto ICollision_shape::create_capsule_shape(
+    const Axis  axis,
+    const float radius,
+    const float length
+) -> ICollision_shape*
 {
     switch (axis)
     {
@@ -22,7 +30,12 @@ auto ICollision_shape::create_capsule_shape(const Axis axis, const float radius,
         default:      return nullptr;
     }
 }
-auto ICollision_shape::create_capsule_shape_shared(const Axis axis, const float radius, const float length) -> std::shared_ptr<ICollision_shape>
+
+auto ICollision_shape::create_capsule_shape_shared(
+    const Axis  axis,
+    const float radius,
+    const float length
+) -> std::shared_ptr<ICollision_shape>
 {
     switch (axis)
     {
@@ -32,7 +45,12 @@ auto ICollision_shape::create_capsule_shape_shared(const Axis axis, const float 
         default:      return {};
     }
 }
-auto ICollision_shape::create_cone_shape(const Axis axis, const float base_radius, const float height) -> ICollision_shape*
+
+auto ICollision_shape::create_cone_shape(
+    const Axis  axis,
+    const float base_radius,
+    const float height
+) -> ICollision_shape*
 {
     switch (axis)
     {
@@ -42,7 +60,12 @@ auto ICollision_shape::create_cone_shape(const Axis axis, const float base_radiu
         default:      return nullptr;
     }
 }
-auto ICollision_shape::create_cone_shape_shared(const Axis axis, const float base_radius, const float height) -> std::shared_ptr<ICollision_shape>
+
+auto ICollision_shape::create_cone_shape_shared(
+    const Axis  axis,
+    const float base_radius,
+    const float height
+) -> std::shared_ptr<ICollision_shape>
 {
     switch (axis)
     {
@@ -52,7 +75,11 @@ auto ICollision_shape::create_cone_shape_shared(const Axis axis, const float bas
         default:      return {};
     }
 }
-auto ICollision_shape::create_cylinder_shape(const Axis axis, const glm::vec3 half_extents) -> ICollision_shape*
+
+auto ICollision_shape::create_cylinder_shape(
+    const Axis      axis,
+    const glm::vec3 half_extents
+) -> ICollision_shape*
 {
     switch (axis)
     {
@@ -62,7 +89,11 @@ auto ICollision_shape::create_cylinder_shape(const Axis axis, const glm::vec3 ha
         default:      return nullptr;
     }
 }
-auto ICollision_shape::create_cylinder_shape_shared(const Axis axis, const glm::vec3 half_extents) -> std::shared_ptr<ICollision_shape>
+
+auto ICollision_shape::create_cylinder_shape_shared(
+    const Axis      axis,
+    const glm::vec3 half_extents
+) -> std::shared_ptr<ICollision_shape>
 {
     switch (axis)
     {
@@ -72,11 +103,15 @@ auto ICollision_shape::create_cylinder_shape_shared(const Axis axis, const glm::
         default:      return nullptr;
     }
 }
-auto ICollision_shape::create_sphere_shape(const float radius) -> ICollision_shape*
+
+auto ICollision_shape::create_sphere_shape(const float radius)
+    -> ICollision_shape*
 {
     return new Bullet_sphere_shape(radius);
 }
-auto ICollision_shape::create_sphere_shape_shared(const float radius) -> std::shared_ptr<ICollision_shape>
+
+auto ICollision_shape::create_sphere_shape_shared(const float radius)
+    -> std::shared_ptr<ICollision_shape>
 {
     return std::make_shared<Bullet_sphere_shape>(radius);
 }

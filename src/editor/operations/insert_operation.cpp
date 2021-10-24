@@ -49,21 +49,25 @@ void Mesh_insert_remove_operation::execute(const Mode mode)
     VERIFY(m_context.node);
     if (mode == Mode::insert)
     {
-        attach(m_context.layer,
-               m_context.scene,
-               m_context.physics_world,
-               m_context.node,
-               m_context.mesh, m_context.node_physics);
+        attach(
+            m_context.layer,
+            m_context.scene,
+            m_context.physics_world,
+            m_context.node,
+            m_context.mesh, m_context.node_physics
+        );
     }
     else
     {
         m_context.selection_tool->remove_from_selection(m_context.mesh);
-        detach(m_context.layer,
-               m_context.scene,
-               m_context.physics_world,
-               m_context.node,
-               m_context.mesh,
-               m_context.node_physics);
+        detach(
+            m_context.layer,
+            m_context.scene,
+            m_context.physics_world,
+            m_context.node,
+            m_context.mesh,
+            m_context.node_physics
+        );
     }
 }
 
@@ -90,17 +94,21 @@ void Light_insert_remove_operation::execute(const Mode mode)
     VERIFY(m_context.node);
     if (mode == Mode::insert)
     {
-        attach(m_context.layer,
-               m_context.scene,
-               m_context.node,
-               m_context.light);
+        attach(
+            m_context.layer,
+            m_context.scene,
+            m_context.node,
+            m_context.light
+        );
     }
     else
     {
-        detach(m_context.layer,
-               m_context.scene,
-               m_context.node,
-               m_context.light);
+        detach(
+            m_context.layer,
+            m_context.scene,
+            m_context.node,
+            m_context.light
+        );
     }
 }
 

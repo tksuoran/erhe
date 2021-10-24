@@ -86,8 +86,10 @@ public:
 
     // relStackIn is in range -1..1
     // relStack is in range 0..1
-    auto cone_point(const double rel_slice, const double rel_stack_minus_one_to_one)
-    -> Point_id
+    auto cone_point(
+        const double rel_slice,
+        const double rel_stack_minus_one_to_one
+    ) -> Point_id
     {
         const double phi                 = glm::pi<double>() * 2.0 * rel_slice;
         const double sin_phi             = std::sin(phi);
@@ -95,22 +97,30 @@ public:
         const double rel_stack           = 0.5 + 0.5 * rel_stack_minus_one_to_one;
         const double one_minus_rel_stack = 1.0 - rel_stack;
 
-        const vec3 position{static_cast<float>(one_minus_rel_stack * (min_x                  ) + rel_stack * (max_x)),
-                            static_cast<float>(one_minus_rel_stack * (bottom_radius * sin_phi) + rel_stack * (top_radius * sin_phi)),
-                            static_cast<float>(one_minus_rel_stack * (bottom_radius * cos_phi) + rel_stack * (top_radius * cos_phi))};
+        const vec3 position{
+            static_cast<float>(one_minus_rel_stack * (min_x                  ) + rel_stack * (max_x)),
+            static_cast<float>(one_minus_rel_stack * (bottom_radius * sin_phi) + rel_stack * (top_radius * sin_phi)),
+            static_cast<float>(one_minus_rel_stack * (bottom_radius * cos_phi) + rel_stack * (top_radius * cos_phi))
+        };
 
-        const vec3 bottom{static_cast<float>(min_x),
-                          static_cast<float>(bottom_radius * sin_phi),
-                          static_cast<float>(bottom_radius * cos_phi)};
+        const vec3 bottom{
+            static_cast<float>(min_x),
+            static_cast<float>(bottom_radius * sin_phi),
+            static_cast<float>(bottom_radius * cos_phi)
+        };
 
-        const vec3 top{static_cast<float>(max_x),
-                       static_cast<float>(top_radius * sin_phi),
-                       static_cast<float>(top_radius * cos_phi)};
+        const vec3 top{
+            static_cast<float>(max_x),
+            static_cast<float>(top_radius * sin_phi),
+            static_cast<float>(top_radius * cos_phi)
+        };
 
         const vec3 B = glm::normalize(top - bottom); // generatrix
-        const vec3 T{0.0f,
-                     static_cast<float>(std::sin(phi + (glm::pi<double>() * 0.5))),
-                     static_cast<float>(std::cos(phi + (glm::pi<double>() * 0.5)))};
+        const vec3 T{
+            0.0f,
+            static_cast<float>(std::sin(phi + (glm::pi<double>() * 0.5))),
+            static_cast<float>(std::cos(phi + (glm::pi<double>() * 0.5)))
+        };
         const vec3 N0 = glm::cross(B, T);
         const vec3 N  = glm::normalize(N0);
 
@@ -126,25 +136,34 @@ public:
 
         point_locations ->put(point_id, position);
         point_normals   ->put(point_id, N);
-        point_tangents  ->put(point_id, vec4(t_xyz, t_w));
-        point_bitangents->put(point_id, vec4(b_xyz, b_w));
-        point_texcoords ->put(point_id, vec2(static_cast<float>(s),          static_cast<float>(t)));
-        log_cone.trace("point_id = {:3}, rel_slice = {: 3.1}, rel_stack = {: 3.1}, "
-                       "position = {}, texcoord = {}\n",
-                       point_id, static_cast<float>(rel_slice), static_cast<float>(rel_stack),
-                       position,
-                       glm::vec2(s, t));
+        point_tangents  ->put(point_id, vec4{t_xyz, t_w});
+        point_bitangents->put(point_id, vec4{b_xyz, b_w});
+        point_texcoords ->put(point_id, vec2{static_cast<float>(s), static_cast<float>(t)});
+        log_cone.trace(
+            "point_id = {:3}, rel_slice = {: 3.1}, rel_stack = {: 3.1}, "
+            "position = {}, texcoord = {}\n",
+            point_id, static_cast<float>(rel_slice), static_cast<float>(rel_stack),
+            position,
+            glm::vec2{s, t}
+        );
         return point_id;
     }
 
-    auto make_corner(const Polygon_id polygon, const int slice, const int stack)
-    -> Corner_id
+    auto make_corner(
+        const Polygon_id polygon,
+        const int        slice,
+        const int        stack
+    ) -> Corner_id
     {
         return make_corner(polygon, slice, stack, false);
     }
 
-    auto make_corner(const Polygon_id polygon_id, const int slice, const int stack, const bool base)
-    -> Corner_id
+    auto make_corner(
+        const Polygon_id polygon_id,
+        const int        slice,
+        const int        stack,
+        const bool       base
+    ) -> Corner_id
     {
         const auto rel_slice                  = static_cast<double>(slice) / static_cast<double>(slice_count);
         const auto rel_stack_minus_one_to_one = static_cast<double>(stack) / (static_cast<double>(stack_division) + 1);
@@ -203,7 +222,7 @@ public:
                 t = static_cast<float>(rel_stack);
                 //log_cone.trace(" slice seam rel_slice = {: 3.1} rel_stack = {: 3.1}", rel_slice, rel_stack);
             }
-            corner_texcoords->put(corner_id, vec2(s, t));
+            corner_texcoords->put(corner_id, vec2{s, t});
             //log_cone.trace(" UV discontinuity, texcoord = {: 3.1}, {: 3.1}", s, t);
         }
 
@@ -212,20 +231,36 @@ public:
             if (base && is_bottom && (bottom_radius != 0.0) && use_bottom)
             {
                 corner_normals->put(corner_id, vec3(-1.0f, 0.0f, 0.0f));
-                corner_tangents->put(corner_id, bottom_not_singular ? vec4(0.0f, 1.0f, 0.0f, 1.0f)
-                                                                    : vec4(0.0f, 0.0f, 0.0f, 0.0f));
-                corner_bitangents->put(corner_id, bottom_not_singular ? vec4(0.0f, 0.0f, 1.0f, 1.0f)
-                                                                      : vec4(0.0f, 0.0f, 0.0f, 0.0f));
+                corner_tangents->put(
+                    corner_id,
+                    bottom_not_singular
+                        ? vec4{0.0f, 1.0f, 0.0f, 1.0f}
+                        : vec4{0.0f, 0.0f, 0.0f, 0.0f}
+                );
+                corner_bitangents->put(
+                    corner_id,
+                    bottom_not_singular
+                        ? vec4{0.0f, 0.0f, 1.0f, 1.0f}
+                        : vec4{0.0f, 0.0f, 0.0f, 0.0f}
+                );
                 //log_cone.trace(" forced bottom normal and tangent");
             }
 
             if (base && is_top && (top_radius != 0.0) && use_top)
             {
-                corner_normals->put(corner_id, vec3(1.0f, 0.0f, 0.0f));
-                corner_tangents->put(corner_id, bottom_not_singular ? vec4(0.0f, 1.0f, 0.0f, 1.0f)
-                                                                    : vec4(0.0f, 0.0f, 0.0f, 0.0f));
-                corner_bitangents->put(corner_id, bottom_not_singular ? vec4(0.0f, 0.0f, 1.0f, 1.0f)
-                                                                      : vec4(0.0f, 0.0f, 0.0f, 0.0f));
+                corner_normals->put(corner_id, vec3{1.0f, 0.0f, 0.0f});
+                corner_tangents->put(
+                    corner_id,
+                    bottom_not_singular
+                        ? vec4{0.0f, 1.0f, 0.0f, 1.0f}
+                        : vec4{0.0f, 0.0f, 0.0f, 0.0f}
+                );
+                corner_bitangents->put(
+                    corner_id,
+                    bottom_not_singular
+                        ? vec4{0.0f, 0.0f, 1.0f, 1.0f}
+                        : vec4{0.0f, 0.0f, 0.0f, 0.0f}
+                );
                 //log_cone.trace(" forced top normal and tangent");
             }
         }
@@ -233,15 +268,17 @@ public:
         return corner_id;
     }
 
-    Conical_frustum_builder(Geometry&    geometry,
-                            const double min_x,
-                            const double max_x,
-                            const double bottom_radius,
-                            const double top_radius,
-                            const bool   use_bottom,
-                            const bool   use_top,
-                            const int    slice_count,
-                            const int    stack_division)
+    Conical_frustum_builder(
+        Geometry&    geometry,
+        const double min_x,
+        const double max_x,
+        const double bottom_radius,
+        const double top_radius,
+        const bool   use_bottom,
+        const bool   use_top,
+        const int    slice_count,
+        const int    stack_division
+    )
         : geometry           {geometry}
         , min_x              {min_x}
         , max_x              {max_x}
@@ -314,12 +351,12 @@ public:
 
                 const vec4 t1              = point_tangents->get(p0);
                 const vec4 t2              = point_tangents->get(p1);
-                const vec3 average_tangent = normalize(glm::vec3(t1) + glm::vec3(t2));
+                const vec3 average_tangent = normalize(glm::vec3{t1} + glm::vec3{t2});
                 corner_tangents->put(tip_corner_id, glm::vec4(average_tangent, t1.w));
 
                 const vec4 b1              = point_bitangents->get(p0);
                 const vec4 b2              = point_bitangents->get(p1);
-                const vec3 average_bitangent = normalize(glm::vec3(b1) + glm::vec3(b2));
+                const vec3 average_bitangent = normalize(glm::vec3{b1} + glm::vec3{b2});
                 corner_bitangents->put(tip_corner_id, glm::vec4(average_bitangent, b1.w));
 
                 const vec2 uv1              = point_texcoords->get(p0);
@@ -344,9 +381,9 @@ public:
                 const Polygon_id polygon_id = geometry.make_polygon();
                 if constexpr (use_geometric_centroids)
                 {
-                    polygon_centroids->put(polygon_id, vec3(static_cast<float>(min_x), 0.0f, 0.0f));
+                    polygon_centroids->put(polygon_id, vec3{static_cast<float>(min_x), 0.0f, 0.0f});
                 }
-                polygon_normals->put(polygon_id, vec3(-1.0f, 0.0f, 0.0f));
+                polygon_normals->put(polygon_id, vec3{-1.0f, 0.0f, 0.0f});
 
                 for (int slice = 0; slice < slice_count; ++slice)
                 {
@@ -354,13 +391,15 @@ public:
                     make_corner(polygon_id, reverse_slice, -stack_division - 1, true);
                 }
 
-                geometry.polygons[polygon_id].compute_planar_texture_coordinates(polygon_id,
-                                                                                 geometry,
-                                                                                 *corner_texcoords,
-                                                                                 *polygon_centroids,
-                                                                                 *polygon_normals,
-                                                                                 *point_locations,
-                                                                                 false);
+                geometry.polygons[polygon_id].compute_planar_texture_coordinates(
+                    polygon_id,
+                    geometry,
+                    *corner_texcoords,
+                    *polygon_centroids,
+                    *polygon_normals,
+                    *point_locations,
+                    false
+                );
             }
             else
             {
@@ -375,11 +414,13 @@ public:
             stack < stack_division + top_not_singular;
             ++stack)
         {
-            const double rel_stack_centroid = (static_cast<double>(stack) + 0.5) / (static_cast<double>(stack_division) + 1);
+            const double rel_stack_centroid =
+                (static_cast<double>(stack) + 0.5) / (static_cast<double>(stack_division) + 1);
 
             for (int slice = 0; slice < slice_count; ++slice)
             {
-                const auto rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
+                const auto rel_slice_centroid =
+                    (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
 
                 const Polygon_id polygon_id = geometry.make_polygon();
                 make_corner(polygon_id, slice + 1, stack + 1);
@@ -423,13 +464,13 @@ public:
 
                 const vec4 t1              = point_tangents->get(p0);
                 const vec4 t2              = point_tangents->get(p1);
-                const vec3 average_tangent = normalize(glm::vec3(t1) + glm::vec3(t2));
-                corner_tangents->put(tip_corner_id, glm::vec4(average_tangent, t1.w));
+                const vec3 average_tangent = normalize(glm::vec3{t1} + glm::vec3{t2});
+                corner_tangents->put(tip_corner_id, glm::vec4{average_tangent, t1.w});
 
                 const vec4 b1                = point_bitangents->get(p0);
                 const vec4 b2                = point_bitangents->get(p1);
-                const vec3 average_bitangent = normalize(glm::vec3(b1) + glm::vec3(b2));
-                corner_bitangents->put(tip_corner_id, glm::vec4(average_bitangent, b1.w));
+                const vec3 average_bitangent = normalize(glm::vec3{b1} + glm::vec3{b2});
+                corner_bitangents->put(tip_corner_id, glm::vec4{average_bitangent, b1.w});
 
                 const vec2 uv1              = point_texcoords->get(p0);
                 const vec2 uv2              = point_texcoords->get(p1);
@@ -452,9 +493,9 @@ public:
                 const Polygon_id polygon_id = geometry.make_polygon();
                 if constexpr (use_geometric_centroids)
                 {
-                    polygon_centroids->put(polygon_id, vec3(static_cast<float>(max_x), 0.0f, 0.0f));
+                    polygon_centroids->put(polygon_id, vec3{static_cast<float>(max_x), 0.0f, 0.0f});
                 }
-                polygon_normals->put(polygon_id, vec3(1.0f, 0.0f, 0.0f));
+                polygon_normals->put(polygon_id, vec3{1.0f, 0.0f, 0.0f});
 
                 for (int slice = 0; slice < slice_count; ++slice)
                 {
@@ -468,7 +509,8 @@ public:
                     *polygon_centroids,
                     *polygon_normals,
                     *point_locations,
-                    false);
+                    false
+                );
             }
             else
             {
@@ -507,26 +549,29 @@ auto make_conical_frustum(
         "conical frustum",
         [=](auto& geometry)
         {
-            Conical_frustum_builder builder(geometry,
-                                            min_x,
-                                            max_x,
-                                            bottom_radius,
-                                            top_radius,
-                                            use_bottom,
-                                            use_top,
-                                            slice_count,
-                                            stack_division);
+            Conical_frustum_builder builder{
+                geometry,
+                min_x,
+                max_x,
+                bottom_radius,
+                top_radius,
+                use_bottom,
+                use_top,
+                slice_count,
+                stack_division
+            };
             builder.build();
         }
     );
 }
 
-auto make_cone(const double min_x,
-               const double max_x,
-               const double bottom_radius,
-               const bool   use_bottom,
-               const int    slice_count,
-               const int    stack_division)
+auto make_cone(
+    const double min_x,
+    const double max_x,
+    const double bottom_radius,
+    const bool   use_bottom,
+    const int    slice_count,
+    const int    stack_division)
 -> Geometry
 {
     ZoneScoped;
@@ -535,27 +580,31 @@ auto make_cone(const double min_x,
         "cone",
         [=](auto& geometry)
         {
-            Conical_frustum_builder builder(geometry,
-                                            min_x,
-                                            max_x,
-                                            bottom_radius,
-                                            0.0,
-                                            use_bottom,
-                                            false,
-                                            slice_count,
-                                            stack_division);
+            Conical_frustum_builder builder{
+                geometry,
+                min_x,
+                max_x,
+                bottom_radius,
+                0.0,
+                use_bottom,
+                false,
+                slice_count,
+                stack_division
+            };
             builder.build();
         }
     );
 }
 
-auto make_cylinder(const double min_x,
-                   const double max_x,
-                   const double radius,
-                   const bool   use_bottom,
-                   const bool   use_top,
-                   const int    slice_count,
-                   const int    stack_division)
+auto make_cylinder(
+    const double min_x,
+    const double max_x,
+    const double radius,
+    const bool   use_bottom,
+    const bool   use_top,
+    const int    slice_count,
+    const int    stack_division
+)
 -> Geometry
 {
     ZoneScoped;
@@ -564,15 +613,16 @@ auto make_cylinder(const double min_x,
         "cylinder",
         [=](auto& geometry)
         {
-            Conical_frustum_builder builder(geometry,
-                                            min_x,
-                                            max_x,
-                                            radius,
-                                            radius,
-                                            use_bottom,
-                                            use_top,
-                                            slice_count,
-                                            stack_division);
+            Conical_frustum_builder builder{
+                geometry,
+                min_x,
+                max_x,
+                radius,
+                radius,
+                use_bottom,
+                use_top,
+                slice_count,
+                stack_division};
             builder.build();
         }
     );

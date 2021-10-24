@@ -11,15 +11,16 @@ namespace erhe::primitive
 Primitive::Primitive() = default;
 
 
-Primitive::Primitive(std::shared_ptr<Primitive_geometry> primitive_geometry,
-                     std::shared_ptr<Material>           material)
+Primitive::Primitive(
+    std::shared_ptr<Primitive_geometry> primitive_geometry,
+    std::shared_ptr<Material>           material
+)
     : primitive_geometry{primitive_geometry}
     , material         {material}
 {
 }
 
-auto c_str(Primitive_mode primitive_mode)
--> const char*
+auto c_str(Primitive_mode primitive_mode) -> const char*
 {
     switch (primitive_mode)
     {
@@ -37,8 +38,7 @@ auto c_str(Primitive_mode primitive_mode)
     }
 }
 
-auto c_str(Normal_style normal_style)
--> const char*
+auto c_str(Normal_style normal_style) -> const char*
 {
     switch (normal_style)
     {

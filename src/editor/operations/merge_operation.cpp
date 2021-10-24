@@ -61,13 +61,15 @@ Merge_operation::Merge_operation(Context& context)
             }
         }
 
-        m_source_entries.emplace_back(context.build_info_set,
-                                      context.layer,
-                                      context.scene,
-                                      context.physics_world,
-                                      mesh,
-                                      mesh->node(),
-                                      mesh->primitives);
+        m_source_entries.emplace_back(
+            context.build_info_set,
+            context.layer,
+            context.scene,
+            context.physics_world,
+            mesh,
+            mesh->node(),
+            mesh->primitives
+        );
     }
 
     if (m_source_entries.size() < 2)

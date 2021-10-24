@@ -8,14 +8,12 @@ namespace erhe::toolkit
 {
 
 template <typename T, typename U>
-auto round(const float num)
--> T
+auto round(const float num) -> T
 {
     return static_cast<T>((num > U{0.0}) ? std::floor(num + U{0.5}) : std::ceil(num - U{0.5}));
 }
 
-inline auto next_power_of_two(uint32_t x)
--> uint32_t
+inline auto next_power_of_two(uint32_t x) -> uint32_t
 {
     x--;
     x |= x >> 1u;  // handle  2 bit numbers
@@ -28,8 +26,7 @@ inline auto next_power_of_two(uint32_t x)
     return x;
 }
 
-inline auto uint_from_vector3(glm::vec3 v)
--> uint32_t
+inline auto uint_from_vector3(glm::vec3 v) -> uint32_t
 {
     const float        rf = v.x * 255.0f;
     const float        gf = v.y * 255.0f;
@@ -42,24 +39,24 @@ inline auto uint_from_vector3(glm::vec3 v)
     return static_cast<uint32_t>(i);
 }
 
-inline auto vec3_from_uint(const uint32_t i)
--> glm::vec3
+inline auto vec3_from_uint(const uint32_t i) -> glm::vec3
 {
     const uint32_t r = (i >> 16u) & 0xffu;
     const uint32_t g = (i >>  8u) & 0xffu;
     const uint32_t b = (i >>  0u) & 0xffu;
 
-    return glm::vec3{r / 255.0f,
-                     g / 255.0f,
-                     b / 255.0f};
+    return glm::vec3{
+        r / 255.0f,
+        g / 255.0f,
+        b / 255.0f
+    };
 }
 
 constexpr glm::vec3 vec3_unit_x{1.0f, 0.0f, 0.0f};
 constexpr glm::vec3 vec3_unit_y{0.0f, 1.0f, 0.0f};
 constexpr glm::vec3 vec3_unit_z{0.0f, 0.0f, 1.0f};
 
-inline auto max_axis(const glm::vec3 v)
--> glm::vec3
+inline auto max_axis(const glm::vec3 v) -> glm::vec3
 {
     if (std::abs(v.x) >= std::abs(v.y) && std::abs(v.x) >= std::abs(v.z))
     {
@@ -73,8 +70,7 @@ inline auto max_axis(const glm::vec3 v)
     return vec3_unit_z;
 }
 
-inline auto min_axis(const glm::vec3 v)
--> glm::vec3
+inline auto min_axis(const glm::vec3 v) -> glm::vec3
 {
     if (std::abs(v.x) <= std::abs(v.y) && std::abs(v.x) <= std::abs(v.z))
     {
@@ -89,8 +85,7 @@ inline auto min_axis(const glm::vec3 v)
     return vec3_unit_z;
 }
 
-inline auto max_axis_index(const glm::vec3 v)
--> glm::vec3::length_type
+inline auto max_axis_index(const glm::vec3 v) -> glm::vec3::length_type
 {
     if (std::abs(v.x) >= std::abs(v.y) && std::abs(v.x) >= std::abs(v.z))
     {
@@ -104,8 +99,7 @@ inline auto max_axis_index(const glm::vec3 v)
     return glm::vec3::length_type{2};
 }
 
-inline auto min_axis_index(const glm::vec3 v)
--> glm::vec3::length_type
+inline auto min_axis_index(const glm::vec3 v) -> glm::vec3::length_type
 {
     if (std::abs(v.x) <= std::abs(v.y) && std::abs(v.x) <= std::abs(v.z))
     {
@@ -119,49 +113,63 @@ inline auto min_axis_index(const glm::vec3 v)
     return glm::vec3::length_type{2};
 }
 
-constexpr glm::mat4 mat4_swap_xy{0.0f, 1.0f, 0.0f, 0.0f,
-                                 1.0f, 0.0f, 0.0f, 0.0f,
-                                 0.0f, 0.0f, 1.0f, 0.0f,
-                                 0.0f, 0.0f, 0.0f, 1.0f};
+constexpr glm::mat4 mat4_swap_xy{
+    0.0f, 1.0f, 0.0f, 0.0f,
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 1.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, 1.0f
+};
 
-constexpr glm::mat4 mat4_swap_xz{0.0f, 0.0f, 1.0f, 0.0f,
-                                 0.0f, 1.0f, 0.0f, 0.0f,
-                                 1.0f, 0.0f, 0.0f, 0.0f,
-                                 0.0f, 0.0f, 0.0f, 1.0f};
+constexpr glm::mat4 mat4_swap_xz{
+    0.0f, 0.0f, 1.0f, 0.0f,
+    0.0f, 1.0f, 0.0f, 0.0f,
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, 1.0f
+};
 
-constexpr glm::mat4 mat4_swap_yz{1.0f, 0.0f, 0.0f, 0.0f,
-                                 0.0f, 0.0f, 1.0f, 0.0f,
-                                 0.0f, 1.0f, 0.0f, 0.0f,
-                                 0.0f, 0.0f, 0.0f, 1.0f};
+constexpr glm::mat4 mat4_swap_yz{
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 1.0f, 0.0f,
+    0.0f, 1.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, 1.0f
+};
 
-constexpr glm::mat4 mat4_rotate_xy_cw{0.0f, -1.0f, 0.0f, 0.0f,
-                                      1.0f,  0.0f, 0.0f, 0.0f,
-                                      0.0f,  0.0f, 1.0f, 0.0f,
-                                      0.0f,  0.0f, 0.0f, 1.0f};
+constexpr glm::mat4 mat4_rotate_xy_cw{
+    0.0f, -1.0f, 0.0f, 0.0f,
+    1.0f,  0.0f, 0.0f, 0.0f,
+    0.0f,  0.0f, 1.0f, 0.0f,
+    0.0f,  0.0f, 0.0f, 1.0f
+};
 
-constexpr glm::mat4 mat4_rotate_xz_cw{0.0f, 0.0f, -1.0f, 0.0f,
-                                      0.0f, 1.0f,  0.0f, 0.0f,
-                                      1.0f, 0.0f,  0.0f, 0.0f,
-                                      0.0f, 0.0f,  0.0f, 1.0f};
+constexpr glm::mat4 mat4_rotate_xz_cw{
+    0.0f, 0.0f, -1.0f, 0.0f,
+    0.0f, 1.0f,  0.0f, 0.0f,
+    1.0f, 0.0f,  0.0f, 0.0f,
+    0.0f, 0.0f,  0.0f, 1.0f
+};
 
-auto unproject(const glm::mat4 world_from_clip,
-               const glm::vec3 window,
-               const float     depth_range_near,
-               const float     depth_range_far,
-               const float     viewport_x,
-               const float     viewport_y,
-               const float     viewport_width,
-               const float     viewport_height)
+auto unproject(
+    const glm::mat4 world_from_clip,
+    const glm::vec3 window,
+    const float     depth_range_near,
+    const float     depth_range_far,
+    const float     viewport_x,
+    const float     viewport_y,
+    const float     viewport_width,
+    const float     viewport_height
+)
 -> glm::vec3;
 
-auto project_to_screen_space(const glm::mat4 clip_from_world,
-                             const glm::vec3 position_in_world,
-                             const float     depth_range_near,
-                             const float     depth_range_far,
-                             const float     viewport_x,
-                             const float     viewport_y,
-                             const float     viewport_width,
-                             const float     viewport_height)
+auto project_to_screen_space(
+    const glm::mat4 clip_from_world,
+    const glm::vec3 position_in_world,
+    const float     depth_range_near,
+    const float     depth_range_far,
+    const float     viewport_x,
+    const float     viewport_y,
+    const float     viewport_width,
+    const float     viewport_height
+)
 -> glm::vec3;
 
 auto create_frustum(const float left, const float right, const float bottom, const float top, const float z_near, const float z_far)

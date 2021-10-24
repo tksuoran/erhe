@@ -32,7 +32,7 @@ void Textures::initialize_component()
 {
     Expects(m_image_transfer);
 
-    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
 
     background  = load(std::filesystem::path("res") / "images" / "background.png");
     camera_icon = load(std::filesystem::path("res") / "icons" / "camera16.png");
@@ -81,9 +81,11 @@ auto Textures::load(const std::filesystem::path& path)
     texture_create_info.row_stride      = image_info.row_stride;
     texture_create_info.use_mipmaps     = texture_create_info.level_count > 1;
     texture_create_info.internal_format = to_gl(image_info.format);
-    gsl::span<std::byte> span = slot.span_for(image_info.width,
-                                                image_info.height,
-                                                texture_create_info.internal_format);
+    gsl::span<std::byte> span = slot.span_for(
+        image_info.width,
+        image_info.height,
+        texture_create_info.internal_format
+    );
 
     bool ok = loader.load(span);
     loader.close();

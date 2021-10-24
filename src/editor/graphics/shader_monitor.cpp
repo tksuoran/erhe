@@ -36,8 +36,10 @@ void Shader_monitor::initialize_component()
     m_poll_filesystem_thread = std::thread(&Shader_monitor::poll_thread, this);
 }
 
-void Shader_monitor::add(erhe::graphics::Shader_stages::Create_info    create_info,
-                         gsl::not_null<erhe::graphics::Shader_stages*> shader_stages)
+void Shader_monitor::add(
+    erhe::graphics::Shader_stages::Create_info    create_info,
+    gsl::not_null<erhe::graphics::Shader_stages*> shader_stages
+)
 {
     for (const auto& shader : create_info.shaders)
     {
@@ -48,9 +50,11 @@ void Shader_monitor::add(erhe::graphics::Shader_stages::Create_info    create_in
     }
 }
 
-void Shader_monitor::add(const std::filesystem::path&                  path,
-                         erhe::graphics::Shader_stages::Create_info    create_info,
-                         gsl::not_null<erhe::graphics::Shader_stages*> shader_stages)
+void Shader_monitor::add(
+    const std::filesystem::path&                  path,
+    erhe::graphics::Shader_stages::Create_info    create_info,
+    gsl::not_null<erhe::graphics::Shader_stages*> shader_stages
+)
 {
     const std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -94,9 +98,10 @@ void Shader_monitor::poll_thread()
                 // like file being externally modified at the same time.
                 try
                 {
-                    bool ok = std::filesystem::exists(f.path) &&
-                              !std::filesystem::is_empty(f.path) &&
-                              std::filesystem::is_regular_file(f.path);
+                    bool ok =
+                        std::filesystem::exists(f.path)    &&
+                        !std::filesystem::is_empty(f.path) &&
+                        std::filesystem::is_regular_file(f.path);
                     if (ok)
                     {
                         auto time = std::filesystem::last_write_time(f.path);

@@ -61,9 +61,11 @@ auto Hover_tool::update(Pointer_context& pointer_context) -> bool
 {
     ZoneScoped;
 
-    m_hover_position = glm::vec3(pointer_context.pointer_x,
-                                 pointer_context.pointer_y,
-                                 pointer_context.pointer_z);
+    m_hover_position = glm::vec3{
+        pointer_context.pointer_x,
+        pointer_context.pointer_y,
+        pointer_context.pointer_z
+    };
     m_hover_content        = pointer_context.hover_content;
     m_hover_tool           = pointer_context.hover_tool;
     m_hover_position_world = m_hover_content && pointer_context.hover_valid ? pointer_context.position_in_world() : std::optional<glm::vec3>{};
@@ -82,9 +84,10 @@ void Hover_tool::render(const Render_context& render_context)
 {
     ZoneScoped;
 
-    const uint32_t text_color = m_hover_content ? 0xffffffffu :
-                                m_hover_tool    ? 0xffff0000u :
-                                                  0xff0000ffu; // abgr
+    const uint32_t text_color =
+        m_hover_content ? 0xffffffffu :
+        m_hover_tool    ? 0xffff0000u :
+                          0xff0000ffu; // abgr
     if (m_hover_mesh != nullptr)
     {
         if (m_enable_color_highlight)
@@ -99,18 +102,22 @@ void Hover_tool::render(const Render_context& render_context)
             auto position = m_hover_position.value();
             position.x += 50.0f;
             position.z  = -0.5f;
-            std::string text = fmt::format("{} {} {} {}",
-                                           m_hover_mesh->name(),
-                                           render_context.pointer_context->hover_primitive,
-                                           render_context.pointer_context->hover_local_index,
-                                           render_context.pointer_context->pointer_z);
+            std::string text = fmt::format(
+                "{} {} {} {}",
+                m_hover_mesh->name(),
+                render_context.pointer_context->hover_primitive,
+                render_context.pointer_context->hover_local_index,
+                render_context.pointer_context->pointer_z
+            );
 
-            render_context.text_renderer->print(position,
-                                                text_color,
-                                                text);
-                                                //"{}",
-                                                //m_hover_mesh->name());
-                                                //static_cast<int>(render_context.pointer_context->hover_primitive));
+            render_context.text_renderer->print(
+                position,
+                text_color,
+                text
+            );
+                //"{}",
+                //m_hover_mesh->name());
+                //static_cast<int>(render_context.pointer_context->hover_primitive));
         }
         if (m_hover_position_world.has_value() && m_hover_normal.has_value())
         {
@@ -166,11 +173,13 @@ void Hover_tool::select(Pointer_context& pointer_context)
 
         // Replace primitive material with modified copy
         m_hover_mesh->primitives[m_hover_primitive_index].material = m_hover_material;
-        log_materials.info("hover mesh {} primitive {} set to {} with index {}\n",
-                            m_hover_mesh->name(),
-                            m_hover_primitive_index,
-                            m_hover_material->name,
-                            m_hover_material->index);
+        log_materials.info(
+            "hover mesh {} primitive {} set to {} with index {}\n",
+            m_hover_mesh->name(),
+            m_hover_primitive_index,
+            m_hover_material->name,
+            m_hover_material->index
+        );
     }
 }
 

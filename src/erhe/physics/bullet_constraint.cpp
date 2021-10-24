@@ -18,18 +18,28 @@ auto IConstraint::create_point_to_point_constraint_unique(IRigid_body* rigid_bod
     return std::make_unique<Bullet_point_to_point_constraint>(rigid_body, point);
 }
 
-auto IConstraint::create_point_to_point_constraint(IRigid_body*    rigid_body_a, IRigid_body*    rigid_body_b, 
-                                                   const glm::vec3 pivot_in_a,   const glm::vec3 pivot_in_b) -> IConstraint*
+auto IConstraint::create_point_to_point_constraint(
+    IRigid_body*    rigid_body_a,
+    IRigid_body*    rigid_body_b, 
+    const glm::vec3 pivot_in_a,
+    const glm::vec3 pivot_in_b
+) -> IConstraint*
 {
     return new Bullet_point_to_point_constraint(rigid_body_a, rigid_body_b, pivot_in_a, pivot_in_b);
 }
-auto IConstraint::create_point_to_point_constraint_shared(IRigid_body*    rigid_body_a, IRigid_body*    rigid_body_b, 
-                                                          const glm::vec3 pivot_in_a,   const glm::vec3 pivot_in_b) -> std::shared_ptr<IConstraint>
+auto IConstraint::create_point_to_point_constraint_shared(
+    IRigid_body*    rigid_body_a,
+    IRigid_body*    rigid_body_b, 
+    const glm::vec3 pivot_in_a,
+    const glm::vec3 pivot_in_b) -> std::shared_ptr<IConstraint>
 {
     return std::make_shared<Bullet_point_to_point_constraint>(rigid_body_a, rigid_body_b, pivot_in_a, pivot_in_b);
 }
-auto IConstraint::create_point_to_point_constraint_unique(IRigid_body*    rigid_body_a, IRigid_body*    rigid_body_b, 
-                                                          const glm::vec3 pivot_in_a,   const glm::vec3 pivot_in_b) -> std::unique_ptr<IConstraint>
+auto IConstraint::create_point_to_point_constraint_unique(
+    IRigid_body*    rigid_body_a,
+    IRigid_body*    rigid_body_b, 
+    const glm::vec3 pivot_in_a,
+    const glm::vec3 pivot_in_b) -> std::unique_ptr<IConstraint>
 {
     return std::make_unique<Bullet_point_to_point_constraint>(rigid_body_a, rigid_body_b, pivot_in_a, pivot_in_b);
 }
@@ -42,8 +52,11 @@ Bullet_point_to_point_constraint::Bullet_point_to_point_constraint(IRigid_body* 
 {
 }
 
-Bullet_point_to_point_constraint::Bullet_point_to_point_constraint(IRigid_body*    rigid_body_a, IRigid_body*    rigid_body_b, 
-                                                                   const glm::vec3 pivot_in_a,   const glm::vec3 pivot_in_b)
+Bullet_point_to_point_constraint::Bullet_point_to_point_constraint(
+    IRigid_body*    rigid_body_a,
+    IRigid_body*    rigid_body_b, 
+    const glm::vec3 pivot_in_a,
+    const glm::vec3 pivot_in_b)
     : m_bullet_constraint{
         *static_cast<Bullet_rigid_body*>(rigid_body_a)->get_bullet_rigid_body(),
         *static_cast<Bullet_rigid_body*>(rigid_body_b)->get_bullet_rigid_body(),

@@ -24,8 +24,10 @@ class Bullet_rigid_body
     : public IRigid_body
 {
 public:
-    Bullet_rigid_body(IRigid_body_create_info& create_info,
-                      IMotion_state*           motion_state);
+    Bullet_rigid_body(
+        IRigid_body_create_info& create_info,
+        IMotion_state*           motion_state
+    );
 
     // Implements IRigid_body
     //auto get_node_transform() const -> glm::mat4           override;
@@ -54,7 +56,6 @@ public:
     void end_move            ()                                                        override; // Sets active, clears disable deactivation
 
     auto get_bullet_rigid_body() -> btRigidBody*;
-
 
 private:
     Motion_state_adapter              m_motion_state_adapter;

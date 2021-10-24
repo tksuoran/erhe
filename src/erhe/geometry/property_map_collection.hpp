@@ -16,8 +16,10 @@ private:
         Entry() = default;
         ~Entry() = default;
 
-        Entry(const std::string&           key,
-              Property_map_base<Key_type>* p)
+        Entry(
+            const std::string&           key,
+            Property_map_base<Key_type>* p
+        )
             : key  {key}
             , value{p}
         {

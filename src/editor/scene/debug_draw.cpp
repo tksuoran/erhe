@@ -32,22 +32,23 @@ void Debug_draw::connect()
     m_line_renderer = get<Line_renderer>();
     m_text_renderer = get<Text_renderer>();
 
-    m_debug_mode = IDebug_draw::c_Draw_wireframe           |
-                   IDebug_draw::c_Draw_aabb                |
-                   IDebug_draw::c_Draw_features_text       |
-                   IDebug_draw::c_Draw_contact_points      |
-                   //IDebug_draw::c_No_deactivation        |
-                   //IDebug_draw::c_No_nelp_text           |
-                   IDebug_draw::c_Draw_text                |
-                   //IDebug_draw::c_Profile_timings        |
-                   //IDebug_draw::c_Enable_sat-comparison  |
-                   //IDebug_draw::c_Disable_bullet_lcp     |
-                   //IDebug_draw::c_Enable_ccd             |
-                   //IDebug_draw::c_Draw_constraints       |
-                   //IDebug_draw::c_Draw_constraint_limits |
-                   IDebug_draw::c_Fast_wireframe           |
-                   IDebug_draw::c_Draw_normals             |
-                   IDebug_draw::c_Draw_frames;
+    m_debug_mode =
+        IDebug_draw::c_Draw_wireframe           |
+        IDebug_draw::c_Draw_aabb                |
+        IDebug_draw::c_Draw_features_text       |
+        IDebug_draw::c_Draw_contact_points      |
+        //IDebug_draw::c_No_deactivation        |
+        //IDebug_draw::c_No_nelp_text           |
+        IDebug_draw::c_Draw_text                |
+        //IDebug_draw::c_Profile_timings        |
+        //IDebug_draw::c_Enable_sat-comparison  |
+        //IDebug_draw::c_Disable_bullet_lcp     |
+        //IDebug_draw::c_Enable_ccd             |
+        //IDebug_draw::c_Draw_constraints       |
+        //IDebug_draw::c_Draw_constraint_limits |
+        IDebug_draw::c_Fast_wireframe           |
+        IDebug_draw::c_Draw_normals             |
+        IDebug_draw::c_Draw_frames;
 }
 
 void Debug_draw::initialize_component()

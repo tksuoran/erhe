@@ -65,9 +65,10 @@ void PNG_loader::close()
     m_file.reset();
 }
 
-auto PNG_loader::open(const std::filesystem::path& path,
-                      Image_info&                  info)
--> bool
+auto PNG_loader::open(
+    const std::filesystem::path& path,
+    Image_info&                  info
+) -> bool
 {
     m_file = std::make_unique<mango::filesystem::File>(path.string());
     mango::filesystem::File& file = *m_file;
@@ -91,8 +92,7 @@ auto PNG_loader::open(const std::filesystem::path& path,
     return true;
 }
 
-auto PNG_loader::load(gsl::span<std::byte> transfer_buffer)
--> bool
+auto PNG_loader::load(gsl::span<std::byte> transfer_buffer) -> bool
 {
     const mango::ImageHeader header = m_image_decoder->header();
     const auto stride = header.width * header.format.bytes();
@@ -106,10 +106,11 @@ PNG_writer::PNG_writer() = default;
 
 PNG_writer::~PNG_writer() = default;
 
-auto PNG_writer::write(const std::filesystem::path& path,
-                       const Image_info&            info,
-                       gsl::span<std::byte>         data)
--> bool
+auto PNG_writer::write(
+    const std::filesystem::path& path,
+    const Image_info&            info,
+    gsl::span<std::byte>         data
+) -> bool
 {
     m_image_encoder = std::make_unique<mango::ImageEncoder>(".png");
     if (!m_image_encoder->isEncoder())

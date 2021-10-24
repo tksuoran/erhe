@@ -20,10 +20,12 @@ public:
     class Attachment
     {
     public:
-        Attachment(const gl::Framebuffer_attachment attachment_point,
-                   const gsl::not_null<Texture*>    texture,
-                   const unsigned int               level,
-                   const unsigned int               layer)
+        Attachment(
+            const gl::Framebuffer_attachment attachment_point,
+            const gsl::not_null<Texture*>    texture,
+            const unsigned int               level,
+            const unsigned int               layer
+        )
             : attachment_point{attachment_point}
             , texture_level   {level}
             , texture_layer   {layer}
@@ -31,8 +33,10 @@ public:
         {
         }
 
-        Attachment(const gl::Framebuffer_attachment   attachment_point,
-                   const gsl::not_null<Renderbuffer*> renderbuffer)
+        Attachment(
+            const gl::Framebuffer_attachment   attachment_point,
+            const gsl::not_null<Renderbuffer*> renderbuffer
+        )
             : attachment_point{attachment_point}
             , renderbuffer    {renderbuffer}
         {
@@ -48,13 +52,16 @@ public:
     class Create_info
     {
     public:
-        void attach(const gl::Framebuffer_attachment attachment_point,
-                    const gsl::not_null<Texture*>    texture,
-                    const unsigned int               level = 0,
-                    const unsigned int               layer = 0);
+        void attach(
+            const gl::Framebuffer_attachment attachment_point,
+            const gsl::not_null<Texture*>    texture,
+            const unsigned int               level = 0,
+            const unsigned int               layer = 0
+        );
 
-        void attach(const gl::Framebuffer_attachment   attachment_point,
-                    const gsl::not_null<Renderbuffer*> renderbuffer);
+        void attach(
+            const gl::Framebuffer_attachment   attachment_point,
+            const gsl::not_null<Renderbuffer*> renderbuffer);
 
         std::vector<Attachment> attachments;
     };
@@ -102,8 +109,12 @@ public:
 
     void set_debug_label(const std::string& label)
     {
-        gl::object_label(gl::Object_identifier::framebuffer,
-                         gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
+        gl::object_label(
+            gl::Object_identifier::framebuffer,
+            gl_name(),
+            static_cast<GLsizei>(label.length()),
+            label.c_str()
+        );
     }
 
 private:

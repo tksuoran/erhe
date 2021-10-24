@@ -44,15 +44,16 @@ public:
             std::filesystem::path path;
         };
 
-        Create_info(const std::string_view           name,
-                    const Shader_resource*           default_uniform_block, // containing sampler uniforms
-                    const Vertex_attribute_mappings* vertex_attribute_mappings,
-                    const Fragment_outputs*          fragment_outputs);
+        Create_info(
+            const std::string_view           name,
+            const Shader_resource*           default_uniform_block, // containing sampler uniforms
+            const Vertex_attribute_mappings* vertex_attribute_mappings,
+            const Fragment_outputs*          fragment_outputs
+        );
 
         // Adds #version, #defines, fragment outputs, uniform blocks, samplers,
         // and source (possibly read from file).
-        auto final_source(const Shader_stage& shader) const
-        -> std::string;
+        auto final_source(const Shader_stage& shader) const -> std::string;
 
         void add_interface_block(gsl::not_null<const Shader_resource*> uniform_block);
 
@@ -79,8 +80,7 @@ public:
         Prototype         (const Prototype&) = delete;
         void operator=    (const Prototype&) = delete;
 
-        auto is_valid() const
-        -> bool
+        auto is_valid() const -> bool
         {
             return m_link_succeeded;
         }
@@ -88,9 +88,10 @@ public:
         void dump_reflection() const;
 
     private:
-        static auto try_compile_shader(const Shader_stages::Create_info&               create_info,
-                                       const Shader_stages::Create_info::Shader_stage& shader)
-        -> std::optional<Gl_shader>;
+        static auto try_compile_shader(
+            const Shader_stages::Create_info&               create_info,
+            const Shader_stages::Create_info::Shader_stage& shader
+        ) -> std::optional<Gl_shader>;
 
         friend class Shader_stages;
 

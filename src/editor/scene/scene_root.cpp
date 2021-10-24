@@ -158,23 +158,25 @@ auto Scene_root::tool_layer() const -> std::shared_ptr<erhe::scene::Layer>
     return m_tool_layer;
 }
 
-auto Scene_root::make_mesh_node(string_view                           name,
-                                const shared_ptr<Primitive_geometry>& primitive_geometry,
-                                const shared_ptr<Material>&           material,
-                                Node*                                 parent,
-                                const glm::vec3                       position)
--> shared_ptr<Mesh>
+auto Scene_root::make_mesh_node(
+    string_view                           name,
+    const shared_ptr<Primitive_geometry>& primitive_geometry,
+    const shared_ptr<Material>&           material,
+    Node*                                 parent,
+    const glm::vec3                       position
+) -> shared_ptr<Mesh>
 {
     return make_mesh_node(name, primitive_geometry, material, content_layer(), parent, position);
 }
 
-auto Scene_root::make_mesh_node(string_view                           name,
-                                const shared_ptr<Primitive_geometry>& primitive_geometry,
-                                const shared_ptr<Material>&           material,
-                                Layer&                                layer,
-                                Node*                                 parent,
-                                const glm::vec3                       position)
--> shared_ptr<Mesh>
+auto Scene_root::make_mesh_node(
+    string_view                           name,
+    const shared_ptr<Primitive_geometry>& primitive_geometry,
+    const shared_ptr<Material>&           material,
+    Layer&                                layer,
+    Node*                                 parent,
+    const glm::vec3                       position
+) -> shared_ptr<Mesh>
 {
     const glm::mat4 transform = erhe::toolkit::create_translation(position);
 
@@ -186,12 +188,14 @@ auto Scene_root::make_mesh_node(string_view                           name,
     node->transforms.parent_from_node.set(transform);
     node->update();
 
-    attach(layer,
-           scene(),
-           physics_world(),
-           node,
-           mesh,
-           {});
+    attach(
+        layer,
+        scene(),
+        physics_world(),
+        node,
+        mesh,
+        {}
+    );
 
     return mesh;
 }

@@ -11,8 +11,10 @@ Mesh::Mesh(const std::string_view name)
 {
 }
 
-Mesh::Mesh(const std::string_view           name,
-           const erhe::primitive::Primitive primitive)
+Mesh::Mesh(
+    const std::string_view           name,
+    const erhe::primitive::Primitive primitive
+)
     : m_name{name}
     , m_id{}
 {

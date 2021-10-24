@@ -38,8 +38,10 @@ void Camera::update(Viewport viewport)
     m_node->update();
 
     // Update clip from world / world from clip
-    m_transforms.clip_from_world.set(clip_from_node() * m_node->node_from_world(),
-                                     m_node->world_from_node() * node_from_clip());
+    m_transforms.clip_from_world.set(
+        clip_from_node() * m_node->node_from_world(),
+        m_node->world_from_node() * node_from_clip()
+    );
 }
 
 auto Camera::node() const -> const std::shared_ptr<Node>&

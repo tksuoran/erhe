@@ -48,7 +48,11 @@ Font::~Font()
     validate(FT_Done_FreeType(m_freetype_library));
 }
 
-Font::Font(const std::filesystem::path& path, const unsigned int size, const float outline_thickness)
+Font::Font(
+    const std::filesystem::path& path,
+    const unsigned int           size,
+    const float                  outline_thickness
+)
     : m_path             {path}
     , m_bolding          {(size > 10) ? 0.5f : 0.0f}
     , m_outline_thickness{outline_thickness}
@@ -271,31 +275,35 @@ void Font::render()
         }
         if (render)
         {
-            m_bitmap->blit<false>(g->bitmap.width,
-                                  g->bitmap.height,
-                                  r.x + 1 + std::max(0, rotated ? (g->bitmap.bottom - box.bottom) : (g->bitmap.left   - box.left  )),
-                                  r.y + 1 + std::max(0, rotated ? (g->bitmap.left   - box.left  ) : (g->bitmap.bottom - box.bottom)),
-                                  g->buffer(),
-                                  g->bitmap.pitch,
-                                  g->bitmap.width,
-                                  1,
-                                  0,
-                                  rotated);
+            m_bitmap->blit<false>(
+                g->bitmap.width,
+                g->bitmap.height,
+                r.x + 1 + std::max(0, rotated ? (g->bitmap.bottom - box.bottom) : (g->bitmap.left   - box.left  )),
+                r.y + 1 + std::max(0, rotated ? (g->bitmap.left   - box.left  ) : (g->bitmap.bottom - box.bottom)),
+                g->buffer(),
+                g->bitmap.pitch,
+                g->bitmap.width,
+                1,
+                0,
+                rotated
+            );
             if (m_outline_thickness > 0.0f)
             {
                 for (auto& outline_glyphs : outline_glyphs_vector)
                 {
                     const auto og = outline_glyphs[c].get();
-                    m_bitmap->blit<true>(og->bitmap.width,
-                                         og->bitmap.height,
-                                         r.x + 1 + std::max(0, rotated ? (og->bitmap.bottom - box.bottom) : (og->bitmap.left   - box.left  )),
-                                         r.y + 1 + std::max(0, rotated ? (og->bitmap.left   - box.left  ) : (og->bitmap.bottom - box.bottom)),
-                                         og->buffer(),
-                                         og->bitmap.pitch,
-                                         og->bitmap.width,
-                                         1,
-                                         1,
-                                         rotated);
+                    m_bitmap->blit<true>(
+                        og->bitmap.width,
+                        og->bitmap.height,
+                        r.x + 1 + std::max(0, rotated ? (og->bitmap.bottom - box.bottom) : (og->bitmap.left   - box.left  )),
+                        r.y + 1 + std::max(0, rotated ? (og->bitmap.left   - box.left  ) : (og->bitmap.bottom - box.bottom)),
+                        og->buffer(),
+                        og->bitmap.pitch,
+                        og->bitmap.width,
+                        1,
+                        1,
+                        rotated
+                    );
                 }
             }
         }
@@ -466,13 +474,14 @@ void Font::post_process()
 // Vertical default
 // vert Vertical Alternates             A subset of vrt2: prefer the latter feature
 
-auto Font::print(gsl::span<float>    float_data,
-                 gsl::span<uint32_t> uint_data,
-                 std::string_view    text,
-                 glm::vec3           text_position,
-                 const uint32_t      text_color,
-                 Rectangle&          out_bounds) const
--> size_t
+auto Font::print(
+    gsl::span<float>    float_data,
+    gsl::span<uint32_t> uint_data,
+    std::string_view    text,
+    glm::vec3           text_position,
+    const uint32_t      text_color,
+    Rectangle&          out_bounds
+) const -> size_t
 {
     ZoneScoped;
 

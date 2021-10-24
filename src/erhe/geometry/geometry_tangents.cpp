@@ -31,12 +31,14 @@ auto Geometry::has_corner_bitangents() const -> bool
     return m_serial_corner_bitangents == m_serial;
 }
 
-auto Geometry::compute_tangents(const bool corner_tangents,
-                                const bool corner_bitangents,
-                                const bool polygon_tangents,
-                                const bool polygon_bitangents,
-                                const bool make_polygons_flat,
-                                const bool override_existing) -> bool
+auto Geometry::compute_tangents(
+    const bool corner_tangents,
+    const bool corner_bitangents,
+    const bool polygon_tangents,
+    const bool polygon_bitangents,
+    const bool make_polygons_flat,
+    const bool override_existing
+) -> bool
 {
     using namespace glm;
 
@@ -354,10 +356,12 @@ auto Geometry::compute_tangents(const bool corner_tangents,
         return num_vertices_of_face;
     };
 
-    mikktspace.m_getPosition = [](const SMikkTSpaceContext* pContext,
-                                  float                     fvPosOut[],
-                                  int32_t                   iFace,
-                                  int32_t                   iVert)
+    mikktspace.m_getPosition = [](
+        const SMikkTSpaceContext* pContext,
+        float                     fvPosOut[],
+        int32_t                   iFace,
+        int32_t                   iVert
+    )
     {
         const auto* context    = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
         glm::vec3   g_location = context->get_position(iFace, iVert);
@@ -366,10 +370,12 @@ auto Geometry::compute_tangents(const bool corner_tangents,
         fvPosOut[2] = g_location[2];
     };
 
-    mikktspace.m_getNormal = [](const SMikkTSpaceContext* pContext,
-                                float                     fvNormOut[],
-                                int32_t                   iFace,
-                                int32_t                   iVert)
+    mikktspace.m_getNormal = [](
+        const SMikkTSpaceContext* pContext,
+        float                     fvNormOut[],
+        int32_t                   iFace,
+        int32_t                   iVert
+    )
     {
         const auto* context  = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
         glm::vec3   g_normal = context->get_normal(iFace, iVert);
@@ -378,10 +384,12 @@ auto Geometry::compute_tangents(const bool corner_tangents,
         fvNormOut[2] = g_normal[2];
     };
 
-    mikktspace.m_getTexCoord = [](const SMikkTSpaceContext* pContext,
-                                  float                     fvTexcOut[],
-                                  int32_t                   iFace,
-                                  int32_t                   iVert)
+    mikktspace.m_getTexCoord = [](
+        const SMikkTSpaceContext* pContext,
+        float                     fvTexcOut[],
+        int32_t                   iFace,
+        int32_t                   iVert
+    )
     {
         auto*     context    = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
         glm::vec2 g_texcoord = context->get_texcoord(iFace, iVert);
@@ -389,14 +397,16 @@ auto Geometry::compute_tangents(const bool corner_tangents,
         fvTexcOut[1] = g_texcoord[1];
     };
 
-	mikktspace.m_setTSpace = [](const SMikkTSpaceContext* pContext,
-                                const float               fvTangent[],
-                                const float               fvBiTangent[],
-                                const float               fMagS,
-                                const float               fMagT,
-                                const tbool               bIsOrientationPreserving,
-                                const int                 iFace,
-                                const int                 iVert)
+	mikktspace.m_setTSpace = [](
+        const SMikkTSpaceContext* pContext,
+        const float               fvTangent[],
+        const float               fvBiTangent[],
+        const float               fMagS,
+        const float               fMagT,
+        const tbool               bIsOrientationPreserving,
+        const int                 iFace,
+        const int                 iVert
+    )
     {
         static_cast<void>(fMagS);
         static_cast<void>(fMagT);

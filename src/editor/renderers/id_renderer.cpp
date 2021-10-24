@@ -68,7 +68,7 @@ void Id_renderer::initialize_component()
     ZoneScoped;
 
     TracyMessageL("ID: Waiting for GL context");
-    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
     TracyMessageL("ID: Got GL context");
 
     create_frame_resources(1, 1, 1, 1000, 1000);
@@ -76,10 +76,12 @@ void Id_renderer::initialize_component()
     const auto  reverse_depth    = erhe::components::Component::get<Configuration>()->reverse_depth;
     const auto& shader_resources = *Component::get<Program_interface>()->shader_resources.get();
 
-    m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(shader_resources.attribute_mappings,
-                                                                          m_mesh_memory->gl_vertex_format(),
-                                                                          m_mesh_memory->gl_vertex_buffer.get(),
-                                                                          m_mesh_memory->gl_index_buffer.get());
+    m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
+        shader_resources.attribute_mappings,
+        m_mesh_memory->gl_vertex_format(),
+        m_mesh_memory->gl_vertex_buffer.get(),
+        m_mesh_memory->gl_index_buffer.get()
+    );
 
     m_pipeline.shader_stages  = m_programs->id.get();
     m_pipeline.vertex_input   = m_vertex_input.get();
@@ -97,10 +99,12 @@ void Id_renderer::initialize_component()
     m_selective_depth_clear_pipeline.color_blend    = &erhe::graphics::Color_blend_state::color_writes_disabled;
     m_selective_depth_clear_pipeline.viewport       = nullptr;
 
-    gl::push_debug_group(gl::Debug_source::debug_source_application,
-                         0,
-                         static_cast<GLsizei>(c_id_renderer_initialize_component.length()),
-                         c_id_renderer_initialize_component.data());
+    gl::push_debug_group(
+        gl::Debug_source::debug_source_application,
+        0,
+        static_cast<GLsizei>(c_id_renderer_initialize_component.length()),
+       c_id_renderer_initialize_component.data()
+    );
 
     create_id_frame_resources();
 
@@ -187,18 +191,22 @@ void Id_renderer::render_layer(erhe::scene::Layer* layer)
         0u
     };
     update_primitive_buffer(layer->meshes, id_filter);
-    auto draw_indirect_buffer_range = update_draw_indirect_buffer(layer->meshes,
-                                                                  Primitive_mode::polygon_fill,
-                                                                  id_filter);
+    auto draw_indirect_buffer_range = update_draw_indirect_buffer(
+        layer->meshes,
+        Primitive_mode::polygon_fill,
+        id_filter
+    );
 
     bind_primitive_buffer();
     bind_draw_indirect_buffer();
 
-    gl::multi_draw_elements_indirect(m_pipeline.input_assembly->primitive_topology,
-                                     m_mesh_memory->gl_index_type(),
-                                     reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
-                                     static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
-                                     static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command)));
+    gl::multi_draw_elements_indirect(
+        m_pipeline.input_assembly->primitive_topology,
+        m_mesh_memory->gl_index_type(),
+        reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
+        static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
+        static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
+    );
     layer_range.end = id_offset();
     m_layer_ranges.emplace_back(layer_range);
 }
@@ -207,13 +215,15 @@ static constexpr std::string_view c_id_renderer_render_clear  {"Id_renderer::ren
 static constexpr std::string_view c_id_renderer_render_content{"Id_renderer::render() content"};
 static constexpr std::string_view c_id_renderer_render_tool   {"Id_renderer::render() tool"   };
 static constexpr std::string_view c_id_renderer_render_read   {"Id_renderer::render() read"   };
-void Id_renderer::render(const erhe::scene::Viewport viewport,
-                         const Layer_collection&     content_layers,
-                         const Layer_collection&     tool_layers,
-                         erhe::scene::ICamera&       camera,
-                         const double                time,
-                         const int                   x,
-                         const int                   y)
+
+void Id_renderer::render(
+    const erhe::scene::Viewport viewport,
+    const Layer_collection&     content_layers,
+    const Layer_collection&     tool_layers,
+    erhe::scene::ICamera&       camera,
+    const double                time,
+    const int                   x,
+    const int                   y)
 {
     ZoneScoped;
 
@@ -224,10 +234,12 @@ void Id_renderer::render(const erhe::scene::Viewport viewport,
         return;
     }
 
-    gl::push_debug_group(gl::Debug_source::debug_source_application,
-                         0,
-                         static_cast<GLsizei>(c_id_renderer_render_content.length()),
-                         c_id_renderer_render_content.data());
+    gl::push_debug_group(
+        gl::Debug_source::debug_source_application,
+        0,
+        static_cast<GLsizei>(c_id_renderer_render_content.length()),
+        c_id_renderer_render_content.data()
+    );
 
     update_framebuffer(viewport);
 

@@ -65,15 +65,20 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-    void render(const erhe::scene::Viewport camera_viewport,
-                const erhe::scene::ICamera& camera);
+    void render(
+        const erhe::scene::Viewport camera_viewport,
+        const erhe::scene::ICamera& camera
+    );
 
     void set_line_color(uint32_t color)
     {
         m_line_color = color;
     }
 
-    void add_lines(const std::initializer_list<Line> lines, const float thickness = 2.0f);
+    void add_lines(
+        const std::initializer_list<Line> lines,
+        const float thickness = 2.0f
+    );
 
     void next_frame();
 
@@ -119,51 +124,64 @@ private:
             true,
             true
         };
-        static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_coherent_bit   |
-                                                              gl::Buffer_storage_mask::map_persistent_bit |
-                                                              gl::Buffer_storage_mask::map_write_bit};
+        static constexpr gl::Buffer_storage_mask storage_mask{
+            gl::Buffer_storage_mask::map_coherent_bit   |
+            gl::Buffer_storage_mask::map_persistent_bit |
+            gl::Buffer_storage_mask::map_write_bit
+        };
 
-        static constexpr gl::Map_buffer_access_mask access_mask{gl::Map_buffer_access_mask::map_coherent_bit   |
-                                                                gl::Map_buffer_access_mask::map_persistent_bit |
-                                                                gl::Map_buffer_access_mask::map_write_bit};
+        static constexpr gl::Map_buffer_access_mask access_mask{
+            gl::Map_buffer_access_mask::map_coherent_bit   |
+            gl::Map_buffer_access_mask::map_persistent_bit |
+            gl::Map_buffer_access_mask::map_write_bit
+        };
 
-        Frame_resources(bool                                      reverse_depth,
-                        size_t                                    view_stride,
-                        size_t                                    view_count,
-                        size_t                                    vertex_count,
-                        erhe::graphics::Shader_stages*            shader_stages,
-                        erhe::graphics::Vertex_attribute_mappings attribute_mappings,
-                        erhe::graphics::Vertex_format&            vertex_format)
+        Frame_resources(
+            bool                                      reverse_depth,
+            size_t                                    view_stride,
+            size_t                                    view_count,
+            size_t                                    vertex_count,
+            erhe::graphics::Shader_stages*            shader_stages,
+            erhe::graphics::Vertex_attribute_mappings attribute_mappings,
+            erhe::graphics::Vertex_format&            vertex_format
+        )
+            : vertex_buffer{
+                gl::Buffer_target::array_buffer,
+                vertex_format.stride() * vertex_count,
+                storage_mask,
+                access_mask
+            }
+            , view_buffer{
+                gl::Buffer_target::uniform_buffer,
+                view_stride * view_count,
+                storage_mask,
+                access_mask
+            }
+            , vertex_input_state{
+                attribute_mappings,
+                vertex_format,
+                &vertex_buffer,
+                nullptr
+            }
 
-            : vertex_buffer{gl::Buffer_target::array_buffer,
-                            vertex_format.stride() * vertex_count,
-                            storage_mask,
-                            access_mask}
-
-            , view_buffer{gl::Buffer_target::uniform_buffer,
-                          view_stride * view_count,
-                          storage_mask,
-                          access_mask}
-
-            , vertex_input_state{attribute_mappings,
-                                 vertex_format,
-                                 &vertex_buffer,
-                                 nullptr}
-
-            , pipeline_depth_pass{shader_stages,
-                                  &vertex_input_state,
-                                  &erhe::graphics::Input_assembly_state::lines,
-                                  &erhe::graphics::Rasterization_state::cull_mode_none,
-                                  erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-                                  &erhe::graphics::Color_blend_state::color_blend_premultiplied,
-                                  nullptr}
-            , pipeline_depth_fail{shader_stages,
-                                  &vertex_input_state,
-                                  &erhe::graphics::Input_assembly_state::lines,
-                                  &erhe::graphics::Rasterization_state::cull_mode_none,
-                                  &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                                  &color_blend_hidden_lines,
-                                  nullptr}
+            , pipeline_depth_pass{
+                shader_stages,
+                &vertex_input_state,
+                &erhe::graphics::Input_assembly_state::lines,
+                &erhe::graphics::Rasterization_state::cull_mode_none,
+                erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+                &erhe::graphics::Color_blend_state::color_blend_premultiplied,
+                nullptr
+            }
+            , pipeline_depth_fail{
+                shader_stages,
+                &vertex_input_state,
+                &erhe::graphics::Input_assembly_state::lines,
+                &erhe::graphics::Rasterization_state::cull_mode_none,
+                &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+                &color_blend_hidden_lines,
+                nullptr
+            }
         {
             vertex_buffer.set_debug_label("Line Renderer Vertex");
             view_buffer.set_debug_label ("Line Renderer View");

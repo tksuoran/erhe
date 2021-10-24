@@ -24,7 +24,7 @@ public:
     void initialize_component() override;
 
     auto load(const std::filesystem::path& path)
-    -> std::shared_ptr<erhe::graphics::Texture>;
+        -> std::shared_ptr<erhe::graphics::Texture>;
 
     std::shared_ptr<erhe::graphics::Texture> background;
     std::shared_ptr<erhe::graphics::Texture> camera_icon;

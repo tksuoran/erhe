@@ -24,10 +24,8 @@ public:
     void connect()              override;
     void initialize_component() override;
 
-    auto load(const std::filesystem::path& path)
-    -> ImVec2;
-
-    auto uv1(const ImVec2& uv0) -> ImVec2;
+    auto load(const std::filesystem::path& path) -> ImVec2;
+    auto uv1 (const ImVec2& uv0) -> ImVec2;
 
     std::shared_ptr<erhe::graphics::Texture> texture;
 

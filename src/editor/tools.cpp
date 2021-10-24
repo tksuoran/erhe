@@ -338,14 +338,16 @@ void Editor_tools::delete_selected_meshes()
         {
             continue;
         }
-        Mesh_insert_remove_operation::Context context{m_selection_tool,
-                                                      scene_root->content_layer(),
-                                                      scene_root->scene(),
-                                                      scene_root->physics_world(),
-                                                      mesh,
-                                                      node,
-                                                      node->get_attachment<Node_physics>(),
-                                                      Scene_item_operation::Mode::remove};
+        Mesh_insert_remove_operation::Context context{
+            m_selection_tool,
+            scene_root->content_layer(),
+            scene_root->scene(),
+            scene_root->physics_world(),
+            mesh,
+            node,
+            node->get_attachment<Node_physics>(),
+            Scene_item_operation::Mode::remove
+        };
         auto op = make_shared<Mesh_insert_remove_operation>(context);
         compound_context.operations.push_back(op);
     }

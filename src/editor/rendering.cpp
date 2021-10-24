@@ -176,12 +176,14 @@ void Editor_rendering::render(const double time)
 
     begin_frame();
 
-    const Render_context render_context{&pointer_context,
-                                        m_scene_manager.get(),
-                                        m_line_renderer.get(),
-                                        m_text_renderer.get(),
-                                        scene_viewport,
-                                        time};
+    const Render_context render_context{
+        &pointer_context,
+        m_scene_manager.get(),
+        m_line_renderer.get(),
+        m_text_renderer.get(),
+        scene_viewport,
+        time
+    };
 
     m_editor_tools->render_update_tools(render_context);
 
@@ -217,12 +219,14 @@ void Editor_rendering::render(const double time)
         m_editor_view->update_pointer();
 
         auto& pointer_context = m_editor_view->pointer_context;
-        const Render_context render_context{&pointer_context,
-                                            m_scene_manager.get(),
-                                            m_line_renderer.get(),
-                                            m_text_renderer.get(),
-                                            scene_viewport,
-                                            time};
+        const Render_context render_context{
+            &pointer_context,
+            m_scene_manager.get(),
+            m_line_renderer.get(),
+            m_text_renderer.get(),
+            scene_viewport,
+            time
+        };
 
         m_editor_tools->update_and_render_tools(render_context);
 
@@ -281,13 +285,15 @@ void Editor_rendering::render_id(const double time)
 
     auto& pointer_context = m_editor_view->pointer_context;
 
-    m_id_renderer->render(scene_viewport,
-                          m_scene_root->content_layers(),
-                          m_scene_root->tool_layers(),
-                          *camera,
-                          time,
-                          pointer_context.pointer_x,
-                          pointer_context.pointer_y);
+    m_id_renderer->render(
+        scene_viewport,
+        m_scene_root->content_layers(),
+        m_scene_root->tool_layers(),
+        *camera,
+        time,
+        pointer_context.pointer_x,
+        pointer_context.pointer_y
+    );
 }
 
 void Editor_rendering::render_clear_primary()
@@ -296,21 +302,27 @@ void Editor_rendering::render_clear_primary()
 
     m_pipeline_state_tracker->shader_stages.reset();
     m_pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
-    gl::viewport(scene_viewport.x,
-                 scene_viewport.y,
-                 scene_viewport.width,
-                 scene_viewport.height);
+    gl::viewport(
+        scene_viewport.x,
+        scene_viewport.y,
+        scene_viewport.width,
+        scene_viewport.height
+    );
     gl::enable(gl::Enable_cap::framebuffer_srgb);
-    gl::clear_color(m_viewport_config->clear_color[0],
-                    m_viewport_config->clear_color[1],
-                    m_viewport_config->clear_color[2],
-                    m_viewport_config->clear_color[3]);
+    gl::clear_color(
+        m_viewport_config->clear_color[0],
+        m_viewport_config->clear_color[1],
+        m_viewport_config->clear_color[2],
+        m_viewport_config->clear_color[3]
+    );
     gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
     gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 }
 
-void Editor_rendering::render_content(erhe::scene::ICamera*       camera,
-                                      const erhe::scene::Viewport viewport)
+void Editor_rendering::render_content(
+    erhe::scene::ICamera*       camera,
+    const erhe::scene::Viewport viewport
+)
 {
     ZoneScoped;
 
@@ -341,12 +353,14 @@ void Editor_rendering::render_content(erhe::scene::ICamera*       camera,
         //                             render_style.polygon_offset_units,
         //                             render_style.polygon_offset_clamp);
         //}
-        m_forward_renderer->render(viewport,
-                                   *camera,
-                                   m_scene_root->content_layers(),
-                                   m_scene_root->materials(),
-                                   { Forward_renderer::Pass::polygon_fill },
-                                   content_not_selected_filter);
+        m_forward_renderer->render(
+            viewport,
+            *camera,
+            m_scene_root->content_layers(),
+            m_scene_root->materials(),
+            { Forward_renderer::Pass::polygon_fill },
+            content_not_selected_filter
+        );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
     }
 
@@ -357,12 +371,14 @@ void Editor_rendering::render_content(erhe::scene::ICamera*       camera,
         m_forward_renderer->primitive_constant_color = render_style.line_color;
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_size  = render_style.line_width;
-        m_forward_renderer->render(viewport,
-                                   *camera,
-                                   m_scene_root->content_fill_layers(),
-                                   m_scene_root->materials(),
-                                   { Forward_renderer::Pass::edge_lines },
-                                   content_not_selected_filter);
+        m_forward_renderer->render(
+            viewport,
+            *camera,
+            m_scene_root->content_fill_layers(),
+            m_scene_root->materials(),
+            { Forward_renderer::Pass::edge_lines },
+            content_not_selected_filter
+        );
         gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
     }
     if (render_style.polygon_centroids)
@@ -371,12 +387,14 @@ void Editor_rendering::render_content(erhe::scene::ICamera*       camera,
         m_forward_renderer->primitive_constant_color = render_style.centroid_color;
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_size  = render_style.point_size;
-        m_forward_renderer->render(viewport,
-                                   *camera,
-                                   m_scene_root->content_layers(),
-                                   m_scene_root->materials(),
-                                   { Forward_renderer::Pass::polygon_centroids },
-                                   content_not_selected_filter);
+        m_forward_renderer->render(
+            viewport,
+            *camera,
+            m_scene_root->content_layers(),
+            m_scene_root->materials(),
+            { Forward_renderer::Pass::polygon_centroids },
+            content_not_selected_filter
+        );
     }
     if (render_style.corner_points)
     {
@@ -384,17 +402,20 @@ void Editor_rendering::render_content(erhe::scene::ICamera*       camera,
         m_forward_renderer->primitive_constant_color = render_style.corner_color;
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_size  = render_style.point_size;
-        m_forward_renderer->render(viewport,
-                                   *camera,
-                                   m_scene_root->content_layers(),
-                                   m_scene_root->materials(),
-                                   { Forward_renderer::Pass::corner_points },
-                                   content_not_selected_filter);
+        m_forward_renderer->render(
+            viewport,
+            *camera,
+            m_scene_root->content_layers(),
+            m_scene_root->materials(),
+            { Forward_renderer::Pass::corner_points },
+            content_not_selected_filter
+        );
     }
 }
 
-void Editor_rendering::render_selection(erhe::scene::ICamera*       camera,
-                                        const erhe::scene::Viewport viewport)
+void Editor_rendering::render_selection(
+    erhe::scene::ICamera*       camera,
+    const erhe::scene::Viewport viewport)
 {
     if (camera == nullptr)
     {
@@ -421,12 +442,14 @@ void Editor_rendering::render_selection(erhe::scene::ICamera*       camera,
         //}
         //m_forward_renderer->primitive_color_source   = Base_renderer::Primitive_color_source::constant_color;
         //m_forward_renderer->primitive_constant_color = render_style.line_color;
-        m_forward_renderer->render(viewport,
-                                   *camera,
-                                   m_scene_root->content_layers(),
-                                   m_scene_root->materials(),
-                                   { Forward_renderer::Pass::polygon_fill },
-                                   content_selected_filter);
+        m_forward_renderer->render(
+            viewport,
+            *camera,
+            m_scene_root->content_layers(),
+            m_scene_root->materials(),
+            { Forward_renderer::Pass::polygon_fill },
+            content_selected_filter
+        );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
     }
 
@@ -439,14 +462,17 @@ void Editor_rendering::render_selection(erhe::scene::ICamera*       camera,
         m_forward_renderer->primitive_constant_color = render_style.line_color;
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_size  = render_style.line_width;
-        m_forward_renderer->render(viewport,
-                                   *camera,
-                                   m_scene_root->content_layers(),
-                                   m_scene_root->materials(),
-                                   { Forward_renderer::Pass::edge_lines,
-                                     Forward_renderer::Pass::hidden_line_with_blend
-                                   },
-                                   content_selected_filter);
+        m_forward_renderer->render(
+            viewport,
+            *camera,
+            m_scene_root->content_layers(),
+            m_scene_root->materials(),
+            {
+                Forward_renderer::Pass::edge_lines,
+                Forward_renderer::Pass::hidden_line_with_blend
+            },
+            content_selected_filter
+        );
         gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
     }
 
@@ -458,12 +484,14 @@ void Editor_rendering::render_selection(erhe::scene::ICamera*       camera,
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_color = render_style.centroid_color;
         m_forward_renderer->primitive_constant_size  = render_style.point_size;
-        m_forward_renderer->render(viewport,
-                                   *camera,
-                                   m_scene_root->content_layers(),
-                                   m_scene_root->materials(),
-                                   { Forward_renderer::Pass::polygon_centroids },
-                                   content_selected_filter);
+        m_forward_renderer->render(
+            viewport,
+            *camera,
+            m_scene_root->content_layers(),
+            m_scene_root->materials(),
+            { Forward_renderer::Pass::polygon_centroids },
+            content_selected_filter
+        );
     }
     if (m_viewport_config && render_style.corner_points)
     {
@@ -472,18 +500,22 @@ void Editor_rendering::render_selection(erhe::scene::ICamera*       camera,
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_color = render_style.corner_color;
         m_forward_renderer->primitive_constant_size  = render_style.point_size;
-        m_forward_renderer->render(viewport,
-                                   *camera,
-                                   m_scene_root->content_layers(),
-                                   m_scene_root->materials(),
-                                   { Forward_renderer::Pass::corner_points },
-                                   content_selected_filter);
+        m_forward_renderer->render(
+            viewport,
+            *camera,
+            m_scene_root->content_layers(),
+            m_scene_root->materials(),
+            { Forward_renderer::Pass::corner_points },
+            content_selected_filter
+        );
     }
     gl::disable(gl::Enable_cap::program_point_size);
 }
 
-void Editor_rendering::render_tool_meshes(erhe::scene::ICamera*       camera,
-                                          const erhe::scene::Viewport viewport)
+void Editor_rendering::render_tool_meshes(
+    erhe::scene::ICamera*       camera,
+    const erhe::scene::Viewport viewport
+)
 {
     ZoneScoped;
 
@@ -498,19 +530,21 @@ void Editor_rendering::render_tool_meshes(erhe::scene::ICamera*       camera,
         0u,                                    // all clear
         0u};                                   // at least one cler
 
-    m_forward_renderer->render(viewport,
-                               *camera,
-                               m_scene_root->tool_layers(),
-                               m_scene_root->materials(),
-                               {
-                                   Forward_renderer::Pass::tag_depth_hidden_with_stencil,
-                                   Forward_renderer::Pass::tag_depth_visible_with_stencil,
-                                   Forward_renderer::Pass::clear_depth,
-                                   Forward_renderer::Pass::depth_only,
-                                   Forward_renderer::Pass::require_stencil_tag_depth_visible,
-                                   Forward_renderer::Pass::require_stencil_tag_depth_hidden_and_blend,
-                               },
-                               tool_filter);
+    m_forward_renderer->render(
+        viewport,
+        *camera,
+        m_scene_root->tool_layers(),
+        m_scene_root->materials(),
+        {
+            Forward_renderer::Pass::tag_depth_hidden_with_stencil,
+            Forward_renderer::Pass::tag_depth_visible_with_stencil,
+            Forward_renderer::Pass::clear_depth,
+            Forward_renderer::Pass::depth_only,
+            Forward_renderer::Pass::require_stencil_tag_depth_visible,
+            Forward_renderer::Pass::require_stencil_tag_depth_hidden_and_blend,
+        },
+        tool_filter
+    );
 }
 
 void Editor_rendering::bind_primary_scene_output_framebuffer()

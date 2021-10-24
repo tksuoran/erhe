@@ -50,10 +50,12 @@ void Operations::imgui(Pointer_context& pointer_context)
     for (unsigned int i = 0; i < static_cast<unsigned int>(Action::count); ++i)
     {
         const auto button_action  = static_cast<Action>(i);
-        const bool button_pressed = make_button(c_action_strings[i].data(),
-                                                (button_action == active_action) ? Item_mode::active
-                                                                                 : Item_mode::normal,
-                                                button_size);
+        const bool button_pressed = make_button(
+            c_action_strings[i].data(),
+            (button_action == active_action) ? Item_mode::active
+                                             : Item_mode::normal,
+            button_size
+        );
         if (button_pressed && (active_action != button_action))
         {
             log_tools.trace("Setting priority action to {}", c_action_strings[i]);
@@ -61,11 +63,13 @@ void Operations::imgui(Pointer_context& pointer_context)
         }
     }
 
-    Mesh_operation::Context context{m_mesh_memory->build_info_set,
-                                    m_scene_root->content_layer(),
-                                    m_scene_root->scene(),
-                                    m_scene_root->physics_world(),
-                                    m_selection_tool};
+    Mesh_operation::Context context{
+        m_mesh_memory->build_info_set,
+        m_scene_root->content_layer(),
+        m_scene_root->scene(),
+        m_scene_root->physics_world(),
+        m_selection_tool
+    };
     if (make_button("Undo", m_operation_stack->can_undo() ? Item_mode::normal
                                                           : Item_mode::disabled, button_size))
     {
@@ -79,11 +83,13 @@ void Operations::imgui(Pointer_context& pointer_context)
 
     if (ImGui::Button("Merge", button_size))
     {
-        Merge_operation::Context merge_context{m_mesh_memory->build_info_set,
-                                               m_scene_root->content_layer(),
-                                               m_scene_root->scene(),
-                                               m_scene_root->physics_world(),
-                                               m_selection_tool};
+        Merge_operation::Context merge_context{
+            m_mesh_memory->build_info_set,
+            m_scene_root->content_layer(),
+            m_scene_root->scene(),
+            m_scene_root->physics_world(),
+            m_selection_tool
+        };
         auto op = std::make_shared<Merge_operation>(merge_context);
         m_operation_stack->push(op);
     }

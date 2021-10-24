@@ -22,8 +22,10 @@ using glm::mat4;
 
 Geometry::Geometry() = default;
 
-Geometry::Geometry(std::string_view               name,
-                   std::function<void(Geometry&)> generator)
+Geometry::Geometry(
+    std::string_view               name,
+    std::function<void(Geometry&)> generator
+)
     : name{name}
 {
     if (generator)
@@ -655,13 +657,15 @@ auto Geometry::generate_polygon_texture_coordinates(const bool overwrite_existin
 
     for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
     {
-        polygons[polygon_id].compute_planar_texture_coordinates(polygon_id,
-                                                                *this,
-                                                                *corner_texcoords,
-                                                                *polygon_centroids,
-                                                                *polygon_normals,
-                                                                *point_locations,
-                                                                overwrite_existing_texture_coordinates);
+        polygons[polygon_id].compute_planar_texture_coordinates(
+            polygon_id,
+            *this,
+            *corner_texcoords,
+            *polygon_centroids,
+            *polygon_normals,
+            *point_locations,
+            overwrite_existing_texture_coordinates
+        );
     }
 
     m_serial_polygon_texture_coordinates = m_serial;
@@ -684,8 +688,10 @@ void Geometry::sanity_check() const
             }
             if (j.corner.polygon_id >= m_next_polygon_id)
             {
-                log_geometry.error("Sanity check failure: Point {} uses corner {} which points to invalid polygon {}\n",
-                          i.point_id, j.corner_id, j.corner.polygon_id);
+                log_geometry.error(
+                    "Sanity check failure: Point {} uses corner {} which points to invalid polygon {}\n",
+                    i.point_id, j.corner_id, j.corner.polygon_id
+                );
                 ++error_count;
             }
         });
@@ -697,14 +703,18 @@ void Geometry::sanity_check() const
         {
             if (j.corner.polygon_id != i.polygon_id)
             {
-                log_geometry.error("Sanity check failure: Polygon {} uses corner {} but corner {} polygon is {}\n",
-                          i.polygon_id, j.corner_id, j.corner_id, j.corner.polygon_id);
+                log_geometry.error(
+                    "Sanity check failure: Polygon {} uses corner {} but corner {} polygon is {}\n",
+                    i.polygon_id, j.corner_id, j.corner_id, j.corner.polygon_id
+                );
                 ++error_count;
             }
             if (j.corner.point_id >= m_next_point_id)
             {
-                log_geometry.error("Sanity check failure: Polygon {} uses corner {} which points to invalid point {}\n",
-                          i.polygon_id, j.corner_id, j.corner_id, j.corner.point_id);
+                log_geometry.error(
+                    "Sanity check failure: Polygon {} uses corner {} which points to invalid point {}\n",
+                    i.polygon_id, j.corner_id, j.corner_id, j.corner.point_id
+                );
                 ++error_count;
             }
             else
@@ -721,8 +731,10 @@ void Geometry::sanity_check() const
                 });
                 if (!corner_found)
                 {
-                    log_geometry.error("Sanity check failure: Polygon {} uses corner {} which uses point {} which does not point back to the corner\n",
-                              i.polygon_id, j.corner_id, j.corner.point_id);
+                    log_geometry.error(
+                        "Sanity check failure: Polygon {} uses corner {} which uses point {} which does not point back to the corner\n",
+                        i.polygon_id, j.corner_id, j.corner.point_id
+                    );
                     ++error_count;
                 }
             }
@@ -755,15 +767,19 @@ void Geometry::sanity_check() const
             });
             if (!corner_point_found)
             {
-                log_geometry.error("Sanity check failure: Corner {} not found referenced by any point\n",
-                          i.corner_id);
+                log_geometry.error(
+                    "Sanity check failure: Corner {} not found referenced by any point\n",
+                    i.corner_id
+                );
                 ++error_count;
             }
         }
         if (i.corner.polygon_id >= m_next_polygon_id)
         {
-            log_geometry.error("Sanity check failure: Corner {} points to invalid polygon {}\n",
-                      i.corner_id, i.corner.polygon_id);
+            log_geometry.error(
+                "Sanity check failure: Corner {} points to invalid polygon {}\n",
+                i.corner_id, i.corner.polygon_id
+            );
             ++error_count;
             return;
         }
@@ -781,20 +797,28 @@ void Geometry::sanity_check() const
             });
             if (!corner_polygon_found)
             {
-                log_geometry.error("Sanity check failure: Corner {} not found referenced by any polygon\n",
-                          i.corner_id);
+                log_geometry.error(
+                    "Sanity check failure: Corner {} not found referenced by any polygon\n",
+                    i.corner_id
+                );
                 ++error_count;
             }
         }
         if (corner_point_found != corner_polygon_found)
         {
-            log_geometry.error("Corner {} found in point mismatch found in polygon\n", i.corner_id);
+            log_geometry.error(
+                "Corner {} found in point mismatch found in polygon\n",
+                i.corner_id
+            );
             ++error_count;
         }
     });
     if (error_count > 0)
     {
-         log_geometry.error("Sanity check failure: Detected {} errors\n", error_count);
+         log_geometry.error(
+             "Sanity check failure: Detected {} errors\n",
+             error_count
+         );
     }
 }
 

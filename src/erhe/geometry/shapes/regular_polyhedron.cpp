@@ -11,7 +11,7 @@ auto make_cuboctahedron(const double r)
 {
     ZoneScoped;
 
-    return Geometry(
+    return Geometry{
         "cuboctahedron",
         [=](auto& geometry)
         {
@@ -50,7 +50,7 @@ auto make_cuboctahedron(const double r)
             geometry.generate_polygon_texture_coordinates(true);
             geometry.compute_tangents(true, true, false, false, true, true);
         }
-    );
+    };
 }
 
 auto make_dodecahedron(const double r)
@@ -58,7 +58,7 @@ auto make_dodecahedron(const double r)
 {
     ZoneScoped;
 
-    return Geometry(
+    return Geometry{
         "dodecahedron",
         [=](auto& geometry)
         {
@@ -106,7 +106,7 @@ auto make_dodecahedron(const double r)
             geometry.generate_polygon_texture_coordinates(true);
             geometry.compute_tangents(true, true, false, false, true, true);
         }
-    );
+    };
 }
 
 auto make_icosahedron(const double r)
@@ -114,7 +114,7 @@ auto make_icosahedron(const double r)
 {
     ZoneScoped;
 
-    return Geometry(
+    return Geometry{
         "icosahedron",
         [=](auto& geometry)
         {
@@ -162,7 +162,7 @@ auto make_icosahedron(const double r)
             geometry.generate_polygon_texture_coordinates(true);
             geometry.compute_tangents(true, true, false, false, true, true);
         }
-    );
+    };
 }
 
 auto make_octahedron(const double r)
@@ -170,7 +170,7 @@ auto make_octahedron(const double r)
 {
     ZoneScoped;
 
-    return Geometry(
+    return Geometry{
         "octahedron",
         [=](auto& geometry)
         {
@@ -195,7 +195,7 @@ auto make_octahedron(const double r)
             geometry.generate_polygon_texture_coordinates(true);
             geometry.compute_tangents(true, true, false, false, true, true);
         }
-    );
+    };
 }
 
 auto make_tetrahedron(double r)
@@ -203,7 +203,7 @@ auto make_tetrahedron(double r)
 {
     ZoneScoped;
 
-    return Geometry(
+    return Geometry{
         "tetrahedron",
         [=](auto& geometry)
         {
@@ -225,7 +225,7 @@ auto make_tetrahedron(double r)
             geometry.generate_polygon_texture_coordinates(true);
             geometry.compute_tangents(true, true, false, false, true, true);
         }
-    );
+    };
 }
 
 auto make_cube(const double r)
@@ -233,7 +233,7 @@ auto make_cube(const double r)
 {
     ZoneScoped;
 
-    return Geometry(
+    return Geometry{
         "cube",
         [=](auto& geometry)
         {
@@ -259,7 +259,7 @@ auto make_cube(const double r)
             geometry.generate_polygon_texture_coordinates(true);
             geometry.compute_tangents(true, true, false, false, true, true);
         }
-    );
+    };
 }
 
 } // namespace erhe::geometry::shapes

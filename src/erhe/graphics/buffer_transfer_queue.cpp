@@ -35,11 +35,13 @@ void Buffer_transfer_queue::flush()
     for (const auto& entry : m_queued)
     {
         log_buffer.trace("buffer upload {} transfer offset = {} size = {}\n", entry.target->gl_name(), entry.target_offset, entry.data.size());
-        Scoped_buffer_mapping<uint8_t> scoped_mapping{*entry.target,
-                                                      entry.target_offset,
-                                                      entry.data.size(),
-                                                      gl::Map_buffer_access_mask::map_invalidate_range_bit |
-                                                      gl::Map_buffer_access_mask::map_write_bit};
+        Scoped_buffer_mapping<uint8_t> scoped_mapping{
+            *entry.target,
+            entry.target_offset,
+            entry.data.size(),
+            gl::Map_buffer_access_mask::map_invalidate_range_bit |
+            gl::Map_buffer_access_mask::map_write_bit
+        };
         auto destination = scoped_mapping.span();
         memcpy(destination.data(), entry.data.data(), entry.data.size());
     }

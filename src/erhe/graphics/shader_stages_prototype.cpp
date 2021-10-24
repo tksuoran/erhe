@@ -98,17 +98,20 @@ gl::Program_resource_property program_resource_properties[]
 
 template <typename T> auto
 is_in_list(const T& item, std::initializer_list<T> items)
--> bool
+    -> bool
 {
-    return std::find(items.begin(),
-                     items.end(),
-                     item) != items.end();
+    return std::find(
+        items.begin(),
+        items.end(),
+        item
+    ) != items.end();
 }
 
 // [OpenGL 4.6 (Core Profile)] Table 7.2 GetProgramResourceiv properties and supported interfaces
-auto is_program_interface_allowed(const gl::Program_resource_property property,
-                                  const gl::Program_interface         interface)
--> bool
+auto is_program_interface_allowed(
+    const gl::Program_resource_property property,
+    const gl::Program_interface         interface
+) -> bool
 {
     switch (property)
     {
@@ -346,9 +349,10 @@ auto is_program_interface_allowed(const gl::Program_resource_property property,
 
 }
 
-auto Shader_stages::Prototype::try_compile_shader(const Shader_stages::Create_info&               create_info,
-                                                  const Shader_stages::Create_info::Shader_stage& shader)
--> std::optional<Gl_shader>
+auto Shader_stages::Prototype::try_compile_shader(
+    const Shader_stages::Create_info&               create_info,
+    const Shader_stages::Create_info::Shader_stage& shader
+) -> std::optional<Gl_shader>
 {
     Gl_shader gl_shader(shader.type);
     const auto gl_name = gl_shader.gl_name();
@@ -409,10 +413,12 @@ Shader_stages::Prototype::Prototype(const Shader_stages::Create_info& create_inf
             c_array[i] = create_info.transform_feedback_varyings[i].c_str();
         }
 
-        gl::transform_feedback_varyings(gl_name,
-                                        static_cast<GLsizei>(c_array.size()),
-                                        c_array.data(),
-                                        create_info.transform_feedback_buffer_mode);
+        gl::transform_feedback_varyings(
+            gl_name,
+            static_cast<GLsizei>(c_array.size()),
+            c_array.data(),
+            create_info.transform_feedback_buffer_mode
+        );
     }
 
     gl::link_program(gl_name);
@@ -520,10 +526,12 @@ void Shader_stages::Prototype::dump_reflection() const
             continue;
         }
         int interface_max_name_length{0};
-        gl::get_program_interface_iv(gl_name,
-                                     interface,
-                                     gl::Program_interface_p_name::max_name_length,
-                                     &interface_max_name_length);
+        gl::get_program_interface_iv(
+            gl_name,
+            interface,
+            gl::Program_interface_p_name::max_name_length,
+            &interface_max_name_length
+        );
         max_name_length = std::max(max_name_length, interface_max_name_length);
     }
 
@@ -534,10 +542,12 @@ void Shader_stages::Prototype::dump_reflection() const
     for (auto interface : program_interfaces)
     {
         int active_resource_count{0};
-        gl::get_program_interface_iv(gl_name,
-                                     interface,
-                                     gl::Program_interface_p_name::active_resources,
-                                     &active_resource_count);
+        gl::get_program_interface_iv(
+            gl_name,
+            interface,
+            gl::Program_interface_p_name::active_resources,
+            &active_resource_count
+        );
 
         if (active_resource_count == 0)
         {
@@ -552,12 +562,14 @@ void Shader_stages::Prototype::dump_reflection() const
             if (interface != gl::Program_interface::atomic_counter_buffer)
             {
                 std::fill(begin(name_buffer), end(name_buffer), '\0');
-                gl::get_program_resource_name(gl_name,
-                                              interface,
-                                              i,
-                                              max_name_length,
-                                              &name_length,
-                                              name_buffer.data());
+                gl::get_program_resource_name(
+                    gl_name,
+                    interface,
+                    i,
+                    max_name_length,
+                    &name_length,
+                    name_buffer.data()
+                );
                 name = std::string(name_buffer.data(), name_length);
                 log_program.trace("\t{:<40} : {}\n", i, name);
             }
@@ -573,30 +585,36 @@ void Shader_stages::Prototype::dump_reflection() const
             {
                 GLsizei length{0};
                 GLint num_active_variables{0};
-                gl::get_program_resource_iv(gl_name,
-                                            interface,
-                                            i,
-                                            1,
-                                            &property_num_active_variables,
-                                            1,
-                                            &length,
-                                            &num_active_variables);
-                log_program.trace("\t\t{:<40} = {}\n",
-                                  c_str(property_num_active_variables),
-                                  num_active_variables);
+                gl::get_program_resource_iv(
+                    gl_name,
+                    interface,
+                    i,
+                    1,
+                    &property_num_active_variables,
+                    1,
+                    &length,
+                    &num_active_variables
+                );
+                log_program.trace(
+                    "\t\t{:<40} = {}\n",
+                    c_str(property_num_active_variables),
+                    num_active_variables
+                );
                 if (num_active_variables > 0)
                 {
                     std::vector<GLint> indices;
                     indices.resize(num_active_variables);
                     std::fill(begin(indices), end(indices), 0);
-                    gl::get_program_resource_iv(gl_name,
-                                                interface,
-                                                i,
-                                                1,
-                                                &property_active_variables,
-                                                num_active_variables,
-                                                &length,
-                                                indices.data());
+                    gl::get_program_resource_iv(
+                        gl_name,
+                        interface,
+                        i,
+                        1,
+                        &property_active_variables,
+                        num_active_variables,
+                        &length,
+                        indices.data()
+                    );
                     log_program.trace("\t\t{:<40} = [ ", c_str(property_active_variables));
                     for (int i = 0; i < num_active_variables; ++i)
                     {
@@ -608,12 +626,14 @@ void Shader_stages::Prototype::dump_reflection() const
                         if (member_interface_.has_value())
                         {
                             std::fill(begin(name_buffer), end(name_buffer), '\0');
-                            gl::get_program_resource_name(gl_name,
-                                                          member_interface_.value(),
-                                                          indices[i],
-                                                          max_name_length,
-                                                          &name_length,
-                                                          name_buffer.data());
+                            gl::get_program_resource_name(
+                                gl_name,
+                                member_interface_.value(),
+                                indices[i],
+                                max_name_length,
+                                &name_length,
+                                name_buffer.data()
+                            );
                             name = std::string(name_buffer.data(), name_length);
                             log_program.trace("{} {}", indices[i], name);
                         }
@@ -635,14 +655,16 @@ void Shader_stages::Prototype::dump_reflection() const
                 }
                 GLsizei length{0};
                 int param{0};
-                gl::get_program_resource_iv(gl_name,
-                                            interface,
-                                            i,
-                                            1,
-                                            &property,
-                                            1,
-                                            &length,
-                                            &param);
+                gl::get_program_resource_iv(
+                    gl_name,
+                    interface,
+                    i,
+                    1,
+                    &property,
+                    1,
+                    &length,
+                    &param
+                );
                 if (property != gl::Program_resource_property::type)
                 {
                     log_program.trace("\t\t{:<40} = {}\n", c_str(property), param);
@@ -667,13 +689,15 @@ void Shader_stages::Prototype::dump_reflection() const
         gl::Attribute_type type2;
         for (unsigned int i = 0; i < static_cast<unsigned int>(transform_feedback_varyings); ++i)
         {
-            gl::get_transform_feedback_varying(gl_name,
-                                               i,
-                                               transform_feedback_varying_max_length,
-                                               &length,
-                                               &size2,
-                                               &type2,
-                                               &buffer_[0]);
+            gl::get_transform_feedback_varying(
+                gl_name,
+                i,
+                transform_feedback_varying_max_length,
+                &length,
+                &size2,
+                &type2,
+                &buffer_[0]
+            );
 
             if (size2 > 1)
             {

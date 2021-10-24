@@ -285,18 +285,22 @@ auto Context_window::get_glfw_window() const
 
 int Context_window::s_window_count{0};
 
-const char* month_name[] = { "January", "February", "March", "April", "May", "June",
-                             "July", "August", "September", "October", "November", "December" };
+const char* month_name[] = {
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+};
 
 Context_window::Context_window(const int width, const int height, const int msaa_sample_count)
     : m_root_view{this}
 {
     time_t now = time(0);
     tm* l = localtime(&now);
-    std::string title = fmt::format("erhe by Timo Suoranta {} {}. {}",
-                                     month_name[l->tm_mon],
-                                     l->tm_mday,
-                                     1900 + l->tm_year);
+    std::string title = fmt::format(
+        "erhe by Timo Suoranta {} {}. {}",
+        month_name[l->tm_mon],
+        l->tm_mday,
+        1900 + l->tm_year
+    );
     bool ok = open(width, height, msaa_sample_count, title, 4, 6, nullptr);
 
     VERIFY(ok);
@@ -314,13 +318,14 @@ Context_window::Context_window(Context_window* share)
 
 // Currently this is not thread safe.
 // For now, only call this from main thread.
-auto Context_window::open(const int          width,
-                          const int          height,
-                          const int          msaa_sample_count,
-                          const std::string& title,
-                          const int          opengl_major_version,
-                          const int          opengl_minor_version,
-                          Context_window*    share)
+auto Context_window::open(
+    const int          width,
+    const int          height,
+    const int          msaa_sample_count,
+    const std::string& title,
+    const int          opengl_major_version,
+    const int          opengl_minor_version,
+    Context_window*    share)
 -> bool
 {
     if (s_window_count == 0)
@@ -476,9 +481,14 @@ void Context_window::show_ursor(const bool show)
             m_is_window_visible = show;
             if (!m_is_mouse_captured)
             {
-                glfwSetInputMode(window, GLFW_CURSOR, m_is_mouse_captured ? GLFW_CURSOR_DISABLED
-                                                                          : m_is_window_visible ? GLFW_CURSOR_NORMAL
-                                                                                                : GLFW_CURSOR_HIDDEN);
+                glfwSetInputMode(
+                    window, GLFW_CURSOR,
+                    m_is_mouse_captured
+                        ? GLFW_CURSOR_DISABLED
+                        : m_is_window_visible
+                            ? GLFW_CURSOR_NORMAL
+                            : GLFW_CURSOR_HIDDEN
+                );
             }
         }
     }
@@ -492,15 +502,20 @@ void Context_window::capture_mouse(const bool capture)
         if (m_is_mouse_captured != capture)
         {
             m_is_mouse_captured = capture;
-                glfwSetInputMode(window, GLFW_CURSOR, m_is_mouse_captured ? GLFW_CURSOR_DISABLED
-                                                                          : m_is_window_visible ? GLFW_CURSOR_NORMAL
-                                                                                                : GLFW_CURSOR_HIDDEN);
+            glfwSetInputMode(
+                window,
+                GLFW_CURSOR,
+                m_is_mouse_captured
+                    ? GLFW_CURSOR_DISABLED
+                    : m_is_window_visible
+                        ? GLFW_CURSOR_NORMAL
+                        : GLFW_CURSOR_HIDDEN
+            );
         }
     }
 }
 
-auto Context_window::is_mouse_captured() const
--> bool
+auto Context_window::is_mouse_captured() const -> bool
 {
     auto* window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
     if (window != nullptr)
@@ -519,8 +534,7 @@ auto Context_window::is_mouse_captured() const
     return false;
 }
 
-auto Context_window::get_width() const
--> int
+auto Context_window::get_width() const -> int
 {
     int width{0};
     int height{0};
@@ -532,8 +546,7 @@ auto Context_window::get_width() const
     return width;
 }
 
-auto Context_window::get_height() const
--> int
+auto Context_window::get_height() const -> int
 {
     int width{0};
     int height{0};

@@ -67,21 +67,25 @@ void Forward_renderer::initialize_component()
 {
     ZoneScoped;
 
-    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
 
-    gl::push_debug_group(gl::Debug_source::debug_source_application,
-                         0,
-                         static_cast<GLsizei>(c_forward_renderer_initialize_component.length()),
-                         c_forward_renderer_initialize_component.data());
+    gl::push_debug_group(
+        gl::Debug_source::debug_source_application,
+        0,
+        static_cast<GLsizei>(c_forward_renderer_initialize_component.length()),
+        c_forward_renderer_initialize_component.data()
+    );
 
     create_frame_resources(256, 256, 256, 8000, 8000);
 
     const auto& shader_resources = *get<Program_interface>()->shader_resources.get();
 
-    m_vertex_input = std::make_unique<Vertex_input_state>(shader_resources.attribute_mappings,
-                                                          m_mesh_memory->gl_vertex_format(),
-                                                          m_mesh_memory->gl_vertex_buffer.get(),
-                                                          m_mesh_memory->gl_index_buffer.get());
+    m_vertex_input = std::make_unique<Vertex_input_state>(
+        shader_resources.attribute_mappings,
+        m_mesh_memory->gl_vertex_format(),
+        m_mesh_memory->gl_vertex_buffer.get(),
+        m_mesh_memory->gl_index_buffer.get()
+    );
 
     m_pipeline_fill.shader_stages  = m_programs->standard.get();
     m_pipeline_fill.vertex_input   = m_vertex_input.get();
@@ -383,19 +387,23 @@ auto Forward_renderer::select_primitive_mode(Pass pass) const -> erhe::primitive
 }
 
 static constexpr std::string_view c_forward_renderer_render{"Forward_renderer::render()"};
-void Forward_renderer::render(Viewport                              viewport,
-                              ICamera&                              camera,
-                              Layer_collection&                     layers,
-                              const Material_collection&            materials,
-                              const std::initializer_list<Pass>     passes,
-                              const erhe::scene::Visibility_filter& visibility_filter)
+void Forward_renderer::render(
+    Viewport                              viewport,
+    ICamera&                              camera,
+    Layer_collection&                     layers,
+    const Material_collection&            materials,
+    const std::initializer_list<Pass>     passes,
+    const erhe::scene::Visibility_filter& visibility_filter
+)
 {
     ZoneScoped;
 
-    gl::push_debug_group(gl::Debug_source::debug_source_application,
-                         0,
-                         static_cast<GLsizei>(c_forward_renderer_render.length()),
-                         c_forward_renderer_render.data());
+    gl::push_debug_group(
+        gl::Debug_source::debug_source_application,
+        0,
+        static_cast<GLsizei>(c_forward_renderer_render.length()),
+        c_forward_renderer_render.data()
+    );
     const unsigned int shadow_texture_unit = 0;
     const unsigned int shadow_texture_name = m_shadow_renderer->texture()->gl_name();
     gl::bind_sampler (shadow_texture_unit, m_programs->nearest_sampler->gl_name());
@@ -417,15 +425,19 @@ void Forward_renderer::render(Viewport                              viewport,
         }
 
         const auto& pass_name = c_pass_strings[static_cast<size_t>(pass)];
-        gl::push_debug_group(gl::Debug_source::debug_source_application,
-                             0,
-                             static_cast<GLsizei>(pass_name.length()),
-                             pass_name.data());
+        gl::push_debug_group(
+            gl::Debug_source::debug_source_application,
+            0,
+            static_cast<GLsizei>(pass_name.length()),
+            pass_name.data()
+        );
 
         m_pipeline_state_tracker->execute(pipeline);
-        gl::program_uniform_1i(pipeline->shader_stages->gl_name(),
-                               m_programs->shadow_sampler_location,
-                               shadow_texture_unit);
+        gl::program_uniform_1i(
+            pipeline->shader_stages->gl_name(),
+            m_programs->shadow_sampler_location,
+            shadow_texture_unit
+        );
         update_material_buffer(materials);
         update_camera_buffer  (camera, viewport);
         bind_material_buffer();
@@ -442,11 +454,13 @@ void Forward_renderer::render(Viewport                              viewport,
             bind_primitive_buffer();
             bind_draw_indirect_buffer();
 
-            gl::multi_draw_elements_indirect(pipeline->input_assembly->primitive_topology,
-                                             m_mesh_memory->gl_index_type(),
-                                             reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
-                                             static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
-                                             static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command)));
+            gl::multi_draw_elements_indirect(
+                pipeline->input_assembly->primitive_topology,
+                m_mesh_memory->gl_index_type(),
+                reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
+                static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
+                static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
+            );
         }
 
         if (pass == Pass::clear_depth)

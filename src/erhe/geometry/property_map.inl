@@ -24,7 +24,7 @@ Property_map<Key_type, Value_type>::clear()
 template <typename Key_type, typename Value_type>
 inline auto
 Property_map<Key_type, Value_type>::empty() const
--> bool
+    -> bool
 {
     return values.empty();
 }
@@ -32,7 +32,7 @@ Property_map<Key_type, Value_type>::empty() const
 template <typename Key_type, typename Value_type>
 inline auto
 Property_map<Key_type, Value_type>::size() const
--> size_t
+    -> size_t
 {
     return values.size();
 }
@@ -78,7 +78,7 @@ Property_map<Key_type, Value_type>::put(Key_type key, Value_type value)
 template <typename Key_type, typename Value_type>
 inline auto
 Property_map<Key_type, Value_type>::get(Key_type key) const
--> Value_type
+    -> Value_type
 {
     ZoneScoped;
 
@@ -108,7 +108,7 @@ Property_map<Key_type, Value_type>::erase(Key_type key)
 template <typename Key_type, typename Value_type>
 inline auto
 Property_map<Key_type, Value_type>::maybe_get(Key_type key, Value_type& out_value) const
--> bool
+    -> bool
 {
     ZoneScoped;
 
@@ -125,7 +125,7 @@ Property_map<Key_type, Value_type>::maybe_get(Key_type key, Value_type& out_valu
 template <typename Key_type, typename Value_type>
 inline auto
 Property_map<Key_type, Value_type>::has(Key_type key) const
--> bool
+    -> bool
 {
     ZoneScoped;
 
@@ -140,7 +140,7 @@ Property_map<Key_type, Value_type>::has(Key_type key) const
 template <typename Key_type, typename Value_type>
 inline auto
 Property_map<Key_type, Value_type>::constructor(const Property_map_descriptor& descriptor) const
--> Property_map_base<Key_type>*
+    -> Property_map_base<Key_type>*
 {
     ZoneScoped;
 
@@ -153,7 +153,8 @@ template <typename Key_type, typename Value_type>
 inline void
 Property_map<Key_type, Value_type>::interpolate(
     Property_map_base<Key_type>*                                destination_base,
-    const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds) const
+    const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds
+) const
 {
     ZoneScoped;
 
@@ -264,7 +265,9 @@ template <>           struct transform_properties<glm::vec4> { static const bool
 template <typename Key_type, typename Value_type>
 inline void
 Property_map<Key_type, Value_type>::import_from(
-    Property_map_base<Key_type>* source_base, glm::mat4 transform)
+    Property_map_base<Key_type>* source_base,
+    glm::mat4                    transform
+)
 {
     ZoneScoped;
 

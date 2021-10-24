@@ -20,9 +20,11 @@ public:
     class Transfer_entry
     {
     public:
-        Transfer_entry(Buffer*                target,
-                       const size_t           target_offset,
-                       std::vector<uint8_t>&& data)
+        Transfer_entry(
+            Buffer*                target,
+            const size_t           target_offset,
+            std::vector<uint8_t>&& data
+        )
             : target       {target}
             , target_offset{target_offset}
             , data         {data}

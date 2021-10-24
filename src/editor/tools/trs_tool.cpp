@@ -241,7 +241,7 @@ void Trs_tool::initialize_component()
 {
     ZoneScoped;
 
-    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
 
     VERIFY(m_mesh_memory);
     VERIFY(m_scene_root);
@@ -402,13 +402,16 @@ void Trs_tool::update_axis_translate(Pointer_context& pointer_context)
     vec3 ss_P0 = pointer_context.position_in_window(P0);
     vec3 ss_P1 = pointer_context.position_in_window(P1);
     vec2 ss_closest;
-    bool use_ss = closest_point(vec2(ss_P0),
-                                vec2(ss_P1),
-                                vec2(static_cast<float>(pointer_context.pointer_x),
-                                     static_cast<float>(pointer_context.pointer_y)),
-                                ss_closest);
-    vec3 R0 = pointer_context.position_in_world(vec3(ss_closest, 0.0f));
-    vec3 R1 = pointer_context.position_in_world(vec3(ss_closest, 1.0f));
+    bool use_ss = closest_point(
+        vec2{ss_P0},
+        vec2{ss_P1},
+        vec2{
+            static_cast<float>(pointer_context.pointer_x),
+            static_cast<float>(pointer_context.pointer_y)
+        },
+        ss_closest);
+    vec3 R0 = pointer_context.position_in_world(vec3{ss_closest, 0.0f});
+    vec3 R1 = pointer_context.position_in_world(vec3{ss_closest, 1.0f});
     vec3 PC_q;
     vec3 QC;
     vec3 PC_r;
@@ -437,30 +440,34 @@ void Trs_tool::update_axis_translate(Pointer_context& pointer_context)
 
 auto Trs_tool::is_x_translate_active() const -> bool
 {
-    return (m_active_handle == Handle::e_handle_translate_x ) ||
-           (m_active_handle == Handle::e_handle_translate_xy) ||
-           (m_active_handle == Handle::e_handle_translate_xz);
+    return
+        (m_active_handle == Handle::e_handle_translate_x ) ||
+        (m_active_handle == Handle::e_handle_translate_xy) ||
+        (m_active_handle == Handle::e_handle_translate_xz);
 }
 
 auto Trs_tool::is_y_translate_active() const -> bool
 {
-    return (m_active_handle == Handle::e_handle_translate_y ) ||
-           (m_active_handle == Handle::e_handle_translate_xy) ||
-           (m_active_handle == Handle::e_handle_translate_yz);
+    return
+        (m_active_handle == Handle::e_handle_translate_y ) ||
+        (m_active_handle == Handle::e_handle_translate_xy) ||
+        (m_active_handle == Handle::e_handle_translate_yz);
 }
 
 auto Trs_tool::is_z_translate_active() const -> bool
 {
-    return (m_active_handle == Handle::e_handle_translate_z ) ||
-           (m_active_handle == Handle::e_handle_translate_xz) ||
-           (m_active_handle == Handle::e_handle_translate_yz);
+    return
+        (m_active_handle == Handle::e_handle_translate_z ) ||
+        (m_active_handle == Handle::e_handle_translate_xz) ||
+        (m_active_handle == Handle::e_handle_translate_yz);
 }
 
 auto Trs_tool::is_rotate_active() const -> bool
 {
-    return (m_active_handle == Handle::e_handle_rotate_x) ||
-           (m_active_handle == Handle::e_handle_rotate_y) ||
-           (m_active_handle == Handle::e_handle_rotate_z);
+    return
+        (m_active_handle == Handle::e_handle_rotate_x) ||
+        (m_active_handle == Handle::e_handle_rotate_y) ||
+        (m_active_handle == Handle::e_handle_rotate_z);
 }
 
 void Trs_tool::snap_translate(glm::vec3& translation) const
@@ -626,7 +633,7 @@ void Trs_tool::update_rotate(Pointer_context& pointer_context)
     const vec3  up      = m_rotation.up;
 
     constexpr float c_parallel_threshold = 0.4f;
-    const vec3  V0      = vec3(root()->position_in_world()) - vec3(pointer_context.camera->node()->position_in_world());
+    const vec3  V0      = vec3{root()->position_in_world()} - vec3{pointer_context.camera->node()->position_in_world()};
     const vec3  V       = normalize(m_drag.initial_local_from_world * vec4(V0, 0.0f));
     const float v_dot_n = dot(V, n);
     if (std::abs(v_dot_n) < c_parallel_threshold)
@@ -635,9 +642,9 @@ void Trs_tool::update_rotate(Pointer_context& pointer_context)
     }
 
     const vec3 rotation_axis                  = get_axis_direction();
-    const vec4 initial_root_position_in_model = m_drag.initial_world_from_local * vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    const mat4 translate     = create_translation(vec3(-initial_root_position_in_model));
-    const mat4 untranslate   = create_translation(vec3( initial_root_position_in_model));
+    const vec4 initial_root_position_in_model = m_drag.initial_world_from_local * vec4{0.0f, 0.0f, 0.0f, 1.0f};
+    const mat4 translate     = create_translation(vec3{-initial_root_position_in_model});
+    const mat4 untranslate   = create_translation(vec3{ initial_root_position_in_model});
     //mat4 world_from_parent = (root()->parent != nullptr) ? root()->parent->world_from_node()
     //                                                    : mat4(1);
 #if 0
@@ -692,13 +699,13 @@ void Trs_tool::update_rotate(Pointer_context& pointer_context)
 
 void Trs_tool::update_rotate_parallel(Pointer_context& pointer_context)
 {
-    const vec3 r_   = vec3(m_drag.initial_local_from_world * vec4(m_drag.initial_position_in_world, 1.0f));
+    const vec3 r_   = vec3{m_drag.initial_local_from_world * vec4{m_drag.initial_position_in_world, 1.0f}};
     const vec3 p    = offset_plane_origo(m_active_handle, r_);
     const vec3 n    = get_plane_normal_in_model();
     const vec3 side = get_plane_side_in_model();
     const vec3 up   = cross(n, side);
     const vec3 pw   = pointer_context.position_in_world(m_drag.initial_window_depth);
-    const vec3 q0   = vec3(m_drag.initial_local_from_world * vec4(pw, 1.0f));
+    const vec3 q0   = vec3{m_drag.initial_local_from_world * vec4{pw, 1.0f}};
     const vec3 q_   = project_to_offset_plane(m_active_handle, p, q0);
 
     const vec3 r = normalize(r_ - p);
@@ -715,9 +722,9 @@ void Trs_tool::update_rotate_parallel(Pointer_context& pointer_context)
     const float angle      = q_angle - r_angle;
 
     const vec3 rotation_axis   = get_axis_direction();
-    const vec4 initial_root_position_in_model = m_drag.initial_world_from_local * vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    const mat4 translate       = create_translation(vec3(-initial_root_position_in_model));
-    const mat4 untranslate     = create_translation(vec3( initial_root_position_in_model));
+    const vec4 initial_root_position_in_model = m_drag.initial_world_from_local * vec4{0.0f, 0.0f, 0.0f, 1.0f};
+    const mat4 translate       = create_translation(vec3{-initial_root_position_in_model});
+    const mat4 untranslate     = create_translation(vec3{ initial_root_position_in_model});
     const mat4 rotation        = create_rotation(angle, rotation_axis);
     const mat4 world_from_node = untranslate * rotation * translate * m_drag.initial_world_from_local;
     set_node_world_transform(world_from_node);
@@ -746,7 +753,7 @@ void Trs_tool::render_update(const Render_context& render_context)
         return;
     }
 
-    const glm::vec3 view_position_in_world = vec3(camera->node()->position_in_world());
+    const glm::vec3 view_position_in_world = vec3{camera->node()->position_in_world()};
 
     m_visualization.update_scale(view_position_in_world);
 }
@@ -765,17 +772,17 @@ void Trs_tool::render(const Render_context& render_context)
     auto* line_renderer     = render_context.line_renderer;
     auto& camera            = *render_context.pointer_context->camera;
     vec3  position_in_world = root()->position_in_world();
-    float distance          = length(position_in_world - vec3(camera.node()->position_in_world()));
+    float distance          = length(position_in_world - vec3{camera.node()->position_in_world()});
     float scale             = m_visualization.scale * distance / 100.0f;
 
     if ((get_handle_type(m_active_handle) == Handle_type::e_handle_type_rotate) &&
         (line_renderer != nullptr))
     {
-        vec3 r     = vec3(m_drag.initial_local_from_world * vec4(m_drag.initial_position_in_world, 1.0f));
+        vec3 r     = vec3{m_drag.initial_local_from_world * vec4{m_drag.initial_position_in_world, 1.0f}};
         vec3 p     = offset_plane_origo(m_active_handle, r);
-        vec3 side0 = vec3(m_drag.initial_world_from_local * vec4(get_plane_side_in_model(), 0.0f));
-        vec3 side1 = vec3(m_drag.initial_world_from_local * vec4(get_plane_side_in_model2(), 0.0f));
-        vec3 q     = vec3(root()->node_from_world() * vec4(m_drag.initial_position_in_world, 1.0f));
+        vec3 side0 = vec3{m_drag.initial_world_from_local * vec4{get_plane_side_in_model(), 0.0f}};
+        vec3 side1 = vec3{m_drag.initial_world_from_local * vec4{get_plane_side_in_model2(), 0.0f}};
+        vec3 q     = vec3{root()->node_from_world()       * vec4{m_drag.initial_position_in_world, 1.0f}};
 
         r = normalize(r - p);
         q = normalize(q - p);
@@ -791,7 +798,7 @@ void Trs_tool::render(const Render_context& render_context)
         //vec3 direction         = vec3(m_drag.initial_world_from_local * vec4(get_plane_normal_in_model(), 0.0f));
         //vec3 current_direction = vec3(root()->world_from_node()        * vec4(get_plane_side_in_model(), 0.0f));
         //vec3 root              = vec3(root()->position_in_world());
-        vec3 root_position     =  vec3(root()->world_from_node()       * vec4(p, 1.0f));
+        vec3 root_position     =  vec3{root()->world_from_node()       * vec4{p, 1.0f}};
         //vec3 neg_z             = root_position - 10.f * direction;
         //vec3 pos_z             = root_position + 10.f * direction;
         //line_renderer->set_line_color(0xffffccaau);
@@ -805,17 +812,23 @@ void Trs_tool::render(const Render_context& render_context)
             {
                 float rel   = static_cast<float>(i) / static_cast<float>(sector_count);
                 float angle = rel * 2.0f * pi<float>();
-                float r0    = (i == 0) ? 0.0f
-                                       : (i % 10 == 0) ? 4.0f * scale
-                                                       : 8.0f * scale;
+                float r0    =
+                    (i == 0) ? 0.0f
+                             : (i % 10 == 0) ? 4.0f * scale
+                                             : 8.0f * scale;
 
                 angle += r_angle;
-                vec3 p0 = root_position +
-                          r0 * std::cos(angle) * side0 +
-                          r0 * std::sin(angle) * side1;
-                vec3 p1 = root_position +
-                          r1 * std::cos(angle) * side0 +
-                          r1 * std::sin(angle) * side1;
+
+                vec3 p0 =
+                    root_position +
+                    r0 * std::cos(angle) * side0 +
+                    r0 * std::sin(angle) * side1;
+
+                vec3 p1 =
+                    root_position +
+                    r1 * std::cos(angle) * side0 +
+                    r1 * std::sin(angle) * side1;
+
                 line_renderer->add_lines( { {p0, p1} }, 10.0f );
             }
         }
@@ -828,27 +841,43 @@ void Trs_tool::render(const Render_context& render_context)
                 float     rel   = static_cast<float>(i) / static_cast<float>(sector_count);
                 float     angle = rel * 2.0f * pi<float>();
                 angle += r_angle;
-                positions.emplace_back(root_position +
-                                       r1 * std::cos(angle) * side0 +
-                                       r1 * std::sin(angle) * side1);
+                positions.emplace_back(
+                    root_position +
+                    r1 * std::cos(angle) * side0 +
+                    r1 * std::sin(angle) * side1
+                );
             }
             for (size_t i = 0, count = positions.size(); i < count; ++i)
             {
                 size_t next_i = (i + 1) % count;
-                line_renderer->add_lines( { {positions[i], positions[next_i]} }, 10.0f );
+                line_renderer->add_lines(
+                    { {positions[i], positions[next_i]} }, 10.0f
+                );
             }
         }
 
         line_renderer->set_line_color(0xff00ff00u);
-        line_renderer->add_lines( { {root_position,
-                                    r1 * std::sin(q_angle) * side1 +
-                                    r1 * std::cos(q_angle) * side0
-                                   } }, 10.0f );
+        line_renderer->add_lines(
+            {
+                {
+                    root_position,
+                    r1 * std::sin(q_angle) * side1 +
+                    r1 * std::cos(q_angle) * side0
+                }
+            },
+            10.0f
+        );
         line_renderer->set_line_color(0xff0000ffu);
-        line_renderer->add_lines( { {root_position,
-                                    (r1 + 1.0f) * std::sin(r_angle) * side1 +
-                                    (r1 + 1.0f) * std::cos(r_angle) * side0
-                                   } }, 10.0f );
+        line_renderer->add_lines(
+            {
+                {
+                    root_position,
+                    (r1 + 1.0f) * std::sin(r_angle) * side1 +
+                    (r1 + 1.0f) * std::cos(r_angle) * side0
+                }
+            },
+            10.0f
+        );
     }
 
     auto* text_renderer   = render_context.text_renderer;
@@ -874,11 +903,15 @@ void Trs_tool::render(const Render_context& render_context)
 
         uint32_t text_color = 0xffffffffu; // abgr
         vec3 text_position = vec3(100.0f, 100.0f, -0.5f);
-        text_renderer->print(text_position,
-                             text_color,
-                             fmt::format("p  = {}  {}",
-                                         pointer_context->pointer_x,
-                                         pointer_context->pointer_y));
+        text_renderer->print(
+            text_position,
+            text_color,
+            fmt::format(
+                "p  = {}  {}",
+                pointer_context->pointer_x,
+                pointer_context->pointer_y
+            )
+        );
         text_position.y -= 20.0f;
     }
 }
@@ -954,12 +987,14 @@ auto Trs_tool::end(Pointer_context& pointer_context) -> bool
     cancel_ready();
     update_visibility();
 
-    Node_transform_operation::Context context{m_scene_root->content_layer(),
-                                              m_scene_root->scene(),
-                                              m_scene_root->physics_world(),
-                                              m_target_node,
-                                              m_drag.initial_transforms,
-                                              m_target_node->transforms};
+    Node_transform_operation::Context context{
+        m_scene_root->content_layer(),
+        m_scene_root->scene(),
+        m_scene_root->physics_world(),
+        m_target_node,
+        m_drag.initial_transforms,
+        m_target_node->transforms
+    };
 
     auto op = std::make_shared<Node_transform_operation>(context);
     m_operation_stack->push(op);

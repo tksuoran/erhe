@@ -18,9 +18,10 @@ namespace erhe::primitive
 namespace
 {
 
-inline void write_low(gsl::span<std::uint8_t> destination,
-                      gl::Draw_elements_type  type,
-                      size_t                  value)
+inline void write_low(
+    gsl::span<std::uint8_t> destination,
+    gl::Draw_elements_type  type,
+    size_t                  value)
 {
     switch (type)
     {
@@ -54,9 +55,10 @@ inline void write_low(gsl::span<std::uint8_t> destination,
     }
 }
 
-inline void write_low(gsl::span<std::uint8_t> destination,
-                      gl::Vertex_attrib_type  type,
-                      unsigned int            value)
+inline void write_low(
+    gsl::span<std::uint8_t> destination,
+    gl::Vertex_attrib_type  type,
+    unsigned int            value)
 {
     switch (type)
     {
@@ -90,9 +92,10 @@ inline void write_low(gsl::span<std::uint8_t> destination,
     }
 }
 
-inline void write_low(gsl::span<std::uint8_t> destination,
-                      gl::Vertex_attrib_type  type,
-                      glm::vec2               value)
+inline void write_low(
+    gsl::span<std::uint8_t> destination,
+    gl::Vertex_attrib_type  type,
+    glm::vec2               value)
 {
     if (type == gl::Vertex_attrib_type::float_)
     {
@@ -115,9 +118,10 @@ inline void write_low(gsl::span<std::uint8_t> destination,
     }
 }
 
-inline void write_low(gsl::span<std::uint8_t> destination,
-                      gl::Vertex_attrib_type  type,
-                      glm::vec3               value)
+inline void write_low(
+    gsl::span<std::uint8_t> destination,
+    gl::Vertex_attrib_type  type,
+    glm::vec3               value)
 {
     if (type == gl::Vertex_attrib_type::float_)
     {
@@ -139,9 +143,10 @@ inline void write_low(gsl::span<std::uint8_t> destination,
     }
 }
 
-inline void write_low(gsl::span<std::uint8_t> destination,
-                      gl::Vertex_attrib_type  type,
-                      glm::vec4               value)
+inline void write_low(
+    gsl::span<std::uint8_t> destination,
+    gl::Vertex_attrib_type  type,
+    glm::vec4               value)
 {
     if (type == gl::Vertex_attrib_type::float_)
     {
@@ -168,8 +173,10 @@ inline void write_low(gsl::span<std::uint8_t> destination,
 
 } // namespace
 
-Vertex_buffer_writer::Vertex_buffer_writer(Build_context&              build_context,
-                                           gsl::not_null<Buffer_sink*> buffer_sink)
+Vertex_buffer_writer::Vertex_buffer_writer(
+    Build_context&              build_context,
+    gsl::not_null<Buffer_sink*> buffer_sink
+)
     : build_context{build_context}
     , buffer_sink  {buffer_sink}
 {
@@ -189,8 +196,10 @@ auto Vertex_buffer_writer::start_offset() -> size_t
     return build_context.root.primitive_geometry->vertex_buffer_range.byte_offset;
 }
 
-Index_buffer_writer::Index_buffer_writer(Build_context&              build_context,
-                                         gsl::not_null<Buffer_sink*> buffer_sink)
+Index_buffer_writer::Index_buffer_writer(
+    Build_context&              build_context,
+    gsl::not_null<Buffer_sink*> buffer_sink
+)
     : build_context  {build_context}
     , buffer_sink    {buffer_sink}
     , index_type     {build_context.root.build_info.buffer.index_type}
@@ -247,26 +256,38 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const g
 
 void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::vec3 value)
 {
-    write_low(vertex_data_span.subspan(vertex_write_offset + attribute.offset,
-                                       attribute.size),
-              attribute.data_type,
-              value);
+    write_low(
+        vertex_data_span.subspan(
+            vertex_write_offset + attribute.offset,
+            attribute.size
+        ),
+        attribute.data_type,
+        value
+    );
 }
 
 void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::vec4 value)
 {
-    write_low(vertex_data_span.subspan(vertex_write_offset + attribute.offset,
-                                       attribute.size),
-              attribute.data_type,
-              value);
+    write_low(
+        vertex_data_span.subspan(
+            vertex_write_offset + attribute.offset,
+            attribute.size
+        ),
+        attribute.data_type,
+        value
+    );
 }
 
 void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const uint32_t value)
 {
-    write_low(vertex_data_span.subspan(vertex_write_offset + attribute.offset,
-                                       attribute.size),
-              attribute.data_type,
-              value);
+    write_low(
+        vertex_data_span.subspan(
+            vertex_write_offset + attribute.offset,
+            attribute.size
+        ),
+        attribute.data_type,
+        value
+    );
 }
 
 void Vertex_buffer_writer::move(const size_t relative_offset)

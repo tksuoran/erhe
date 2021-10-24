@@ -7,11 +7,13 @@ Material::Material() = default;
 
 Material::~Material() = default;
 
-Material::Material(std::string_view name,
-                   glm::vec4        base_color,
-                   float            roughness,
-                   float            anisotropy,
-                   float            metallic)
+Material::Material(
+    std::string_view name,
+    glm::vec4        base_color,
+    float            roughness,
+    float            anisotropy,
+    float            metallic
+)
     : name      {name}
     , metallic  {metallic}
     , roughness {roughness}

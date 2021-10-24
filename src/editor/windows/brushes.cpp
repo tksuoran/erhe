@@ -32,8 +32,10 @@ using namespace erhe::primitive;
 using namespace erhe::scene;
 using namespace erhe::toolkit;
 
-Brush_create_context::Brush_create_context(erhe::primitive::Build_info_set& build_info_set,
-                                           erhe::primitive::Normal_style    normal_style)
+Brush_create_context::Brush_create_context(
+    erhe::primitive::Build_info_set& build_info_set,
+    erhe::primitive::Normal_style    normal_style
+)
     : build_info_set{build_info_set}
     , normal_style  {normal_style}
 {
@@ -72,11 +74,13 @@ void Brushes::make_materials()
 {
     if constexpr (true) // White default material
     {
-        auto m = m_scene_root->make_material(fmt::format("Default Material"),
-                                             vec4(1.0f, 1.0f, 1.0f, 1.0f),
-                                             0.50f,
-                                             0.00f,
-                                             0.50f);
+        auto m = m_scene_root->make_material(
+            fmt::format("Default Material"),
+            vec4{1.0f, 1.0f, 1.0f, 1.0f},
+            0.50f,
+            0.00f,
+            0.50f
+        );
         add_material(m);
     }
 
@@ -88,11 +92,13 @@ void Brushes::make_materials()
         const float value      = 1.0f;
         float R, G, B;
         erhe::toolkit::hsv_to_rgb(hue, saturation, value, R, G, B);
-        auto m = m_scene_root->make_material(fmt::format("Hue {}", static_cast<int>(hue)),
-                                             vec4(R, G, B, 1.0f),
-                                             1.00f,
-                                             0.95f,
-                                             0.70f);
+        auto m = m_scene_root->make_material(
+            fmt::format("Hue {}", static_cast<int>(hue)),
+            vec4{R, G, B, 1.0f},
+            1.00f,
+            0.95f,
+            0.70f
+        );
         add_material(m);
     }
 }
@@ -106,10 +112,11 @@ auto Brushes::allocate_brush(Build_info_set& build_info_set)
     return brush;
 }
 
-auto Brushes::make_brush(erhe::geometry::Geometry&&                         geometry,
-                         const Brush_create_context&                        context,
-                         const shared_ptr<erhe::physics::ICollision_shape>& collision_shape)
--> std::shared_ptr<Brush>
+auto Brushes::make_brush(
+    erhe::geometry::Geometry&&                         geometry,
+    const Brush_create_context&                        context,
+    const shared_ptr<erhe::physics::ICollision_shape>& collision_shape
+) -> std::shared_ptr<Brush>
 {
     ZoneScoped;
 
@@ -117,10 +124,11 @@ auto Brushes::make_brush(erhe::geometry::Geometry&&                         geom
     return make_brush(shared_geometry, context, collision_shape);
 }
 
-auto Brushes::make_brush(shared_ptr<erhe::geometry::Geometry>               geometry,
-                         const Brush_create_context&                        context,
-                         const shared_ptr<erhe::physics::ICollision_shape>& collision_shape)
--> std::shared_ptr<Brush>
+auto Brushes::make_brush(
+    shared_ptr<erhe::geometry::Geometry>               geometry,
+    const Brush_create_context&                        context,
+    const shared_ptr<erhe::physics::ICollision_shape>& collision_shape
+) -> std::shared_ptr<Brush>
 {
     ZoneScoped;
 
@@ -132,22 +140,26 @@ auto Brushes::make_brush(shared_ptr<erhe::geometry::Geometry>               geom
 
     const float density = 1.0f;
 
-    Brush::Create_info create_info{geometry,
-                                   context.build_info_set,
-                                   context.normal_style,
-                                   density,
-                                   geometry->volume(),
-                                   collision_shape};
+    Brush::Create_info create_info{
+        geometry,
+        context.build_info_set,
+        context.normal_style,
+        density,
+        geometry->volume(),
+        collision_shape
+    };
 
     const auto brush = allocate_brush(context.build_info_set);
     brush->initialize(create_info);
     return brush;
 }
 
-auto Brushes::make_brush(shared_ptr<erhe::geometry::Geometry> geometry,
-                         const Brush_create_context&          context,
-                         Collision_volume_calculator          collision_volume_calculator,
-                         Collision_shape_generator            collision_shape_generator)
+auto Brushes::make_brush(
+    shared_ptr<erhe::geometry::Geometry> geometry,
+    const Brush_create_context&          context,
+    Collision_volume_calculator          collision_volume_calculator,
+    Collision_shape_generator            collision_shape_generator
+)
 -> std::shared_ptr<Brush>
 {
     ZoneScoped;
@@ -157,12 +169,14 @@ auto Brushes::make_brush(shared_ptr<erhe::geometry::Geometry> geometry,
     geometry->compute_tangents();
     geometry->compute_polygon_centroids();
     geometry->compute_point_normals(c_point_normals_smooth);
-    const Brush::Create_info create_info{geometry,
-                                         context.build_info_set,
-                                         context.normal_style,
-                                         1.0f, // density
-                                         collision_volume_calculator,
-                                         collision_shape_generator};
+    const Brush::Create_info create_info{
+        geometry,
+        context.build_info_set,
+        context.normal_style,
+        1.0f, // density
+        collision_volume_calculator,
+        collision_shape_generator
+    };
 
     const auto brush = allocate_brush(context.build_info_set);
     brush->initialize(create_info);
@@ -322,25 +336,30 @@ void Brushes::do_insert_operation()
 
     const auto transform = get_brush_transform();
     const auto material  = m_materials[m_selected_material];
-    const auto instance  = m_brush->make_instance(m_scene_root->content_layer(),
-                                                  m_scene_root->scene(),
-                                                  m_scene_root->physics_world(),
-                                                  m_hover_node,
-                                                  transform,
-                                                  material,
-                                                  m_transform_scale);
-    instance.mesh->visibility_mask |= (INode_attachment::c_visibility_content     |
-                                       INode_attachment::c_visibility_shadow_cast |
-                                       INode_attachment::c_visibility_id);
+    const auto instance  = m_brush->make_instance(
+        m_scene_root->content_layer(),
+        m_scene_root->scene(),
+        m_scene_root->physics_world(),
+        m_hover_node,
+        transform,
+        material,
+        m_transform_scale
+    );
+    instance.mesh->visibility_mask |=
+        (INode_attachment::c_visibility_content     |
+         INode_attachment::c_visibility_shadow_cast |
+         INode_attachment::c_visibility_id);
 
-    const Mesh_insert_remove_operation::Context context{m_selection_tool,
-                                                        m_scene_root->content_layer(),
-                                                        m_scene_root->scene(),
-                                                        m_scene_root->physics_world(),
-                                                        instance.mesh,
-                                                        instance.node,
-                                                        instance.node_physics,
-                                                        Scene_item_operation::Mode::insert};
+    const Mesh_insert_remove_operation::Context context{
+        m_selection_tool,
+        m_scene_root->content_layer(),
+        m_scene_root->scene(),
+        m_scene_root->physics_world(),
+        instance.mesh,
+        instance.node,
+        instance.node_physics,
+        Scene_item_operation::Mode::insert
+    };
     auto op = make_shared<Mesh_insert_remove_operation>(context);
     m_operation_stack->push(op);
 }
@@ -358,9 +377,11 @@ void Brushes::add_hover_mesh()
 
     const auto  material     = m_materials[m_selected_material];
     const auto& brush_scaled = m_brush->get_scaled(m_transform_scale);
-    m_brush_mesh = m_scene_root->make_mesh_node(brush_scaled.primitive_geometry->source_geometry->name,
-                                                brush_scaled.primitive_geometry,
-                                                material);
+    m_brush_mesh = m_scene_root->make_mesh_node(
+        brush_scaled.primitive_geometry->source_geometry->name,
+        brush_scaled.primitive_geometry,
+        material
+    );
     m_brush_mesh->visibility_mask &= ~(Mesh::c_visibility_id);
     update_mesh_node_transform();
 }
@@ -408,10 +429,12 @@ void Brushes::imgui(Pointer_context&)
     for (int i = 0; i < static_cast<int>(brush_count); ++i)
     {
         auto* brush = m_brushes[i].get();
-        bool button_pressed = make_button(brush->geometry->name.c_str(),
-                                          (m_selected_brush_index == i) ? Item_mode::active
-                                                                        : Item_mode::normal,
-                                          button_size);
+        bool button_pressed = make_button(
+            brush->geometry->name.c_str(),
+            (m_selected_brush_index == i) ? Item_mode::active
+                                          : Item_mode::normal,
+            button_size
+        );
         if (button_pressed)
         {
             m_selected_brush_index = i;
@@ -420,10 +443,12 @@ void Brushes::imgui(Pointer_context&)
     }
     ImGui::SliderFloat("Scale", &m_scale, 0.0f, 2.0f);
     make_check_box("Snap to Polygon", &m_snap_to_hover_polygon);
-    make_check_box("Snap to Grid",
-                   &m_snap_to_grid,
-                   m_snap_to_hover_polygon ? Imgui_window::Item_mode::disabled
-                                           : Imgui_window::Item_mode::normal);
+    make_check_box(
+        "Snap to Grid",
+        &m_snap_to_grid,
+        m_snap_to_hover_polygon ? Imgui_window::Item_mode::disabled
+                                : Imgui_window::Item_mode::normal
+    );
     ImGui::End();
 
     ImGui::Begin("Materials");
@@ -433,10 +458,12 @@ void Brushes::imgui(Pointer_context&)
         const auto   button_size    = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
         for (int i = 0; i < static_cast<int>(material_count); ++i)
         {
-            const bool button_pressed = make_button(m_material_names[i],
-                                                    (m_selected_material == i) ? Item_mode::active
-                                                                               : Item_mode::normal,
-                                                    button_size);
+            const bool button_pressed = make_button(
+                m_material_names[i],
+                (m_selected_material == i) ? Item_mode::active
+                                           : Item_mode::normal,
+                button_size
+            );
             if (button_pressed)
             {
                 m_selected_material = i;

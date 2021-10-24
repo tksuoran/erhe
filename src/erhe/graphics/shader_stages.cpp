@@ -56,8 +56,12 @@ Shader_stages::Shader_stages(Prototype&& prototype)
     m_handle           = std::move(prototype.m_handle);
     m_attached_shaders = std::move(prototype.m_attached_shaders);
 
-    gl::object_label(gl::Object_identifier::program,
-                     gl_name(), static_cast<GLsizei>(m_name.length()), m_name.c_str());
+    gl::object_label(
+        gl::Object_identifier::program,
+        gl_name(),
+        static_cast<GLsizei>(m_name.length()),
+        m_name.c_str()
+    );
 }
 
 void Shader_stages::reload(Prototype&& prototype)
@@ -73,18 +77,20 @@ void Shader_stages::reload(Prototype&& prototype)
     m_handle           = std::move(prototype.m_handle);
     m_attached_shaders = std::move(prototype.m_attached_shaders);
 
-    gl::object_label(gl::Object_identifier::program,
-                     gl_name(), static_cast<GLsizei>(m_name.length()), m_name.c_str());
+    gl::object_label(
+        gl::Object_identifier::program,
+        gl_name(),
+        static_cast<GLsizei>(m_name.length()),
+        m_name.c_str()
+    );
 }
 
-auto operator==(const Shader_stages& lhs, const Shader_stages& rhs) noexcept
--> bool
+auto operator==(const Shader_stages& lhs, const Shader_stages& rhs) noexcept -> bool
 {
     return lhs.gl_name() == rhs.gl_name();
 }
 
-auto operator!=(const Shader_stages& lhs, const Shader_stages& rhs) noexcept
--> bool
+auto operator!=(const Shader_stages& lhs, const Shader_stages& rhs) noexcept -> bool
 {
     return !(lhs == rhs);
 }

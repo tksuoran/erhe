@@ -13,11 +13,13 @@ class Material
 {
 public:
     Material();
-    explicit Material(std::string_view name,
-                      glm::vec4        base_color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f),
-                      float            roughness  = 1.0f,
-                      float            anisotropy = 0.0f,
-                      float            metallic   = 0.6f);
+    explicit Material(
+        std::string_view name,
+        glm::vec4        base_color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f),
+        float            roughness  = 1.0f,
+        float            anisotropy = 0.0f,
+        float            metallic   = 0.6f
+    );
     ~Material();
 
     size_t      index{0};

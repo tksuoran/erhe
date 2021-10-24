@@ -12,17 +12,20 @@ class Sampler
 public:
     Sampler();
 
-    Sampler(const gl::Texture_min_filter min_filter,
-            const gl::Texture_mag_filter mag_filter);
+    Sampler(
+        const gl::Texture_min_filter min_filter,
+        const gl::Texture_mag_filter mag_filter
+    );
 
-    Sampler(const gl::Texture_min_filter min_filter,
-            const gl::Texture_mag_filter mag_filter,
-            const gl::Texture_wrap_mode  wrap_mode);
+    Sampler(
+        const gl::Texture_min_filter min_filter,
+        const gl::Texture_mag_filter mag_filter,
+        const gl::Texture_wrap_mode  wrap_mode
+    );
 
     ~Sampler() = default;
 
-    auto gl_name() const
-    -> unsigned int
+    auto gl_name() const -> unsigned int
     {
         return m_handle.gl_name();
     }
@@ -49,8 +52,7 @@ private:
 class Sampler_hash
 {
 public:
-    auto operator()(const Sampler& sampler) const noexcept
-    -> size_t
+    auto operator()(const Sampler& sampler) const noexcept -> size_t
     {
         Expects(sampler.gl_name() != 0);
 
@@ -58,10 +60,8 @@ public:
     }
 };
 
-auto operator==(const Sampler& lhs, const Sampler& rhs) noexcept
--> bool;
+auto operator==(const Sampler& lhs, const Sampler& rhs) noexcept -> bool;
 
-auto operator!=(const Sampler& lhs, const Sampler& rhs) noexcept
--> bool;
+auto operator!=(const Sampler& lhs, const Sampler& rhs) noexcept -> bool;
 
 } // namespace erhe::graphics

@@ -17,12 +17,14 @@ namespace erhe::ui
 {
 
 
-Glyph::Glyph(FT_Library          library,
-             FT_Face             font_face,
-             const unsigned char c,
-             const float         bolding,
-             const float         outline_thickness,
-             const int           hint_mode)
+Glyph::Glyph(
+    FT_Library          library,
+    FT_Face             font_face,
+    const unsigned char c,
+    const float         bolding,
+    const float         outline_thickness,
+    const int           hint_mode
+)
     : char_code        {c}
     , outline_thickness{outline_thickness}
 {
@@ -65,11 +67,13 @@ Glyph::Glyph(FT_Library          library,
 
         validate(FT_Stroker_New(library, &stroker));
 
-        FT_Stroker_Set(stroker,
-                       static_cast<int>(outline_thickness * 64.0f),
-                       FT_STROKER_LINECAP_ROUND,
-                       FT_STROKER_LINEJOIN_ROUND,
-                       0);
+        FT_Stroker_Set(
+            stroker,
+            static_cast<int>(outline_thickness * 64.0f),
+            FT_STROKER_LINECAP_ROUND,
+            FT_STROKER_LINEJOIN_ROUND,
+            0
+        );
 
         FT_GlyphRec_* glyph{nullptr};
         validate(FT_Get_Glyph(font_face->glyph, &glyph));

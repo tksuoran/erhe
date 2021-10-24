@@ -24,9 +24,11 @@ Gl_context_provider::Gl_context_provider()
 
 Gl_context_provider::~Gl_context_provider() = default;
 
-void Gl_context_provider::provide_worker_contexts(const shared_ptr<erhe::graphics::OpenGL_state_tracker>& opengl_state_tracker,
-                                                  erhe::toolkit::Context_window*                          main_window,
-                                                  function<bool()>                                        worker_contexts_still_needed_callback)
+void Gl_context_provider::provide_worker_contexts(
+    const shared_ptr<erhe::graphics::OpenGL_state_tracker>& opengl_state_tracker,
+    erhe::toolkit::Context_window*                          main_window,
+    function<bool()>                                        worker_contexts_still_needed_callback
+)
 {
     ZoneScoped;
 

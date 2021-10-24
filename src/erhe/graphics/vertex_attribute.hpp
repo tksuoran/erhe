@@ -55,25 +55,26 @@ public:
     class Data_type
     {
     public:
-        Data_type(const gl::Vertex_attrib_type type,
-                  const bool                   normalized,
-                  const size_t                 dimension)
+        Data_type(
+            const gl::Vertex_attrib_type type,
+            const bool                   normalized,
+            const size_t                 dimension
+        )
             : type      {type}
             , normalized{normalized}
             , dimension {dimension}
         {
         }
 
-        auto operator==(const Data_type& other) const
-        -> bool
+        auto operator==(const Data_type& other) const -> bool
         {
-            return (type == other.type)             &&
-                   (normalized == other.normalized) &&
-                   (dimension == other.dimension);
+            return
+                (type == other.type)             &&
+                (normalized == other.normalized) &&
+                (dimension == other.dimension);
         }
 
-        auto operator!=(const Data_type& other) const
-        -> bool
+        auto operator!=(const Data_type& other) const -> bool
         {
             return !(*this == other);
         }
@@ -86,11 +87,13 @@ public:
     static auto desc(const Usage_type usage)
     -> const char*;
 
-    Vertex_attribute(const Usage              usage,
-                     const gl::Attribute_type shader_type,
-                     const Data_type          data_type,
-                     const size_t             offset  = 0,
-                     const unsigned int       divisor = 0)
+    Vertex_attribute(
+        const Usage              usage,
+        const gl::Attribute_type shader_type,
+        const Data_type          data_type,
+        const size_t             offset  = 0,
+        const unsigned int       divisor = 0
+    )
         : usage      {usage}
         , shader_type{shader_type}
         , data_type  {data_type}
@@ -99,24 +102,22 @@ public:
     {
     }
 
-    auto stride() const
-    -> size_t
+    auto stride() const -> size_t
     {
         return data_type.dimension * gl::size_of_type(data_type.type);
     }
 
-    auto operator==(const Vertex_attribute& other) const
-    -> bool
+    auto operator==(const Vertex_attribute& other) const -> bool
     {
-        return (usage       == other.usage      ) &&
-               (data_type   == other.data_type  ) &&
-               (shader_type == other.shader_type) &&
-               (offset      == other.offset     ) &&
-               (divisor     == other.divisor);
+        return
+            (usage       == other.usage      ) &&
+            (data_type   == other.data_type  ) &&
+            (shader_type == other.shader_type) &&
+            (offset      == other.offset     ) &&
+            (divisor     == other.divisor);
     }
 
-    auto operator!=(const Vertex_attribute& other) const
-    -> bool
+    auto operator!=(const Vertex_attribute& other) const -> bool
     {
         return !(*this == other);
     }

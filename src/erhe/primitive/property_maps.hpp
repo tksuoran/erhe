@@ -28,15 +28,18 @@ namespace erhe::primitive
 class Property_maps
 {
 public:
-    Property_maps(const erhe::geometry::Geometry& geometry,
-                  const Format_info&              format_info);
+    Property_maps(
+        const erhe::geometry::Geometry& geometry,
+        const Format_info&              format_info
+    );
 
     template <typename Key_type, typename Value_type>
     auto
-    find_or_create(const erhe::geometry::Property_map_collection<Key_type>& geometry_attributes,
-                   erhe::geometry::Property_map_collection<Key_type>&       attributes,
-                   const std::string&                                       name)
-    -> erhe::geometry::Property_map<Key_type, Value_type> *
+    find_or_create(
+        const erhe::geometry::Property_map_collection<Key_type>& geometry_attributes,
+        erhe::geometry::Property_map_collection<Key_type>&       attributes,
+        const std::string&                                       name
+    ) -> erhe::geometry::Property_map<Key_type, Value_type> *
     {
         ZoneScoped;
 

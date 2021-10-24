@@ -77,13 +77,17 @@ void Node::update(const uint32_t update_serial, const bool cache_enable)
     if (parent != nullptr)
     {
         parent->update(update_serial, cache_enable);
-        transforms.world_from_node.set(parent->world_from_node() * parent_from_node(),
-                                       node_from_parent() * parent->node_from_world());
+        transforms.world_from_node.set(
+            parent->world_from_node() * parent_from_node(),
+            node_from_parent() * parent->node_from_world()
+        );
     }
     else
     {
-        transforms.world_from_node.set(parent_from_node(),
-                                       node_from_parent());
+        transforms.world_from_node.set(
+            parent_from_node(),
+            node_from_parent()
+        );
     }
 }
 

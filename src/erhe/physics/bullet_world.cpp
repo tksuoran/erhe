@@ -138,10 +138,12 @@ Bullet_world::Bullet_world()
     , m_bullet_collision_dispatcher{&m_bullet_collision_configuration}
     , m_bullet_broadphase_interface{}
     , m_bullet_impulse_constraint_solver{}
-    , m_bullet_dynamics_world{&m_bullet_collision_dispatcher,
-                              &m_bullet_broadphase_interface,
-                              &m_bullet_impulse_constraint_solver,
-                              &m_bullet_collision_configuration}
+    , m_bullet_dynamics_world{
+        &m_bullet_collision_dispatcher,
+        &m_bullet_broadphase_interface,
+        &m_bullet_impulse_constraint_solver,
+        &m_bullet_collision_configuration
+    }
 {
     m_bullet_dynamics_world.setGravity(btVector3(0, -10, 0));
 }

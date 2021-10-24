@@ -17,12 +17,14 @@ class Texture_create_info
 public:
     Texture_create_info() = default;
 
-    Texture_create_info(const gl::Texture_target  target,
-                        const gl::Internal_format internal_format,
-                        const bool                use_mipmaps,
-                        const int                 width,
-                        const int                 height = 1,
-                        const int                 depth  = 1);
+    Texture_create_info(
+        const gl::Texture_target  target,
+        const gl::Internal_format internal_format,
+        const bool                use_mipmaps,
+        const int                 width,
+        const int                 height = 1,
+        const int                 depth  = 1
+    );
 
     void calculate_level_count();
 
@@ -56,20 +58,24 @@ public:
     Texture         (Texture&& other) noexcept;
     auto operator=  (Texture&& other) noexcept -> Texture&;
 
-    void upload         (const gl::Internal_format internal_format,
-                         const int                 width,
-                         const int                 height = 1,
-                         const int                 depth = 1);
+    void upload(
+        const gl::Internal_format internal_format,
+        const int                 width,
+        const int                 height = 1,
+        const int                 depth = 1
+    );
 
-    void upload         (const gl::Internal_format        internal_format,
-                         const gsl::span<const std::byte> data,
-                         const int                        width,
-                         const int                        height = 1,
-                         const int                        depth = 1,
-                         const int                        level = 0,
-                         const int                        x = 0,
-                         const int                        y = 0,
-                         const int                        z = 0);
+    void upload(
+        const gl::Internal_format        internal_format,
+        const gsl::span<const std::byte> data,
+        const int                        width,
+        const int                        height = 1,
+        const int                        depth = 1,
+        const int                        level = 0,
+        const int                        x = 0,
+        const int                        y = 0,
+        const int                        z = 0
+    );
 
     void set_debug_label(std::string_view value);
     auto debug_label    () const -> const std::string&;
@@ -98,8 +104,7 @@ private:
 class Texture_hash
 {
 public:
-    auto operator()(const Texture& texture) const noexcept
-    -> size_t
+    auto operator()(const Texture& texture) const noexcept -> size_t
     {
         Expects(texture.gl_name() != 0);
 
@@ -107,24 +112,20 @@ public:
     }
 };
 
-auto operator==(const Texture& lhs, const Texture& rhs) noexcept
--> bool;
+auto operator==(const Texture& lhs, const Texture& rhs) noexcept -> bool;
 
-auto operator!=(const Texture& lhs, const Texture& rhs) noexcept
--> bool;
+auto operator!=(const Texture& lhs, const Texture& rhs) noexcept -> bool;
 
-auto component_count(gl::Pixel_format pixel_format)
--> size_t;
+auto component_count(gl::Pixel_format pixel_format) -> size_t;
 
-auto byte_count(gl::Pixel_type pixel_type)
--> size_t;
+auto byte_count(gl::Pixel_type pixel_type) -> size_t;
 
-auto get_upload_pixel_byte_count(gl::Internal_format internalformat)
--> size_t;
+auto get_upload_pixel_byte_count(gl::Internal_format internalformat) -> size_t;
 
-auto get_format_and_type(gl::Internal_format internalformat,
-                         gl::Pixel_format&   format,
-                         gl::Pixel_type&     type)
--> bool;
+auto get_format_and_type(
+    gl::Internal_format internalformat,
+    gl::Pixel_format&   format,
+    gl::Pixel_type&     type
+) -> bool;
 
 } // namespace erhe::graphics

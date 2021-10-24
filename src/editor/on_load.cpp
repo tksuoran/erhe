@@ -133,11 +133,13 @@ auto Application::initialize_components(int argc, char** argv)
 
     m_components.launch_component_initialization();
 
-    gl_context_provider->provide_worker_contexts(opengl_state_tracker,
-                                                 window->get_context_window(),
-                                                 [this]() -> bool {
-                                                     return !m_components.is_component_initialization_complete();
-                                                 });
+    gl_context_provider->provide_worker_contexts(
+        opengl_state_tracker,
+        window->get_context_window(),
+        [this]() -> bool {
+            return !m_components.is_component_initialization_complete();
+        }
+    );
 
     m_components.wait_component_initialization_complete();
 

@@ -23,8 +23,10 @@ namespace editor
 
 using namespace erhe::graphics;
 
-Headset_view_resources::Headset_view_resources(erhe::xr::Render_view& render_view,
-                                               Editor_rendering&      rendering)
+Headset_view_resources::Headset_view_resources(
+    erhe::xr::Render_view& render_view,
+    Editor_rendering&      rendering
+)
 {
     //log_headset.trace("Color tex {:2} {:<20} depth texture {:2} {:<20} size {:4} x {:4}, hfov {: 6.2f}..{: 6.2f}, vfov {: 6.2f}..{: 6.2f}, pos {}\n",
     //                  render_view.color_texture,
@@ -97,8 +99,10 @@ Headset_view_resources::Headset_view_resources(erhe::xr::Render_view& render_vie
     is_valid = true;
 }
 
-void Headset_view_resources::update(erhe::xr::Render_view& render_view,
-                                    Editor_rendering&      rendering)
+void Headset_view_resources::update(
+    erhe::xr::Render_view& render_view,
+    Editor_rendering&      rendering
+)
 {
     camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_xr;
     camera->projection()->fov_left        = render_view.fov_left;
@@ -118,9 +122,11 @@ void Headset_view_resources::update(erhe::xr::Render_view& render_view,
     camera_node->update();
 }
 
-Controller_visualization::Controller_visualization(Mesh_memory&       mesh_memory,
-                                                   Scene_root&        scene_root,
-                                                   erhe::scene::Node* view_root)
+Controller_visualization::Controller_visualization(
+    Mesh_memory&       mesh_memory,
+    Scene_root&        scene_root,
+    erhe::scene::Node* view_root
+)
 {
     auto controller_material = scene_root.make_material("Controller", glm::vec4(0.1f, 0.1f, 0.2f, 1.0f));
     //constexpr float length = 0.05f;
@@ -131,12 +137,14 @@ Controller_visualization::Controller_visualization(Mesh_memory&       mesh_memor
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
     auto controller_pg = erhe::primitive::make_primitive_shared(controller_geometry, mesh_memory.build_info_set.gl);
-    m_controller_mesh = scene_root.make_mesh_node("Controller",
-                                                  controller_pg,
-                                                  controller_material,
-                                                  *scene_root.controller_layer().get(),
-                                                  view_root,
-                                                  glm::vec3(-9999.9f, -9999.9f, -9999.9f));
+    m_controller_mesh = scene_root.make_mesh_node(
+        "Controller",
+        controller_pg,
+        controller_material,
+        *scene_root.controller_layer().get(),
+        view_root,
+        glm::vec3(-9999.9f, -9999.9f, -9999.9f)
+    );
 }
 
 void Controller_visualization::update(const erhe::xr::Pose& pose)
@@ -161,7 +169,9 @@ Headset_renderer::Headset_renderer()
 
 Headset_renderer::~Headset_renderer() = default;
 
-auto Headset_renderer::get_headset_view_resources(erhe::xr::Render_view& render_view) -> Headset_view_resources&
+auto Headset_renderer::get_headset_view_resources(
+    erhe::xr::Render_view& render_view
+) -> Headset_view_resources&
 {
     auto match_color_texture = [&render_view](const auto& i)
     {
@@ -276,9 +286,11 @@ void Headset_renderer::initialize_component()
     auto  mesh_memory = get<Mesh_memory>();
     auto* view_root   = m_scene_manager->get_view_camera()->node().get();
 
-    m_controller_visualization = std::make_unique<Controller_visualization>(*mesh_memory.get(),
-                                                                            *m_scene_root.get(),
-                                                                            view_root);
+    m_controller_visualization = std::make_unique<Controller_visualization>(
+        *mesh_memory.get(),
+        *m_scene_root.get(),
+        view_root
+    );
 }
 
 void Headset_renderer::begin_frame()

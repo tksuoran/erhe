@@ -34,8 +34,10 @@ void Mesh_operation::undo()
     }
 }
 
-void Mesh_operation::make_entries(const Context&                                                      context,
-                                  const function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation)
+void Mesh_operation::make_entries(
+    const Context&                                                      context,
+    const function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation
+)
 {
     m_selection_tool = context.selection_tool;
     for (auto item : context.selection_tool->selection())
@@ -45,13 +47,16 @@ void Mesh_operation::make_entries(const Context&                                
         {
             continue;
         }
-        Entry entry{context.layer,
-                    context.scene,
-                    context.physics_world,
-                    mesh,
-                    mesh->node(),
-                    *entry.mesh,
-                    *entry.mesh};
+
+        Entry entry{
+            context.layer,
+            context.scene,
+            context.physics_world,
+            mesh,
+            mesh->node(),
+            *entry.mesh,
+            *entry.mesh
+        };
         for (auto& primitive : entry.after.primitives)
         {
             auto geometry = primitive.primitive_geometry->source_geometry;
@@ -63,11 +68,15 @@ void Mesh_operation::make_entries(const Context&                                
             auto& gr = *g;
             auto result_geometry = operation(gr);
             result_geometry.sanity_check();
-            auto result_primitive_geometry = make_primitive_shared(result_geometry,
-                                                                   context.build_info_set.gl,
-                                                                   primitive.primitive_geometry->source_normal_style);
+            auto result_primitive_geometry = make_primitive_shared(
+                result_geometry,
+                context.build_info_set.gl,
+                primitive.primitive_geometry->source_normal_style
+            );
             primitive.primitive_geometry = result_primitive_geometry;
-            primitive.primitive_geometry->source_geometry = make_shared<erhe::geometry::Geometry>(move(result_geometry));
+            primitive.primitive_geometry->source_geometry = make_shared<erhe::geometry::Geometry>(
+                move(result_geometry)
+            );
         }
         add_entry(std::move(entry));
     }

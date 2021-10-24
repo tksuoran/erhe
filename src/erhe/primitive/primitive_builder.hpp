@@ -55,18 +55,22 @@ public:
 class Build_context_root
 {
 public:
-    Build_context_root(const erhe::geometry::Geometry& geometry,
-                       Build_info&                     build_info,
-                       Primitive_geometry*             primitive_geometry);
+    Build_context_root(
+        const erhe::geometry::Geometry& geometry,
+        Build_info&                     build_info,
+        Primitive_geometry*             primitive_geometry
+    );
 
     void get_mesh_info         ();
     void get_vertex_attributes ();
     void calculate_bounding_box(erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec3>* point_locations);
     void allocate_vertex_buffer();
     void allocate_index_buffer ();
-    void allocate_index_range  (gl::Primitive_type primitive_type,
-                                size_t             index_count,
-                                Index_range&       range);
+    void allocate_index_range(
+        gl::Primitive_type primitive_type,
+        size_t             index_count,
+        Index_range&       range
+    );
 
     const erhe::geometry::Geometry& geometry;
     Build_info&                     build_info;
@@ -83,10 +87,12 @@ public:
 class Build_context
 {
 public:
-    Build_context(const erhe::geometry::Geometry& geometry,
-                  Build_info&                     build_info,
-                  const Normal_style              normal_style,
-                  Primitive_geometry*             primitive_geometry);
+    Build_context(
+        const erhe::geometry::Geometry& geometry,
+        Build_info&                     build_info,
+        const Normal_style              normal_style,
+        Primitive_geometry*             primitive_geometry
+    );
     ~Build_context();
 
     void build_polygon_fill   ();
@@ -138,9 +144,11 @@ public:
 
     Primitive_builder() = delete;
 
-    Primitive_builder(const erhe::geometry::Geometry& geometry,
-                      Build_info&                     build_info,
-                      const Normal_style              normal_style);
+    Primitive_builder(
+        const erhe::geometry::Geometry& geometry,
+        Build_info&                     build_info,
+        const Normal_style              normal_style
+    );
 
     ~Primitive_builder();
 
@@ -156,14 +164,16 @@ private:
     Normal_style                    m_normal_style;
 };
 
-auto make_primitive(const erhe::geometry::Geometry& geometry,
-                    Build_info&                     build_info,
-                    const Normal_style              normal_style = Normal_style::corner_normals)
--> Primitive_geometry;
+auto make_primitive(
+    const erhe::geometry::Geometry& geometry,
+    Build_info&                     build_info,
+    const Normal_style              normal_style = Normal_style::corner_normals
+) -> Primitive_geometry;
 
-auto make_primitive_shared(const erhe::geometry::Geometry& geometry,
-                           Build_info&                     build_info,
-                           const Normal_style              normal_style = Normal_style::corner_normals)
--> std::shared_ptr<Primitive_geometry>;
+auto make_primitive_shared(
+    const erhe::geometry::Geometry& geometry,
+    Build_info&                     build_info,
+    const Normal_style              normal_style = Normal_style::corner_normals
+) -> std::shared_ptr<Primitive_geometry>;
 
 } // namespace erhe::primitive

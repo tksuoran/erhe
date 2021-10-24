@@ -17,7 +17,7 @@ Property_map_collection<Key_type>::clear()
 template <typename Key_type>
 inline auto
 Property_map_collection<Key_type>::size() const
--> size_t
+    -> size_t
 {
     return m_entries.size();
 }
@@ -42,12 +42,14 @@ Property_map_collection<Key_type>::remove(const std::string& name)
 {
     ZoneScoped;
 
-    auto i = std::remove_if(m_entries.begin(),
-                            m_entries.end(),
-                            [name](const Entry& entry)
-                            {
-                                return entry.key == name;
-                            });
+    auto i = std::remove_if(
+        m_entries.begin(),
+        m_entries.end(),
+        [name](const Entry& entry)
+        {
+            return entry.key == name;
+        }
+    );
     if (i != m_entries.end())
     {
         m_entries.erase(i, m_entries.end());
@@ -58,7 +60,7 @@ template <typename Key_type>
 template <typename Value_type>
 inline auto
 Property_map_collection<Key_type>::contains(const std::string& name) const
--> bool
+    -> bool
 {
     ZoneScoped;
 
@@ -95,7 +97,7 @@ template <typename Key_type>
 template <typename Value_type>
 inline auto
 Property_map_collection<Key_type>::create(const Property_map_descriptor& descriptor)
--> Property_map<Key_type, Value_type>*
+    -> Property_map<Key_type, Value_type>*
 {
     ZoneScoped;
 
@@ -115,7 +117,7 @@ template <typename Key_type>
 template <typename Value_type>
 inline auto
 Property_map_collection<Key_type>::find(const Property_map_descriptor& descriptor) const
--> Property_map<Key_type, Value_type>*
+    -> Property_map<Key_type, Value_type>*
 {
     ZoneScoped;
 
@@ -138,7 +140,7 @@ template <typename Key_type>
 template <typename Value_type>
 inline auto
 Property_map_collection<Key_type>::find_or_create(const Property_map_descriptor& descriptor)
--> Property_map<Key_type, Value_type>*
+    -> Property_map<Key_type, Value_type>*
 {
     ZoneScoped;
 

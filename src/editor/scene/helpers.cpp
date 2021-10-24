@@ -19,12 +19,14 @@ using namespace erhe::primitive;
 using namespace erhe::physics;
 using namespace std;
 
-void attach(Layer&                   layer,
-            Scene&                   scene,
-            IWorld&                  physics_world,
-            shared_ptr<Node>         node,
-            shared_ptr<Mesh>         mesh,
-            shared_ptr<Node_physics> node_physics)
+void attach(
+    Layer&                   layer,
+    Scene&                   scene,
+    IWorld&                  physics_world,
+    shared_ptr<Node>         node,
+    shared_ptr<Mesh>         mesh,
+    shared_ptr<Node_physics> node_physics
+)
 {
     VERIFY(node);
     VERIFY(mesh);
@@ -43,12 +45,14 @@ void attach(Layer&                   layer,
     }
 }
 
-void detach(Layer&                   layer,
-            Scene&                   scene,
-            IWorld&                  physics_world,
-            shared_ptr<Node>         node,
-            shared_ptr<Mesh>         mesh,
-            shared_ptr<Node_physics> node_physics)
+void detach(
+    Layer&                   layer,
+    Scene&                   scene,
+    IWorld&                  physics_world,
+    shared_ptr<Node>         node,
+    shared_ptr<Mesh>         mesh,
+    shared_ptr<Node_physics> node_physics
+)
 {
     VERIFY(node);
     VERIFY(mesh);
@@ -70,10 +74,12 @@ void detach(Layer&                   layer,
     nodes.erase(std::remove(nodes.begin(), nodes.end(), node), nodes.end());
 }
 
-void attach(Layer&            layer,
-            Scene&            scene,
-            shared_ptr<Node>  node,
-            shared_ptr<Light> light)
+void attach(
+    Layer&            layer,
+    Scene&            scene,
+    shared_ptr<Node>  node,
+    shared_ptr<Light> light
+)
 {
     VERIFY(node);
     VERIFY(light);
@@ -83,10 +89,11 @@ void attach(Layer&            layer,
     node->attach(light);
 }
 
-void detach(Layer&            layer,
-            Scene&            scene,
-            shared_ptr<Node>  node,
-            shared_ptr<Light> light)
+void detach(
+    Layer&            layer,
+    Scene&            scene,
+    shared_ptr<Node>  node,
+    shared_ptr<Light> light)
 {
     VERIFY(node);
     VERIFY(light);

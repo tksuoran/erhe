@@ -29,8 +29,10 @@ public:
     // Implements IUpdate_once_per_frame
     void update_once_per_frame(const erhe::components::Time_context& time_context);
 
-    void add(erhe::graphics::Shader_stages::Create_info    create_info,
-             gsl::not_null<erhe::graphics::Shader_stages*> program);
+    void add(
+        erhe::graphics::Shader_stages::Create_info    create_info,
+        gsl::not_null<erhe::graphics::Shader_stages*> program
+    );
 
 private:
     void set_run(bool value)
@@ -41,15 +43,19 @@ private:
 
     void poll_thread();
 
-    void add(const std::filesystem::path&                  path,
-             erhe::graphics::Shader_stages::Create_info    create_info,
-             gsl::not_null<erhe::graphics::Shader_stages*> program);
+    void add(
+        const std::filesystem::path&                  path,
+        erhe::graphics::Shader_stages::Create_info    create_info,
+        gsl::not_null<erhe::graphics::Shader_stages*> program
+    );
 
     class Reload_entry
     {
     public:
-        Reload_entry(erhe::graphics::Shader_stages::Create_info    create_info,
-                     gsl::not_null<erhe::graphics::Shader_stages*> shader_stages)
+        Reload_entry(
+            erhe::graphics::Shader_stages::Create_info    create_info,
+            gsl::not_null<erhe::graphics::Shader_stages*> shader_stages
+        )
             : create_info  {std::move(create_info)}
             , shader_stages{shader_stages}
         {

@@ -22,7 +22,8 @@ Bullet_uniform_scaling_shape::Bullet_uniform_scaling_shape(ICollision_shape* sha
         static_cast<btConvexShape*>(
             reinterpret_cast<Bullet_collision_shape*>(shape)->get_bullet_collision_shape()
         ),
-        scale}
+        scale
+    }
 {
 }
 

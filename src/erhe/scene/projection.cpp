@@ -5,7 +5,10 @@
 namespace erhe::scene
 {
 
-void Projection::update(Transform& transform, const Viewport viewport) const
+void Projection::update(
+    Transform&     transform,
+    const Viewport viewport
+) const
 {
     const auto clip_range = viewport.reverse_depth ? Clip_range{z_far, z_near} : Clip_range{z_near, z_far};
 
@@ -37,51 +40,61 @@ void Projection::update(Transform& transform, const Viewport viewport) const
 
         case Projection::Type::orthogonal_horizontal:
         {
-            transform.set_orthographic(clip_range,
-                                       -0.5f * ortho_width,
-                                        0.5f * ortho_width,
-                                       -0.5f * ortho_width / viewport.aspect_ratio(),
-                                        0.5f * ortho_width / viewport.aspect_ratio());
+            transform.set_orthographic(
+                clip_range,
+                -0.5f * ortho_width,
+                 0.5f * ortho_width,
+                -0.5f * ortho_width / viewport.aspect_ratio(),
+                 0.5f * ortho_width / viewport.aspect_ratio()
+            );
             break;
         }
 
         case Projection::Type::orthogonal_vertical:
         {
-            transform.set_orthographic(clip_range,
-                                       -0.5f * ortho_height / viewport.aspect_ratio(),
-                                        0.5f * ortho_height / viewport.aspect_ratio(),
-                                       -0.5f * ortho_height,
-                                        0.5f * ortho_height);
+            transform.set_orthographic(
+                clip_range,
+                -0.5f * ortho_height / viewport.aspect_ratio(),
+                 0.5f * ortho_height / viewport.aspect_ratio(),
+                -0.5f * ortho_height,
+                 0.5f * ortho_height
+            );
             break;
         }
 
         case Projection::Type::orthogonal:
         {
-            transform.set_orthographic(clip_range,
-                                       -0.5f * ortho_width,
-                                        0.5f * ortho_width,
-                                       -0.5f * ortho_height,
-                                        0.5f * ortho_height);
+            transform.set_orthographic(
+                clip_range,
+                -0.5f * ortho_width,
+                 0.5f * ortho_width,
+                -0.5f * ortho_height,
+                 0.5f * ortho_height
+            );
             break;
         }
 
         case Projection::Type::orthogonal_rectangle:
         {
-            transform.set_orthographic(clip_range,
-                                       ortho_left,
-                                       ortho_left + ortho_width,
-                                       ortho_bottom,
-                                       ortho_bottom + ortho_height);
+            transform.set_orthographic(
+                clip_range,
+                ortho_left,
+                ortho_left + ortho_width,
+                ortho_bottom,
+                ortho_bottom + ortho_height
+            );
             break;
         }
 
         case Projection::Type::generic_frustum:
         {
-            transform.set_frustum(clip_range,
-                                  frustum_left,
-                                  frustum_right,
-                                  frustum_bottom,
-                                  frustum_top);
+            transform.set_frustum(
+                clip_range,
+                frustum_left,
+                frustum_right,
+                frustum_bottom,
+                frustum_top
+            );
             break;
         }
 
@@ -97,74 +110,92 @@ auto Projection::get_fov_sides(const Viewport viewport) const -> Fov_sides
     {
         case Projection::Type::perspective:
         {
-            return Fov_sides{ -0.5f * fov_x,
-                               0.5f * fov_x,
-                               0.5f * fov_y,
-                              -0.5f * fov_y };
+            return Fov_sides{
+                -0.5f * fov_x,
+                 0.5f * fov_x,
+                 0.5f * fov_y,
+                -0.5f * fov_y
+            };
         }
 
         case Projection::Type::perspective_xr:
         {
-            return Fov_sides{ fov_left,
-                              fov_right,
-                              fov_up,
-                              fov_down };
+            return Fov_sides{
+                fov_left,
+                fov_right,
+                fov_up,
+                fov_down
+            };
         }
 
         case Projection::Type::perspective_horizontal:
         {
-            return Fov_sides{ -0.5f * fov_x,
-                               0.5f * fov_x,
-                               0.5f * fov_x / viewport.aspect_ratio(),
-                              -0.5f * fov_x / viewport.aspect_ratio() };
+            return Fov_sides{
+                -0.5f * fov_x,
+                 0.5f * fov_x,
+                 0.5f * fov_x / viewport.aspect_ratio(),
+                -0.5f * fov_x / viewport.aspect_ratio()
+            };
         }
 
         case Projection::Type::perspective_vertical:
         {
-            return Fov_sides{ -0.5f * fov_y * viewport.aspect_ratio(),
-                               0.5f * fov_y * viewport.aspect_ratio(),
-                               0.5f * fov_y,
-                              -0.5f * fov_y };
+            return Fov_sides{
+                -0.5f * fov_y * viewport.aspect_ratio(),
+                 0.5f * fov_y * viewport.aspect_ratio(),
+                 0.5f * fov_y,
+                -0.5f * fov_y
+            };
         }
 
         case Projection::Type::orthogonal_horizontal:
         {
-            return Fov_sides{ -0.5f * ortho_width,
-                               0.5f * ortho_width,
-                               0.5f * ortho_width / viewport.aspect_ratio(),
-                              -0.5f * ortho_width / viewport.aspect_ratio() };
+            return Fov_sides{
+                -0.5f * ortho_width,
+                 0.5f * ortho_width,
+                 0.5f * ortho_width / viewport.aspect_ratio(),
+                -0.5f * ortho_width / viewport.aspect_ratio()
+            };
         }
 
         case Projection::Type::orthogonal_vertical:
         {
-            return Fov_sides{ -0.5f * ortho_height / viewport.aspect_ratio(),
-                               0.5f * ortho_height / viewport.aspect_ratio(),
-                               0.5f * ortho_height,
-                              -0.5f * ortho_height };
+            return Fov_sides{
+                -0.5f * ortho_height / viewport.aspect_ratio(),
+                 0.5f * ortho_height / viewport.aspect_ratio(),
+                 0.5f * ortho_height,
+                -0.5f * ortho_height
+            };
         }
 
         case Projection::Type::orthogonal:
         {
-            return Fov_sides{ -0.5f * ortho_width,
-                               0.5f * ortho_width,
-                               0.5f * ortho_height,
-                              -0.5f * ortho_height };
+            return Fov_sides{
+                -0.5f * ortho_width,
+                 0.5f * ortho_width,
+                 0.5f * ortho_height,
+                -0.5f * ortho_height
+            };
         }
 
         case Projection::Type::orthogonal_rectangle:
         {
-            return Fov_sides{ ortho_left,
-                              ortho_left   + ortho_width,
-                              ortho_bottom + ortho_height,
-                              ortho_bottom };
+            return Fov_sides{
+                ortho_left,
+                ortho_left   + ortho_width,
+                ortho_bottom + ortho_height,
+                ortho_bottom
+            };
         }
 
         case Projection::Type::generic_frustum:
         {
-            return Fov_sides{ frustum_left,
-                              frustum_right,
-                              frustum_top,
-                              frustum_bottom };
+            return Fov_sides{
+                frustum_left,
+                frustum_right,
+                frustum_top,
+                frustum_bottom
+            };
         }
 
         case Projection::Type::other:

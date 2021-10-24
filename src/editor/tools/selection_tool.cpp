@@ -50,13 +50,17 @@ Selection_tool::Subcription Selection_tool::subscribe_selection_change_notificat
 
 void Selection_tool::unsubscribe_selection_change_notification(int handle)
 {
-    m_selection_change_subscriptions.erase(std::remove_if(m_selection_change_subscriptions.begin(),
-                                                          m_selection_change_subscriptions.end(),
-                                                          [=](Subscription_entry& entry) -> bool
-                                                          {
-                                                              return entry.handle == handle;
-                                                          }),
-                                           m_selection_change_subscriptions.end());
+    m_selection_change_subscriptions.erase(
+        std::remove_if(
+            m_selection_change_subscriptions.begin(),
+            m_selection_change_subscriptions.end(),
+            [=](Subscription_entry& entry) -> bool
+            {
+                return entry.handle == handle;
+            }
+        ),
+        m_selection_change_subscriptions.end()
+    );
 }
 
 void Selection_tool::imgui(Pointer_context&)
@@ -106,9 +110,11 @@ auto Selection_tool::update(Pointer_context& pointer_context) -> bool
         return false;
     }
     m_hover_mesh     = pointer_context.hover_mesh;
-    m_hover_position = glm::vec3(pointer_context.pointer_x,
-                                 pointer_context.pointer_y,
-                                 pointer_context.pointer_z);
+    m_hover_position = glm::vec3{
+        pointer_context.pointer_x,
+        pointer_context.pointer_y,
+        pointer_context.pointer_z
+    };
     m_hover_content  = pointer_context.hover_content;
     m_hover_tool     = pointer_context.hover_tool;
 
@@ -170,8 +176,10 @@ auto Selection_tool::clear_selection() -> bool
     return true;
 }
 
-void Selection_tool::toggle_selection(std::shared_ptr<erhe::scene::INode_attachment> item,
-                                      const bool                                     clear_others)
+void Selection_tool::toggle_selection(
+    std::shared_ptr<erhe::scene::INode_attachment> item,
+    const bool                                     clear_others
+)
 {
     if (clear_others)
     {
@@ -200,9 +208,11 @@ void Selection_tool::toggle_selection(std::shared_ptr<erhe::scene::INode_attachm
 
 auto Selection_tool::is_in_selection(std::shared_ptr<erhe::scene::INode_attachment> item) -> bool
 {
-    return std::find(m_selection.begin(),
-                     m_selection.end(),
-                     item) != m_selection.end();
+    return std::find(
+        m_selection.begin(),
+        m_selection.end(),
+        item
+    ) != m_selection.end();
 }
 
 auto Selection_tool::add_to_selection(std::shared_ptr<erhe::scene::INode_attachment> item) -> bool
@@ -236,9 +246,11 @@ auto Selection_tool::remove_from_selection(std::shared_ptr<erhe::scene::INode_at
 
     item->visibility_mask &= ~erhe::scene::INode_attachment::c_visibility_selected;
 
-    const auto i = std::remove(m_selection.begin(),
-                               m_selection.end(),
-                               item);
+    const auto i = std::remove(
+        m_selection.begin(),
+        m_selection.end(),
+        item
+    );
     if (i != m_selection.end())
     {
         log_selection.trace("Removing item {} from selection\n", item->name());

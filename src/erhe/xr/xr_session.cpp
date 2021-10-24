@@ -20,8 +20,10 @@
 
 namespace erhe::xr {
 
-Xr_session::Xr_session(Xr_instance&                   instance,
-                       erhe::toolkit::Context_window& context_window)
+Xr_session::Xr_session(
+    Xr_instance&                   instance,
+    erhe::toolkit::Context_window& context_window
+)
     : m_instance              {instance}
     , m_context_window        {context_window}
     , m_xr_session            {XR_NULL_HANDLE}
@@ -29,11 +31,13 @@ Xr_session::Xr_session(Xr_instance&                   instance,
     , m_swapchain_depth_format{gl::Internal_format::depth24_stencil8}
     , m_xr_reference_space    {XR_NULL_HANDLE}
     , m_xr_session_state      {XR_SESSION_STATE_VISIBLE}
-    , m_xr_frame_state        {XR_TYPE_FRAME_STATE,
-                               nullptr,
-                               0,
-                               0,
-                               XR_FALSE}
+    , m_xr_frame_state        {
+        XR_TYPE_FRAME_STATE,
+        nullptr,
+        0,
+        0,
+        XR_FALSE
+    }
 {
     log_xr.trace("{}\n", __func__);
 
@@ -84,10 +88,16 @@ auto Xr_session::create_session() -> bool
 
     PFN_xrGetOpenGLGraphicsRequirementsKHR xrGetOpenGLGraphicsRequirementsKHR{nullptr};
 
-    if (!check("xrGetInstanceProcAddr",
-               xrGetInstanceProcAddr(xr_instance,
-                                     "xrGetOpenGLGraphicsRequirementsKHR",
-                                     reinterpret_cast<PFN_xrVoidFunction*>(&xrGetOpenGLGraphicsRequirementsKHR))))
+    if (
+        !check(
+            "xrGetInstanceProcAddr",
+            xrGetInstanceProcAddr(
+                xr_instance,
+                "xrGetOpenGLGraphicsRequirementsKHR",
+                reinterpret_cast<PFN_xrVoidFunction*>(&xrGetOpenGLGraphicsRequirementsKHR)
+            )
+        )
+    )
     {
         return false;
     }
@@ -96,10 +106,16 @@ auto Xr_session::create_session() -> bool
     xr_graphics_requirements_opengl.type = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_KHR;
     xr_graphics_requirements_opengl.next = nullptr;
 
-    if (!check("xrGetOpenGLGraphicsRequirementsKHR",
-               xrGetOpenGLGraphicsRequirementsKHR(xr_instance,
-                                                  m_instance.get_xr_system_id(),
-                                                  &xr_graphics_requirements_opengl)))
+    if (
+        !check(
+            "xrGetOpenGLGraphicsRequirementsKHR",
+            xrGetOpenGLGraphicsRequirementsKHR(
+                xr_instance,
+                m_instance.get_xr_system_id(),
+                &xr_graphics_requirements_opengl
+            )
+        )
+    )
     {
         return false;
     }
@@ -124,8 +140,12 @@ auto Xr_session::create_session() -> bool
     session_create_info.systemId    = m_instance.get_xr_system_id();
 
     check_gl_context_in_current_in_this_thread();
-    if (!check("xrCreateSession",
-               xrCreateSession(xr_instance, &session_create_info, &m_xr_session)))
+    if (
+        !check(
+            "xrCreateSession",
+            xrCreateSession(xr_instance, &session_create_info, &m_xr_session)
+        )
+    )
     {
         return false;
     }
@@ -192,19 +212,29 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
 
     uint32_t swapchain_format_count{0};
 
-    if (!check("xrEnumerateSwapchainFormats",
-               xrEnumerateSwapchainFormats(m_xr_session, 0, &swapchain_format_count, nullptr)))
+    if (
+        !check(
+            "xrEnumerateSwapchainFormats",
+            xrEnumerateSwapchainFormats(m_xr_session, 0, &swapchain_format_count, nullptr)
+        )
+    )
     {
         return false;
     }
 
     std::vector<int64_t> swapchain_formats(swapchain_format_count);
 
-    if (!check("xrEnumerateSwapchainFormats",
-               xrEnumerateSwapchainFormats(m_xr_session,
-                                           swapchain_format_count,
-                                           &swapchain_format_count,
-                                           swapchain_formats.data())))
+    if (
+        !check(
+            "xrEnumerateSwapchainFormats",
+            xrEnumerateSwapchainFormats(
+                m_xr_session,
+                swapchain_format_count,
+                &swapchain_format_count,
+                swapchain_formats.data()
+            )
+        )
+    )
     {
         return false;
     }
@@ -236,21 +266,32 @@ auto Xr_session::enumerate_reference_spaces() -> bool
     }
 
     uint32_t reference_space_type_count{0};
-    if (!check("xrEnumerateReferenceSpaces",
-               xrEnumerateReferenceSpaces(m_xr_session,
-                                          0,
-                                          &reference_space_type_count,
-                                          nullptr)))
+    if (
+        !check(
+            "xrEnumerateReferenceSpaces",
+            xrEnumerateReferenceSpaces(
+                m_xr_session,
+                0,
+                &reference_space_type_count,
+                nullptr)
+        )
+    )
     {
         return false;
     }
 
     m_xr_reference_space_types.resize(reference_space_type_count);
-    if (!check("xrEnumerateReferenceSpaces",
-               xrEnumerateReferenceSpaces(m_xr_session,
-                                          reference_space_type_count,
-                                          &reference_space_type_count,
-                                          m_xr_reference_space_types.data())))
+    if (
+        !check(
+            "xrEnumerateReferenceSpaces",
+            xrEnumerateReferenceSpaces(
+                m_xr_session,
+                reference_space_type_count,
+                &reference_space_type_count,
+                m_xr_reference_space_types.data()
+            )
+        )
+    )
     {
         return false;
     }
@@ -290,8 +331,16 @@ auto Xr_session::create_swapchains() -> bool
         XrSwapchain color_swapchain{XR_NULL_HANDLE};
 
         check_gl_context_in_current_in_this_thread();
-        if (!check("xrCreateSwapchain",
-                   xrCreateSwapchain(m_xr_session, &swapchain_create_info, &color_swapchain)))
+        if (
+            !check(
+                "xrCreateSwapchain",
+                xrCreateSwapchain(
+                    m_xr_session,
+                    &swapchain_create_info,
+                    &color_swapchain
+                )
+            )
+        )
         {
             return false;
         }
@@ -301,8 +350,15 @@ auto Xr_session::create_swapchains() -> bool
         XrSwapchain depth_swapchain{XR_NULL_HANDLE};
 
         check_gl_context_in_current_in_this_thread();
-        if (!check("xrCreateSwapchain",
-                   xrCreateSwapchain(m_xr_session, &swapchain_create_info, &depth_swapchain)))
+        if (
+            !check(
+                "xrCreateSwapchain",
+                xrCreateSwapchain(
+                    m_xr_session,
+                    &swapchain_create_info, &depth_swapchain
+                )
+            )
+        )
         {
             return false;
         }
@@ -331,10 +387,16 @@ auto Xr_session::create_reference_space() -> bool
     reference_space_create_info.poseInReferenceSpace.position.y    = 0.0f;
     reference_space_create_info.poseInReferenceSpace.position.z    = 0.0f;
 
-    if (!check("xrCreateReferenceSpace",
-               xrCreateReferenceSpace(m_xr_session,
-                                      &reference_space_create_info,
-                                      &m_xr_reference_space)))
+    if (
+        !check(
+            "xrCreateReferenceSpace",
+            xrCreateReferenceSpace(
+                m_xr_session,
+                &reference_space_create_info,
+                &m_xr_reference_space
+            )
+        )
+    )
     {
         return false;
     }
@@ -354,8 +416,12 @@ auto Xr_session::begin_session() -> bool
     session_begin_info.next                         = nullptr;
     session_begin_info.primaryViewConfigurationType = m_instance.get_xr_view_configuration_type();
 
-    if (!check("xrBeginSession",
-               xrBeginSession(m_xr_session, &session_begin_info)))
+    if (
+        !check(
+            "xrBeginSession",
+            xrBeginSession(m_xr_session, &session_begin_info)
+        )
+    )
     {
         return false;
     }
@@ -377,8 +443,12 @@ auto Xr_session::attach_actions() -> bool
     session_action_sets_attach_info.next            = nullptr;
     session_action_sets_attach_info.countActionSets = 1;
     session_action_sets_attach_info.actionSets      = &m_instance.actions.action_set;
-    if (!check("xrAttachSessionActionSets",
-               xrAttachSessionActionSets(m_xr_session, &session_action_sets_attach_info)))
+    if (
+        !check(
+            "xrAttachSessionActionSets",
+            xrAttachSessionActionSets(m_xr_session, &session_action_sets_attach_info)
+        )
+    )
     {
         return false;
     }
@@ -395,10 +465,16 @@ auto Xr_session::attach_actions() -> bool
     action_space_create_info.poseInActionSpace.orientation.y = 0.0f;
     action_space_create_info.poseInActionSpace.orientation.z = 0.0f;
     action_space_create_info.poseInActionSpace.orientation.w = 1.0f;
-    if (!check("xrCreateActionSpace",
-               xrCreateActionSpace(m_xr_session,
-                                   &action_space_create_info,
-                                   &m_instance.actions.aim_pose_space)))
+    if (
+        !check(
+            "xrCreateActionSpace",
+            xrCreateActionSpace(
+                m_xr_session,
+                &action_space_create_info,
+                &m_instance.actions.aim_pose_space
+            )
+        )
+    )
     {
         return false;
     }
@@ -493,13 +569,19 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
     view_locate_info.displayTime = m_xr_frame_state.predictedDisplayTime;
     view_locate_info.space       = m_xr_reference_space;
 
-    if (!check("xrLocateViews",
-               xrLocateViews(m_xr_session,
-                             &view_locate_info,
-                             &view_state,
-                             view_capacity_input,
-                             &view_count_output,
-                             m_xr_views.data())))
+    if (
+        !check(
+            "xrLocateViews",
+            xrLocateViews(
+                m_xr_session,
+                &view_locate_info,
+                &view_state,
+                view_capacity_input,
+                &view_count_output,
+                m_xr_views.data()
+            )
+        )
+    )
     {
         return false;
     }

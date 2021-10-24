@@ -6,8 +6,7 @@
 namespace erhe::toolkit
 {
 
-auto read(const std::filesystem::path& path)
--> std::optional<std::string>
+auto read(const std::filesystem::path& path) -> std::optional<std::string>
 {
     // Watch out for fio
     try

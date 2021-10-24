@@ -35,16 +35,23 @@ void Programs::initialize_component()
 
     erhe::log::Indenter indenter;
 
-    Scoped_gl_context gl_context(Component::get<Gl_context_provider>().get());
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
 
-    nearest_sampler = std::make_unique<erhe::graphics::Sampler>(gl::Texture_min_filter::nearest,
-                                                                gl::Texture_mag_filter::nearest);
+    nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
+        gl::Texture_min_filter::nearest,
+        gl::Texture_mag_filter::nearest
+    );
 
-    linear_sampler = std::make_unique<erhe::graphics::Sampler>(gl::Texture_min_filter::linear,
-                                                               gl::Texture_mag_filter::linear);
+    linear_sampler = std::make_unique<erhe::graphics::Sampler>(
+        gl::Texture_min_filter::linear,
+        gl::Texture_mag_filter::linear
+    );
 
     default_uniform_block   = std::make_unique<erhe::graphics::Shader_resource>();
-    shadow_sampler_location = default_uniform_block->add_sampler("s_shadow",  gl::Uniform_type::sampler_2d_array)->location();
+    shadow_sampler_location = default_uniform_block->add_sampler(
+        "s_shadow",
+        gl::Uniform_type::sampler_2d_array
+    )->location();
 
     m_shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
 
@@ -65,7 +72,10 @@ auto Programs::make_program(std::string_view name)
     return make_program(name, no_defines);
 }
 
-auto Programs::make_program(std::string_view name, std::string_view define)
+auto Programs::make_program(
+    std::string_view name,
+    std::string_view define
+)
 -> std::unique_ptr<erhe::graphics::Shader_stages>
 {
     std::vector<std::string> defines;
@@ -73,7 +83,10 @@ auto Programs::make_program(std::string_view name, std::string_view define)
     return make_program(name, defines);
 }
 
-auto Programs::make_program(std::string_view name, const std::vector<std::string>& defines)
+auto Programs::make_program(
+    std::string_view                name,
+    const std::vector<std::string>& defines
+)
 -> std::unique_ptr<erhe::graphics::Shader_stages>
 {
     ZoneScoped;
@@ -91,10 +104,12 @@ auto Programs::make_program(std::string_view name, const std::vector<std::string
 
     const auto& shader_resources = *m_program_interface->shader_resources.get();
 
-    Shader_stages::Create_info create_info(name,
-                                           default_uniform_block.get(),
-                                           &shader_resources.attribute_mappings,
-                                           &shader_resources.fragment_outputs);
+    Shader_stages::Create_info create_info{
+        name,
+        default_uniform_block.get(),
+        &shader_resources.attribute_mappings,
+        &shader_resources.fragment_outputs
+    };
     create_info.add_interface_block(&shader_resources.material_block);
     create_info.add_interface_block(&shader_resources.light_block);
     create_info.add_interface_block(&shader_resources.camera_block);

@@ -44,9 +44,11 @@ public:
 
     auto acquire_gl_context     () -> Gl_worker_context;
     void release_gl_context     (Gl_worker_context context);
-    void provide_worker_contexts(const std::shared_ptr<erhe::graphics::OpenGL_state_tracker>& opengl_state_tracker,
-                                 erhe::toolkit::Context_window*                               main_window,
-                                 std::function<bool()>                                        worker_contexts_still_needed_callback);
+    void provide_worker_contexts(
+        const std::shared_ptr<erhe::graphics::OpenGL_state_tracker>& opengl_state_tracker,
+        erhe::toolkit::Context_window*                               main_window,
+        std::function<bool()>                                        worker_contexts_still_needed_callback
+    );
 
 private:
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker>       m_opengl_state_tracker;

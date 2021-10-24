@@ -64,19 +64,23 @@ public:
 class Brush_create_info final
 {
 public:
-    Brush_create_info(const std::shared_ptr<erhe::geometry::Geometry>&        geometry,
-                      erhe::primitive::Build_info_set&                        build_info_set,
-                      const erhe::primitive::Normal_style                     normal_style,
-                      const float                                             density,
-                      const float                                             volume,
-                      const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape);
+    Brush_create_info(
+        const std::shared_ptr<erhe::geometry::Geometry>&        geometry,
+        erhe::primitive::Build_info_set&                        build_info_set,
+        const erhe::primitive::Normal_style                     normal_style,
+        const float                                             density,
+        const float                                             volume,
+        const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape
+    );
 
-    Brush_create_info(const std::shared_ptr<erhe::geometry::Geometry>& geometry,
-                      erhe::primitive::Build_info_set&                 build_info_set,
-                      const erhe::primitive::Normal_style              normal_style,
-                      const float                                      density,
-                      const Collision_volume_calculator                collision_volume_calculator,
-                      const Collision_shape_generator                  collision_shape_generator);
+    Brush_create_info(
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry,
+        erhe::primitive::Build_info_set&                 build_info_set,
+        const erhe::primitive::Normal_style              normal_style,
+        const float                                      density,
+        const Collision_volume_calculator                collision_volume_calculator,
+        const Collision_shape_generator                  collision_shape_generator
+    );
 
     ~Brush_create_info();
 
@@ -133,14 +137,15 @@ public:
     auto create_scaled(const int scale_key)
     -> Scaled;
 
-    auto make_instance(erhe::scene::Layer&                               layer,
-                       erhe::scene::Scene&                               scene,
-                       erhe::physics::IWorld&                            physics_world,
-                       const std::shared_ptr<erhe::scene::Node>&         parent,
-                       const glm::mat4                                   local_to_parent,
-                       const std::shared_ptr<erhe::primitive::Material>& material,
-                       const float                                       scale)
-    -> Instance;
+    auto make_instance(
+        erhe::scene::Layer&                               layer,
+        erhe::scene::Scene&                               scene,
+        erhe::physics::IWorld&                            physics_world,
+        const std::shared_ptr<erhe::scene::Node>&         parent,
+        const glm::mat4                                   local_to_parent,
+        const std::shared_ptr<erhe::primitive::Material>& material,
+        const float                                       scale
+    ) -> Instance;
 
     std::shared_ptr<erhe::geometry::Geometry>            geometry;
     erhe::primitive::Build_info_set                      build_info_set;

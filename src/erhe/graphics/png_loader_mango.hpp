@@ -64,10 +64,11 @@ public:
     auto operator=(const PNG_writer&) = delete;
     auto operator=(PNG_writer&&)      = delete;
 
-    auto write(const std::filesystem::path& path,
-               const Image_info&            info,
-               gsl::span<std::byte>         data)
-    -> bool;
+    auto write(
+        const std::filesystem::path& path,
+        const Image_info&            info,
+        gsl::span<std::byte>         data
+    ) -> bool;
 
 private:
     std::unique_ptr<mango::filesystem::FileStream> m_file_stream;

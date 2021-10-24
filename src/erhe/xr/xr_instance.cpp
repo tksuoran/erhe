@@ -54,27 +54,35 @@ auto Xr_instance::is_available() const -> bool
     return m_xr_instance != XR_NULL_HANDLE;
 }
 
-auto xr_debug_utils_messenger_callback(XrDebugUtilsMessageSeverityFlagsEXT         messageSeverity,
-                                       XrDebugUtilsMessageTypeFlagsEXT             messageTypes,
-                                       const XrDebugUtilsMessengerCallbackDataEXT* callbackData,
-                                       void*                                       userData) -> XrBool32
+auto xr_debug_utils_messenger_callback(
+    XrDebugUtilsMessageSeverityFlagsEXT         messageSeverity,
+    XrDebugUtilsMessageTypeFlagsEXT             messageTypes,
+    const XrDebugUtilsMessengerCallbackDataEXT* callbackData,
+    void*                                       userData
+) -> XrBool32
 {
     auto* instance = reinterpret_cast<Xr_instance*>(userData);
-    return instance->debug_utils_messenger_callback(messageSeverity,
-                                                    messageTypes,
-                                                    callbackData);
+    return instance->debug_utils_messenger_callback(
+        messageSeverity,
+        messageTypes,
+        callbackData
+    );
 }
 
 
-auto Xr_instance::debug_utils_messenger_callback(XrDebugUtilsMessageSeverityFlagsEXT         messageSeverity,
-                                                 XrDebugUtilsMessageTypeFlagsEXT             messageTypes,
-                                                 const XrDebugUtilsMessengerCallbackDataEXT* callbackData) const -> XrBool32
+auto Xr_instance::debug_utils_messenger_callback(
+    XrDebugUtilsMessageSeverityFlagsEXT         messageSeverity,
+    XrDebugUtilsMessageTypeFlagsEXT             messageTypes,
+    const XrDebugUtilsMessengerCallbackDataEXT* callbackData
+) const -> XrBool32
 {
-    log_xr.info("XR: S:{} T:{} I:{} M:{}\n",
-                to_string_message_severity(messageSeverity),
-                to_string_message_type(messageTypes),
-                callbackData->messageId,
-                callbackData->message);
+    log_xr.info(
+        "XR: S:{} T:{} I:{} M:{}\n",
+        to_string_message_severity(messageSeverity),
+        to_string_message_type(messageTypes),
+        callbackData->messageId,
+        callbackData->message
+    );
 
     if (callbackData->objectCount > 0)
     {
@@ -82,10 +90,12 @@ auto Xr_instance::debug_utils_messenger_callback(XrDebugUtilsMessageSeverityFlag
         erhe::log::Indenter scope_indent;
         for (uint32_t i = 0; i < callbackData->objectCount; ++i)
         {
-            log_xr.info("{} {} {}\n",
-                        c_str(callbackData->objects[i].objectType),
-                        callbackData->objects[i].objectHandle,
-                        callbackData->objects[i].objectName);
+            log_xr.info(
+                "{} {} {}\n",
+                c_str(callbackData->objects[i].objectType),
+                callbackData->objects[i].objectHandle,
+                callbackData->objects[i].objectName
+            );
         }
     }
 
@@ -139,9 +149,15 @@ auto Xr_instance::create_instance() -> bool
 
     //for (;;)
     //{
-        if (!check("xrCreateInstance",
-                   xrCreateInstance(&create_info,
-                                    &m_xr_instance)))
+        if (
+            !check(
+                "xrCreateInstance",
+                xrCreateInstance(
+                    &create_info,
+                    &m_xr_instance
+                )
+            )
+        )
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             //continue;
@@ -162,30 +178,44 @@ auto Xr_instance::create_instance() -> bool
     XrDebugUtilsMessengerCreateInfoEXT debug_utils_messenger_create_info;
     debug_utils_messenger_create_info.type              = XR_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     debug_utils_messenger_create_info.next              = nullptr;
-    debug_utils_messenger_create_info.messageSeverities = XR_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-                                                          XR_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT    |
-                                                          XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                                                          XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    debug_utils_messenger_create_info.messageTypes      = XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT     |
-                                                          XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT  |
-                                                          XR_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-                                                          XR_DEBUG_UTILS_MESSAGE_TYPE_CONFORMANCE_BIT_EXT;
+    debug_utils_messenger_create_info.messageSeverities =
+        XR_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+        XR_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT    |
+        XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+        XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    debug_utils_messenger_create_info.messageTypes      =
+        XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT     |
+        XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT  |
+        XR_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+        XR_DEBUG_UTILS_MESSAGE_TYPE_CONFORMANCE_BIT_EXT;
     debug_utils_messenger_create_info.userCallback      = xr_debug_utils_messenger_callback;
     debug_utils_messenger_create_info.userData          = this;
 
     PFN_xrCreateDebugUtilsMessengerEXT xrCreateDebugUtilsMessengerEXT{nullptr};
-    if (!check("xrGetInstanceProcAddr",
-               xrGetInstanceProcAddr(m_xr_instance,
-                                     "xrCreateDebugUtilsMessengerEXT",
-                                     reinterpret_cast<PFN_xrVoidFunction*>(&xrCreateDebugUtilsMessengerEXT))))
+    if (
+        !check(
+            "xrGetInstanceProcAddr",
+            xrGetInstanceProcAddr(
+                m_xr_instance,
+                "xrCreateDebugUtilsMessengerEXT",
+                reinterpret_cast<PFN_xrVoidFunction*>(&xrCreateDebugUtilsMessengerEXT)
+            )
+        )
+        )
     {
         return false;
     }
 
-    if (!check("xrCreateDebugUtilsMessengerEXT",
-               xrCreateDebugUtilsMessengerEXT(m_xr_instance,
-                                              &debug_utils_messenger_create_info,
-                                              &m_debug_utils_messenger)))
+    if (
+        !check(
+            "xrCreateDebugUtilsMessengerEXT",
+            xrCreateDebugUtilsMessengerEXT(
+                m_xr_instance,
+                &debug_utils_messenger_create_info,
+                &m_debug_utils_messenger
+            )
+        )
+    )
     {
         return false;
     }
@@ -241,8 +271,12 @@ auto Xr_instance::enumerate_layers() -> bool
     log_xr.trace("{}\n", __func__);
 
     uint32_t count{0};
-    if (!check("xrEnumerateApiLayerProperties",
-               xrEnumerateApiLayerProperties(0, &count, nullptr)))
+    if (
+        !check(
+            "xrEnumerateApiLayerProperties",
+            xrEnumerateApiLayerProperties(0, &count, nullptr)
+        )
+    )
     {
         return false;
     }
@@ -258,8 +292,12 @@ auto Xr_instance::enumerate_layers() -> bool
         api_layer.type = XR_TYPE_API_LAYER_PROPERTIES;
         api_layer.next = nullptr;
     }
-    if (!check("xrEnumerateApiLayerProperties",
-               xrEnumerateApiLayerProperties(count, &count, m_xr_api_layer_properties.data())))
+    if (
+        !check(
+            "xrEnumerateApiLayerProperties",
+            xrEnumerateApiLayerProperties(count, &count, m_xr_api_layer_properties.data())
+        )
+    )
     {
         return false;
     }
@@ -267,10 +305,12 @@ auto Xr_instance::enumerate_layers() -> bool
     log_xr.info("OpenXR API Layer Properties:\n");
     for (const auto& api_layer : m_xr_api_layer_properties)
     {
-        log_xr.info("    {} layer version {} spec version\n",
-                    api_layer.layerName,
-                    api_layer.layerVersion,
-                    api_layer.specVersion);
+        log_xr.info(
+            "    {} layer version {} spec version\n",
+            api_layer.layerName,
+            api_layer.layerVersion,
+            api_layer.specVersion
+        );
     }
     return true;
 }
@@ -288,11 +328,17 @@ auto Xr_instance::enumerate_extensions() -> bool
     //{
     //    return false;
     //}
-    if (!check("xrEnumerateInstanceExtensionProperties",
-               xrEnumerateInstanceExtensionProperties(nullptr,
-                                                      0,
-                                                      &instance_extension_count,
-                                                      nullptr)))
+    if (
+        !check(
+            "xrEnumerateInstanceExtensionProperties",
+            xrEnumerateInstanceExtensionProperties(
+                nullptr,
+                0,
+                &instance_extension_count,
+                nullptr
+            )
+        )
+    )
     {
         return false;
     }
@@ -307,11 +353,17 @@ auto Xr_instance::enumerate_extensions() -> bool
         extension.type = XR_TYPE_EXTENSION_PROPERTIES;
     }
 
-    if (!check("xrEnumerateInstanceExtensionProperties",
-               xrEnumerateInstanceExtensionProperties(nullptr,
-                                                      instance_extension_count,
-                                                      &instance_extension_count,
-                                                      m_xr_extensions.data())))
+    if (
+        !check(
+            "xrEnumerateInstanceExtensionProperties",
+            xrEnumerateInstanceExtensionProperties(
+                nullptr,
+                instance_extension_count,
+                &instance_extension_count,
+                m_xr_extensions.data()
+            )
+        )
+    )
     {
         return false;
     }
@@ -333,8 +385,12 @@ auto Xr_instance::get_system_info() -> bool
     m_xr_system_info.next       = nullptr;
     m_xr_system_info.formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
 
-    if (!check("xrGetSystem",
-               xrGetSystem(m_xr_instance, &m_xr_system_info, &m_xr_system_id)))
+    if (
+        !check(
+            "xrGetSystem",
+            xrGetSystem(m_xr_instance, &m_xr_system_info, &m_xr_system_id)
+        )
+    )
     {
         return false;
     }
@@ -368,13 +424,19 @@ auto score(XrEnvironmentBlendMode environment_blend_mode) -> int
 auto Xr_instance::enumerate_blend_modes() -> bool
 {
     uint32_t environment_blend_mode_count{0};
-    if (!check("xrEnumerateEnvironmentBlendModes",
-               xrEnumerateEnvironmentBlendModes(m_xr_instance,
-                                                m_xr_system_id,
-                                                m_xr_view_configuration_type,
-                                                0,
-                                                &environment_blend_mode_count,
-                                                nullptr)))
+    if (
+        !check(
+            "xrEnumerateEnvironmentBlendModes",
+            xrEnumerateEnvironmentBlendModes(
+                m_xr_instance,
+                m_xr_system_id,
+                m_xr_view_configuration_type,
+                0,
+                &environment_blend_mode_count,
+                nullptr
+            )
+        )
+    )
     {
         return false;
     }
@@ -386,13 +448,19 @@ auto Xr_instance::enumerate_blend_modes() -> bool
     }
 
     m_xr_environment_blend_modes.resize(environment_blend_mode_count);
-    if (!check("xrEnumerateEnvironmentBlendModes",
-               xrEnumerateEnvironmentBlendModes(m_xr_instance,
-                                                m_xr_system_id,
-                                                m_xr_view_configuration_type,
-                                                environment_blend_mode_count,
-                                                &environment_blend_mode_count,
-                                                m_xr_environment_blend_modes.data())))
+    if (
+        !check(
+            "xrEnumerateEnvironmentBlendModes",
+            xrEnumerateEnvironmentBlendModes(
+                m_xr_instance,
+                m_xr_system_id,
+                m_xr_view_configuration_type,
+                environment_blend_mode_count,
+                &environment_blend_mode_count,
+                m_xr_environment_blend_modes.data()
+            )
+        )
+    )
     {
         return false;
     }
@@ -418,12 +486,18 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     log_xr.trace("{}\n", __func__);
 
     uint32_t view_configuration_type_count;
-    if (!check("xrEnumerateViewConfigurations",
-               xrEnumerateViewConfigurations(m_xr_instance,
-                                             m_xr_system_id,
-                                             0,
-                                             &view_configuration_type_count,
-                                             nullptr)))
+    if (
+        !check(
+            "xrEnumerateViewConfigurations",
+            xrEnumerateViewConfigurations(
+                m_xr_instance,
+                m_xr_system_id,
+                0,
+                &view_configuration_type_count,
+                nullptr
+            )
+        )
+    )
     {
         return false;
     }
@@ -434,12 +508,18 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 
     std::vector<XrViewConfigurationType> view_configuration_types{view_configuration_type_count};
 
-    if (!check("xrEnumerateViewConfigurations",
-               xrEnumerateViewConfigurations(m_xr_instance,
-                                             m_xr_system_id,
-                                             view_configuration_type_count,
-                                             &view_configuration_type_count,
-                                             view_configuration_types.data())))
+    if (
+        !check(
+            "xrEnumerateViewConfigurations",
+            xrEnumerateViewConfigurations(
+                m_xr_instance,
+                m_xr_system_id,
+                view_configuration_type_count,
+                &view_configuration_type_count,
+                view_configuration_types.data()
+            )
+        )
+    )
     {
         return false;
     }
@@ -461,13 +541,19 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 
     uint32_t view_count{0};
 
-    if (!check("xrEnumerateViewConfigurationViews",
-               xrEnumerateViewConfigurationViews(m_xr_instance,
-                                                 m_xr_system_id,
-                                                 m_xr_view_configuration_type,
-                                                 0,
-                                                 &view_count,
-                                                 nullptr)))
+    if (
+        !check(
+            "xrEnumerateViewConfigurationViews",
+            xrEnumerateViewConfigurationViews(
+                m_xr_instance,
+                m_xr_system_id,
+                m_xr_view_configuration_type,
+                0,
+                &view_count,
+                nullptr
+            )
+        )
+    )
     {
         return false;
     }
@@ -479,13 +565,19 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 
     m_xr_view_configuration_views = std::vector<XrViewConfigurationView>(view_count, {XR_TYPE_VIEW_CONFIGURATION_VIEW});
 
-    if (!check("xrEnumerateViewConfigurationViews",
-               xrEnumerateViewConfigurationViews(m_xr_instance,
-                                                 m_xr_system_id,
-                                                 m_xr_view_configuration_type,
-                                                 view_count,
-                                                 &view_count,
-                                                 m_xr_view_configuration_views.data())))
+    if (
+        !check(
+            "xrEnumerateViewConfigurationViews",
+            xrEnumerateViewConfigurationViews(
+                m_xr_instance,
+                m_xr_system_id,
+                m_xr_view_configuration_type,
+                view_count,
+                &view_count,
+                m_xr_view_configuration_views.data()
+            )
+        )
+    )
     {
         return false;
     }
@@ -494,15 +586,17 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     size_t index = 0;
     for (const auto& view_configuration_view : m_xr_view_configuration_views)
     {
-        log_xr.info("    View {}: Size recommended = {} x {}, Max = {} x {}, sample count = {}, image count recommended = {}, max = {}\n",
-                    index++,
-                    view_configuration_view.recommendedImageRectWidth,
-                    view_configuration_view.recommendedImageRectHeight,
-                    view_configuration_view.maxImageRectWidth,
-                    view_configuration_view.maxImageRectHeight,
-                    view_configuration_view.recommendedSwapchainSampleCount,
-                    view_configuration_view.maxSwapchainSampleCount,
-                    view_configuration_view.maxSwapchainSampleCount);
+        log_xr.info(
+            "    View {}: Size recommended = {} x {}, Max = {} x {}, sample count = {}, image count recommended = {}, max = {}\n",
+            index++,
+            view_configuration_view.recommendedImageRectWidth,
+            view_configuration_view.recommendedImageRectHeight,
+            view_configuration_view.maxImageRectWidth,
+            view_configuration_view.maxImageRectHeight,
+            view_configuration_view.recommendedSwapchainSampleCount,
+            view_configuration_view.maxSwapchainSampleCount,
+            view_configuration_view.maxSwapchainSampleCount
+        );
     }
 
     return true;
@@ -763,10 +857,14 @@ Xr_path::Xr_path() = default;
 
 Xr_path::Xr_path(XrInstance instance, const char* path)
 {
-    check("xrStringToPath",
-          xrStringToPath(instance,
-                         path,
-                         &xr_path));
+    check(
+        "xrStringToPath",
+        xrStringToPath(
+            instance,
+            path,
+            &xr_path
+        )
+    );
 }
 
 auto Xr_instance::path(const char* path) -> Xr_path
@@ -790,10 +888,16 @@ auto Xr_instance::initialize_actions() -> bool
     action_set_info.localizedActionSetName[3] = 'e';
     action_set_info.localizedActionSetName[4] = '\0';
     action_set_info.priority                  = 0;
-    if (!check("xrCreateActionSet",
-               xrCreateActionSet(m_xr_instance,
-                                 &action_set_info,
-                                 &actions.action_set)))
+    if (
+        !check(
+            "xrCreateActionSet",
+            xrCreateActionSet(
+                m_xr_instance,
+                &action_set_info,
+                &actions.action_set
+            )
+        )
+    )
     {
         return false;
     }
@@ -820,10 +924,16 @@ auto Xr_instance::initialize_actions() -> bool
     trigger_value_action_create_info.localizedActionName[5] = 'e';
     trigger_value_action_create_info.localizedActionName[6] = 'r';
     trigger_value_action_create_info.localizedActionName[7] = '\0';
-    if (!check("xrCreateAction",
-               xrCreateAction(actions.action_set,
-                              &trigger_value_action_create_info,
-                              &actions.trigger_value)))
+    if (
+        !check(
+            "xrCreateAction",
+            xrCreateAction(
+                actions.action_set,
+                &trigger_value_action_create_info,
+                &actions.trigger_value
+            )
+        )
+    )
     {
         return false;
     }
@@ -850,10 +960,16 @@ auto Xr_instance::initialize_actions() -> bool
     squeeze_click_action_create_info.localizedActionName[5] = 'z';
     squeeze_click_action_create_info.localizedActionName[6] = 'e';
     squeeze_click_action_create_info.localizedActionName[7] = '\0';
-    if (!check("xrCreateAction",
-               xrCreateAction(actions.action_set,
-                              &squeeze_click_action_create_info,
-                              &actions.squeeze_click)))
+    if (
+        !check(
+            "xrCreateAction",
+            xrCreateAction(
+                actions.action_set,
+                &squeeze_click_action_create_info,
+                &actions.squeeze_click
+            )
+        )
+    )
     {
         return false;
     }
@@ -872,10 +988,16 @@ auto Xr_instance::initialize_actions() -> bool
     aim_pose_action_create_info.localizedActionName[1] = 'i';
     aim_pose_action_create_info.localizedActionName[2] = 'm';
     aim_pose_action_create_info.localizedActionName[7] = '\0';
-    if (!check("xrCreateAction",
-               xrCreateAction(actions.action_set,
-                              &aim_pose_action_create_info,
-                              &actions.aim_pose)))
+    if (
+        !check(
+            "xrCreateAction",
+            xrCreateAction(
+                actions.action_set,
+                &aim_pose_action_create_info,
+                &actions.aim_pose
+            )
+        )
+    )
     {
         return false;
     }
@@ -902,9 +1024,15 @@ auto Xr_instance::initialize_actions() -> bool
     interaction_profile_suggested_binding.countSuggestedBindings = static_cast<uint32_t>(vive_controller_trigger_value_suggested_bindings.size());
     interaction_profile_suggested_binding.suggestedBindings      = vive_controller_trigger_value_suggested_bindings.data();
 
-    if (!check("xrSuggestInteractionProfileBindings",
-               xrSuggestInteractionProfileBindings(m_xr_instance,
-                                                   &interaction_profile_suggested_binding)))
+    if (
+        !check(
+            "xrSuggestInteractionProfileBindings",
+            xrSuggestInteractionProfileBindings(
+                m_xr_instance,
+                &interaction_profile_suggested_binding
+            )
+        )
+    )
     {
         return false;
     }
@@ -972,10 +1100,16 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
         action_state_get_info.action        = actions.trigger_value;
         action_state_get_info.subactionPath = XR_NULL_PATH;
 
-        if (!check("xrGetActionStateFloat",
-                   xrGetActionStateFloat(session.get_xr_session(),
-                                         &action_state_get_info,
-                                         &actions.trigger_value_state)))
+        if (
+            !check(
+                "xrGetActionStateFloat",
+                xrGetActionStateFloat(
+                    session.get_xr_session(),
+                    &action_state_get_info,
+                    &actions.trigger_value_state
+                )
+            )
+        )
         {
             return false;
         }
@@ -988,10 +1122,16 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
         action_state_get_info.action        = actions.squeeze_click;
         action_state_get_info.subactionPath = XR_NULL_PATH;
 
-        if (!check("xrGetActionStateBoolean",
-                   xrGetActionStateBoolean(session.get_xr_session(),
-                                           &action_state_get_info,
-                                           &actions.squeeze_click_state)))
+        if (
+            !check(
+                "xrGetActionStateBoolean",
+                xrGetActionStateBoolean(
+                    session.get_xr_session(),
+                    &action_state_get_info,
+                    &actions.squeeze_click_state
+                )
+            )
+        )
         {
             return false;
         }
@@ -1004,10 +1144,16 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
         action_state_get_info.action        = actions.aim_pose;
         action_state_get_info.subactionPath = XR_NULL_PATH;
 
-        if (!check("xrGetActionStatePose",
-                   xrGetActionStatePose(session.get_xr_session(),
-                                        &action_state_get_info,
-                                        &actions.aim_pose_state)))
+        if (
+            !check(
+                "xrGetActionStatePose",
+                xrGetActionStatePose(
+                    session.get_xr_session(),
+                    &action_state_get_info,
+                    &actions.aim_pose_state
+                )
+            )
+        )
         {
             return false;
         }
@@ -1028,11 +1174,17 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
     location.pose.orientation.z = 0.0f;
     location.pose.orientation.w = 1.0f;
 
-    if (!check("xrLocateSpace",
-               xrLocateSpace(space,
-                             baseSpace,
-                             time,
-                             &location)))
+    if (
+        !check(
+            "xrLocateSpace",
+            xrLocateSpace(
+                space,
+                baseSpace,
+                time,
+                &location
+            )
+        )
+    )
     {
         return false;
     }
@@ -1049,10 +1201,16 @@ auto Xr_instance::get_current_interaction_profile(Xr_session& session) -> bool
     interation_profile_state.next               = nullptr;
     interation_profile_state.interactionProfile = XR_NULL_PATH;
 
-    if (!check("xrGetCurrentInteractionProfile",
-                xrGetCurrentInteractionProfile(session.get_xr_session(),
-                                               paths.user_hand_left.xr_path,
-                                               &interation_profile_state)))
+    if (
+        !check(
+            "xrGetCurrentInteractionProfile",
+            xrGetCurrentInteractionProfile(
+                session.get_xr_session(),
+                paths.user_hand_left.xr_path,
+                &interation_profile_state
+            )
+        )
+    )
     {
         return false;
     }
@@ -1065,12 +1223,18 @@ auto Xr_instance::get_current_interaction_profile(Xr_session& session) -> bool
 
     std::array<char, 256> profile_name{};
     uint32_t profile_name_length = 0;
-    if (!check("xrPathToString",
-                xrPathToString(m_xr_instance,
-                               interation_profile_state.interactionProfile,
-                               static_cast<uint32_t>(profile_name.size()),
-                               &profile_name_length,
-                               profile_name.data())))
+    if (
+        !check(
+            "xrPathToString",
+            xrPathToString(
+                m_xr_instance,
+                interation_profile_state.interactionProfile,
+                static_cast<uint32_t>(profile_name.size()),
+                &profile_name_length,
+                profile_name.data()
+            )
+        )
+    )
     {
         return false;
     }

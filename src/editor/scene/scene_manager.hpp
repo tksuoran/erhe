@@ -68,23 +68,27 @@ public:
     auto get_view_camera() const -> std::shared_ptr<erhe::scene::ICamera>;
     void add_scene      ();
     void sort_lights    ();
-    auto make_directional_light(std::string_view name,
-                                glm::vec3        position,
-                                glm::vec3        color,
-                                float            intensity)
-    -> std::shared_ptr<erhe::scene::Light>;
+    auto make_directional_light(
+        std::string_view name,
+        glm::vec3        position,
+        glm::vec3        color,
+        float            intensity
+    ) -> std::shared_ptr<erhe::scene::Light>;
 
-    auto make_spot_light(std::string_view name,
-                         glm::vec3        position,
-                         glm::vec3        direction,
-                         glm::vec3        color,
-                         float            intensity,
-                         glm::vec2        spot_cone_angle)
-    -> std::shared_ptr<erhe::scene::Light>;
+    auto make_spot_light(
+        std::string_view name,
+        glm::vec3        position,
+        glm::vec3        direction,
+        glm::vec3        color,
+        float            intensity,
+        glm::vec2        spot_cone_angle
+    ) -> std::shared_ptr<erhe::scene::Light>;
 
     template <typename ...Args>
-    auto make_brush(bool instantiate_to_scene, Args&& ...args)
-    -> std::shared_ptr<Brush>
+    auto make_brush(
+        bool instantiate_to_scene,
+        Args&& ...args
+    ) -> std::shared_ptr<Brush>
     {
         auto brush = m_brushes->make_brush(std::forward<Args>(args)...);
         if (instantiate_to_scene)

@@ -19,11 +19,13 @@ class Vertex_attribute_info
 {
 public:
     Vertex_attribute_info();
-    Vertex_attribute_info(erhe::graphics::Vertex_format*               vertex_format,
-                          gl::Vertex_attrib_type                       default_data_type,
-                          size_t                                       dimension,
-                          erhe::graphics::Vertex_attribute::Usage_type semantic,
-                          unsigned int                                 semantic_index);
+    Vertex_attribute_info(
+        erhe::graphics::Vertex_format*               vertex_format,
+        gl::Vertex_attrib_type                       default_data_type,
+        size_t                                       dimension,
+        erhe::graphics::Vertex_attribute::Usage_type semantic,
+        unsigned int                                 semantic_index
+    );
 
     auto is_valid() -> bool;
 

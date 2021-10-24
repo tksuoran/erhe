@@ -67,8 +67,7 @@ Gl_program::Gl_program(Gl_program&& other) noexcept
     other.m_gl_name = 0;
 }
 
-auto Gl_program::operator=(Gl_program&& other) noexcept
--> Gl_program&
+auto Gl_program::operator=(Gl_program&& other) noexcept -> Gl_program&
 {
     m_gl_name = other.m_gl_name;
     other.m_gl_name = 0;
@@ -117,8 +116,7 @@ auto Gl_shader::operator=(Gl_shader&& other) noexcept -> Gl_shader&
     return *this;
 }
 
-auto Gl_shader::gl_name() const
--> unsigned int
+auto Gl_shader::gl_name() const -> unsigned int
 {
     return m_gl_name;
 }
@@ -144,16 +142,14 @@ Gl_sampler::Gl_sampler(Gl_sampler&& other) noexcept
     other.m_gl_name = 0;
 }
 
-auto Gl_sampler::operator=(Gl_sampler&& other) noexcept
--> Gl_sampler&
+auto Gl_sampler::operator=(Gl_sampler&& other) noexcept -> Gl_sampler&
 {
     m_gl_name = other.m_gl_name;
     other.m_gl_name = 0;
     return *this;
 }
 
-auto Gl_sampler::gl_name() const
--> unsigned int
+auto Gl_sampler::gl_name() const -> unsigned int
 {
     return m_gl_name;
 }
@@ -179,16 +175,14 @@ Gl_framebuffer::Gl_framebuffer(Gl_framebuffer&& other) noexcept
     other.m_gl_name = 0;
 }
 
-auto Gl_framebuffer::operator=(Gl_framebuffer&& other) noexcept
--> Gl_framebuffer&
+auto Gl_framebuffer::operator=(Gl_framebuffer&& other) noexcept -> Gl_framebuffer&
 {
     m_gl_name = other.m_gl_name;
     other.m_gl_name = 0;
     return *this;
 }
 
-auto Gl_framebuffer::gl_name() const
--> GLuint
+auto Gl_framebuffer::gl_name() const -> GLuint
 {
     return m_gl_name;
 }
@@ -214,16 +208,14 @@ Gl_renderbuffer::Gl_renderbuffer(Gl_renderbuffer&& other) noexcept
     other.m_gl_name = 0;
 }
 
-auto Gl_renderbuffer::operator=(Gl_renderbuffer&& other) noexcept
--> Gl_renderbuffer&
+auto Gl_renderbuffer::operator=(Gl_renderbuffer&& other) noexcept -> Gl_renderbuffer&
 {
     m_gl_name = other.m_gl_name;
     other.m_gl_name = 0;
     return *this;
 }
 
-auto Gl_renderbuffer::gl_name() const
--> GLuint
+auto Gl_renderbuffer::gl_name() const -> GLuint
 {
     return m_gl_name;
 }
@@ -249,16 +241,14 @@ Gl_buffer::Gl_buffer(Gl_buffer&& other) noexcept
     other.m_gl_name = 0;
 }
 
-auto Gl_buffer::operator=(Gl_buffer&& other) noexcept
--> Gl_buffer&
+auto Gl_buffer::operator=(Gl_buffer&& other) noexcept -> Gl_buffer&
 {
     m_gl_name = other.m_gl_name;
     other.m_gl_name = 0;
     return *this;
 }
 
-auto Gl_buffer::gl_name() const
--> GLuint
+auto Gl_buffer::gl_name() const -> GLuint
 {
     return m_gl_name;
 }
@@ -285,8 +275,7 @@ Gl_transform_feedback::Gl_transform_feedback(Gl_transform_feedback&& other) noex
     other.m_gl_name = 0;
 }
 
-auto Gl_transform_feedback::operator=(Gl_transform_feedback&& other) noexcept
--> Gl_transform_feedback&
+auto Gl_transform_feedback::operator=(Gl_transform_feedback&& other) noexcept -> Gl_transform_feedback&
 {
     m_gl_name = other.m_gl_name;
     other.m_gl_name = 0;
@@ -320,16 +309,14 @@ Gl_query::Gl_query(Gl_query&& other) noexcept
     other.m_gl_name = 0;
 }
 
-auto Gl_query::operator=(Gl_query&& other) noexcept
--> Gl_query&
+auto Gl_query::operator=(Gl_query&& other) noexcept -> Gl_query&
 {
     m_gl_name = other.m_gl_name;
     other.m_gl_name = 0;
     return *this;
 }
 
-auto Gl_query::gl_name() const
--> GLuint
+auto Gl_query::gl_name() const -> GLuint
 {
     return m_gl_name;
 }
@@ -355,16 +342,14 @@ Gl_vertex_array::Gl_vertex_array(Gl_vertex_array&& other) noexcept
     other.m_gl_name = 0;
 }
 
-auto Gl_vertex_array::operator=(Gl_vertex_array&& other) noexcept
--> Gl_vertex_array&
+auto Gl_vertex_array::operator=(Gl_vertex_array&& other) noexcept -> Gl_vertex_array&
 {
     m_gl_name = other.m_gl_name;
     other.m_gl_name = 0;
     return *this;
 }
 
-auto Gl_vertex_array::gl_name() const
--> GLuint
+auto Gl_vertex_array::gl_name() const -> GLuint
 {
     return m_gl_name;
 }

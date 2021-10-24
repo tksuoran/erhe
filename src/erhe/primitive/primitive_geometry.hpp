@@ -46,8 +46,7 @@ public:
     }
 
     // Value that should be added in index range first index
-    auto base_index() const
-    -> uint32_t
+    auto base_index() const -> uint32_t
     {
         return static_cast<uint32_t>(index_buffer_range.byte_offset / index_buffer_range.element_size);
     }
