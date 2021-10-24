@@ -139,7 +139,7 @@ void Physics_window::imgui(Pointer_context& pointer_context)
         }
         ImGui::Text("Rigid body: %s", mesh->name().c_str());
         auto* rigid_body = node_physics->rigid_body();
-        int collision_mode = static_cast<int>(rigid_body->get_collision_mode());
+        int motion_mode = static_cast<int>(rigid_body->get_motion_mode());
 
         {
             const glm::vec3 local_inertia = rigid_body->get_local_inertia();
@@ -149,12 +149,12 @@ void Physics_window::imgui(Pointer_context& pointer_context)
         }
 
         ImGui::Combo(
-            "Collision Mode",
-            &collision_mode,
-            erhe::physics::c_collision_mode_strings,
-            IM_ARRAYSIZE(erhe::physics::c_collision_mode_strings)
+            "Motion Mode",
+            &motion_mode,
+            erhe::physics::c_motion_mode_strings,
+            IM_ARRAYSIZE(erhe::physics::c_motion_mode_strings)
         );
-        rigid_body->set_collision_mode(static_cast<erhe::physics::Collision_mode>(collision_mode));
+        rigid_body->set_motion_mode(static_cast<erhe::physics::Motion_mode>(motion_mode));
 
         float mass = rigid_body->get_mass();
         const float before_mass = mass;

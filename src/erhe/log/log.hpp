@@ -124,10 +124,10 @@ protected:
 
     static std::mutex s_mutex;
     std::array<int, 2> m_color;
-    int                m_level{Level::LEVEL_ALL};
+    int                m_level    {Level::LEVEL_ALL};
     Colorizer          m_colorizer{Colorizer::default_};
-    int                m_indent{0};
-    bool               m_newline{false};
+    int                m_indent   {0};
+    bool               m_newline  {true};
 };
 
 class Log

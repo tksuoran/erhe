@@ -1,5 +1,6 @@
 #include "erhe/physics/bullet_compound_shape.hpp"
 #include "erhe/physics/glm_conversions.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::physics
 {
@@ -21,12 +22,14 @@ Bullet_compound_shape::Bullet_compound_shape()
 }
 
 void Bullet_compound_shape::add_child_shape(
-    ICollision_shape* shape,
-    const glm::mat3   basis,
-    const glm::vec3   origin
+    std::shared_ptr<ICollision_shape> shape,
+    const glm::mat3                   basis,
+    const glm::vec3                   origin
 )
 {
-    Bullet_collision_shape* bullet_collision_shape = static_cast<Bullet_collision_shape*>(shape);
+    auto bullet_collision_shape = dynamic_pointer_cast<Bullet_collision_shape>(shape);
+    VERIFY(bullet_collision_shape);
+    m_children.push_back(bullet_collision_shape);
     const btTransform transform{from_glm(basis), from_glm(origin)};
     m_compound_shape.addChildShape(transform, bullet_collision_shape->get_bullet_collision_shape());
 }

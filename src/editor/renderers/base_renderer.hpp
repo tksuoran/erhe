@@ -131,7 +131,7 @@ public:
     auto update_light_buffer(
         const Light_collection&     lights,
         const erhe::scene::Viewport light_texture_viewport,
-        const glm::vec4             ambient_light = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f)
+        const glm::vec4             ambient_light = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f}
     ) -> Buffer_range;
 
     auto update_material_buffer(const Material_collection& materials)

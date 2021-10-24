@@ -33,7 +33,7 @@
             "name": "editor Ninja (Windows)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/src/editor/Debug/editor",
+            "program": "${workspaceFolder}/vscode-cmake-build/src/editor/editor.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/src/editor",

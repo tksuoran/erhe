@@ -310,8 +310,8 @@ void Build_context_root::calculate_bounding_box(
 
     Expects(primitive_geometry != nullptr);
 
-    primitive_geometry->bounding_box_min = vec3(std::numeric_limits<float>::max());
-    primitive_geometry->bounding_box_max = vec3(std::numeric_limits<float>::lowest());
+    primitive_geometry->bounding_box_min = vec3{std::numeric_limits<float>::max()};
+    primitive_geometry->bounding_box_max = vec3{std::numeric_limits<float>::lowest()};
     if ((geometry.point_count() == 0) || (point_locations == nullptr))
     {
         primitive_geometry->bounding_box_min = vec3{0.0f};

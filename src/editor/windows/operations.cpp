@@ -58,7 +58,7 @@ void Operations::imgui(Pointer_context& pointer_context)
         );
         if (button_pressed && (active_action != button_action))
         {
-            log_tools.trace("Setting priority action to {}", c_action_strings[i]);
+            log_tools.trace("Setting priority action to {}\n", c_action_strings[i]);
             pointer_context.priority_action = button_action;
         }
     }

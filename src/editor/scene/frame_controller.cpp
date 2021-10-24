@@ -81,8 +81,8 @@ void Frame_controller::set_frame(erhe::scene::Node* node)
         return;
     }
 
-    const vec4 position  = node->world_from_node() * vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    const vec4 direction = node->world_from_node() * vec4(0.0f, 0.0f, 1.0f, 0.0f);
+    const vec4 position  = node->world_from_node() * vec4{0.0f, 0.0f, 0.0f, 1.0f};
+    const vec4 direction = node->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f};
 
     m_position = position;
     float heading{0.0f};
@@ -127,7 +127,7 @@ void Frame_controller::update()
     // }
 
     // Put translation to column 3
-    parent_from_local[3] = vec4(m_position, 1.0f);
+    parent_from_local[3] = vec4{m_position, 1.0f};
 
     // Put inverse translation to column 3
     /*parentToLocal._03 = parentToLocal._00 * -positionInParent.X + parentToLocal._01 * -positionInParent.Y + parentToLocal._02 * - positionInParent.Z;
@@ -140,8 +140,8 @@ void Frame_controller::update()
     {
         m_frame->transforms.parent_from_node.set(parent_from_local);
 
-        //vec4 position  = m_frame->world_from_local.matrix() * vec4(0.0f, 0.0f, 0.0f, 1.0f);
-        //vec4 direction = m_frame->world_from_local.matrix() * vec4(0.0f, 0.0f, 1.0f, 0.0f);
+        //vec4 position  = m_frame->world_from_local.matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f};
+        //vec4 direction = m_frame->world_from_local.matrix() * vec4{0.0f, 0.0f, 1.0f, 0.0f};
         //float elevation;
         //float heading;
         //cartesian_to_heading_elevation(direction, elevation, heading);
@@ -151,22 +151,19 @@ void Frame_controller::update()
     //Frame.LocalToParent.Set(localToParent, parentToLocal);
 }
 
-auto Frame_controller::right() const
--> vec3
+auto Frame_controller::right() const -> vec3
 {
-    return vec3(m_heading_matrix[0].x, m_heading_matrix[0].y, m_heading_matrix[0].z);
+    return vec3{m_heading_matrix[0].x, m_heading_matrix[0].y, m_heading_matrix[0].z};
 }
 
-auto Frame_controller::up() const
--> vec3
+auto Frame_controller::up() const -> vec3
 {
-    return vec3(m_heading_matrix[1].x, m_heading_matrix[1].y, m_heading_matrix[1].z);
+    return vec3{m_heading_matrix[1].x, m_heading_matrix[1].y, m_heading_matrix[1].z};
 }
 
-auto Frame_controller::back() const
--> vec3
+auto Frame_controller::back() const -> vec3
 {
-    return vec3(m_heading_matrix[2].x, m_heading_matrix[2].y, m_heading_matrix[2].z);
+    return vec3{m_heading_matrix[2].x, m_heading_matrix[2].y, m_heading_matrix[2].z};
 }
 
 void Frame_controller::update_fixed_step()
@@ -201,8 +198,7 @@ void Frame_controller::update_fixed_step()
     {
         m_heading += rotate_y.current_value();
         m_elevation += rotate_x.current_value();
-        mat4 elevation_matrix;
-        elevation_matrix = create_rotation(m_elevation, vec3_unit_x);
+        mat4 elevation_matrix = create_rotation(m_elevation, vec3_unit_x);
         m_heading_matrix = create_rotation(m_heading, vec3_unit_y);
         m_rotation_matrix = m_heading_matrix * elevation_matrix;
     }
@@ -219,7 +215,7 @@ void Frame_controller::update_fixed_step()
       m_position.y = 0.03f;
 
    /*  Put translation to column 3  */ 
-   m_parent_from_local[3] = vec4(m_position, 1.0f);
+   m_parent_from_local[3] = vec4{m_position, 1.0f};
 
 #    if 0
    localToParent._03 = positionInParent.X;

@@ -46,8 +46,10 @@ class Selection_tool;
 class Brush_create_context
 {
 public:
-    explicit Brush_create_context(erhe::primitive::Build_info_set&    build_info_set,
-                                  const erhe::primitive::Normal_style normal_style = erhe::primitive::Normal_style::corner_normals);
+    explicit Brush_create_context(
+        erhe::primitive::Build_info_set&    build_info_set,
+        const erhe::primitive::Normal_style normal_style = erhe::primitive::Normal_style::corner_normals
+    );
 
     erhe::primitive::Build_info_set& build_info_set;
     erhe::primitive::Normal_style    normal_style{erhe::primitive::Normal_style::corner_normals};

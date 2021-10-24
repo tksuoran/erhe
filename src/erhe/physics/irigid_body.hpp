@@ -12,14 +12,14 @@ namespace erhe::scene
 namespace erhe::physics
 {
 
-enum class Collision_mode : unsigned int
+enum class Motion_mode : unsigned int
 {
     e_static,    // zero mass, immovable
     e_kinematic, // zero mass, can move non-physically
     e_dynamic    // non-zero mass, physical movement
 };
 
-static constexpr const char* c_collision_mode_strings[] =
+static constexpr const char* c_motion_mode_strings[] =
 {
     "Static",
     "Kinematic",
@@ -37,7 +37,6 @@ public:
     glm::vec3                         local_inertia{0.0f, 0.0f, 0.0f};
 };
 
-
 class IRigid_body
 {
 public:
@@ -52,12 +51,9 @@ public:
     ) -> std::shared_ptr<IRigid_body>;
 
     //virtual auto get_node_transform() const -> glm::mat4 = 0;
-    virtual void set_collision_mode  (Collision_mode collision_mode)                           = 0;
-    virtual auto get_collision_mode  () const -> Collision_mode                                = 0;
     virtual auto get_collision_shape () const -> ICollision_shape*                             = 0;
-    virtual void set_static          ()                                                        = 0;
-    virtual void set_dynamic         ()                                                        = 0;
-    virtual void set_kinematic       ()                                                        = 0;
+    virtual void set_motion_mode     (const Motion_mode motion_mode)                           = 0;
+    virtual auto get_motion_mode     () const -> Motion_mode                                   = 0;
     virtual auto get_friction        () -> float                                               = 0;
     virtual void set_friction        (float friction)                                          = 0;
     virtual auto get_rolling_friction() -> float                                               = 0;

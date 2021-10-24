@@ -85,12 +85,12 @@ auto Light_mesh::get_light_transform(const Light& light) -> glm::mat4
     {
         case Light::Type::directional:
         {
-            return mat4(1.0f);
+            return mat4{1.0f};
         }
 
         case Light::Type::point:
         {
-            return mat4(1.0f);
+            return mat4{1.0f};
         }
 
         case Light::Type::spot:
@@ -119,7 +119,7 @@ auto Light_mesh::get_light_transform(const Light& light) -> glm::mat4
 
         default:
         {
-            return mat4(1.0f);
+            return mat4{1.0f};
         }
     }
 }
@@ -136,10 +136,10 @@ auto Light_mesh::point_in_light(const glm::vec3 point, const Light& light) -> bo
     const float spot_cutoff        = std::cos(outer_angle);
     const float range              = light.range;
     const mat4  light_from_world   = light.node()->node_from_world();
-    const vec3  view_in_light_     = vec3(light_from_world * vec4(point, 1.0f));
+    const vec3  view_in_light_     = vec3{light_from_world * vec4{point, 1.0f}};
     const float distance           = -view_in_light_.z;
     const vec3  view_in_light      = normalize(view_in_light_);
-    const float cos_angle          = dot(view_in_light, vec3(0.0f, 0.0f, -1.0f));
+    const float cos_angle          = dot(view_in_light, vec3{0.0f, 0.0f, -1.0f});
     const bool  outside_cone_angle = (cos_angle < spot_cutoff);
     const bool  outside_cone_range = (distance < 0.0f) || (distance > range);
     if (outside_cone_angle || outside_cone_range)

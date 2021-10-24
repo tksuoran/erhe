@@ -342,7 +342,7 @@ auto Geometry::make_point(const float x, const float y, const float z)
     const Point_id point_id        = make_point();
     auto* const    point_positions = point_attributes().find_or_create<glm::vec3>(c_point_locations);
 
-    point_positions->put(point_id, glm::vec3(x, y, z));
+    point_positions->put(point_id, glm::vec3{x, y, z});
 
     return point_id;
 }
@@ -356,8 +356,8 @@ auto Geometry::make_point(const float x, const float y, const float z, const flo
     auto* const    point_positions = point_attributes().find_or_create<glm::vec3>(c_point_locations);
     auto* const    point_texcoords = point_attributes().find_or_create<glm::vec2>(c_point_texcoords);
 
-    point_positions->put(point_id, glm::vec3(x, y, z));
-    point_texcoords->put(point_id, glm::vec2(s, t));
+    point_positions->put(point_id, glm::vec3{x, y, z});
+    point_texcoords->put(point_id, glm::vec2{s, t});
 
     return point_id;
 }

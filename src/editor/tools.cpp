@@ -1,6 +1,7 @@
 ﻿#include "tools.hpp"
 #include "application.hpp"
 #include "log.hpp"
+#include "time.hpp"
 #include "view.hpp"
 #include "window.hpp"
 #include "operations/compound_operation.hpp"
@@ -38,6 +39,7 @@ void Editor_tools::connect()
     require<Window>();
     m_brushes        = get<Brushes       >();
     m_editor_view    = get<Editor_view   >();
+    m_editor_time    = get<Editor_time   >();
     m_physics_tool   = get<Physics_tool  >();
     m_selection_tool = get<Selection_tool>();
     m_trs_tool       = get<Trs_tool      >();
@@ -74,12 +76,12 @@ void Editor_tools::initialize_component()
     builder.BuildRanges(&m_glyphRanges);
     io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 18.0f, nullptr, m_glyphRanges.Data);
 
-
-
     ImGui::StyleColorsDark();
     auto* const glfw_window = reinterpret_cast<GLFWwindow*>(get<Window>()->get_context_window()->get_glfw_window());
     ImGui_ImplGlfw_InitForOther(glfw_window, true);
     ImGui_ImplErhe_Init(get<erhe::graphics::OpenGL_state_tracker>());
+
+    get<Editor_tools>()->register_imgui_window(this);
 }
 
 void Editor_tools::gui_begin_frame()
@@ -142,11 +144,11 @@ void Editor_tools::set_priority_action(Action action)
 
     if (m_trs_tool)
     {
-    switch (action)
-    {
-        case Action::translate:
+        switch (action)
         {
-            m_trs_tool->set_rotate(false);
+            case Action::translate:
+            {
+                m_trs_tool->set_rotate(false);
                 m_trs_tool->set_translate(true);
                 break;
             }
@@ -273,6 +275,19 @@ void Editor_tools::render_update_tools(const Render_context& render_context)
     }
 }
 
+void Editor_tools::update_once_per_frame(const erhe::components::Time_context&)
+{
+    auto& pointer_context = m_editor_view->pointer_context;
+
+    for (auto tool : m_tools)
+    {
+        if ((tool->state() == Tool::State::Active) && tool->update(pointer_context))
+        {
+            return;
+        }
+    }
+}
+
 void Editor_tools::on_pointer()
 {
     auto& pointer_context = m_editor_view->pointer_context;
@@ -288,6 +303,8 @@ void Editor_tools::on_pointer()
         }
     }
 
+    log_input_events.trace("No tools are active, looking for ready tools\n");
+
     // Pass 2: Ready tools
     for (auto tool : m_tools)
     {
@@ -299,6 +316,8 @@ void Editor_tools::on_pointer()
         }
     }
 
+    log_input_events.trace("No tools are ready, looking for passive tools\n");
+
     // Oass 3: Passive tools
     for (auto tool : m_tools)
     {
@@ -309,6 +328,65 @@ void Editor_tools::on_pointer()
             return;
         }
     }
+}
+
+void Editor_tools::imgui(Pointer_context&)
+{
+    ImGui::Begin("Editor Tools");
+
+    ImGui::Text("Priority action: %s", c_action_strings[static_cast<int>(m_priority_action)].data());
+
+    const ImGuiTreeNodeFlags leaf_flags{ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Leaf};
+
+    if (ImGui::TreeNodeEx("Active", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        for (auto tool : m_tools)
+        {
+            if (tool->state() == Tool::State::Active)
+            {
+                ImGui::TreeNodeEx(tool->description(), leaf_flags);
+            }
+        }
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNodeEx("Ready", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        for (auto tool : m_tools)
+        {
+            if (tool->state() == Tool::State::Ready)
+            {
+                ImGui::TreeNodeEx(tool->description(), leaf_flags);
+            }
+        }
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNodeEx("Passive", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        for (auto tool : m_tools)
+        {
+            if (tool->state() == Tool::State::Passive)
+            {
+                ImGui::TreeNodeEx(tool->description(), leaf_flags);
+            }
+        }
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNodeEx("Disabled", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        for (auto tool : m_tools)
+        {
+            if (tool->state() == Tool::State::Disabled)
+            {
+                ImGui::TreeNodeEx(tool->description(), leaf_flags);
+            }
+        }
+        ImGui::TreePop();
+    }
+    
+    ImGui::End();
 }
 
 void Editor_tools::delete_selected_meshes()

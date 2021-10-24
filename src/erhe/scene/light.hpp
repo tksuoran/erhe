@@ -41,7 +41,7 @@ public:
     auto world_from_texture() const -> glm::mat4;
 
     Type      type            {Type::directional};
-    glm::vec3 color           {glm::vec3(1.0f, 1.0f, 1.0f)};
+    glm::vec3 color           {1.0f, 1.0f, 1.0f};
     float     intensity       {1.0f};
     float     range           {100.0f};
     float     inner_spot_angle{glm::pi<float>() * 0.4f};
@@ -72,20 +72,24 @@ public:
     public:
         Transform clip_from_node;
         Transform clip_from_world;
-        Transform texture_from_world{glm::mat4(1.0f), glm::mat4(1.0f)};
+        Transform texture_from_world{glm::mat4{1.0f}, glm::mat4{1.0f}};
     };
 
     Transforms m_transforms;
 
-    static constexpr glm::mat4 texture_from_clip{0.5f, 0.0f, 0.0f, 0.0f,
-                                                 0.0f, 0.5f, 0.0f, 0.0f,
-                                                 0.0f, 0.0f, 1.0f, 0.0f,
-                                                 0.5f, 0.5f, 0.0f, 1.0f};
+    static constexpr glm::mat4 texture_from_clip{
+        0.5f, 0.0f, 0.0f, 0.0f,
+        0.0f, 0.5f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.5f, 0.5f, 0.0f, 1.0f
+    };
 
-    static constexpr glm::mat4 clip_from_texture{ 2.0f, 0.0f, 0.0f, 0.0f,
-                                                  0.0f, 2.0f, 0.0f, 0.0f,
-                                                  0.0f, 0.0f, 1.0f, 0.0f,
-                                                 -1.0f,-1.0f, 0.0f, 1.0f};
+    static constexpr glm::mat4 clip_from_texture{
+         2.0f, 0.0f, 0.0f, 0.0f,
+         0.0f, 2.0f, 0.0f, 0.0f,
+         0.0f, 0.0f, 1.0f, 0.0f,
+        -1.0f,-1.0f, 0.0f, 1.0f
+    };
 };
 
 } // namespace erhe::scene

@@ -104,8 +104,9 @@ void Mesh_properties::render(const Render_context& render_context)
         {
             continue;
         }
-        const glm::mat4 world_from_node = mesh->node() ? mesh->node()->world_from_node() 
-                                                       : glm::mat4(1.0f);
+        const glm::mat4 world_from_node = mesh->node()
+            ? mesh->node()->world_from_node() 
+            : glm::mat4{1.0f};
         for (auto& primitive : mesh->primitives)
         {
             const auto geometry = primitive.primitive_geometry->source_geometry;

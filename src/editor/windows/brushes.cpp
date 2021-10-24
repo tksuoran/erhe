@@ -221,7 +221,7 @@ auto Brushes::update(Pointer_context& pointer_context) -> bool
     m_hover_normal      = m_hover_content && pointer_context.hover_valid ? pointer_context.hover_normal        : optional<vec3>{};
     if (m_hover_node && m_hover_position.has_value())
     {
-        m_hover_position = m_hover_node->node_from_world() * vec4(m_hover_position.value(), 1.0f);
+        m_hover_position = m_hover_node->node_from_world() * vec4{m_hover_position.value(), 1.0f};
     }
 
     if ((m_state == State::Passive) &&
@@ -261,7 +261,7 @@ auto Brushes::get_brush_transform() -> mat4
 {
     if ((m_hover_node == nullptr) || (m_hover_geometry == nullptr) || (m_brush == nullptr))
     {
-        return mat4(1);
+        return mat4{1};
     }
 
     const Polygon_id polygon_id = static_cast<const Polygon_id>(m_hover_local_index);

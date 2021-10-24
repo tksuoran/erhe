@@ -43,7 +43,7 @@ public:
 
     virtual void calculate_local_inertia(const float mass, glm::vec3& inertia) const = 0;
     virtual auto is_convex              () const -> bool = 0;
-    virtual void add_child_shape        (ICollision_shape* shape, const glm::mat3 basis, const glm::vec3 origin) = 0;
+    virtual void add_child_shape        (std::shared_ptr<ICollision_shape> shape, const glm::mat3 basis, const glm::vec3 origin) = 0;
 };
 
 

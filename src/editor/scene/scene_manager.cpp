@@ -105,7 +105,15 @@ void Scene_manager::initialize_camera()
     m_scene_root->scene().nodes.emplace_back(node);
     //const glm::mat4 identity{1.0f};
     //node->transforms.parent_from_node.set(identity);
-    node->transforms.parent_from_node.set_translation(0.0f, 1.65f, 0.0f);
+
+    glm::vec3 position{4.0f, 3.0f, 4.0f};
+    mat4 m = erhe::toolkit::create_look_at(
+        position,                 // eye
+        vec3{0.0f,  0.0f, 0.0f},  // center
+        vec3{0.0f,  0.0f, 1.0f}   // up
+    );
+    node->transforms.parent_from_node.set(m);
+
     node->update();
     node->attach(m_camera);
 
@@ -142,8 +150,8 @@ void Scene_manager::make_brushes()
             auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
                 std::move(
                     make_box(
-                        vec3(40.0f, 1.0f, 40.0f),
-                        ivec3(40, 1, 40)
+                        vec3{40.0f, 1.0f, 40.0f},
+                        ivec3{40, 1, 40}
                     )
                 )
             );
@@ -196,7 +204,7 @@ void Scene_manager::make_brushes()
     }
 
     // Platonic solids
-    if constexpr (false)
+    if constexpr (true)
     {
         execution_queue.enqueue(
             [this]()
@@ -207,16 +215,16 @@ void Scene_manager::make_brushes()
                 constexpr bool instantiate = true;
 
                 constexpr float original_scale = 1.0f;
-                //make_brush(instantiate, make_dodecahedron (original_scale), context);
-                //make_brush(instantiate, make_icosahedron  (original_scale), context);
-                //make_brush(instantiate, make_octahedron   (original_scale), context);
+                make_brush(instantiate, make_dodecahedron (original_scale), context);
+                make_brush(instantiate, make_icosahedron  (original_scale), context);
+                make_brush(instantiate, make_octahedron   (original_scale), context);
                 make_brush(instantiate, make_tetrahedron  (original_scale), context);
-                //make_brush(instantiate, make_cuboctahedron(original_scale), context);
+                make_brush(instantiate, make_cuboctahedron(original_scale), context);
                 make_brush(
                     instantiate,
                     make_cube(original_scale),
                     context,
-                    erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3(original_scale * 0.5f))
+                    erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{original_scale * 0.5f})
                 );
             }
         );
@@ -233,28 +241,15 @@ void Scene_manager::make_brushes()
                 const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 constexpr bool instantiate = true;
 
+                //make_brush(
+                //    instantiate,
+                //    make_box(3.0f, 2.0f, 4.0f),
+                //    context,
+                //    erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{1.5f, 1.0f, 2.0f})
+                //);
                 make_brush(
                     instantiate,
-                    make_box(1.0f, 2.0f, 0.5f),
-                    context,
-                    erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3(0.5f, 1.0f, 0.25f))
-                );
-
-                make_brush(
-                    instantiate,
-                    make_sphere(1.0f, 12 * 4, 4 * 6),
-                    context,
-                    erhe::physics::ICollision_shape::create_sphere_shape_shared(1.0f)
-                );
-                make_brush(
-                    instantiate,
-                    make_sphere(1.0f, 12 * 3, 3 * 6),
-                    context,
-                    erhe::physics::ICollision_shape::create_sphere_shape_shared(1.0f)
-                );
-                make_brush(
-                    instantiate,
-                    make_sphere(1.0f, 12 * 2, 2 * 6),
+                    make_sphere(1.0f, 24 * 4, 6 * 4),
                     context,
                     erhe::physics::ICollision_shape::create_sphere_shape_shared(1.0f)
                 );
@@ -262,7 +257,9 @@ void Scene_manager::make_brushes()
         );
     }
 
-#if 0
+    // Torus
+    if constexpr (true)
+    {
         execution_queue.enqueue(
             [this]()
             {
@@ -288,25 +285,25 @@ void Scene_manager::make_brushes()
                     const double     subdivisions        = 16.0;
                     const double     scaled_major_radius = major_radius * scale;
                     const double     scaled_minor_radius = minor_radius * scale;
-                    const double     major_circumference = 2.0 * glm::pi<double>() * scaled_major_radius;
+                    const double     major_circumference = glm::two_pi<double>() * scaled_major_radius;
                     const double     capsule_length      = major_circumference / subdivisions;
                     const glm::dvec3 forward{0.0, 1.0, 0.0};
                     const glm::dvec3 side   {scaled_major_radius, 0.0, 0.0};
 
-                    // TODO Fix new
-                    auto shape = erhe::physics::ICollision_shape::create_capsule_shape_shared(
+                    auto capsule = erhe::physics::ICollision_shape::create_capsule_shape_shared(
                         erhe::physics::Axis::Z,
                         static_cast<float>(scaled_minor_radius),
                         static_cast<float>(capsule_length)
                     );
-                    for (int rel = 0; rel < (int)subdivisions; rel++)
+                    for (int i = 0; i < static_cast<int>(subdivisions); i++)
                     {
-                        const double     angle    = (rel * 2.0 * glm::two_pi<double>()) / subdivisions;
-                        const glm::dvec3 position = glm::rotate(side, angle, forward);
-                        const glm::dquat q        = glm::angleAxis(angle, forward);
+                        const double     rel      = static_cast<double>(i) / subdivisions;
+                        const double     theta    = rel * glm::two_pi<double>();
+                        const glm::dvec3 position = glm::rotate(side, theta, forward);
+                        const glm::dquat q        = glm::angleAxis(theta, forward);
                         const glm::dmat3 m        = glm::toMat3(q);
 
-                        torus_shape->add_child_shape(shape.get(), glm::mat3{m}, glm::vec3{position});
+                        torus_shape->add_child_shape(capsule, glm::mat3{m}, glm::vec3{position});
                     }
                     return torus_shape;
                 };
@@ -320,9 +317,9 @@ void Scene_manager::make_brushes()
                 );
             }
         );
-#endif
+    }
 
-    // cylinder and cone
+    // Cylinder and cone
     if constexpr (true)
     {
         execution_queue.enqueue(
@@ -332,14 +329,16 @@ void Scene_manager::make_brushes()
 
                 const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 constexpr bool instantiate = true;
+                auto cylinder_geometry = make_cylinder(-1.0f, 1.0f, 1.0f, true, true, 32, 2); // always axis = x
+                cylinder_geometry.transform(erhe::toolkit::mat4_swap_xy);                     // convert to axis = y
 
                 make_brush(
                     instantiate,
-                    make_cylinder(-1.0f, 1.0f, 1.0f, true, true, 32, 2),
+                    std::move(cylinder_geometry),
                     context,
                     erhe::physics::ICollision_shape::create_cylinder_shape_shared(
-                        erhe::physics::Axis::X,
-                        glm::vec3(1.0f, 1.0f, 1.0f)
+                        erhe::physics::Axis::Y,
+                        glm::vec3{1.0f, 1.0f, 1.0f}
                     )
                 );
             }
@@ -352,12 +351,16 @@ void Scene_manager::make_brushes()
 
                 const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 constexpr bool instantiate = true;
+                auto cone_geometry = make_cone(-1.0f, 1.0f, 1.0f, true, 42, 4); // always axis = x
+                cone_geometry.transform(erhe::toolkit::mat4_swap_xy);           // convert to axis = y
 
                 make_brush(
                     instantiate,
-                    make_cone(-1.0f, 1.0f, 1.0f, true, 42, 4),
+                    std::move(cone_geometry),
                     context,
-                    erhe::physics::ICollision_shape::create_cone_shape_shared(erhe::physics::Axis::X, 1.0f, 2.0f)
+                    erhe::physics::ICollision_shape::create_cone_shape_shared(
+                        erhe::physics::Axis::Y, 1.0f, 2.0f
+                    )
                 );
             }
         );
@@ -368,9 +371,9 @@ void Scene_manager::make_brushes()
     {
         ZoneScopedN("test scene for anisotropic debugging");
 
-        auto x_material = m_scene_root->make_material("x", vec4(1.000f, 0.000f, 0.0f, 1.0f), 0.3f, 0.0f, 0.3f);
-        auto y_material = m_scene_root->make_material("y", vec4(0.228f, 1.000f, 0.0f, 1.0f), 0.3f, 0.0f, 0.3f);
-        auto z_material = m_scene_root->make_material("z", vec4(0.000f, 0.228f, 1.0f, 1.0f), 0.3f, 0.0f, 0.3f);
+        auto x_material = m_scene_root->make_material("x", vec4{1.000f, 0.000f, 0.0f, 1.0f}, 0.3f, 0.0f, 0.3f);
+        auto y_material = m_scene_root->make_material("y", vec4{0.228f, 1.000f, 0.0f, 1.0f}, 0.3f, 0.0f, 0.3f);
+        auto z_material = m_scene_root->make_material("z", vec4{0.000f, 0.228f, 1.0f, 1.0f}, 0.3f, 0.0f, 0.3f);
 
         const float ring_major_radius = 4.0f;
         const float ring_minor_radius = 0.55f; // 0.15f;
@@ -385,9 +388,9 @@ void Scene_manager::make_brushes()
         auto y_rotate_ring_mesh = m_scene_root->make_mesh_node("Y ring", rotate_ring_pg, y_material, nullptr, pos);
         auto z_rotate_ring_mesh = m_scene_root->make_mesh_node("Z ring", rotate_ring_pg, z_material, nullptr, pos);
 
-        x_rotate_ring_mesh->node()->transforms.parent_from_node.set         ( mat4(1));
-        y_rotate_ring_mesh->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3(0.0f, 0.0f, 1.0f));
-        z_rotate_ring_mesh->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
+        x_rotate_ring_mesh->node()->transforms.parent_from_node.set         ( mat4{1});
+        y_rotate_ring_mesh->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f});
+        z_rotate_ring_mesh->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f});
     }
 
     // Johnson solids
@@ -422,8 +425,7 @@ void Scene_manager::make_brushes()
     buffer_transfer_queue().flush();
 }
 
-auto Scene_manager::buffer_transfer_queue()
--> erhe::graphics::Buffer_transfer_queue&
+auto Scene_manager::buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&
 {
     Expects(m_mesh_memory->gl_buffer_transfer_queue);
 
@@ -436,7 +438,7 @@ void Scene_manager::add_floor()
 
     auto floor_material = m_scene_root->make_material(
         "Floor",
-        vec4(0.4f, 0.4f, 0.4f, 1.0f),
+        vec4{0.4f, 0.4f, 0.4f, 1.0f},
         0.5f,
         0.8f
     );
@@ -538,7 +540,7 @@ void Scene_manager::make_mesh_nodes()
         const auto primitive_geometry = brush->primitive_geometry;
         float      x = static_cast<float>(entry.rectangle.x) + 0.5f * static_cast<float>(entry.rectangle.width);
         float      z = static_cast<float>(entry.rectangle.y) + 0.5f * static_cast<float>(entry.rectangle.height);
-        float      y = -primitive_geometry->bounding_box_min.y + 1.0f;
+        float      y = -primitive_geometry->bounding_box_min.y;
         x -= 0.5f * static_cast<float>(group_width);
         z -= 0.5f * static_cast<float>(group_depth);
         auto material = m_scene_root->materials().at(material_index);
@@ -591,8 +593,8 @@ auto Scene_manager::make_directional_light(
     auto node = make_shared<Node>(name);
     mat4 m = erhe::toolkit::create_look_at(
         position,                 // eye
-        vec3(0.0f,  0.0f, 0.0f),  // center
-        vec3(0.0f,  0.0f, 1.0f)   // up
+        vec3{0.0f,  0.0f, 0.0f},  // center
+        vec3{0.0f,  0.0f, 1.0f}   // up
     );
     node->transforms.parent_from_node.set(m);
 
@@ -629,7 +631,7 @@ auto Scene_manager::make_spot_light(
     light->projection()->z_far           = 100.0f;
 
     auto node = make_shared<Node>(name);
-    const mat4 m = erhe::toolkit::create_look_at(position, target, vec3(0.0f, 0.0f, 1.0f));
+    const mat4 m = erhe::toolkit::create_look_at(position, target, vec3{0.0f, 0.0f, 1.0f});
     node->transforms.parent_from_node.set(m);
 
     attach(
@@ -657,10 +659,10 @@ void Scene_manager::make_punctual_light_nodes()
         const float x = 30.0f * cos(rel * 2.0f * pi<float>());
         const float z = 30.0f * sin(rel * 2.0f * pi<float>());
 
-        const vec3   color     = vec3(r, g, b);
+        const vec3   color     = vec3{r, g, b};
         const float  intensity = (8.0f / static_cast<float>(directional_light_count));
         const string name      = fmt::format("Directional light {}", i);
-        const vec3   position  = vec3(   x, 30.0f, z);
+        const vec3   position  = vec3{x, 30.0f, z};
         make_directional_light(
             name,
             position,
@@ -683,17 +685,19 @@ void Scene_manager::make_punctual_light_nodes()
 
         erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
 
-        const vec3   color     = vec3(r, g, b);
+        const vec3   color     = vec3{r, g, b};
         const float  intensity = 100.0f;
         const string name      = fmt::format("Spot {}", i);
 
         const float x_pos = R * sin(t * 6.0f * 2.0f * pi<float>());
         const float z_pos = R * cos(t * 6.0f * 2.0f * pi<float>());
 
-        const vec3 position        = vec3(x_pos, 10.0f, z_pos);
-        const vec3 target          = vec3(x_pos * 0.5, 0.0f, z_pos * 0.5f);
-        const vec2 spot_cone_angle = vec2(pi<float>() / 5.0f,
-                                          pi<float>() / 4.0f);
+        const vec3 position        = vec3{x_pos, 10.0f, z_pos};
+        const vec3 target          = vec3{x_pos * 0.5, 0.0f, z_pos * 0.5f};
+        const vec2 spot_cone_angle = vec2{
+            pi<float>() / 5.0f,
+            pi<float>() / 4.0f
+        };
         make_spot_light(name, position, target, color, intensity, spot_cone_angle);
     }
 }
@@ -733,22 +737,22 @@ void Scene_manager::animate_lights(double time_d)
         const float R   = 4.0f;
         const float r   = 8.0f;
 
-        const auto eye = vec3(
+        const auto eye = vec3{
             R * std::sin(rel + t * 0.52f),
             8.0f,
             R * std::cos(rel + t * 0.71f)
-        );
+        };
 
-        const auto center = vec3(
+        const auto center = vec3{
             r * std::sin(rel + t * 0.35f),
             0.0f,
             r * std::cos(rel + t * 0.93f)
-        );
+        };
 
         const auto m = erhe::toolkit::create_look_at(
             eye,
             center,
-            vec3(0.0f, 0.0f, 1.0f) // up
+            vec3{0.0f, 0.0f, 1.0f} // up
         );
 
         l->node()->transforms.parent_from_node.set(m);
@@ -762,7 +766,7 @@ void Scene_manager::add_scene()
 {
     ZoneScoped;
 
-    m_scene_root->content_layer().ambient_light = vec4(0.1f, 0.15f, 0.2f, 0.0f);
+    m_scene_root->content_layer().ambient_light = vec4{0.1f, 0.15f, 0.2f, 0.0f};
 
     make_brushes();
     make_mesh_nodes();
@@ -787,8 +791,10 @@ int sort_value(Light::Type light_type)
 class Light_comparator
 {
 public:
-    inline auto operator()(const shared_ptr<Light>& lhs,
-                           const shared_ptr<Light>& rhs) -> bool
+    inline auto operator()(
+        const shared_ptr<Light>& lhs,
+        const shared_ptr<Light>& rhs
+    ) -> bool
     {
         return sort_value(lhs->type) < sort_value(rhs->type);
     }

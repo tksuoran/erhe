@@ -78,8 +78,7 @@ public:
     Property_map<Polygon_id, vec3>* polygon_centroids{nullptr};
     Property_map<Polygon_id, vec3>* polygon_normals  {nullptr};
 
-    auto get_point(const int slice, const int stack)
-    -> Point_id
+    auto get_point(const int slice, const int stack) -> Point_id
     {
         return points[std::make_pair(slice, stack)];
     }
@@ -230,7 +229,7 @@ public:
         {
             if (base && is_bottom && (bottom_radius != 0.0) && use_bottom)
             {
-                corner_normals->put(corner_id, vec3(-1.0f, 0.0f, 0.0f));
+                corner_normals->put(corner_id, vec3{-1.0f, 0.0f, 0.0f});
                 corner_tangents->put(
                     corner_id,
                     bottom_not_singular
@@ -352,12 +351,12 @@ public:
                 const vec4 t1              = point_tangents->get(p0);
                 const vec4 t2              = point_tangents->get(p1);
                 const vec3 average_tangent = normalize(glm::vec3{t1} + glm::vec3{t2});
-                corner_tangents->put(tip_corner_id, glm::vec4(average_tangent, t1.w));
+                corner_tangents->put(tip_corner_id, glm::vec4{average_tangent, t1.w});
 
                 const vec4 b1              = point_bitangents->get(p0);
                 const vec4 b2              = point_bitangents->get(p1);
                 const vec3 average_bitangent = normalize(glm::vec3{b1} + glm::vec3{b2});
-                corner_bitangents->put(tip_corner_id, glm::vec4(average_bitangent, b1.w));
+                corner_bitangents->put(tip_corner_id, glm::vec4{average_bitangent, b1.w});
 
                 const vec2 uv1              = point_texcoords->get(p0);
                 const vec2 uv2              = point_texcoords->get(p1);
@@ -451,10 +450,10 @@ public:
 
                 const Polygon_id polygon_id    = geometry.make_polygon();
                 const Corner_id  tip_corner_id = make_corner(polygon_id, slice, stack_division + 1);
-                make_corner(polygon_id, slice, stack);
+                make_corner(polygon_id, slice,     stack);
                 make_corner(polygon_id, slice + 1, stack);
 
-                auto p0 = get_point(slice, stack);
+                auto p0 = get_point(slice,     stack);
                 auto p1 = get_point(slice + 1, stack);
 
                 const vec3 n1             = point_normals->get(p0);
@@ -622,7 +621,8 @@ auto make_cylinder(
                 use_bottom,
                 use_top,
                 slice_count,
-                stack_division};
+                stack_division
+            };
             builder.build();
         }
     );

@@ -30,10 +30,13 @@ dependencies.
     are done automatically in correct order
 
     -   C++ constructor
-        -   Other components might not yet be even created
+        -   Other components might not yet be constructed
+        -   Components can be constructed in any order
         -   Can do initialization which do not depend on other components
 
     -   connect():
+
+        -   This methods is called when all components have been constructed
 
         -   Other components can be fetched with get<> or require<>
 
@@ -105,9 +108,9 @@ erhe::log namespace provides classes to do very basic logging.
 Also included are macros VERIFY(condition) and FATAL(format, ...) which
 can be used in place of assert() and unrecoverable error.
 
-## erhe::mesh namespace
+## erhe::primitive namespace
 
-erhe::mesh namespace provides classes to convert erhe::geometry::Geometry
+erhe::primitive namespace provides classes to convert erhe::geometry::Geometry
 to renderable vertex and index buffers.
 
 ## erhe::scene namespace

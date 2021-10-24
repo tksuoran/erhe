@@ -30,10 +30,10 @@ public:
     // Implements View
     void update        () override;
     void on_enter      () override;
-    void on_mouse_move (double x, double y) override;
-    void on_mouse_click(erhe::toolkit::Mouse_button button, int count) override;
-    void on_key_press  (erhe::toolkit::Keycode code, uint32_t modifier_mask) override;
-    void on_key_release(erhe::toolkit::Keycode code, uint32_t modifier_mask) override;
+    void on_mouse_move (const double x, const double y) override;
+    void on_mouse_click(const erhe::toolkit::Mouse_button button, const int count) override;
+    void on_key_press  (const erhe::toolkit::Keycode code, const uint32_t modifier_mask) override;
+    void on_key_release(const erhe::toolkit::Keycode code, const uint32_t modifier_mask) override;
 
     void on_key        (bool pressed, erhe::toolkit::Keycode code, uint32_t modifier_mask);
     void update_pointer();

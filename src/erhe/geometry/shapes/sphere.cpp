@@ -104,7 +104,7 @@ public:
         //                        // (relSlice == 0.0) ||
         //                           (rel_slice ==  1.0);
 
-        const vec3 P = vec3(xP, yP, zP);
+        const vec3 P = vec3{xP, yP, zP};
 
         point_locations ->put(point_id, P);
         point_normals   ->put(point_id, N);

@@ -21,7 +21,7 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(${_target}
     PUBLIC
-        embree
+        #embree
         erhe_log
         erhe_primitive
         erhe_scene

@@ -2,7 +2,7 @@
 #include "erhe/raytrace/device.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include <embree3/rtcore.h>
+//#include <embree3/rtcore.h>
 #include <mutex>
 
 #include <gsl/gsl_assert>

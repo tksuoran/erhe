@@ -147,7 +147,7 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection&   meshes,
             }
 
             const vec3     id_offset_vec3  = vec3_from_uint(m_id_offset);
-            const vec3     id_offset_vec4  = vec4(id_offset_vec3, 0.0f);
+            const vec4     id_offset_vec4  = vec4{id_offset_vec3, 0.0f};
             const mat4     world_from_node = node->world_from_node();
             const uint32_t material_index  = (primitive.material != nullptr) ? static_cast<uint32_t>(primitive.material->index) : 0u;
             const uint32_t extra2          = 0;
@@ -225,13 +225,13 @@ auto Base_renderer::update_light_buffer(
         const auto node = light->node();
         VERIFY(node);
 
-        const vec3  direction            = vec3(node->world_from_node() * vec4(0.0f, 0.0f, 1.0f, 0.0f));
-        const vec3  position             = vec3(node->world_from_node() * vec4(0.0f, 0.0f, 0.0f, 1.0f));
-        const vec4  radiance             = vec4(light->intensity * light->color, light->range);
+        const vec3  direction            = vec3{node->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
+        const vec3  position             = vec3{node->world_from_node() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+        const vec4  radiance             = vec4{light->intensity * light->color, light->range};
         const float inner_spot_cos       = std::cos(light->inner_spot_angle * 0.5f);
         const float outer_spot_cos       = std::cos(light->outer_spot_angle * 0.5f);
-        const vec4  position_inner_spot  = vec4(position, inner_spot_cos);
-        const vec4  direction_outer_spot = vec4(glm::normalize(vec3(direction)), outer_spot_cos);
+        const vec4  position_inner_spot  = vec4{position, inner_spot_cos};
+        const vec4  direction_outer_spot = vec4{glm::normalize(vec3{direction}), outer_spot_cos};
         write(light_gpu_data, m_light_writer.write_offset + offsets.light.texture_from_world,           as_span(light->texture_from_world()));
         write(light_gpu_data, m_light_writer.write_offset + offsets.light.position_and_inner_spot_cos,  as_span(position_inner_spot));
         write(light_gpu_data, m_light_writer.write_offset + offsets.light.direction_and_outer_spot_cos, as_span(direction_outer_spot));

@@ -337,7 +337,7 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                             }
                             colors.emplace_back(float_args[3], float_args[4], float_args[5]);
                             has_vertex_colors = true;
-                            //point_colors->put(point_id, glm::vec3(float_args[3], float_args[4], float_args[5]));
+                            //point_colors->put(point_id, glm::vec3{float_args[3], float_args[4], float_args[5]});
                         }
 
                         positions.emplace_back(float_args[0], float_args[1], float_args[2]);

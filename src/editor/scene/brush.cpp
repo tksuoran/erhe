@@ -56,11 +56,11 @@ Reference_frame::Reference_frame(
 
 void Reference_frame::transform_by(const mat4 m)
 {
-    centroid = m * vec4(centroid, 1.0f);
-    position = m * vec4(position, 1.0f);
-    B = m * vec4(B, 0.0f);
-    T = m * vec4(T, 0.0f);
-    N = m * vec4(N, 0.0f);
+    centroid = m * vec4{centroid, 1.0f};
+    position = m * vec4{position, 1.0f};
+    B = m * vec4{B, 0.0f};
+    T = m * vec4{T, 0.0f};
+    N = m * vec4{N, 0.0f};
     B = normalize(cross(N, T));
     N = normalize(cross(T, B));
     T = normalize(cross(B, N));

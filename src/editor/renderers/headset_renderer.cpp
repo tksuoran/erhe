@@ -128,7 +128,7 @@ Controller_visualization::Controller_visualization(
     erhe::scene::Node* view_root
 )
 {
-    auto controller_material = scene_root.make_material("Controller", glm::vec4(0.1f, 0.1f, 0.2f, 1.0f));
+    auto controller_material = scene_root.make_material("Controller", glm::vec4{0.1f, 0.1f, 0.2f, 1.0f});
     //constexpr float length = 0.05f;
     //constexpr float radius = 0.02f;
     auto controller_geometry = erhe::geometry::shapes::make_torus(0.05f, 0.0025f, 22, 8);
@@ -143,7 +143,7 @@ Controller_visualization::Controller_visualization(
         controller_material,
         *scene_root.controller_layer().get(),
         view_root,
-        glm::vec3(-9999.9f, -9999.9f, -9999.9f)
+        glm::vec3{-9999.9f, -9999.9f, -9999.9f}
     );
 }
 

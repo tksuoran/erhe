@@ -72,7 +72,7 @@ void Node_properties::imgui(Pointer_context&)
                 for (int row = 0; row < 4; row++)
                 {
                     const std::string label     = fmt::format("M{}", row);
-                    glm::vec4   rowVector = glm::vec4(transform[0][row], transform[1][row], transform[2][row], transform[3][row]);
+                    glm::vec4         rowVector = glm::vec4{transform[0][row], transform[1][row], transform[2][row], transform[3][row]};
                     ImGui::InputFloat4(label.c_str(), &rowVector.x, "%.3f");
                     // TODO rowVector back to matrix?
                 }

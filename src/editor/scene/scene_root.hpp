@@ -117,7 +117,7 @@ public:
         const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry,
         const std::shared_ptr<erhe::primitive::Material>&           material,
         erhe::scene::Node*                                          parent   = nullptr,
-        const glm::vec3                                             position = glm::vec3(0.0f)
+        const glm::vec3                                             position = glm::vec3{0.0f}
     ) -> std::shared_ptr<erhe::scene::Mesh>;
 
     auto make_mesh_node(
@@ -126,7 +126,7 @@ public:
         const std::shared_ptr<erhe::primitive::Material>&           material,
         erhe::scene::Layer&                                         layer,
         erhe::scene::Node*                                          parent   = nullptr,
-        const glm::vec3                                             position = glm::vec3(0.0f)
+        const glm::vec3                                             position = glm::vec3{0.0f}
     ) -> std::shared_ptr<erhe::scene::Mesh>;
 
     auto add          (const std::shared_ptr<erhe::primitive::Material>& material) -> std::shared_ptr<erhe::primitive::Material>;

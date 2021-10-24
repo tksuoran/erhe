@@ -18,7 +18,7 @@ auto Pointer_context::position_in_world(const float z) const -> glm::vec3
 
     const float     depth_range_near  = 0.0f;
     const float     depth_range_far   = 1.0f;
-    const glm::vec3 pointer_in_window = glm::vec3(static_cast<float>(pointer_x), static_cast<float>(pointer_y), z);
+    const glm::vec3 pointer_in_window = glm::vec3{static_cast<float>(pointer_x), static_cast<float>(pointer_y), z};
     return erhe::toolkit::unproject(
         camera->world_from_clip(),
         pointer_in_window,

@@ -48,6 +48,8 @@ public:
     void imgui(Pointer_context& pointer_context) override;
 
 private:
+    void update_internal(Pointer_context& pointer_context);
+
     State                                       m_state{State::Passive};
     std::shared_ptr<Scene_root>                 m_scene_root;
 
@@ -59,13 +61,14 @@ private:
     glm::vec3                                   m_drag_position_end    {0.0f, 0.0f, 0.0f};
     std::unique_ptr<erhe::physics::IConstraint> m_drag_constraint;
 
-    float m_tau                     { 0.001f};
-    float m_damping                 { 1.00f};
-    float m_impulse_clamp           { 1.00f};
-    float m_linear_damping          { 0.99f};
-    float m_angular_damping         { 0.99f};
-    float m_original_linear_damping { 0.00f};
-    float m_original_angular_damping{ 0.00f};
+    float    m_tau                     { 0.001f};
+    float    m_damping                 { 1.00f};
+    float    m_impulse_clamp           { 1.00f};
+    float    m_linear_damping          { 0.99f};
+    float    m_angular_damping         { 0.99f};
+    float    m_original_linear_damping { 0.00f};
+    float    m_original_angular_damping{ 0.00f};
+    uint64_t m_last_update_frame_number{0};
 };
 
 } // namespace editor

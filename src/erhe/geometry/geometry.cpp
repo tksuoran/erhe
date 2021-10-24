@@ -460,7 +460,7 @@ auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) 
     return true;
 }
 
-void Geometry::transform(const mat4& m)
+auto Geometry::transform(const mat4& m) -> Geometry&
 {
     ZoneScoped;
 
@@ -478,12 +478,12 @@ void Geometry::transform(const mat4& m)
     {
         if ((point_locations != nullptr) && point_locations->has(point_id))
         {
-            point_locations->put(point_id, vec3(m * vec4(point_locations->get(point_id), 1.0f)));
+            point_locations->put(point_id, vec3{m * vec4{point_locations->get(point_id), 1.0f}});
         }
 
         if ((point_normals != nullptr) && point_normals->has(point_id))
         {
-            point_normals->put(point_id, vec3(it * vec4(point_normals->get(point_id), 0.0f)));
+            point_normals->put(point_id, vec3{it * vec4{point_normals->get(point_id), 0.0f}});
         }
     }
 
@@ -491,12 +491,12 @@ void Geometry::transform(const mat4& m)
     {
         if ((polygon_centroids != nullptr) && polygon_centroids->has(polygon_id))
         {
-            polygon_centroids->put(polygon_id, vec3(m * vec4(polygon_centroids->get(polygon_id), 1.0f)));
+            polygon_centroids->put(polygon_id, vec3{m * vec4{polygon_centroids->get(polygon_id), 1.0f}});
         }
 
         if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id))
         {
-            polygon_normals->put(polygon_id, vec3(it * vec4(polygon_normals->get(polygon_id), 0.0f)));
+            polygon_normals->put(polygon_id, vec3{it * vec4{polygon_normals->get(polygon_id), 0.0f}});
         }
     }
 
@@ -504,17 +504,25 @@ void Geometry::transform(const mat4& m)
     {
         if ((corner_normals != nullptr) && corner_normals->has(corner_id))
         {
-            corner_normals->put(corner_id, vec3(it * vec4(corner_normals->get(corner_id), 0.0f)));
+            corner_normals->put(corner_id, vec3{it * vec4{corner_normals->get(corner_id), 0.0f}});
         }
 
         if ((corner_tangents != nullptr) && corner_tangents->has(corner_id))
         {
             const vec4  t0_sign = corner_tangents->get(corner_id);
-            const vec3  t0      = vec3(t0_sign);
+            const vec3  t0      = vec3{t0_sign};
             const float sign    = t0_sign.w;
-            corner_tangents->put(corner_id, vec4(vec3(it * vec4(t0, 0.0f)), sign));
+            corner_tangents->put(corner_id, vec4{vec3{it * vec4{t0, 0.0f}}, sign});
         }
     }
+
+    auto det = glm::determinant(m);
+    if (det < 0.0f)
+    {
+        reverse_polygons();
+    }
+
+    return *this;
 }
 
 void Geometry::reverse_polygons()

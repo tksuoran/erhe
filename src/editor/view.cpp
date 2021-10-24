@@ -100,7 +100,7 @@ void Editor_view::update_pointer()
                             if (node)
                             {
                                 auto world_from_node = node->world_from_node();
-                                pointer_context.hover_normal = glm::vec3(world_from_node * glm::vec4(local_normal, 0.0f));
+                                pointer_context.hover_normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
                             }
                             else
                             {
@@ -120,6 +120,8 @@ void Editor_view::update_pointer()
         pointer_context.hover_primitive   = 0;
         pointer_context.hover_local_index = 0;
     }
+
+    pointer_context.frame_number = m_editor_time->m_frame_number;
 }
 
 void Editor_view::on_enter()
@@ -129,9 +131,9 @@ void Editor_view::on_enter()
 }
 
 void Editor_view::on_key(
-    bool                   pressed,
-    erhe::toolkit::Keycode code,
-    uint32_t               modifier_mask
+    const bool                   pressed,
+    const erhe::toolkit::Keycode code,
+    const uint32_t               modifier_mask
 )
 {
     ImGuiIO& io = ImGui::GetIO();
@@ -185,8 +187,8 @@ void Editor_view::on_key(
 }
 
 void Editor_view::on_mouse_click(
-    erhe::toolkit::Mouse_button button,
-    int                         count
+    const erhe::toolkit::Mouse_button button,
+    const int                         count
 )
 {
     ImGuiIO& io = ImGui::GetIO();
@@ -202,7 +204,7 @@ void Editor_view::on_mouse_click(
     m_editor_tools->on_pointer();
 }
 
-void Editor_view::on_mouse_move(double x, double y)
+void Editor_view::on_mouse_move(const double x, const double y)
 {
     ImGuiIO& io = ImGui::GetIO();
     if (io.WantCaptureMouse && !m_editor_rendering->is_content_in_focus())
@@ -218,16 +220,16 @@ void Editor_view::on_mouse_move(double x, double y)
 }
 
 void Editor_view::on_key_press(
-    erhe::toolkit::Keycode code,
-    uint32_t               modifier_mask
+    const erhe::toolkit::Keycode code,
+    const uint32_t               modifier_mask
 )
 {
     on_key(true, code, modifier_mask);
 }
 
 void Editor_view::on_key_release(
-    erhe::toolkit::Keycode code,
-    uint32_t               modifier_mask
+    const erhe::toolkit::Keycode code,
+    const uint32_t               modifier_mask
 )
 {
     on_key(false, code, modifier_mask);

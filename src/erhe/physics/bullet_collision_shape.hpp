@@ -26,9 +26,13 @@ public:
     }
 
     // Implements ICollision_shape
-    void calculate_local_inertia(float mass, glm::vec3& inertia) const                                   override;
-    auto is_convex              () const -> bool                                                         override;
-    void add_child_shape        (ICollision_shape* shape, const glm::mat3 basis, const glm::vec3 origin) override;
+    void calculate_local_inertia(float mass, glm::vec3& inertia) const override;
+    auto is_convex              () const -> bool                       override;
+    void add_child_shape(
+        std::shared_ptr<ICollision_shape> shape,
+        const glm::mat3                   basis,
+        const glm::vec3                   origin
+    )                                                                  override;
 
     auto get_bullet_collision_shape() -> btCollisionShape*
     {
@@ -70,7 +74,7 @@ public:
     Bullet_capsule_y_shape(const float radius, const float length);
 
 private:
-    btCapsuleShapeX m_capsule_shape;
+    btCapsuleShape m_capsule_shape;
 };
 
 class Bullet_capsule_z_shape
@@ -80,7 +84,7 @@ public:
     Bullet_capsule_z_shape(const float radius, const float length);
 
 private:
-    btCapsuleShapeX m_capsule_shape;
+    btCapsuleShapeZ m_capsule_shape;
 };
 
 class Bullet_cone_x_shape

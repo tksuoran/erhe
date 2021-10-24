@@ -4,6 +4,7 @@
 #include "erhe/scene/viewport.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
+#include "windows/imgui_window.hpp"
 
 #include <gsl/gsl>
 
@@ -11,6 +12,7 @@ namespace editor {
 
 class Brushes;
 class Editor_view;
+class Editor_time;
 class Line_renderer;
 class Physics_tool;
 class Pointer_context;
@@ -32,6 +34,8 @@ public:
 
 class Editor_tools
     : public erhe::components::Component
+    , public erhe::components::IUpdate_once_per_frame
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name{"Editor_tools"};
@@ -42,6 +46,12 @@ public:
     // Implements Component
     void connect             () override;
     void initialize_component() override;
+
+    // Implements IUpdate_once_per_frame
+    void update_once_per_frame(const erhe::components::Time_context&) override;
+
+    // Implements Imgui_window
+    void imgui(Pointer_context& pointer_context) override;
 
     void gui_begin_frame         ();
     void imgui                   ();
@@ -67,6 +77,7 @@ private:
 
     std::shared_ptr<Brushes>        m_brushes;
     std::shared_ptr<Editor_view>    m_editor_view;
+    std::shared_ptr<Editor_time>    m_editor_time;
     std::shared_ptr<Physics_tool>   m_physics_tool;
     std::shared_ptr<Selection_tool> m_selection_tool;
     std::shared_ptr<Trs_tool>       m_trs_tool;

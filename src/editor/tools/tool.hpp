@@ -22,6 +22,14 @@ public:
         Active
     };
 
+    static constexpr const char* c_state_str[] =
+    {
+        "disabled",
+        "passive",
+        "ready",
+        "active"
+    };
+
     virtual auto description() -> const char* = 0;
 
     // Interaction with pointer

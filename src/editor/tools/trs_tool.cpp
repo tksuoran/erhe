@@ -81,10 +81,10 @@ void Trs_tool::set_node(const std::shared_ptr<Node>& node)
     // Promote static to kinematic if we try to move object
     if (rigid_body != nullptr)
     {
-        const auto collision_mode = rigid_body->get_collision_mode();
-        if (collision_mode == erhe::physics::Collision_mode::e_static)
+        const auto motion_mode = rigid_body->get_motion_mode();
+        if (motion_mode == erhe::physics::Motion_mode::e_static)
         {
-            rigid_body->set_collision_mode(erhe::physics::Collision_mode::e_kinematic);
+            rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic);
         }
         rigid_body->begin_move();
     }
@@ -118,7 +118,7 @@ void Trs_tool::Visualization::update_scale(const vec3 view_position_in_world)
     }
 
     const vec3 position_in_world = root->position_in_world();
-    view_distance = length(position_in_world - vec3(view_position_in_world));
+    view_distance = length(position_in_world - vec3{view_position_in_world});
     update_transforms();
 }
 
@@ -165,10 +165,10 @@ void Trs_tool::Visualization::update_visibility(const bool visible, const Handle
 
 void Trs_tool::Visualization::initialize(Mesh_memory& mesh_memory, Scene_root& scene_root)
 {
-    x_material         = scene_root.make_material("x",         vec4(1.00f, 0.00f, 0.0f, 1.0f));
-    y_material         = scene_root.make_material("y",         vec4(0.23f, 1.00f, 0.0f, 1.0f));
-    z_material         = scene_root.make_material("z",         vec4(0.00f, 0.23f, 1.0f, 1.0f));
-    highlight_material = scene_root.make_material("highlight", vec4(1.00f, 0.70f, 0.1f, 1.0f));
+    x_material         = scene_root.make_material("x",         vec4{1.00f, 0.00f, 0.0f, 1.0f});
+    y_material         = scene_root.make_material("y",         vec4{0.23f, 1.00f, 0.0f, 1.0f});
+    z_material         = scene_root.make_material("z",         vec4{0.00f, 0.23f, 1.0f, 1.0f});
+    highlight_material = scene_root.make_material("highlight", vec4{1.00f, 0.70f, 0.1f, 1.0f});
 
     constexpr float arrow_cylinder_length    = 2.5f;
     constexpr float arrow_cone_length        = 1.0f;
@@ -207,21 +207,21 @@ void Trs_tool::Visualization::initialize(Mesh_memory& mesh_memory, Scene_root& s
     y_rotate_ring_mesh     = scene_root.make_mesh_node("Y rotate ring",    rotate_ring_pg,    y_material, tool_layer, &tool_node, pos);
     z_rotate_ring_mesh     = scene_root.make_mesh_node("Z rotate ring",    rotate_ring_pg,    z_material, tool_layer, &tool_node, pos);
 
-    x_arrow_cylinder_mesh->node()->transforms.parent_from_node.set         (mat4(1));
-    x_arrow_cone_mesh    ->node()->transforms.parent_from_node.set         (mat4(1));
-    y_arrow_cylinder_mesh->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3(0.0f, 0.0f, 1.0f));
-    y_arrow_cone_mesh    ->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3(0.0f, 0.0f, 1.0f));
-    z_arrow_cylinder_mesh->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
-    z_arrow_cone_mesh    ->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
-    xy_box_mesh          ->node()->transforms.parent_from_node.set         (mat4(1));
-    xz_box_mesh          ->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3(1.0f, 0.0f, 0.0f));
-    yz_box_mesh          ->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
+    x_arrow_cylinder_mesh->node()->transforms.parent_from_node.set         (mat4{1});
+    x_arrow_cone_mesh    ->node()->transforms.parent_from_node.set         (mat4{1});
+    y_arrow_cylinder_mesh->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f});
+    y_arrow_cone_mesh    ->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f});
+    z_arrow_cylinder_mesh->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f});
+    z_arrow_cone_mesh    ->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f});
+    xy_box_mesh          ->node()->transforms.parent_from_node.set         (mat4{1});
+    xz_box_mesh          ->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3{1.0f, 0.0f, 0.0f});
+    yz_box_mesh          ->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f});
 
-    x_rotate_ring_mesh->node()->transforms.parent_from_node.set         (mat4(1));
-    y_rotate_ring_mesh->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3(0.0f, 0.0f, 1.0f));
-    z_rotate_ring_mesh->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
+    x_rotate_ring_mesh->node()->transforms.parent_from_node.set         (mat4{1});
+    y_rotate_ring_mesh->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f});
+    z_rotate_ring_mesh->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f});
 
-    //root->transforms.parent_from_node.set_rotation(pi<float>() / 4.0f, vec3(0.0f, 1.0f, 0.0f));
+    //root->transforms.parent_from_node.set_rotation(pi<float>() / 4.0f, vec3{0.0f, 1.0f, 0.0f});
 
     update_visibility(false, Handle::e_handle_none);
     update_transforms();
@@ -375,15 +375,15 @@ auto Trs_tool::get_axis_direction() const -> vec3
 {
     switch (m_active_handle)
     {
-        case Handle::e_handle_translate_x:  return m_local ? m_drag.initial_world_from_local[0] : glm::vec3(1.0f, 0.0f, 0.0f);
-        case Handle::e_handle_translate_y:  return m_local ? m_drag.initial_world_from_local[1] : glm::vec3(0.0f, 1.0f, 0.0f);
-        case Handle::e_handle_translate_z:  return m_local ? m_drag.initial_world_from_local[2] : glm::vec3(0.0f, 0.0f, 1.0f);
-        case Handle::e_handle_translate_yz: return m_local ? m_drag.initial_world_from_local[0] : glm::vec3(1.0f, 0.0f, 0.0f);
-        case Handle::e_handle_translate_xz: return m_local ? m_drag.initial_world_from_local[1] : glm::vec3(0.0f, 1.0f, 0.0f);
-        case Handle::e_handle_translate_xy: return m_local ? m_drag.initial_world_from_local[2] : glm::vec3(0.0f, 0.0f, 1.0f);
-        case Handle::e_handle_rotate_x:     return m_local ? m_drag.initial_world_from_local[0] : glm::vec3(1.0f, 0.0f, 0.0f);
-        case Handle::e_handle_rotate_y:     return m_local ? m_drag.initial_world_from_local[1] : glm::vec3(0.0f, 1.0f, 0.0f);
-        case Handle::e_handle_rotate_z:     return m_local ? m_drag.initial_world_from_local[2] : glm::vec3(0.0f, 0.0f, 1.0f);
+        case Handle::e_handle_translate_x:  return m_local ? m_drag.initial_world_from_local[0] : glm::vec3{1.0f, 0.0f, 0.0f};
+        case Handle::e_handle_translate_y:  return m_local ? m_drag.initial_world_from_local[1] : glm::vec3{0.0f, 1.0f, 0.0f};
+        case Handle::e_handle_translate_z:  return m_local ? m_drag.initial_world_from_local[2] : glm::vec3{0.0f, 0.0f, 1.0f};
+        case Handle::e_handle_translate_yz: return m_local ? m_drag.initial_world_from_local[0] : glm::vec3{1.0f, 0.0f, 0.0f};
+        case Handle::e_handle_translate_xz: return m_local ? m_drag.initial_world_from_local[1] : glm::vec3{0.0f, 1.0f, 0.0f};
+        case Handle::e_handle_translate_xy: return m_local ? m_drag.initial_world_from_local[2] : glm::vec3{0.0f, 0.0f, 1.0f};
+        case Handle::e_handle_rotate_x:     return m_local ? m_drag.initial_world_from_local[0] : glm::vec3{1.0f, 0.0f, 0.0f};
+        case Handle::e_handle_rotate_y:     return m_local ? m_drag.initial_world_from_local[1] : glm::vec3{0.0f, 1.0f, 0.0f};
+        case Handle::e_handle_rotate_z:     return m_local ? m_drag.initial_world_from_local[2] : glm::vec3{0.0f, 0.0f, 1.0f};
         default:
             FATAL("bad axis\n");
             break;
@@ -494,12 +494,12 @@ auto Trs_tool::get_plane_normal() const -> vec3
 {
     switch (m_active_handle)
     {
-        case Handle::e_handle_translate_xy: return m_local ? m_drag.initial_world_from_local[2] : glm::vec3(0.0f, 0.0f, 1.0f);
-        case Handle::e_handle_translate_xz: return m_local ? m_drag.initial_world_from_local[1] : glm::vec3(0.0f, 1.0f, 0.0f);
-        case Handle::e_handle_translate_yz: return m_local ? m_drag.initial_world_from_local[0] : glm::vec3(1.0f, 0.0f, 0.0f);
-        case Handle::e_handle_rotate_x:     return m_local ? m_drag.initial_world_from_local[0] : glm::vec3(1.0f, 0.0f, 0.0f);
-        case Handle::e_handle_rotate_y:     return m_local ? m_drag.initial_world_from_local[1] : glm::vec3(0.0f, 1.0f, 0.0f);
-        case Handle::e_handle_rotate_z:     return m_local ? m_drag.initial_world_from_local[2] : glm::vec3(0.0f, 0.0f, 1.0f);
+        case Handle::e_handle_translate_xy: return m_local ? m_drag.initial_world_from_local[2] : glm::vec3{0.0f, 0.0f, 1.0f};
+        case Handle::e_handle_translate_xz: return m_local ? m_drag.initial_world_from_local[1] : glm::vec3{0.0f, 1.0f, 0.0f};
+        case Handle::e_handle_translate_yz: return m_local ? m_drag.initial_world_from_local[0] : glm::vec3{1.0f, 0.0f, 0.0f};
+        case Handle::e_handle_rotate_x:     return m_local ? m_drag.initial_world_from_local[0] : glm::vec3{1.0f, 0.0f, 0.0f};
+        case Handle::e_handle_rotate_y:     return m_local ? m_drag.initial_world_from_local[1] : glm::vec3{0.0f, 1.0f, 0.0f};
+        case Handle::e_handle_rotate_z:     return m_local ? m_drag.initial_world_from_local[2] : glm::vec3{0.0f, 0.0f, 1.0f};
         default:
             FATAL("bad handle for plane");
             break;
@@ -510,9 +510,9 @@ auto Trs_tool::get_plane_normal_in_model() const -> vec3
 {
     switch (m_active_handle)
     {
-        case Handle::e_handle_rotate_x: return vec3(1.0f, 0.0f, 0.0f);
-        case Handle::e_handle_rotate_y: return vec3(0.0f, 1.0f, 0.0f);
-        case Handle::e_handle_rotate_z: return vec3(0.0f, 0.0f, 1.0f);
+        case Handle::e_handle_rotate_x: return vec3{1.0f, 0.0f, 0.0f};
+        case Handle::e_handle_rotate_y: return vec3{0.0f, 1.0f, 0.0f};
+        case Handle::e_handle_rotate_z: return vec3{0.0f, 0.0f, 1.0f};
         default:
             // TODO plane translation?
             FATAL("bad handle for plane");
@@ -524,9 +524,9 @@ auto Trs_tool::get_plane_side_in_model() const -> vec3
 {
     switch (m_active_handle)
     {
-        case Handle::e_handle_rotate_x: return vec3( 0.0f, 0.0f, 1.0f);
-        case Handle::e_handle_rotate_y: return vec3( 0.0f, 0.0f, 1.0f);
-        case Handle::e_handle_rotate_z: return vec3(-1.0f, 0.0f, 0.0f);
+        case Handle::e_handle_rotate_x: return vec3{ 0.0f, 0.0f, 1.0f};
+        case Handle::e_handle_rotate_y: return vec3{ 0.0f, 0.0f, 1.0f};
+        case Handle::e_handle_rotate_z: return vec3{-1.0f, 0.0f, 0.0f};
         default:
             FATAL("bad handle for rotate");
             break;
@@ -537,9 +537,9 @@ auto Trs_tool::get_plane_side_in_model2() const -> vec3
 {
     switch (m_active_handle)
     {
-        case Handle::e_handle_rotate_x: return vec3( 0.0f, 1.0f, 0.0f);
-        case Handle::e_handle_rotate_y: return vec3( 1.0f, 0.0f, 0.0f);
-        case Handle::e_handle_rotate_z: return vec3( 0.0f, 1.0f, 0.0f);
+        case Handle::e_handle_rotate_x: return vec3{ 0.0f, 1.0f, 0.0f};
+        case Handle::e_handle_rotate_y: return vec3{ 1.0f, 0.0f, 0.0f};
+        case Handle::e_handle_rotate_z: return vec3{ 0.0f, 1.0f, 0.0f};
         default:
             FATAL("bad handle for rotate");
             break;
@@ -579,9 +579,9 @@ auto Trs_tool::offset_plane_origo(const Handle handle, const vec3 p) const -> ve
 {
     switch (handle)
     {
-        case Handle::e_handle_rotate_x: return vec3( p.x, 0.0f, 0.0f);
-        case Handle::e_handle_rotate_y: return vec3(0.0f,  p.y, 0.0f);
-        case Handle::e_handle_rotate_z: return vec3(0.0f, 0.0f,  p.z);
+        case Handle::e_handle_rotate_x: return vec3{ p.x, 0.0f, 0.0f};
+        case Handle::e_handle_rotate_y: return vec3{0.0f,  p.y, 0.0f};
+        case Handle::e_handle_rotate_z: return vec3{0.0f, 0.0f,  p.z};
         default:
             FATAL("bad handle for rotate");
             break;
@@ -592,9 +592,9 @@ auto Trs_tool::project_to_offset_plane(const Handle handle, const vec3 p, const 
 {
     switch (handle)
     {
-        case Handle::e_handle_rotate_x: return vec3(p.x, q.y, q.z);
-        case Handle::e_handle_rotate_y: return vec3(q.x, p.y, q.z);
-        case Handle::e_handle_rotate_z: return vec3(q.x, q.y, p.z);
+        case Handle::e_handle_rotate_x: return vec3{p.x, q.y, q.z};
+        case Handle::e_handle_rotate_y: return vec3{q.x, p.y, q.z};
+        case Handle::e_handle_rotate_z: return vec3{q.x, q.y, p.z};
         default:
             FATAL("bad handle for rotate");
             break;
@@ -604,8 +604,8 @@ auto Trs_tool::project_to_offset_plane(const Handle handle, const vec3 p, const 
 auto Trs_tool::project_pointer_to_plane(const Pointer_context& pointer_context, const vec3 p, vec3& q) -> bool
 {
     const vec3 n  = get_plane_normal_in_model();
-    const vec3 q0 = vec3(m_drag.initial_local_from_world * vec4(pointer_context.position_in_world(0.0f), 1.0f));
-    const vec3 q1 = vec3(m_drag.initial_local_from_world * vec4(pointer_context.position_in_world(1.0f), 1.0f));
+    const vec3 q0 = vec3{m_drag.initial_local_from_world * vec4{pointer_context.position_in_world(0.0f), 1.0f}};
+    const vec3 q1 = vec3{m_drag.initial_local_from_world * vec4{pointer_context.position_in_world(1.0f), 1.0f}};
     const vec3 v  = normalize(q1 - q0);
     float      t  = 0.0f;
     const bool ok = intersect_plane(n, p, q0, v, t);
@@ -634,7 +634,7 @@ void Trs_tool::update_rotate(Pointer_context& pointer_context)
 
     constexpr float c_parallel_threshold = 0.4f;
     const vec3  V0      = vec3{root()->position_in_world()} - vec3{pointer_context.camera->node()->position_in_world()};
-    const vec3  V       = normalize(m_drag.initial_local_from_world * vec4(V0, 0.0f));
+    const vec3  V       = normalize(m_drag.initial_local_from_world * vec4{V0, 0.0f});
     const float v_dot_n = dot(V, n);
     if (std::abs(v_dot_n) < c_parallel_threshold)
     {
@@ -646,7 +646,7 @@ void Trs_tool::update_rotate(Pointer_context& pointer_context)
     const mat4 translate     = create_translation(vec3{-initial_root_position_in_model});
     const mat4 untranslate   = create_translation(vec3{ initial_root_position_in_model});
     //mat4 world_from_parent = (root()->parent != nullptr) ? root()->parent->world_from_node()
-    //                                                    : mat4(1);
+    //                                                     : mat4{1};
 #if 0
     vec3 q0 = pointer_context.position_in_world(0.0f);
     vec3 q1 = pointer_context.position_in_world(1.0f);
@@ -658,7 +658,7 @@ void Trs_tool::update_rotate(Pointer_context& pointer_context)
         mat4 rotation                 = create_rotation(angle, rotation_axis);
         mat4 parent_from_rotated_node = untranslate * rotation * translate * m_drag.initial_world_from_local;
         mat4 world_from_rotated_node  = world_from_parent * parent_from_rotated_node;
-        vec3 position                 = vec3(world_from_rotated_node * vec4(m_drag.initial_position_in_world, 1.0f));
+        vec3 position                 = vec3{world_from_rotated_node * vec4{m_drag.initial_position_in_world, 1.0f}}    ;
         float distance;
         if (line_point_distance(q0, q1, position, distance) && (distance < closest_distance))
         {
@@ -795,9 +795,9 @@ void Trs_tool::render(const Render_context& render_context)
         float r_angle = (r_dot_up > 0.0f) ? std::acos(r_dot_side) : 2.0f * pi<float>() - std::acos(r_dot_side);
         float q_angle = (q_dot_up > 0.0f) ? std::acos(q_dot_side) : 2.0f * pi<float>() - std::acos(q_dot_side);
 
-        //vec3 direction         = vec3(m_drag.initial_world_from_local * vec4(get_plane_normal_in_model(), 0.0f));
-        //vec3 current_direction = vec3(root()->world_from_node()        * vec4(get_plane_side_in_model(), 0.0f));
-        //vec3 root              = vec3(root()->position_in_world());
+        //vec3 direction         = vec3{m_drag.initial_world_from_local * vec4{get_plane_normal_in_model(), 0.0f}};
+        //vec3 current_direction = vec3{root()->world_from_node()       * vec4{get_plane_side_in_model(), 0.0f}};
+        //vec3 root              = vec3{root()->position_in_world());
         vec3 root_position     =  vec3{root()->world_from_node()       * vec4{p, 1.0f}};
         //vec3 neg_z             = root_position - 10.f * direction;
         //vec3 pos_z             = root_position + 10.f * direction;
@@ -888,9 +888,9 @@ void Trs_tool::render(const Render_context& render_context)
     {
         //float depth_range_near  = 0.0f;
         //float depth_range_far   = 1.0f;
-        //vec3  pointer_in_window = vec3(static_cast<float>(pointer_context->pointer_x),
+        //vec3  pointer_in_window = vec3{static_cast<float>(pointer_context->pointer_x),
         //                                                  static_cast<float>(pointer_context->pointer_y),
-        //                                                  m_drag.initial_window_depth);
+        //                                                  m_drag.initial_window_depth};
         //vec3 pointer_in_world = unproject(pointer_context->camera->world_from_clip(),
         //                                  pointer_in_window,
         //                                  depth_range_near,
@@ -902,7 +902,7 @@ void Trs_tool::render(const Render_context& render_context)
         //pointer_in_world = pointer_context->position_in_world();
 
         uint32_t text_color = 0xffffffffu; // abgr
-        vec3 text_position = vec3(100.0f, 100.0f, -0.5f);
+        vec3 text_position = vec3{100.0f, 100.0f, -0.5f};
         text_renderer->print(
             text_position,
             text_color,
@@ -941,7 +941,7 @@ auto Trs_tool::begin(Pointer_context& pointer_context) -> bool
         return false;
     }
     m_drag.initial_position_in_world = pointer_context.position_in_world();
-    m_drag.position_in_root          = root()->node_from_world() * vec4(m_drag.initial_position_in_world, 1.0f);
+    m_drag.position_in_root          = root()->node_from_world() * vec4{m_drag.initial_position_in_world, 1.0f};
     m_drag.initial_world_from_local  = root()->world_from_node();
     m_drag.initial_local_from_world  = root()->node_from_world();
     m_drag.initial_window_depth      = pointer_context.pointer_z;
@@ -954,8 +954,8 @@ auto Trs_tool::begin(Pointer_context& pointer_context) -> bool
     if (is_rotate_active())
     {
         vec3 rotation_axis_in_world = get_axis_direction();
-        m_rotation.drag_start               = vec3(m_drag.initial_local_from_world * vec4(m_drag.initial_position_in_world, 1.0f));;
-        m_rotation.center_of_rotation       = vec3(0.0f, 0.0f, 0.0f); // offset_plane_origo(m_active_handle, m_rotation.drag_start);
+        m_rotation.drag_start               = vec3{m_drag.initial_local_from_world * vec4{m_drag.initial_position_in_world, 1.0f}};
+        m_rotation.center_of_rotation       = vec3{0.0f, 0.0f, 0.0f}; // offset_plane_origo(m_active_handle, m_rotation.drag_start);
         m_rotation.normal                   = get_plane_normal_in_model();
         m_rotation.side                     = get_plane_side_in_model2();
         m_rotation.up                       = cross(m_rotation.normal, m_rotation.side);
@@ -1013,8 +1013,8 @@ void Trs_tool::cancel_ready()
     log_tools.trace("Trs tool state = Passive\n");
     m_state                          = State::Passive;
     m_active_handle                  = Handle::e_handle_none;
-    m_drag.initial_position_in_world = vec3(0.0f, 0.0f, 0.0f);
-    m_drag.initial_world_from_local  = mat4(1);
+    m_drag.initial_position_in_world = vec3{0.0f, 0.0f, 0.0f};
+    m_drag.initial_world_from_local  = mat4{1};
     m_drag.initial_window_depth      = 0.0f;
 }
 

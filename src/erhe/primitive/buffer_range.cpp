@@ -19,7 +19,7 @@ Buffer_range::Buffer_range(const Buffer_range& other)
 {
 }
 
-Buffer_range& Buffer_range::operator=(const Buffer_range& other)
+auto Buffer_range::operator=(const Buffer_range& other) -> Buffer_range&
 {
     count        = other.count;
     element_size = other.element_size;
@@ -34,7 +34,7 @@ Buffer_range::Buffer_range(const Buffer_range&& other) noexcept
 {
 }
 
-Buffer_range& Buffer_range::operator=(const Buffer_range&& other) noexcept
+auto Buffer_range::operator=(const Buffer_range&& other) noexcept -> Buffer_range& 
 {
     byte_offset  = other.byte_offset;
     element_size = other.element_size;

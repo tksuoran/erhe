@@ -42,7 +42,7 @@ auto Polygon::compute_normal(
     // Make sure all points are unique from others
     if ((p0 == p1) || (p0 == p2) || (p1 == p2))
     {
-        return glm::vec3(0.0f, 1.0f, 0.0f);
+        return glm::vec3{0.0f, 1.0f, 0.0f};
     }
     auto pos0   = point_locations.get(p0);
     auto pos1   = point_locations.get(p1);

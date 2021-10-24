@@ -3,16 +3,23 @@ set(_target "erhe_physics")
 set(source_list
     bullet_collision_shape.cpp
     bullet_collision_shape.hpp
+    bullet_compound_shape.cpp
+    bullet_compound_shape.hpp
+    bullet_constraint.cpp
+    bullet_constraint.hpp
     bullet_convex_hull_collision_shape.cpp
     bullet_convex_hull_collision_shape.hpp
     bullet_rigid_body.cpp
     bullet_rigid_body.hpp
+    bullet_uniform_scaling_shape.cpp
+    bullet_uniform_scaling_shape.hpp
     bullet_world.cpp
     bullet_world.hpp
     glm_conversions.hpp
     log.cpp
     log.hpp
     icollision_shape.hpp
+    iconstraint.hpp
     iconvex_hull_collision_shape.hpp
     imotion_state.hpp
     irigid_body.hpp

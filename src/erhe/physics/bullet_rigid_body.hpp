@@ -31,12 +31,9 @@ public:
 
     // Implements IRigid_body
     //auto get_node_transform() const -> glm::mat4           override;
-    void set_collision_mode  (Collision_mode collision_mode)                           override;
-    auto get_collision_mode  () const -> Collision_mode                                override;
+    void set_motion_mode     (const Motion_mode motion_mode)                           override;
+    auto get_motion_mode     () const -> Motion_mode                                   override;
     auto get_collision_shape () const -> ICollision_shape*                             override;
-    void set_dynamic         ()                                                        override;
-    void set_static          ()                                                        override;
-    void set_kinematic       ()                                                        override;
     auto get_friction        () -> float                                               override;
     void set_friction        (const float friction)                                    override;
     auto get_rolling_friction() -> float                                               override;
@@ -61,7 +58,7 @@ private:
     Motion_state_adapter              m_motion_state_adapter;
     std::shared_ptr<ICollision_shape> m_collision_shape;
     btRigidBody                       m_bullet_rigid_body;
-    Collision_mode                    m_collision_mode{Collision_mode::e_kinematic};
+    Motion_mode                       m_motion_mode{Motion_mode::e_kinematic};
 };
 
 } // namespace erhe::physics

@@ -128,9 +128,38 @@ void Category::write(bool indent, int level, const std::string& text)
 
 std::mutex Category::s_mutex;
 
+//          111111111122
+// 123456789012345678901
+// 20211022 14:17:01.337
+auto timestamp() -> std::string
+{
+    struct timespec ts{};
+    timespec_get(&ts, TIME_UTC);
+
+    struct tm time;
+#ifdef _MSC_VER
+    localtime_s(&time, &ts.tv_sec);
+#else
+    localtime_s(&ts.tv_sec, &time);
+#endif
+
+    // Write time
+    return fmt::format(
+        "{:04d}{:02d}{:02d} {:02}:{:02}:{:02}.{:03d} ",
+        time.tm_year + 1900,
+        time.tm_mon + 1,
+        time.tm_mday,
+        time.tm_hour,
+        time.tm_min, 
+        time.tm_sec,
+        ts.tv_nsec / 1000000
+    );
+}
+
 void Category::write(bool indent, const std::string& text)
 {
     std::lock_guard<std::mutex> lock{s_mutex};
+
     // Log to console
     if (Log::print_color())
     {
@@ -157,9 +186,18 @@ void Category::write(bool indent, const std::string& text)
                             //fflush(stdout);
                         }
 
-                        for (int i = 0; i < Log::s_indent; ++i)
+                        if constexpr (true)
                         {
-                            putc(' ', stdout);
+                            const auto stamp_string = timestamp();
+                            fputs(stamp_string.c_str(), stdout);
+                        }
+
+                        if (indent)
+                        {
+                            for (int i = 0; i < Log::s_indent; ++i)
+                            {
+                                putc(' ', stdout);
+                            }
                         }
                         m_newline = false;
                     }

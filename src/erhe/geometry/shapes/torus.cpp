@@ -136,8 +136,8 @@ public:
 
     Torus_builder(
         Geometry&    geometry,
-        const double minor_radius,
         const double major_radius,
+        const double minor_radius,
         const int    major_axis_steps,
         const int    minor_axis_steps
     )
@@ -226,7 +226,7 @@ auto make_torus(
         "torus",
         [=](auto& geometry)
         {
-            Torus_builder builder(geometry, major_radius, minor_radius, major_axis_steps, minor_axis_steps);
+        Torus_builder builder{geometry, major_radius, minor_radius, major_axis_steps, minor_axis_steps};
             builder.build();
         }
     };

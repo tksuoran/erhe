@@ -223,7 +223,7 @@ Property_map<Key_type, Value_type>::interpolate(
         {
             if (m_descriptor.interpolation_mode == Interpolation_mode::normalized_vec3_float)
             {
-                new_value = glm::vec4(glm::normalize(glm::vec3(new_value)), new_value.z);
+                new_value = glm::vec4{glm::normalize(glm::vec3{new_value}), new_value.z};
                 //log_interpolate.trace("\tnormalized vec3-float\n", new_value);
             }
         }
@@ -236,23 +236,23 @@ Property_map<Key_type, Value_type>::interpolate(
 
 static inline float apply_transform(float value, glm::mat4 transform, float w)
 {
-    return (transform * glm::vec4(value, 0.0f, 0.0f, w))[0];
+    return (transform * glm::vec4{value, 0.0f, 0.0f, w})[0];
 }
 
 static inline glm::vec2 apply_transform(glm::vec2 value, glm::mat4 transform, float w)
 {
-    return glm::vec2(transform * glm::vec4(value, 0.0f, w));
+    return glm::vec2{transform * glm::vec4{value, 0.0f, w}};
 }
 
 static inline glm::vec3 apply_transform(glm::vec3 value, glm::mat4 transform, float w)
 {
-    return glm::vec3(transform * glm::vec4(value, w));
+    return glm::vec3{transform * glm::vec4{value, w}};
 }
 
 static inline glm::vec4 apply_transform(glm::vec4 value, glm::mat4 transform, float w)
 {
     static_cast<void>(w);
-    return transform * glm::vec4(value);
+    return transform * glm::vec4{value};
 }
 
 
@@ -326,8 +326,8 @@ Property_map<Key_type, Value_type>::import_from(
                     for (size_t i = 0, end = source->values.size(); i < end; ++i)
                     {
                         Value_type source_value     = source->values[i];
-                        glm::vec3  transformed_vec3 = glm::normalize(apply_transform(glm::vec3(source_value), inverse_transpose_transform, 0.0f));
-                        Value_type result           = glm::vec4(transformed_vec3, source_value.w);
+                        glm::vec3  transformed_vec3 = glm::normalize(apply_transform(glm::vec3{source_value}, inverse_transpose_transform, 0.0f));
+                        Value_type result           = glm::vec4{transformed_vec3, source_value.w};
                         values.push_back(result);
                     }
                 }

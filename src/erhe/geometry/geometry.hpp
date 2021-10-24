@@ -672,7 +672,7 @@ public:
 
     auto has_edges() const -> bool;
 
-    void transform(const glm::mat4& m);
+    auto transform(const glm::mat4& m) -> Geometry&;
 
     void reverse_polygons();
 

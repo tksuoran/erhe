@@ -89,7 +89,7 @@ auto project_to_screen_space(
     const auto s                 = depth_range_far - depth_range_near;
     const auto b                 = depth_range_near;
 
-    const vec4 clip = clip_from_world * vec4(position_in_world, 1.0f);
+    const vec4 clip = clip_from_world * vec4{position_in_world, 1.0f};
 
     const vec3 ndc{
         clip.x / clip.w,
@@ -451,7 +451,7 @@ auto create_look_at(const vec3 eye, const vec3 center, const vec3 up0) -> mat4
 #else
     if (eye == center)
     {
-        return mat4(1);
+        return mat4{1};
     }
 
     const vec3 back  = glm::normalize(eye - center);
@@ -460,10 +460,10 @@ auto create_look_at(const vec3 eye, const vec3 center, const vec3 up0) -> mat4
     const vec3 up    = glm::cross(back, right);
 
     mat4 result;
-    result[0] = vec4(right, 0.0f);
-    result[1] = vec4(up,    0.0f);
-    result[2] = vec4(back,  0.0f);
-    result[3] = vec4(eye, 1.0f);
+    result[0] = vec4{right, 0.0f};
+    result[1] = vec4{up,    0.0f};
+    result[2] = vec4{back,  0.0f};
+    result[3] = vec4{eye, 1.0f};
     return result;
 #endif
 }

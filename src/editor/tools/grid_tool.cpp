@@ -55,20 +55,50 @@ void Grid_tool::render(const Render_context& render_context)
     {
         float xz = static_cast<float>(cell) * m_cell_size;
         line_renderer.set_line_color(cell_major_color);
-        line_renderer.add_lines( { {glm::vec3(     xz, 0.0f, -extent), glm::vec3(    xz, 0.0f,  extent)},
-                                   {glm::vec3(-extent, 0.0f,      xz), glm::vec3(extent, 0.0f,      xz)}  } );
+        line_renderer.add_lines(
+            {
+                {
+                    glm::vec3{     xz, 0.0f, -extent},
+                    glm::vec3{     xz, 0.0f,  extent}
+                },
+                {
+                    glm::vec3{-extent, 0.0f,      xz},
+                    glm::vec3{ extent, 0.0f,      xz}
+                }
+            }
+        );
         line_renderer.set_line_color(cell_minor_color);
         for (int i = 0; i < (m_cell_div - 1); ++i)
         {
             xz += minor_step;
-            line_renderer.add_lines( { {glm::vec3(     xz, 0.0f, -extent), glm::vec3(    xz, 0.0f,  extent)},
-                                       {glm::vec3(-extent, 0.0f,      xz), glm::vec3(extent, 0.0f,      xz)}  } );
+            line_renderer.add_lines(
+                {
+                    {
+                        glm::vec3{     xz, 0.0f, -extent},
+                        glm::vec3{     xz, 0.0f,  extent}
+                    },
+                    {
+                        glm::vec3{-extent, 0.0f,      xz},
+                        glm::vec3{ extent, 0.0f,      xz}
+                    }
+                }
+            );
         }
     }
     line_renderer.set_line_color(cell_major_color);
     float xz = static_cast<float>(cell) * m_cell_size;
-    line_renderer.add_lines( { {glm::vec3(     xz, 0.0f, -extent), glm::vec3(    xz, 0.0f,  extent)},
-                               {glm::vec3(-extent, 0.0f,      xz), glm::vec3(extent, 0.0f,      xz)}  } );
+    line_renderer.add_lines(
+        {
+            {
+                glm::vec3{    xz, 0.0f, -extent},
+                glm::vec3{    xz, 0.0f,  extent}
+            },
+            {
+                glm::vec3{-extent, 0.0f,     xz},
+                glm::vec3{ extent, 0.0f,     xz}
+            }
+        }
+    );
 }
 
 void Grid_tool::imgui(Pointer_context&)
@@ -78,8 +108,8 @@ void Grid_tool::imgui(Pointer_context&)
     ImGui::Begin      ("Grid");
     ImGui::Checkbox   ("Enable",     &m_enable);
     ImGui::SliderFloat("Cell Size",  &m_cell_size,  0.0f, 10.0f);
-    ImGui::SliderInt  ("Cell Div",   &m_cell_div,   0, 10);
-    ImGui::SliderInt  ("Cell Count", &m_cell_count, 1, 100);
+    ImGui::SliderInt  ("Cell Div",   &m_cell_div,   0,    10);
+    ImGui::SliderInt  ("Cell Count", &m_cell_count, 1,    100);
     ImGui::End        ();
 }
 

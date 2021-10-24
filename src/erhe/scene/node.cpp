@@ -6,8 +6,8 @@ namespace erhe::scene
 {
 
 Node::Node(std::string_view name)
-    : m_name{name}
-    , m_id{}
+    : m_name {name}
+    , m_id   {}
     , m_label{fmt::format("{}##Node{}", name, m_id.get_id())}
 {
 }
@@ -41,9 +41,11 @@ auto Node::detach(const std::shared_ptr<INode_attachment>& attachment) -> bool
         return false;
     }
 
-    const auto i = std::remove(attachments.begin(),
-                               attachments.end(),
-                               attachment);
+    const auto i = std::remove(
+        attachments.begin(),
+        attachments.end(),
+        attachment
+    );
     if (i != attachments.end())
     {
         log.trace("Removing attachment {} from node\n", attachment->name());
@@ -117,17 +119,17 @@ auto Node::world_from_parent() const -> glm::mat4
     {
         return parent->world_from_node();
     }
-    return glm::mat4(1);
+    return glm::mat4{1};
 }
 
 auto Node::position_in_world() const -> glm::vec4
 {
-    return world_from_node() * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    return world_from_node() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
 }
 
 auto Node::direction_in_world() const -> glm::vec4
 {
-    return world_from_node() * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+    return world_from_node() * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f};
 }
 
 auto Node::root() -> Node*

@@ -101,6 +101,7 @@ public:
     bool                               hover_tool       {false};
     bool                               hover_content    {false};
     erhe::geometry::Geometry*          geometry{nullptr};
+    uint64_t                           frame_number{0};
 };
 
 } // namespace editor

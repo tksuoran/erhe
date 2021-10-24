@@ -61,8 +61,11 @@ Bullet_rigid_body::Bullet_rigid_body(
             from_glm(create_info.local_inertia)
         }
     }
-    , m_collision_mode{create_info.mass > 0.0f ? Collision_mode::e_dynamic
-                                               : Collision_mode::e_static}
+    , m_motion_mode{
+        (create_info.mass > 0.0f)
+            ? Motion_mode::e_dynamic
+            : Motion_mode::e_static
+    }
 {
     m_bullet_rigid_body.setDamping(0.02f, 0.02f);
 
@@ -70,9 +73,9 @@ Bullet_rigid_body::Bullet_rigid_body(
     m_bullet_rigid_body.setRollingFriction(0.1);
 }
 
-auto Bullet_rigid_body::get_collision_mode() const -> Collision_mode
+auto Bullet_rigid_body::get_motion_mode() const -> Motion_mode
 {
-    return m_collision_mode;
+    return m_motion_mode;
 }
 
 auto Bullet_rigid_body::get_collision_shape() const -> ICollision_shape*
@@ -120,46 +123,39 @@ void Bullet_rigid_body::end_move()
     m_bullet_rigid_body.setActivationState(ACTIVE_TAG);
 }
 
-void Bullet_rigid_body::set_static()
+void Bullet_rigid_body::set_motion_mode(const Motion_mode motion_mode)
 {
-    int flags = m_bullet_rigid_body.getCollisionFlags();
-    flags |=  btCollisionObject::CF_STATIC_OBJECT;
-    flags &= ~btCollisionObject::CF_KINEMATIC_OBJECT;
-    m_bullet_rigid_body.setCollisionFlags(flags);
-}
-
-void Bullet_rigid_body::set_kinematic()
-{
-    int flags = m_bullet_rigid_body.getCollisionFlags();
-    flags &= ~btCollisionObject::CF_STATIC_OBJECT;
-    flags |=  btCollisionObject::CF_KINEMATIC_OBJECT;
-    m_bullet_rigid_body.setCollisionFlags(flags);
-}
-
-void Bullet_rigid_body::set_dynamic()
-{
-    int flags = m_bullet_rigid_body.getCollisionFlags();
-    flags &= ~btCollisionObject::CF_STATIC_OBJECT;
-    flags &= ~btCollisionObject::CF_KINEMATIC_OBJECT;
-    m_bullet_rigid_body.setCollisionFlags(flags);
-    m_bullet_rigid_body.activate(true);
-}
-
-void Bullet_rigid_body::set_collision_mode(Collision_mode collision_mode)
-{
-    if (m_collision_mode == collision_mode)
+    if (m_motion_mode == motion_mode)
     {
         return;
     }
 
-    m_collision_mode = collision_mode;
-    switch (m_collision_mode)
+    m_motion_mode = motion_mode;
+
+    int flags = m_bullet_rigid_body.getCollisionFlags();
+
+    switch (motion_mode)
     {
-        case Collision_mode::e_static:    set_static();    break;
-        case Collision_mode::e_kinematic: set_kinematic(); break;
-        case Collision_mode::e_dynamic:   set_dynamic();   break;
-        default: break;
+        case Motion_mode::e_static:
+        {
+            flags |=  btCollisionObject::CF_STATIC_OBJECT;
+            flags &= ~btCollisionObject::CF_KINEMATIC_OBJECT;
+            break;
+        }
+        case Motion_mode::e_kinematic:
+        {
+            flags &= ~btCollisionObject::CF_STATIC_OBJECT;
+            flags |=  btCollisionObject::CF_KINEMATIC_OBJECT;
+            break;
+        }
+        case Motion_mode::e_dynamic:
+        {
+            flags &= ~btCollisionObject::CF_STATIC_OBJECT;
+            flags &= ~btCollisionObject::CF_KINEMATIC_OBJECT;
+            break;
+        }
     }
+    m_bullet_rigid_body.setCollisionFlags(flags);
 }
 
 void Bullet_rigid_body::set_world_transform(const glm::mat3 basis, const glm::vec3 origin)

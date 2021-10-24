@@ -97,10 +97,10 @@ void Node_physics::on_node_updated()
 
     VERIFY(m_node.get() != nullptr);
 
-    if (m_rigid_body->get_collision_mode() == Collision_mode::e_static)
+    if (m_rigid_body->get_motion_mode() == Motion_mode::e_static)
     {
         log_physics.warn("Attempt to move static rigid body - promoting to kinematic.\n");
-        m_rigid_body->set_kinematic();
+        m_rigid_body->set_motion_mode(Motion_mode::e_kinematic);
     }
     glm::mat3 basis{};
     glm::vec3 origin{};
