@@ -39,57 +39,65 @@ auto make_box(const double x_size, const double y_size, const double z_size)
     const double y = y_size / 2.0;
     const double z = z_size / 2.0;
 
-    return Geometry("box", [=](auto& geometry) {
-        geometry.make_point(-x,  y,  z, 0, 1); // 0
-        geometry.make_point( x,  y,  z, 1, 1); // 1
-        geometry.make_point( x, -y,  z, 1, 1); // 2
-        geometry.make_point(-x, -y,  z, 0, 1); // 3
-        geometry.make_point(-x,  y, -z, 0, 0); // 4
-        geometry.make_point( x,  y, -z, 1, 0); // 5
-        geometry.make_point( x, -y, -z, 1, 0); // 6
-        geometry.make_point(-x, -y, -z, 0, 0); // 7
+    return Geometry(
+        "box",
+        [=](auto& geometry)
+        {
+            geometry.make_point(-x,  y,  z, 0, 1); // 0
+            geometry.make_point( x,  y,  z, 1, 1); // 1
+            geometry.make_point( x, -y,  z, 1, 1); // 2
+            geometry.make_point(-x, -y,  z, 0, 1); // 3
+            geometry.make_point(-x,  y, -z, 0, 0); // 4
+            geometry.make_point( x,  y, -z, 1, 0); // 5
+            geometry.make_point( x, -y, -z, 1, 0); // 6
+            geometry.make_point(-x, -y, -z, 0, 0); // 7
 
-        geometry.make_polygon( {0, 1, 2, 3} );
-        geometry.make_polygon( {0, 3, 7, 4} );
-        geometry.make_polygon( {0, 4, 5, 1} ); // top
-        geometry.make_polygon( {5, 4, 7, 6} );
-        geometry.make_polygon( {2, 1, 5, 6} );
-        geometry.make_polygon( {7, 3, 2, 6} ); // bottom
+            geometry.make_polygon( {0, 1, 2, 3} );
+            geometry.make_polygon( {0, 3, 7, 4} );
+            geometry.make_polygon( {0, 4, 5, 1} ); // top
+            geometry.make_polygon( {5, 4, 7, 6} );
+            geometry.make_polygon( {2, 1, 5, 6} );
+            geometry.make_polygon( {7, 3, 2, 6} ); // bottom
 
-        geometry.make_point_corners();
-        geometry.build_edges();
-        geometry.compute_polygon_normals();
-        geometry.compute_polygon_centroids();
-        geometry.compute_tangents();
-    });
+            geometry.make_point_corners();
+            geometry.build_edges();
+            geometry.compute_polygon_normals();
+            geometry.compute_polygon_centroids();
+            geometry.compute_tangents();
+        }
+    );
 }
 
 auto make_box(const float min_x, const float max_x, const float min_y, const float max_y, const float min_z, const float max_z)
 -> Geometry
 {
-    return Geometry("box", [=](auto& geometry) {
-        geometry.make_point(min_x, max_y, max_z, 0, 1); // 0
-        geometry.make_point(max_x, max_y, max_z, 1, 1); // 1
-        geometry.make_point(max_x, min_y, max_z, 1, 1); // 2
-        geometry.make_point(min_x, min_y, max_z, 0, 1); // 3
-        geometry.make_point(min_x, max_y, min_z, 0, 0); // 4
-        geometry.make_point(max_x, max_y, min_z, 1, 0); // 5
-        geometry.make_point(max_x, min_y, min_z, 1, 0); // 6
-        geometry.make_point(min_x, min_y, min_z, 0, 0); // 7
+    return Geometry(
+        "box",
+        [=](auto& geometry)
+        {
+            geometry.make_point(min_x, max_y, max_z, 0, 1); // 0
+            geometry.make_point(max_x, max_y, max_z, 1, 1); // 1
+            geometry.make_point(max_x, min_y, max_z, 1, 1); // 2
+            geometry.make_point(min_x, min_y, max_z, 0, 1); // 3
+            geometry.make_point(min_x, max_y, min_z, 0, 0); // 4
+            geometry.make_point(max_x, max_y, min_z, 1, 0); // 5
+            geometry.make_point(max_x, min_y, min_z, 1, 0); // 6
+            geometry.make_point(min_x, min_y, min_z, 0, 0); // 7
 
-        geometry.make_polygon( {0, 1, 2, 3} );
-        geometry.make_polygon( {0, 3, 7, 4} );
-        geometry.make_polygon( {0, 4, 5, 1} ); // top
-        geometry.make_polygon( {5, 4, 7, 6} );
-        geometry.make_polygon( {2, 1, 5, 6} );
-        geometry.make_polygon( {7, 3, 2, 6} ); // bottom
+            geometry.make_polygon( {0, 1, 2, 3} );
+            geometry.make_polygon( {0, 3, 7, 4} );
+            geometry.make_polygon( {0, 4, 5, 1} ); // top
+            geometry.make_polygon( {5, 4, 7, 6} );
+            geometry.make_polygon( {2, 1, 5, 6} );
+            geometry.make_polygon( {7, 3, 2, 6} ); // bottom
 
-        geometry.make_point_corners();
-        geometry.build_edges();
-        geometry.compute_polygon_normals();
-        geometry.compute_polygon_centroids();
-        geometry.compute_tangents();
-    });
+            geometry.make_point_corners();
+            geometry.build_edges();
+            geometry.compute_polygon_normals();
+            geometry.compute_polygon_centroids();
+            geometry.compute_tangents();
+        }
+    );
 }
 
 auto make_box(const double r)

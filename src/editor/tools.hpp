@@ -78,6 +78,7 @@ private:
     std::vector<gsl::not_null<Tool*>>         m_background_tools;
     std::vector<gsl::not_null<Imgui_window*>> m_imgui_windows;
     ImGuiContext*                             m_imgui_context{nullptr};
+    ImVector<ImWchar>                         m_glyphRanges;
 };
 
 }

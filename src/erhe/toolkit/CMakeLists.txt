@@ -16,14 +16,14 @@ set(source_list
     window.hpp
 )
 
-if (${ERHE_WINDOW_TOOLKIT} STREQUAL "GLFW")
+if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
     list(APPEND source_list
          glfw_window.cpp
          glfw_window.hpp
     )
 endif()
 
-if (${ERHE_WINDOW_TOOLKIT} STREQUAL "Mango")
+if (${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
     list(APPEND source_list
          mango_window.cpp
          mango_window.hpp
@@ -42,11 +42,11 @@ target_link_libraries(${_target}
         Microsoft.GSL::GSL
 )
 
-if (${ERHE_WINDOW_TOOLKIT} STREQUAL "GLFW")
+if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
     target_link_libraries(${_target} PUBLIC glfw)
 endif ()
 
-if (${ERHE_WINDOW_TOOLKIT} STREQUAL "Mango")
+if (${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
     target_link_libraries(${_target} PUBLIC mango)
 endif()
 

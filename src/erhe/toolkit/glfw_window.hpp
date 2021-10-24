@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(ERHE_WINDOW_TOOLKIT_GLFW)
+#if defined(ERHE_WINDOW_LIBRARY_GLFW)
 
 #include "erhe/toolkit/view.hpp"
 
@@ -87,4 +87,4 @@ private:
 
 } // namespace erhe::toolkit
 
-#endif // defined(ERHE_WINDOW_TOOLKIT_GLFW)
+#endif // defined(ERHE_WINDOW_LIBRARY_GLFW)

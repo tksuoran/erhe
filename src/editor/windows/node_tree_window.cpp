@@ -72,6 +72,39 @@ auto Node_tree_window::get_icon(const Light_type type) const -> const ImVec2
     }
 }
 
+auto has_exactly_one_visible_attachment(const std::shared_ptr<erhe::scene::Node>& node)
+{
+    size_t visible_attachment_count{0};
+    for (const auto& attachment : node->attachments)
+    {
+        const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(attachment);
+        if (mesh)
+        {
+            ++visible_attachment_count;
+        }
+        const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(attachment);
+        if (camera)
+        {
+            ++visible_attachment_count;
+        }
+        const auto light = std::dynamic_pointer_cast<erhe::scene::Light>(attachment);
+        if (light)
+        {
+            ++visible_attachment_count;
+        }
+        const auto child_node = std::dynamic_pointer_cast<erhe::scene::Node>(attachment);
+        if (child_node)
+        {
+            ++visible_attachment_count;
+        }
+        if (visible_attachment_count > 1)
+        {
+            return false;
+        }
+    }
+    return visible_attachment_count == 1;
+}
+
 void Node_tree_window::node_imgui(const std::shared_ptr<erhe::scene::Node>& node)
 {    
     const auto node_selection_bit = node->is_selected() ? ImGuiTreeNodeFlags_Selected
@@ -82,9 +115,11 @@ void Node_tree_window::node_imgui(const std::shared_ptr<erhe::scene::Node>& node
                                         node_selection_bit};
     icon(m_icon_set->icons.node);
     std::shared_ptr<erhe::scene::INode_attachment> item_clicked{nullptr};
-    if (ImGui::TreeNodeEx(node->label().c_str(), node_flags))
+
+    const bool single_attachment = has_exactly_one_visible_attachment(node);
+    if (single_attachment || ImGui::TreeNodeEx(node->label().c_str(), node_flags))
     {
-        if (ImGui::IsItemClicked())
+        if (!single_attachment && ImGui::IsItemClicked())
         {
             item_clicked = node;
         }
@@ -97,7 +132,7 @@ void Node_tree_window::node_imgui(const std::shared_ptr<erhe::scene::Node>& node
                                                 ImGuiTreeNodeFlags_NoTreePushOnOpen |
                                                 ImGuiTreeNodeFlags_Leaf             |
                                                 attachment_selection_bit};
-            auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(attachment);
+            const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(attachment);
             if (mesh)
             {
                 icon(m_icon_set->icons.mesh);
@@ -107,7 +142,7 @@ void Node_tree_window::node_imgui(const std::shared_ptr<erhe::scene::Node>& node
                     item_clicked = attachment;
                 }
             }
-            auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(attachment);
+            const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(attachment);
             if (camera)
             {
                 icon(m_icon_set->icons.camera);
@@ -117,7 +152,7 @@ void Node_tree_window::node_imgui(const std::shared_ptr<erhe::scene::Node>& node
                     item_clicked = attachment;
                 }
             }
-            auto light = std::dynamic_pointer_cast<erhe::scene::Light>(attachment);
+            const auto light = std::dynamic_pointer_cast<erhe::scene::Light>(attachment);
             if (light)
             {
                 icon(get_icon(light->type), glm::vec4{light->color, 1.0f});
@@ -127,13 +162,16 @@ void Node_tree_window::node_imgui(const std::shared_ptr<erhe::scene::Node>& node
                     item_clicked = attachment;
                 }
             }
-            auto child_node = std::dynamic_pointer_cast<erhe::scene::Node>(attachment);
+            const auto child_node = std::dynamic_pointer_cast<erhe::scene::Node>(attachment);
             if (child_node)
             {
                 node_imgui(child_node);
             }
         }
-        ImGui::TreePop();
+        if (!single_attachment)
+        {
+            ImGui::TreePop();
+        }
     }
 
     ImGuiIO& io = ImGui::GetIO();

@@ -8,12 +8,15 @@ namespace erhe::geometry
     class Geometry;
 };
 
-class btCollisionShape;
+namespace erhe::physics
+{
+    class ICollision_shape;
+};
 
 namespace editor
 {
 
-using Collision_shape_generator   = std::function<std::shared_ptr<btCollisionShape>(float)>;
+using Collision_shape_generator   = std::function<std::shared_ptr<erhe::physics::ICollision_shape>(float)>;
 using Collision_volume_calculator = std::function<float(float)>;
 
 }

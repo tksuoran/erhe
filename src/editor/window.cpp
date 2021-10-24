@@ -7,7 +7,7 @@
 #include "erhe/toolkit/tracy_client.hpp"
 #include "erhe/toolkit/window.hpp"
 
-#if defined(ERHE_WINDOW_TOOLKIT_GLFW)
+#if defined(ERHE_WINDOW_LIBRARY_GLFW)
 #   include <GLFW/glfw3.h>
 #endif
 
@@ -35,7 +35,7 @@ auto Window::create_gl_window() -> bool
     m_context_window = std::make_unique<erhe::toolkit::Context_window>(1920, 1080, msaa_sample_count); // 1080p
     //m_context_window = std::make_unique<erhe::toolkit::Context_window>(1280,  720, msaa_sample_count); // 720p
 
-#if defined(ERHE_WINDOW_TOOLKIT_GLFW)
+#if defined(ERHE_WINDOW_LIBRARY_GLFW)
     erhe::graphics::PNG_loader loader;
     erhe::graphics::Image_info image_info;
     std::filesystem::path current_path = std::filesystem::current_path();

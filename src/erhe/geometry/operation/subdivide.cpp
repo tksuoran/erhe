@@ -65,9 +65,13 @@ Subdivide::Subdivide(Geometry& src, Geometry& destination)
 
 auto subdivide(Geometry& source) -> Geometry
 {
-    return Geometry(fmt::format("subdivide({})", source.name), [&source](auto& result) {
-        Subdivide operation(source, result);
-    });
+    return Geometry(
+        fmt::format("subdivide({})", source.name),
+        [&source](auto& result)
+        {
+            Subdivide operation(source, result);
+        }
+    );
 }
 
 

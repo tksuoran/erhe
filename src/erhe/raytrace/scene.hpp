@@ -15,29 +15,20 @@ namespace erhe::raytrace
 class Device;
 class Geometry;
 
-class Scene
+class IScene
     : public erhe::scene::INode_attachment
 {
 public:
-    explicit Scene(const Device& device);
-    Scene(const Scene&)            = delete;
-    Scene(Scene&&)                 = delete;
-    Scene& operator=(const Scene&) = delete;
-    Scene& operator=(Scene&&)      = delete;
-    ~Scene();
-
-    void attach   (Scene& scene);
-    void attach   (Geometry& geometry);
-    void detach   (Geometry& geometry_id);
-    void commit   ();
-    auto intersect(const glm::vec3 origin, const glm::vec3 direction) -> RTCRayHit;
-
-    auto get_hit_position(const RTCRayHit& ray_hit) -> std::optional<glm::vec3>;
-    auto get_hit_normal  (const RTCRayHit& ray_hit) -> std::optional<glm::vec3>;
+    virtual void attach          (IScene& scene) = 0;
+    virtual void attach          (IGeometry& geometry) = 0;
+    virtual void detach          (IGeometry& geometry_id) = 0;
+    virtual void commit          ();
+    virtual auto intersect       (const glm::vec3 origin, const glm::vec3 direction) -> RTCRayHit;
+    virtual auto get_hit_position(const RTCRayHit& ray_hit) -> std::optional<glm::vec3>;
+    virtual auto get_hit_normal  (const RTCRayHit& ray_hit) -> std::optional<glm::vec3>;
 
 private:
-    RTCScene m_scene{nullptr};
-    
+    RTCScene m_scene{nullptr};    
 };
 
 } // namespace erhe::raytrace

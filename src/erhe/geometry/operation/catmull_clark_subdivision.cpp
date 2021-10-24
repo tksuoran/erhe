@@ -158,9 +158,12 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& de
 
 auto catmull_clark_subdivision(Geometry& source) -> Geometry
 {
-    return Geometry(fmt::format("catmull_clark({})", source.name), [&source](auto& result) {
-        Catmull_clark_subdivision operation(source, result);
-    });
+    return Geometry(
+        fmt::format("catmull_clark({})", source.name),
+        [&source](auto& result) {
+            Catmull_clark_subdivision operation(source, result);
+        }
+    );
 }
 
 } // namespace erhe::geometry::operation

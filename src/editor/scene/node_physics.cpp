@@ -10,10 +10,10 @@ using namespace erhe::scene;
 using namespace erhe::physics;
 using namespace std;
 
-Node_physics::Node_physics(Rigid_body::Create_info& create_info)
-    : m_node         {{}}
-    , rigid_body     {create_info, this}
-    , collision_shape{create_info.collision_shape}
+Node_physics::Node_physics(IRigid_body_create_info& create_info)
+    : m_node           {{}}
+    , m_rigid_body     {IRigid_body::create_shared(create_info, this)}
+    , m_collision_shape{create_info.collision_shape}
 {
     m_node.reset();
 }
@@ -32,8 +32,11 @@ void Node_physics::on_attach(Node& node)
     ZoneScoped;
 
     m_node = node.shared_from_this();
-    btTransform world_transform = get_node_transform();
-    rigid_body.bullet_rigid_body.setWorldTransform(world_transform);
+    glm::mat3 basis{};
+    glm::vec3 origin{};
+    get_world_transform(basis, origin);
+    VERIFY(m_rigid_body);
+    m_rigid_body->set_world_transform(basis, origin);
 }
 
 void Node_physics::on_detach(Node& node)
@@ -43,42 +46,26 @@ void Node_physics::on_detach(Node& node)
     m_node.reset();
 }
 
-btTransform Node_physics::get_node_transform() const
+//auto Node_physics::get_node_transform() const -> glm::mat4
+void Node_physics::get_world_transform(glm::mat3& basis, glm::vec3& origin)
 {
     ZoneScoped;
 
     if (m_node.get() == nullptr)
     {
-        return btTransform::getIdentity();
-    }
-
-    glm::mat4 m = m_node->world_from_node();
-    glm::vec3 p = glm::vec3(m[3]);
-    return btTransform(btMatrix3x3(m[0][0], m[1][0], m[2][0],
-                                   m[0][1], m[1][1], m[2][1],
-                                   m[0][2], m[1][2], m[2][2]),
-                       btVector3(p[0], p[1], p[2]));
-}
-
-void Node_physics::getWorldTransform(btTransform& worldTrans) const
-{
-    ZoneScoped;
-
-    if (m_node.get() == nullptr)
-    {
-        worldTrans = btTransform::getIdentity();
+        basis  = glm::mat3{1.0f};
+        origin = glm::vec3{0.0f};
         return;
     }
 
-    // TODO Take center of mass into account
     glm::mat4 m = m_node->world_from_node();
-    worldTrans.setBasis(btMatrix3x3(m[0][0], m[1][0], m[2][0],
-                                    m[0][1], m[1][1], m[2][1],
-                                    m[0][2], m[1][2], m[2][2]));
-    worldTrans.setOrigin(btVector3(m[3][0], m[3][1], m[3][2]));
+    glm::vec3 p = glm::vec3{m[3]};
+
+    basis = glm::mat3{m};
+    origin = p;
 }
 
-void Node_physics::setWorldTransform(const btTransform& worldTrans)
+void Node_physics::set_world_transform(const glm::mat3 basis, const glm::vec3 origin) 
 {
     ZoneScoped;
 
@@ -88,21 +75,18 @@ void Node_physics::setWorldTransform(const btTransform& worldTrans)
     }
 
     // TODO Take center of mass into account
-    btMatrix3x3 m = worldTrans.getBasis();
-    btVector3   p = worldTrans.getOrigin();
 
-    if (p.y() < -100.0f)
+    if (origin.y < -100.0f)
     {
-        p = btVector3(0.0f, 8.0f, 0.0f);
-        rigid_body.bullet_rigid_body.setWorldTransform(btTransform(m, p));
-        rigid_body.bullet_rigid_body.setLinearVelocity(btVector3(0.0f, 0.0f, 0.0f));
-        rigid_body.bullet_rigid_body.setAngularVelocity(btVector3(0.0f, 0.0f, 0.0f));
+        const glm::vec3 p{0.0f, 8.0f, 0.0f};
+        m_rigid_body->set_world_transform(basis, p);
+        m_rigid_body->set_linear_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
+        m_rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
     }
 
-    glm::mat4 transform(m.getColumn(0).x(), m.getColumn(0).y(), m.getColumn(0).z(), 0.0f,
-                        m.getColumn(1).x(), m.getColumn(1).y(), m.getColumn(1).z(), 0.0f,
-                        m.getColumn(2).x(), m.getColumn(2).y(), m.getColumn(2).z(), 0.0f,
-                        p.x(),              p.y(),              p.z(),              1.0f);
+    const auto& m = basis;
+    glm::mat4 transform{m};
+    transform[3] = glm::vec4{origin.x, origin.y, origin.z, 1.0f};
     m_node->parent = nullptr;
     m_node->transforms.parent_from_node.set(transform);
 }
@@ -113,13 +97,25 @@ void Node_physics::on_node_updated()
 
     VERIFY(m_node.get() != nullptr);
 
-    if (rigid_body.get_collision_mode() == Rigid_body::Collision_mode::e_static)
+    if (m_rigid_body->get_collision_mode() == Collision_mode::e_static)
     {
         log_physics.warn("Attempt to move static rigid body - promoting to kinematic.\n");
-        rigid_body.set_kinematic();
+        m_rigid_body->set_kinematic();
     }
-    btTransform world_transform = get_node_transform();
-    rigid_body.bullet_rigid_body.setWorldTransform(world_transform);
+    glm::mat3 basis{};
+    glm::vec3 origin{};
+    get_world_transform(basis, origin);
+    m_rigid_body->set_world_transform(basis, origin);
+}
+
+auto Node_physics::rigid_body() -> IRigid_body*
+{
+    return m_rigid_body.get();
+}
+
+auto Node_physics::rigid_body() const -> const IRigid_body*
+{
+    return m_rigid_body.get();
 }
 
 

@@ -11,7 +11,8 @@
 
 namespace erhe::xr {
 
-Swapchain_image::Swapchain_image(Swapchain* swapchain, const uint32_t image_index)
+Swapchain_image::Swapchain_image(gsl::not_null<Swapchain*> swapchain,
+                                 const uint32_t            image_index)
     : m_swapchain  {swapchain}
     , m_image_index{image_index}
 {
@@ -56,6 +57,7 @@ auto Swapchain_image::get_gl_texture() const -> uint32_t
 Swapchain::Swapchain(XrSwapchain xr_swapchain)
     : m_xr_swapchain{xr_swapchain}
 {
+    Expects(xr_swapchain != XR_NULL_HANDLE);
     enumerate_images();
 }
 
@@ -77,6 +79,12 @@ Swapchain::Swapchain(Swapchain&& other) noexcept
 
 void Swapchain::operator=(Swapchain&& other) noexcept
 {
+    Expects(other.m_xr_swapchain != XR_NULL_HANDLE);
+    if (m_xr_swapchain != XR_NULL_HANDLE)
+    {
+        check_gl_context_in_current_in_this_thread();
+        check("xrDestroySwapchain", xrDestroySwapchain(m_xr_swapchain));
+    }
     m_xr_swapchain = other.m_xr_swapchain;
     m_gl_textures  = std::move(other.m_gl_textures);
     other.m_xr_swapchain = XR_NULL_HANDLE;
@@ -84,6 +92,11 @@ void Swapchain::operator=(Swapchain&& other) noexcept
 
 auto Swapchain::acquire() -> std::optional<Swapchain_image>
 {
+    if (m_xr_swapchain == XR_NULL_HANDLE)
+    {
+        return {};
+    }
+
     XrSwapchainImageAcquireInfo swapchain_image_acquire_info;
     swapchain_image_acquire_info.type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO;
     swapchain_image_acquire_info.next = nullptr;
@@ -150,6 +163,11 @@ auto Swapchain::get_xr_swapchain() const -> XrSwapchain
 
 auto Swapchain::enumerate_images() -> bool
 {
+    if (m_xr_swapchain == XR_NULL_HANDLE)
+    {
+        return false;
+    }
+
     uint32_t image_count{0};
 
     check_gl_context_in_current_in_this_thread();

@@ -87,7 +87,7 @@ target_link_libraries(${_target}
         erhe_log
 )
 
-if(${ERHE_WINDOW_TOOLKIT} STREQUAL "Mango")
+if(${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
     target_link_libraries(${_target}
         PUBLIC
             mango

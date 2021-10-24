@@ -4,9 +4,12 @@
 #include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 
+#include <gsl/gsl>
+
 #include <algorithm>
 #include <cctype>
 #include <glm/glm.hpp>
+#include <limits>
 #include <string>
 
 namespace editor {
@@ -14,27 +17,100 @@ namespace editor {
 using namespace glm;
 using namespace erhe::geometry;
 
+// http://paulbourke.net/dataformats/obj/
+// http://www.martinreddy.net/gfx/3d/OBJ.spec
+// https://www.marxentlabs.com/obj-files/
+
+
 enum class Command : unsigned int
 {
     Unknown = 0,
+    Basis_matrix,
+    Bevel_interpolation,
+    Color_interpolation,
+    Connectivity,
+    Curve,
+    Curve_2D,
+    Curve_approximation_technique,
+    Curve_type,
+    Degree,
+    Dissolve_interpolation,
+    End,
+    Face,
+    Group_name,
+    Inner_trimming_loop,
+    Level_of_detail,
+    Line,
     Material_library,
-    Begin_geometry,
+    Merging_group,
+    Object_name,
+    Outer_trimming,
+    Parameter_values,
+    Point,
+    Ray_tracing,
+    Shadow_casting,
+    Smoothing_group,
+    Special_curve,
+    Special_point,
+    Step_size,
+    Surface,
+    Surface_approximation_technique,
     Use_material,
+    Vertex_parameter_space,
     Vertex_position,
     Vertex_texture_coordinate,
     Vertex_normal,
-    Face,
 };
 
 Command tokenize(const std::string& text)
 {
-    if (text == "v")      return Command::Vertex_position;
-    if (text == "vt")     return Command::Vertex_texture_coordinate;
-    if (text == "vn")     return Command::Vertex_normal;
-    if (text == "f")      return Command::Face;
-    if (text == "g")      return Command::Begin_geometry;
-    if (text == "usemtl") return Command::Use_material;
-    if (text == "mtllib") return Command::Material_library;
+    // Vertex data
+    if (text == "v")          return Command::Vertex_position;
+    if (text == "vt")         return Command::Vertex_texture_coordinate;
+    if (text == "vn")         return Command::Vertex_normal;
+    if (text == "vp")         return Command::Vertex_parameter_space;
+
+    // Element data
+    if (text == "f")          return Command::Face;
+    if (text == "fo")         return Command::Face; // Face outline
+    if (text == "l")          return Command::Line;
+    if (text == "p")          return Command::Point;
+    if (text == "curv")       return Command::Curve;
+    if (text == "curv2D")     return Command::Curve_2D;
+    if (text == "s")          return Command::Surface;
+
+    // Surface data
+    if (text == "deg")        return Command::Degree;
+    if (text == "bmat")       return Command::Basis_matrix;
+    if (text == "step")       return Command::Step_size;
+    if (text == "cstype")     return Command::Curve_type;
+    if (text == "con")        return Command::Connectivity;
+
+    if (text == "parm")       return Command::Parameter_values;
+    if (text == "trim")       return Command::Outer_trimming;
+    if (text == "hole")       return Command::Inner_trimming_loop;
+    if (text == "scrv")       return Command::Special_curve;
+    if (text == "sp")         return Command::Special_point;
+    if (text == "end")        return Command::End;
+
+    // Grouping data
+    if (text == "g")          return Command::Group_name;
+    if (text == "s")          return Command::Smoothing_group;
+    if (text == "mg")         return Command::Merging_group;
+    if (text == "o")          return Command::Object_name;
+
+    // Display and rendering data
+    if (text == "bevel")      return Command::Bevel_interpolation;
+    if (text == "c_interp")   return Command::Color_interpolation;
+    if (text == "d_interp")   return Command::Dissolve_interpolation;
+    if (text == "lod")        return Command::Level_of_detail;
+    if (text == "usemtl")     return Command::Use_material;
+    if (text == "mtllib")     return Command::Material_library;
+    if (text == "shadow_obj") return Command::Shadow_casting;
+    if (text == "trace_obj")  return Command::Ray_tracing;
+    if (text == "ctech")      return Command::Curve_approximation_technique;
+    if (text == "stech")      return Command::Surface_approximation_technique;
+
     return Command::Unknown;
 }
 
@@ -43,15 +119,15 @@ Command tokenize(const std::string& text)
 // vn -1.64188e-16 -0.284002 0.958824
 // f 1/1/1 2/2/2 3/3/3 4/4/4
 
-Geometry parse_obj_geometry(const std::filesystem::path& path)
+auto parse_obj_geometry(const std::filesystem::path& path)
+-> std::vector<std::shared_ptr<erhe::geometry::Geometry>>
 {
     ZoneScoped;
 
     log_parsers.trace("path = {}\n", path.generic_string());
 
-    Geometry geometry;
-
-    auto opt_text = erhe::toolkit::read(path);
+    std::vector<std::shared_ptr<erhe::geometry::Geometry>> result;
+    const auto opt_text = erhe::toolkit::read(path);
 
     // I dislike this big scope, I'd prefer just to
     // return {} but unfortunately having more than
@@ -60,60 +136,86 @@ Geometry parse_obj_geometry(const std::filesystem::path& path)
     {
         const std::string& text = opt_text.value();
 
-        auto* point_positions  = geometry.point_attributes().create<glm::vec3>(c_point_locations);
-        auto* corner_normals   = geometry.corner_attributes().create<glm::vec3>(c_corner_normals);
-        auto* corner_texcoords = geometry.corner_attributes().create<glm::vec2>(c_corner_texcoords);
+        std::shared_ptr<erhe::geometry::Geometry> geometry{};
+        erhe::geometry::Property_map<erhe::geometry::Point_id,  glm::vec3>* point_positions {nullptr};
+        erhe::geometry::Property_map<erhe::geometry::Point_id,  glm::vec3>* point_colors    {nullptr};
+        erhe::geometry::Property_map<erhe::geometry::Corner_id, glm::vec3>* corner_normals  {nullptr};
+        erhe::geometry::Property_map<erhe::geometry::Corner_id, glm::vec2>* corner_texcoords{nullptr};
 
         const std::string& delimiters  = " \t\v";
         const std::string& end_of_line = "\n";
         const std::string& slash       = "/\r";
-        std::string::size_type line_last_pos = text.find_first_not_of(end_of_line, 0);
-        std::string::size_type line_pos      = text.find_first_of(end_of_line, line_last_pos);
 
-        Point_id next_vertex_id = 0;
+        std::string::size_type line_last_pos  = text.find_first_not_of(end_of_line, 0);
+        std::string::size_type line_pos       = text.find_first_of(end_of_line, line_last_pos);
+        std::vector<glm::vec3> positions;
+        std::vector<glm::vec3> colors;
         std::vector<glm::vec3> normals;
         std::vector<glm::vec2> texcoords;
+
+        // Mapping from OBJ point id to erhe::geometry::Geometry::Point_Id
+        std::vector<Point_id>  obj_point_to_geometry_point;
+
+        bool has_vertex_colors = false;
+        bool has_normals       = false;
+        bool has_texcoors      = false;
+
         while ((line_pos != std::string::npos) || (line_last_pos != std::string::npos))
         {
             auto line = text.substr(line_last_pos, line_pos - line_last_pos);
             line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
+
             //log_parsers.trace("line: {}\n", line);
             if (line.length() == 0)
             {
                 line_last_pos = text.find_first_not_of(end_of_line, line_pos);
-                line_pos = text.find_first_of(end_of_line, line_last_pos);
+                line_pos      = text.find_first_of(end_of_line, line_last_pos);
                 continue;
             }
             erhe::log::Indenter scope_indent;
 
             // process line
             std::string::size_type token_last_pos = line.find_first_not_of(delimiters, 0);
-            std::string::size_type token_pos      = line.find_first_of(delimiters, token_last_pos);
+            std::string::size_type token_pos      = line.find_first_of    (delimiters, token_last_pos);
             if (token_last_pos == std::string::npos || token_pos == std::string::npos)
             {
                 line_last_pos = text.find_first_not_of(end_of_line, line_pos);
-                line_pos = text.find_first_of(end_of_line, line_last_pos);
+                line_pos      = text.find_first_of(end_of_line, line_last_pos);
                 continue;
             }
-            auto command_text = line.substr(token_last_pos, token_pos - token_last_pos);
-            auto command = tokenize(command_text);
+
+            const auto command_text = line.substr(token_last_pos, token_pos - token_last_pos);
+            const auto command      = tokenize(command_text);
+
             //log_parsers.trace("command: {}\n", command_text);
             std::vector<float> float_args;
-            std::vector<int> int_args;
-            std::vector<int> face_vertex_position_indices;
-            std::vector<int> face_vertex_texcoord_indices;
-            std::vector<int> face_vertex_normal_indices;
+            std::vector<int>   int_args;
+            std::vector<int>   face_vertex_position_indices;
+            std::vector<int>   face_vertex_texcoord_indices;
+            std::vector<int>   face_vertex_normal_indices;
             while ((token_pos != std::string::npos) || (token_last_pos != std::string::npos))
             {
                 switch (command)
                 {
-                    case Command::Begin_geometry:
+                    case Command::Object_name:
+                        // TODO Choose Geometry splitting based on o / g / s / mg
+                        //      Currently fixed to use g
+                        break;
+
+                    case Command::Group_name:
                     {
                         token_last_pos = line.find_first_not_of(end_of_line, token_pos);
-                        token_pos = line.find_first_of(end_of_line, token_last_pos);
+                        token_pos      = line.find_first_of(end_of_line, token_last_pos);
                         if (token_last_pos != std::string::npos || token_pos != std::string::npos)
                         {
-                            auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
+                            const auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
+                            geometry         = std::make_shared<erhe::geometry::Geometry>(arg_text);
+                            point_positions  = geometry->point_attributes().create<glm::vec3>(c_point_locations);
+                            point_colors     = geometry->point_attributes().create<glm::vec3>(c_point_colors);
+                            corner_normals   = geometry->corner_attributes().create<glm::vec3>(c_corner_normals);
+                            corner_texcoords = geometry->corner_attributes().create<glm::vec2>(c_corner_texcoords);
+                            result.push_back(geometry);
+                            obj_point_to_geometry_point.clear();
                             //log_parsers.trace("arg: {}\n", arg_text);
                         }
                         //token_pos = text.find_first_of(end_of_line, token_last_pos);
@@ -126,27 +228,46 @@ Geometry parse_obj_geometry(const std::filesystem::path& path)
                     {
                         // consume rest of the line for now
                         token_last_pos = line.find_first_not_of(end_of_line, token_pos);
-                        token_pos = line.find_first_of(end_of_line, token_last_pos);
+                        token_pos      = line.find_first_of    (end_of_line, token_last_pos);
                         if (token_last_pos != std::string::npos || token_pos != std::string::npos)
                         {
-                            auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
+                            const auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
                             //log_parsers.trace("arg: {}\n", arg_text);
                         }
                         //token_last_pos = line.find_first_not_of(end_of_line, token_pos);
                         //token_pos = text.find_first_of(end_of_line, token_last_pos);
                         break;
                     }
+
                     case Command::Vertex_position:
+                    // Three required variables: x, y, and z
+                    // One optional variable: w
+                    // Some applications support colors; if they are available, add RBG values after the variables.
+                    // The default is 1.
+
                     case Command::Vertex_normal:
+                    // If a UV (vt) or vertex normal (vn) are defined for one vertex in a shape, they must be defined for all.
+                    // Three required variables: x, y, and z
+
                     case Command::Vertex_texture_coordinate:
+                    // If a UV (vt) or vertex normal (vn) are defined for one vertex in a shape, they must be defined for all.
+                    // One required variable: u
+                    // Two optional variables: v and w
+                    // The default is 0.
+
+                    case Command::Vertex_parameter_space:
+                    // Use u for curve points
+                    // Use u and v for surface points and non-rational trimming curve control points
+                    // Use u, v, and w for rational trimming curve control points
+
                     {
                         token_last_pos = line.find_first_not_of(delimiters, token_pos);
-                        token_pos = line.find_first_of(delimiters, token_last_pos);
+                        token_pos      = line.find_first_of    (delimiters, token_last_pos);
                         if (token_last_pos != std::string::npos || token_pos != std::string::npos)
                         {
-                            auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
-                            log_parsers.trace("arg: {}\n", arg_text);
-                            float value = std::stof(arg_text);
+                            const auto  arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
+                            const float value    = std::stof(arg_text);
+                            //log_parsers.trace("arg: {}\n", arg_text);
                             float_args.push_back(value);
                         }
                         //token_last_pos = line.find_first_not_of(delimiters, token_pos);
@@ -156,26 +277,26 @@ Geometry parse_obj_geometry(const std::filesystem::path& path)
                     case Command::Face:
                     {
                         token_last_pos = line.find_first_not_of(delimiters, token_pos);
-                        token_pos = line.find_first_of(delimiters, token_last_pos);
+                        token_pos      = line.find_first_of    (delimiters, token_last_pos);
                         if (token_last_pos != std::string::npos || token_pos != std::string::npos)
                         {
-                            auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
+                            const auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
                             //log_parsers.trace("arg: {}\n", arg_text);
                             std::string::size_type subtoken_last_pos = arg_text.find_first_not_of(slash, 0);
                             std::string::size_type subtoken_pos      = arg_text.find_first_of(slash, subtoken_last_pos);
                             int subtoken_slot = 0;
                             while ((subtoken_pos != std::string::npos) || (subtoken_last_pos != std::string::npos))
                             {
-                                auto subtoken_text = arg_text.substr(subtoken_last_pos, subtoken_pos - subtoken_last_pos);
+                                const auto subtoken_text = arg_text.substr(subtoken_last_pos, subtoken_pos - subtoken_last_pos);
                                 //log_parsers.trace("subtoken: {}\n", subtoken_text);
                                 if (arg_text.length() > 0)
                                 {
-                                    int value = std::stoi(subtoken_text);
+                                    const int value = std::stoi(subtoken_text);
                                     switch (subtoken_slot)
                                     {
                                         case 0: face_vertex_position_indices.push_back(value); break;
                                         case 1: face_vertex_texcoord_indices.push_back(value); break;
-                                        case 2: face_vertex_normal_indices.push_back(value); break;
+                                        case 2: face_vertex_normal_indices  .push_back(value); break;
                                         default:
                                         {
                                             //FATAL("bad subtoken slot for wavefront obj parser face command\n");
@@ -184,7 +305,7 @@ Geometry parse_obj_geometry(const std::filesystem::path& path)
                                     }
                                 }
                                 subtoken_last_pos = arg_text.find_first_not_of(slash, subtoken_pos);
-                                subtoken_pos = arg_text.find_first_of(slash, subtoken_last_pos);
+                                subtoken_pos      = arg_text.find_first_of    (slash, subtoken_last_pos);
                                 subtoken_slot++;
                             }
                         }
@@ -196,20 +317,30 @@ Geometry parse_obj_geometry(const std::filesystem::path& path)
 
             switch (command)
             {
-                case Command::Begin_geometry:
+                case Command::Group_name:
                 case Command::Use_material:
                 case Command::Unknown:
                 case Command::Material_library:
+                default:
                     break;
                 case Command::Vertex_position:
                 {
                     //ZoneScopedN("position");
-                    if (float_args.size() == 3)
+                    if (float_args.size() >= 3)
                     {
-                        Point_id point_id = geometry.make_point();
-                        //Expects(point_id == next_vertex_id);
-                        point_positions->put(point_id, glm::vec3(float_args[0], float_args[1], float_args[2]));
-                        next_vertex_id++;
+                        Expects(geometry);
+                        if (float_args.size() >= 6)
+                        {
+                            while (colors.size() < positions.size())
+                            {
+                                colors.emplace_back(1.0f, 1.0f, 1.0f);
+                            }
+                            colors.emplace_back(float_args[3], float_args[4], float_args[5]);
+                            has_vertex_colors = true;
+                            //point_colors->put(point_id, glm::vec3(float_args[3], float_args[4], float_args[5]));
+                        }
+
+                        positions.emplace_back(float_args[0], float_args[1], float_args[2]);
                     }
                     //else
                     //{
@@ -234,6 +365,7 @@ Geometry parse_obj_geometry(const std::filesystem::path& path)
                 case Command::Vertex_texture_coordinate:
                 {
                     //ZoneScopedN("texcoord");
+                    // TODO support 1 / 3
                     if (float_args.size() == 2)
                     {
                         texcoords.emplace_back(float_args[0], float_args[1]);
@@ -247,23 +379,74 @@ Geometry parse_obj_geometry(const std::filesystem::path& path)
                 case Command::Face:
                 {
                     //ZoneScopedN("face");
-                    Polygon_id polygon_id = geometry.make_polygon();
-                    size_t corner_count = face_vertex_position_indices.size();
-                    for (size_t i = 0; i < corner_count; ++i)
+                    Expects(geometry);
+
+                    const Polygon_id polygon_id   = geometry->make_polygon();
+                    const int        corner_count = static_cast<int>(face_vertex_position_indices.size());
+                    for (int i = 0; i < corner_count; ++i)
                     {
-                        auto pos_index = face_vertex_position_indices[i] - 1;
-                        Point_id point_id = static_cast<Point_id>(pos_index);
-                        Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
-                        if (i < face_vertex_texcoord_indices.size())
+                        const int j = corner_count - 1 - i; // reverse polygon
+                        const int obj_vertex_index = face_vertex_position_indices[j];
+                        const int position_index =
+                            (obj_vertex_index > 0)
+                                ? obj_vertex_index - 1
+                                : obj_vertex_index + static_cast<int>(positions.size());
+                        if (position_index < 0) 
                         {
-                            auto texcoord_index = static_cast<size_t>(face_vertex_texcoord_indices[i] - 1);
-                            //VERIFY(texcoord_index < texcoords.size());
+                            DebugBreak();
+                        }
+
+                        // Vertex indices in OBJ file are global.
+                        // Each erhe::geometry Geometry has it's own namespace for Point_id.
+                        // This maps OBJ vertex indices to geometry Point_id.
+                        constexpr auto null_point = std::numeric_limits<Point_id>::max();
+                        while (obj_point_to_geometry_point.size() <= position_index)
+                        {
+                            obj_point_to_geometry_point.push_back(null_point);
+                        }
+                        if (obj_point_to_geometry_point[position_index] == null_point)
+                        {
+                            obj_point_to_geometry_point[position_index] = geometry->make_point();
+                        }
+
+                        const Point_id  point_id  = obj_point_to_geometry_point[position_index];
+                        const Corner_id corner_id = geometry->make_polygon_corner(polygon_id, point_id);
+                        VERIFY(position_index < positions.size());
+
+                        point_positions->put(point_id, positions[position_index]);
+
+                        if (has_vertex_colors)
+                        {
+                            point_colors->put(point_id, colors[position_index]);
+                        }
+
+                        if (j < face_vertex_texcoord_indices.size())
+                        {
+                            const int obj_texcoord_index = face_vertex_texcoord_indices[j];
+                            const int texcoord_index =
+                                (obj_texcoord_index > 0)
+                                    ? obj_texcoord_index - 1
+                                    : obj_texcoord_index + static_cast<int>(texcoords.size());
+                            if (texcoord_index < 0) 
+                            {
+                                DebugBreak();
+                            }
+                            VERIFY(texcoord_index < texcoords.size());
                             corner_texcoords->put(corner_id, texcoords[texcoord_index]);
                         }
-                        if (i < face_vertex_normal_indices.size())
+
+                        if (j < face_vertex_normal_indices.size())
                         {
-                            auto normal_index = static_cast<size_t>(face_vertex_normal_indices[i] - 1);
-                            //VERIFY(normal_index < normals.size());
+                            const int obj_normal_index = face_vertex_normal_indices[j];
+                            const int normal_index =
+                                (obj_normal_index > 0)
+                                    ? obj_normal_index - 1
+                                    : obj_normal_index + static_cast<int>(normals.size());
+                            if (normal_index < 0) 
+                            {
+                                DebugBreak();
+                            }
+                            VERIFY(normal_index < normals.size());
                             corner_normals->put(corner_id, normals[normal_index]);
                         }
                     }
@@ -274,24 +457,19 @@ Geometry parse_obj_geometry(const std::filesystem::path& path)
             line_pos = text.find_first_of(end_of_line, line_last_pos);
         }
 
+        for (auto geometry : result)
         {
             ZoneScopedN("post processing");
 
-            geometry.make_point_corners();
+            geometry->make_point_corners();
 
-            for (Polygon_id polygon_id = 0; polygon_id < geometry.polygon_count(); ++polygon_id)
-            {
-                erhe::geometry::Polygon& polygon = geometry.polygons[polygon_id];
-                polygon.reverse(geometry);
-            }
-
-            geometry.build_edges();
-            geometry.generate_polygon_texture_coordinates();
-            geometry.compute_tangents();
+            geometry->build_edges();
+            geometry->generate_polygon_texture_coordinates();
+            geometry->compute_tangents();
         }
     }
 
-    return geometry;
+    return result;
 }
 
 } // namespace editor

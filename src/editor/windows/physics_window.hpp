@@ -3,6 +3,8 @@
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
 
+#include "erhe/physics/idebug_draw.hpp"
+
 #include <memory>
 
 namespace editor
@@ -47,18 +49,7 @@ public:
         bool normals          {false};
         bool frames           {true};
 
-        class Default_colors
-        {
-        public:
-            glm::vec3 active_object               {1.0f, 1.0f, 1.0f};
-            glm::vec3 deactivated_object          {0.0f, 1.0f, 0.0f};
-            glm::vec3 wants_deactivation_object   {0.0f, 1.0f, 1.0f};
-            glm::vec3 disabled_deactivation_object{1.0f, 0.0f, 0.0f};
-            glm::vec3 disabled_simulation_object  {1.0f, 1.0f, 0.0f};
-            glm::vec3 aabb                        {1.0f, 0.0f, 0.0f};
-            glm::vec3 contact_point               {1.0f, 1.0f, 0.0f};
-        };
-        Default_colors default_colors;
+        erhe::physics::IDebug_draw::Colors colors;
     };
 
     auto get_debug_draw_parameters() -> Debug_draw_parameters;

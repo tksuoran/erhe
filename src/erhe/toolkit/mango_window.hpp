@@ -1,7 +1,7 @@
 #ifndef mango_window_hpp_erhe_toolkit
 #define mango_window_hpp_erhe_toolkit
 
-#if defined(ERHE_WINDOW_TOOLKIT_MANGO)
+#if defined(ERHE_WINDOW_LIBRARY_MANGO)
 
 #include "erhe/toolkit/view.hpp"
 #include "erhe/gl/dynamic_load.hpp"
@@ -347,6 +347,6 @@ private:
 
 } // namespace erhe::toolkit
 
-#endif // defined(ERHE_WINDOW_TOOLKIT_MANGO)
+#endif // defined(ERHE_WINDOW_LIBRARY_MANGO)
 
 #endif

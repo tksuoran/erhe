@@ -53,8 +53,8 @@ void Mesh_memory::initialize_component()
     gl_buffer_sink = make_unique<erhe::primitive::Gl_buffer_sink>(*gl_buffer_transfer_queue.get(),
                                                                   gl_vertex_buffer,
                                                                   gl_index_buffer);
-    embree_vertex_buffer = make_shared<erhe::raytrace::Buffer>(vertex_byte_count);
-    embree_index_buffer  = make_shared<erhe::raytrace::Buffer>(index_byte_count);
+    embree_vertex_buffer = erhe::raytrace::IBuffer::create_shared(vertex_byte_count);
+    embree_index_buffer  = erhe::raytrace::IBuffer::create_shared(index_byte_count);
     embree_buffer_sink   = make_unique<erhe::primitive::Embree_buffer_sink>(embree_vertex_buffer, embree_index_buffer);
 
     build_info_set.gl    .buffer.buffer_sink = gl_buffer_sink.get();

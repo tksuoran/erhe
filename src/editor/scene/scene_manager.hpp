@@ -41,11 +41,6 @@ namespace erhe::scene
     class Scene;
 }
 
-namespace erhe::physics
-{
-    class World;
-}
-
 namespace editor
 {
 
@@ -133,6 +128,7 @@ private:
     std::shared_ptr<erhe::scene::Camera>  m_camera;
     std::shared_ptr<Frame_controller>     m_camera_controls;
 
+    std::vector<std::shared_ptr<erhe::physics::ICollision_shape>> m_collision_shapes;
 };
 
 } // namespace editor

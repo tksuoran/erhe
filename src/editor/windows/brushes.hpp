@@ -15,6 +15,11 @@ namespace erhe::geometry
     class Geometry;
 }
 
+namespace Physics
+{
+    class ICollision_shape;
+}
+
 namespace erhe::primitive
 {
     class Build_info_set;
@@ -27,8 +32,6 @@ namespace erhe::scene
     class Mesh;
     class Node;
 }
-
-class btCollisionShape;
 
 namespace editor
 {
@@ -79,14 +82,14 @@ public:
     //void add_brush     (const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry);
     void add_material  (const std::shared_ptr<erhe::primitive::Material>& material);
     auto allocate_brush(erhe::primitive::Build_info_set& build_info_set) -> std::shared_ptr<Brush>;
-    auto make_brush    (erhe::geometry::Geometry&&               geometry,
-                        const Brush_create_context&              context,
-                        const std::shared_ptr<btCollisionShape>& collision_shape = {})
+    auto make_brush    (erhe::geometry::Geometry&&                              geometry,
+                        const Brush_create_context&                             context,
+                        const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape = {})
     -> std::shared_ptr<Brush>;
 
-    auto make_brush(std::shared_ptr<erhe::geometry::Geometry> geometry,
-                    const Brush_create_context&               context,
-                    const std::shared_ptr<btCollisionShape>&  collision_shape = {})
+    auto make_brush(std::shared_ptr<erhe::geometry::Geometry>               geometry,
+                    const Brush_create_context&                             context,
+                    const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape = {})
     -> std::shared_ptr<Brush>;
 
     auto make_brush(std::shared_ptr<erhe::geometry::Geometry> geometry,

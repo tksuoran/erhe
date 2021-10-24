@@ -185,7 +185,10 @@ int color_format_score(const gl::Internal_format image_format)
 
 auto Xr_session::enumerate_swapchain_formats() -> bool
 {
-    log_xr.trace("{}\n", __func__);
+    if (m_xr_session == XR_NULL_HANDLE)
+    {
+        return false;
+    }
 
     uint32_t swapchain_format_count{0};
 
@@ -227,7 +230,10 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
 
 auto Xr_session::enumerate_reference_spaces() -> bool
 {
-    log_xr.trace("{}\n", __func__);
+    if (m_xr_session == XR_NULL_HANDLE)
+    {
+        return false;
+    }
 
     uint32_t reference_space_type_count{0};
     if (!check("xrEnumerateReferenceSpaces",
@@ -259,7 +265,10 @@ auto Xr_session::enumerate_reference_spaces() -> bool
 
 auto Xr_session::create_swapchains() -> bool
 {
-    log_xr.trace("{}\n", __func__);
+    if (m_xr_session == XR_NULL_HANDLE)
+    {
+        return false;
+    }
 
     const auto& views = m_instance.get_xr_view_conriguration_views();
     m_view_swapchains.clear();
@@ -305,6 +314,11 @@ auto Xr_session::create_swapchains() -> bool
 
 auto Xr_session::create_reference_space() -> bool
 {
+    if (m_xr_session == XR_NULL_HANDLE)
+    {
+        return false;
+    }
+
     XrReferenceSpaceCreateInfo reference_space_create_info;
     reference_space_create_info.type                               = XR_TYPE_REFERENCE_SPACE_CREATE_INFO;
     reference_space_create_info.next                               = nullptr;
@@ -330,6 +344,11 @@ auto Xr_session::create_reference_space() -> bool
 
 auto Xr_session::begin_session() -> bool
 {
+    if (m_xr_session == XR_NULL_HANDLE)
+    {
+        return false;
+    }
+
     XrSessionBeginInfo session_begin_info;
     session_begin_info.type                         = XR_TYPE_SESSION_BEGIN_INFO;
     session_begin_info.next                         = nullptr;
@@ -348,6 +367,11 @@ auto Xr_session::begin_session() -> bool
 
 auto Xr_session::attach_actions() -> bool
 {
+    if (m_xr_session == XR_NULL_HANDLE)
+    {
+        return false;
+    }
+
     XrSessionActionSetsAttachInfo session_action_sets_attach_info;
     session_action_sets_attach_info.type            = XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO;
     session_action_sets_attach_info.next            = nullptr;
@@ -384,6 +408,11 @@ auto Xr_session::attach_actions() -> bool
 
 auto Xr_session::begin_frame() -> bool
 {
+    if (m_xr_session == XR_NULL_HANDLE)
+    {
+        return false;
+    }
+
     XrFrameBeginInfo frame_begin_info;
     frame_begin_info.type = XR_TYPE_FRAME_BEGIN_INFO;
     frame_begin_info.next = nullptr;
@@ -411,6 +440,11 @@ auto Xr_session::begin_frame() -> bool
 
 auto Xr_session::wait_frame() -> XrFrameState*
 {
+    if (m_xr_session == XR_NULL_HANDLE)
+    {
+        return nullptr;
+    }
+
     XrFrameWaitInfo frame_wait_info;
     frame_wait_info.type = XR_TYPE_FRAME_WAIT_INFO;
     frame_wait_info.next = nullptr;
@@ -441,6 +475,11 @@ auto Xr_session::wait_frame() -> XrFrameState*
 
 auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_callback) -> bool
 {
+    if (m_xr_session == XR_NULL_HANDLE)
+    {
+        return false;
+    }
+
     XrViewState view_state;
     view_state.type           = XR_TYPE_VIEW_STATE;
     view_state.next           = nullptr;
@@ -544,6 +583,11 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
 
 auto Xr_session::end_frame() -> bool
 {
+    if (m_xr_session == XR_NULL_HANDLE)
+    {
+        return false;
+    }
+
     //XrCompositionLayerDepthTestVARJO layer_depth;
     //layer_depth.type                = XR_TYPE_COMPOSITION_LAYER_DEPTH_TEST_VARJO;
     //layer_depth.next                = nullptr;

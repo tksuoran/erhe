@@ -16,9 +16,9 @@ auto read(const std::filesystem::path& path)
             std::filesystem::is_regular_file(path) &&
             !std::filesystem::is_empty(path))
         {
-            size_t file_length = std::filesystem::file_size(path);
+            const size_t file_length = std::filesystem::file_size(path);
             std::string result(file_length, '\0');
-            std::ifstream stream(path.c_str(), std::ios::binary);
+            std::ifstream stream(path, std::ios::binary);
             stream.read(result.data(), file_length);
             return std::optional<std::string>(result);
         }
@@ -26,7 +26,7 @@ auto read(const std::filesystem::path& path)
     catch (...)
     {
     }
-    return std::optional<std::string>();
+    return {};
 }
 
 } // namespace erhe::toolkit

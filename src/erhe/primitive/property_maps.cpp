@@ -61,12 +61,15 @@ Property_maps::Property_maps(const erhe::geometry::Geometry& geometry,
         }
         if (!geometry.has_polygon_normals())
         {
-            geometry.for_each_polygon_const([this, &geometry](auto& i) {
-                if (!polygon_normals->has(i.polygon_id))
+            geometry.for_each_polygon_const(
+                [this, &geometry](auto& i)
                 {
-                    i.polygon.compute_normal(i.polygon_id, geometry, *polygon_normals, *point_locations);
+                    if (!polygon_normals->has(i.polygon_id))
+                    {
+                        i.polygon.compute_normal(i.polygon_id, geometry, *polygon_normals, *point_locations);
+                    }
                 }
-            });
+            );
         }
         if ((corner_normals == nullptr) && (point_normals == nullptr) && (point_normals_smooth == nullptr))
         {
@@ -79,24 +82,31 @@ Property_maps::Property_maps(const erhe::geometry::Geometry& geometry,
     {
         log_primitive_builder.trace("-computing point_normals_smooth\n");
         point_normals_smooth = point_attributes.create<vec3>(erhe::geometry::c_point_normals_smooth);
-        geometry.for_each_point_const([this, &geometry](auto& i) {
-            vec3 normal_sum{0.0f, 0.0f, 0.0f};
-            i.point.for_each_corner_const(geometry, [this, &geometry, &normal_sum](auto& j) {
-                const erhe::geometry::Polygon_id polygon_id = j.corner.polygon_id;
-                if (polygon_normals->has(polygon_id))
-                {
-                    normal_sum += polygon_normals->get(polygon_id);
-                }
-                else
-                {
-                    //log_primitive_builder.warn("{} - smooth normals have been requested, but polygon normals have missing polygons\n", __func__);
-                    const auto& polygon = geometry.polygons[polygon_id];
-                    const vec3  normal  = polygon.compute_normal(geometry, *point_locations);
-                    normal_sum += normal;
-                }
-            });
-            point_normals_smooth->put(i.point_id, normalize(normal_sum));
-        });
+        geometry.for_each_point_const(
+            [this, &geometry](auto& i)
+            {
+                vec3 normal_sum{0.0f, 0.0f, 0.0f};
+                i.point.for_each_corner_const(
+                    geometry,
+                    [this, &geometry, &normal_sum](auto& j)
+                    {
+                        const erhe::geometry::Polygon_id polygon_id = j.corner.polygon_id;
+                        if (polygon_normals->has(polygon_id))
+                        {
+                            normal_sum += polygon_normals->get(polygon_id);
+                        }
+                        else
+                        {
+                            //log_primitive_builder.warn("{} - smooth normals have been requested, but polygon normals have missing polygons\n", __func__);
+                            const auto& polygon = geometry.polygons[polygon_id];
+                            const vec3  normal  = polygon.compute_normal(geometry, *point_locations);
+                            normal_sum += normal;
+                        }
+                    }
+                );
+                point_normals_smooth->put(i.point_id, normalize(normal_sum));
+            }
+        );
     }
 
     if (format_info.features.centroid_points)
@@ -107,12 +117,15 @@ Property_maps::Property_maps(const erhe::geometry::Geometry& geometry,
         }
         if (!geometry.has_polygon_centroids())
         {
-            geometry.for_each_polygon_const([this, &geometry](auto& i) {
-                if (!polygon_centroids->has(i.polygon_id))
+            geometry.for_each_polygon_const(
+                [this, &geometry](auto& i)
                 {
-                    i.polygon.compute_centroid(i.polygon_id, geometry, *polygon_centroids, *point_locations);
+                    if (!polygon_centroids->has(i.polygon_id))
+                    {
+                        i.polygon.compute_centroid(i.polygon_id, geometry, *polygon_centroids, *point_locations);
+                    }
                 }
-            });
+            );
         }
     }
 

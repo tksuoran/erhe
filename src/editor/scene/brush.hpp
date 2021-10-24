@@ -7,11 +7,6 @@
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/build_info.hpp"
 
-#include "LinearMath/btVector3.h"
-
-class btCollisionShape;
-class btUniformScalingShape;
-
 namespace erhe::geometry
 {
     class Geometry;
@@ -19,7 +14,8 @@ namespace erhe::geometry
 
 namespace erhe::physics
 {
-    class World;
+    class ICollision_shape;
+    class IWorld;
 }
 
 namespace erhe::primitive
@@ -68,12 +64,12 @@ public:
 class Brush_create_info final
 {
 public:
-    Brush_create_info(const std::shared_ptr<erhe::geometry::Geometry>& geometry,
-                      erhe::primitive::Build_info_set&                 build_info_set,
-                      const erhe::primitive::Normal_style              normal_style,
-                      const float                                      density,
-                      const float                                      volume,
-                      const std::shared_ptr<btCollisionShape>&         collision_shape);
+    Brush_create_info(const std::shared_ptr<erhe::geometry::Geometry>&        geometry,
+                      erhe::primitive::Build_info_set&                        build_info_set,
+                      const erhe::primitive::Normal_style                     normal_style,
+                      const float                                             density,
+                      const float                                             volume,
+                      const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape);
 
     Brush_create_info(const std::shared_ptr<erhe::geometry::Geometry>& geometry,
                       erhe::primitive::Build_info_set&                 build_info_set,
@@ -84,14 +80,14 @@ public:
 
     ~Brush_create_info();
 
-    std::shared_ptr<erhe::geometry::Geometry> geometry;
-    erhe::primitive::Build_info_set&          build_info_set;
-    erhe::primitive::Normal_style             normal_style;
-    float                                     density{1.0f};
-    float                                     volume{1.0f};
-    std::shared_ptr<btCollisionShape>         collision_shape;
-    Collision_volume_calculator               collision_volume_calculator;
-    Collision_shape_generator                 collision_shape_generator;
+    std::shared_ptr<erhe::geometry::Geometry>        geometry;
+    erhe::primitive::Build_info_set&                 build_info_set;
+    erhe::primitive::Normal_style                    normal_style;
+    float                                            density{1.0f};
+    float                                            volume{1.0f};
+    std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
+    Collision_volume_calculator                      collision_volume_calculator;
+    Collision_shape_generator                        collision_shape_generator;
 };
 
 class Instance
@@ -126,9 +122,9 @@ public:
     public:
         int                                                  scale_key;
         std::shared_ptr<erhe::primitive::Primitive_geometry> primitive_geometry;
-        std::shared_ptr<btCollisionShape>                    collision_shape;
+        std::shared_ptr<erhe::physics::ICollision_shape>     collision_shape;
         float                                                volume;
-        btVector3                                            local_inertia;
+        glm::vec3                                            local_inertia;
     };
 
     auto get_scaled(const float scale)
@@ -139,7 +135,7 @@ public:
 
     auto make_instance(erhe::scene::Layer&                               layer,
                        erhe::scene::Scene&                               scene,
-                       erhe::physics::World&                             physics_world,
+                       erhe::physics::IWorld&                            physics_world,
                        const std::shared_ptr<erhe::scene::Node>&         parent,
                        const glm::mat4                                   local_to_parent,
                        const std::shared_ptr<erhe::primitive::Material>& material,
@@ -150,7 +146,7 @@ public:
     erhe::primitive::Build_info_set                      build_info_set;
     std::shared_ptr<erhe::primitive::Primitive_geometry> primitive_geometry;
     erhe::primitive::Normal_style                        normal_style{erhe::primitive::Normal_style::corner_normals};
-    std::shared_ptr<btCollisionShape>                    collision_shape;
+    std::shared_ptr<erhe::physics::ICollision_shape>     collision_shape;
     Collision_volume_calculator                          collision_volume_calculator;
     Collision_shape_generator                            collision_shape_generator;
     float                                                volume {0.0f};

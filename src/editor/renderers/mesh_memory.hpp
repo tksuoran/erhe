@@ -28,7 +28,7 @@ namespace erhe::primitive
 
 namespace erhe::raytrace
 {
-    class Buffer;
+    class IBuffer;
 }
 
 namespace erhe::scene
@@ -39,11 +39,6 @@ namespace erhe::scene
     class Light;
     class Mesh;
     class Scene;
-}
-
-namespace erhe::physics
-{
-    class World;
 }
 
 namespace editor
@@ -78,8 +73,8 @@ public:
     std::shared_ptr<erhe::graphics::Buffer>                gl_index_buffer;
     erhe::primitive::Build_info_set                        build_info_set;
 
-    std::shared_ptr<erhe::raytrace::Buffer> embree_vertex_buffer;
-    std::shared_ptr<erhe::raytrace::Buffer> embree_index_buffer;
+    std::shared_ptr<erhe::raytrace::IBuffer> embree_vertex_buffer;
+    std::shared_ptr<erhe::raytrace::IBuffer> embree_index_buffer;
 };
 
 } // namespace editor

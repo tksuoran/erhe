@@ -1,7 +1,7 @@
 #pragma once
 
 #include "erhe/components/component.hpp"
-#include "btBulletDynamicsCommon.h"
+#include "erhe/physics/idebug_draw.hpp"
 
 namespace editor
 {
@@ -11,7 +11,7 @@ class Text_renderer;
 
 class Debug_draw
     : public erhe::components::Component
-    , public btIDebugDraw
+    , public erhe::physics::IDebug_draw
 {
 public:
     static constexpr std::string_view c_name{"Debug_draw"};
@@ -22,14 +22,21 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-    // Implements btIDebugDraw
-    void drawLine          (const btVector3& from, const btVector3& to, const btVector3& color) override;
-    void draw3dText        (const btVector3& location, const char* textString)                  override;
-    void setDebugMode      (int debugMode)                                                      override;
-    auto getDebugMode      () const -> int                                                      override;
-    void drawContactPoint  (const btVector3& PointOnB, const btVector3& normalOnB,
-                            btScalar distance, int lifeTime, const btVector3& color)            override;
-    void reportErrorWarning(const char* warningString)                                          override;
+    // Implemnents IDebug_draw
+	auto get_colors          () const -> Colors                                                override;
+	void set_colors          (const Colors& colors)                                            override;
+    void draw_line           (const glm::vec3 from, const glm::vec3 to, const glm::vec3 color) override;
+    void draw_3d_text        (const glm::vec3 location, const char* text)                      override;
+    void set_debug_mode      (int debug_mode)                                                  override;
+    auto get_debug_mode      () const -> int                                                   override;
+    void draw_contact_point(
+        const glm::vec3 point,
+        const glm::vec3 normal,
+        float           distance,
+        int             life_time,
+        const glm::vec3 color
+    )                                                                                          override;
+    void report_error_warning(const char* warning)                                             override;
 
     float line_width{4.0f};
 
@@ -37,6 +44,7 @@ private:
     std::shared_ptr<Line_renderer> m_line_renderer;
     std::shared_ptr<Text_renderer> m_text_renderer;
     int                            m_debug_mode{0};
+    Colors                         m_colors;
 };
 
 } // namespace editor

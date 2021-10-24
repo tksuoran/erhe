@@ -14,9 +14,13 @@ void Polygon::copy_to_corners(const Polygon_id                   this_polygon_id
     ZoneScoped;
 
     const T polygon_value = polygon_attribute.get(this_polygon_id);
-    for_each_corner_const(geometry, [&corner_attribute, polygon_value](auto& i) {
-        corner_attribute.put(i.corner_id, polygon_value);
-    });
+    for_each_corner_const(
+        geometry,
+        [&corner_attribute, polygon_value](auto& i)
+        {
+            corner_attribute.put(i.corner_id, polygon_value);
+        }
+    );
 }
 
 template <typename T>

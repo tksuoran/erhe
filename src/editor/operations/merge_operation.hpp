@@ -7,7 +7,7 @@
 
 namespace erhe::physics
 {
-    class World;
+    class IWorld;
 };
 
 namespace erhe::primitive
@@ -38,7 +38,7 @@ public:
         erhe::primitive::Build_info_set& build_info_set;
         erhe::scene::Layer&              layer;
         erhe::scene::Scene&              scene;
-        erhe::physics::World&            physics_world;
+        erhe::physics::IWorld&           physics_world;
         std::shared_ptr<Selection_tool>  selection_tool;
     };
 
@@ -55,7 +55,7 @@ private:
         Source_entry(erhe::primitive::Build_info_set&               build_info_set,
                      erhe::scene::Layer&                            layer,
                      erhe::scene::Scene&                            scene,
-                     erhe::physics::World&                          physics_world,
+                     erhe::physics::IWorld&                         physics_world,
                      std::shared_ptr<erhe::scene::Mesh>             mesh,
                      std::shared_ptr<erhe::scene::Node>             node,
                      const std::vector<erhe::primitive::Primitive>& primitives)
@@ -72,7 +72,7 @@ private:
         erhe::primitive::Build_info_set&        build_info_set;
         erhe::scene::Layer&                     layer;
         erhe::scene::Scene&                     scene;
-        erhe::physics::World&                   physics_world;
+        erhe::physics::IWorld&                  physics_world;
         std::shared_ptr<erhe::scene::Mesh>      mesh;
         std::shared_ptr<erhe::scene::Node>      node;
         std::vector<erhe::primitive::Primitive> primitives;

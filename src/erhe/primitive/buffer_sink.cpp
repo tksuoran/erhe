@@ -74,8 +74,8 @@ void Gl_buffer_sink::buffer_ready(Index_buffer_writer&  writer) const
                                     std::move(writer.index_data));
 }
 
-Embree_buffer_sink::Embree_buffer_sink(const std::shared_ptr<erhe::raytrace::Buffer>& vertex_buffer,
-                                       const std::shared_ptr<erhe::raytrace::Buffer>& index_buffer)
+Embree_buffer_sink::Embree_buffer_sink(const std::shared_ptr<erhe::raytrace::IBuffer>& vertex_buffer,
+                                       const std::shared_ptr<erhe::raytrace::IBuffer>& index_buffer)
     : m_vertex_buffer{vertex_buffer}
     , m_index_buffer {index_buffer}
 {

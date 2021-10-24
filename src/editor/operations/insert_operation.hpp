@@ -19,7 +19,7 @@ namespace erhe::scene
 
 namespace erhe::physics
 {
-    class World;
+    class IWorld;
 };
 
 namespace editor
@@ -37,7 +37,7 @@ public:
     public:
         erhe::scene::Layer&                layer;
         erhe::scene::Scene&                scene;
-        erhe::physics::World&              physics_world;
+        erhe::physics::IWorld&             physics_world;
         std::shared_ptr<erhe::scene::Node> node;
         erhe::scene::Node::Transforms      before;
         erhe::scene::Node::Transforms      after;
@@ -87,7 +87,7 @@ public:
         std::shared_ptr<Selection_tool>    selection_tool;
         erhe::scene::Layer&                layer;
         erhe::scene::Scene&                scene;
-        erhe::physics::World&              physics_world;
+        erhe::physics::IWorld&             physics_world;
         std::shared_ptr<erhe::scene::Mesh> mesh;
         std::shared_ptr<erhe::scene::Node> node;
         std::shared_ptr<Node_physics>      node_physics;

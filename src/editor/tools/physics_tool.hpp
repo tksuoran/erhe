@@ -8,10 +8,12 @@
 #include <functional>
 #include <memory>
 
-class btPoint2PointConstraint;
-
 namespace erhe::scene {
     class Mesh;
+}
+
+namespace erhe::physics {
+    class IConstraint;
 }
 
 namespace editor
@@ -46,16 +48,16 @@ public:
     void imgui(Pointer_context& pointer_context) override;
 
 private:
-    State                                    m_state{State::Passive};
-    std::shared_ptr<Scene_root>              m_scene_root;
+    State                                       m_state{State::Passive};
+    std::shared_ptr<Scene_root>                 m_scene_root;
 
-    std::shared_ptr<erhe::scene::Mesh>       m_drag_mesh;
-    std::shared_ptr<Node_physics>            m_drag_node_physics;
-    float                                    m_drag_depth{0.5f};
-    glm::vec3                                m_drag_position_in_mesh{0.0f, 0.0f, 0.0f};
-    glm::vec3                                m_drag_position_start  {0.0f, 0.0f, 0.0f};
-    glm::vec3                                m_drag_position_end    {0.0f, 0.0f, 0.0f};
-    std::unique_ptr<btPoint2PointConstraint> m_drag_constraint;
+    std::shared_ptr<erhe::scene::Mesh>          m_drag_mesh;
+    std::shared_ptr<Node_physics>               m_drag_node_physics;
+    float                                       m_drag_depth{0.5f};
+    glm::vec3                                   m_drag_position_in_mesh{0.0f, 0.0f, 0.0f};
+    glm::vec3                                   m_drag_position_start  {0.0f, 0.0f, 0.0f};
+    glm::vec3                                   m_drag_position_end    {0.0f, 0.0f, 0.0f};
+    std::unique_ptr<erhe::physics::IConstraint> m_drag_constraint;
 
     float m_tau                     { 0.001f};
     float m_damping                 { 1.00f};

@@ -36,9 +36,13 @@ Dual::Dual(Geometry& source, Geometry& destination, bool post_process)
 
 auto dual(Geometry& source) -> Geometry
 {
-    return Geometry(fmt::format("dual({})", source.name), [&source](auto& result) {
-        Dual operation(source, result);
-    });
+    return Geometry(
+        fmt::format("dual({})", source.name),
+        [&source](auto& result)
+        {
+            Dual operation(source, result);
+        }
+    );
 }
 
 

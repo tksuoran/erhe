@@ -4,7 +4,7 @@
 #include "renderers/text_renderer.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe/physics/world.hpp"
+#include "erhe/physics/iworld.hpp"
 
 #include "log.hpp"
 
@@ -26,74 +26,82 @@ Debug_draw::~Debug_draw() = default;
 
 void Debug_draw::connect()
 {
+    using IDebug_draw = erhe::physics::IDebug_draw;
+
     require<Scene_root>();
     m_line_renderer = get<Line_renderer>();
     m_text_renderer = get<Text_renderer>();
 
-    m_debug_mode = DBG_DrawWireframe         |
-                   DBG_DrawAabb              |
-                   DBG_DrawFeaturesText      |
-                   DBG_DrawContactPoints     |
-                   //DBG_NoDeactivation        |
-                   //DBG_NoHelpText            |
-                   DBG_DrawText              |
-                   //DBG_ProfileTimings        |
-                   //DBG_EnableSatComparison   |
-                   //DBG_DisableBulletLCP      |
-                   //DBG_EnableCCD             |
-                   //DBG_DrawConstraints       |
-                   //DBG_DrawConstraintLimits  |
-                   DBG_FastWireframe         |
-                   DBG_DrawNormals           |
-                   DBG_DrawFrames;
+    m_debug_mode = IDebug_draw::c_Draw_wireframe           |
+                   IDebug_draw::c_Draw_aabb                |
+                   IDebug_draw::c_Draw_features_text       |
+                   IDebug_draw::c_Draw_contact_points      |
+                   //IDebug_draw::c_No_deactivation        |
+                   //IDebug_draw::c_No_nelp_text           |
+                   IDebug_draw::c_Draw_text                |
+                   //IDebug_draw::c_Profile_timings        |
+                   //IDebug_draw::c_Enable_sat-comparison  |
+                   //IDebug_draw::c_Disable_bullet_lcp     |
+                   //IDebug_draw::c_Enable_ccd             |
+                   //IDebug_draw::c_Draw_constraints       |
+                   //IDebug_draw::c_Draw_constraint_limits |
+                   IDebug_draw::c_Fast_wireframe           |
+                   IDebug_draw::c_Draw_normals             |
+                   IDebug_draw::c_Draw_frames;
 }
 
 void Debug_draw::initialize_component()
 {
-    get<Scene_root>()->physics_world().bullet_dynamics_world.setDebugDrawer(this);
+    get<Scene_root>()->physics_world().set_debug_drawer(this);
 }
 
-void Debug_draw::drawLine(const btVector3& from, const btVector3& to, const btVector3& color)
+auto Debug_draw::get_colors() const -> Colors
 {
-    auto color_ui32 = ImGui::ColorConvertFloat4ToU32(ImVec4(color.x(), color.y(), color.z(), 1.0f));
-    glm::vec3 p0{from.x(), from.y(), from.z()};
-    glm::vec3 p1{to.x(), to.y(), to.z()};
-    m_line_renderer->set_line_color(color_ui32);
-    m_line_renderer->add_lines( { {p0, p1} }, line_width);
+    return m_colors;
 }
 
-void Debug_draw::draw3dText(const btVector3& location, const char* textString)
+void Debug_draw::set_colors(const Colors& colors)
+{
+    m_colors = colors;
+}
+
+void Debug_draw::draw_line(const glm::vec3 from, const glm::vec3 to, const glm::vec3 color)
+{
+    auto color_ui32 = ImGui::ColorConvertFloat4ToU32(ImVec4(color.x, color.y, color.z, 1.0f));
+    m_line_renderer->set_line_color(color_ui32);
+    m_line_renderer->add_lines( { {from, to} }, line_width);
+}
+
+void Debug_draw::draw_3d_text(const glm::vec3 location, const char* text)
 {
     uint32_t text_color = 0xffffffffu; // abgr
-    glm::vec3 text_position{location.x(), location.y(), location.z()};
-    m_text_renderer->print(text_position, text_color, textString);
+    m_text_renderer->print(location, text_color, text);
 }
 
-void Debug_draw::setDebugMode(int debugMode)
+void Debug_draw::set_debug_mode(int debug_mode)
 {
-    m_debug_mode = debugMode;
+    m_debug_mode = debug_mode;
 }
 
-auto Debug_draw::getDebugMode() const -> int
+auto Debug_draw::get_debug_mode() const -> int
 {
     return m_debug_mode;
 }
 
-void Debug_draw::drawContactPoint(const btVector3& PointOnB, const btVector3& normalOnB, btScalar distance, int lifeTime, const btVector3& color)
+void Debug_draw::draw_contact_point(const glm::vec3 point, const glm::vec3 normal, float distance, int lifeTime, const glm::vec3 color)
 {
-	drawLine(PointOnB, PointOnB + normalOnB * distance, color);
-	btVector3 ncolor(0, 0, 0);
-	drawLine(PointOnB, PointOnB + normalOnB * 0.01, ncolor);
+	draw_line(point, point + normal * distance, color);
+    glm::vec3 ncolor{0};
+	draw_line(point, point + (normal * 0.01f), ncolor);
 }
 
-void Debug_draw::reportErrorWarning(const char* warningString)
+void Debug_draw::report_error_warning(const char* warning)
 {
-    if (warningString == nullptr)
+    if (warning == nullptr)
     {
         return;
     }
-    log_physics.warn("{}", warningString);
+    log_physics.warn("{}", warning);
 }
-
 
 }

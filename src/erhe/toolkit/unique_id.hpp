@@ -24,20 +24,20 @@ public:
     {
     }
 
-    Unique_id& operator=(const Unique_id&)
+    auto operator=(const Unique_id&) -> Unique_id&
     {
         return *this;
     }
 
     explicit Unique_id(Unique_id&& other)
-        : m_id{other.id()}
+        : m_id{other.get_id()}
     {
         other.reset();
     }
 
-    Unique_id& operator=(Unique_id&& other)
+    auto operator=(Unique_id&& other) -> Unique_id&
     {
-        m_id = other.id();
+        m_id = other.get_id();
         other.reset();
         return *this;
     }

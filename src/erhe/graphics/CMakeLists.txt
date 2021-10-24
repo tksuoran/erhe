@@ -59,7 +59,7 @@ set(source_list
     state/viewport_state.hpp
 )
 
-if (${ERHE_PNG_LIBRARY} STREQUAL "Mango")
+if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
     list(APPEND source_list
          png_loader_mango.cpp
          png_loader_mango.hpp
@@ -80,6 +80,7 @@ target_include_directories(${_target}
 
 target_link_libraries(${_target}
     PUBLIC
+        erhe_components
         erhe_gl
         erhe_log
         fmt::fmt
@@ -87,7 +88,7 @@ target_link_libraries(${_target}
         Microsoft.GSL::GSL
 )
 
-if (${ERHE_PNG_LIBRARY} STREQUAL "Mango")
+if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
     target_link_libraries(${_target} PUBLIC mango)
 endif()
 

@@ -28,7 +28,7 @@ namespace erhe::scene
 
 namespace erhe::physics
 {
-    class World;
+    class IWorld;
 }
 
 namespace editor
@@ -38,14 +38,14 @@ class Node_physics;
 
 void attach(erhe::scene::Layer&                layer,
             erhe::scene::Scene&                scene,
-            erhe::physics::World&              physics_world,
+            erhe::physics::IWorld&             physics_world,
             std::shared_ptr<erhe::scene::Node> node,
             std::shared_ptr<erhe::scene::Mesh> mesh,
             std::shared_ptr<Node_physics>      node_physics);
 
 void detach(erhe::scene::Layer&                layer,
             erhe::scene::Scene&                scene,
-            erhe::physics::World&              physics_world,
+            erhe::physics::IWorld&             physics_world,
             std::shared_ptr<erhe::scene::Node> node,
             std::shared_ptr<erhe::scene::Mesh> mesh,
             std::shared_ptr<Node_physics>      node_physics);

@@ -17,7 +17,7 @@
 #include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/physics/rigid_body.hpp"
+#include "erhe/physics/irigid_body.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -73,24 +73,20 @@ void Trs_tool::set_node(const std::shared_ptr<Node>& node)
         return;
     }
 
-    if (m_node_physics)
-    {
-        m_node_physics->rigid_body.end_move();
-    }
+    auto* const rigid_body = m_node_physics ? m_node_physics->rigid_body() : nullptr;
 
     // Attach new host to manipulator
     m_target_node = node;
     m_node_physics = node ? node->get_attachment<Node_physics>() : std::shared_ptr<Node_physics>();
-    if (m_node_physics)
+    // Promote static to kinematic if we try to move object
+    if (rigid_body != nullptr)
     {
-        // Promote static to kinematic if we try to move object
-        auto&      rigid_body     = m_node_physics->rigid_body;
-        const auto collision_mode = rigid_body.get_collision_mode();
-        if (collision_mode == erhe::physics::Rigid_body::Collision_mode::e_static)
+        const auto collision_mode = rigid_body->get_collision_mode();
+        if (collision_mode == erhe::physics::Collision_mode::e_static)
         {
-            rigid_body.set_collision_mode(erhe::physics::Rigid_body::Collision_mode::e_kinematic);
+            rigid_body->set_collision_mode(erhe::physics::Collision_mode::e_kinematic);
         }
-        rigid_body.begin_move();
+        rigid_body->begin_move();
     }
 
     if (m_target_node)
@@ -941,7 +937,11 @@ auto Trs_tool::begin(Pointer_context& pointer_context) -> bool
 
     if (m_node_physics)
     {
-        m_node_physics->rigid_body.begin_move();
+        auto* const rigid_body = m_node_physics->rigid_body();
+        if (rigid_body != nullptr)
+        {
+            rigid_body->begin_move();
+        }
     }
 
     return true;
@@ -966,7 +966,8 @@ auto Trs_tool::end(Pointer_context& pointer_context) -> bool
 
     if (m_node_physics)
     {
-        m_node_physics->rigid_body.end_move();
+        auto* const rigid_body = m_node_physics->rigid_body();
+        rigid_body->end_move();
     }
 
     return consume_event;

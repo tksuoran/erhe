@@ -359,10 +359,14 @@ auto make_sphere(const double radius, const unsigned int slice_count, const unsi
 {
     ZoneScoped;
 
-    return Geometry("sphere", [=](auto& geometry) {
-        Sphere_builder builder(geometry, radius, static_cast<int>(slice_count), static_cast<int>(stack_division));
-        builder.build();
-    });
+    return Geometry(
+        "sphere",
+        [=](auto& geometry)
+        {
+            Sphere_builder builder(geometry, radius, static_cast<int>(slice_count), static_cast<int>(stack_division));
+            builder.build();
+        }
+    );
 }
 
 } // namespace erhe::geometry::shapes

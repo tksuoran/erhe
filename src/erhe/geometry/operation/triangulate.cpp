@@ -41,9 +41,13 @@ Triangulate::Triangulate(Geometry& src, Geometry& destination)
 
 auto triangulate(Geometry& source) -> Geometry
 {
-    return Geometry(fmt::format("triangulate({})", source.name), [&source](auto& result) {
-        Triangulate operation(source, result);
-    });
+    return Geometry(
+        fmt::format("triangulate({})", source.name),
+        [&source](auto& result)
+        {
+            Triangulate operation(source, result);
+        }
+    );
 }
 
 

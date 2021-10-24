@@ -35,7 +35,6 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(${_target}
     PUBLIC
-        embree
         fmt::fmt
         glm::glm
         Microsoft.GSL::GSL
@@ -44,6 +43,13 @@ target_link_libraries(${_target}
         erhe_log
         erhe_raytrace
 )
+
+if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
+    target_link_libraries(${_target}
+        PUBLIC
+            embree
+    )
+endif ()
 
 foreach(source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)

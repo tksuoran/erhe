@@ -18,7 +18,7 @@
 //#   include <windows.h>
 #endif
 
-#if defined(ERHE_WINDOW_TOOLKIT_MANGO)
+#if defined(ERHE_WINDOW_LIBRARY_MANGO)
 #   define MANGO_OPENGL_DISABLE_PLATFORM_API 1
 #   include "mango/opengl/opengl.hpp"
 #   undef MANGO_OPENGL_DISABLE_PLATFORM_API

@@ -14,7 +14,7 @@ namespace erhe::graphics
 
 namespace erhe::raytrace
 {
-    class Buffer;
+    class IBuffer;
 }
 
 namespace erhe::primitive
@@ -64,8 +64,8 @@ class Embree_buffer_sink
     : public Buffer_sink
 {
 public:
-    Embree_buffer_sink(const std::shared_ptr<erhe::raytrace::Buffer>& vertex_buffer,
-                       const std::shared_ptr<erhe::raytrace::Buffer>& index_buffer);
+    Embree_buffer_sink(const std::shared_ptr<erhe::raytrace::IBuffer>& vertex_buffer,
+                       const std::shared_ptr<erhe::raytrace::IBuffer>& index_buffer);
 
     auto allocate_vertex_buffer(const size_t vertex_count,
                                 const size_t vertex_element_size) -> Buffer_range override;
@@ -77,8 +77,8 @@ public:
     void buffer_ready(Index_buffer_writer&  writer) const override;
 
 private:
-    std::shared_ptr<erhe::raytrace::Buffer> m_vertex_buffer;
-    std::shared_ptr<erhe::raytrace::Buffer> m_index_buffer;
+    std::shared_ptr<erhe::raytrace::IBuffer> m_vertex_buffer;
+    std::shared_ptr<erhe::raytrace::IBuffer> m_index_buffer;
 };
 
 } // namespace erhe::primitive

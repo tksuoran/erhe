@@ -1,4 +1,4 @@
-#include "tools.hpp"
+﻿#include "tools.hpp"
 #include "application.hpp"
 #include "log.hpp"
 #include "view.hpp"
@@ -51,7 +51,31 @@ void Editor_tools::initialize_component()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
-    io.Fonts->AddFontFromFileTTF("res/fonts/ProximaNova-Regular.otf", 16.0f);
+    //io.Fonts->AddFontFromFileTTF("res/fonts/ProximaNova-Regular.otf", 16.0f);
+
+    ImFontGlyphRangesBuilder builder;
+
+    //ImGui::Text(u8"Hiragana: 要らない.txt");
+    //ImGui::Text(u8"Greek kosme κόσμε");
+
+    // %u 8981      4E00 — 9FFF  	CJK Unified Ideographs
+    // %u 3089      3040 — 309F  	Hiragana
+    // %u 306A      3040 — 309F  	Hiragana
+    // %u 3044.txt  3040 — 309F  	Hiragana
+    builder.AddRanges(io.Fonts->GetGlyphRangesDefault());                // Basic Latin, Extended Latin
+    //builder.AddRanges(io.Fonts->GetGlyphRangesKorean());                 // Default + Korean characters
+    //builder.AddRanges(io.Fonts->GetGlyphRangesJapanese());               // Default + Hiragana, Katakana, Half-Width, Selection of 2999 Ideographs
+    //builder.AddRanges(io.Fonts->GetGlyphRangesChineseFull());            // Default + Half-Width + Japanese Hiragana/Katakana + full set of about 21000 CJK Unified Ideographs
+    //builder.AddRanges(io.Fonts->GetGlyphRangesChineseSimplifiedCommon());// Default + Half-Width + Japanese Hiragana/Katakana + set of 2500 CJK Unified Ideographs for common simplified Chinese
+    //builder.AddRanges(io.Fonts->GetGlyphRangesCyrillic());               // Default + about 400 Cyrillic characters
+    //builder.AddRanges(io.Fonts->GetGlyphRangesThai());                   // Default + Thai characters
+    //builder.AddRanges(io.Fonts->GetGlyphRangesVietnamese());             // Default + Vietnamese characters
+
+    builder.BuildRanges(&m_glyphRanges);
+    io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 18.0f, nullptr, m_glyphRanges.Data);
+
+
+
     ImGui::StyleColorsDark();
     auto* const glfw_window = reinterpret_cast<GLFWwindow*>(get<Window>()->get_context_window()->get_glfw_window());
     ImGui_ImplGlfw_InitForOther(glfw_window, true);

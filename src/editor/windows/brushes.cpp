@@ -18,7 +18,6 @@
 #include "erhe/scene/scene.hpp"
 
 #include "imgui.h"
-#include "BulletCollision/CollisionShapes/btUniformScalingShape.h"
 
 #include <glm/gtx/transform.hpp>
 
@@ -107,9 +106,9 @@ auto Brushes::allocate_brush(Build_info_set& build_info_set)
     return brush;
 }
 
-auto Brushes::make_brush(erhe::geometry::Geometry&&          geometry,
-                         const Brush_create_context&         context,
-                         const shared_ptr<btCollisionShape>& collision_shape)
+auto Brushes::make_brush(erhe::geometry::Geometry&&                         geometry,
+                         const Brush_create_context&                        context,
+                         const shared_ptr<erhe::physics::ICollision_shape>& collision_shape)
 -> std::shared_ptr<Brush>
 {
     ZoneScoped;
@@ -118,9 +117,9 @@ auto Brushes::make_brush(erhe::geometry::Geometry&&          geometry,
     return make_brush(shared_geometry, context, collision_shape);
 }
 
-auto Brushes::make_brush(shared_ptr<erhe::geometry::Geometry> geometry,
-                         const Brush_create_context&          context,
-                         const shared_ptr<btCollisionShape>&  collision_shape)
+auto Brushes::make_brush(shared_ptr<erhe::geometry::Geometry>               geometry,
+                         const Brush_create_context&                        context,
+                         const shared_ptr<erhe::physics::ICollision_shape>& collision_shape)
 -> std::shared_ptr<Brush>
 {
     ZoneScoped;

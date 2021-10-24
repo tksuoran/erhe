@@ -51,7 +51,7 @@ namespace erhe::scene
 
 namespace erhe::physics
 {
-    class World;
+    class IWorld;
 }
 
 namespace editor
@@ -130,7 +130,7 @@ public:
     auto add          (const std::shared_ptr<erhe::scene::Light>&        light)    -> std::shared_ptr<erhe::scene::Light>;
     auto materials    () -> std::vector<std::shared_ptr<erhe::primitive::Material>>&;
     auto materials    () const -> const std::vector<std::shared_ptr<erhe::primitive::Material>>&;
-    auto physics_world() -> erhe::physics::World&;
+    auto physics_world() -> erhe::physics::IWorld&;
     auto scene        () -> erhe::scene::Scene&;
     auto content_layer() -> erhe::scene::Layer&;
 
@@ -138,7 +138,7 @@ private:
     std::mutex                                              m_materials_mutex;
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
 
-    std::unique_ptr<erhe::physics::World>            m_physics_world;
+    std::unique_ptr<erhe::physics::IWorld>           m_physics_world;
     std::unique_ptr<erhe::scene::Scene>              m_scene;
     std::shared_ptr<erhe::scene::Layer>              m_content_layer;
     std::shared_ptr<erhe::scene::Layer>              m_controller_layer;

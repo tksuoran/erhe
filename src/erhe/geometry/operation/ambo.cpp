@@ -50,9 +50,12 @@ Ambo::Ambo(Geometry& source, Geometry& destination)
 
 auto ambo(Geometry& source) -> Geometry
 {
-    return Geometry(fmt::format("ambo({})", source.name), [&source](auto& result) {
-        Ambo operation(source, result);
-    });
+    return Geometry(
+        fmt::format("ambo({})", source.name),
+        [&source](auto& result) {
+            Ambo operation(source, result);
+        }
+    );
 }
 
 

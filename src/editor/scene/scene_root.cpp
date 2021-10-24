@@ -5,7 +5,7 @@
 
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/primitive/material.hpp"
-#include "erhe/physics/world.hpp"
+#include "erhe/physics/iworld.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -88,7 +88,7 @@ void Scene_root::initialize_component()
     m_tool_layers        .push_back(m_tool_layer);
     m_brush_layers       .push_back(m_brush_layer);
 
-    m_physics_world = std::make_unique<erhe::physics::World>();
+    m_physics_world = erhe::physics::IWorld::create_unique();
 }
 
 auto Scene_root::materials() -> vector<shared_ptr<Material>>&
@@ -101,7 +101,7 @@ auto Scene_root::materials() const -> const vector<shared_ptr<Material>>&
     return m_materials;
 }
 
-auto Scene_root::physics_world() -> erhe::physics::World&
+auto Scene_root::physics_world() -> erhe::physics::IWorld&
 {
     VERIFY(m_physics_world);
     return *m_physics_world.get();

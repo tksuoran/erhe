@@ -461,13 +461,14 @@ public:
                     make_corner(polygon_id, slice, stack_division + 1, true);
                 }
 
-                geometry.polygons[polygon_id].compute_planar_texture_coordinates(polygon_id,
-                                                                                 geometry,
-                                                                                 *corner_texcoords,
-                                                                                 *polygon_centroids,
-                                                                                 *polygon_normals,
-                                                                                 *point_locations,
-                                                                                 false);
+                geometry.polygons[polygon_id].compute_planar_texture_coordinates(
+                    polygon_id,
+                    geometry,
+                    *corner_texcoords,
+                    *polygon_centroids,
+                    *polygon_normals,
+                    *point_locations,
+                    false);
             }
             else
             {
@@ -489,30 +490,35 @@ public:
     }
 };
 
-auto make_conical_frustum(const double min_x,
-                          const double max_x,
-                          const double bottom_radius,
-                          const double top_radius,
-                          const bool   use_bottom,
-                          const bool   use_top,
-                          const int    slice_count,
-                          const int    stack_division)
+auto make_conical_frustum(
+    const double min_x,
+    const double max_x,
+    const double bottom_radius,
+    const double top_radius,
+    const bool   use_bottom,
+    const bool   use_top,
+    const int    slice_count,
+    const int    stack_division)
 -> Geometry
 {
     ZoneScoped;
 
-    return Geometry("conical frustum", [=](auto& geometry) {
-        Conical_frustum_builder builder(geometry,
-                                        min_x,
-                                        max_x,
-                                        bottom_radius,
-                                        top_radius,
-                                        use_bottom,
-                                        use_top,
-                                        slice_count,
-                                        stack_division);
-        builder.build();
-    });
+    return Geometry(
+        "conical frustum",
+        [=](auto& geometry)
+        {
+            Conical_frustum_builder builder(geometry,
+                                            min_x,
+                                            max_x,
+                                            bottom_radius,
+                                            top_radius,
+                                            use_bottom,
+                                            use_top,
+                                            slice_count,
+                                            stack_division);
+            builder.build();
+        }
+    );
 }
 
 auto make_cone(const double min_x,
@@ -525,18 +531,22 @@ auto make_cone(const double min_x,
 {
     ZoneScoped;
 
-    return Geometry("cone", [=](auto& geometry) {
-        Conical_frustum_builder builder(geometry,
-                                        min_x,
-                                        max_x,
-                                        bottom_radius,
-                                        0.0,
-                                        use_bottom,
-                                        false,
-                                        slice_count,
-                                        stack_division);
-        builder.build();
-    });
+    return Geometry(
+        "cone",
+        [=](auto& geometry)
+        {
+            Conical_frustum_builder builder(geometry,
+                                            min_x,
+                                            max_x,
+                                            bottom_radius,
+                                            0.0,
+                                            use_bottom,
+                                            false,
+                                            slice_count,
+                                            stack_division);
+            builder.build();
+        }
+    );
 }
 
 auto make_cylinder(const double min_x,
@@ -550,18 +560,22 @@ auto make_cylinder(const double min_x,
 {
     ZoneScoped;
 
-    return Geometry("cylinder", [=](auto& geometry) {
-        Conical_frustum_builder builder(geometry,
-                                        min_x,
-                                        max_x,
-                                        radius,
-                                        radius,
-                                        use_bottom,
-                                        use_top,
-                                        slice_count,
-                                        stack_division);
-        builder.build();
-    });
+    return Geometry(
+        "cylinder",
+        [=](auto& geometry)
+        {
+            Conical_frustum_builder builder(geometry,
+                                            min_x,
+                                            max_x,
+                                            radius,
+                                            radius,
+                                            use_bottom,
+                                            use_top,
+                                            slice_count,
+                                            stack_division);
+            builder.build();
+        }
+    );
 }
 
 } // namespace erhe::geometry::shapes

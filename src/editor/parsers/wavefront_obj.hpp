@@ -1,11 +1,14 @@
 #pragma once
 
 #include "erhe/geometry/geometry.hpp"
-#include <string>
+
 #include <filesystem>
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace editor {
 
-erhe::geometry::Geometry parse_obj_geometry(const std::filesystem::path& path);
+auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::shared_ptr<erhe::geometry::Geometry>>;
 
 }

@@ -2,7 +2,6 @@
 #include "scene/node_physics.hpp"
 #include "scene/helpers.hpp"
 #include "tools/selection_tool.hpp"
-#include "erhe/physics/world.hpp"
 #include "erhe/scene/scene.hpp"
 
 namespace editor

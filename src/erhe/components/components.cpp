@@ -199,9 +199,12 @@ void Components::launch_component_initialization()
 
     for (size_t i = 0; i < m_initialize_component_count_worker_thread; ++i)
     {
-        m_execution_queue->enqueue([this]() {
-            initialize_component(in_worker_thread);
-        });
+        m_execution_queue->enqueue(
+            [this]()
+            {
+                initialize_component(in_worker_thread);
+            }
+        );
     }
 }
 
@@ -223,7 +226,8 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> sha
             std::lock_guard<std::mutex> lock(m_mutex);
             const auto i = std::find_if(m_uninitialized_components.begin(),
                                         m_uninitialized_components.end(),
-                                        [in_worker_thread](auto& component) {
+                                        [in_worker_thread](auto& component)
+                                        {
                                             return component->get_state() == Component::Component_state::Connected &&
                                                    component->is_ready_to_initialize(in_worker_thread);
                                         });

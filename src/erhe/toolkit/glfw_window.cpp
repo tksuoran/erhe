@@ -1,4 +1,4 @@
-#if defined(ERHE_WINDOW_TOOLKIT_GLFW)
+#if defined(ERHE_WINDOW_LIBRARY_GLFW)
 
 #include "erhe/toolkit/glfw_window.hpp"
 #include "erhe/gl/dynamic_load.hpp"
@@ -575,4 +575,4 @@ void Context_window::swap_buffers() const
 
 } // namespace erhe::toolkit
 
-#endif // defined(ERHE_WINDOW_TOOLKIT_GLFW)
+#endif // defined(ERHE_WINDOW_LIBRARY_GLFW)

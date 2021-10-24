@@ -6,6 +6,32 @@
 namespace erhe::raytrace
 {
 
+class Geometry
+    : public IGeometry
+{
+public:
+    explicit Geometry(Device& device);
+    Geometry(const Geometry&)            = delete;
+    Geometry(Geometry&&)                 = delete;
+    Geometry& operator=(const Geometry&) = delete;
+    Geometry& operator=(Geometry&&)      = delete;
+    ~Geometry();
+
+    //void enable();
+    //void disable();
+    //void set_mask(unsigned int mask);
+    //void intersection_filter(const RTCFilterFunctionNArguments* args);
+
+    auto get_rtc_geometry() const -> RTCGeometry;
+    void set_id          (const unsigned int id);
+    auto get_id          () -> unsigned int;
+    void reset_id        ();
+
+private:
+    RTCGeometry  m_geometry{nullptr};
+    unsigned int m_id      {RTC_INVALID_GEOMETRY_ID};
+};
+
 //struct RTCFilterFunctionNArguments
 //{
 //  int* valid;
@@ -29,6 +55,17 @@ namespace erhe::raytrace
 //    }
 //    geometry->intersection_filter(args);
 //}
+
+auto IGeometry::create(IDevice& device) -> IGeometry*
+{
+    return new Geometry(device);
+}
+
+auto IGeometry::create_shared(IDevice& device) -> std::shared_ptr<IGeometry>
+{
+    return std::make_shared<Geometry>(device(;l
+}
+
 
 Geometry::Geometry(Device& device)
 {

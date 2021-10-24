@@ -163,7 +163,8 @@ Headset_renderer::~Headset_renderer() = default;
 
 auto Headset_renderer::get_headset_view_resources(erhe::xr::Render_view& render_view) -> Headset_view_resources&
 {
-    auto match_color_texture = [&render_view](const auto& i) {
+    auto match_color_texture = [&render_view](const auto& i)
+    {
         return i.color_texture->gl_name() == render_view.color_texture;
     };
     auto i = std::find_if(m_view_resources.begin(), m_view_resources.end(), match_color_texture);

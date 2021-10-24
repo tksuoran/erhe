@@ -9,23 +9,20 @@ Root_view::Root_view(Context_window* window)
 {
 }
 
-void
-Root_view::set_view(std::shared_ptr<View> view)
+void Root_view::set_view(std::shared_ptr<View> view)
 {
     view->on_resize(m_window->get_width(), m_window->get_height());
     m_view = view;
 }
 
-void
-Root_view::reset_view(std::shared_ptr<View> view)
+void Root_view::reset_view(std::shared_ptr<View> view)
 {
     view->on_resize(m_window->get_width(), m_window->get_height());
     m_view = view;
     m_last_view.reset();
 }
 
-void
-Root_view::on_idle()
+void Root_view::on_idle()
 {
     if (m_last_view != m_view)
     {
@@ -44,8 +41,7 @@ Root_view::on_idle()
     }
 }
 
-void
-Root_view::on_close()
+void Root_view::on_close()
 {
     if (m_view)
     {
@@ -61,8 +57,7 @@ Root_view::on_close()
     }
 }
 
-void
-Root_view::on_resize(const int width, const int height)
+void Root_view::on_resize(const int width, const int height)
 {
     if (m_view)
     {
@@ -70,8 +65,7 @@ Root_view::on_resize(const int width, const int height)
     }
 }
 
-void
-Root_view::on_key_press(const Keycode code, const Key_modifier_mask mask)
+void Root_view::on_key_press(const Keycode code, const Key_modifier_mask mask)
 {
     if (m_view)
     {
@@ -79,8 +73,7 @@ Root_view::on_key_press(const Keycode code, const Key_modifier_mask mask)
     }
 }
 
-void
-Root_view::on_key_release(const Keycode code, const Key_modifier_mask mask)
+void Root_view::on_key_release(const Keycode code, const Key_modifier_mask mask)
 {
     if (m_view)
     {
@@ -88,8 +81,7 @@ Root_view::on_key_release(const Keycode code, const Key_modifier_mask mask)
     }
 }
 
-void
-Root_view::on_mouse_move(const double x, const double y)
+void Root_view::on_mouse_move(const double x, const double y)
 {
     if (m_view)
     {
@@ -97,8 +89,7 @@ Root_view::on_mouse_move(const double x, const double y)
     }
 }
 
-void
-Root_view::on_mouse_click(const Mouse_button button, const int count)
+void Root_view::on_mouse_click(const Mouse_button button, const int count)
 {
     if (m_view)
     {

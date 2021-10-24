@@ -1,7 +1,7 @@
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
 
-#include "erhe/physics/world.hpp"
+#include "erhe/physics/iworld.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -21,7 +21,7 @@ using namespace std;
 
 void attach(Layer&                   layer,
             Scene&                   scene,
-            World&                   physics_world,
+            IWorld&                  physics_world,
             shared_ptr<Node>         node,
             shared_ptr<Mesh>         mesh,
             shared_ptr<Node_physics> node_physics)
@@ -35,7 +35,7 @@ void attach(Layer&                   layer,
     if (node_physics)
     {
         node->attach(node_physics);
-        physics_world.add_rigid_body(&node_physics->rigid_body);
+        physics_world.add_rigid_body(node_physics->rigid_body());
     }
     if (node->parent)
     {
@@ -45,7 +45,7 @@ void attach(Layer&                   layer,
 
 void detach(Layer&                   layer,
             Scene&                   scene,
-            World&                   physics_world,
+            IWorld&                  physics_world,
             shared_ptr<Node>         node,
             shared_ptr<Mesh>         mesh,
             shared_ptr<Node_physics> node_physics)
@@ -64,7 +64,7 @@ void detach(Layer&                   layer,
     if (node_physics)
     {
         node->detach(node_physics);
-        physics_world.remove_rigid_body(&node_physics->rigid_body);
+        physics_world.remove_rigid_body(node_physics->rigid_body());
     }
     meshes.erase(std::remove(meshes.begin(), meshes.end(), mesh), meshes.end());
     nodes.erase(std::remove(nodes.begin(), nodes.end(), node), nodes.end());

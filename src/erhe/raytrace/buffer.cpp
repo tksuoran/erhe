@@ -2,10 +2,48 @@
 #include "erhe/raytrace/device.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+#include <embree3/rtcore.h>
+#include <mutex>
+
 #include <gsl/gsl_assert>
 
 namespace erhe::raytrace
 {
+
+class Buffer
+    : public IBuffer
+{
+public:
+    explicit Buffer(const size_t capacity_bytes_count);
+    Buffer(const Buffer&)             = delete;
+    explicit Buffer(Buffer&& other) noexcept;
+    Buffer& operator=(const Buffer&)  = delete;
+    Buffer& operator=(Buffer&& other) noexcept;
+    ~Buffer();
+
+    auto capacity_byte_count() const noexcept -> size_t;
+    auto allocate_bytes     (const size_t byte_count, const size_t alignment = 64) noexcept -> size_t;
+    auto span               () noexcept -> gsl::span<std::byte>;
+
+private:
+    //RTCBuffer  m_buffer{nullptr};
+    std::mutex             m_allocate_mutex;
+    size_t                 m_capacity_byte_count{0};
+    size_t                 m_next_free_byte     {0};
+
+    std::vector<std::byte> m_buffer;
+    gsl::span<std::byte>   m_span;
+};
+
+auto IBuffer::create(const size_t capacity_bytes_count) -> IBuffer*
+{
+    return new Buffer(capacity_bytes_count);
+}
+
+auto IBuffer::create_shared(const size_t capacity_bytes_count) -> std::shared_ptr<IBuffer>
+{
+    return std::make_shared<Buffer>(capacity_bytes_count);
+}
 
 Buffer::Buffer(const size_t capacity_bytes_count)
 {

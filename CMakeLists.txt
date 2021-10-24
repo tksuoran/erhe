@@ -4,207 +4,26 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 cmake_policy(SET CMP0079 NEW)
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
+
+macro(set_option variable_name help_text default_value possible_values)
+    set("${variable_name}" "${default_value}" CACHE STRING "${help_text}")
+    set_property(CACHE ${variable_name} PROPERTY STRINGS "${possible_values}")
+endmacro()
+
+set_option(ERHE_PNG_LIBRARY                "PNG loading library. Either mango or none"                   "mango"    "mango;none")
+set_option(ERHE_FONT_RASTERIZATION_LIBRARY "Font rasterization library. Either freetype or none"         "freetype" "freetype;none")
+set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype, harfbuzz or none"      "harfbuzz" "harfbuzz;freetype;none")
+set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Either glfw, mango or none" "glfw"     "glfw;mango;none")
+set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree or none"    "embree"   "embree;none")
+set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either bullet or none"     "bullet"   "bullet;none")
+
+
 # Globally use fastlink
 add_link_options($<$<COMPILE_LANGUAGE:CXX>:/DEBUG:FASTLINK>)
 
-include(FetchContent)
 
-FetchContent_Declare(
-    nlohmann_json
-    #GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_REPOSITORY https://github.com/ArthurSonzogni/nlohmann_json_cmake_fetchcontent.git
-    GIT_TAG        master
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-FetchContent_Declare(
-    freetype
-    GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype.git
-    GIT_TAG        VER-2-11-0
-)
-
-FetchContent_Declare(
-    harfbuzz
-    GIT_REPOSITORY https://github.com/tksuoran/harfbuzz.git
-    GIT_TAG        fixes
-    #GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz.git
-    #GIT_TAG        2.7.4
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-FetchContent_Declare(
-    fmt
-    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-    GIT_TAG        8.0.1
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-FetchContent_Declare(
-    RectangleBinPack
-    GIT_REPOSITORY https://github.com/tksuoran/RectangleBinPack.git
-    GIT_TAG        fix-win32
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-FetchContent_Declare(
-    ImGui
-    GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG        master # v1.81
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-FetchContent_Declare(
-    avir
-    #GIT_REPOSITORY https://github.com/avaneev/avir.git
-    #GIT_TAG        master
-    GIT_REPOSITORY  https://github.com/tksuoran/avir.git
-    GIT_TAG         cmake
-    GIT_SHALLOW     TRUE
-    GIT_PROGRESS    TRUE
-)
-
-FetchContent_Declare(
-    lunasvg
-    GIT_REPOSITORY  https://github.com/sammycage/lunasvg.git
-    GIT_TAG         master
-    GIT_SHALLOW     TRUE
-    GIT_PROGRESS    TRUE
-)
-
-
-FetchContent_Declare(
-    tracy
-    #GIT_REPOSITORY https://github.com/tksuoran/tracy.git
-    #GIT_TAG        cmake-client
-    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-    GIT_TAG        master
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-FetchContent_Declare(
-    cxxopts
-    GIT_REPOSITORY https://github.com/jarro2783/cxxopts.git
-    GIT_TAG        master
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-
-# FetchContent_Declare(
-#     reactphysics3d
-#     GIT_REPOSITORY https://github.com/DanielChappuis/reactphysics3d.git
-#     GIT_TAG        v0.8.0
-#     GIT_SHALLOW    TRUE
-#     GIT_PROGRESS   TRUE
-# )
-
-# FetchContent_Declare(
-#     spdlog
-#     GIT_REPOSITORY https://github.com/gabime/spdlog.git
-#     GIT_TAG        v1.8.5
-#     GIT_SHALLOW    TRUE
-#     GIT_PROGRESS   TRUE
-# )
-
-FetchContent_Declare(
-    bullet3
-    #GIT_REPOSITORY https://github.com/bulletphysics/bullet3.git
-    GIT_REPOSITORY https://github.com/tksuoran/bullet3.git
-    GIT_TAG        cmake-fetchcontent
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-FetchContent_Declare(
-    eigen
-    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-    GIT_TAG        3.4.0
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-# FetchContent_Declare(
-#     libigl
-#     GIT_REPOSITORY https://github.com/libigl/libigl.git
-#     GIT_TAG        v2.3.0
-#     GIT_SHALLOW    TRUE
-#     GIT_PROGRESS   TRUE
-# )
-
-FetchContent_Declare(
-    embree
-    GIT_REPOSITORY https://github.com/embree/embree.git
-    GIT_TAG        v3.13.1
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-
-# Mango project name is about to change.
-# Temporarily using my own fork until it comes up with a new name.
-FetchContent_Declare(
-    mango
-    #GIT_REPOSITORY https://github.com/t0rakka/mango.git
-    GIT_REPOSITORY https://github.com/tksuoran/mango.git
-    GIT_TAG        master
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-FetchContent_Declare(
-    glfw
-    GIT_REPOSITORY https://github.com/glfw/glfw.git
-    GIT_TAG        3.3.4
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-FetchContent_Declare(
-    glm
-    GIT_REPOSITORY https://github.com/tksuoran/glm-1.git
-    GIT_TAG        fix-cmake
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-FetchContent_Declare(
-    GSL
-    GIT_REPOSITORY https://github.com/microsoft/GSL.git
-    GIT_TAG        main # v3.1.0
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-# FetchContent_Declare(
-#     googletest
-#     GIT_REPOSITORY https://github.com/google/googletest.git
-#     GIT_TAG        master
-#     GIT_SHALLOW    TRUE
-#     GIT_PROGRESS   TRUE
-# )
-
-FetchContent_Declare(
-    OpenXR-SDK
-    GIT_REPOSITORY https://github.com/KhronosGroup/OpenXR-SDK.git
-    GIT_TAG        master
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-
-#FetchContent_Declare(
-#    concurrentqueue
-#    GIT_REPOSITORY https://github.com/cameron314/concurrentqueue.git
-#    GIT_TAG        master
-#    GIT_SHALLOW    TRUE
-#    GIT_PROGRESS   TRUE
-#)
+include(libraries)
 
 
 FetchContent_MakeAvailable(nlohmann_json)
@@ -219,6 +38,16 @@ FetchContent_GetProperties(mango)
 string(TOLOWER "mango" lc_mango)
 if(NOT ${lc_mango}_POPULATED)
     FetchContent_Populate(mango)
+    set(MANGO_ALL_ARCHIVE_FORMATS ZIP; RAR; MGX)
+    foreach(format ${MANGO_ALL_ARCHIVE_FORMATS})
+        option(MANGO_DISABLE_ARCHIVE_${format} "" ON)
+    endforeach()
+
+    set(MANGO_ALL_IMAGE_FORMATS ASTC; ATARI; BMP; C64; DDS; GIF; HDR; IFF; JPG; KTX; PCX; PKM; PNM; PVR; SGI; TGA; WEBP; ZPNG)
+    foreach(format ${MANGO_ALL_IMAGE_FORMATS})
+        option(MANGO_DISABLE_IMAGE_${format} "" ON)
+    endforeach()
+
     add_subdirectory(${${lc_mango}_SOURCE_DIR}/build ${${lc_mango}_BINARY_DIR})
 endif()
 
@@ -229,20 +58,25 @@ FetchContent_MakeAvailable(GSL)
 FetchContent_MakeAvailable(ImGui)
 
 # TODO Figure out how to disable Tracy profiling properly
-set(TRACY_ENABLE OFF CACHE BOOL "Enable profiling")
-option(TRACY_ENABLE "Enable profiling" OFF)
+#set(TRACY_ENABLE OFF CACHE BOOL "Enable profiling")
+#option(TRACY_ENABLE "Enable profiling" OFF)
+set(TRACY_ENABLE ON CACHE BOOL "Enable profiling")
+option(TRACY_ENABLE "Enable profiling" ON)
 FetchContent_MakeAvailable(tracy)
 
 FetchContent_MakeAvailable(cxxopts)
 
+
 #FetchContent_MakeAvailable(reactphysics3d)
-FetchContent_MakeAvailable(bullet3)
-FetchContent_MakeAvailable(embree)
+if (${ERHE_PHYSICS_LIBRARY} STREQUAL "bullet")
+    FetchContent_MakeAvailable(bullet3)
+endif ()
+if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
+    FetchContent_MakeAvailable(embree)
+endif()
 
 FetchContent_MakeAvailable(OpenXR-SDK)
 #FetchContent_MakeAvailable(eigen)
-#FetchContent_MakeAvailable(libigl)
-#FetchContent_MakeAvailable(concurrentqueue)
 FetchContent_MakeAvailable(avir)
 FetchContent_MakeAvailable(lunasvg)
 
@@ -255,22 +89,6 @@ endif()
 project(erhe VERSION 1.0 LANGUAGES C CXX)
 
 set(ERHE_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/src")
-
-# set(CMAKE_CXX_CPPCHECK "C:/Program\ Files/Cppcheck/cppcheck.exe")
-#set(CMAKE_CXX_CPPCHECK cppcheck)
-#list(APPEND CMAKE_CXX_CPPCHECK
-#    "-j 4"
-#    "--quiet"
-#    "--enable=information"
-#    "--enable=portability"
-#    "--enable=performance"
-#    "--enable=style"
-#    "--enable=warning"
-#    #"--enable=error"
-#    "--std=c++20"
-#    "--platform=unix64"
-#    # "--clang=clang-12"
-#)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
     set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -Wall -Wno-unknown-pragmas -Wno-sign-compare -Woverloaded-virtual -Wwrite-strings -Wno-unused")
@@ -314,19 +132,7 @@ add_definitions(-DERHE_DLOAD_ALL_GL_SYMBOLS)
 
 add_definitions(-DGLM_FORCE_DEPTH_ZERO_TO_ONE)
 
-set(ERHE_PNG_LIBRARY "Mango" CACHE STRING "PNG loading library. Either Mango or none")
-set_property(CACHE ERHE_PNG_LIBRARY PROPERTY STRINGS none Mango)
-
-set(ERHE_FONT_RASTERIZATION_LIBRARY "freetype" CACHE STRING "Font rasterization library. Either freetype or none")
-set_property(CACHE ERHE_FONT_RASTERIZATION_LIBRARY PROPERTY STRINGS none freetype)
-
-set(ERHE_FONT_LAYOUT_LIBRARY "harfbuzz" CACHE STRING "Font layout library. Either freetype, harfbuzz or none")
-set_property(CACHE ERHE_FONT_LAYOUT_LIBRARY PROPERTY STRINGS none freetype harfbuzz)
-
-set(ERHE_WINDOW_TOOLKIT "GLFW" CACHE STRING "Window toolkit to use with erhe. Either GLFW or Mango")
-set_property(CACHE ERHE_WINDOW_TOOLKIT PROPERTY STRINGS GLFW Mango)
-
-if (${ERHE_PNG_LIBRARY} STREQUAL "Mango")
+if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
     message(STATUS "Erhe configured to use Mango for PNG loading.")
     add_definitions(-DERHE_PNG_LIBRARY_MANGO)
 endif()
@@ -335,28 +141,35 @@ if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
     add_definitions(-DERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE)
     ### FetchContent_MakeAvailable(freetype)
 endif()
-if (${ERHE_FONT_LAYOUT_LIBRARY} STREQUAL "harfbuzz")
-    message(STATUS "Erhe configured to use harfbuzz for font layout.")
+if (${ERHE_TEXT_LAYOUT_LIBRARY} STREQUAL "harfbuzz")
+    message(STATUS "Erhe configured to use harfbuzz for text layout.")
     add_definitions(-DERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE)
     ### FetchContent_MakeAvailable(harfbuzz)
 endif()
-if (${ERHE_WINDOW_TOOLKIT} STREQUAL "GLFW")
-    message(STATUS "Erhe configured to use GLFW for OpenGL Context_window.")
-    add_definitions(-DERHE_WINDOW_TOOLKIT_GLFW)
+if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
+    message(STATUS "Erhe configured to use glfw for OpenGL Context_window.")
+    add_definitions(-DERHE_WINDOW_LIBRARY_GLFW)
 endif()
-if (${ERHE_WINDOW_TOOLKIT} STREQUAL "Mango")
-    message(STATUS "Erhe configured to use Mango for OpenGL Context_window.")
-    add_definitions(-DERHE_WINDOW_TOOLKIT_MANGO)
+if (${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
+    message(STATUS "Erhe configured to use mango for OpenGL Context_window.")
+    add_definitions(-DERHE_WINDOW_LIBRARY_MANGO)
 endif()
-
-### if (${ERHE_PNG_LIBRARY} STREQUAL "Mango" OR ${ERHE_WINDOW_TOOLKIT} STREQUAL "Mango")
-###     FetchContent_GetProperties(mango)
-###     string(TOLOWER "mango" lc_mango)
-###     if(NOT ${lc_mango}_POPULATED)
-###         FetchContent_Populate(mango)
-###         add_subdirectory(${${lc_mango}_SOURCE_DIR}/build ${${lc_mango}_BINARY_DIR})
-###     endif()
-### endif()
+if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "Embree")
+    message(STATUS "Erhe configured to use Embree for raytracing.")
+    add_definitions(-DERHE_RAYTRACE_LIBRARY_EMBREE)
+endif()
+if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "none")
+    message(STATUS "Erhe configured to disable raytracing.")
+    add_definitions(-DERHE_RAYTRACE_LIBRARY_NONE)
+endif()
+if (${ERHE_PHYSICS_LIBRARY} STREQUAL "bullet")
+    message(STATUS "Erhe configured to use bullet for physics.")
+    add_definitions(-DERHE_PHYSICS_LIBRARY_BULLET)
+endif()
+if (${ERHE_PHYSICS_LIBRARY} STREQUAL "none")
+    message(STATUS "Erhe configured to disable physics.")
+    add_definitions(-DERHE_PHYSICS_LIBRARY_NONE)
+endif()
 
 # Workaround VS2017
 add_definitions(-D_ENABLE_EXTENDED_ALIGNED_STORAGE)
@@ -378,64 +191,4 @@ if(MSVC)
                  PROPERTY VS_STARTUP_PROJECT "editor")
 endif()
 
-# Add Analyze with CppCheck target if CppCheck is installed
-# if(WIN32)
-#   # Find CppCheck executable
-#   find_program(CMAKE_CXX_CPPCHECK cppcheck NAMES cppcheck HINTS $ENV{PROGRAMFILES}/cppcheck)
-# 
-#   # If CppCheck executable found
-#   if(CMAKE_CXX_CPPCHECK)
-#     # Check CppCheck version
-#     set(CPP_CHECK_CMD ${CMAKE_CXX_CPPCHECK} --version)
-#     execute_process(COMMAND ${CPP_CHECK_CMD}
-#       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-#       RESULT_VARIABLE CPP_CHECK_RESULT
-#       OUTPUT_VARIABLE CPP_CHECK_VERSION
-#       ERROR_VARIABLE CPP_CHECK_ERROR)
-# 
-#     # Check if version could be extracted
-#     if(CPP_CHECK_RESULT EQUAL 0)
-#       # Get number of CPU cores
-#       include(ProcessorCount)
-#       ProcessorCount(CPU_CORES)
-# 
-#       # Append desired arguments to CppCheck
-#       list(
-#         APPEND CMAKE_CXX_CPPCHECK
-# 
-#           # Using the below template will allow jumping to any found error from inside Visual Studio output window by double click
-#           "--template \"${CMAKE_SOURCE_DIR}/{file}({line}): {severity} ({id}): {message}\""
-# 
-#           # Use all the available CPU cores
-#           "-j ${CPU_CORES}"
-# 
-#           # Only show found errors
-#           "--quiet"
-# 
-#           # Desired warning level in CppCheck
-#           "--enable=style"
-# 
-#           # Optional: Specified C++ version
-#           "--std=c++17"
-# 
-#           # Optional: Specified platform
-#           "--platform=win64"
-# 
-#           # Optional: suppression file stored in same directory as the top level CMake script
-#           "--suppressions-list=${CMAKE_SOURCE_DIR}/cppcheck_suppressions.txt"
-# 
-#           # Optional: Use inline suppressions
-#           "--inline-suppr"
-# 
-#           # Run CppCheck from the working directory, as specified in the add_custom_target command below
-#           "."
-#         )
-# 
-#       add_custom_target(ANALYZE_CPPCHECK DEPENDS erhe
-#         COMMAND ${CMAKE_CXX_CPPCHECK}
-#         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-#         COMMENT "Static code analysis using ${CPP_CHECK_VERSION}"
-#       )
-#     endif()
-#   endif()
-# endif()
+

@@ -10,30 +10,17 @@ namespace erhe::raytrace
 
 class Device;
 
-class Geometry
+class IGeometry
     : public erhe::scene::INode_attachment
 {
 public:
-    explicit Geometry(Device& device);
-    Geometry(const Geometry&)            = delete;
-    Geometry(Geometry&&)                 = delete;
-    Geometry& operator=(const Geometry&) = delete;
-    Geometry& operator=(Geometry&&)      = delete;
-    ~Geometry();
-
     //void enable();
     //void disable();
     //void set_mask(unsigned int mask);
     //void intersection_filter(const RTCFilterFunctionNArguments* args);
 
-    auto get_rtc_geometry() const -> RTCGeometry;
-    void set_id          (const unsigned int id);
-    auto get_id          () -> unsigned int;
-    void reset_id        ();
-
-private:
-    RTCGeometry  m_geometry{nullptr};
-    unsigned int m_id      {RTC_INVALID_GEOMETRY_ID};
+    static auto create(IDevice& device) -> IGeometry*;
+    static auto create_shared(IDevice& device) -> std::shared_ptr<IGeometry>;
 };
 
 } // namespace erhe::raytrace

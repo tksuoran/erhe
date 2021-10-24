@@ -7,9 +7,8 @@
 #include "tools/pointer_context.hpp"
 
 #include "erhe/scene/mesh.hpp"
-#include "erhe/physics/world.hpp"
-
-#include <BulletDynamics/ConstraintSolver/btPoint2PointConstraint.h>
+#include "erhe/physics/iworld.hpp"
+#include "erhe/physics/iconstraint.hpp"
 
 #include "imgui.h"
 
@@ -91,18 +90,18 @@ auto Physics_tool::update(Pointer_context& pointer_context) -> bool
             m_drag_node_physics     = m_drag_mesh->node()->get_attachment<Node_physics>();
             if (m_drag_node_physics)
             {
-                m_original_linear_damping  = m_drag_node_physics->rigid_body.bullet_rigid_body.getLinearDamping();
-                m_original_angular_damping = m_drag_node_physics->rigid_body.bullet_rigid_body.getAngularDamping();
-                m_drag_node_physics->rigid_body.bullet_rigid_body.setDamping(m_linear_damping,
-                                                                             m_angular_damping);
-                const btVector3 pivot{m_drag_position_in_mesh.x, m_drag_position_in_mesh.y, m_drag_position_in_mesh.z};
-                m_drag_constraint = std::make_unique<btPoint2PointConstraint>(m_drag_node_physics->rigid_body.bullet_rigid_body,
-                                                                              pivot);
-                m_drag_constraint->m_setting.m_impulseClamp = m_impulse_clamp;
-                m_drag_constraint->m_setting.m_damping      = m_damping;
-                m_drag_constraint->m_setting.m_tau          = m_tau;
-                m_drag_node_physics->rigid_body.bullet_rigid_body.setActivationState(DISABLE_DEACTIVATION);
-                m_scene_root->physics_world().bullet_dynamics_world.addConstraint(m_drag_constraint.get());
+                m_original_linear_damping  = m_drag_node_physics->rigid_body()->get_linear_damping();
+                m_original_angular_damping = m_drag_node_physics->rigid_body()->get_angular_damping();
+                m_drag_node_physics->rigid_body()->set_damping(m_linear_damping,
+                                                             m_angular_damping);
+                const glm::vec3 pivot{m_drag_position_in_mesh.x, m_drag_position_in_mesh.y, m_drag_position_in_mesh.z};
+                m_drag_constraint = erhe::physics::IConstraint::create_point_to_point_constraint_unique(m_drag_node_physics->rigid_body(),
+                                                                                                        pivot);
+                m_drag_constraint->set_impulse_clamp(m_impulse_clamp);
+                m_drag_constraint->set_damping(m_damping);
+                m_drag_constraint->set_tau(m_tau);
+                m_drag_node_physics->rigid_body()->begin_move();
+                m_scene_root->physics_world().add_constraint(m_drag_constraint.get());
             }
             log_tools.trace("Physics tool state = ready\n");
             m_state = State::Ready;
@@ -134,9 +133,10 @@ auto Physics_tool::update(Pointer_context& pointer_context) -> bool
 
     m_drag_position_start = glm::vec3(m_drag_mesh->node()->world_from_node() * glm::vec4(m_drag_position_in_mesh, 1.0f));
     m_drag_position_end   = pointer_context.position_in_world(m_drag_depth);
+
     if (m_drag_constraint)
     {
-        m_drag_constraint->setPivotB(btVector3(m_drag_position_end.x, m_drag_position_end.y, m_drag_position_end.z));
+        m_drag_constraint->set_pivot_in_b(m_drag_position_end);
     }
 
     if (pointer_context.mouse_button[Mouse_button_left].released)
@@ -145,12 +145,12 @@ auto Physics_tool::update(Pointer_context& pointer_context) -> bool
         {
             if (m_drag_node_physics)
             {
-                m_drag_node_physics->rigid_body.bullet_rigid_body.setDamping(m_original_linear_damping,
-                                                                             m_original_angular_damping);
-                m_drag_node_physics->rigid_body.bullet_rigid_body.forceActivationState(ACTIVE_TAG);
+                m_drag_node_physics->rigid_body()->set_damping(m_original_linear_damping,
+                                                               m_original_angular_damping);
+                m_drag_node_physics->rigid_body()->end_move();
                 m_drag_node_physics.reset();
             }
-            m_scene_root->physics_world().bullet_dynamics_world.removeConstraint(m_drag_constraint.get());
+            m_scene_root->physics_world().remove_constraint(m_drag_constraint.get());
             m_drag_constraint.reset();
         }
         m_drag_mesh.reset();
@@ -158,6 +158,7 @@ auto Physics_tool::update(Pointer_context& pointer_context) -> bool
         m_state = State::Passive;
     }
     return true;
+    return false;
 }
 
 

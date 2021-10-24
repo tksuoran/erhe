@@ -26,7 +26,8 @@
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/primitive/material.hpp"
-#include "erhe/physics/world.hpp"
+#include "erhe/physics/icollision_shape.hpp"
+#include "erhe/physics/iworld.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -36,7 +37,10 @@
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include "mango/core/thread.hpp"
-#include "glm/gtx/color_space.hpp"
+
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/color_space.hpp>
+#include <glm/gtx/rotate_vector.hpp>
 
 namespace editor
 {
@@ -120,160 +124,247 @@ void Scene_manager::make_brushes()
     mango::ConcurrentQueue     execution_queue;
     //mango::SerialQueue         execution_queue;
 
-    auto floor_box_shape = make_shared<btBoxShape>(btVector3{20.0f, 0.5f, 20.0f});
+    auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{20.0f, 0.5f, 20.0f});
 
     // Otherwise it will be destructed when leave add_floor() scope
-    m_scene_root->physics_world().collision_shapes.push_back(floor_box_shape);
+    m_collision_shapes.push_back(floor_box_shape);
+    //m_scene_root->physics_world().collision_shapes.push_back(floor_box_shape);
 
-    execution_queue.enqueue([this, &floor_box_shape]() {
-        ZoneScopedN("Floor brush");
+    // Floor
+    execution_queue.enqueue(
+        [this, &floor_box_shape]()
+        {
+            ZoneScopedN("Floor brush");
 
-        Brush_create_context context{build_info_set()}; //, Normal_style::polygon_normals};
-        context.normal_style = Normal_style::polygon_normals;
+            Brush_create_context context{build_info_set()}; //, Normal_style::polygon_normals};
+            context.normal_style = Normal_style::polygon_normals;
 
-        auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(std::move(make_box(vec3(40.0f, 1.0f, 40.0f),
-                                                                                            ivec3(40, 1, 40))));
-        floor_geometry->name = "floor";
-        floor_geometry->build_edges();
+            auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
+                std::move(
+                    make_box(
+                        vec3(40.0f, 1.0f, 40.0f),
+                        ivec3(40, 1, 40)
+                    )
+                )
+            );
+            floor_geometry->name = "floor";
+            floor_geometry->build_edges();
 
-        const Brush::Create_info brush_create_info{floor_geometry,
-                                                   build_info_set(),
-                                                   Normal_style::polygon_normals,
-                                                   0.0f, // density for static object
-                                                   0.0f, // volume for static object
-                                                   floor_box_shape};
-        m_floor_brush = make_unique<Brush>(brush_create_info);
-    });
-
-#if 1
-    if constexpr (true) // teapot
-    {
-        execution_queue.enqueue([this]() {
-            ZoneScopedN("teapot from .obj");
-
-            const Brush_create_context context{build_info_set(), Normal_style::point_normals};
-            constexpr bool instantiate = true;
-
-            auto geometry = parse_obj_geometry("res/models/teapot.obj");
-            geometry.compute_polygon_normals();
-            // The real teapot is ~33% taller (ratio 4:3)
-            const mat4 scale_t = erhe::toolkit::create_scale(0.5f, 0.5f * 4.0f / 3.0f, 0.5f);
-            geometry.transform(scale_t);
-            make_brush(instantiate, move(geometry), context);
-        });
-    }
-
-    if constexpr (true)
-    {
-        execution_queue.enqueue([this]() {
-            ZoneScopedN("platonic solids");
-
-            const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
-            constexpr bool instantiate = true;
-
-            constexpr float original_scale = 1.0f;
-            make_brush(instantiate, make_dodecahedron (original_scale), context);
-            make_brush(instantiate, make_icosahedron  (original_scale), context);
-            make_brush(instantiate, make_octahedron   (original_scale), context);
-            make_brush(instantiate, make_tetrahedron  (original_scale), context);
-            make_brush(instantiate, make_cuboctahedron(original_scale), context);
-            make_brush(instantiate,
-                       make_cube(original_scale),
-                       context,
-                       make_shared<btBoxShape>(btVector3(original_scale * 0.5f, original_scale * 0.5f, original_scale * 0.5f)));
-        });
-    }
-
-    if constexpr (true)
-    {
-        execution_queue.enqueue([this]() {
-            ZoneScopedN("Sphere");
-
-            const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
-            constexpr bool instantiate = true;
-
-            make_brush(instantiate,
-                       make_sphere(1.0f, 12 * 4, 4 * 6),
-                       context,
-                       make_shared<btSphereShape>(1.0f));
-        });
-
-        execution_queue.enqueue([this]() {
-            ZoneScopedN("Torus");
-
-            const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
-            constexpr bool instantiate = true;
-
-            constexpr float major_radius = 1.0f;
-            constexpr float minor_radius = 0.25f;
-            auto torus_collision_volume_calculator = [=](float scale) -> float
-            {
-                return torus_volume(major_radius * scale, minor_radius * scale);
+            const Brush::Create_info brush_create_info{
+                floor_geometry,
+                build_info_set(),
+                Normal_style::polygon_normals,
+                0.0f, // density for static object
+                0.0f, // volume for static object
+                floor_box_shape
             };
+            m_floor_brush = make_unique<Brush>(brush_create_info);
+        }
+    );
 
-            auto torus_collision_shape_generator = [major_radius, minor_radius](float scale)
-            -> std::shared_ptr<btCollisionShape>
+    // Teapot
+    if constexpr (false)
+    {
+        execution_queue.enqueue(
+            [this]()
             {
-                ZoneScopedN("torus_collision_shape_generator");
+                ZoneScopedN("teapot from .obj");
 
-                auto torus_shape = make_shared<btCompoundShape>();
+                const Brush_create_context context{build_info_set(), Normal_style::point_normals};
+                constexpr bool instantiate = true;
 
-                const double    subdivisions        = 16.0;
-                const double    scaled_major_radius = major_radius * scale;
-                const double    scaled_minor_radius = minor_radius * scale;
-                const double    major_circumference = 2.0 * SIMD_PI * scaled_major_radius;
-                const double    capsule_length      = major_circumference / subdivisions;
-                const btVector3 forward{btScalar(0.0), btScalar(1.0), btScalar(0.0)};
-                const btVector3 side   {btScalar(scaled_major_radius), btScalar(0.0), btScalar(0.0)};
-
-                // TODO Fix new
-                btCapsuleShapeZ* shape = new btCapsuleShapeZ(btScalar(scaled_minor_radius), btScalar(capsule_length));
-                btTransform t;
-                for (int rel = 0; rel < (int)subdivisions; rel++)
+                const char* teaset[] = {
+                    "res/models/teapot.obj",
+                    "res/models/teacup.obj",
+                    "res/models/spoon.obj"
+                };
+                for (auto* path : teaset)
                 {
-                    btScalar     angle    = btScalar((rel * 2.0 * SIMD_PI) / subdivisions);
-                    btVector3    position = side.rotate(forward, angle);
-                    btQuaternion q(forward, angle);
-                    t.setIdentity();
-                    t.setOrigin  (position);
-                    t.setRotation(q);
-                    torus_shape->addChildShape(t, shape);
+                    auto geometries = parse_obj_geometry(path);
+
+                    for (auto& geometry : geometries)
+                    {
+                        geometry->compute_polygon_normals();
+                        // The real teapot is ~33% taller (ratio 4:3)
+                        const mat4 scale_t = erhe::toolkit::create_scale(0.5f, 0.5f * 4.0f / 3.0f, 0.5f);
+                        geometry->transform(scale_t);
+                        make_brush(instantiate, move(geometry), context);
+                    }
                 }
-                return torus_shape;
-            };
-
-            make_brush(instantiate,
-                       make_shared<erhe::geometry::Geometry>(move(make_torus(major_radius, minor_radius, 42, 32))),
-                       context,
-                       torus_collision_volume_calculator,
-                       torus_collision_shape_generator);
-        });
-
-        execution_queue.enqueue([this]() {
-            ZoneScopedN("Cylinder");
-
-            const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
-            constexpr bool instantiate = true;
-
-            make_brush(instantiate,
-                       make_cylinder(-1.0f, 1.0f, 1.0f, true, true, 32, 2),
-                       context,
-                       make_shared<btCylinderShapeX>(btVector3(1.0f, 1.0f, 1.0f)));
-        });
-
-        execution_queue.enqueue([this]() {
-            ZoneScopedN("Cone");
-
-            const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
-            constexpr bool instantiate = true;
-
-            make_brush(instantiate,
-                       make_cone(-1.0f, 1.0f, 1.0f, true, 42, 4),
-                       context,
-                       make_shared<btConeShapeX>(1.0f, 2.0f));
-        });
+            }
+        );
     }
 
+    // Platonic solids
+    if constexpr (false)
+    {
+        execution_queue.enqueue(
+            [this]()
+            {
+                ZoneScopedN("Platonic solids");
+
+                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                constexpr bool instantiate = true;
+
+                constexpr float original_scale = 1.0f;
+                //make_brush(instantiate, make_dodecahedron (original_scale), context);
+                //make_brush(instantiate, make_icosahedron  (original_scale), context);
+                //make_brush(instantiate, make_octahedron   (original_scale), context);
+                make_brush(instantiate, make_tetrahedron  (original_scale), context);
+                //make_brush(instantiate, make_cuboctahedron(original_scale), context);
+                make_brush(
+                    instantiate,
+                    make_cube(original_scale),
+                    context,
+                    erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3(original_scale * 0.5f))
+                );
+            }
+        );
+    }
+
+    // Sphere
+    if constexpr (true)
+    {
+        execution_queue.enqueue(
+            [this]()
+            {
+                ZoneScopedN("Sphere");
+
+                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                constexpr bool instantiate = true;
+
+                make_brush(
+                    instantiate,
+                    make_box(1.0f, 2.0f, 0.5f),
+                    context,
+                    erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3(0.5f, 1.0f, 0.25f))
+                );
+
+                make_brush(
+                    instantiate,
+                    make_sphere(1.0f, 12 * 4, 4 * 6),
+                    context,
+                    erhe::physics::ICollision_shape::create_sphere_shape_shared(1.0f)
+                );
+                make_brush(
+                    instantiate,
+                    make_sphere(1.0f, 12 * 3, 3 * 6),
+                    context,
+                    erhe::physics::ICollision_shape::create_sphere_shape_shared(1.0f)
+                );
+                make_brush(
+                    instantiate,
+                    make_sphere(1.0f, 12 * 2, 2 * 6),
+                    context,
+                    erhe::physics::ICollision_shape::create_sphere_shape_shared(1.0f)
+                );
+            }
+        );
+    }
+
+#if 0
+        execution_queue.enqueue(
+            [this]()
+            {
+                ZoneScopedN("Torus");
+
+                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                constexpr bool instantiate = true;
+
+                constexpr float major_radius = 1.0f;
+                constexpr float minor_radius = 0.25f;
+                auto torus_collision_volume_calculator = [=](float scale) -> float
+                {
+                    return torus_volume(major_radius * scale, minor_radius * scale);
+                };
+
+                auto torus_collision_shape_generator = [major_radius, minor_radius](float scale)
+                -> std::shared_ptr<erhe::physics::ICollision_shape>
+                {
+                    ZoneScopedN("torus_collision_shape_generator");
+
+                    auto torus_shape = erhe::physics::ICollision_shape::create_compound_shape_shared();
+
+                    const double     subdivisions        = 16.0;
+                    const double     scaled_major_radius = major_radius * scale;
+                    const double     scaled_minor_radius = minor_radius * scale;
+                    const double     major_circumference = 2.0 * glm::pi<double>() * scaled_major_radius;
+                    const double     capsule_length      = major_circumference / subdivisions;
+                    const glm::dvec3 forward{0.0, 1.0, 0.0};
+                    const glm::dvec3 side   {scaled_major_radius, 0.0, 0.0};
+
+                    // TODO Fix new
+                    auto shape = erhe::physics::ICollision_shape::create_capsule_shape_shared(
+                        erhe::physics::Axis::Z,
+                        static_cast<float>(scaled_minor_radius),
+                        static_cast<float>(capsule_length)
+                    );
+                    for (int rel = 0; rel < (int)subdivisions; rel++)
+                    {
+                        const double     angle    = (rel * 2.0 * glm::two_pi<double>()) / subdivisions;
+                        const glm::dvec3 position = glm::rotate(side, angle, forward);
+                        const glm::dquat q        = glm::angleAxis(angle, forward);
+                        const glm::dmat3 m        = glm::toMat3(q);
+
+                        torus_shape->add_child_shape(shape.get(), glm::mat3{m}, glm::vec3{position});
+                    }
+                    return torus_shape;
+                };
+
+                make_brush(
+                    instantiate,
+                    make_shared<erhe::geometry::Geometry>(move(make_torus(major_radius, minor_radius, 42, 32))),
+                    context,
+                    torus_collision_volume_calculator,
+                    torus_collision_shape_generator
+                );
+            }
+        );
+#endif
+
+
+    // cylinder and cone
+    if constexpr (true)
+    {
+        execution_queue.enqueue(
+            [this]()
+            {
+                ZoneScopedN("Cylinder");
+
+                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                constexpr bool instantiate = true;
+
+                make_brush(
+                    instantiate,
+                    make_cylinder(-1.0f, 1.0f, 1.0f, true, true, 32, 2),
+                    context,
+                    erhe::physics::ICollision_shape::create_cylinder_shape_shared(
+                        erhe::physics::Axis::X,
+                        glm::vec3(1.0f, 1.0f, 1.0f)
+                    )
+                );
+            }
+        );
+
+        execution_queue.enqueue(
+            [this]()
+            {
+                ZoneScopedN("Cone");
+
+                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                constexpr bool instantiate = true;
+
+                make_brush(
+                    instantiate,
+                    make_cone(-1.0f, 1.0f, 1.0f, true, 42, 4),
+                    context,
+                    erhe::physics::ICollision_shape::create_cone_shape_shared(erhe::physics::Axis::X, 1.0f, 2.0f)
+                );
+            }
+        );
+    }
+
+    // Test scene for anisotropic debugging
     if constexpr (false)
     {
         ZoneScopedN("test scene for anisotropic debugging");
@@ -300,29 +391,32 @@ void Scene_manager::make_brushes()
         z_rotate_ring_mesh->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3(0.0f, 1.0f, 0.0f));
     }
 
+    // Johnson solids
     if constexpr (false)
     {
-        execution_queue.enqueue([this]() {
-            ZoneScopedN("Johnson solids");
-
-            const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
-            constexpr bool instantiate = true;
-
-            const Json_library library("res/polyhedra/johnson.json");
-            for (const auto& key_name : library.names)
+        execution_queue.enqueue(
+            [this]()
             {
-                auto geometry = library.make_geometry(key_name);
-                if (geometry.polygon_count() == 0)
-                {
-                    continue;
-                }
-                geometry.compute_polygon_normals();
+                ZoneScopedN("Johnson solids");
 
-                make_brush(instantiate, move(geometry), context);
+                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                constexpr bool instantiate = true;
+
+                const Json_library library("res/polyhedra/johnson.json");
+                for (const auto& key_name : library.names)
+                {
+                    auto geometry = library.make_geometry(key_name);
+                    if (geometry.polygon_count() == 0)
+                    {
+                        continue;
+                    }
+                    geometry.compute_polygon_normals();
+
+                    make_brush(instantiate, move(geometry), context);
+                }
             }
-        });
+        );
     }
-#endif
 
     execution_queue.wait();
 
@@ -341,27 +435,34 @@ void Scene_manager::add_floor()
 {
     ZoneScoped;
 
-    auto floor_material = m_scene_root->make_material("Floor",
-                                                      vec4(0.4f, 0.4f, 0.4f, 1.0f),
-                                                      0.5f,
-                                                      0.8f);
+    auto floor_material = m_scene_root->make_material(
+        "Floor",
+        vec4(0.4f, 0.4f, 0.4f, 1.0f),
+        0.5f,
+        0.8f
+    );
 
-    auto instance = m_floor_brush->make_instance(m_scene_root->content_layer(),
-                                                 m_scene_root->scene(),
-                                                 m_scene_root->physics_world(),
-                                                 {},
-                                                 erhe::toolkit::create_translation(0, -0.5001f, 0.0f),
-                                                 floor_material,
-                                                 1.0f);
-    instance.mesh->visibility_mask |= (INode_attachment::c_visibility_content     |
-                                       INode_attachment::c_visibility_shadow_cast | // Optional for flat floor
-                                       INode_attachment::c_visibility_id);
-    attach(m_scene_root->content_layer(),
-           m_scene_root->scene(),
-           m_scene_root->physics_world(),
-           instance.node,
-           instance.mesh,
-           instance.node_physics);
+    auto instance = m_floor_brush->make_instance(
+        m_scene_root->content_layer(),
+        m_scene_root->scene(),
+        m_scene_root->physics_world(),
+        {},
+        erhe::toolkit::create_translation(0, -0.5001f, 0.0f),
+        floor_material,
+        1.0f
+    );
+    instance.mesh->visibility_mask |= 
+        (INode_attachment::c_visibility_content     |
+         INode_attachment::c_visibility_shadow_cast | // Optional for flat floor
+         INode_attachment::c_visibility_id);
+    attach(
+        m_scene_root->content_layer(),
+        m_scene_root->scene(),
+        m_scene_root->physics_world(),
+        instance.node,
+        instance.mesh,
+        instance.node_physics
+    );
 }
 
 void Scene_manager::make_mesh_nodes()
@@ -438,35 +539,41 @@ void Scene_manager::make_mesh_nodes()
         const auto primitive_geometry = brush->primitive_geometry;
         float      x = static_cast<float>(entry.rectangle.x) + 0.5f * static_cast<float>(entry.rectangle.width);
         float      z = static_cast<float>(entry.rectangle.y) + 0.5f * static_cast<float>(entry.rectangle.height);
-        float      y = -primitive_geometry->bounding_box_min.y;
+        float      y = -primitive_geometry->bounding_box_min.y + 1.0f;
         x -= 0.5f * static_cast<float>(group_width);
         z -= 0.5f * static_cast<float>(group_depth);
         auto material = m_scene_root->materials().at(material_index);
-        auto instance = brush->make_instance(m_scene_root->content_layer(),
-                                             m_scene_root->scene(),
-                                             m_scene_root->physics_world(),
-                                             {},
-                                             erhe::toolkit::create_translation(x, y, z),
-                                             material,
-                                             1.0f);
-        instance.mesh->visibility_mask |= (INode_attachment::c_visibility_content     |
-                                           INode_attachment::c_visibility_shadow_cast |
-                                           INode_attachment::c_visibility_id);
+        auto instance = brush->make_instance(
+            m_scene_root->content_layer(),
+            m_scene_root->scene(),
+            m_scene_root->physics_world(),
+            {},
+            erhe::toolkit::create_translation(x, y, z),
+            material,
+            1.0f
+        );
+        instance.mesh->visibility_mask |= 
+            (INode_attachment::c_visibility_content     |
+             INode_attachment::c_visibility_shadow_cast |
+             INode_attachment::c_visibility_id);
 
-        attach(m_scene_root->content_layer(),
-               m_scene_root->scene(),
-               m_scene_root->physics_world(),
-               instance.node,
-               instance.mesh,
-               instance.node_physics);
+        attach(
+            m_scene_root->content_layer(),
+            m_scene_root->scene(),
+            m_scene_root->physics_world(),
+            instance.node,
+            instance.mesh,
+            instance.node_physics
+        );
         material_index = (material_index + 1) % m_scene_root->materials().size();
     }
 }
 
-auto Scene_manager::make_directional_light(string_view name,
-                                           vec3        position,
-                                           vec3        color,
-                                           float       intensity)
+auto Scene_manager::make_directional_light(
+    string_view name,
+    vec3        position,
+    vec3        color,
+    float       intensity)
 -> shared_ptr<Light>
 {
     auto light = make_shared<Light>(name);
@@ -483,25 +590,30 @@ auto Scene_manager::make_directional_light(string_view name,
     light->projection()->z_far           =  60.0f;
 
     auto node = make_shared<Node>(name);
-    mat4 m = erhe::toolkit::create_look_at(position,                 // eye
-                                           vec3(0.0f,  0.0f, 0.0f),  // center
-                                           vec3(0.0f,  0.0f, 1.0f)); // up
+    mat4 m = erhe::toolkit::create_look_at(
+        position,                 // eye
+        vec3(0.0f,  0.0f, 0.0f),  // center
+        vec3(0.0f,  0.0f, 1.0f)   // up
+    );
     node->transforms.parent_from_node.set(m);
 
-    attach(m_scene_root->content_layer(),
-           m_scene_root->scene(),
-           node,
-           light);
+    attach(
+        m_scene_root->content_layer(),
+        m_scene_root->scene(),
+        node,
+        light
+    );
 
     return light;
 }
 
-auto Scene_manager::make_spot_light(string_view name,
-                                    vec3        position,
-                                    vec3        target,
-                                    vec3        color,
-                                    float       intensity,
-                                    vec2        spot_cone_angle)
+auto Scene_manager::make_spot_light(
+    string_view name,
+    vec3        position,
+    vec3        target,
+    vec3        color,
+    float       intensity,
+    vec2        spot_cone_angle)
 -> shared_ptr<Light>
 {
     auto light = make_shared<Light>(name);
@@ -521,10 +633,12 @@ auto Scene_manager::make_spot_light(string_view name,
     const mat4 m = erhe::toolkit::create_look_at(position, target, vec3(0.0f, 0.0f, 1.0f));
     node->transforms.parent_from_node.set(m);
 
-    attach(m_scene_root->content_layer(),
-           m_scene_root->scene(),
-           node,
-           light);
+    attach(
+        m_scene_root->content_layer(),
+        m_scene_root->scene(),
+        node,
+        light
+    );
 
     return light;
 }
@@ -548,10 +662,12 @@ void Scene_manager::make_punctual_light_nodes()
         const float  intensity = (8.0f / static_cast<float>(directional_light_count));
         const string name      = fmt::format("Directional light {}", i);
         const vec3   position  = vec3(   x, 30.0f, z);
-        make_directional_light(name,
-                               position,
-                               color,
-                               intensity);
+        make_directional_light(
+            name,
+            position,
+            color,
+            intensity
+        );
     }
 
     int spot_light_count = 0;
@@ -618,17 +734,23 @@ void Scene_manager::animate_lights(double time_d)
         const float R   = 4.0f;
         const float r   = 8.0f;
 
-        const auto eye = vec3(R * std::sin(rel + t * 0.52f),
-                              8.0f,
-                              R * std::cos(rel + t * 0.71f));
+        const auto eye = vec3(
+            R * std::sin(rel + t * 0.52f),
+            8.0f,
+            R * std::cos(rel + t * 0.71f)
+        );
 
-        const auto center = vec3(r * std::sin(rel + t * 0.35f),
-                                 0.0f,
-                                 r * std::cos(rel + t * 0.93f));
+        const auto center = vec3(
+            r * std::sin(rel + t * 0.35f),
+            0.0f,
+            r * std::cos(rel + t * 0.93f)
+        );
 
-        const auto m = erhe::toolkit::create_look_at(eye,
-                                                     center,
-                                                     vec3(0.0f, 0.0f, 1.0f)); // up
+        const auto m = erhe::toolkit::create_look_at(
+            eye,
+            center,
+            vec3(0.0f, 0.0f, 1.0f) // up
+        );
 
         l->node()->transforms.parent_from_node.set(m);
         l->node()->update();
@@ -677,12 +799,16 @@ public:
 
 void Scene_manager::sort_lights()
 {
-    sort(m_scene_root->content_layer().lights.begin(),
-         m_scene_root->content_layer().lights.end(),
-         Light_comparator());
-    sort(m_scene_root->tool_layer()->lights.begin(),
-         m_scene_root->tool_layer()->lights.end(),
-         Light_comparator());
+    sort(
+        m_scene_root->content_layer().lights.begin(),
+        m_scene_root->content_layer().lights.end(),
+        Light_comparator()
+    );
+    sort(
+        m_scene_root->tool_layer()->lights.begin(),
+        m_scene_root->tool_layer()->lights.end(),
+        Light_comparator()
+    );
 }
 
 } // namespace editor
