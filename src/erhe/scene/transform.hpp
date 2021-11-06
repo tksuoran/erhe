@@ -45,6 +45,13 @@ public:
     void set                       (const glm::mat4 matrix, const glm::mat4 inverse_matrix);
     void catenate                  (const glm::mat4 m);
 
+    static auto create_translation(const float x, const float y, const float z)     -> const Transform;
+    static auto create_translation(const glm::vec3 translation)                     -> const Transform;
+    static auto create_rotation   (const float angle_radians, const glm::vec3 axis) -> const Transform;
+    static auto create_scale      (const float s)                                   -> const Transform;
+    static auto create_scale      (const float x, const float y, const float z)     -> const Transform;
+    static auto create_scale      (const glm::vec3 scale)                           -> const Transform;
+
     static bool s_reverse_depth;
 
 private:

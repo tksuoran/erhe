@@ -2,6 +2,7 @@
 #include "log.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools.hpp"
+#include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
 #include "graphics/icon_set.hpp"
@@ -48,7 +49,7 @@ ImVec4 imvec_from_glm(glm::vec4 v)
     return ImVec4{v.x, v.y, v.z, v.w};
 }
 
-void Node_tree_window::icon(ImVec2 uv0, glm::vec4 tint_color)
+void Node_tree_window::icon(ImVec2 uv0, glm::vec4 tint_color) const
 {
     const float size      = ImGui::GetTextLineHeight();
     const auto  icon_size = ImVec2(size, size);
@@ -74,135 +75,78 @@ auto Node_tree_window::get_icon(const Light_type type) const -> const ImVec2
     }
 }
 
-auto has_exactly_one_visible_attachment(const std::shared_ptr<erhe::scene::Node>& node)
+void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
 {
-    size_t visible_attachment_count{0};
-    for (const auto& attachment : node->attachments)
+    //erhe::log::Indenter log_indent;
+
+    using namespace erhe::scene;
+
+    if (is_empty(node))
     {
-        const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(attachment);
-        if (mesh)
-        {
-            ++visible_attachment_count;
-        }
-        const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(attachment);
-        if (camera)
-        {
-            ++visible_attachment_count;
-        }
-        const auto light = std::dynamic_pointer_cast<erhe::scene::Light>(attachment);
-        if (light)
-        {
-            ++visible_attachment_count;
-        }
-        const auto child_node = std::dynamic_pointer_cast<erhe::scene::Node>(attachment);
-        if (child_node)
-        {
-            ++visible_attachment_count;
-        }
-        if (visible_attachment_count > 1)
-        {
-            return false;
-        }
+        //log_tools.info("E {} ({})\n", node->name());
+        icon(m_icon_set->icons.node);
     }
-    return visible_attachment_count == 1;
-}
-
-void Node_tree_window::node_imgui(const std::shared_ptr<erhe::scene::Node>& node)
-{    
-    const auto node_selection_bit = node->is_selected() ? ImGuiTreeNodeFlags_Selected
-                                                        : ImGuiTreeNodeFlags_None;
-    const ImGuiTreeNodeFlags node_flags{
-        ImGuiTreeNodeFlags_OpenOnArrow       |
-        ImGuiTreeNodeFlags_OpenOnDoubleClick |
-        ImGuiTreeNodeFlags_SpanFullWidth     |
-        node_selection_bit
-    };
-    icon(m_icon_set->icons.node);
-    std::shared_ptr<erhe::scene::INode_attachment> item_clicked{nullptr};
-
-    const bool single_attachment = has_exactly_one_visible_attachment(node);
-    if (single_attachment || ImGui::TreeNodeEx(node->label().c_str(), node_flags))
+    else if (is_mesh(node))
     {
-        if (!single_attachment && ImGui::IsItemClicked())
-        {
-            item_clicked = node;
-        }
-        for (const auto& attachment : node->attachments)
-        {
-            const auto attachment_selection_bit =
-                attachment->is_selected() ? ImGuiTreeNodeFlags_Selected
-                                          : ImGuiTreeNodeFlags_None;
+        auto* mesh = as_mesh(node);
+        //log_tools.info("M {} ({})\n", node->name(), mesh->m_id.get_id());
+        icon(m_icon_set->icons.mesh);
+    }
+    else if (is_camera(node))
+    {
+        //log_tools.info("C {}\n", node->name());
+        icon(m_icon_set->icons.camera);
+    }
+    else if (is_light(node))
+    {
+        auto* light = as_light(node);
+        icon(
+            get_icon(light->type),
+            glm::vec4{light->color, 1.0f}
+        );
+    }
+    else if (is_physics(node))
+    {
+        //log_tools.info("P {}\n", node->name());
+        icon(m_icon_set->icons.node);
+    }
+    else
+    {
+        //log_tools.info("? {} ({})\n", node->name());
+        icon(m_icon_set->icons.node);
+    }
 
-            const ImGuiTreeNodeFlags leaf_flags{
-                ImGuiTreeNodeFlags_SpanFullWidth    |
-                ImGuiTreeNodeFlags_NoTreePushOnOpen |
-                ImGuiTreeNodeFlags_Leaf             |
-                attachment_selection_bit
-            };
-            const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(attachment);
-            if (mesh)
-            {
-                icon(m_icon_set->icons.mesh);
-                ImGui::TreeNodeEx(mesh->name().c_str(), leaf_flags);
-                if (ImGui::IsItemClicked())
-                {
-                    item_clicked = attachment;
-                }
-            }
-            const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(attachment);
-            if (camera)
-            {
-                icon(m_icon_set->icons.camera);
-                ImGui::TreeNodeEx(camera->name().c_str(), leaf_flags);
-                if (ImGui::IsItemClicked())
-                {
-                    item_clicked = attachment;
-                }
-            }
-            const auto light = std::dynamic_pointer_cast<erhe::scene::Light>(attachment);
-            if (light)
-            {
-                icon(get_icon(light->type), glm::vec4{light->color, 1.0f});
-                ImGui::TreeNodeEx(light->name().c_str(), leaf_flags);
-                if (ImGui::IsItemClicked())
-                {
-                    item_clicked = attachment;
-                }
-            }
-            const auto child_node = std::dynamic_pointer_cast<erhe::scene::Node>(attachment);
-            if (child_node)
-            {
-                node_imgui(child_node);
-            }
+    const auto child_count = node->child_count();
+    const bool is_leaf = (child_count == 0);
+
+    const ImGuiTreeNodeFlags parent_flags{ImGuiTreeNodeFlags_OpenOnArrow      | ImGuiTreeNodeFlags_OpenOnDoubleClick};
+    const ImGuiTreeNodeFlags leaf_flags  {ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Leaf             };
+
+    const ImGuiTreeNodeFlags node_flags{0
+        | ImGuiTreeNodeFlags_SpanFullWidth
+        | (is_leaf
+            ? leaf_flags
+            : parent_flags)
+        | (node->is_selected()
+            ? ImGuiTreeNodeFlags_Selected
+            : ImGuiTreeNodeFlags_None)};
+
+    const auto node_open = ImGui::TreeNodeEx(node->name().c_str(), node_flags);
+    if (ImGui::IsItemClicked())
+    {
+        m_node_clicked = node->shared_from_this();
+    }
+
+    if (node_open)
+    {
+        for (const auto& child_node : node->children())
+        {
+            imgui_tree_node(child_node.get());
         }
-        if (!single_attachment)
+
+        if (!is_leaf)
         {
             ImGui::TreePop();
-        }
-    }
-
-    ImGuiIO& io = ImGui::GetIO();
-    if (item_clicked)
-    {
-        if (io.KeyShift) // ctrl?
-        {
-            if (item_clicked->is_selected())
-            {
-                m_selection_tool->remove_from_selection(item_clicked);
-            }
-            else
-            {
-                m_selection_tool->add_to_selection(item_clicked);
-            }
-        }
-        else
-        {
-            bool was_selected = item_clicked->is_selected();
-            m_selection_tool->clear_selection();
-            if (!was_selected)
-            {
-                m_selection_tool->add_to_selection(item_clicked);
-            }
         }
     }
 }
@@ -210,16 +154,41 @@ void Node_tree_window::node_imgui(const std::shared_ptr<erhe::scene::Node>& node
 void Node_tree_window::imgui(Pointer_context&)
 {
     const auto& scene = m_scene_root->scene();
-    const auto& nodes = scene.nodes;
     ImGui::Begin("Node Tree");
-    for (const auto& node : nodes)
+    for (const auto& node : scene.nodes)
     {
-        if (node->parent == nullptr)
+        if (node->parent() == nullptr)
         {
-            node_imgui(node);
+            imgui_tree_node(node.get());
         }
     }
     ImGui::End();
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (m_node_clicked)
+    {
+        if (io.KeyShift) // ctrl?
+        {
+            if (m_node_clicked->is_selected())
+            {
+                m_selection_tool->remove_from_selection(m_node_clicked);
+            }
+            else
+            {
+                m_selection_tool->add_to_selection(m_node_clicked);
+            }
+        }
+        else
+        {
+            bool was_selected = m_node_clicked->is_selected();
+            m_selection_tool->clear_selection();
+            if (!was_selected)
+            {
+                m_selection_tool->add_to_selection(m_node_clicked);
+            }
+        }
+    }
+    m_node_clicked.reset();
 }
 
 }

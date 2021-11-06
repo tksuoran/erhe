@@ -90,11 +90,12 @@ Headset_view_resources::Headset_view_resources(
     auto scene_root = rendering.get<Scene_root>();
     scene_root->scene().cameras.push_back(camera);
 
-    camera_node = std::make_shared<erhe::scene::Node>("Camera");
-    scene_root->scene().nodes.emplace_back(camera_node);
-    camera_node->parent = rendering.get<Scene_manager>()->get_view_camera()->node().get();
+    scene_root->scene().nodes.emplace_back(camera);
+    scene_root->scene().nodes_sorted = false;
+    auto view_camera = rendering.get<Scene_manager>()->get_view_camera().get();
+    view_camera->attach(camera);
+    //camera->parent = rendering.get<Scene_manager>()->get_view_camera()->get();
     //camera_node->parent = nullptr;
-    camera_node->attach(camera);
 
     is_valid = true;
 }
@@ -118,8 +119,7 @@ void Headset_view_resources::update(
     const glm::mat4 orientation = glm::mat4_cast(render_view.view_pose.orientation);
     const glm::mat4 translation = glm::translate(glm::mat4{ 1 }, render_view.view_pose.position);
     const glm::mat4 m           = translation * orientation;
-    camera_node->transforms.parent_from_node.set(m);
-    camera_node->update();
+    camera->set_parent_from_node(m);
 }
 
 Controller_visualization::Controller_visualization(
@@ -138,12 +138,12 @@ Controller_visualization::Controller_visualization(
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
     auto controller_pg = erhe::primitive::make_primitive_shared(controller_geometry, mesh_memory.build_info_set.gl);
     m_controller_mesh = scene_root.make_mesh_node(
-        "Controller",
-        controller_pg,
-        controller_material,
-        *scene_root.controller_layer().get(),
-        view_root,
-        glm::vec3{-9999.9f, -9999.9f, -9999.9f}
+        "Controller",                           // name
+        controller_pg,                          // primitive geometry
+        controller_material,                    // material
+        *scene_root.controller_layer().get(),   // layer
+        view_root,                              // parent
+        glm::vec3{-9999.9f, -9999.9f, -9999.9f} // position
     );
 }
 
@@ -152,14 +152,12 @@ void Controller_visualization::update(const erhe::xr::Pose& pose)
     const glm::mat4 orientation = glm::mat4_cast(pose.orientation);
     const glm::mat4 translation = glm::translate(glm::mat4{ 1 }, pose.position);
     const glm::mat4 m           = translation * orientation;
-    auto node = m_controller_mesh->node();
-    node->transforms.parent_from_node.set(m);
-    node->update();
+    m_controller_mesh->set_parent_from_node(m);
 }
 
 auto Controller_visualization::get_node() const -> erhe::scene::Node*
 {
-    return m_controller_mesh->node().get();
+    return m_controller_mesh.get();
 }
 
 Headset_renderer::Headset_renderer()
@@ -245,7 +243,6 @@ void Headset_renderer::render()
 
             if (!m_headset->squeeze_click())
             {
-                view_resources.camera_node->update();
                 auto* camera = view_resources.camera.get();
                 m_editor_rendering->render_content(camera, viewport);
 
@@ -284,7 +281,7 @@ void Headset_renderer::initialize_component()
     m_headset = std::make_unique<erhe::xr::Headset>(get<Window>()->get_context_window());
 
     auto  mesh_memory = get<Mesh_memory>();
-    auto* view_root   = m_scene_manager->get_view_camera()->node().get();
+    auto* view_root   = m_scene_manager->get_view_camera().get();
 
     m_controller_visualization = std::make_unique<Controller_visualization>(
         *mesh_memory.get(),

@@ -88,7 +88,11 @@ void Fly_camera_tool::initialize_component()
         return;
     }
 
-    m_camera_controller.set_frame(camera->node().get());
+    // set_frame() below requires world from node matrix, which
+    // might not be valid due to transform hierarchy.
+    m_scene_root->scene().update_node_transforms();
+
+    m_camera_controller.set_frame(camera.get());
     m_space_mouse_listener.set_active(true);
 
     get<Editor_tools>()->register_tool(this);
@@ -279,6 +283,8 @@ void Fly_camera_tool::imgui(Pointer_context&)
     ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
     ImGui::End        ();
 
+    m_camera_controller.translate_x.set_max_delta(speed);
+    m_camera_controller.translate_y.set_max_delta(speed);
     m_camera_controller.translate_z.set_max_delta(speed);
 }
 

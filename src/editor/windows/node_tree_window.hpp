@@ -42,13 +42,14 @@ public:
     void imgui(Pointer_context& pointer_context) override;
 
 private:
-    auto get_icon  (const erhe::scene::Light_type type) const -> const ImVec2;
-    void node_imgui(const std::shared_ptr<erhe::scene::Node>& node);
-    void icon      (ImVec2 uv0, glm::vec4 tint_color = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f});
+    void imgui_tree_node(erhe::scene::Node* node);
+    auto get_icon       (const erhe::scene::Light_type type) const -> const ImVec2;
+    void icon           (ImVec2 uv0, glm::vec4 tint_color = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}) const;
 
-    std::shared_ptr<Scene_root>     m_scene_root;
-    std::shared_ptr<Selection_tool> m_selection_tool;
-    std::shared_ptr<Icon_set>       m_icon_set;
+    std::shared_ptr<Scene_root>        m_scene_root;
+    std::shared_ptr<Selection_tool>    m_selection_tool;
+    std::shared_ptr<Icon_set>          m_icon_set;
+    std::shared_ptr<erhe::scene::Node> m_node_clicked;
 };
 
 } // namespace editor

@@ -172,8 +172,8 @@ private:
     bool                                       m_translate_snap_enable{false};
     bool                                       m_rotate_snap_enable   {false};
     float                                      m_translate_snap       {0.1f};
-    //float                                      m_rotate_snap          {15.0f};
-    erhe::scene::Node::Transforms              m_before;
+    //float                                    m_rotate_snap          {15.0f};
+    erhe::scene::Transform                     m_parent_from_node_before;
 
     // These are for debug rendering
     class Debug_rendering
@@ -203,7 +203,7 @@ private:
         glm::vec3 position_in_root         {0.0f, 0.0f, 0.0f};
         glm::vec3 world_direction          {1.0f, 0.0f, 0.0f};
         float     initial_window_depth     {0.0f};
-        erhe::scene::Node::Transforms initial_transforms;
+        erhe::scene::Transform initial_parent_from_node_transform;
     };
     Drag m_drag;
 
@@ -233,7 +233,7 @@ private:
         void initialize       (Mesh_memory& mesh_memory, Scene_root& scene_root);
         void update_visibility(const bool show, const Handle active_handle);
         void update_scale     (const glm::vec3 view_position_in_world);
-        void update_transforms();
+        void update_transforms(uint64_t serial);
 
         bool  show_translate{false};
         bool  show_rotate   {false};
@@ -241,7 +241,7 @@ private:
         float scale         {3.5f}; // 6.6 for debug
 
         erhe::scene::Node*                         root{nullptr};
-        erhe::scene::Node                          tool_node;
+        std::shared_ptr<erhe::scene::Node>         tool_node;
         bool                                       local{true};
         float                                      view_distance{1.0f};
         std::shared_ptr<erhe::primitive::Material> x_material;

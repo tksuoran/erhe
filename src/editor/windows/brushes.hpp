@@ -106,7 +106,7 @@ public:
 private:
     void make_materials            ();
     void update_mesh               ();
-    auto get_brush_transform       () -> glm::mat4;
+    auto get_brush_transform       () -> glm::mat4; // Places brush in parent (hover) mesh
     void do_insert_operation       ();
     void add_hover_mesh            ();
     void remove_hover_mesh         ();
@@ -134,7 +134,7 @@ private:
     bool                                m_hover_tool           {false};
     std::optional<glm::vec3>            m_hover_position;
     std::optional<glm::vec3>            m_hover_normal;
-    std::shared_ptr<erhe::scene::Node>  m_hover_node;
+    std::shared_ptr<erhe::scene::Mesh>  m_hover_mesh;
     erhe::geometry::Geometry*           m_hover_geometry   {nullptr};
     size_t                              m_hover_primitive  {0};
     size_t                              m_hover_local_index{0};

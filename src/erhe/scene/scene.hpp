@@ -24,9 +24,19 @@ public:
 class Scene
 {
 public:
+    void sort_transform_nodes  ();
+    void update_node_transforms();
+
     std::vector<std::shared_ptr<Node>>   nodes;
     std::vector<std::shared_ptr<Layer>>  layers;
     std::vector<std::shared_ptr<Camera>> cameras;
+
+    bool nodes_sorted{false};
+
+    auto transform_update_serial() -> uint64_t;
+
+private:
+    uint64_t m_transform_update_serial{0};
 };
 
 } // namespace erhe::scene

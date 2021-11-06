@@ -55,12 +55,13 @@ auto Icon_set::load(const std::filesystem::path& path)
 {
     Expects(m_row < m_row_count);
 
-    const auto  document = lunasvg::Document::loadFromFile(path.string());
-    const auto  bitmap   = document->renderToBitmap(m_icon_width, m_icon_height);
-    const int   x_offset = m_column * m_icon_width;
-    const int   y_offset = m_row    * m_icon_height;
-    const float u        = static_cast<float>(x_offset) / static_cast<float>(texture->width());
-    const float v        = static_cast<float>(y_offset) / static_cast<float>(texture->height());
+    const auto  current_path = std::filesystem::current_path();
+    const auto  document     = lunasvg::Document::loadFromFile(path.string());
+    const auto  bitmap       = document->renderToBitmap(m_icon_width, m_icon_height);
+    const int   x_offset     = m_column * m_icon_width;
+    const int   y_offset     = m_row    * m_icon_height;
+    const float u            = static_cast<float>(x_offset) / static_cast<float>(texture->width());
+    const float v            = static_cast<float>(y_offset) / static_cast<float>(texture->height());
 
     const auto  span     = gsl::span<std::byte>{
         reinterpret_cast<std::byte*>(bitmap.data()),

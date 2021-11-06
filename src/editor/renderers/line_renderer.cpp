@@ -213,7 +213,7 @@ void Line_renderer::render(
     m_view_writer.begin();
 
     const mat4  clip_from_world        = camera.clip_from_world();
-    const vec4  view_position_in_world = camera.node()->position_in_world();
+    const vec4  view_position_in_world = camera.position_in_world();
     const auto  fov_sides              = camera.projection()->get_fov_sides(viewport);
     auto* const view_buffer            = &current_frame_resources().view_buffer;
     auto        view_gpu_data          = view_buffer->map();

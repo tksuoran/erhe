@@ -42,20 +42,19 @@ void Mesh_operation::make_entries(
     m_selection_tool = context.selection_tool;
     for (auto item : context.selection_tool->selection())
     {
-        auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        auto mesh = as_mesh(item);
         if (!mesh)
         {
             continue;
         }
 
         Entry entry{
-            context.layer,
             context.scene,
+            context.layer,
             context.physics_world,
             mesh,
-            mesh->node(),
-            *entry.mesh,
-            *entry.mesh
+            *mesh,
+            *mesh
         };
         for (auto& primitive : entry.after.primitives)
         {

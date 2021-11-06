@@ -1,7 +1,7 @@
-#include "erhe/physics/bullet_world.hpp"
-#include "erhe/physics/bullet_constraint.hpp"
-#include "erhe/physics/bullet_rigid_body.hpp"
-#include "erhe/physics/glm_conversions.hpp"
+#include "erhe/physics/bullet/bullet_world.hpp"
+#include "erhe/physics/bullet/bullet_constraint.hpp"
+#include "erhe/physics/bullet/bullet_rigid_body.hpp"
+#include "erhe/physics/bullet/glm_conversions.hpp"
 #include "erhe/physics/idebug_draw.hpp"
 #include "erhe/physics/log.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -212,7 +212,7 @@ void Bullet_world::remove_constraint(IConstraint* constraint)
     m_bullet_dynamics_world.removeConstraint(bullet_constraint->get_bullet_constraint());
 }
 
-void Bullet_world::set_gravity(glm::vec3 gravity)
+void Bullet_world::set_gravity(const glm::vec3 gravity)
 {
     m_bullet_dynamics_world.setGravity(from_glm(gravity));
 }

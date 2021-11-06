@@ -28,7 +28,7 @@ set_option(ERHE_FONT_RASTERIZATION_LIBRARY "Font rasterization library. Either f
 set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype, harfbuzz or none"      "harfbuzz" "harfbuzz;freetype;none")
 set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Either glfw, mango or none" "glfw"     "glfw;mango;none")
 set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree or none"    "none"     "embree;none")
-set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either bullet or none"     "bullet"   "bullet;none")
+set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either bullet or none"     "none"   "bullet;none")
 
 # These are in cmake/ directory
 #message("Compiler = ${CMAKE_CXX_COMPILER_ID}")

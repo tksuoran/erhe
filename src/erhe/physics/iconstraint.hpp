@@ -19,7 +19,7 @@ public:
 
     static auto create_point_to_point_constraint(
         IRigid_body*    rigid_body_a,
-        IRigid_body*    rigid_body_b, 
+        IRigid_body*    rigid_body_b,
         const glm::vec3 pivot_in_a,
         const glm::vec3 pivot_in_b
     ) -> IConstraint*;

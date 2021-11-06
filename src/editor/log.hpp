@@ -23,5 +23,6 @@ extern erhe::log::Category log_brush;
 extern erhe::log::Category log_physics;
 extern erhe::log::Category log_gl;
 extern erhe::log::Category log_headset;
+extern erhe::log::Category log_scene;
 
 }

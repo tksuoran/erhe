@@ -15,11 +15,13 @@ namespace erhe::scene
 class Viewport;
 
 class ICamera
+    : public Node
 {
 public:
+    ICamera(const std::string_view name);
+
     virtual ~ICamera() {}
     virtual void update         (Viewport viewport) = 0;
-    virtual auto node           () const -> const std::shared_ptr<Node>& = 0;
     virtual auto projection     () -> Projection* = 0;
     virtual auto projection     () const -> const Projection* = 0;
     virtual auto clip_from_node () const -> glm::mat4 = 0;
@@ -30,22 +32,16 @@ public:
 
 class Camera
     : public ICamera
-    , public erhe::scene::INode_attachment
-    , public std::enable_shared_from_this<Camera>
 {
 public:
-    explicit Camera(std::string_view name);
+    explicit Camera(const std::string_view name);
     ~Camera() override;
 
-    void update(Viewport viewport) override;
+    auto node_type() const -> const char* override;
 
-    // Implements INode_attachment
-    auto name     () const -> const std::string&;
-    void on_attach(Node& node);
-    void on_detach(Node& node);
+    void update(const Viewport viewport) override;
 
     // Implements ICamera
-    auto node           () const -> const std::shared_ptr<Node>& override;
     auto projection     () -> Projection*                        override;
     auto projection     () const -> const Projection*            override;
     auto clip_from_node () const -> glm::mat4                    override;
@@ -53,9 +49,8 @@ public:
     auto node_from_clip () const -> glm::mat4                    override;
     auto world_from_clip() const -> glm::mat4                    override;
 
-    std::string           m_name;
-    std::shared_ptr<Node> m_node;
-    Projection            m_projection;
+private:
+    Projection m_projection;
 
     class Transforms
     {
@@ -64,7 +59,12 @@ public:
         Transform clip_from_world;
     };
 
-    Transforms m_transforms;
+    Transforms m_camera_transforms;
 };
+
+auto is_camera(const Node* const node) -> bool;
+auto is_camera(const std::shared_ptr<Node>& node) -> bool;
+auto as_camera(Node* const node) -> Camera*;
+auto as_camera(const std::shared_ptr<Node>& node) -> std::shared_ptr<Camera>;
 
 } // namespace erhe::scene

@@ -1,4 +1,4 @@
-#include "erhe/physics/bullet_uniform_scaling_shape.hpp"
+#include "erhe/physics/bullet/bullet_uniform_scaling_shape.hpp"
 
 #include "BulletCollision/CollisionShapes/btUniformScalingShape.h"
 

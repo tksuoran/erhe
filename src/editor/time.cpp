@@ -1,6 +1,7 @@
 #include "time.hpp"
 #include "rendering.hpp"
 #include "window.hpp"
+#include "scene/scene_root.hpp"
 
 #include "application.hpp"
 #include "log.hpp"
@@ -29,6 +30,7 @@ void Editor_time::connect()
 {
     m_application      = get<Application     >();
     m_editor_rendering = get<Editor_rendering>();
+    m_scene_root       = get<Scene_root      >();
     m_window           = get<Window          >();
 }
 
@@ -62,6 +64,7 @@ void Editor_time::update()
     }
 
     update_once_per_frame(erhe::components::Time_context{dt, m_time, m_frame_number});
+    m_scene_root->scene().update_node_transforms();
     m_editor_rendering->render(m_time);
 
     {

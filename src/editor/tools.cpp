@@ -404,26 +404,21 @@ void Editor_tools::delete_selected_meshes()
     }
 
     Compound_operation::Context compound_context;
-    for (auto item : selection)
+    for (auto node : selection)
     {
-        const auto mesh = dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        const auto mesh = as_mesh(node);
         if (!mesh)
-        {
-            continue;
-        }
-        const auto node = mesh->node();
-        if (!node)
         {
             continue;
         }
         Mesh_insert_remove_operation::Context context{
             m_selection_tool,
-            scene_root->content_layer(),
             scene_root->scene(),
+            scene_root->content_layer(),
             scene_root->physics_world(),
             mesh,
-            node,
-            node->get_attachment<Node_physics>(),
+            get_physics_node(mesh.get()),
+            mesh->parent()->shared_from_this(),
             Scene_item_operation::Mode::remove
         };
         auto op = make_shared<Mesh_insert_remove_operation>(context);

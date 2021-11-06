@@ -46,7 +46,7 @@ void Camera_properties::imgui(Pointer_context& pointer_context)
         if (projection != nullptr)
         {
             const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
-            ImGui::Text("%s", camera->node()->name().c_str());
+            ImGui::Text("%s", camera->name().c_str());
             ImGui::Separator();
             ImGui::SetNextItemWidth(200);
             make_combo("Type", projection->projection_type, erhe::scene::Projection::c_type_strings, IM_ARRAYSIZE(erhe::scene::Projection::c_type_strings));

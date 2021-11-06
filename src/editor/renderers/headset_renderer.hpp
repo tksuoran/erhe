@@ -45,7 +45,6 @@ public:
     std::shared_ptr<erhe::graphics::Texture>      depth_texture;
     //std::unique_ptr<erhe::graphics::Renderbuffer> depth_stencil_renderbuffer;
     std::unique_ptr<erhe::graphics::Framebuffer>  framebuffer;
-    std::shared_ptr<erhe::scene::Node>            camera_node;
     std::shared_ptr<erhe::scene::Camera>          camera;
     bool                                          is_valid{false};
 };

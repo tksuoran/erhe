@@ -30,15 +30,14 @@ public:
     );
 
     // Implements IRigid_body
-    //auto get_node_transform() const -> glm::mat4           override;
     void set_motion_mode     (const Motion_mode motion_mode)                           override;
     auto get_motion_mode     () const -> Motion_mode                                   override;
     auto get_collision_shape () const -> ICollision_shape*                             override;
-    auto get_friction        () -> float                                               override;
+    auto get_friction        () const -> float                                         override;
     void set_friction        (const float friction)                                    override;
-    auto get_rolling_friction() -> float                                               override;
+    auto get_rolling_friction() const -> float                                         override;
     void set_rolling_friction(const float rolling_friction)                            override;
-    auto get_restitution     () -> float                                               override;
+    auto get_restitution     () const -> float                                         override;
     void set_restitution     (const float restitution)                                 override;
     void set_world_transform (const glm::mat3 basis, const glm::vec3 origin)           override;
     void set_linear_velocity (const glm::vec3 velocity)                                override;

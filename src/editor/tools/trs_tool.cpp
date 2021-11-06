@@ -21,6 +21,7 @@
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 
@@ -73,11 +74,15 @@ void Trs_tool::set_node(const std::shared_ptr<Node>& node)
         return;
     }
 
-    auto* const rigid_body = m_node_physics ? m_node_physics->rigid_body() : nullptr;
+    auto* const rigid_body = m_node_physics 
+        ? m_node_physics->rigid_body()
+        : nullptr;
 
     // Attach new host to manipulator
     m_target_node = node;
-    m_node_physics = node ? node->get_attachment<Node_physics>() : std::shared_ptr<Node_physics>();
+    m_node_physics = node
+        ? get_physics_node(node.get())
+        : std::shared_ptr<Node_physics>();
     // Promote static to kinematic if we try to move object
     if (rigid_body != nullptr)
     {
@@ -91,21 +96,22 @@ void Trs_tool::set_node(const std::shared_ptr<Node>& node)
 
     if (m_target_node)
     {
-        m_visualization.root             = m_target_node.get();
-        m_visualization.tool_node.parent = nullptr;
+        m_visualization.root = m_target_node.get();
+        //m_visualization.root->attach(m_visualization.tool_node);
+        //m_visualization.tool_node.parent = m_visualization.root;
     }
     else
     {
-        m_visualization.root             = nullptr;
-        m_visualization.tool_node.parent = nullptr;
+        m_visualization.root = nullptr;
+        //m_visualization.tool_node->unparent();
     }
 
     update_visibility();
 }
 
 Trs_tool::Visualization::Visualization()
-    : tool_node{"Trs"}
 {
+    tool_node = std::make_shared<erhe::scene::Node>("Trs");
 }
 
 void Trs_tool::Visualization::update_scale(const vec3 view_position_in_world)
@@ -119,35 +125,34 @@ void Trs_tool::Visualization::update_scale(const vec3 view_position_in_world)
 
     const vec3 position_in_world = root->position_in_world();
     view_distance = length(position_in_world - vec3{view_position_in_world});
-    update_transforms();
 }
 
 void Trs_tool::Visualization::update_visibility(const bool visible, const Handle active_handle)
 {
     ZoneScoped;
 
-    constexpr uint64_t visible_mask = erhe::scene::Mesh::c_visibility_tool | erhe::scene::Mesh::c_visibility_id;
+    constexpr uint64_t visible_mask = erhe::scene::Node::c_visibility_tool | erhe::scene::Node::c_visibility_id;
     const bool show_all = visible && (active_handle == Handle::e_handle_none);
-    y_arrow_cylinder_mesh->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_y ) || show_all) ? visible_mask : 0;
-    z_arrow_cylinder_mesh->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_z ) || show_all) ? visible_mask : 0;
-    xy_box_mesh          ->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_xy) || show_all) ? visible_mask : 0;
-    xz_box_mesh          ->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_xz) || show_all) ? visible_mask : 0;
-    yz_box_mesh          ->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_yz) || show_all) ? visible_mask : 0;
-    x_rotate_ring_mesh   ->visibility_mask = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_x    ) || show_all) ? visible_mask : 0;
-    y_rotate_ring_mesh   ->visibility_mask = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_y    ) || show_all) ? visible_mask : 0;
-    z_rotate_ring_mesh   ->visibility_mask = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_z    ) || show_all) ? visible_mask : 0;
-    x_arrow_cylinder_mesh->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_x ) || show_all) ? visible_mask : 0;
-    x_arrow_cone_mesh    ->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_x ) || show_all) ? visible_mask : 0;
-    y_arrow_cylinder_mesh->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_y ) || show_all) ? visible_mask : 0;
-    y_arrow_cone_mesh    ->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_y ) || show_all) ? visible_mask : 0;
-    z_arrow_cylinder_mesh->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_z ) || show_all) ? visible_mask : 0;
-    z_arrow_cone_mesh    ->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_z ) || show_all) ? visible_mask : 0;
-    xy_box_mesh          ->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_xy) || show_all) ? visible_mask : 0;
-    xz_box_mesh          ->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_xz) || show_all) ? visible_mask : 0;
-    yz_box_mesh          ->visibility_mask = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_yz) || show_all) ? visible_mask : 0;
-    x_rotate_ring_mesh   ->visibility_mask = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_x    ) || show_all) ? visible_mask : 0;
-    y_rotate_ring_mesh   ->visibility_mask = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_y    ) || show_all) ? visible_mask : 0;
-    z_rotate_ring_mesh   ->visibility_mask = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_z    ) || show_all) ? visible_mask : 0;
+    y_arrow_cylinder_mesh->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_y ) || show_all) ? visible_mask : 0;
+    z_arrow_cylinder_mesh->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_z ) || show_all) ? visible_mask : 0;
+    xy_box_mesh          ->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_xy) || show_all) ? visible_mask : 0;
+    xz_box_mesh          ->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_xz) || show_all) ? visible_mask : 0;
+    yz_box_mesh          ->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_yz) || show_all) ? visible_mask : 0;
+    x_rotate_ring_mesh   ->visibility_mask() = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_x    ) || show_all) ? visible_mask : 0;
+    y_rotate_ring_mesh   ->visibility_mask() = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_y    ) || show_all) ? visible_mask : 0;
+    z_rotate_ring_mesh   ->visibility_mask() = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_z    ) || show_all) ? visible_mask : 0;
+    x_arrow_cylinder_mesh->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_x ) || show_all) ? visible_mask : 0;
+    x_arrow_cone_mesh    ->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_x ) || show_all) ? visible_mask : 0;
+    y_arrow_cylinder_mesh->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_y ) || show_all) ? visible_mask : 0;
+    y_arrow_cone_mesh    ->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_y ) || show_all) ? visible_mask : 0;
+    z_arrow_cylinder_mesh->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_z ) || show_all) ? visible_mask : 0;
+    z_arrow_cone_mesh    ->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_z ) || show_all) ? visible_mask : 0;
+    xy_box_mesh          ->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_xy) || show_all) ? visible_mask : 0;
+    xz_box_mesh          ->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_xz) || show_all) ? visible_mask : 0;
+    yz_box_mesh          ->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_yz) || show_all) ? visible_mask : 0;
+    x_rotate_ring_mesh   ->visibility_mask() = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_x    ) || show_all) ? visible_mask : 0;
+    y_rotate_ring_mesh   ->visibility_mask() = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_y    ) || show_all) ? visible_mask : 0;
+    z_rotate_ring_mesh   ->visibility_mask() = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_z    ) || show_all) ? visible_mask : 0;
 
     x_arrow_cylinder_mesh->primitives.front().material = (active_handle == Handle::e_handle_translate_x ) ? highlight_material : x_material;
     x_arrow_cone_mesh    ->primitives.front().material = (active_handle == Handle::e_handle_translate_x ) ? highlight_material : x_material;
@@ -194,37 +199,37 @@ void Trs_tool::Visualization::initialize(Mesh_memory& mesh_memory, Scene_root& s
     auto  rotate_ring_pg    = make_primitive_shared(rotate_ring_geometry   , mesh_memory.build_info_set.gl);
     auto& tool_layer        = *scene_root.tool_layer().get();
     const vec3 pos{0.0f, 1.0f, 0.0f};
-    x_arrow_cylinder_mesh  = scene_root.make_mesh_node("X arrow cylinder", arrow_cylinder_pg, x_material, tool_layer, &tool_node, pos);
-    x_arrow_cone_mesh      = scene_root.make_mesh_node("X arrow cone",     arrow_cone_pg,     x_material, tool_layer, &tool_node, pos);
-    y_arrow_cylinder_mesh  = scene_root.make_mesh_node("Y arrow cylinder", arrow_cylinder_pg, y_material, tool_layer, &tool_node, pos);
-    y_arrow_cone_mesh      = scene_root.make_mesh_node("Y arrow cone",     arrow_cone_pg,     y_material, tool_layer, &tool_node, pos);
-    z_arrow_cylinder_mesh  = scene_root.make_mesh_node("Z arrow cylinder", arrow_cylinder_pg, z_material, tool_layer, &tool_node, pos);
-    z_arrow_cone_mesh      = scene_root.make_mesh_node("Z arrow cone",     arrow_cone_pg,     z_material, tool_layer, &tool_node, pos);
-    xy_box_mesh            = scene_root.make_mesh_node("XY box",           box_pg,            z_material, tool_layer, &tool_node, pos);
-    xz_box_mesh            = scene_root.make_mesh_node("XZ box",           box_pg,            y_material, tool_layer, &tool_node, pos);
-    yz_box_mesh            = scene_root.make_mesh_node("YZ box",           box_pg,            x_material, tool_layer, &tool_node, pos);
-    x_rotate_ring_mesh     = scene_root.make_mesh_node("X rotate ring",    rotate_ring_pg,    x_material, tool_layer, &tool_node, pos);
-    y_rotate_ring_mesh     = scene_root.make_mesh_node("Y rotate ring",    rotate_ring_pg,    y_material, tool_layer, &tool_node, pos);
-    z_rotate_ring_mesh     = scene_root.make_mesh_node("Z rotate ring",    rotate_ring_pg,    z_material, tool_layer, &tool_node, pos);
+    auto* parent = tool_node.get();
+    x_arrow_cylinder_mesh  = scene_root.make_mesh_node("X arrow cylinder", arrow_cylinder_pg, x_material, tool_layer, parent, pos);
+    x_arrow_cone_mesh      = scene_root.make_mesh_node("X arrow cone",     arrow_cone_pg,     x_material, tool_layer, parent, pos);
+    y_arrow_cylinder_mesh  = scene_root.make_mesh_node("Y arrow cylinder", arrow_cylinder_pg, y_material, tool_layer, parent, pos);
+    y_arrow_cone_mesh      = scene_root.make_mesh_node("Y arrow cone",     arrow_cone_pg,     y_material, tool_layer, parent, pos);
+    z_arrow_cylinder_mesh  = scene_root.make_mesh_node("Z arrow cylinder", arrow_cylinder_pg, z_material, tool_layer, parent, pos);
+    z_arrow_cone_mesh      = scene_root.make_mesh_node("Z arrow cone",     arrow_cone_pg,     z_material, tool_layer, parent, pos);
+    xy_box_mesh            = scene_root.make_mesh_node("XY box",           box_pg,            z_material, tool_layer, parent, pos);
+    xz_box_mesh            = scene_root.make_mesh_node("XZ box",           box_pg,            y_material, tool_layer, parent, pos);
+    yz_box_mesh            = scene_root.make_mesh_node("YZ box",           box_pg,            x_material, tool_layer, parent, pos);
+    x_rotate_ring_mesh     = scene_root.make_mesh_node("X rotate ring",    rotate_ring_pg,    x_material, tool_layer, parent, pos);
+    y_rotate_ring_mesh     = scene_root.make_mesh_node("Y rotate ring",    rotate_ring_pg,    y_material, tool_layer, parent, pos);
+    z_rotate_ring_mesh     = scene_root.make_mesh_node("Z rotate ring",    rotate_ring_pg,    z_material, tool_layer, parent, pos);
 
-    x_arrow_cylinder_mesh->node()->transforms.parent_from_node.set         (mat4{1});
-    x_arrow_cone_mesh    ->node()->transforms.parent_from_node.set         (mat4{1});
-    y_arrow_cylinder_mesh->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f});
-    y_arrow_cone_mesh    ->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f});
-    z_arrow_cylinder_mesh->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f});
-    z_arrow_cone_mesh    ->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f});
-    xy_box_mesh          ->node()->transforms.parent_from_node.set         (mat4{1});
-    xz_box_mesh          ->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3{1.0f, 0.0f, 0.0f});
-    yz_box_mesh          ->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f});
+    //x_arrow_cylinder_mesh->set_parent_from_node.set         (mat4{1});
+    //x_arrow_cone_mesh    ->set_parent_from_node.set         (mat4{1});
+    y_arrow_cylinder_mesh->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
+    y_arrow_cone_mesh    ->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
+    z_arrow_cylinder_mesh->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
+    z_arrow_cone_mesh    ->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
+    //xy_box_mesh          ->set_parent_from_node.set         (mat4{1});
+    xz_box_mesh          ->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{1.0f, 0.0f, 0.0f}));
+    yz_box_mesh          ->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
 
-    x_rotate_ring_mesh->node()->transforms.parent_from_node.set         (mat4{1});
-    y_rotate_ring_mesh->node()->transforms.parent_from_node.set_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f});
-    z_rotate_ring_mesh->node()->transforms.parent_from_node.set_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f});
+    //x_rotate_ring_mesh->transforms.parent_from_node.set         (mat4{1});
+    y_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
+    z_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
 
     //root->transforms.parent_from_node.set_rotation(pi<float>() / 4.0f, vec3{0.0f, 1.0f, 0.0f});
 
     update_visibility(false, Handle::e_handle_none);
-    update_transforms();
 }
 
 void Trs_tool::connect()
@@ -264,24 +269,13 @@ void Trs_tool::initialize_component()
     {
         auto lambda = [this](const Selection_tool::Selection& selection)
         {
-            bool node_found{false};
-            for (auto item : selection)
-            {
-                auto mesh = dynamic_pointer_cast<Mesh>(item);
-                if (mesh)
-                {
-                    auto node = mesh->node();
-                    if (node)
-                    {
-                        node_found = true;
-                        set_node(node);
-                        break;
-                    }
-                }
-            }
-            if (!node_found)
+            if (selection.empty())
             {
                 set_node({});
+            }
+            else
+            {
+                set_node(selection.front());
             }
         };
         m_selection_subscription = m_selection_tool->subscribe_selection_change_notification(lambda);
@@ -633,7 +627,7 @@ void Trs_tool::update_rotate(Pointer_context& pointer_context)
     const vec3  up      = m_rotation.up;
 
     constexpr float c_parallel_threshold = 0.4f;
-    const vec3  V0      = vec3{root()->position_in_world()} - vec3{pointer_context.camera->node()->position_in_world()};
+    const vec3  V0      = vec3{root()->position_in_world()} - vec3{pointer_context.camera->position_in_world()};
     const vec3  V       = normalize(m_drag.initial_local_from_world * vec4{V0, 0.0f});
     const float v_dot_n = dot(V, n);
     if (std::abs(v_dot_n) < c_parallel_threshold)
@@ -733,16 +727,10 @@ void Trs_tool::update_rotate_parallel(Pointer_context& pointer_context)
 
 void Trs_tool::set_node_world_transform(const glm::mat4 world_from_node)
 {
-    mat4 parent_from_world;
-    if (root()->parent != nullptr)
-    {
-        parent_from_world = root()->parent->node_from_world() * world_from_node;
-    }
-    else
-    {
-        parent_from_world = world_from_node;
-    }
-    root()->transforms.parent_from_node.set(parent_from_world);
+    const mat4 parent_from_world = (root()->parent() != nullptr)
+        ? root()->parent()->node_from_world() * world_from_node
+        : world_from_node;
+    root()->set_parent_from_node(parent_from_world);
  }
 
 void Trs_tool::render_update(const Render_context& render_context)
@@ -753,9 +741,10 @@ void Trs_tool::render_update(const Render_context& render_context)
         return;
     }
 
-    const glm::vec3 view_position_in_world = vec3{camera->node()->position_in_world()};
+    const glm::vec3 view_position_in_world = vec3{camera->position_in_world()};
 
     m_visualization.update_scale(view_position_in_world);
+    update_transforms();
 }
 
 void Trs_tool::render(const Render_context& render_context)
@@ -772,7 +761,7 @@ void Trs_tool::render(const Render_context& render_context)
     auto* line_renderer     = render_context.line_renderer;
     auto& camera            = *render_context.pointer_context->camera;
     vec3  position_in_world = root()->position_in_world();
-    float distance          = length(position_in_world - vec3{camera.node()->position_in_world()});
+    float distance          = length(position_in_world - vec3{camera.position_in_world()});
     float scale             = m_visualization.scale * distance / 100.0f;
 
     if ((get_handle_type(m_active_handle) == Handle_type::e_handle_type_rotate) &&
@@ -947,7 +936,7 @@ auto Trs_tool::begin(Pointer_context& pointer_context) -> bool
     m_drag.initial_window_depth      = pointer_context.pointer_z;
     if (m_target_node)
     {
-        m_drag.initial_transforms = m_target_node->transforms;
+        m_drag.initial_parent_from_node_transform = m_target_node->parent_from_node_transform();
     }
 
     // For rotation
@@ -992,8 +981,8 @@ auto Trs_tool::end(Pointer_context& pointer_context) -> bool
         m_scene_root->scene(),
         m_scene_root->physics_world(),
         m_target_node,
-        m_drag.initial_transforms,
-        m_target_node->transforms
+        m_drag.initial_parent_from_node_transform,
+        m_target_node->parent_from_node_transform()
     };
 
     auto op = std::make_shared<Node_transform_operation>(context);
@@ -1063,7 +1052,7 @@ auto Trs_tool::get_axis_color(const Handle handle) const -> uint32_t
     }
 }
 
-void Trs_tool::Visualization::update_transforms()
+void Trs_tool::Visualization::update_transforms(uint64_t serial)
 {
     ZoneScoped;
 
@@ -1072,31 +1061,15 @@ void Trs_tool::Visualization::update_transforms()
         return;
     }
 
-    mat4 scaling = erhe::toolkit::create_scale(scale * view_distance / 100.0f);
+    auto transform = local
+        ? root->parent_from_node_transform()
+        : Transform::create_translation(root->position_in_world());
 
-    if (local)
-    {
-        tool_node.transforms = root->transforms;
-    }
-    else
-    {
-        auto position = root->position_in_world();
-        tool_node.transforms.parent_from_node.set_translation(position);
-    }
-    tool_node.transforms.parent_from_node.catenate(scaling);
+    const mat4 scaling = erhe::toolkit::create_scale(scale * view_distance / 100.0f);
+    transform.catenate(scaling);
 
-    x_arrow_cylinder_mesh->node()->update();
-    x_arrow_cone_mesh    ->node()->update();
-    y_arrow_cylinder_mesh->node()->update();
-    y_arrow_cone_mesh    ->node()->update();
-    z_arrow_cylinder_mesh->node()->update();
-    z_arrow_cone_mesh    ->node()->update();
-    xy_box_mesh          ->node()->update();
-    xz_box_mesh          ->node()->update();
-    yz_box_mesh          ->node()->update();
-    x_rotate_ring_mesh   ->node()->update();
-    y_rotate_ring_mesh   ->node()->update();
-    z_rotate_ring_mesh   ->node()->update();
+    tool_node->set_parent_from_node(transform);
+    tool_node->update_transform_recursive(serial);
 }
 
 void Trs_tool::update_transforms()
@@ -1105,17 +1078,19 @@ void Trs_tool::update_transforms()
     {
         return;
     }
-    root()->update();
+    const auto serial = m_scene_root->scene().transform_update_serial();
+    root()->update_transform(serial);
     if (m_node_physics)
     {
         m_node_physics->on_node_updated();
     }
-    m_visualization.update_transforms();
+    m_visualization.update_transforms(serial);
 }
 
 void Trs_tool::update_visibility()
 {
     m_visualization.update_visibility(m_target_node != nullptr, m_active_handle);
+    update_transforms();
 }
 
 auto Trs_tool::root() -> erhe::scene::Node*

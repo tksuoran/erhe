@@ -391,10 +391,9 @@ auto Brush::create_scaled(const int scale_key)
 const std::string empty_string = {};
 
 auto Brush::make_instance(
-    erhe::scene::Layer&                               layer,
     erhe::scene::Scene&                               scene,
+    erhe::scene::Layer&                               layer,
     erhe::physics::IWorld&                            physics_world,
-    const std::shared_ptr<erhe::scene::Node>&         parent,
     const glm::mat4                                   local_to_parent,
     const std::shared_ptr<erhe::primitive::Material>& material,
     const float                                       scale
@@ -402,17 +401,18 @@ auto Brush::make_instance(
 {
     ZoneScoped;
 
-    const auto&        scaled = get_scaled(scale);
-    const std::string& name   = scaled.primitive_geometry->source_geometry ? scaled.primitive_geometry->source_geometry->name
-                                                                           : empty_string;
-    auto               mesh   = std::make_shared<Mesh>(name);
-    mesh->primitives.emplace_back(scaled.primitive_geometry, material);
-    layer.meshes.push_back(mesh);
+    const auto& scaled = get_scaled(scale);
 
-    auto node = make_shared<Node>(name);
-    node->parent = parent.get();
-    node->transforms.parent_from_node.set(local_to_parent);
-    node->update();
+    const auto& name = scaled.primitive_geometry->source_geometry
+        ? scaled.primitive_geometry->source_geometry->name
+        : empty_string;
+
+    auto mesh = std::make_shared<Mesh>(name);
+    mesh->primitives.emplace_back(scaled.primitive_geometry, material);
+
+    Node* node{nullptr};
+
+    std::shared_ptr<Node_physics> node_physics;
 
     if (collision_shape || collision_shape_generator)
     {
@@ -422,10 +422,19 @@ auto Brush::make_instance(
             scaled.collision_shape,
             scaled.local_inertia
         };
-        auto node_physics = make_shared<Node_physics>(create_info);
-        return { node, mesh, node_physics };
+        node_physics = make_shared<Node_physics>(create_info);
+        node_physics->set_name(name);
+        node = node_physics.get();
+        node_physics->attach(mesh);
     }
-    return { node, mesh, {} };
+    else
+    {
+        node = mesh.get();
+    }
+
+    node->set_parent_from_node(local_to_parent);
+
+    return { mesh, node_physics };
 }
 
 }

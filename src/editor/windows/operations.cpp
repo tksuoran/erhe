@@ -65,18 +65,19 @@ void Operations::imgui(Pointer_context& pointer_context)
 
     Mesh_operation::Context context{
         m_mesh_memory->build_info_set,
-        m_scene_root->content_layer(),
         m_scene_root->scene(),
+        m_scene_root->content_layer(),
         m_scene_root->physics_world(),
         m_selection_tool
     };
-    if (make_button("Undo", m_operation_stack->can_undo() ? Item_mode::normal
-                                                          : Item_mode::disabled, button_size))
+    const auto mode = m_operation_stack->can_undo()
+        ? Item_mode::normal
+        : Item_mode::disabled;
+    if (make_button("Undo", mode, button_size))
     {
         m_operation_stack->undo();
     }
-    if (make_button("Redo", m_operation_stack->can_redo() ? Item_mode::normal
-                                                          : Item_mode::disabled, button_size))
+    if (make_button("Redo", mode, button_size))
     {
         m_operation_stack->redo();
     }

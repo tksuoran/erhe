@@ -39,8 +39,8 @@ public:
         erhe::scene::Scene&                scene;
         erhe::physics::IWorld&             physics_world;
         std::shared_ptr<erhe::scene::Node> node;
-        erhe::scene::Node::Transforms      before;
-        erhe::scene::Node::Transforms      after;
+        erhe::scene::Transform             parent_from_node_before;
+        erhe::scene::Transform             parent_from_node_after;
     };
 
     explicit Node_transform_operation(const Context& context);
@@ -85,12 +85,12 @@ public:
     {
     public:
         std::shared_ptr<Selection_tool>    selection_tool;
-        erhe::scene::Layer&                layer;
         erhe::scene::Scene&                scene;
+        erhe::scene::Layer&                layer;
         erhe::physics::IWorld&             physics_world;
         std::shared_ptr<erhe::scene::Mesh> mesh;
-        std::shared_ptr<erhe::scene::Node> node;
         std::shared_ptr<Node_physics>      node_physics;
+        std::shared_ptr<erhe::scene::Node> parent;
         Mode                               mode;
     };
 
@@ -117,7 +117,7 @@ public:
         erhe::scene::Layer&                 layer;
         erhe::scene::Scene&                 scene;
         std::shared_ptr<erhe::scene::Light> light;
-        std::shared_ptr<erhe::scene::Node>  node;
+        std::shared_ptr<erhe::scene::Node>  parent;
         Mode                                mode;
     };
 

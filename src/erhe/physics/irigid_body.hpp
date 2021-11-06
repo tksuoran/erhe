@@ -54,11 +54,11 @@ public:
     virtual auto get_collision_shape () const -> ICollision_shape*                             = 0;
     virtual void set_motion_mode     (const Motion_mode motion_mode)                           = 0;
     virtual auto get_motion_mode     () const -> Motion_mode                                   = 0;
-    virtual auto get_friction        () -> float                                               = 0;
+    virtual auto get_friction        () const -> float                                         = 0;
     virtual void set_friction        (float friction)                                          = 0;
-    virtual auto get_rolling_friction() -> float                                               = 0;
+    virtual auto get_rolling_friction() const -> float                                         = 0;
     virtual void set_rolling_friction(float friction)                                          = 0;
-    virtual auto get_restitution     () -> float                                               = 0;
+    virtual auto get_restitution     () const -> float                                         = 0;
     virtual void set_restitution     (float restitution)                                       = 0;
     virtual void set_world_transform (const glm::mat3 basis, const glm::vec3 origin)           = 0;
     virtual void set_linear_velocity (const glm::vec3 velocity)                                = 0;

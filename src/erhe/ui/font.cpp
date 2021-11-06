@@ -59,7 +59,11 @@ Font::Font(
 {
     ZoneScoped;
 
-    log_font.trace("Font::Font(path = {}, size = {}, outline_thickness = {})\n", path.string(), size, outline_thickness);
+    const auto current_path = std::filesystem::current_path();
+    log_font.info("current path = {}\n", current_path.string());
+
+
+    log_font.info("Font::Font(path = {}, size = {}, outline_thickness = {})\n", path.string(), size, outline_thickness);
 
     if (m_hinting)
     {

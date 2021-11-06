@@ -26,7 +26,7 @@ public:
     virtual void remove_rigid_body         (IRigid_body* rigid_body) = 0;
     virtual void add_constraint            (IConstraint* constraint) = 0;
     virtual void remove_constraint         (IConstraint* constraint) = 0;
-    virtual void set_gravity               (glm::vec3 gravity)       = 0;
+    virtual void set_gravity               (const glm::vec3 gravity) = 0;
     virtual auto get_gravity               () const -> glm::vec3     = 0;
     virtual void set_debug_drawer          (IDebug_draw* debug_draw) = 0;
     virtual void debug_draw                ()                        = 0;

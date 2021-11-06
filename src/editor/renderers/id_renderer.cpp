@@ -185,7 +185,7 @@ void Id_renderer::render_layer(erhe::scene::Layer* layer)
     layer_range.layer  = layer;
 
     erhe::scene::Visibility_filter id_filter{
-        erhe::scene::Mesh::c_visibility_id,
+        erhe::scene::Node::c_visibility_id,
         0u,
         0u,
         0u

@@ -19,7 +19,7 @@ class Frame_controller
 public:
     Frame_controller();
 
-    void set_frame        (erhe::scene::Node* value);
+    void set_frame        (erhe::scene::Node* node);
     auto node             () -> erhe::scene::Node*;
     void clear            ();
     void update           ();
@@ -43,7 +43,7 @@ public:
     Controller speed_modifier;
 
 private:
-    erhe::scene::Node* m_frame          {nullptr};
+    erhe::scene::Node* m_node           {nullptr};
     float              m_elevation      {0.0f};
     float              m_heading        {0.0f};
     glm::mat4          m_heading_matrix {1.0f};

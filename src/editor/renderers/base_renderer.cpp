@@ -122,13 +122,11 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection&   meshes,
     size_t       primitive_index    = 0;
     for (auto mesh : meshes)
     {
-        if (!visibility_filter(mesh->visibility_mask))
+        VERIFY(mesh);
+        if (!visibility_filter(mesh->visibility_mask()))
         {
             continue;
         }
-        auto node = mesh->node();
-        VERIFY(node);
-        node->update(); // TODO cache
 
         size_t mesh_primitive_index{0};
         for (auto& primitive : mesh->primitives)
@@ -148,7 +146,7 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection&   meshes,
 
             const vec3     id_offset_vec3  = vec3_from_uint(m_id_offset);
             const vec4     id_offset_vec4  = vec4{id_offset_vec3, 0.0f};
-            const mat4     world_from_node = node->world_from_node();
+            const mat4     world_from_node = mesh->world_from_node();
             const uint32_t material_index  = (primitive.material != nullptr) ? static_cast<uint32_t>(primitive.material->index) : 0u;
             const uint32_t extra2          = 0;
             const uint32_t extra3          = 0;
@@ -161,12 +159,16 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection&   meshes,
                 (primitive_size_source == Primitive_size_source::mesh_line_width) ? as_span(mesh->line_width       ) :
                                                                                     as_span(primitive_constant_size);
             //memset(reinterpret_cast<uint8_t*>(model_gpu_data.data()) + offset, 0, entry_size);
-            write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.world_from_node, as_span(world_from_node));
-            write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.color,           color_span              );
-            write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.material_index,  as_span(material_index ));
-            write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.size,            size_span               );
-            write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.extra2,          as_span(extra2         ));
-            write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.extra3,          as_span(extra3         ));
+            {
+                ZoneScopedN("write");
+
+                write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.world_from_node, as_span(world_from_node));
+                write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.color,           color_span              );
+                write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.material_index,  as_span(material_index ));
+                write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.size,            size_span               );
+                write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.extra2,          as_span(extra2         ));
+                write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.extra3,          as_span(extra3         ));
+            }
             m_primitive_writer.write_offset += entry_size;
 
             Id_range r;
@@ -181,6 +183,7 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection&   meshes,
             ++primitive_index;
         }
     }
+
     m_primitive_writer.end();
 
     return m_primitive_writer.range;
@@ -211,6 +214,8 @@ auto Base_renderer::update_light_buffer(
 
     for (auto light : lights)
     {
+        VERIFY(light);
+
         log_render.trace("light_index = {}\n", light_index);
         switch (light->type)
         {
@@ -222,11 +227,8 @@ auto Base_renderer::update_light_buffer(
 
         light->update(light_texture_viewport);
 
-        const auto node = light->node();
-        VERIFY(node);
-
-        const vec3  direction            = vec3{node->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
-        const vec3  position             = vec3{node->world_from_node() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+        const vec3  direction            = vec3{light->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
+        const vec3  position             = vec3{light->world_from_node() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
         const vec4  radiance             = vec4{light->intensity * light->color, light->range};
         const float inner_spot_cos       = std::cos(light->inner_spot_angle * 0.5f);
         const float outer_spot_cos       = std::cos(light->outer_spot_angle * 0.5f);
@@ -286,14 +288,12 @@ auto Base_renderer::update_camera_buffer(
 {
     ZoneScoped;
 
-    log_render.trace("{}\n", __func__);
-
     camera.update(viewport);
 
     const auto& shader_resources = *m_program_interface->shader_resources.get();
     auto        camera_gpu_data  = current_frame_resources().camera_buffer.map();
     const auto& offsets          = shader_resources.camera_block_offsets;
-    const mat4  world_from_node  = camera.node()->world_from_node();
+    const mat4  world_from_node  = camera.world_from_node();
     const mat4  world_from_clip  = camera.world_from_clip();
     const mat4  clip_from_world  = camera.clip_from_world();
     const float exposure         = 1.0f;
@@ -346,7 +346,7 @@ auto Base_renderer::update_draw_indirect_buffer(
     m_draw_indirect_writer.begin();
     for (auto mesh : meshes)
     {
-        if (!visibility_filter(mesh->visibility_mask))
+        if (!visibility_filter(mesh->visibility_mask()))
         {
             continue;
         }

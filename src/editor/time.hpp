@@ -6,6 +6,7 @@ namespace editor {
 
 class Application;
 class Editor_rendering;
+class Scene_root;
 class Window;
 
 class Editor_time
@@ -31,7 +32,9 @@ public:
 
     std::shared_ptr<Editor_rendering> m_editor_rendering;
     std::shared_ptr<Application     > m_application;
+    std::shared_ptr<Scene_root      > m_scene_root;
     std::shared_ptr<Window          > m_window;
-};
+};  
+   
 
 }

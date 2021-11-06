@@ -12,7 +12,7 @@ namespace erhe::scene
 {
 
 class Mesh
-    : public INode_attachment
+    : public Node
 {
 public:
     Mesh         ();
@@ -20,23 +20,21 @@ public:
     Mesh         (const std::string_view name, const erhe::primitive::Primitive primitive);
     ~Mesh        () override;
 
-    // Implements INode_attachment
-    auto name     () const -> const std::string&;
-    auto node     () const -> const std::shared_ptr<Node>&;
-
-    void on_attach(Node& node);
-    void on_detach();
+    auto node_type() const -> const char* override;
 
     std::vector<erhe::primitive::Primitive> primitives;
     glm::vec4                               wireframe_color{0.0f, 0.0f, 0.0f, 1.0f};
     float                                   point_size     {3.0f};
     float                                   line_width     {1.0f};
 
-    std::string                    m_name;
     erhe::toolkit::Unique_id<Mesh> m_id;
-    std::shared_ptr<Node>          m_node;
 };
 
 auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool;
+
+auto is_mesh(const Node* const node) -> bool;
+auto is_mesh(const std::shared_ptr<Node>& node) -> bool;
+auto as_mesh(Node* const node) -> Mesh*;
+auto as_mesh(const std::shared_ptr<Node>& node) -> std::shared_ptr<Mesh>;
 
 }

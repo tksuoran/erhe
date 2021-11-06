@@ -28,23 +28,21 @@ Merge_operation::Merge_operation(Context& context)
     auto normal_style              = Normal_style::none;
     for (auto item : context.selection_tool->selection())
     {
-        auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        auto mesh = as_mesh(item);
         if (!mesh)
         {
             continue;
         }
-        auto node = mesh->node();
-        VERIFY(node);
         mat4 transform;
         if (first_mesh)
         {
-            reference_node_from_world = node->node_from_world();
+            reference_node_from_world = mesh->node_from_world();
             transform  = mat4{1};
             first_mesh = false;
         }
         else
         {
-            transform = reference_node_from_world * node->world_from_node();
+            transform = reference_node_from_world * mesh->world_from_node();
         }
 
         for (auto& primitive : mesh->primitives)
@@ -63,11 +61,10 @@ Merge_operation::Merge_operation(Context& context)
 
         m_source_entries.emplace_back(
             context.build_info_set,
-            context.layer,
             context.scene,
+            context.layer,
             context.physics_world,
             mesh,
-            mesh->node(),
             mesh->primitives
         );
     }
@@ -87,7 +84,7 @@ Merge_operation::Merge_operation(Context& context)
     m_combined_primitive_geometry->source_geometry     = std::make_shared<erhe::geometry::Geometry>(std::move(combined_geometry));
     m_combined_primitive_geometry->source_normal_style = normal_style;
     m_selection_before = context.selection_tool->selection();
-    m_selection_after.push_back({});
+    m_selection_after = {};
 }
 
 void Merge_operation::execute()
@@ -97,11 +94,12 @@ void Merge_operation::execute()
     auto& nodes       = m_context.scene.nodes;
     for (const auto& entry : m_source_entries)
     {
+        auto mesh = entry.mesh;
         if (first_entry)
         {
             // For first mesh: Replace mesh primitives
-            entry.mesh->primitives.resize(1);
-            entry.mesh->primitives.front().primitive_geometry = m_combined_primitive_geometry;
+            mesh->primitives.resize(1);
+            mesh->primitives.front().primitive_geometry = m_combined_primitive_geometry;
             first_entry = false;
         }
         else
@@ -109,14 +107,23 @@ void Merge_operation::execute()
             // For other meshes:
             //  - Remove meshes from scene
             //  - Detach meshes from mesh nodes
-            //  - If mesh node attachments become empty, remove node from scene
-            auto node = entry.mesh->node();
-            meshes.erase(std::remove(meshes.begin(), meshes.end(), entry.mesh), meshes.end());
-            node->detach(entry.mesh);
-            if (node->attachment_count() == 0)
-            {
-                nodes.erase(std::remove(nodes.begin(), nodes.end(), node), nodes.end());
-            }
+            meshes.erase(
+                std::remove(
+                    meshes.begin(),
+                    meshes.end(),
+                    mesh
+                ),
+                meshes.end()
+            );
+            mesh->unparent();
+            nodes.erase(
+                std::remove(
+                    nodes.begin(),
+                    nodes.end(),
+                    mesh
+                ),
+                nodes.end()
+            );
         }
     }
     m_context.selection_tool->set_selection(m_selection_after);
@@ -124,14 +131,15 @@ void Merge_operation::execute()
 
 void Merge_operation::undo()
 {
-    bool  first_entry = true;
-    auto& meshes      = m_context.layer.meshes;
-    auto& nodes       = m_context.scene.nodes;
+    bool  first_entry     = true;
+    auto& meshes          = m_context.layer.meshes;
+    auto& transform_nodes = m_context.scene.nodes;
     for (const auto& entry : m_source_entries)
     {
         // For all entries:
         //  - Restore original mesh primitives
-        entry.mesh->primitives = entry.primitives;
+        auto mesh = entry.mesh;
+        mesh->primitives = entry.primitives;
         if (first_entry)
         {
             first_entry = false;
@@ -142,15 +150,12 @@ void Merge_operation::undo()
             //  - Add mesh to scene
             //  - If node attachments were empty, add node to scene
             //  - Attach mesh to mesh node
-            auto node = entry.mesh->node();
-            meshes.push_back(entry.mesh);
-            if (entry.node->attachment_count() == 0)
-            {
-                nodes.push_back(node);
-            }
-            entry.node->attach(entry.mesh);
+            meshes.push_back(mesh);
+            transform_nodes.push_back(mesh);
+            mesh->unparent();
         }
     }
+    m_context.scene.nodes_sorted = false;
     m_context.selection_tool->set_selection(m_selection_before);
 }
 

@@ -4,7 +4,10 @@
 #include "tools/trs_tool.hpp"
 #include "renderers/text_renderer.hpp"
 #include "scene/scene_manager.hpp"
+#include "scene/node_physics.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/scene/camera.hpp"
+#include "erhe/scene/light.hpp"
 #include "log.hpp"
 
 #include "imgui.h"
@@ -68,22 +71,12 @@ void Selection_tool::imgui(Pointer_context&)
     ImGui::Begin("Selection");
     for (const auto& item : m_selection)
     {
+        VERIFY(item);
         if (!item)
         {
             continue;
         }
-        const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
-        if (!mesh)
-        {
-            continue;
-        }
-        ImGui::Text("Mesh: %s", mesh->name().c_str());
-        const auto* node = mesh->node().get();
-        if (node != nullptr)
-        {
-            ImGui::Text("Node: %s", node->name().c_str());
-        }
-        ImGui::Separator();
+        ImGui::Text("%s: %s", item->node_type(), item->name().c_str());
     }
     ImGui::End();
 }
@@ -167,7 +160,12 @@ auto Selection_tool::clear_selection() -> bool
 
     for (auto item : m_selection)
     {
-        item->visibility_mask &= ~erhe::scene::INode_attachment::c_visibility_selected;
+        VERIFY(item);
+        if (!item)
+        {
+            continue;
+        }
+        item->visibility_mask() &= ~erhe::scene::Node::c_visibility_selected;
     }
 
     log_selection.trace("Clearing selection ({} items were selected)\n", m_selection.size());
@@ -177,8 +175,8 @@ auto Selection_tool::clear_selection() -> bool
 }
 
 void Selection_tool::toggle_selection(
-    std::shared_ptr<erhe::scene::INode_attachment> item,
-    const bool                                     clear_others
+    std::shared_ptr<erhe::scene::Node> item,
+    const bool                         clear_others
 )
 {
     if (clear_others)
@@ -206,8 +204,13 @@ void Selection_tool::toggle_selection(
     call_selection_change_subscriptions();
 }
 
-auto Selection_tool::is_in_selection(std::shared_ptr<erhe::scene::INode_attachment> item) -> bool
+auto Selection_tool::is_in_selection(std::shared_ptr<erhe::scene::Node> item) -> bool
 {
+    if (!item)
+    {
+        return false;
+    }
+
     return std::find(
         m_selection.begin(),
         m_selection.end(),
@@ -215,7 +218,7 @@ auto Selection_tool::is_in_selection(std::shared_ptr<erhe::scene::INode_attachme
     ) != m_selection.end();
 }
 
-auto Selection_tool::add_to_selection(std::shared_ptr<erhe::scene::INode_attachment> item) -> bool
+auto Selection_tool::add_to_selection(std::shared_ptr<erhe::scene::Node> item) -> bool
 {
     if (!item)
     {
@@ -223,7 +226,7 @@ auto Selection_tool::add_to_selection(std::shared_ptr<erhe::scene::INode_attachm
         return false;
     }
 
-    item->visibility_mask |= erhe::scene::INode_attachment::c_visibility_selected;
+    item->visibility_mask() |= erhe::scene::Node::c_visibility_selected;
 
     if (!is_in_selection(item))
     {
@@ -236,7 +239,7 @@ auto Selection_tool::add_to_selection(std::shared_ptr<erhe::scene::INode_attachm
     return false;
 }
 
-auto Selection_tool::remove_from_selection(std::shared_ptr<erhe::scene::INode_attachment> item) -> bool
+auto Selection_tool::remove_from_selection(std::shared_ptr<erhe::scene::Node> item) -> bool
 {
     if (!item)
     {
@@ -244,7 +247,7 @@ auto Selection_tool::remove_from_selection(std::shared_ptr<erhe::scene::INode_at
         return false;
     }
 
-    item->visibility_mask &= ~erhe::scene::INode_attachment::c_visibility_selected;
+    item->visibility_mask() &= ~erhe::scene::Node::c_visibility_selected;
 
     const auto i = std::remove(
         m_selection.begin(),

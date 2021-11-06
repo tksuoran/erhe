@@ -22,7 +22,6 @@ namespace erhe::scene
     class Layer;
     class Light;
     class Mesh;
-    class Node;
     class Scene;
 }
 
@@ -36,36 +35,40 @@ namespace editor
 
 class Node_physics;
 
-void attach(
-    erhe::scene::Layer&                layer,
+void add_to_scene_layer(
     erhe::scene::Scene&                scene,
-    erhe::physics::IWorld&             physics_world,
-    std::shared_ptr<erhe::scene::Node> node,
-    std::shared_ptr<erhe::scene::Mesh> mesh,
-    std::shared_ptr<Node_physics>      node_physics
-);
-
-void detach(
     erhe::scene::Layer&                layer,
+    std::shared_ptr<erhe::scene::Mesh> mesh_node
+);
+
+void add_to_scene_layer(
+    erhe::scene::Scene&                 scene,
+    erhe::scene::Layer&                 layer,
+    std::shared_ptr<erhe::scene::Light> light_node
+);
+
+void add_to_physics_world(
+    erhe::scene::Scene&           scene,
+    erhe::physics::IWorld&        physics_world,
+    std::shared_ptr<Node_physics> node_physics
+);
+
+void remove_from_scene_layer(
     erhe::scene::Scene&                scene,
-    erhe::physics::IWorld&             physics_world,
-    std::shared_ptr<erhe::scene::Node> node,
-    std::shared_ptr<erhe::scene::Mesh> mesh,
-    std::shared_ptr<Node_physics>      node_physics
+    erhe::scene::Layer&                layer,
+    std::shared_ptr<erhe::scene::Mesh> mesh_node
 );
 
-void attach(
-    erhe::scene::Layer&                 layer,
+void remove_from_scene_layer(
     erhe::scene::Scene&                 scene,
-    std::shared_ptr<erhe::scene::Node>  node,
-    std::shared_ptr<erhe::scene::Light> light
+    erhe::scene::Layer&                 layer,
+    std::shared_ptr<erhe::scene::Light> light_node
 );
 
-void detach(
-    erhe::scene::Layer&                 layer,
-    erhe::scene::Scene&                 scene,
-    std::shared_ptr<erhe::scene::Node>  node,
-    std::shared_ptr<erhe::scene::Light> light
+void remove_from_physics_world(
+    erhe::scene::Scene&           scene,
+    erhe::physics::IWorld&        physics_world,
+    std::shared_ptr<Node_physics> node_physics
 );
 
 

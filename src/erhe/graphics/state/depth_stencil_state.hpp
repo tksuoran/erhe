@@ -71,8 +71,7 @@ private:
     static Depth_stencil_state s_depth_test_enabled_greater_or_equal_stencil_test_disabled_reverse_depth;
 };
 
-constexpr auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function;
-//auto reverse(const Depth_stencil_state& depth_stencil_state) -> Depth_stencil_state;
+auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function;
 
 class Depth_stencil_state_hash
 {

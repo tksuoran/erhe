@@ -41,7 +41,7 @@ public:
     // Implements Window
     void imgui(Pointer_context& pointer_context) override;
 
-    using Selection            = std::vector<std::shared_ptr<erhe::scene::INode_attachment>>;
+    using Selection            = std::vector<std::shared_ptr<erhe::scene::Node>>;
     using On_selection_changed = std::function<void(const Selection&)>;
 
     class Subcription final
@@ -100,13 +100,13 @@ public:
         call_selection_change_subscriptions();
     }
     auto clear_selection      () -> bool;
-    auto is_in_selection      (std::shared_ptr<erhe::scene::INode_attachment> item) -> bool;
-    auto add_to_selection     (std::shared_ptr<erhe::scene::INode_attachment> item) -> bool;
-    auto remove_from_selection(std::shared_ptr<erhe::scene::INode_attachment> item) -> bool;
+    auto is_in_selection      (std::shared_ptr<erhe::scene::Node> item) -> bool;
+    auto add_to_selection     (std::shared_ptr<erhe::scene::Node> item) -> bool;
+    auto remove_from_selection(std::shared_ptr<erhe::scene::Node> item) -> bool;
 
 private:
     void call_selection_change_subscriptions();
-    void toggle_selection(std::shared_ptr<erhe::scene::INode_attachment> item, const bool clear_others);
+    void toggle_selection(std::shared_ptr<erhe::scene::Node> item, const bool clear_others);
 
     class Subscription_entry
     {

@@ -74,15 +74,18 @@ Frame_controller::Frame_controller()
 
 void Frame_controller::set_frame(erhe::scene::Node* node)
 {
-    m_frame = node;
+    m_node = node;
 
-    if (!m_frame)
+    if (!m_node)
     {
         return;
     }
 
-    const vec4 position  = node->world_from_node() * vec4{0.0f, 0.0f, 0.0f, 1.0f};
-    const vec4 direction = node->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f};
+    // node->world_from_node() is not necessarily valid, so make sure it is.
+    //node->update_transform();
+
+    const vec4 position  = node->position_in_world();
+    const vec4 direction = node->direction_in_world();
 
     m_position = position;
     float heading{0.0f};
@@ -96,10 +99,9 @@ void Frame_controller::set_frame(erhe::scene::Node* node)
     update();
 }
 
-auto Frame_controller::node()
--> erhe::scene::Node*
+auto Frame_controller::node() -> erhe::scene::Node*
 {
-    return m_frame;
+    return m_node;
 }
 
 void Frame_controller::clear()
@@ -114,6 +116,11 @@ void Frame_controller::clear()
 
 void Frame_controller::update()
 {
+    if (m_node == nullptr)
+    {
+        return;
+    }
+
     const mat4 elevation_matrix = create_rotation(m_elevation, vec3_unit_x);
     m_rotation_matrix = m_heading_matrix * elevation_matrix;
 
@@ -136,17 +143,14 @@ void Frame_controller::update()
    parentToLocal._33 = 1.0f;
    */
     //m_local_from_parent = inverse(m_parent_from_local);
-    if (m_frame)
-    {
-        m_frame->transforms.parent_from_node.set(parent_from_local);
+    m_node->set_parent_from_node(parent_from_local);
 
-        //vec4 position  = m_frame->world_from_local.matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f};
-        //vec4 direction = m_frame->world_from_local.matrix() * vec4{0.0f, 0.0f, 1.0f, 0.0f};
-        //float elevation;
-        //float heading;
-        //cartesian_to_heading_elevation(direction, elevation, heading);
-        //log_render.info("elevation = {:.2f}, heading = {:.2f}\n", elevation / glm::pi<float>(), heading / glm::pi<float>());
-    }
+    //vec4 position  = m_node->world_from_local.matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f};
+    //vec4 direction = m_node->world_from_local.matrix() * vec4{0.0f, 0.0f, 1.0f, 0.0f};
+    //float elevation;
+    //float heading;
+    //cartesian_to_heading_elevation(direction, elevation, heading);
+    //log_render.info("elevation = {:.2f}, heading = {:.2f}\n", elevation / glm::pi<float>(), heading / glm::pi<float>());
 
     //Frame.LocalToParent.Set(localToParent, parentToLocal);
 }

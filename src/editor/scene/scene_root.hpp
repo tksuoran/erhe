@@ -113,7 +113,7 @@ public:
     auto tool_layers        () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_tool_layers; }
 
     auto make_mesh_node(
-        std::string_view                                            name,
+        const std::string_view                                      name,
         const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry,
         const std::shared_ptr<erhe::primitive::Material>&           material,
         erhe::scene::Node*                                          parent   = nullptr,
@@ -121,7 +121,7 @@ public:
     ) -> std::shared_ptr<erhe::scene::Mesh>;
 
     auto make_mesh_node(
-        std::string_view                                            name,
+        const std::string_view                                      name,
         const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry,
         const std::shared_ptr<erhe::primitive::Material>&           material,
         erhe::scene::Layer&                                         layer,

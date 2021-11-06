@@ -147,7 +147,7 @@ void Shadow_renderer::render(Layer_collection& layers,
     gl::viewport(m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
 
     erhe::scene::Visibility_filter shadow_filter{
-        erhe::scene::Mesh::c_visibility_shadow_cast,
+        erhe::scene::Node::c_visibility_shadow_cast,
         0u,
         0u,
         0u

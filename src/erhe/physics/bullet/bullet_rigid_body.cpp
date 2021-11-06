@@ -1,7 +1,7 @@
-#include "erhe/physics/bullet_rigid_body.hpp"
-#include "erhe/physics/bullet_collision_shape.hpp"
+#include "erhe/physics/bullet/bullet_rigid_body.hpp"
+#include "erhe/physics/bullet/bullet_collision_shape.hpp"
+#include "erhe/physics/bullet/glm_conversions.hpp"
 #include "erhe/physics/imotion_state.hpp"
-#include "erhe/physics/glm_conversions.hpp"
 #include "erhe/scene/node.hpp"
 
 #include <glm/glm.hpp>
@@ -83,7 +83,7 @@ auto Bullet_rigid_body::get_collision_shape() const -> ICollision_shape*
     return m_collision_shape.get();
 }
 
-auto Bullet_rigid_body::get_friction() -> float
+auto Bullet_rigid_body::get_friction() const -> float
 {
     return static_cast<float>(m_bullet_rigid_body.getFriction());
 }
@@ -93,7 +93,7 @@ void Bullet_rigid_body::set_friction(const float friction)
     m_bullet_rigid_body.setFriction(static_cast<btScalar>(friction));
 }
 
-auto Bullet_rigid_body::get_rolling_friction() -> float
+auto Bullet_rigid_body::get_rolling_friction() const -> float
 {
     return static_cast<float>(m_bullet_rigid_body.getRollingFriction());
 }
@@ -103,7 +103,7 @@ void Bullet_rigid_body::set_rolling_friction(const float rolling_friction)
     m_bullet_rigid_body.setRollingFriction(static_cast<btScalar>(rolling_friction));
 }
 
-auto Bullet_rigid_body::get_restitution() -> float
+auto Bullet_rigid_body::get_restitution() const -> float
 {
     return static_cast<float>(m_bullet_rigid_body.getRestitution());
 }

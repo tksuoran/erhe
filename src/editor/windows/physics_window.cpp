@@ -120,24 +120,12 @@ void Physics_window::imgui(Pointer_context& pointer_context)
     const auto& selecion = m_selection_tool->selection();
     for (const auto item : selecion)
     {
-        const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
-        if (!mesh)
-        {
-            continue;
-        }
-
-        const auto* node = mesh->node().get();
-        if (node == nullptr)
-        {
-            continue;
-        }
-
-        auto node_physics = node->get_attachment<Node_physics>();
+        auto* node_physics = as_physics(item.get());
         if (!node_physics)
         {
             continue;
         }
-        ImGui::Text("Rigid body: %s", mesh->name().c_str());
+        ImGui::Text("Rigid body: %s", item->name().c_str());
         auto* rigid_body = node_physics->rigid_body();
         int motion_mode = static_cast<int>(rigid_body->get_motion_mode());
 

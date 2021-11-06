@@ -100,8 +100,8 @@ auto Physics_tool::update(Pointer_context& pointer_context) -> bool
         {
             m_drag_mesh             = pointer_context.hover_mesh;
             m_drag_depth            = pointer_context.pointer_z;
-            m_drag_position_in_mesh = glm::vec3{m_drag_mesh->node()->node_from_world() * glm::vec4{pointer_context.position_in_world(), 1.0f}};
-            m_drag_node_physics     = m_drag_mesh->node()->get_attachment<Node_physics>();
+            m_drag_position_in_mesh = glm::vec3{m_drag_mesh->node_from_world() * glm::vec4{pointer_context.position_in_world(), 1.0f}};
+            m_drag_node_physics     = get_physics_node(m_drag_mesh.get());
 
             if (m_drag_node_physics && 
                 (m_drag_node_physics->rigid_body()->get_motion_mode() != erhe::physics::Motion_mode::e_static))
@@ -154,15 +154,9 @@ auto Physics_tool::update(Pointer_context& pointer_context) -> bool
         return false;
     }
 
-    if (!m_drag_mesh->node())
-    {
-        log_tools.trace("Physics tool: No node, returning false not consuming\n");
-        return false;
-    }
-
     //log_tools.info("physics_tool::update()\n");
 
-    m_drag_position_start = glm::vec3{m_drag_mesh->node()->world_from_node() * glm::vec4{m_drag_position_in_mesh, 1.0f}};
+    m_drag_position_start = glm::vec3{m_drag_mesh->world_from_node() * glm::vec4{m_drag_position_in_mesh, 1.0f}};
     m_drag_position_end   = pointer_context.position_in_world(m_drag_depth);
 
     if (m_drag_constraint)

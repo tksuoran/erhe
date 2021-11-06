@@ -12,104 +12,97 @@ namespace erhe::scene
 
 class Node;
 
-class INode_attachment
-{
-public:
-    virtual ~INode_attachment() {};
-    virtual auto name     () const -> const std::string& = 0;
-    virtual void on_attach(Node& node) {};
-    virtual void on_detach(Node& node) {};
-
-    static constexpr uint64_t c_visibility_content      = (1ul << 0ul);
-    static constexpr uint64_t c_visibility_shadow_cast  = (1ul << 1ul);
-    static constexpr uint64_t c_visibility_id           = (1ul << 2ul);
-    static constexpr uint64_t c_visibility_tool         = (1ul << 3ul);
-    static constexpr uint64_t c_visibility_brush        = (1ul << 4ul);
-    static constexpr uint64_t c_visibility_selected     = (1ul << 5ul);
-    static constexpr uint64_t c_visibility_none         = uint64_t(0);
-
-    auto is_selected() const -> bool
-    {
-        return (visibility_mask & c_visibility_selected) == c_visibility_selected;
-    }
-
-    uint64_t visibility_mask{c_visibility_none};
-};
+class Node_physics;
+class Light;
+class Camera;
+class Mesh;
 
 class Node
     : public std::enable_shared_from_this<Node>
-    , public INode_attachment
 {
 public:
-    explicit Node(std::string_view name);
+    explicit Node(const std::string_view name);
 
     virtual ~Node();
 
-    void update(const uint32_t update_serial = 0, const bool cache_enable = false);
-    void attach(const std::shared_ptr<INode_attachment>& attachment);
-    auto detach(const std::shared_ptr<INode_attachment>& attachment) -> bool;
+    static constexpr uint64_t c_visibility_none        = 0;
+    static constexpr uint64_t c_visibility_content     = (1 << 0);
+    static constexpr uint64_t c_visibility_shadow_cast = (1 << 1);
+    static constexpr uint64_t c_visibility_id          = (1 << 2);
+    static constexpr uint64_t c_visibility_tool        = (1 << 3);
+    static constexpr uint64_t c_visibility_brush       = (1 << 4);
+    static constexpr uint64_t c_visibility_selected    = (1 << 5);
 
-    template <typename T>
-    auto get_attachment() const -> std::shared_ptr<T>
-    {
-        for (const auto& attachment : attachments)
-        {
-            auto typed_attachment = std::dynamic_pointer_cast<T>(attachment);
-            if (typed_attachment)
-            {
-                return typed_attachment;
-            }
-        }
-        return {};
-    }
+    static constexpr uint64_t c_flag_bit_none         = 0;
+    static constexpr uint64_t c_flag_bit_is_transform = (1 << 0);
+    static constexpr uint64_t c_flag_bit_is_empty     = (1 << 1);
+    static constexpr uint64_t c_flag_bit_is_physics   = (1 << 2);
+    static constexpr uint64_t c_flag_bit_is_light     = (1 << 3);
+    static constexpr uint64_t c_flag_bit_is_camera    = (1 << 4);
+    static constexpr uint64_t c_flag_bit_is_mesh      = (1 << 5);
 
-    auto parent_from_node  () const -> glm::mat4;
-    auto world_from_node   () const -> glm::mat4;
-    auto node_from_parent  () const -> glm::mat4;
-    auto node_from_world   () const -> glm::mat4;
-    auto world_from_parent () const -> glm::mat4;
-    auto position_in_world () const -> glm::vec4;
-    auto direction_in_world() const -> glm::vec4;
-    auto root              () -> Node*;
-    auto root              () const -> const Node*;
+    virtual void on_attached_to      (Node& node);
+    virtual void on_detached_from    (Node& node);
+    virtual void on_transform_changed() {}
+    virtual auto node_type           () const -> const char*;
 
-    // INode_attachment
-    auto name() const -> const std::string& override
-    {
-        return m_name;
-    }
+    void update_transform          (const uint64_t serial = 0);
+    void update_transform_recursive(const uint64_t serial = 0);
 
-    auto label() const -> const std::string&
-    {
-        return m_label;
-    }
+    auto parent                    () const -> Node*;
+    auto depth                     () const -> size_t;
+    auto children                  () const -> const std::vector<std::shared_ptr<Node>>&;
+    auto visibility_mask           () const -> uint64_t;
+    auto visibility_mask           () -> uint64_t&;
+    auto flag_bits                 () const -> uint64_t;
+    auto flag_bits                 () -> uint64_t&;
+    auto parent_from_node_transform() const -> const Transform&;
+    auto parent_from_node          () const -> glm::mat4;
+    auto world_from_node           () const -> glm::mat4;
+    auto node_from_parent          () const -> glm::mat4;
+    auto node_from_world           () const -> glm::mat4;
+    auto world_from_parent         () const -> glm::mat4;
+    auto position_in_world         () const -> glm::vec4;
+    auto direction_in_world        () const -> glm::vec4;
 
-    void set_name(std::string_view name);
+    void set_parent_from_node      (const glm::mat4 matrix);
+    void set_parent_from_node      (const Transform& transform);
 
-    Node* parent{nullptr};
+    auto is_selected() const -> bool;
+    void attach     (const std::shared_ptr<Node>& node);
+    auto detach     (const std::shared_ptr<Node>& node) -> bool;
+    void unparent   ();
+    auto root       () -> Node*;
+    auto root       () const -> const Node*;
+    auto name       () const -> const std::string&;
+    auto label      () const -> const std::string&;
+    void set_name   (const std::string_view name);
+    auto child_count() const -> size_t;
 
-    auto attachment_count() -> size_t
-    {
-        return attachments.size();
-    }
-
+protected:
     class Transforms
     {
     public:
         Transform parent_from_node; // normative
-        Transform world_from_node;  // calculated by update()
+        Transform world_from_node;  // calculated by update_transform()
     };
-    Transforms transforms;
 
-    std::vector<std::shared_ptr<INode_attachment>> attachments;
-
-protected:
-    std::string                    m_name;
-    erhe::toolkit::Unique_id<Node> m_id;
-    std::string                    m_label;
-    bool                           m_updated{false};
-    std::uint32_t                  m_last_update_serial{0};
+    Transforms                         m_transforms;
+    std::uint64_t                      m_last_transform_update_serial{0};
+    Node*                              m_parent         {nullptr};
+    std::vector<std::shared_ptr<Node>> m_children;
+    uint64_t                           m_visibility_mask{c_visibility_none};
+    uint64_t                           m_flag_bits      {c_flag_bit_none};
+    size_t                             m_depth          {0};
+    erhe::toolkit::Unique_id<Node>     m_id;
+    std::string                        m_name;
+    std::string                        m_label;
 };
+
+auto is_empty    (const Node* const node) -> bool;
+auto is_empty    (const std::shared_ptr<Node>& node) -> bool;
+auto is_transform(const Node* const node) -> bool;
+auto is_transform(const std::shared_ptr<Node>& node) -> bool;
 
 class Visibility_filter
 {

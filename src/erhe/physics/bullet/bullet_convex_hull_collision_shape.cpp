@@ -1,5 +1,5 @@
-#include "erhe/physics/bullet_convex_hull_collision_shape.hpp"
-#include "erhe/physics/glm_conversions.hpp"
+#include "erhe/physics/bullet/bullet_convex_hull_collision_shape.hpp"
+#include "erhe/physics/bullet/glm_conversions.hpp"
 
 namespace erhe::physics
 {

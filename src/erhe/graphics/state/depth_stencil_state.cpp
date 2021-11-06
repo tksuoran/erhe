@@ -7,7 +7,7 @@
 namespace erhe::graphics
 {
 
-constexpr auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function
+auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function
 {
     switch (depth_function)
     {

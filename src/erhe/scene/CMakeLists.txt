@@ -17,6 +17,7 @@ set(source_list
     scene.hpp
     transform.cpp
     transform.hpp
+    viewport.cpp
     viewport.hpp
 )
 
@@ -30,6 +31,7 @@ target_link_libraries(${_target}
         fmt::fmt
         glm::glm
         Microsoft.GSL::GSL
+        TracyClient
 )
 
 foreach(source IN LISTS source_list)

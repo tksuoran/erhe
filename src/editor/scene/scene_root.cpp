@@ -159,7 +159,7 @@ auto Scene_root::tool_layer() const -> std::shared_ptr<erhe::scene::Layer>
 }
 
 auto Scene_root::make_mesh_node(
-    string_view                           name,
+    const string_view                     name,
     const shared_ptr<Primitive_geometry>& primitive_geometry,
     const shared_ptr<Material>&           material,
     Node*                                 parent,
@@ -170,7 +170,7 @@ auto Scene_root::make_mesh_node(
 }
 
 auto Scene_root::make_mesh_node(
-    string_view                           name,
+    const string_view                     name,
     const shared_ptr<Primitive_geometry>& primitive_geometry,
     const shared_ptr<Material>&           material,
     Layer&                                layer,
@@ -178,24 +178,16 @@ auto Scene_root::make_mesh_node(
     const glm::vec3                       position
 ) -> shared_ptr<Mesh>
 {
-    const glm::mat4 transform = erhe::toolkit::create_translation(position);
-
     auto mesh = make_shared<Mesh>(name);
     mesh->primitives.emplace_back(primitive_geometry, material);
 
-    auto node = make_shared<Node>(name);
-    node->parent = parent;
-    node->transforms.parent_from_node.set(transform);
-    node->update();
+    mesh->set_parent_from_node(Transform::create_translation(position));
 
-    attach(
-        layer,
-        scene(),
-        physics_world(),
-        node,
-        mesh,
-        {}
-    );
+    add_to_scene_layer(scene(), layer, mesh);
+    if (parent != nullptr)
+    {
+        parent->attach(mesh);
+    }
 
     return mesh;
 }

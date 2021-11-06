@@ -1,5 +1,5 @@
-#include "erhe/physics/bullet_compound_shape.hpp"
-#include "erhe/physics/glm_conversions.hpp"
+#include "erhe/physics/bullet/bullet_compound_shape.hpp"
+#include "erhe/physics/bullet/glm_conversions.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace erhe::physics

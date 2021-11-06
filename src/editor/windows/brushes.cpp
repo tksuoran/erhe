@@ -213,15 +213,15 @@ auto Brushes::update(Pointer_context& pointer_context) -> bool
 
     m_hover_content     = pointer_context.hover_content;
     m_hover_tool        = pointer_context.hover_tool;
-    m_hover_node        = pointer_context.hover_mesh ? pointer_context.hover_mesh->node() : shared_ptr<Node>{};
+    m_hover_mesh        = pointer_context.hover_mesh;
     m_hover_primitive   = pointer_context.hover_primitive;
     m_hover_local_index = pointer_context.hover_local_index;
     m_hover_geometry    = pointer_context.geometry;
     m_hover_position    = m_hover_content && pointer_context.hover_valid ? pointer_context.position_in_world() : optional<vec3>{};
     m_hover_normal      = m_hover_content && pointer_context.hover_valid ? pointer_context.hover_normal        : optional<vec3>{};
-    if (m_hover_node && m_hover_position.has_value())
+    if (m_hover_mesh && m_hover_position.has_value())
     {
-        m_hover_position = m_hover_node->node_from_world() * vec4{m_hover_position.value(), 1.0f};
+        m_hover_position = m_hover_mesh->node_from_world() * vec4{m_hover_position.value(), 1.0f};
     }
 
     if ((m_state == State::Passive) &&
@@ -257,9 +257,10 @@ void Brushes::render_update(const Render_context&)
     update_mesh();
 }
 
+// Returns transform which places brush in parent (hover) mesh space.
 auto Brushes::get_brush_transform() -> mat4
 {
-    if ((m_hover_node == nullptr) || (m_hover_geometry == nullptr) || (m_brush == nullptr))
+    if ((m_hover_mesh == nullptr) || (m_hover_geometry == nullptr) || (m_brush == nullptr))
     {
         return mat4{1};
     }
@@ -310,18 +311,13 @@ void Brushes::update_mesh_node_transform()
         return;
     }
 
-    const auto node = m_brush_mesh->node();
-    if (node == nullptr)
-    {
-        // unexpected
-        log_brush.warn("brush mesh has no node");
-        return;
-    }
-
     const auto  transform    = get_brush_transform();
     const auto& brush_scaled = m_brush->get_scaled(m_transform_scale);
-    node->parent = m_hover_node.get(); // TODO reference count
-    node->transforms.parent_from_node.set(transform);
+    if (m_brush_mesh->parent() != m_hover_mesh.get())
+    {
+        m_hover_mesh->attach(m_brush_mesh);
+    }
+    m_brush_mesh->set_parent_from_node(transform);
     m_brush_mesh->primitives.front().primitive_geometry = brush_scaled.primitive_geometry;
 }
 
@@ -337,27 +333,26 @@ void Brushes::do_insert_operation()
     const auto transform = get_brush_transform();
     const auto material  = m_materials[m_selected_material];
     const auto instance  = m_brush->make_instance(
-        m_scene_root->content_layer(),
         m_scene_root->scene(),
+        m_scene_root->content_layer(),
         m_scene_root->physics_world(),
-        m_hover_node,
         transform,
         material,
         m_transform_scale
     );
-    instance.mesh->visibility_mask |=
-        (INode_attachment::c_visibility_content     |
-         INode_attachment::c_visibility_shadow_cast |
-         INode_attachment::c_visibility_id);
+    instance.mesh->visibility_mask() |=
+        (Node::c_visibility_content     |
+         Node::c_visibility_shadow_cast |
+         Node::c_visibility_id);
 
     const Mesh_insert_remove_operation::Context context{
         m_selection_tool,
-        m_scene_root->content_layer(),
         m_scene_root->scene(),
+        m_scene_root->content_layer(),
         m_scene_root->physics_world(),
         instance.mesh,
-        instance.node,
         instance.node_physics,
+        m_hover_mesh,
         Scene_item_operation::Mode::insert
     };
     auto op = make_shared<Mesh_insert_remove_operation>(context);
@@ -382,7 +377,7 @@ void Brushes::add_hover_mesh()
         brush_scaled.primitive_geometry,
         material
     );
-    m_brush_mesh->visibility_mask &= ~(Mesh::c_visibility_id);
+    m_brush_mesh->visibility_mask() &= ~(Node::c_visibility_id);
     update_mesh_node_transform();
 }
 

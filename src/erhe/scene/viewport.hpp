@@ -21,7 +21,7 @@ public:
         const glm::vec3 window,
         const float     depth_range_near,
         const float     depth_range_far
-    ) -> glm::vec3;
+    ) const -> glm::vec3;
 
     // TODO
     auto project_to_screen_space(
@@ -29,7 +29,7 @@ public:
         const glm::vec3 position_in_world,
         const float     depth_range_near,
         const float     depth_range_far
-    );
+    ) const -> glm::vec3;
 
     int  x     {0};
     int  y     {0};

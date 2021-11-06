@@ -17,13 +17,12 @@ Node_transform_operation::~Node_transform_operation() = default;
 
 void Node_transform_operation::execute()
 {
-    m_context.node->transforms = m_context.after;
-    // TODO update, handling trs tool node
+    m_context.node->set_parent_from_node(m_context.parent_from_node_after);
 }
 
 void Node_transform_operation::undo()
 {
-    m_context.node->transforms = m_context.before;
+    m_context.node->set_parent_from_node(m_context.parent_from_node_before);
 }
 
 Mesh_insert_remove_operation::Mesh_insert_remove_operation(const Context& context)
@@ -46,28 +45,45 @@ void Mesh_insert_remove_operation::undo()
 void Mesh_insert_remove_operation::execute(const Mode mode)
 {
     VERIFY(m_context.mesh);
-    VERIFY(m_context.node);
+    VERIFY(m_context.mesh);
     if (mode == Mode::insert)
     {
-        attach(
-            m_context.layer,
-            m_context.scene,
-            m_context.physics_world,
-            m_context.node,
-            m_context.mesh, m_context.node_physics
-        );
+        add_to_scene_layer(m_context.scene, m_context.layer, m_context.mesh);
+        if (m_context.node_physics)
+        {
+            add_to_physics_world(m_context.scene, m_context.physics_world, m_context.node_physics);
+            if (m_context.parent)
+            {
+                m_context.parent->attach(m_context.node_physics);
+            }
+        }
+        else
+        {
+            if (m_context.parent)
+            {
+                m_context.parent->attach(m_context.mesh);
+            }
+        }
     }
     else
     {
         m_context.selection_tool->remove_from_selection(m_context.mesh);
-        detach(
-            m_context.layer,
-            m_context.scene,
-            m_context.physics_world,
-            m_context.node,
-            m_context.mesh,
-            m_context.node_physics
-        );
+        remove_from_scene_layer(m_context.scene, m_context.layer, m_context.mesh);
+        if (m_context.node_physics)
+        {
+            remove_from_physics_world(m_context.scene, m_context.physics_world, m_context.node_physics);
+            if (m_context.parent)
+            {
+                m_context.parent->detach(m_context.node_physics);
+            }
+        }
+        else
+        {
+            if (m_context.parent)
+            {
+                m_context.parent->detach(m_context.mesh);
+            }
+        }
     }
 }
 
@@ -91,24 +107,21 @@ void Light_insert_remove_operation::undo()
 void Light_insert_remove_operation::execute(const Mode mode)
 {
     VERIFY(m_context.light);
-    VERIFY(m_context.node);
     if (mode == Mode::insert)
     {
-        attach(
-            m_context.layer,
-            m_context.scene,
-            m_context.node,
-            m_context.light
-        );
+        add_to_scene_layer(m_context.scene, m_context.layer, m_context.light);
+        if (m_context.parent)
+        {
+            m_context.parent->attach(m_context.light);
+        }
     }
     else
     {
-        detach(
-            m_context.layer,
-            m_context.scene,
-            m_context.node,
-            m_context.light
-        );
+        remove_from_scene_layer(m_context.scene, m_context.layer, m_context.light);
+        if (m_context.parent)
+        {
+            m_context.parent->detach(m_context.light);
+        }
     }
 }
 

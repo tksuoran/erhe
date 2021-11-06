@@ -339,9 +339,9 @@ void Editor_rendering::render_content(
     auto& render_style = m_viewport_config->render_style_not_selected;
 
     constexpr erhe::scene::Visibility_filter content_not_selected_filter{
-        erhe::scene::Mesh::c_visibility_content,    // all set
+        erhe::scene::Node::c_visibility_content,    // all set
         0u,                                         // at least one set
-        erhe::scene::Mesh::c_visibility_selected,   // all clear
+        erhe::scene::Node::c_visibility_selected,   // all clear
         0u};                                        // at least one cler
 
     if (render_style.polygon_fill)
@@ -425,8 +425,8 @@ void Editor_rendering::render_selection(
     const auto& render_style = m_viewport_config->render_style_selected;
 
     constexpr erhe::scene::Visibility_filter content_selected_filter{
-        (erhe::scene::Mesh::c_visibility_content |  // all set
-         erhe::scene::Mesh::c_visibility_selected), 
+        (erhe::scene::Node::c_visibility_content |  // all set
+         erhe::scene::Node::c_visibility_selected), 
         0u,                                         // at least one set
         0u,                                         // all clear
         0u};                                        // at least one cler
@@ -525,7 +525,7 @@ void Editor_rendering::render_tool_meshes(
     }
 
     constexpr erhe::scene::Visibility_filter tool_filter{
-        erhe::scene::Mesh::c_visibility_tool,  // all set
+        erhe::scene::Node::c_visibility_tool,  // all set
         0u,                                    // at least one set
         0u,                                    // all clear
         0u};                                   // at least one cler

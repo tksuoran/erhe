@@ -95,17 +95,9 @@ void Editor_view::update_pointer()
                         auto* polygon_normals = geometry->polygon_attributes().find<glm::vec3>(c_polygon_normals);
                         if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id))
                         {
-                            auto node         = pointer_context.hover_mesh->node();
-                            auto local_normal = polygon_normals->get(polygon_id);
-                            if (node)
-                            {
-                                auto world_from_node = node->world_from_node();
-                                pointer_context.hover_normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
-                            }
-                            else
-                            {
-                                pointer_context.hover_normal = local_normal;
-                            }
+                            auto local_normal    = polygon_normals->get(polygon_id);
+                            auto world_from_node = pointer_context.hover_mesh->world_from_node();
+                            pointer_context.hover_normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
                         }
                     }
                 }

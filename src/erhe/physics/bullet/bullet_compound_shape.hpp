@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/physics/bullet_collision_shape.hpp"
+#include "erhe/physics/bullet/bullet_collision_shape.hpp"
 
 #include "BulletCollision/CollisionShapes/btCompoundShape.h"
 

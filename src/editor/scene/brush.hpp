@@ -97,7 +97,6 @@ public:
 class Instance
 {
 public:
-    std::shared_ptr<erhe::scene::Node> node;
     std::shared_ptr<erhe::scene::Mesh> mesh;
     std::shared_ptr<Node_physics>      node_physics;
 };
@@ -131,17 +130,13 @@ public:
         glm::vec3                                            local_inertia;
     };
 
-    auto get_scaled(const float scale)
-    -> const Scaled&;
-
-    auto create_scaled(const int scale_key)
-    -> Scaled;
+    auto get_scaled   (const float scale) -> const Scaled&;
+    auto create_scaled(const int scale_key) -> Scaled;
 
     auto make_instance(
-        erhe::scene::Layer&                               layer,
         erhe::scene::Scene&                               scene,
+        erhe::scene::Layer&                               layer,
         erhe::physics::IWorld&                            physics_world,
-        const std::shared_ptr<erhe::scene::Node>&         parent,
         const glm::mat4                                   local_to_parent,
         const std::shared_ptr<erhe::primitive::Material>& material,
         const float                                       scale

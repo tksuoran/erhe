@@ -54,36 +54,33 @@ private:
     public:
         Source_entry(
             erhe::primitive::Build_info_set&               build_info_set,
-            erhe::scene::Layer&                            layer,
             erhe::scene::Scene&                            scene,
+            erhe::scene::Layer&                            layer,
             erhe::physics::IWorld&                         physics_world,
             std::shared_ptr<erhe::scene::Mesh>             mesh,
-            std::shared_ptr<erhe::scene::Node>             node,
             const std::vector<erhe::primitive::Primitive>& primitives
         )
             : build_info_set{build_info_set}
-            , layer         {layer            }
             , scene         {scene            }
+            , layer         {layer            }
             , physics_world {physics_world    }
             , mesh          {mesh             }
-            , node          {node             }
             , primitives    {primitives       }
         {
         }
 
         erhe::primitive::Build_info_set&        build_info_set;
-        erhe::scene::Layer&                     layer;
         erhe::scene::Scene&                     scene;
+        erhe::scene::Layer&                     layer;
         erhe::physics::IWorld&                  physics_world;
         std::shared_ptr<erhe::scene::Mesh>      mesh;
-        std::shared_ptr<erhe::scene::Node>      node;
         std::vector<erhe::primitive::Primitive> primitives;
     };
-    Context                                                     m_context;
-    std::vector<Source_entry>                                   m_source_entries;
-    std::shared_ptr<erhe::primitive::Primitive_geometry>        m_combined_primitive_geometry;
-    std::vector<std::shared_ptr<erhe::scene::INode_attachment>> m_selection_before;
-    std::vector<std::shared_ptr<erhe::scene::INode_attachment>> m_selection_after;
+    Context                                              m_context;
+    std::vector<Source_entry>                            m_source_entries;
+    std::shared_ptr<erhe::primitive::Primitive_geometry> m_combined_primitive_geometry;
+    std::vector<std::shared_ptr<erhe::scene::Node>>      m_selection_before;
+    std::vector<std::shared_ptr<erhe::scene::Node>>      m_selection_after;
 };
 
 }
