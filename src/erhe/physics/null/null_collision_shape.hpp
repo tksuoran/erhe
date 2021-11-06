@@ -39,7 +39,7 @@ class Null_box_shape
     : public Null_collision_shape
 {
 public:
-    Null_box_shape(const glm::vec3 half_extents)
+    explicit Null_box_shape(const glm::vec3 half_extents)
         : m_half_extents{half_extents}
     {
     }

@@ -88,7 +88,6 @@ void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
     }
     else if (is_mesh(node))
     {
-        auto* mesh = as_mesh(node);
         //log_tools.info("M {} ({})\n", node->name(), mesh->m_id.get_id());
         icon(m_icon_set->icons.mesh);
     }

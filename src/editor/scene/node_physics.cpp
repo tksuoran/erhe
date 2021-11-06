@@ -39,7 +39,7 @@ auto as_physics(Node* node) -> Node_physics*
 
 auto as_physics(const std::shared_ptr<Node>& node) -> std::shared_ptr<Node_physics>
 {
-    if (node)
+    if (!node)
     {
         return {};
     }
