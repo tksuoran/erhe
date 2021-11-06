@@ -55,9 +55,11 @@ set(GEN_DEPENDS
     templates/wrapper_functions.cpp
 )
 
-add_custom_command(COMMAND ${GEN_COMMAND}
-                   DEPENDS ${GEN_DEPENDS}
-                   OUTPUT  ${GENERATED_SOURCES})
+add_custom_command(
+    COMMAND ${GEN_COMMAND}
+    DEPENDS ${GEN_DEPENDS}
+    OUTPUT  ${GENERATED_SOURCES}
+)
 
 set(source_list
     gl.cpp
@@ -77,6 +79,8 @@ target_include_directories(${_target}
     PUBLIC
         ${ERHE_INCLUDE_ROOT}
         ${PROJECT_BINARY_DIR}/src
+        ${ERHE_ADDITIONAL_GL_INCLUDES}
+    }
 )
 
 target_link_libraries(${_target}
@@ -87,16 +91,16 @@ target_link_libraries(${_target}
         erhe_log
 )
 
-if(${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
+if (${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
     target_link_libraries(${_target}
         PUBLIC
             mango
             mango-opengl
     )
-endif()
+endif ()
 
-foreach(source IN LISTS source_list)
+foreach (source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)
     string(REPLACE "/" "\\" source_path_msvc "${source_path}")
     source_group("${source_path_msvc}" FILES "${source}")
-endforeach()
+endforeach ()

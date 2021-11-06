@@ -199,11 +199,13 @@ target_link_libraries(
 
 target_include_directories(editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-set_target_properties(editor PROPERTIES
-                      CXX_STANDARD                  20
-                      CXX_STANDARD_REQUIRED         YES
-                      CXX_EXTENSIONS                NO
-                      VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+set_target_properties(
+    editor PROPERTIES
+    CXX_STANDARD                  20
+    CXX_STANDARD_REQUIRED         YES
+    CXX_EXTENSIONS                NO
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
 
 foreach(source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)
