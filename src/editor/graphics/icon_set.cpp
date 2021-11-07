@@ -80,9 +80,29 @@ auto Icon_set::load(const std::filesystem::path& path)
     return ImVec2(u, v);
 }
 
-auto Icon_set::uv1(const ImVec2& uv0) -> ImVec2
+auto Icon_set::uv1(const ImVec2& uv0) const -> ImVec2
 {
     return ImVec2{uv0.x + m_icon_uv_width, uv0.y + m_icon_uv_height};
+}
+
+ImVec4 imvec_from_glm(glm::vec4 v)
+{
+    return ImVec4{v.x, v.y, v.z, v.w};
+}
+
+void Icon_set::icon(ImVec2 uv0, glm::vec4 tint_color) const
+{
+    const float size      = ImGui::GetTextLineHeight();
+    const auto  icon_size = ImVec2(size, size);
+
+    ImGui::Image(
+        reinterpret_cast<ImTextureID>(texture.get()),
+        icon_size,
+        uv0,
+        uv1(uv0),
+        imvec_from_glm(tint_color)
+    );
+    ImGui::SameLine();
 }
 
 }

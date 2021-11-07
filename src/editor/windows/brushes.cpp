@@ -5,6 +5,7 @@
 #include "operations/insert_operation.hpp"
 #include "renderers/line_renderer.hpp"
 #include "scene/brush.hpp"
+#include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/grid_tool.hpp"
@@ -194,7 +195,18 @@ void Brushes::cancel_ready()
     m_state = State::Passive;
     if (m_brush_mesh)
     {
-        remove_hover_mesh();
+        remove_brush_mesh();
+    }
+}
+
+void Brushes::remove_brush_mesh()
+{
+    if (m_brush_mesh)
+    {
+        log_brush.trace("removing brush mesh\n");
+        remove_from_scene_layer(m_scene_root->scene(), *m_scene_root->brush_layer().get(), m_brush_mesh);
+        m_brush_mesh->unparent();
+        m_brush_mesh.reset();
     }
 }
 
@@ -204,10 +216,7 @@ auto Brushes::update(Pointer_context& pointer_context) -> bool
 
     if (pointer_context.priority_action != Action::add)
     {
-        if (m_brush_mesh)
-        {
-            remove_hover_mesh();
-        }
+        remove_brush_mesh();
         return false;
     }
 
@@ -217,8 +226,15 @@ auto Brushes::update(Pointer_context& pointer_context) -> bool
     m_hover_primitive   = pointer_context.hover_primitive;
     m_hover_local_index = pointer_context.hover_local_index;
     m_hover_geometry    = pointer_context.geometry;
-    m_hover_position    = m_hover_content && pointer_context.hover_valid ? pointer_context.position_in_world() : optional<vec3>{};
-    m_hover_normal      = m_hover_content && pointer_context.hover_valid ? pointer_context.hover_normal        : optional<vec3>{};
+
+    m_hover_position = (m_hover_content && pointer_context.hover_valid)
+        ? pointer_context.position_in_world() 
+        : optional<vec3>{};
+
+    m_hover_normal = (m_hover_content && pointer_context.hover_valid)
+        ? pointer_context.hover_normal
+        : optional<vec3>{};
+
     if (m_hover_mesh && m_hover_position.has_value())
     {
         m_hover_position = m_hover_mesh->node_from_world() * vec4{m_hover_position.value(), 1.0f};
@@ -240,7 +256,7 @@ auto Brushes::update(Pointer_context& pointer_context) -> bool
     if (pointer_context.mouse_button[Mouse_button_left].released && m_brush_mesh)
     {
         do_insert_operation();
-        remove_hover_mesh();
+        remove_brush_mesh();
         m_state = State::Passive;
         return true;
     }
@@ -252,8 +268,14 @@ void Brushes::render(const Render_context&)
 {
 }
 
-void Brushes::render_update(const Render_context&)
+void Brushes::render_update(const Render_context& render_context)
 {
+    if (render_context.pointer_context->priority_action != Action::add)
+    {
+        remove_brush_mesh();
+        return;
+    }
+
     update_mesh();
 }
 
@@ -311,11 +333,43 @@ void Brushes::update_mesh_node_transform()
         return;
     }
 
+    VERIFY(m_brush_mesh);
+    VERIFY(m_hover_mesh);
+
     const auto  transform    = get_brush_transform();
     const auto& brush_scaled = m_brush->get_scaled(m_transform_scale);
     if (m_brush_mesh->parent() != m_hover_mesh.get())
     {
-        m_hover_mesh->attach(m_brush_mesh);
+        if (m_brush_mesh->parent())
+        {
+            log_brush.trace(
+                "m_brush_mesh->parent() = {} ({})\n",
+                m_brush_mesh->parent()->name(),
+                m_brush_mesh->parent()->node_type()
+            );
+        }
+        else
+        {
+            log_brush.trace("m_brush_mesh->parent() = (none)\n");
+        }
+
+        if (m_hover_mesh)
+        {
+            log_brush.trace(
+                "m_hover_mesh = {} ({})\n",
+                m_hover_mesh->name(),
+                m_hover_mesh->node_type()
+            );
+        }
+        else
+        {
+            log_brush.trace("m_hover_mesh = (none)\n");
+        }
+
+        if (m_hover_mesh)
+        {
+            m_hover_mesh->attach(m_brush_mesh);
+        }
     }
     m_brush_mesh->set_parent_from_node(transform);
     m_brush_mesh->primitives.front().primitive_geometry = brush_scaled.primitive_geometry;
@@ -359,7 +413,7 @@ void Brushes::do_insert_operation()
     m_operation_stack->push(op);
 }
 
-void Brushes::add_hover_mesh()
+void Brushes::add_brush_mesh()
 {
     if (m_materials.empty())
     {
@@ -375,36 +429,25 @@ void Brushes::add_hover_mesh()
     m_brush_mesh = m_scene_root->make_mesh_node(
         brush_scaled.primitive_geometry->source_geometry->name,
         brush_scaled.primitive_geometry,
-        material
+        material,
+        *m_scene_root->brush_layer().get()
     );
     m_brush_mesh->visibility_mask() &= ~(Node::c_visibility_id);
+    m_brush_mesh->visibility_mask() |= Node::c_visibility_brush;
     update_mesh_node_transform();
-}
-
-void Brushes::remove_hover_mesh()
-{
-    auto& layer  = m_scene_root->content_layer();
-    auto& meshes = layer.meshes;
-    auto i = remove(meshes.begin(), meshes.end(), m_brush_mesh);
-    if (i != meshes.end())
-    {
-        meshes.erase(i, meshes.end());
-    }
-    m_brush_mesh.reset();
 }
 
 void Brushes::update_mesh()
 {
     if (!m_brush_mesh)
     {
-        add_hover_mesh();
+        add_brush_mesh();
         return;
     }
 
     if ((m_brush == nullptr) || !m_hover_position.has_value())
     {
-        remove_hover_mesh();
-        return;
+        remove_brush_mesh();
     }
 
     update_mesh_node_transform();

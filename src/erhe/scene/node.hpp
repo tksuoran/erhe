@@ -58,6 +58,7 @@ public:
     auto flag_bits                 () -> uint64_t&;
     auto parent_from_node_transform() const -> const Transform&;
     auto parent_from_node          () const -> glm::mat4;
+    auto world_from_node_transform() const -> const Transform&;
     auto world_from_node           () const -> glm::mat4;
     auto node_from_parent          () const -> glm::mat4;
     auto node_from_world           () const -> glm::mat4;

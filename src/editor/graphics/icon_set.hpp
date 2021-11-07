@@ -4,6 +4,8 @@
 #include <filesystem>
 #include "imgui.h"
 
+#include <glm/glm.hpp>
+
 namespace erhe::graphics
 {
     class Texture;
@@ -25,7 +27,8 @@ public:
     void initialize_component() override;
 
     auto load(const std::filesystem::path& path) -> ImVec2;
-    auto uv1 (const ImVec2& uv0) -> ImVec2;
+    auto uv1 (const ImVec2& uv0) const -> ImVec2;
+    void icon(ImVec2 uv0, glm::vec4 tint_color = glm::vec4{1.0f}) const;
 
     std::shared_ptr<erhe::graphics::Texture> texture;
 

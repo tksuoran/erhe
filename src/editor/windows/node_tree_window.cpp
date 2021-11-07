@@ -44,26 +44,6 @@ void Node_tree_window::initialize_component()
     get<Editor_tools>()->register_imgui_window(this);
 }
 
-ImVec4 imvec_from_glm(glm::vec4 v)
-{
-    return ImVec4{v.x, v.y, v.z, v.w};
-}
-
-void Node_tree_window::icon(ImVec2 uv0, glm::vec4 tint_color) const
-{
-    const float size      = ImGui::GetTextLineHeight();
-    const auto  icon_size = ImVec2(size, size);
-
-    ImGui::Image(
-        reinterpret_cast<ImTextureID>(m_icon_set->texture.get()),
-        icon_size,
-        uv0,
-        m_icon_set->uv1(uv0),
-        imvec_from_glm(tint_color)
-    );
-    ImGui::SameLine();
-}
-
 auto Node_tree_window::get_icon(const Light_type type) const -> const ImVec2
 {
     switch (type)
@@ -84,22 +64,22 @@ void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
     if (is_empty(node))
     {
         //log_tools.info("E {} ({})\n", node->name());
-        icon(m_icon_set->icons.node);
+        m_icon_set->icon(m_icon_set->icons.node);
     }
     else if (is_mesh(node))
     {
         //log_tools.info("M {} ({})\n", node->name(), mesh->m_id.get_id());
-        icon(m_icon_set->icons.mesh);
+        m_icon_set->icon(m_icon_set->icons.mesh);
     }
     else if (is_camera(node))
     {
         //log_tools.info("C {}\n", node->name());
-        icon(m_icon_set->icons.camera);
+        m_icon_set->icon(m_icon_set->icons.camera);
     }
     else if (is_light(node))
     {
         auto* light = as_light(node);
-        icon(
+        m_icon_set->icon(
             get_icon(light->type),
             glm::vec4{light->color, 1.0f}
         );
@@ -107,12 +87,12 @@ void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
     else if (is_physics(node))
     {
         //log_tools.info("P {}\n", node->name());
-        icon(m_icon_set->icons.node);
+        m_icon_set->icon(m_icon_set->icons.node);
     }
     else
     {
         //log_tools.info("? {} ({})\n", node->name());
-        icon(m_icon_set->icons.node);
+        m_icon_set->icon(m_icon_set->icons.node);
     }
 
     const auto child_count = node->child_count();

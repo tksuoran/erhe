@@ -69,10 +69,10 @@ void Scene_root::initialize_component()
     ZoneScoped;
 
     // Layer configuration
-    m_content_layer    = make_shared<Layer>();
-    m_controller_layer = make_shared<Layer>();
-    m_tool_layer       = make_shared<Layer>();
-    m_brush_layer      = make_shared<Layer>();
+    m_content_layer    = make_shared<Layer>("content");
+    m_controller_layer = make_shared<Layer>("controller");
+    m_tool_layer       = make_shared<Layer>("tool");
+    m_brush_layer      = make_shared<Layer>("brush");
     m_scene            = std::make_unique<Scene>();
     m_scene->layers      .push_back(m_content_layer);
     m_scene->layers      .push_back(m_controller_layer);
@@ -86,7 +86,7 @@ void Scene_root::initialize_component()
     m_content_fill_layers.push_back(m_content_layer);
     m_content_fill_layers.push_back(m_controller_layer);
     m_tool_layers        .push_back(m_tool_layer);
-    m_brush_layers       .push_back(m_brush_layer);
+    m_tool_layers        .push_back(m_brush_layer);
 
     m_physics_world = erhe::physics::IWorld::create_unique();
 }
@@ -141,6 +141,11 @@ auto Scene_root::add(const shared_ptr<Light>& light)
 {
     m_content_layer->lights.push_back(light);
     return light;
+}
+
+auto Scene_root::brush_layer() const -> std::shared_ptr<erhe::scene::Layer>
+{
+    return m_brush_layer;
 }
 
 auto Scene_root::content_layer() const -> std::shared_ptr<erhe::scene::Layer>

@@ -24,15 +24,15 @@ class Icon_set;
 class Scene_root;
 class Selection_tool;
 
-class Node_tree_window
+class Layers_window
     : public erhe::components::Component
     , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name{"Node_tree"};
 
-    Node_tree_window ();
-    ~Node_tree_window() override;
+    Layers_window ();
+    ~Layers_window() override;
 
     // Implements Component
     void connect             () override;
@@ -42,9 +42,10 @@ public:
     void imgui(Pointer_context& pointer_context) override;
 
 private:
-    void imgui_tree_node(erhe::scene::Node* node);
-    auto get_icon       (const erhe::scene::Light_type type) const -> const ImVec2;
+    auto get_icon(const erhe::scene::Light_type type) const -> const ImVec2;
 
+    bool                               m_show_meshes{true};
+    bool                               m_show_lights{true};
     std::shared_ptr<Scene_root>        m_scene_root;
     std::shared_ptr<Selection_tool>    m_selection_tool;
     std::shared_ptr<Icon_set>          m_icon_set;

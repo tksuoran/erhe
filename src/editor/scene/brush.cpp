@@ -293,10 +293,7 @@ auto Brush::create_scaled(const int scale_key)
             VERIFY(collision_shape->is_convex());
             const auto mass = density * volume;
             glm::vec3 local_inertia{1.0f, 1.0f, 1.0f};
-            {
-                ZoneScopedN("calculateLocalInertia");
-                collision_shape->calculate_local_inertia(mass, local_inertia);
-            }
+            collision_shape->calculate_local_inertia(mass, local_inertia);
             return Scaled{
                 scale_key,
                 primitive_geometry,
@@ -310,10 +307,7 @@ auto Brush::create_scaled(const int scale_key)
             const auto collision_shape = collision_shape_generator(scale);
             const auto mass            = density * volume;
             glm::vec3  local_inertia{1.0f, 1.0f, 1.0f};
-            {
-                ZoneScopedN("calculateLocalInertia");
-                collision_shape->calculate_local_inertia(mass, local_inertia);
-            }
+            collision_shape->calculate_local_inertia(mass, local_inertia);
             return Scaled{
                 scale_key,
                 primitive_geometry,
@@ -352,15 +346,14 @@ auto Brush::create_scaled(const int scale_key)
         //const auto convex_shape           = static_cast<btConvexShape*>(collision_shape.get());
         auto       scaled_collision_shape = erhe::physics::ICollision_shape::create_uniform_scaling_shape_shared(collision_shape.get(), scale);
         glm::vec3  local_inertia{1.0f, 1.0f, 1.0f};
-        {
-            ZoneScopedN("calculateLocalInertia");
-            scaled_collision_shape->calculate_local_inertia(mass, local_inertia);
-        }
-        return Scaled{scale_key,
-                      scaled_primitive_geometry,
-                      scaled_collision_shape,
-                      scaled_volume,
-                      local_inertia};
+        scaled_collision_shape->calculate_local_inertia(mass, local_inertia);
+        return Scaled{
+            scale_key,
+            scaled_primitive_geometry,
+            scaled_collision_shape,
+            scaled_volume,
+            local_inertia
+        };
     }
     else if (collision_shape_generator)
     {
@@ -369,10 +362,7 @@ auto Brush::create_scaled(const int scale_key)
                                                                         : volume * scale * scale * scale;
         const auto mass                   = density * scaled_volume;
         glm::vec3  local_inertia{1.0f, 1.0f, 1.0f};
-        {
-            ZoneScopedN("calculateLocalInertia");
-            scaled_collision_shape->calculate_local_inertia(mass, local_inertia);
-        }
+        scaled_collision_shape->calculate_local_inertia(mass, local_inertia);
         return Scaled{
             scale_key,
             scaled_primitive_geometry,
@@ -383,7 +373,12 @@ auto Brush::create_scaled(const int scale_key)
     }
     else
     {
-        return Scaled{scale_key, scaled_primitive_geometry, {}, volume * scale * scale * scale};
+        return Scaled{
+            scale_key,
+            scaled_primitive_geometry,
+            {},
+            volume * scale * scale * scale
+        };
     }
 
 }

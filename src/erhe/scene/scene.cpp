@@ -8,6 +8,11 @@
 namespace erhe::scene
 {
 
+Layer::Layer(const std::string_view name)
+    : name{name}
+{
+}
+
 void Scene::sort_transform_nodes()
 {
     log.trace("sorting {} nodes\n", nodes.size());

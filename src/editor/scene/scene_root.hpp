@@ -104,6 +104,7 @@ public:
     }
 
 
+    auto brush_layer        () const -> std::shared_ptr<erhe::scene::Layer>;
     auto content_layer      () const -> std::shared_ptr<erhe::scene::Layer>;
     auto controller_layer   () const -> std::shared_ptr<erhe::scene::Layer>;
     auto tool_layer         () const -> std::shared_ptr<erhe::scene::Layer>;
@@ -155,7 +156,6 @@ private:
     std::vector<std::shared_ptr<erhe::scene::Layer>> m_content_fill_layers;
     std::vector<std::shared_ptr<erhe::scene::Layer>> m_content_layers;
     std::vector<std::shared_ptr<erhe::scene::Layer>> m_tool_layers;
-    std::vector<std::shared_ptr<erhe::scene::Layer>> m_brush_layers;
 };
 
 } // namespace editor

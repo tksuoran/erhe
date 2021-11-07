@@ -108,8 +108,8 @@ private:
     void update_mesh               ();
     auto get_brush_transform       () -> glm::mat4; // Places brush in parent (hover) mesh
     void do_insert_operation       ();
-    void add_hover_mesh            ();
-    void remove_hover_mesh         ();
+    void add_brush_mesh            ();
+    void remove_brush_mesh         ();
     void update_mesh_node_transform();
 
     std::shared_ptr<Editor>             m_editor;

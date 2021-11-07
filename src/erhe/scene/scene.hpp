@@ -2,8 +2,9 @@
 
 #include <glm/glm.hpp>
 
-#include <vector>
 #include <memory>
+#include <string_view>
+#include <vector>
 
 namespace erhe::scene
 {
@@ -16,9 +17,12 @@ class Light;
 class Layer
 {
 public:
+    explicit Layer(const std::string_view name);
+
     std::vector<std::shared_ptr<Mesh>>  meshes;
     std::vector<std::shared_ptr<Light>> lights;
     glm::vec4                           ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
+    std::string                         name;
 };
 
 class Scene

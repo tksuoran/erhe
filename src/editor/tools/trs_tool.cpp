@@ -83,6 +83,7 @@ void Trs_tool::set_node(const std::shared_ptr<Node>& node)
     m_node_physics = node
         ? get_physics_node(node.get())
         : std::shared_ptr<Node_physics>();
+
     // Promote static to kinematic if we try to move object
     if (rigid_body != nullptr)
     {
@@ -213,17 +214,17 @@ void Trs_tool::Visualization::initialize(Mesh_memory& mesh_memory, Scene_root& s
     y_rotate_ring_mesh     = scene_root.make_mesh_node("Y rotate ring",    rotate_ring_pg,    y_material, tool_layer, parent, pos);
     z_rotate_ring_mesh     = scene_root.make_mesh_node("Z rotate ring",    rotate_ring_pg,    z_material, tool_layer, parent, pos);
 
-    //x_arrow_cylinder_mesh->set_parent_from_node.set         (mat4{1});
-    //x_arrow_cone_mesh    ->set_parent_from_node.set         (mat4{1});
+    x_arrow_cylinder_mesh->set_parent_from_node(mat4{1});
+    x_arrow_cone_mesh    ->set_parent_from_node(mat4{1});
     y_arrow_cylinder_mesh->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
     y_arrow_cone_mesh    ->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
     z_arrow_cylinder_mesh->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
     z_arrow_cone_mesh    ->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
-    //xy_box_mesh          ->set_parent_from_node.set         (mat4{1});
+    xy_box_mesh          ->set_parent_from_node(mat4{1});
     xz_box_mesh          ->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{1.0f, 0.0f, 0.0f}));
     yz_box_mesh          ->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
 
-    //x_rotate_ring_mesh->transforms.parent_from_node.set         (mat4{1});
+    x_rotate_ring_mesh->set_parent_from_node(mat4{1});
     y_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
     z_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
 
@@ -1061,14 +1062,14 @@ void Trs_tool::Visualization::update_transforms(uint64_t serial)
         return;
     }
 
-    auto transform = local
-        ? root->parent_from_node_transform()
+    auto world_from_root_transform = local
+        ? root->world_from_node_transform()
         : Transform::create_translation(root->position_in_world());
 
     const mat4 scaling = erhe::toolkit::create_scale(scale * view_distance / 100.0f);
-    transform.catenate(scaling);
+    world_from_root_transform.catenate(scaling);
 
-    tool_node->set_parent_from_node(transform);
+    tool_node->set_parent_from_node(world_from_root_transform);
     tool_node->update_transform_recursive(serial);
 }
 

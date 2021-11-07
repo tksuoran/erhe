@@ -525,10 +525,11 @@ void Editor_rendering::render_tool_meshes(
     }
 
     constexpr erhe::scene::Visibility_filter tool_filter{
-        erhe::scene::Node::c_visibility_tool,  // all set
-        0u,                                    // at least one set
-        0u,                                    // all clear
-        0u};                                   // at least one cler
+        0u,                                     // all set
+        erhe::scene::Node::c_visibility_tool |
+        erhe::scene::Node::c_visibility_brush,  // at least one set
+        0u,                                     // all clear
+        0u};                                    // at least one cler
 
     m_forward_renderer->render(
         viewport,

@@ -19,6 +19,7 @@ Node::~Node()
     {
         child->on_detached_from(*this);
     }
+    unparent();
 }
 
 auto Node::node_type() const -> const char*
@@ -58,18 +59,22 @@ void Node::attach(const std::shared_ptr<Node>& child_node)
 
     VERIFY(child_node);
 
-    log.info("{}.attach({})\n", name(), child_node->name());
-
-    const auto i = std::remove(
-        m_children.begin(),
-        m_children.end(),
-        child_node
+    log.info(
+        "{} ({}).attach({} ({}))\n",
+        name(),
+        node_type(),
+        child_node->name(),
+        child_node->node_type()
     );
+
+#ifndef NDEBUG
+    const auto i = std::remove(m_children.begin(), m_children.end(), child_node);
     if (i != m_children.end())
     {
         log.error("Attachment {} already attached to {}\n", child_node->name(), name());
         return;
     }
+#endif
 
     m_children.push_back(child_node);
     child_node->on_attached_to(*this);
@@ -81,20 +86,33 @@ auto Node::detach(const std::shared_ptr<Node>& child_node) -> bool
 
     VERIFY(child_node);
 
-    log.info("{}.detach({})\n", name(), child_node->name());
+    log.info(
+        "{} ({}).detach({} ({}))\n",
+        name(),
+        node_type(),
+        child_node->name(),
+        child_node->node_type()
+    );
 
-    // TODO Check that attachment node points back to us?
-    if (!child_node)
+    if (child_node->parent() != this)
     {
-        log.warn("Child node not found to detach\n");
+        log.warn(
+            "Child node {} parent {} != this {}\n",
+            child_node->parent()
+                ? child_node->parent()->name()
+                : "(none)",
+            name()
+        );
         return false;
     }
 
-    const auto i = std::remove(
-        m_children.begin(),
-        m_children.end(),
-        child_node
-    );
+    if (!child_node)
+    {
+        log.warn("empty child_node, cannot detach\n");
+        return false;
+    }
+
+    const auto i = std::remove(m_children.begin(), m_children.end(), child_node);
     if (i != m_children.end())
     {
         log.trace("Removing attachment {} from node\n", child_node->name());
@@ -103,7 +121,7 @@ auto Node::detach(const std::shared_ptr<Node>& child_node) -> bool
         return true;
     }
 
-    log.warn("Detaching {} from node failed - was not attached\n", child_node->name());
+    log.warn("Detaching {} from node {} failed - was not attached\n", child_node->name(), name());
     return false;
 }
 
@@ -250,6 +268,11 @@ auto Node::parent_from_node_transform() const -> const Transform&
 auto Node::parent_from_node() const -> glm::mat4
 {
     return m_transforms.parent_from_node.matrix();
+}
+
+auto Node::world_from_node_transform() const -> const Transform&
+{
+    return m_transforms.world_from_node;
 }
 
 auto Node::world_from_node() const -> glm::mat4

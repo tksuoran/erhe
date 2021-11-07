@@ -34,6 +34,7 @@
 
 #include "windows/brushes.hpp"
 #include "windows/camera_properties.hpp"
+#include "windows/layers_window.hpp"
 #include "windows/light_properties.hpp"
 #include "windows/material_properties.hpp"
 #include "windows/mesh_properties.hpp"
@@ -98,6 +99,7 @@ auto Application::initialize_components(int argc, char** argv)
         m_components.add(make_shared<Hover_tool          >());
         m_components.add(make_shared<Icon_set            >());
         m_components.add(make_shared<Id_renderer         >());
+        m_components.add(make_shared<Layers_window       >());
         m_components.add(make_shared<Light_properties    >());
         m_components.add(make_shared<Line_renderer       >());
         m_components.add(make_shared<Material_properties >());
