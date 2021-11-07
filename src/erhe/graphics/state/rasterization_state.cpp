@@ -12,10 +12,11 @@ Rasterization_state::Rasterization_state()
 {
 }
 
-Rasterization_state::Rasterization_state(bool                     enabled,
-                                         gl::Cull_face_mode       cull_face_mode,
-                                         gl::Front_face_direction front_face_direction,
-                                         gl::Polygon_mode         polygon_mode
+Rasterization_state::Rasterization_state(
+    bool                     enabled,
+    gl::Cull_face_mode       cull_face_mode,
+    gl::Front_face_direction front_face_direction,
+    gl::Polygon_mode         polygon_mode
 )
     : serial              {get_next_serial()}
     , enabled             {enabled}
@@ -48,17 +49,18 @@ auto Rasterization_state::get_next_serial()
 auto Rasterization_state_hash::operator()(const Rasterization_state& rasterization_state) noexcept
 -> std::size_t
 {
-    return (rasterization_state.enabled ? 1u : 0u)                         |
-            (gl::base_zero(rasterization_state.cull_face_mode      ) << 1u) | // 2 bits
-            (gl::base_zero(rasterization_state.front_face_direction) << 3u) | // 1 bit
-            (gl::base_zero(rasterization_state.polygon_mode        ) << 4u);  // 2 bits
+    return
+        (rasterization_state.enabled ? 1u : 0u)                         |
+        (gl::base_zero(rasterization_state.cull_face_mode      ) << 1u) | // 2 bits
+        (gl::base_zero(rasterization_state.front_face_direction) << 3u) | // 1 bit
+        (gl::base_zero(rasterization_state.polygon_mode        ) << 4u);  // 2 bits
 }
 
-Rasterization_state Rasterization_state::cull_mode_none           {false, gl::Cull_face_mode::back,           gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_front          {true,  gl::Cull_face_mode::front,          gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_back_cw        {true,  gl::Cull_face_mode::back,           gl::Front_face_direction::cw,  gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_back_ccw       {true,  gl::Cull_face_mode::back,           gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_front_and_back {true,  gl::Cull_face_mode::front_and_back, gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_none          {false, gl::Cull_face_mode::back,           gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_front         {true,  gl::Cull_face_mode::front,          gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_back_cw       {true,  gl::Cull_face_mode::back,           gl::Front_face_direction::cw,  gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_back_ccw      {true,  gl::Cull_face_mode::back,           gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_front_and_back{true,  gl::Cull_face_mode::front_and_back, gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
 
 void Rasterization_state_tracker::reset()
 {
@@ -130,10 +132,11 @@ void Rasterization_state_tracker::execute(Rasterization_state const* state)
 auto operator==(const Rasterization_state& lhs, const Rasterization_state& rhs) noexcept
 -> bool
 {
-    return (lhs.enabled              == rhs.enabled             ) &&
-           (lhs.cull_face_mode       == rhs.cull_face_mode      ) &&
-           (lhs.front_face_direction == rhs.front_face_direction) &&
-           (lhs.polygon_mode         == rhs.polygon_mode        );
+    return
+        (lhs.enabled              == rhs.enabled             ) &&
+        (lhs.cull_face_mode       == rhs.cull_face_mode      ) &&
+        (lhs.front_face_direction == rhs.front_face_direction) &&
+        (lhs.polygon_mode         == rhs.polygon_mode        );
 }
 
 auto operator!=(const Rasterization_state& lhs, const Rasterization_state& rhs) noexcept

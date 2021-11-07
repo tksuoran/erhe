@@ -33,10 +33,12 @@ public:
     class Binding
     {
     public:
-        Binding(const Buffer*                                    vertex_buffer,
-                const std::shared_ptr<Vertex_attribute_mapping>& mapping,
-                const Vertex_attribute*                          attribute,
-                size_t                                           stride)
+        Binding(
+            const Buffer*                                    vertex_buffer,
+            const std::shared_ptr<Vertex_attribute_mapping>& mapping,
+            const Vertex_attribute*                          attribute,
+            size_t                                           stride
+        )
             : vertex_buffer           {vertex_buffer}
             , vertex_attribute_mapping{mapping}
             , vertex_attribute        {attribute}
@@ -64,10 +66,12 @@ public:
 
     Vertex_input_state();
 
-    Vertex_input_state(const Vertex_attribute_mappings& attribute_mappings,
-                       const Vertex_format&             vertex_format,
-                       gsl::not_null<const Buffer*>     vertex_buffer,
-                       const Buffer*                    index_buffer);
+    Vertex_input_state(
+        const Vertex_attribute_mappings& attribute_mappings,
+        const Vertex_format&             vertex_format,
+        gsl::not_null<const Buffer*>     vertex_buffer,
+        const Buffer*                    index_buffer
+    );
 
     void touch()
     {
@@ -98,10 +102,12 @@ public:
     //}
 
 
-    void emplace_back(gsl::not_null<const Buffer*>                     vertex_buffer,
-                      const std::shared_ptr<Vertex_attribute_mapping>& vertex_attribute_mapping,
-                      const Vertex_attribute*                          attribute,
-                      const size_t                                     stride);
+    void emplace_back(
+        gsl::not_null<const Buffer*>                     vertex_buffer,
+        const std::shared_ptr<Vertex_attribute_mapping>& vertex_attribute_mapping,
+        const Vertex_attribute*                          attribute,
+        const size_t                                     stride
+    );
     //-> Binding&;
 
     void use() const;
@@ -132,10 +138,12 @@ public:
         std::lock_guard lock{s_mutex};
         for (auto* vertex_input_state : s_all_vertex_input_states)
         {
-            log_threads.trace("{}: on thread enter: vertex input state @ {} owned by thread {}\n",
-                              std::this_thread::get_id(),
-                              fmt::ptr(vertex_input_state),
-                              vertex_input_state->m_owner_thread);
+            log_threads.trace(
+                "{}: on thread enter: vertex input state @ {} owned by thread {}\n",
+                std::this_thread::get_id(),
+                fmt::ptr(vertex_input_state),
+                vertex_input_state->m_owner_thread
+            );
             if (vertex_input_state->m_owner_thread == std::thread::id{})
             {
                 vertex_input_state->create();
@@ -150,10 +158,12 @@ public:
         auto this_thread_id = std::this_thread::get_id();
         for (auto* vertex_input_state : s_all_vertex_input_states)
         {
-            log_threads.trace("{}: on thread exit: vertex input state @ {} owned by thread {}\n",
-                              std::this_thread::get_id(),
-                              fmt::ptr(vertex_input_state),
-                              vertex_input_state->m_owner_thread);
+            log_threads.trace(
+                "{}: on thread exit: vertex input state @ {} owned by thread {}\n",
+                std::this_thread::get_id(),
+                fmt::ptr(vertex_input_state),
+                vertex_input_state->m_owner_thread
+            );
             if (vertex_input_state->m_owner_thread == this_thread_id)
             {
                 vertex_input_state->reset();

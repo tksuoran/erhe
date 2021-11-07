@@ -61,7 +61,8 @@ public:
 
         void attach(
             const gl::Framebuffer_attachment   attachment_point,
-            const gsl::not_null<Renderbuffer*> renderbuffer);
+            const gsl::not_null<Renderbuffer*> renderbuffer
+        );
 
         std::vector<Attachment> attachments;
     };

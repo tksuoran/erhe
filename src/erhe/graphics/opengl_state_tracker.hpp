@@ -25,6 +25,7 @@ class OpenGL_state_tracker
 {
 public:
     static constexpr std::string_view c_name{"erhe::graphics::OpenGL_state_tracker"};
+
     OpenGL_state_tracker ();
     ~OpenGL_state_tracker() override;
     OpenGL_state_tracker (const OpenGL_state_tracker&) = delete;

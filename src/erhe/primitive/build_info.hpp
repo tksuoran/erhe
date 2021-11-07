@@ -11,7 +11,7 @@ class Build_info
 public:
     Build_info() = default;
 
-    Build_info(Buffer_sink* buffer_sink)
+    explicit Build_info(Buffer_sink* buffer_sink)
         : buffer{buffer_sink}
     {
     }

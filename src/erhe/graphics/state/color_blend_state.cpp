@@ -12,14 +12,15 @@ Color_blend_state::Color_blend_state()
 {
 }
 
-Color_blend_state::Color_blend_state(bool                  enabled,
-                                     Blend_state_component rgb,
-                                     Blend_state_component alpha,
-                                     glm::vec4             color,
-                                     bool                  color_write_mask_red,
-                                     bool                  color_write_mask_green,
-                                     bool                  color_write_mask_blue,
-                                     bool                  color_write_mask_alpha 
+Color_blend_state::Color_blend_state(
+    bool                  enabled,
+    Blend_state_component rgb,
+    Blend_state_component alpha,
+    glm::vec4             color,
+    bool                  color_write_mask_red,
+    bool                  color_write_mask_green,
+    bool                  color_write_mask_blue,
+    bool                  color_write_mask_alpha 
 )
     : serial                {get_next_serial()}
     , enabled               {enabled}
@@ -114,12 +115,16 @@ Color_blend_state Color_blend_state::color_writes_disabled {
 void Color_blend_state_tracker::reset()
 {
     gl::blend_color(0.0f, 0.0f, 0.0f, 0.0f);
-    gl::blend_equation_separate(gl::Blend_equation_mode::func_add,
-                                gl::Blend_equation_mode::func_add);
-    gl::blend_func_separate(gl::Blending_factor::one,
-                            gl::Blending_factor::zero,
-                            gl::Blending_factor::one,
-                            gl::Blending_factor::zero);
+    gl::blend_equation_separate(
+        gl::Blend_equation_mode::func_add,
+        gl::Blend_equation_mode::func_add
+    );
+    gl::blend_func_separate(
+        gl::Blending_factor::one,
+        gl::Blending_factor::zero,
+        gl::Blending_factor::one,
+        gl::Blending_factor::zero
+    );
     gl::disable(gl::Enable_cap::blend);
     gl::color_mask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     m_cache = Color_blend_state{};
@@ -170,10 +175,12 @@ void Color_blend_state_tracker::execute(Color_blend_state const* state) noexcept
             (m_cache.alpha.destination_factor != state->alpha.destination_factor))
 #endif
         {
-            gl::blend_func_separate(state->rgb.source_factor,
-                                    state->rgb.destination_factor,
-                                    state->alpha.source_factor,
-                                    state->alpha.destination_factor);
+            gl::blend_func_separate(
+                state->rgb.source_factor,
+                state->rgb.destination_factor,
+                state->alpha.source_factor,
+                state->alpha.destination_factor
+            );
             m_cache.rgb.source_factor        = state->rgb.source_factor;
             m_cache.rgb.destination_factor   = state->rgb.destination_factor;
             m_cache.alpha.source_factor      = state->alpha.source_factor;
@@ -199,10 +206,12 @@ void Color_blend_state_tracker::execute(Color_blend_state const* state) noexcept
         (m_cache.color_write_mask_alpha != state->color_write_mask_alpha))
 #endif
     {
-        gl::color_mask(state->color_write_mask_red   ? GL_TRUE : GL_FALSE,
-                       state->color_write_mask_green ? GL_TRUE : GL_FALSE,
-                       state->color_write_mask_blue  ? GL_TRUE : GL_FALSE,
-                       state->color_write_mask_alpha ? GL_TRUE : GL_FALSE);
+        gl::color_mask(
+            state->color_write_mask_red   ? GL_TRUE : GL_FALSE,
+            state->color_write_mask_green ? GL_TRUE : GL_FALSE,
+            state->color_write_mask_blue  ? GL_TRUE : GL_FALSE,
+            state->color_write_mask_alpha ? GL_TRUE : GL_FALSE
+        );
         m_cache.color_write_mask_red   = state->color_write_mask_red;
         m_cache.color_write_mask_green = state->color_write_mask_green;
         m_cache.color_write_mask_blue  = state->color_write_mask_blue;
@@ -215,9 +224,10 @@ void Color_blend_state_tracker::execute(Color_blend_state const* state) noexcept
 auto operator==(const Blend_state_component& lhs, const Blend_state_component& rhs) noexcept
 -> bool
 {
-    return (lhs.equation_mode      == rhs.equation_mode     ) &&
-           (lhs.source_factor      == rhs.source_factor     ) &&
-           (lhs.destination_factor == rhs.destination_factor);
+    return
+        (lhs.equation_mode      == rhs.equation_mode     ) &&
+        (lhs.source_factor      == rhs.source_factor     ) &&
+        (lhs.destination_factor == rhs.destination_factor);
 }
 
 auto operator!=(const Blend_state_component& lhs, const Blend_state_component& rhs) noexcept
@@ -229,14 +239,15 @@ auto operator!=(const Blend_state_component& lhs, const Blend_state_component& r
 auto operator==(const Color_blend_state& lhs, const Color_blend_state& rhs) noexcept
 -> bool
 {
-    return (lhs.enabled                == rhs.enabled               ) &&
-           (lhs.rgb                    == rhs.rgb                   ) &&
-           (lhs.alpha                  == rhs.alpha                 ) &&
-           (lhs.color                  == rhs.color                 ) &&
-           (lhs.color_write_mask_red   == rhs.color_write_mask_red  ) &&
-           (lhs.color_write_mask_green == rhs.color_write_mask_green) &&
-           (lhs.color_write_mask_blue  == rhs.color_write_mask_blue ) &&
-           (lhs.color_write_mask_alpha == rhs.color_write_mask_alpha);
+    return
+        (lhs.enabled                == rhs.enabled               ) &&
+        (lhs.rgb                    == rhs.rgb                   ) &&
+        (lhs.alpha                  == rhs.alpha                 ) &&
+        (lhs.color                  == rhs.color                 ) &&
+        (lhs.color_write_mask_red   == rhs.color_write_mask_red  ) &&
+        (lhs.color_write_mask_green == rhs.color_write_mask_green) &&
+        (lhs.color_write_mask_blue  == rhs.color_write_mask_blue ) &&
+        (lhs.color_write_mask_alpha == rhs.color_write_mask_alpha);
 }
 
 auto operator!=(const Color_blend_state& lhs, const Color_blend_state& rhs) noexcept

@@ -9,10 +9,12 @@ class Rasterization_state
 {
 public:
     Rasterization_state();
-    Rasterization_state(bool                     enabled,
-                        gl::Cull_face_mode       cull_face_mode,
-                        gl::Front_face_direction front_face_direction,
-                        gl::Polygon_mode         polygon_mode);
+    Rasterization_state(
+        bool                     enabled,
+        gl::Cull_face_mode       cull_face_mode,
+        gl::Front_face_direction front_face_direction,
+        gl::Polygon_mode         polygon_mode
+    );
 
     void touch();
 

@@ -51,12 +51,16 @@ void opengl_callback(
     }
 
     log_configuration.
-    info("GL: source: {} type: {} id: {:#08x} severity: {} : {}\n",
-         gl::c_str(source),
-         gl::c_str(type),
-         id,
-         gl::c_str(severity),
-         (message != nullptr) ? message : "");
+    info(
+        "GL: source: {} type: {} id: {:#08x} severity: {} : {}\n",
+        gl::c_str(source),
+        gl::c_str(type),
+        id,
+        gl::c_str(severity),
+        (message != nullptr)
+            ? message
+            : ""
+    );
 
     if (severity == gl::Debug_severity::debug_severity_high)
     {
@@ -250,7 +254,8 @@ void Instance::initialize(PFN_get_proc_address get_proc_address)
         implementation_defined.uniform_buffer_offset_alignment,
         limits.max_uniform_buffer_bindings,
         limits.max_vertex_uniform_blocks,
-        limits.max_fragment_uniform_blocks);
+        limits.max_fragment_uniform_blocks
+    );
 
     gl::get_integer_v(gl::Get_p_name::max_geometry_uniform_blocks, &limits.max_geometry_uniform_blocks);
 

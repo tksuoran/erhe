@@ -38,12 +38,14 @@ class Depth_stencil_state
 {
 public:
     Depth_stencil_state();
-    Depth_stencil_state(bool               depth_test_enable,
-                        bool               depth_write_enable,
-                        gl::Depth_function depth_compare_op,
-                        bool               stencil_test_enable,
-                        Stencil_op_state   front,
-                        Stencil_op_state   back);
+    Depth_stencil_state(
+        bool               depth_test_enable,
+        bool               depth_write_enable,
+        gl::Depth_function depth_compare_op,
+        bool               stencil_test_enable,
+        Stencil_op_state   front,
+        Stencil_op_state   back
+    );
     void touch();
 
     size_t             serial;
@@ -92,12 +94,16 @@ public:
     void execute(const Depth_stencil_state* state);
 
 private:
-    static void execute_component(gl::Stencil_face_direction face,
-                                  const Stencil_op_state&    state,
-                                  Stencil_op_state&          cache);
+    static void execute_component(
+        gl::Stencil_face_direction face,
+        const Stencil_op_state&    state,
+        Stencil_op_state&          cache
+    );
 
-    static void execute_shared(const Stencil_op_state& state,
-                               Depth_stencil_state&    cache);
+    static void execute_shared(
+        const Stencil_op_state& state,
+        Depth_stencil_state&    cache
+    );
 
 private:
     size_t              m_last{0};

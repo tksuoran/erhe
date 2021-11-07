@@ -22,9 +22,10 @@ public:
     auto operator()(const Blend_state_component& blend_state_component) const noexcept
     -> size_t
     {
-        return (gl::base_zero(blend_state_component.equation_mode     ) << 0u) | // 3 bits
-               (gl::base_zero(blend_state_component.source_factor     ) << 3u) | // 5 bits
-               (gl::base_zero(blend_state_component.destination_factor) << 8u);  // 5 bits
+        return
+            (gl::base_zero(blend_state_component.equation_mode     ) << 0u) | // 3 bits
+            (gl::base_zero(blend_state_component.source_factor     ) << 3u) | // 5 bits
+            (gl::base_zero(blend_state_component.destination_factor) << 8u);  // 5 bits
     }
 };
 
@@ -40,14 +41,16 @@ class Color_blend_state
 {
 public:
     Color_blend_state();
-    Color_blend_state(bool                  enabled,
-                      Blend_state_component rgb,
-                      Blend_state_component alpha,
-                      glm::vec4             color                  = {},
-                      bool                  color_write_mask_red   = true,
-                      bool                  color_write_mask_green = true,
-                      bool                  color_write_mask_blue  = true,
-                      bool                  color_write_mask_alpha = true);
+    Color_blend_state(
+        bool                  enabled,
+        Blend_state_component rgb,
+        Blend_state_component alpha,
+        glm::vec4             color                  = {},
+        bool                  color_write_mask_red   = true,
+        bool                  color_write_mask_green = true,
+        bool                  color_write_mask_blue  = true,
+        bool                  color_write_mask_alpha = true
+    );
     void touch();
 
     static auto get_next_serial() -> size_t;

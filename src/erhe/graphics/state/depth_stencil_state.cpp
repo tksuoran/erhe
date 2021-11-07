@@ -41,13 +41,14 @@ auto Stencil_state_component_hash::operator()(const Stencil_op_state& stencil_st
 -> size_t
 {
     static_assert(sizeof(size_t) >= 5u);
-    return (gl::base_zero(stencil_state_component.stencil_fail_op)) | // 3 bits
-            (gl::base_zero(stencil_state_component.z_fail_op) << 3u) | // 3 bits
-            (gl::base_zero(stencil_state_component.z_pass_op) << 6u) | // 3 bits
-            (gl::base_zero(stencil_state_component.function ) << 9u) | // 3 bits
-            ((static_cast<uint64_t>(stencil_state_component.reference ) & 0xffU) << 12u) | // 8 bits
-            ((static_cast<uint64_t>(stencil_state_component.test_mask ) & 0xffU) << 20u) | // 8 bits
-            ((static_cast<uint64_t>(stencil_state_component.write_mask) & 0xffU) << 28u); // 8 bits
+    return
+        (gl::base_zero(stencil_state_component.stencil_fail_op)) | // 3 bits
+        (gl::base_zero(stencil_state_component.z_fail_op) << 3u) | // 3 bits
+        (gl::base_zero(stencil_state_component.z_pass_op) << 6u) | // 3 bits
+        (gl::base_zero(stencil_state_component.function ) << 9u) | // 3 bits
+        ((static_cast<uint64_t>(stencil_state_component.reference ) & 0xffU) << 12u) | // 8 bits
+        ((static_cast<uint64_t>(stencil_state_component.test_mask ) & 0xffU) << 20u) | // 8 bits
+        ((static_cast<uint64_t>(stencil_state_component.write_mask) & 0xffU) << 28u); // 8 bits
 }
 
 Depth_stencil_state::Depth_stencil_state()
@@ -55,12 +56,14 @@ Depth_stencil_state::Depth_stencil_state()
 {
 }
 
-Depth_stencil_state::Depth_stencil_state(bool               depth_test_enable,
-                                         bool               depth_write_enable,
-                                         gl::Depth_function depth_compare_op,
-                                         bool               stencil_test_enable,
-                                         Stencil_op_state   front,
-                                         Stencil_op_state   back)
+Depth_stencil_state::Depth_stencil_state(
+    bool               depth_test_enable,
+    bool               depth_write_enable,
+    gl::Depth_function depth_compare_op,
+    bool               stencil_test_enable,
+    Stencil_op_state   front,
+    Stencil_op_state   back
+)
     : serial             {get_next_serial()}
     , depth_test_enable  {depth_test_enable}
     , depth_write_enable {depth_write_enable}
@@ -266,9 +269,11 @@ void Depth_stencil_state_tracker::reset()
     m_last = 0;
 }
 
-void Depth_stencil_state_tracker::execute_component(gl::Stencil_face_direction face,
-                                                    const Stencil_op_state&    state,
-                                                    Stencil_op_state&          cache)
+void Depth_stencil_state_tracker::execute_component(
+    gl::Stencil_face_direction face,
+    const Stencil_op_state&    state,
+    Stencil_op_state&          cache
+)
 {
 #if !DISABLE_CACHE
     if ((cache.stencil_fail_op != state.stencil_fail_op) ||
@@ -302,8 +307,9 @@ void Depth_stencil_state_tracker::execute_component(gl::Stencil_face_direction f
     }
 }
 
-void Depth_stencil_state_tracker::execute_shared(const Stencil_op_state& state,
-                                                 Depth_stencil_state&    cache)
+void Depth_stencil_state_tracker::execute_shared(
+    const Stencil_op_state& state,
+    Depth_stencil_state&    cache)
 {
 #if !DISABLE_CACHE
     if ((cache.front.stencil_fail_op != state.stencil_fail_op) ||
@@ -426,37 +432,44 @@ void Depth_stencil_state_tracker::execute(Depth_stencil_state const* state)
     m_last = state->serial;
 }
 
-auto operator==(const Stencil_op_state& lhs, const Stencil_op_state& rhs) noexcept
--> bool
+auto operator==(
+    const Stencil_op_state& lhs,
+    const Stencil_op_state& rhs
+) noexcept -> bool
 {
-    return (lhs.stencil_fail_op == rhs.stencil_fail_op) &&
-           (lhs.z_fail_op       == rhs.z_fail_op      ) &&
-           (lhs.z_pass_op       == rhs.z_pass_op      ) &&
-           (lhs.function        == rhs.function       ) &&
-           (lhs.reference       == rhs.reference      ) &&
-           (lhs.test_mask       == rhs.test_mask      ) &&
-           (lhs.write_mask      == rhs.write_mask     );
+    return
+        (lhs.stencil_fail_op == rhs.stencil_fail_op) &&
+        (lhs.z_fail_op       == rhs.z_fail_op      ) &&
+        (lhs.z_pass_op       == rhs.z_pass_op      ) &&
+        (lhs.function        == rhs.function       ) &&
+        (lhs.reference       == rhs.reference      ) &&
+        (lhs.test_mask       == rhs.test_mask      ) &&
+        (lhs.write_mask      == rhs.write_mask     );
 }
 
-auto operator!=(const Stencil_op_state& lhs, const Stencil_op_state& rhs) noexcept
--> bool
+auto operator!=(
+    const Stencil_op_state& lhs,
+    const Stencil_op_state& rhs
+) noexcept -> bool
 {
     return !(lhs == rhs);
 }
 
-auto operator==(const Depth_stencil_state& lhs, const Depth_stencil_state& rhs) noexcept
--> bool
+auto operator==(
+    const Depth_stencil_state& lhs,
+    const Depth_stencil_state& rhs
+) noexcept -> bool
 {
-    return (lhs.depth_test_enable   == rhs.depth_test_enable  ) &&
-           (lhs.depth_compare_op    == rhs.depth_compare_op   ) &&
-           (lhs.depth_write_enable  == rhs.depth_write_enable ) &&
-           (lhs.stencil_test_enable == rhs.stencil_test_enable) &&
-           (lhs.front               == rhs.front              ) &&
-           (lhs.back                == rhs.back               );
+    return
+        (lhs.depth_test_enable   == rhs.depth_test_enable  ) &&
+        (lhs.depth_compare_op    == rhs.depth_compare_op   ) &&
+        (lhs.depth_write_enable  == rhs.depth_write_enable ) &&
+        (lhs.stencil_test_enable == rhs.stencil_test_enable) &&
+        (lhs.front               == rhs.front              ) &&
+        (lhs.back                == rhs.back               );
 }
 
-auto operator!=(const Depth_stencil_state& lhs, const Depth_stencil_state& rhs) noexcept
--> bool
+auto operator!=(const Depth_stencil_state& lhs, const Depth_stencil_state& rhs) noexcept -> bool
 {
     return !(lhs == rhs);
 }

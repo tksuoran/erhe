@@ -11,8 +11,10 @@ Input_assembly_state::Input_assembly_state()
 {
 }
 
-Input_assembly_state::Input_assembly_state(gl::Primitive_type primitive_topology,
-                        bool               primitive_restart)
+Input_assembly_state::Input_assembly_state(
+    gl::Primitive_type primitive_topology,
+    bool               primitive_restart
+)
     : serial            {get_next_serial()}
     , primitive_topology{primitive_topology}
     , primitive_restart {primitive_restart}
@@ -89,8 +91,9 @@ Input_assembly_state Input_assembly_state::triangle_strip
 auto operator==(const Input_assembly_state& lhs, const Input_assembly_state& rhs) noexcept
 -> bool
 {
-    return (lhs.primitive_topology == rhs.primitive_topology) &&
-           (lhs.primitive_restart  == rhs.primitive_restart );
+    return
+        (lhs.primitive_topology == rhs.primitive_topology) &&
+        (lhs.primitive_restart  == rhs.primitive_restart );
 }
 
 auto operator!=(const Input_assembly_state& lhs, const Input_assembly_state& rhs) noexcept

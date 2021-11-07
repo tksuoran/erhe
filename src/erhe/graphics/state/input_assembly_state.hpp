@@ -9,8 +9,10 @@ class Input_assembly_state
 {
 public:
     Input_assembly_state();
-    Input_assembly_state(gl::Primitive_type primitive_topology,
-                         bool               primitive_restart);
+    Input_assembly_state(
+        gl::Primitive_type primitive_topology,
+        bool               primitive_restart
+    );
 
     void touch();
 

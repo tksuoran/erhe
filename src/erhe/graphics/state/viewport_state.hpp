@@ -15,12 +15,13 @@ public:
     {
     }
 
-    Viewport_state(float x,
-                   float y,
-                   float width,
-                   float height,
-                   float min_depth,
-                   float max_depth
+    Viewport_state(
+        float x,
+        float y,
+        float width,
+        float height,
+        float min_depth,
+        float max_depth
     )
         : serial   {get_next_serial()}
         , x        {x}

@@ -57,8 +57,9 @@ void Viewport_state_tracker::execute(Viewport_state const* state)
 auto operator==(const Viewport_state& lhs, const Viewport_state& rhs) noexcept
 -> bool
 {
-    return (lhs.min_depth == rhs.min_depth) &&
-           (lhs.max_depth == rhs.max_depth);
+    return
+        (lhs.min_depth == rhs.min_depth) &&
+        (lhs.max_depth == rhs.max_depth);
 }
 
 auto operator!=(const Viewport_state& lhs, const Viewport_state& rhs) noexcept
