@@ -4,4 +4,6 @@ engines:
     language: c++
 exclude_paths:
   - "build/**"
+  - "src/hidapi/**"
   - "src/imgui/**"
+  - "src/mikktspace/**"
