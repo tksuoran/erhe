@@ -103,7 +103,7 @@ class Null_sphere_shape
     : public Null_collision_shape
 {
 public:
-    Null_sphere_shape(const float radius)
+    explicit Null_sphere_shape(const float radius)
         : m_radius{radius}
     {
     }

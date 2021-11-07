@@ -110,15 +110,15 @@ private:
         auto operator=    (const Id_frame_resources&) -> Id_frame_resources& = delete;
 
         Id_frame_resources(Id_frame_resources&& other) noexcept
+            : pixel_pack_buffer{std::move(other.pixel_pack_buffer)}
+            , data             {std::move(other.data)}
+            , time             {other.time}
+            , sync             {other.sync}
+            , clip_from_world  {other.clip_from_world}
+            , x_offset         {other.x_offset}
+            , y_offset         {other.y_offset}
+            , state            {other.state}
         {
-            pixel_pack_buffer = std::move(other.pixel_pack_buffer);
-            data              = std::move(other.data);
-            time              = other.time;
-            sync              = other.sync;
-            clip_from_world   = other.clip_from_world;
-            x_offset          = other.x_offset;
-            y_offset          = other.y_offset;
-            state             = other.state;
         }
 
         auto operator=(Id_frame_resources&& other) noexcept -> Id_frame_resources&

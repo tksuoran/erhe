@@ -44,7 +44,7 @@ public:
         {
         }
 
-        Binding(const Vertex_stream_binding& other)
+        explicit Binding(const Vertex_stream_binding& other)
             : vertex_buffer           {other.vertex_buffer}
             , vertex_attribute_mapping{other.vertex_attribute_mapping}
             , vertex_attribute        {other.vertex_attribute}

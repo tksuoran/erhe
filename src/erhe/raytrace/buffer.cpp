@@ -1,11 +1,9 @@
 #include "erhe/raytrace/buffer.hpp"
-#include "erhe/raytrace/device.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-//#include <embree3/rtcore.h>
 #include <mutex>
 
-#include <gsl/gsl_assert>
+#include <gsl/assert>
 
 namespace erhe::raytrace
 {
@@ -15,11 +13,12 @@ class Buffer
 {
 public:
     explicit Buffer(const size_t capacity_bytes_count);
-    Buffer(const Buffer&)             = delete;
     explicit Buffer(Buffer&& other) noexcept;
-    Buffer& operator=(const Buffer&)  = delete;
     Buffer& operator=(Buffer&& other) noexcept;
     ~Buffer();
+
+    Buffer(const Buffer&)             = delete;
+    Buffer& operator=(const Buffer&)  = delete;
 
     auto capacity_byte_count() const noexcept -> size_t;
     auto allocate_bytes     (const size_t byte_count, const size_t alignment = 64) noexcept -> size_t;

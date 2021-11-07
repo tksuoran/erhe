@@ -3,16 +3,8 @@ set(_target "erhe_raytrace")
 set(source_list
     buffer.cpp
     buffer.hpp
-    #device.cpp
-    #device.hpp
-    #geometry.cpp
-    #geometry.hpp
     log.cpp
     log.hpp
-    #ray.hpp
-    #rayhit.hpp
-    #scene.cpp
-    #scene.hpp
 )
 
 add_library(${_target} ${source_list})

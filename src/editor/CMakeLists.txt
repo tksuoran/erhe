@@ -94,6 +94,8 @@ set(source_list
     windows/brushes.hpp
     windows/camera_properties.cpp
     windows/camera_properties.hpp
+    windows/layers_window.cpp
+    windows/layers_window.hpp
     windows/light_properties.cpp
     windows/light_properties.hpp
     windows/material_properties.cpp

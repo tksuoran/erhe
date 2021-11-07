@@ -20,7 +20,7 @@ class Bullet_collision_shape
     : public ICollision_shape
 {
 public:
-    Bullet_collision_shape(btCollisionShape* shape)
+    explicit Bullet_collision_shape(btCollisionShape* shape)
         : m_bullet_collision_shape{shape}
     {
     }
@@ -40,7 +40,7 @@ public:
     }
     auto get_bullet_collision_shape() const -> const btCollisionShape*
     {
-        m_bullet_collision_shape;
+        return m_bullet_collision_shape;
     }
 
 protected:
@@ -51,7 +51,7 @@ class Bullet_box_shape
     : public Bullet_collision_shape
 {
 public:
-    Bullet_box_shape(const glm::vec3 half_extents);
+    explicit Bullet_box_shape(const glm::vec3 half_extents);
 
 private:
     btBoxShape m_box_shape;
@@ -121,7 +121,7 @@ class Bullet_cylinder_x_shape
     : public Bullet_collision_shape
 {
 public:
-    Bullet_cylinder_x_shape(const glm::vec3 half_extents);
+    explicit Bullet_cylinder_x_shape(const glm::vec3 half_extents);
 
 private:
     btCylinderShapeX m_cylinder_shape;
@@ -131,7 +131,7 @@ class Bullet_cylinder_y_shape
     : public Bullet_collision_shape
 {
 public:
-    Bullet_cylinder_y_shape(const glm::vec3 half_extents);
+    explicit Bullet_cylinder_y_shape(const glm::vec3 half_extents);
 
 private:
     btCylinderShape m_cylinder_shape;
@@ -141,7 +141,7 @@ class Bullet_cylinder_z_shape
     : public Bullet_collision_shape
 {
 public:
-    Bullet_cylinder_z_shape(const glm::vec3 half_extents);
+    explicit Bullet_cylinder_z_shape(const glm::vec3 half_extents);
 
 private:
     btCylinderShapeZ m_cylinder_shape;
@@ -151,7 +151,7 @@ class Bullet_sphere_shape
     : public Bullet_collision_shape
 {
 public:
-    Bullet_sphere_shape(const float radius);
+    explicit Bullet_sphere_shape(const float radius);
 
 private:
     btSphereShape m_sphere_shape;

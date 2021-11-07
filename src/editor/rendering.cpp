@@ -417,6 +417,7 @@ void Editor_rendering::render_selection(
     erhe::scene::ICamera*       camera,
     const erhe::scene::Viewport viewport)
 {
+    VERIFY(m_viewport_config);
     if (camera == nullptr)
     {
         return;
@@ -431,7 +432,7 @@ void Editor_rendering::render_selection(
         0u,                                         // all clear
         0u};                                        // at least one cler
 
-    if (m_viewport_config && render_style.polygon_fill)
+    if (render_style.polygon_fill)
     {
         //if (render_style.polygon_offset_enable)
         //{
@@ -453,7 +454,7 @@ void Editor_rendering::render_selection(
         //gl::disable(gl::Enable_cap::polygon_offset_line);
     }
 
-    if (m_viewport_config && render_style.edge_lines)
+    if (render_style.edge_lines)
     {
         ZoneScopedN("selection edge lines");
 
@@ -477,7 +478,7 @@ void Editor_rendering::render_selection(
     }
 
     gl::enable(gl::Enable_cap::program_point_size);
-    if (m_viewport_config && render_style.polygon_centroids)
+    if (render_style.polygon_centroids)
     {
         ZoneScopedN("selection polygon centroids");
         m_forward_renderer->primitive_color_source   = Base_renderer::Primitive_color_source::constant_color;
@@ -493,7 +494,7 @@ void Editor_rendering::render_selection(
             content_selected_filter
         );
     }
-    if (m_viewport_config && render_style.corner_points)
+    if (render_style.corner_points)
     {
         ZoneScopedN("selection corner points");
         m_forward_renderer->primitive_color_source   = Base_renderer::Primitive_color_source::constant_color;
