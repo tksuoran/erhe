@@ -12,8 +12,6 @@ set(source_list
     geometry.inl
     log.cpp
     log.hpp
-    mikktspace.c
-    mikktspace.h
     operation/catmull_clark_subdivision.cpp
     operation/catmull_clark_subdivision.hpp
     operation/ambo.hpp
@@ -68,8 +66,11 @@ target_link_libraries(${_target}
         fmt::fmt
         glm::glm
         Microsoft.GSL::GSL
+        mikktspace
         TracyClient
 )
+
+target_strict_cxx(${_target})
 
 foreach(source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)

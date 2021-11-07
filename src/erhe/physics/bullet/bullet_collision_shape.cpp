@@ -129,9 +129,9 @@ auto Bullet_collision_shape::is_convex() const -> bool
 }
 
 void Bullet_collision_shape::add_child_shape(
-    std::shared_ptr<ICollision_shape> shape,
-    const glm::mat3                   basis,
-    const glm::vec3                   origin
+    std::shared_ptr<ICollision_shape> /*shape*/,
+    const glm::mat3                   /*basis*/,
+    const glm::vec3                   /*origin*/
 )
 {
     assert(false);

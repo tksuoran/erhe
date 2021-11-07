@@ -56,7 +56,7 @@ public:
     using PFN_generic          = void (*) ();
     using PFN_get_proc_address = PFN_generic (*) (const char*);
 
-    static void initialize(PFN_get_proc_address get_proc_address);
+    static void initialize();
 };
 
 } // namespace erhe::graphics

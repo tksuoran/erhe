@@ -7,8 +7,6 @@
 #include <glm/glm.hpp>
 #include <gsl/assert>
 
-#include "Tracy.hpp"
-
 #include <functional>
 #include <optional>
 #include <set>

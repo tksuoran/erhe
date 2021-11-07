@@ -116,13 +116,18 @@ class Node:
             else:
                 # Enum types:
                 # Cast native type to strongly typed enum type and use c_str()
-                format_entry = 'gl::c_str({})'
+                #format_entry = 'gl::c_str({})'
+
+                format_entry = 'gl::c_str(static_cast<gl::{0}>({{}}))'.format(
+                    generator.to_type_name(parsed.group)
+                )
+
         elif parsed.node_type == 'GLboolean':
             format_entry = 'gl::c_str({})'
         elif parsed.node_type == 'GLbitfield':
             format_entry = "{}"
         elif parsed.ptype == 'GLenum':
-            format_entry = 'gl::c_str({})'
+            format_entry = 'gl::enum_string({})'
         elif parsed.ptype:
             format_entry = "{}"
         else:

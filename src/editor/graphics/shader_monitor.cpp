@@ -1,5 +1,8 @@
 #include "graphics/shader_monitor.hpp"
-#include "Tracy.hpp"
+
+#define ERHE_TRACY_NO_GL 1
+#include "erhe/toolkit/tracy_client.hpp"
+
 #include "erhe/log/log.hpp"
 #include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/verify.hpp"

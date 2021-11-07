@@ -1,7 +1,5 @@
 #pragma once
 
-#include "mango/core/thread.hpp"
-
 #include <condition_variable>
 #include <functional>
 #include <mutex>
@@ -36,6 +34,7 @@ class IUpdate_once_per_frame;
 class IExecution_queue
 {
 public:
+    virtual ~IExecution_queue();
     virtual void enqueue(std::function<void()>) = 0;
     virtual void wait   () = 0;
 };

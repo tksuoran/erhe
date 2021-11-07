@@ -50,7 +50,7 @@ auto Physics_window::description() -> const char*
 //    return btVector3{btScalar{glm_vec3.x}, btScalar{glm_vec3.y}, btScalar{glm_vec3.z}};
 //}
 
-void Physics_window::imgui(Pointer_context& pointer_context)
+void Physics_window::imgui(Pointer_context& /*pointer_context*/)
 {
     if (m_selection_tool.get() == nullptr)
     {
@@ -180,7 +180,7 @@ auto Physics_window::get_debug_draw_parameters() -> Debug_draw_parameters
     return m_debug_draw;
 }
 
-void Physics_window::render(const Render_context& render_context)
+void Physics_window::render(const Render_context& /*render_context*/)
 {
     ZoneScoped;
 

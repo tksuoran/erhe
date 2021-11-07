@@ -69,7 +69,7 @@ auto Window::create_gl_window() -> bool
 
     TracyGpuContext;
 
-    erhe::graphics::Instance::initialize(glfwGetProcAddress);
+    erhe::graphics::Instance::initialize();
 
     log_startup.info("Created OpenGL Window\n");
 

@@ -22,6 +22,8 @@ target_link_libraries(${_target}
         Microsoft.GSL::GSL
 )
 
+target_strict_cxx(${_target})
+
 foreach(source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)
     string(REPLACE "/" "\\" source_path_msvc "${source_path}")

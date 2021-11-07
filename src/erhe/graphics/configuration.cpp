@@ -138,7 +138,7 @@ auto get_string(gl::String_name string_name) -> std::string
     return (c_str != nullptr) ? std::string{c_str} : std::string{};
 }
 
-void Instance::initialize(PFN_get_proc_address get_proc_address)
+void Instance::initialize()
 {
     std::vector<std::string> extensions;
 

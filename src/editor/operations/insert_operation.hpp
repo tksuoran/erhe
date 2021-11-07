@@ -72,7 +72,7 @@ public:
         case Mode::remove: return Mode::insert;
         default:
             FATAL("Bad Context::Mode");
-            return Mode::insert;
+            // unreachable return Mode::insert;
         }
     }
 };

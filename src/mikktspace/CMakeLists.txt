@@ -1,23 +1,13 @@
-set(_target "erhe_log")
+set(_target "mikktspace")
 
 set(source_list
-    log.cpp
-    log.hpp
-    log_glm.hpp
+    mikktspace.h
+    mikktspace.c
 )
 
 add_library(${_target} ${source_list})
 
-target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
-
-target_link_libraries(${_target}
-    PUBLIC
-        fmt::fmt
-        glm::glm
-        Microsoft.GSL::GSL
-)
-
-target_strict_cxx(${_target})
+target_include_directories(${_target} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 foreach(source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)

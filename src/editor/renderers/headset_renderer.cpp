@@ -102,7 +102,7 @@ Headset_view_resources::Headset_view_resources(
 
 void Headset_view_resources::update(
     erhe::xr::Render_view& render_view,
-    Editor_rendering&      rendering
+    Editor_rendering&      /*rendering*/
 )
 {
     camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_xr;

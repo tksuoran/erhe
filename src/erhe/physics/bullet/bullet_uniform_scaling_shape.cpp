@@ -1,6 +1,6 @@
 #include "erhe/physics/bullet/bullet_uniform_scaling_shape.hpp"
 
-#include "BulletCollision/CollisionShapes/btUniformScalingShape.h"
+#include <BulletCollision/CollisionShapes/btUniformScalingShape.h>
 
 namespace erhe::physics
 {

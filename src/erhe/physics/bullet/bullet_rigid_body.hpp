@@ -2,7 +2,7 @@
 
 #include "erhe/physics/irigid_body.hpp"
 
-#include "BulletDynamics/Dynamics/btRigidBody.h"
+#include <BulletDynamics/Dynamics/btRigidBody.h>
 
 namespace erhe::physics
 {

@@ -3,8 +3,6 @@ set(_target "erhe_toolkit")
 set(source_list
     file.cpp
     file.hpp
-    hidapi.c
-    hidapi.h
     math_util.cpp
     math_util.hpp
     space_mouse.cpp
@@ -34,12 +32,14 @@ add_library(${_target} ${source_list})
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
-target_link_libraries(${_target}
+target_link_libraries(
+    ${_target}
     PUBLIC
-        erhe_gl
-        fmt::fmt
-        glm::glm
-        Microsoft.GSL::GSL
+    erhe_gl
+    fmt::fmt
+    glm::glm
+    hidapi
+    Microsoft.GSL::GSL
 )
 
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
@@ -49,6 +49,8 @@ endif ()
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
     target_link_libraries(${_target} PUBLIC mango)
 endif()
+
+target_strict_cxx(${_target})
 
 foreach(source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)

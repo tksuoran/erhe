@@ -51,7 +51,7 @@ gl::Internal_format to_gl(erhe::graphics::Image_format format)
             FATAL("Bad image format\n");
         }
     }
-    return gl::Internal_format::rgba8;
+    // unreachable return gl::Internal_format::rgba8;
 }
 
 auto Textures::load(const std::filesystem::path& path)

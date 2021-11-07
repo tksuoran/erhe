@@ -157,8 +157,6 @@ auto parse_obj_geometry(const std::filesystem::path& path)
         std::vector<Point_id>  obj_point_to_geometry_point;
 
         bool has_vertex_colors = false;
-        bool has_normals       = false;
-        bool has_texcoors      = false;
 
         while ((line_pos != std::string::npos) || (line_last_pos != std::string::npos))
         {
@@ -457,15 +455,15 @@ auto parse_obj_geometry(const std::filesystem::path& path)
             line_pos = text.find_first_of(end_of_line, line_last_pos);
         }
 
-        for (auto geometry : result)
+        for (auto g : result)
         {
             ZoneScopedN("post processing");
 
-            geometry->make_point_corners();
+            g->make_point_corners();
 
-            geometry->build_edges();
-            geometry->generate_polygon_texture_coordinates();
-            geometry->compute_tangents();
+            g->build_edges();
+            g->generate_polygon_texture_coordinates();
+            g->compute_tangents();
         }
     }
 

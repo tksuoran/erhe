@@ -29,7 +29,7 @@ void Camera_properties::initialize_component()
     get<Editor_tools>()->register_imgui_window(this);
 }
 
-void Camera_properties::imgui(Pointer_context& pointer_context)
+void Camera_properties::imgui(Pointer_context& /*pointer_context*/)
 {
     ImGui::Begin("Camera");
 

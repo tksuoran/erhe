@@ -91,6 +91,8 @@ auto Debug_draw::get_debug_mode() const -> int
 
 void Debug_draw::draw_contact_point(const glm::vec3 point, const glm::vec3 normal, float distance, int lifeTime, const glm::vec3 color)
 {
+    static_cast<void>(lifeTime);
+
 	draw_line(point, point + normal * distance, color);
     glm::vec3 ncolor{0};
 	draw_line(point, point + (normal * 0.01f), ncolor);

@@ -18,7 +18,6 @@
 #include "erhe/primitive/vertex_attribute_info.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 
-#include "Tracy.hpp"
 #include <glm/glm.hpp>
 
 #include <cstddef>

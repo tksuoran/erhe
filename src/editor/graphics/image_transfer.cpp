@@ -67,16 +67,16 @@ Image_transfer::Slot::Slot()
 }
 
 auto Image_transfer::Slot::span_for(
-    const int                 width,
-    const int                 height,
+    const int                 span_width,
+    const int                 span_height,
     const gl::Internal_format internal_format
 ) -> gsl::span<std::byte>
 {
-    Expects(width >= 1);
-    Expects(height >= 1);
+    Expects(span_width >= 1);
+    Expects(span_height >= 1);
 
-    row_stride = width * erhe::graphics::get_upload_pixel_byte_count(internal_format);
-    auto byte_count = row_stride * height;
+    auto row_stride = span_width * erhe::graphics::get_upload_pixel_byte_count(internal_format);
+    auto byte_count = row_stride * span_height;
     Expects(byte_count >= 1);
     Expects(byte_count <= capacity);
     return span.subspan(0, byte_count);

@@ -1,7 +1,8 @@
 #pragma once
 
 #include "erhe/toolkit/verify.hpp"
-#include "Tracy.hpp"
+
+#include "erhe/toolkit/tracy_client.hpp"
 
 #include <gsl/assert>
 

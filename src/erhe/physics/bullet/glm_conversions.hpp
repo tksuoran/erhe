@@ -1,10 +1,10 @@
 #pragma once
 
+#include "erhe/log/log.hpp"
+
 #include <glm/glm.hpp>
 
-#include "LinearMath/btVector3.h"
-
-#include "erhe/log/log.hpp"
+#include <LinearMath/btVector3.h>
 
 namespace erhe::physics
 {

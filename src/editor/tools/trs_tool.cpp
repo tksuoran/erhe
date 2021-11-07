@@ -748,7 +748,7 @@ void Trs_tool::render_update(const Render_context& render_context)
     update_transforms();
 }
 
-void Trs_tool::render(const Render_context& render_context)
+void Trs_tool::render(const Render_context& /*render_context*/)
 {
     ZoneScoped;
 
@@ -758,7 +758,7 @@ void Trs_tool::render(const Render_context& render_context)
     }
 
     return; // currently broken
-
+#if 0
     auto* line_renderer     = render_context.line_renderer;
     auto& camera            = *render_context.pointer_context->camera;
     vec3  position_in_world = root()->position_in_world();
@@ -904,6 +904,7 @@ void Trs_tool::render(const Render_context& render_context)
         );
         text_position.y -= 20.0f;
     }
+#endif
 }
 
 auto Trs_tool::Rotation_context::angle_of_rotation_for_point(vec3 q) -> float

@@ -1,9 +1,10 @@
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/geometry/mikktspace.h"
+#include "mikktspace.h"
 #include "erhe/geometry/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include "Tracy.hpp"
+#define ERHE_TRACY_NO_GL 1
+#include "erhe/toolkit/tracy_client.hpp"
 
 #include <glm/glm.hpp>
 
@@ -201,11 +202,8 @@ auto Geometry::compute_tangents(
                 const glm::vec3 normal = polygon_normals->get(polygon_id);
                 return normal;
             }
-            else
-            {
-                FATAL("No normal source\n");
-            }
-            return glm::vec3{0.0f, 1.0f, 0.0f};
+            FATAL("No normal source\n");
+            // unreachable return glm::vec3{0.0f, 1.0f, 0.0f};
         }
 
         auto get_texcoord(const int iFace, const int iVert) -> glm::vec2
@@ -250,11 +248,8 @@ auto Geometry::compute_tangents(
                 const glm::vec2 texcoord = point_texcoords->get(point_id);
                 return texcoord;
             }
-            else
-            {
-                FATAL("No texture coordinate\n");
-            }
-            return glm::vec2(0.0f, 0.0f);
+            FATAL("No texture coordinate\n");
+            // unreachatble return glm::vec2(0.0f, 0.0f);
         }
 
         void set_tangent(const int iFace, const int iVert, const glm::vec3 tangent, const float sign)

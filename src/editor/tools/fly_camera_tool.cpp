@@ -258,14 +258,14 @@ void Fly_camera_tool::cancel_ready()
     m_state = State::Passive;
 }
 
-void Fly_camera_tool::update_fixed_step(const erhe::components::Time_context& time_context)
+void Fly_camera_tool::update_fixed_step(const erhe::components::Time_context& /*time_context*/)
 {
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
 
     m_camera_controller.update_fixed_step();
 }
 
-void Fly_camera_tool::update_once_per_frame(const erhe::components::Time_context& time_context)
+void Fly_camera_tool::update_once_per_frame(const erhe::components::Time_context& /*time_context*/)
 {
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
 

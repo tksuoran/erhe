@@ -3,6 +3,8 @@
 #include "erhe/components/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+#include <mango/core/thread.hpp>
+
 #define ERHE_TRACY_NO_GL 1
 #include "erhe/toolkit/tracy_client.hpp"
 
@@ -61,11 +63,15 @@ void Components::cleanup_components()
     components.clear();
 }
 
+IExecution_queue::~IExecution_queue() = default;
+
 // Optimized queue which executes tasks concurrently
 class Concurrent_execution_queue
     : public IExecution_queue
 {
 public:
+    ~Concurrent_execution_queue() override = default;
+
     void enqueue(std::function<void()> task) override;
     void wait   () override;
 
@@ -88,6 +94,8 @@ class Serial_execution_queue
     : public IExecution_queue
 {
 public:
+    ~Serial_execution_queue() override = default;
+
     void enqueue(std::function<void()> task) override;
     void wait   () override;
 };
@@ -222,7 +230,6 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> sha
         if (m_uninitialized_components.empty())
         {
             FATAL("No uninitialized component found\n");
-            return {};
         }
     }
 

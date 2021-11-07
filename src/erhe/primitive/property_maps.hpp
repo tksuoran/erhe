@@ -9,7 +9,6 @@
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
 
-#include "Tracy.hpp"
 #include <glm/glm.hpp>
 
 #include <cstddef>

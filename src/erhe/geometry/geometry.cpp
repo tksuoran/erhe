@@ -3,7 +3,8 @@
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include "Tracy.hpp"
+#define ERHE_TRACY_NO_GL 1
+#include "erhe/toolkit/tracy_client.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
@@ -539,12 +540,12 @@ void Geometry::reverse_polygons()
 
 void Mesh_info::trace(erhe::log::Category& log) const
 {
-    log_geometry.trace("{} vertex corners vertices\n", vertex_count_corners);
-    log_geometry.trace("{} centroid vertices\n",       vertex_count_centroids);
-    log_geometry.trace("{} fill triangles indices\n",  index_count_fill_triangles);
-    log_geometry.trace("{} edge lines indices\n",      index_count_edge_lines);
-    log_geometry.trace("{} corner points indices\n",   index_count_corner_points);
-    log_geometry.trace("{} centroid points indices\n", index_count_centroid_points);
+    log.trace("{} vertex corners vertices\n", vertex_count_corners);
+    log.trace("{} centroid vertices\n",       vertex_count_centroids);
+    log.trace("{} fill triangles indices\n",  index_count_fill_triangles);
+    log.trace("{} edge lines indices\n",      index_count_edge_lines);
+    log.trace("{} corner points indices\n",   index_count_corner_points);
+    log.trace("{} centroid points indices\n", index_count_centroid_points);
 }
 
 void Geometry::generate_texture_coordinates_spherical()
@@ -761,7 +762,6 @@ void Geometry::sanity_check() const
         }
         else
         {
-            bool corner_found = false;
             //log_weld.trace("Corner {} point {} polygon {}\n", corner_id, corner.point_id, corner.polygon_id);
             erhe::log::Indenter scope_indent;
             const Point& point = points[i.corner.point_id];

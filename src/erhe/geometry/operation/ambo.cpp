@@ -1,7 +1,8 @@
 #include "erhe/geometry/operation/ambo.hpp"
 #include "erhe/geometry/geometry.hpp"
 
-#include "Tracy.hpp"
+#define ERHE_TRACY_NO_GL 1
+#include "erhe/toolkit/tracy_client.hpp"
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>

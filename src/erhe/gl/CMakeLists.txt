@@ -99,6 +99,8 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
     )
 endif ()
 
+target_strict_cxx(${_target})
+
 foreach (source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)
     string(REPLACE "/" "\\" source_path_msvc "${source_path}")

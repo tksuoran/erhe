@@ -1,3 +1,5 @@
+set(_target "editor")
+
 set(source_list
     graphics/gl_context_provider.cpp
     graphics/gl_context_provider.hpp
@@ -174,10 +176,10 @@ set(source_list
     res/shaders/wide_lines.frag
 )
 
-add_executable(editor ${source_list})
+add_executable(${_target} ${source_list})
 
 target_link_libraries(
-    editor
+    ${_target}
     PRIVATE
     cxxopts
     erhe_components
@@ -199,15 +201,17 @@ target_link_libraries(
     TracyClient
 )
 
-target_include_directories(editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 set_target_properties(
-    editor PROPERTIES
+    ${_target} PROPERTIES
     CXX_STANDARD                  20
     CXX_STANDARD_REQUIRED         YES
     CXX_EXTENSIONS                NO
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
+
+target_strict_cxx(${_target})
 
 foreach(source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)

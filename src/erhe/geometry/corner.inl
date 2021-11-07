@@ -1,17 +1,18 @@
 #pragma once
 
-#include "Tracy.hpp"
+#include "erhe/toolkit/tracy_client.hpp"
 
 namespace erhe::geometry
 {
 
 template <typename T>
-void Corner::smooth_normalize(const Corner_id                            this_corner_id,
-                              const Geometry&                            geometry,
-                              Property_map<Corner_id, T>&                corner_attribute,
-                              const Property_map<Polygon_id, T>&         polygon_attribute,
-                              const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-                              const float                                cos_max_smoothing_angle) const
+void Corner::smooth_normalize(
+    const Corner_id                            this_corner_id,
+    const Geometry&                            geometry,
+    Property_map<Corner_id, T>&                corner_attribute,
+    const Property_map<Polygon_id, T>&         polygon_attribute,
+    const Property_map<Polygon_id, glm::vec3>& polygon_normals,
+    const float                                cos_max_smoothing_angle) const
 {
     ZoneScoped;
 
@@ -67,12 +68,13 @@ void Corner::smooth_normalize(const Corner_id                            this_co
 }
 
 template <typename T>
-void Corner::smooth_average(const Corner_id                           this_corner_id,
-                            const Geometry&                           geometry,
-                            Property_map<Corner_id, T>&               new_corner_attribute,
-                            const Property_map<Corner_id, T>&         old_corner_attribute,
-                            const Property_map<Corner_id, glm::vec3>& corner_normals,
-                            const Property_map<Point_id, glm::vec3>&  point_normals) const
+void Corner::smooth_average(
+    const Corner_id                           this_corner_id,
+    const Geometry&                           geometry,
+    Property_map<Corner_id, T>&               new_corner_attribute,
+    const Property_map<Corner_id, T>&         old_corner_attribute,
+    const Property_map<Corner_id, glm::vec3>& corner_normals,
+    const Property_map<Point_id, glm::vec3>&  point_normals) const
 {
     ZoneScoped;
 

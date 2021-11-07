@@ -387,9 +387,6 @@ void Brushes::do_insert_operation()
     const auto transform = get_brush_transform();
     const auto material  = m_materials[m_selected_material];
     const auto instance  = m_brush->make_instance(
-        m_scene_root->scene(),
-        m_scene_root->content_layer(),
-        m_scene_root->physics_world(),
         transform,
         material,
         m_transform_scale
@@ -463,30 +460,34 @@ void Brushes::imgui(Pointer_context&)
 
     const size_t brush_count = m_brushes.size();
 
-    auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
-    for (int i = 0; i < static_cast<int>(brush_count); ++i)
     {
-        auto* brush = m_brushes[i].get();
-        bool button_pressed = make_button(
-            brush->geometry->name.c_str(),
-            (m_selected_brush_index == i) ? Item_mode::active
-                                          : Item_mode::normal,
-            button_size
-        );
-        if (button_pressed)
+        auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
+        for (int i = 0; i < static_cast<int>(brush_count); ++i)
         {
-            m_selected_brush_index = i;
-            m_brush = brush;
+            auto* brush = m_brushes[i].get();
+            bool button_pressed = make_button(
+                brush->geometry->name.c_str(),
+                (m_selected_brush_index == i)
+                    ? Item_mode::active
+                    : Item_mode::normal,
+                button_size
+            );
+            if (button_pressed)
+            {
+                m_selected_brush_index = i;
+                m_brush = brush;
+            }
         }
+        ImGui::SliderFloat("Scale", &m_scale, 0.0f, 2.0f);
+        make_check_box("Snap to Polygon", &m_snap_to_hover_polygon);
+        make_check_box(
+            "Snap to Grid",
+            &m_snap_to_grid,
+            m_snap_to_hover_polygon
+                ? Imgui_window::Item_mode::disabled
+                : Imgui_window::Item_mode::normal
+        );
     }
-    ImGui::SliderFloat("Scale", &m_scale, 0.0f, 2.0f);
-    make_check_box("Snap to Polygon", &m_snap_to_hover_polygon);
-    make_check_box(
-        "Snap to Grid",
-        &m_snap_to_grid,
-        m_snap_to_hover_polygon ? Imgui_window::Item_mode::disabled
-                                : Imgui_window::Item_mode::normal
-    );
     ImGui::End();
 
     ImGui::Begin("Materials");

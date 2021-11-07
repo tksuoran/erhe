@@ -2,7 +2,7 @@
 
 #include "erhe/physics/bullet/bullet_collision_shape.hpp"
 
-#include "BulletCollision/CollisionShapes/btCompoundShape.h"
+#include <BulletCollision/CollisionShapes/btCompoundShape.h>
 
 #include <glm/glm.hpp>
 

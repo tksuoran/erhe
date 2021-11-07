@@ -9,7 +9,8 @@
 #include "erhe/ui/glyph.hpp"
 #include "erhe/ui/log.hpp"
 
-#include "Tracy.hpp"
+#define ERHE_TRACY_NO_GL 1
+#include "erhe/toolkit/tracy_client.hpp"
 
 #include "SkylineBinPack.h" // RectangleBinPack
 

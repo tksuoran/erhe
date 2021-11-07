@@ -5,7 +5,8 @@
 
 #include <glm/glm.hpp>
 
-#include "Tracy.hpp"
+#define ERHE_TRACY_NO_GL 1
+#include "erhe/toolkit/tracy_client.hpp"
 
 namespace erhe::geometry
 {
@@ -329,9 +330,13 @@ public:
         log_weld.trace("\n");
     }
 
-    void for_each_primary_new(const T primary_new_id,
-                              std::function<void(const T primary_new_id,   const T primary_old_id,
-                                                 const T secondary_new_id, const T secondary_old_id)> callback)
+    void for_each_primary_new(
+        const T primary_new_id,
+        std::function<void(
+            const T /*primary_new_id*/,   const T /*primary_old_id*/,
+            const T /*secondary_new_id*/, const T /*secondary_old_id*/)
+        > callback
+    )
     {
         if (!callback)
         {
@@ -344,7 +349,8 @@ public:
             {
                 continue;
             }
-            const T primary_new_id   = entry.primary;
+            //const T primary_new_id   = entry.primary;
+            VERIFY(primary_new_id == entry.primary);
             const T primary_old_id   = old_from_new[primary_new_id];
             const T secondary_new_id = entry.secondary;
             const T secondary_old_id = old_from_new[secondary_new_id];
@@ -376,7 +382,7 @@ public:
         {
             const auto& entry = merge.entries[i];
             const T primary_new_id   = entry.primary;
-            const T primary_old_id   = old_from_new[primary_new_id];
+            //const T primary_old_id   = old_from_new[primary_new_id];
             const T secondary_new_id = entry.secondary;
             const T secondary_old_id = old_from_new[secondary_new_id];
             new_from_old[secondary_old_id] = primary_new_id;
@@ -682,7 +688,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
         // Remap polygons
         auto old_polygon_corners = polygon_corners;
         uint32_t next_polygon_corner = 0;
-        for (Polygon_id new_polygon_id = 0, end = polygon_count(); new_polygon_id < end; ++new_polygon_id)
+        for (Polygon_id new_polygon_id = 0, new_polygon_id_end = polygon_count(); new_polygon_id < new_polygon_id_end; ++new_polygon_id)
         {
             const Polygon_id old_polygon_id = polygon_remapper.old_id(new_polygon_id);
             log_weld.trace("Polygon new {:2} from old {:2} corners:", new_polygon_id, old_polygon_id);
@@ -703,8 +709,8 @@ void Geometry::weld(const Weld_settings& weld_settings)
             polygon_remapper.for_each_primary_new(
                 new_polygon_id,
                 [this, new_polygon_id, &old_polygons, &old_polygon_corners, &next_polygon_corner]
-                (Polygon_id primary_new_id,   Polygon_id primary_old_id, 
-                 Polygon_id secondary_new_id, Polygon_id secondary_old_id)
+                (Polygon_id primary_new_id,   Polygon_id /*primary_old_id*/, 
+                 Polygon_id /*secondary_new_id*/, Polygon_id secondary_old_id)
                 {
                     VERIFY(new_polygon_id == primary_new_id);
                     Polygon& primary_new   = polygons    [primary_new_id];
@@ -728,7 +734,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
         polygon_corners.resize(m_next_polygon_corner_id);
 
         // Remap corner polygons
-        for (Corner_id corner_id = 0, end = corner_count(); corner_id < end; ++corner_id)
+        for (Corner_id corner_id = 0, corner_id_end = corner_count(); corner_id < corner_id_end; ++corner_id)
         {
             Corner& corner = corners[corner_id];
             Polygon_id old_polygon_id = corner.polygon_id;
@@ -938,7 +944,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
         auto old_points = points;
         auto old_point_corners = point_corners;
         uint32_t next_point_corner = 0;
-        for (Point_id new_point_id = 0, end = point_count(); new_point_id < end; ++new_point_id)
+        for (Point_id new_point_id = 0, new_point_end = point_count(); new_point_id < new_point_end; ++new_point_id)
         {
             const Point_id old_point_id = point_remapper.old_id(new_point_id);
             log_weld.trace("Point new {:2} from old {:2} corners:", new_point_id, old_point_id);
@@ -946,7 +952,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
             Point& new_point = points[new_point_id];
             points[new_point_id].first_point_corner_id = next_point_corner;
             points[new_point_id].corner_count          = 0;
-            for (uint32_t i = 0, end = old_point.corner_count; i < end; ++i)
+            for (uint32_t i = 0, i_end = old_point.corner_count; i < i_end; ++i)
             {
                 const Point_corner_id old_point_corner_id = old_point.first_point_corner_id + i;
                 const Point_corner_id new_point_corner_id = new_point.first_point_corner_id + new_point.corner_count;
@@ -967,8 +973,8 @@ void Geometry::weld(const Weld_settings& weld_settings)
             point_remapper.for_each_primary_new(
                 new_point_id,
                 [this, new_point_id, &old_points, &old_point_corners, &next_point_corner]
-                (const Polygon_id primary_new_id,   const Polygon_id primary_old_id, 
-                 const Polygon_id secondary_new_id, const Polygon_id secondary_old_id)
+                (const Polygon_id primary_new_id,       const Polygon_id /*primary_old_id*/, 
+                 const Polygon_id /*secondary_new_id*/, const Polygon_id secondary_old_id)
                 {
                     VERIFY(new_point_id == primary_new_id);
                     Point& primary_new         = points    [primary_new_id];
@@ -1021,7 +1027,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
         log::Indenter scope_indent;
 
         Remapper<Corner_id> corner_remapper(corner_count());
-        for (Point_id point_id = 0, end = point_count(); point_id < end; ++point_id)
+        for (Point_id point_id = 0, point_id_end = point_count(); point_id < point_id_end; ++point_id)
         {
             const Point& point = points[point_id];
             for (Point_corner_id point_corner_id = point.first_point_corner_id,
@@ -1034,7 +1040,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 corner_remapper.use_old(corner_id);
             }
         }
-        for (Polygon_id polygon_id = 0, end = polygon_count(); polygon_id < end; ++polygon_id)
+        for (Polygon_id polygon_id = 0, polygon_id_end = polygon_count(); polygon_id < polygon_id_end; ++polygon_id)
         {
             const Polygon& polygon = polygons[polygon_id];
             for (Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id,
@@ -1091,11 +1097,11 @@ void Geometry::weld(const Weld_settings& weld_settings)
             corner_attributes().remap_keys(corner_remapper.old_from_new);
             corner_attributes().trim(corner_count());
 
-            for (Point_id point_id = 0, end = point_count(); point_id < end; ++point_id)
+            for (Point_id point_id = 0, point_id_end = point_count(); point_id < point_id_end; ++point_id)
             {
                 const Point& point = points[point_id];
                 log_weld.trace("Point {:2} corners:", point_id);
-                log::Indenter scope_indent;
+                log::Indenter point_scope_indent;
                 for (Point_corner_id point_corner_id = point.first_point_corner_id,
                      end = point.first_point_corner_id + point.corner_count;
                      point_corner_id < end;
@@ -1109,11 +1115,11 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 log_weld.trace("\n");
             }
 
-            for (Polygon_id polygon_id = 0, end = polygon_count(); polygon_id < end; ++polygon_id)
+            for (Polygon_id polygon_id = 0, polygon_id_end = polygon_count(); polygon_id < polygon_id_end; ++polygon_id)
             {
                 const Polygon& polygon = polygons[polygon_id];
                 log_weld.trace("Polygon {:2} corners:", polygon_id);
-                log::Indenter scope_indent;
+                log::Indenter polygon_scope_indent;
                 for (Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id,
                      end = polygon.first_polygon_corner_id + polygon.corner_count;
                      polygon_corner_id < end;

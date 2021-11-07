@@ -33,14 +33,8 @@ public:
         }
 
         gsl::span<std::byte>      span;
-        size_t                    width     {0};
-        size_t                    height    {0};
-        size_t                    row_stride{0};
-        size_t                    capacity  {0};
+        size_t                    capacity{0};
         erhe::graphics::Gl_buffer pbo;
-        gl::Internal_format       internal_format{gl::Internal_format::rgba8};
-        gl::Pixel_format          format         {gl::Pixel_format::rgba};
-        gl::Pixel_type            type           {gl::Pixel_type::unsigned_byte};
     };
 
     static constexpr std::string_view c_name{"erhe::graphics::ImageTransfer"};

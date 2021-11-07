@@ -14,8 +14,8 @@
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 
-#include "mango/core/thread.hpp"
-#include "glm/gtx/color_space.hpp"
+#include <mango/core/thread.hpp>
+#include <glm/gtx/color_space.hpp>
 
 #include <algorithm>
 
@@ -30,8 +30,10 @@ using namespace std;
 using namespace glm;
 
 
-Camera_rig::Camera_rig(Scene_root&                          scene_root,
-                       std::shared_ptr<erhe::scene::Camera> camera)
+Camera_rig::Camera_rig(
+    Scene_root&                          /*scene_root*/,
+    std::shared_ptr<erhe::scene::Camera> camera
+)
     : position{camera}
 {
     // position_fps_heading           = make_shared<erhe::scene::Camera>("Camera");

@@ -13,9 +13,9 @@ Buffer_range::Buffer_range(size_t count, size_t element_size, size_t byte_offset
 }
 
 Buffer_range::Buffer_range(const Buffer_range& other)
-    : count       {count}
-    , element_size{element_size}
-    , byte_offset {byte_offset}
+    : count       {other.count}
+    , element_size{other.element_size}
+    , byte_offset {other.byte_offset}
 {
 }
 

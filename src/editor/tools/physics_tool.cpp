@@ -189,7 +189,7 @@ auto Physics_tool::update(Pointer_context& pointer_context) -> bool
     //return false;
 }
 
-void Physics_tool::update_internal(Pointer_context& pointer_context)
+void Physics_tool::update_internal(Pointer_context& /*pointer_context*/)
 {
 }
 

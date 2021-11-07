@@ -36,7 +36,7 @@
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 
-#include "mango/core/thread.hpp"
+#include <mango/core/thread.hpp>
 
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/color_space.hpp>
@@ -440,9 +440,6 @@ void Scene_manager::add_floor()
     );
 
     auto instance = m_floor_brush->make_instance(
-        m_scene_root->scene(),         // scene
-        m_scene_root->content_layer(), // layer
-        m_scene_root->physics_world(), // physics world
         erhe::toolkit::create_translation(0, -0.5001f, 0.0f), // local to parent
         floor_material, // material
         1.0f            // scale
@@ -557,9 +554,6 @@ void Scene_manager::make_mesh_nodes()
         //z -= 0.5f * static_cast<float>(group_depth);
         auto material = m_scene_root->materials().at(material_index);
         auto instance = brush->make_instance(
-            m_scene_root->scene(),
-            m_scene_root->content_layer(),
-            m_scene_root->physics_world(),
             erhe::toolkit::create_translation(x, y, z),
             material,
             1.0f

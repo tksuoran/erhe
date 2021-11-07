@@ -1252,23 +1252,21 @@ auto Xr_instance::poll_xr_events(Xr_session& session) -> bool
         if (result == XR_SUCCESS)
         {
             log_xr.trace("XR event {}\n", c_str(buffer.type));
+
+            if (buffer.type == XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED)
+            {
+                get_current_interaction_profile(session);
+            }
+
             continue;
         }
         else if (result == XR_EVENT_UNAVAILABLE)
         {
             break;
         }
-        else
-        {
-            log_xr.error("xrPollEvent() returned error {}\n", result);
-            return false;
-        }
 
-        if (buffer.type == XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED)
-        {
-            get_current_interaction_profile(session);
-        }
-
+        log_xr.error("xrPollEvent() returned error {}\n", result);
+        return false;
     }
 
     return true;

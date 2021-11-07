@@ -43,8 +43,15 @@ class Reference_frame
 public:
     Reference_frame() = default;
 
-    Reference_frame(const erhe::geometry::Geometry& geometry,
-                    erhe::geometry::Polygon_id      polygon_id);
+    Reference_frame(
+        const erhe::geometry::Geometry& geometry,
+        erhe::geometry::Polygon_id      polygon_id
+    );
+
+    Reference_frame(const Reference_frame& other);
+    Reference_frame(Reference_frame&& other);
+    Reference_frame& operator=(const Reference_frame& other);
+    Reference_frame& operator=(Reference_frame&& other);
 
     void transform_by(const glm::mat4 m);
 
@@ -134,9 +141,6 @@ public:
     auto create_scaled(const int scale_key) -> Scaled;
 
     auto make_instance(
-        erhe::scene::Scene&                               scene,
-        erhe::scene::Layer&                               layer,
-        erhe::physics::IWorld&                            physics_world,
         const glm::mat4                                   local_to_parent,
         const std::shared_ptr<erhe::primitive::Material>& material,
         const float                                       scale

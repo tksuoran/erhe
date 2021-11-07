@@ -616,9 +616,9 @@ void Shader_stages::Prototype::dump_reflection() const
                         indices.data()
                     );
                     log_program.trace("\t\t{:<40} = [ ", c_str(property_active_variables));
-                    for (int i = 0; i < num_active_variables; ++i)
+                    for (int j = 0; j < num_active_variables; ++j)
                     {
-                        if (i > 0)
+                        if (j > 0)
                         {
                             log_program.trace(", ");
                         }
@@ -629,17 +629,17 @@ void Shader_stages::Prototype::dump_reflection() const
                             gl::get_program_resource_name(
                                 gl_name,
                                 member_interface_.value(),
-                                indices[i],
+                                indices[j],
                                 max_name_length,
                                 &name_length,
                                 name_buffer.data()
                             );
                             name = std::string(name_buffer.data(), name_length);
-                            log_program.trace("{} {}", indices[i], name);
+                            log_program.trace("{} {}", indices[j], name);
                         }
                         else
                         {
-                            log_program.trace("{}", indices[i]);
+                            log_program.trace("{}", indices[j]);
                         }
                     }
                     log_program.trace(" ]\n");

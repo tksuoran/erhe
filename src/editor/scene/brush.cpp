@@ -54,6 +54,52 @@ Reference_frame::Reference_frame(
     corner_count = polygon.corner_count;
 }
 
+Reference_frame::Reference_frame(const Reference_frame& other)
+    : corner_count{other.corner_count}
+    , polygon_id{other.polygon_id}
+    , centroid{other.centroid}
+    , position{other.position}
+    , B{other.B}
+    , T{other.T}
+    , N{other.N}
+{
+}
+
+Reference_frame::Reference_frame(Reference_frame&& other)
+    : corner_count{other.corner_count}
+    , polygon_id{other.polygon_id}
+    , centroid{other.centroid}
+    , position{other.position}
+    , B{other.B}
+    , T{other.T}
+    , N{other.N}
+{
+}
+
+Reference_frame& Reference_frame::operator=(const Reference_frame& other)
+{
+    corner_count = other.corner_count;
+    polygon_id = other.polygon_id;
+    centroid = other.centroid;
+    position = other.position;
+    B = other.B;
+    T = other.T;
+    N = other.N;
+    return *this;
+}
+
+Reference_frame& Reference_frame::operator=(Reference_frame&& other)
+{
+    corner_count = other.corner_count;
+    polygon_id = other.polygon_id;
+    centroid = other.centroid;
+    position = other.position;
+    B = other.B;
+    T = other.T;
+    N = other.N;
+    return *this;
+}
+
 void Reference_frame::transform_by(const mat4 m)
 {
     centroid = m * vec4{centroid, 1.0f};
@@ -238,7 +284,7 @@ auto Brush::get_reference_frame(const uint32_t corner_count)
 -> Reference_frame
 {
     VERIFY(primitive_geometry->source_geometry != nullptr);
-    const auto& geometry = *primitive_geometry->source_geometry;
+    const auto& source_geometry = *primitive_geometry->source_geometry.get();
 
     for (const auto& reference_frame : reference_frames)
     {
@@ -248,14 +294,14 @@ auto Brush::get_reference_frame(const uint32_t corner_count)
         }
     }
 
-    for (Polygon_id polygon_id = 0, end = geometry.polygon_count();
+    for (Polygon_id polygon_id = 0, end = source_geometry.polygon_count();
          polygon_id < end;
          ++polygon_id)
     {
-        const auto& polygon = geometry.polygons[polygon_id];
+        const auto& polygon = source_geometry.polygons[polygon_id];
         if (polygon.corner_count == corner_count || (polygon_id + 1 == end))
         {
-            return reference_frames.emplace_back(geometry, polygon_id);
+            return reference_frames.emplace_back(source_geometry, polygon_id);
         }
     }
 
@@ -304,14 +350,14 @@ auto Brush::create_scaled(const int scale_key)
         }
         else if (collision_shape_generator)
         {
-            const auto collision_shape = collision_shape_generator(scale);
-            const auto mass            = density * volume;
+            const auto generated_collision_shape = collision_shape_generator(scale);
+            const auto mass = density * volume;
             glm::vec3  local_inertia{1.0f, 1.0f, 1.0f};
-            collision_shape->calculate_local_inertia(mass, local_inertia);
+            generated_collision_shape->calculate_local_inertia(mass, local_inertia);
             return Scaled{
                 scale_key,
                 primitive_geometry,
-                collision_shape,
+                generated_collision_shape,
                 volume,
                 local_inertia
             };
@@ -386,9 +432,6 @@ auto Brush::create_scaled(const int scale_key)
 const std::string empty_string = {};
 
 auto Brush::make_instance(
-    erhe::scene::Scene&                               scene,
-    erhe::scene::Layer&                               layer,
-    erhe::physics::IWorld&                            physics_world,
     const glm::mat4                                   local_to_parent,
     const std::shared_ptr<erhe::primitive::Material>& material,
     const float                                       scale

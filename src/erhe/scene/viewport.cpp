@@ -36,8 +36,8 @@ auto Viewport::project_to_screen_space(
     return erhe::toolkit::project_to_screen_space(
         clip_from_world,
         position_in_world,
-        0.0f,
-        1.0f,
+        depth_range_near,
+        depth_range_far,
         static_cast<float>(x),
         static_cast<float>(y),
         static_cast<float>(width),

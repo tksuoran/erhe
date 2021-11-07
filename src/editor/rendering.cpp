@@ -218,16 +218,6 @@ void Editor_rendering::render(const double time)
 
         m_editor_view->update_pointer();
 
-        auto& pointer_context = m_editor_view->pointer_context;
-        const Render_context render_context{
-            &pointer_context,
-            m_scene_manager.get(),
-            m_line_renderer.get(),
-            m_text_renderer.get(),
-            scene_viewport,
-            time
-        };
-
         m_editor_tools->update_and_render_tools(render_context);
 
         if (m_line_renderer)

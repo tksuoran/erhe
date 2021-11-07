@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Tracy.hpp"
+#include "erhe/toolkit/tracy_client.hpp"
 
 namespace erhe::geometry
 {

@@ -3,7 +3,8 @@
 #include "erhe/geometry/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include "Tracy.hpp"
+#define ERHE_TRACY_NO_GL 1
+#include "erhe/toolkit/tracy_client.hpp"
 
 #include <cmath>
 
@@ -148,7 +149,7 @@ auto Polygon::corner(const Geometry& geometry, const Point_id point) const -> Co
         return result.value();
     }
     FATAL("corner not found");
-    return {};
+    // unreachable return {};
 }
 
 auto Polygon::next_corner(const Geometry& geometry, const Corner_id anchor_corner_id) const -> Corner_id
@@ -165,7 +166,7 @@ auto Polygon::next_corner(const Geometry& geometry, const Corner_id anchor_corne
         }
     }
     FATAL("corner not found");
-    return {};
+    // unreachable return {};
 }
 
 auto Polygon::prev_corner(const Geometry& geometry, const Corner_id anchor_corner_id) const -> Corner_id
@@ -182,7 +183,7 @@ auto Polygon::prev_corner(const Geometry& geometry, const Corner_id anchor_corne
         }
     }
     FATAL("corner not found");
-    return {};
+    // unreachable return {};
 }
 
 void Polygon::reverse(Geometry& geometry)

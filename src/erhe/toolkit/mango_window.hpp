@@ -8,8 +8,8 @@
 #include "erhe/log/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include "mango/window/window.hpp"
-#include "mango/opengl/opengl.hpp"
+#include <mango/window/window.hpp>
+#include <mango/opengl/opengl.hpp>
 
 #include <string>
 
