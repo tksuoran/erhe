@@ -18,6 +18,8 @@ class Debug_draw_adapter
     : public btIDebugDraw
 {
 public:
+    Debug_draw_adapter();
+
     void set_debug_draw(IDebug_draw* debug_draw);
 
     // Implements btIDebugDraw
@@ -39,7 +41,7 @@ public:
     void reportErrorWarning(const char* warningString)                                          override;
 
 private:
-    IDebug_draw* m_debug_draw;
+    IDebug_draw* m_debug_draw{nullptr};
 };
 
 class Bullet_world

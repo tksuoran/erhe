@@ -307,18 +307,39 @@ void Trs_tool::imgui(Pointer_context&)
     }
 
     ImGui::SliderFloat("Scale",                 &m_visualization.scale, 1.0f, 10.0f);
-    ImGui::Checkbox   ("Translate Tool",        &m_visualization.show_translate);
-    ImGui::Checkbox   ("Translate Snap Enable", &m_translate_snap_enable);
-    const float translate_snap_values[] = {  0.001f,  0.01f,  0.1f,  0.2f,  0.25f,  0.5f,  1.0f,  2.0f,  5.0f,  10.0f,  100.0f };
-    const char* translate_snap_items [] = { "0.001", "0.01", "0.1", "0.2", "0.25", "0.5", "1.0", "2.0", "5.0", "10.0", "100.0" };
-    make_combo("Translate Snap", m_translate_snap, translate_snap_items, IM_ARRAYSIZE(translate_snap_items));
-    ImGui::Separator  ();
-    ImGui::Checkbox   ("Rotate Tool",        &m_visualization.show_rotate);
-    ImGui::Checkbox   ("Rotate Snap Enable", &m_rotate_snap_enable);
-    //const float rotate_snap_values[] = {  5.0f, 10.0f, 15.0f, 20.0f, 30.0f, 45.0f, 60.0f, 90.0f };
-    const char* rotate_snap_items [] = { "5",  "10",  "15",  "20",  "30",  "45",  "60",  "90" };
-    static int  rotate_item_current = 0;
-    make_combo("Rotate Snap", rotate_item_current, rotate_snap_items, IM_ARRAYSIZE(rotate_snap_items));
+
+    {
+        ImGui::Checkbox("Translate Tool",        &m_visualization.show_translate);
+        ImGui::Checkbox("Translate Snap Enable", &m_translate_snap_enable);
+        const float translate_snap_values[] = {  0.001f,  0.01f,  0.1f,  0.2f,  0.25f,  0.5f,  1.0f,  2.0f,  5.0f,  10.0f,  100.0f };
+        const char* translate_snap_items [] = { "0.001", "0.01", "0.1", "0.2", "0.25", "0.5", "1.0", "2.0", "5.0", "10.0", "100.0" };
+        make_combo("Translate Snap", m_translate_snap_index, translate_snap_items, IM_ARRAYSIZE(translate_snap_items));
+        if (
+            (m_translate_snap_index >= 0) &&
+            (m_translate_snap_index < IM_ARRAYSIZE(translate_snap_values))
+        )
+        {
+            m_translate_snap = translate_snap_values[m_translate_snap_index];
+        }
+    }
+
+    ImGui::Separator();
+
+    {
+        ImGui::Checkbox("Rotate Tool",        &m_visualization.show_rotate);
+        ImGui::Checkbox("Rotate Snap Enable", &m_rotate_snap_enable);
+        const float rotate_snap_values[] = {  5.0f, 10.0f, 15.0f, 20.0f, 30.0f, 45.0f, 60.0f, 90.0f };
+        const char* rotate_snap_items [] = { "5",  "10",  "15",  "20",  "30",  "45",  "60",  "90" };
+        make_combo("Rotate Snap", m_rotate_snap_index, rotate_snap_items, IM_ARRAYSIZE(rotate_snap_items));
+        if (
+            (m_rotate_snap_index >= 0) &&
+            (m_rotate_snap_index < IM_ARRAYSIZE(rotate_snap_values))
+        )
+        {
+            m_rotate_snap = rotate_snap_values[m_rotate_snap_index];
+        }
+    }
+
     ImGui::Separator  ();
     ImGui::Checkbox   ("Hide Inactive", &m_visualization.hide_inactive);
     ImGui::Separator  ();

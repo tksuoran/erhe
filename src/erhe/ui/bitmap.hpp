@@ -367,13 +367,12 @@ public:
 
                 for (component_t c = 0; c < src_components; ++c)
                 {
-                    const int     src_byte_x = (ix * src_components) + c;
-                    uint8_t value{0};
-                    size_t  offset{0};
+                    const int src_byte_x = (ix * src_components) + c;
+                    uint8_t   value{0};
                     if (src_byte_x < src_byte_width)
                     {
-                        offset = static_cast<size_t>(src_byte_x + (src_y_ * src_pitch));
-                        value  = src_buffer[offset];
+                        auto offset = static_cast<size_t>(src_byte_x + (src_y_ * src_pitch));
+                        value       = src_buffer[offset];
                     }
                     else
                     {

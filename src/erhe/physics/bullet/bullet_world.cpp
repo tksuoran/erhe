@@ -49,6 +49,8 @@ void Debug_draw_adapter::setDefaultColors(const DefaultColors& bullet_colors)
     m_debug_draw->set_colors(colors);
 }
 
+Debug_draw_adapter::Debug_draw_adapter() = default;
+
 void Debug_draw_adapter::set_debug_draw(IDebug_draw* debug_draw)
 {
     if (m_debug_draw != nullptr)

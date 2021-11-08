@@ -478,10 +478,16 @@ void hsv_to_rgb(float h, float s, float v, float& r, float& g, float& b)
     r = 0.0f;
     g = 0.0f;
     b = 0.0f;
+
+    // cppcheck-suppress variableScope
     float f;
+    // cppcheck-suppress variableScope
     float p;
+    // cppcheck-suppress variableScope
     float q;
+    // cppcheck-suppress variableScope
     float t;
+    // cppcheck-suppress variableScope
     int   i;
 
     if (s == 0.0f)
@@ -564,11 +570,6 @@ void rgb_to_hsv(const float r, const float g, const float b, float& h, float& s,
     h = 0;
     s = 1.0f;
     v = 1.0f;
-    float diff;
-    float r_dist;
-    float g_dist;
-    float b_dist;
-    float undefined = 0;
 
     float max;
     float min;
@@ -601,7 +602,7 @@ void rgb_to_hsv(const float r, const float g, const float b, float& h, float& s,
         min = b;
     }
 
-    diff = max - min;
+    float diff = max - min;
     v    = max;
 
     if (max < 0.0001f)
@@ -615,13 +616,13 @@ void rgb_to_hsv(const float r, const float g, const float b, float& h, float& s,
 
     if (s == 0)
     {
-        h = undefined;
+        h = 0.0f;
     }
     else
     {
-        r_dist = (max - r) / diff;
-        g_dist = (max - g) / diff;
-        b_dist = (max - b) / diff;
+        float r_dist = (max - r) / diff;
+        float g_dist = (max - g) / diff;
+        float b_dist = (max - b) / diff;
         if (r == max)
         {
             h = b_dist - g_dist;

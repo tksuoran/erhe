@@ -171,8 +171,10 @@ private:
     std::shared_ptr<erhe::scene::Node>         m_tool_node;
     bool                                       m_translate_snap_enable{false};
     bool                                       m_rotate_snap_enable   {false};
+    int                                        m_translate_snap_index {2};
     float                                      m_translate_snap       {0.1f};
-    //float                                    m_rotate_snap          {15.0f};
+    int                                        m_rotate_snap_index    {2};
+    float                                      m_rotate_snap          {15.0f};
     erhe::scene::Transform                     m_parent_from_node_before;
 
     // These are for debug rendering
