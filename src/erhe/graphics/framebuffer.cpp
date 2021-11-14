@@ -5,6 +5,8 @@
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+#include <thread>
+
 namespace erhe::graphics
 {
 

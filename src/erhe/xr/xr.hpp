@@ -64,15 +64,15 @@ void check_gl_context_in_current_in_this_thread();
 
 extern erhe::log::Category log_xr;
 
-extern constexpr const char* c_str(::XrActionType            e) noexcept;
-extern constexpr const char* c_str(::XrEnvironmentBlendMode  e) noexcept;
-extern constexpr const char* c_str(::XrEyeVisibility         e) noexcept;
-extern constexpr const char* c_str(::XrFormFactor            e) noexcept;
-extern constexpr const char* c_str(::XrObjectType            e) noexcept;
-extern constexpr const char* c_str(::XrResult                e) noexcept;
-extern constexpr const char* c_str(::XrReferenceSpaceType    e) noexcept;
-extern constexpr const char* c_str(::XrSessionState          e) noexcept;
-extern constexpr const char* c_str(::XrStructureType         e) noexcept;
-extern constexpr const char* c_str(::XrViewConfigurationType e) noexcept;
+extern const char* c_str(::XrActionType            e) noexcept;
+extern const char* c_str(::XrEnvironmentBlendMode  e) noexcept;
+extern const char* c_str(::XrEyeVisibility         e) noexcept;
+extern const char* c_str(::XrFormFactor            e) noexcept;
+extern const char* c_str(::XrObjectType            e) noexcept;
+extern const char* c_str(::XrResult                e) noexcept;
+extern const char* c_str(::XrReferenceSpaceType    e) noexcept;
+extern const char* c_str(::XrSessionState          e) noexcept;
+extern const char* c_str(::XrStructureType         e) noexcept;
+extern const char* c_str(::XrViewConfigurationType e) noexcept;
 
 }

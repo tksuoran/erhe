@@ -223,11 +223,11 @@ Brush::Brush(const Create_info& create_info)
     : geometry                   {create_info.geometry}
     , build_info_set             {create_info.build_info_set}
     , normal_style               {create_info.normal_style}
-    , density                    {create_info.density}
-    , volume                     {create_info.volume}
     , collision_shape            {create_info.collision_shape}
     , collision_volume_calculator{create_info.collision_volume_calculator}
     , collision_shape_generator  {create_info.collision_shape_generator}
+    , volume                     {create_info.volume}
+    , density                    {create_info.density}
 {
     ZoneScoped;
 
@@ -334,11 +334,11 @@ auto Brush::create_scaled(const int scale_key)
 
     if (scale == 1.0f)
     {
+        glm::vec3 local_inertia{1.0f};
         if (collision_shape)
         {
             VERIFY(collision_shape->is_convex());
             const auto mass = density * volume;
-            glm::vec3 local_inertia{1.0f, 1.0f, 1.0f};
             collision_shape->calculate_local_inertia(mass, local_inertia);
             return Scaled{
                 scale_key,
@@ -352,7 +352,6 @@ auto Brush::create_scaled(const int scale_key)
         {
             const auto generated_collision_shape = collision_shape_generator(scale);
             const auto mass = density * volume;
-            glm::vec3  local_inertia{1.0f, 1.0f, 1.0f};
             generated_collision_shape->calculate_local_inertia(mass, local_inertia);
             return Scaled{
                 scale_key,
@@ -364,7 +363,7 @@ auto Brush::create_scaled(const int scale_key)
         }
         else
         {
-            return Scaled{scale_key, primitive_geometry, {}, volume};
+            return Scaled{scale_key, primitive_geometry, {}, volume, local_inertia};
         }
     }
 
@@ -384,6 +383,7 @@ auto Brush::create_scaled(const int scale_key)
     scaled_primitive_geometry->source_geometry     = std::make_shared<erhe::geometry::Geometry>(std::move(scaled_geometry));
     scaled_primitive_geometry->source_normal_style = primitive_geometry->source_normal_style;
 
+    glm::vec3 local_inertia{1.0f};
     if (collision_shape)
     {
         VERIFY(collision_shape->is_convex());
@@ -391,7 +391,6 @@ auto Brush::create_scaled(const int scale_key)
         const auto mass                   = density * scaled_volume;
         //const auto convex_shape           = static_cast<btConvexShape*>(collision_shape.get());
         auto       scaled_collision_shape = erhe::physics::ICollision_shape::create_uniform_scaling_shape_shared(collision_shape.get(), scale);
-        glm::vec3  local_inertia{1.0f, 1.0f, 1.0f};
         scaled_collision_shape->calculate_local_inertia(mass, local_inertia);
         return Scaled{
             scale_key,
@@ -404,10 +403,10 @@ auto Brush::create_scaled(const int scale_key)
     else if (collision_shape_generator)
     {
         auto       scaled_collision_shape = collision_shape_generator(scale);
-        const auto scaled_volume          = collision_volume_calculator ? collision_volume_calculator(scale)
-                                                                        : volume * scale * scale * scale;
+        const auto scaled_volume          = collision_volume_calculator
+            ? collision_volume_calculator(scale)
+            : volume * scale * scale * scale;
         const auto mass                   = density * scaled_volume;
-        glm::vec3  local_inertia{1.0f, 1.0f, 1.0f};
         scaled_collision_shape->calculate_local_inertia(mass, local_inertia);
         return Scaled{
             scale_key,
@@ -423,7 +422,8 @@ auto Brush::create_scaled(const int scale_key)
             scale_key,
             scaled_primitive_geometry,
             {},
-            volume * scale * scale * scale
+            volume * scale * scale * scale,
+            local_inertia
         };
     }
 

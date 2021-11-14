@@ -15,14 +15,15 @@ public:
     explicit Buffer(const size_t capacity_bytes_count);
     explicit Buffer(Buffer&& other) noexcept;
     Buffer& operator=(Buffer&& other) noexcept;
-    ~Buffer();
+    ~Buffer() override;
 
     Buffer(const Buffer&)             = delete;
     Buffer& operator=(const Buffer&)  = delete;
 
-    auto capacity_byte_count() const noexcept -> size_t;
-    auto allocate_bytes     (const size_t byte_count, const size_t alignment = 64) noexcept -> size_t;
-    auto span               () noexcept -> gsl::span<std::byte>;
+    // Implements IBuffer
+    auto capacity_byte_count() const noexcept -> size_t override;
+    auto allocate_bytes     (const size_t byte_count, const size_t alignment = 64) noexcept -> size_t override;
+    auto span               () noexcept -> gsl::span<std::byte> override;
 
 private:
     //RTCBuffer  m_buffer{nullptr};
@@ -70,10 +71,10 @@ Buffer& Buffer::operator=(Buffer&& other) noexcept
     return *this;
 }
 
-Buffer::~Buffer()
-{
+Buffer::~Buffer() = default;
+//{
     //rtcReleaseBuffer(m_buffer);
-}
+//}
 
 auto Buffer::capacity_byte_count() const noexcept
 -> size_t

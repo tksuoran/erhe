@@ -10,16 +10,11 @@
 #   define glQueryCounter        gl::glQueryCounter
 #endif
 
-#pragma warning(push)
-// warning C4324: 'tracy::Profiler': structure was padded due to alignment specifier
-#pragma warning(disable : 4324)
-#include "Tracy.hpp"
+#include <Tracy.hpp>
 
 #if !defined(ERHE_TRACY_NO_GL)
 #   include "TracyOpenGL.hpp"
 #endif
-
-#pragma warning(pop)
 
 #if defined(TRACY_ENABLE) && !defined(ERHE_TRACY_NO_GL)
 #   undef glGenQueries

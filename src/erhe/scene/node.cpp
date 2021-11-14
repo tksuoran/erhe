@@ -8,8 +8,8 @@ namespace erhe::scene
 
 Node::Node(std::string_view name)
     : m_id   {}
-    , m_label{fmt::format("{}##Node{}", name, m_id.get_id())}
     , m_name {name}
+    , m_label{fmt::format("{}##Node{}", name, m_id.get_id())}
 {
 }
 

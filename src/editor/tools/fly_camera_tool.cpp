@@ -16,6 +16,7 @@ using namespace std;
 using namespace erhe::scene;
 using namespace erhe::toolkit;
 
+#ifdef _WIN32
 Fly_camera_space_mouse_listener::Fly_camera_space_mouse_listener(
     Fly_camera_tool& fly_camera_tool
 )
@@ -50,17 +51,22 @@ void Fly_camera_space_mouse_listener::on_rotation(const int rx, const int ry, co
 void Fly_camera_space_mouse_listener::on_button(const int)
 {
 }
+#endif
 
 Fly_camera_tool::Fly_camera_tool()
     : erhe::components::Component{c_name}
+#ifdef _WIN32
     , m_space_mouse_listener     {*this}
     , m_space_mouse_controller   {m_space_mouse_listener}
+#endif
 {
 }
 
 Fly_camera_tool::~Fly_camera_tool()
 {
+#ifdef _WIN32
     m_space_mouse_listener.set_active(false);
+#endif
 }
 
 auto Fly_camera_tool::state() const -> State
@@ -93,7 +99,9 @@ void Fly_camera_tool::initialize_component()
     m_scene_root->scene().update_node_transforms();
 
     m_camera_controller.set_frame(camera.get());
+#ifdef _WIN32
     m_space_mouse_listener.set_active(true);
+#endif
 
     get<Editor_tools>()->register_tool(this);
 }

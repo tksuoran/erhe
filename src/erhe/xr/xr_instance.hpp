@@ -4,8 +4,15 @@
 
 //#include <openxr/openxr.h>
 
-#include <unknwn.h>
-#define XR_USE_PLATFORM_WIN32      1
+#ifdef _WIN32
+#   include <unknwn.h>
+#   define XR_USE_PLATFORM_WIN32      1
+#endif
+
+#ifdef linux
+#   define XR_USE_PLATFORM_LINUX      1
+#endif
+
 //#define XR_USE_GRAPHICS_API_VULKAN 1
 #define XR_USE_GRAPHICS_API_OPENGL 1
 #include <openxr/openxr.h>
@@ -104,8 +111,8 @@ private:
     auto enumerate_view_configurations  () -> bool;
     auto path                           (const char* path) -> Xr_path;
 
-    Xr_session*                          m_session{nullptr};
-    XrInstance                           m_xr_instance{XR_NULL_HANDLE};
+    Xr_session*                          m_session                   {nullptr};
+    XrInstance                           m_xr_instance               {XR_NULL_HANDLE};
     XrSystemGetInfo                      m_xr_system_info;
     XrSystemId                           m_xr_system_id{0};
     XrViewConfigurationType              m_xr_view_configuration_type{XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO};

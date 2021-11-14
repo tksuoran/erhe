@@ -14,14 +14,16 @@ class Null_uniform_scaling_shape
 {
 public:
     Null_uniform_scaling_shape(ICollision_shape* shape, const float scale)
-        : m_shape{shape}
-        , m_scale{scale}
+        //: m_shape{shape}
+        //, m_scale{scale}
     {
+        static_cast<void>(shape);
+        static_cast<void>(scale);
     }
 
 private:
-    ICollision_shape* m_shape{nullptr};
-    float             m_scale{1.0f};
+    //ICollision_shape* m_shape{nullptr};
+    //float             m_scale{1.0f};
 };
 
 } // namespace erhe::physics

@@ -20,7 +20,7 @@ public:
     bool reverse_depth          {true};
 
     auto depth_clear_value_pointer() const -> const float *; // reverse_depth ? 0.0f : 1.0f;
-    auto depth_function           (const gl::Depth_function depth_function) const -> const gl::Depth_function;
+    auto depth_function           (const gl::Depth_function depth_function) const -> gl::Depth_function;
 };
 
 } // namespace editor

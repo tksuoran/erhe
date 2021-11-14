@@ -144,12 +144,12 @@ void Scene_manager::make_brushes()
             context.normal_style = Normal_style::polygon_normals;
 
             auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
-                std::move(
+                //std::move(
                     make_box(
                         vec3{40.0f, 1.0f, 40.0f},
                         ivec3{40, 1, 40}
                     )
-                )
+                //)
             );
             floor_geometry->name = "floor";
             floor_geometry->build_edges();
@@ -271,7 +271,7 @@ void Scene_manager::make_brushes()
                     return torus_volume(major_radius * scale, minor_radius * scale);
                 };
 
-                auto torus_collision_shape_generator = [major_radius, minor_radius](float scale)
+                auto torus_collision_shape_generator = [](float scale)
                 -> std::shared_ptr<erhe::physics::ICollision_shape>
                 {
                     ZoneScopedN("torus_collision_shape_generator");
@@ -306,7 +306,11 @@ void Scene_manager::make_brushes()
 
                 make_brush(
                     instantiate,
-                    make_shared<erhe::geometry::Geometry>(move(make_torus(major_radius, minor_radius, 42, 32))),
+                    make_shared<erhe::geometry::Geometry>(
+                        //move(
+                            make_torus(major_radius, minor_radius, 42, 32)
+                        //),
+                    ),
                     context,
                     torus_collision_volume_calculator,
                     torus_collision_shape_generator

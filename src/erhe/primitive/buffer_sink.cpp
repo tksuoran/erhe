@@ -1,5 +1,3 @@
-#pragma once
-
 #include "erhe/primitive/buffer_sink.hpp"
 #include "erhe/primitive/buffer_info.hpp"
 #include "erhe/primitive/buffer_writer.hpp"
@@ -12,6 +10,8 @@
 namespace erhe::primitive
 {
 
+Buffer_sink::~Buffer_sink() = default;
+
 Gl_buffer_sink::Gl_buffer_sink(
     erhe::graphics::Buffer_transfer_queue&         buffer_transfer_queue,
     const std::shared_ptr<erhe::graphics::Buffer>& vertex_buffer,
@@ -22,6 +22,8 @@ Gl_buffer_sink::Gl_buffer_sink(
     , m_index_buffer         {index_buffer}
 {
 }
+
+Gl_buffer_sink::~Gl_buffer_sink() = default;
 
 auto Gl_buffer_sink::allocate_vertex_buffer(
     const size_t vertex_count,
@@ -98,6 +100,8 @@ Embree_buffer_sink::Embree_buffer_sink(
     , m_index_buffer {index_buffer}
 {
 }
+
+Embree_buffer_sink::~Embree_buffer_sink() = default;
 
 auto Embree_buffer_sink::allocate_vertex_buffer(
     const size_t vertex_count,

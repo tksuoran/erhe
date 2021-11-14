@@ -2,12 +2,21 @@
 #include "erhe/xr/xr_session.hpp"
 #include "erhe/xr/xr.hpp"
 
-#include <unknwn.h>
-#define XR_USE_PLATFORM_WIN32      1
+#ifdef _WIN32
+#   include <unknwn.h>
+#   define XR_USE_PLATFORM_WIN32      1
+#endif
+
+#ifdef linux
+#   define XR_USE_PLATFORM_LINUX      1
+#endif
+
 //#define XR_USE_GRAPHICS_API_VULKAN 1
 #define XR_USE_GRAPHICS_API_OPENGL 1
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
+
+#include <thread>
 
 namespace erhe::xr {
 
@@ -591,7 +600,19 @@ auto Xr_instance::enumerate_view_configurations() -> bool
         return false;
     }
 
-    m_xr_view_configuration_views = std::vector<XrViewConfigurationView>(view_count, {XR_TYPE_VIEW_CONFIGURATION_VIEW});
+    m_xr_view_configuration_views = std::vector<XrViewConfigurationView>(
+        view_count,
+        {
+            .type                            = XR_TYPE_VIEW_CONFIGURATION_VIEW,
+            .next                            = nullptr,
+            .recommendedImageRectWidth       = 0,
+            .maxImageRectWidth               = 0,
+            .recommendedImageRectHeight      = 0,
+            .maxImageRectHeight              = 0,
+            .recommendedSwapchainSampleCount = 0,
+            .maxSwapchainSampleCount         = 0
+        }
+    );
 
     if (
         !check(
@@ -630,12 +651,12 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     return true;
 }
 
-// /user/hand/left  represents the user’s left hand. It might be tracked using a controller
-//                  or other device in the user’s left hand, or tracked without the user
+// /user/hand/left  represents the userï¿½s left hand. It might be tracked using a controller
+//                  or other device in the userï¿½s left hand, or tracked without the user
 //                  holding anything, e.g. using computer vision.
-// /user/hand/right represents the user’s right hand in analog to the left hand.
-// /user/head       represents inputs on the user’s head, often from a device such as a
-//                  head-mounted display. To reason about the user’s head, see the
+// /user/hand/right represents the userï¿½s right hand in analog to the left hand.
+// /user/head       represents inputs on the userï¿½s head, often from a device such as a
+//                  head-mounted display. To reason about the userï¿½s head, see the
 //                  XR_REFERENCE_SPACE_TYPE_VIEW reference space.
 // /user/gamepad    is a two-handed gamepad device held by the user.
 // /user/treadmill  is a treadmill or other locomotion-targeted input device.
@@ -645,10 +666,10 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 
 // trackpad         A 2D input source that usually includes click and touch component.
 //
-// thumbstick       A small 2D joystick that is meant to be used with the user’s thumb.
+// thumbstick       A small 2D joystick that is meant to be used with the userï¿½s thumb.
 //                  These sometimes include click and/or touch components.
 //
-// joystick         A 2D joystick that is meant to be used with the user’s entire hand,
+// joystick         A 2D joystick that is meant to be used with the userï¿½s entire hand,
 //                  such as a flight stick. These generally do not have click component,
 //                  but might have touch components.
 //
@@ -713,37 +734,37 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 //
 // grip
 //      A pose that allows applications to reliably render a virtual object
-//      held in the user’s hand, whether it is tracked directly or by a motion
+//      held in the userï¿½s hand, whether it is tracked directly or by a motion
 //      controller. The grip pose is defined as follows:
 //
 //          The grip position:
 //
 //              For tracked hands:
-//                  The user’s palm centroid when closing the fist,
+//                  The userï¿½s palm centroid when closing the fist,
 //                  at the surface of the palm.
 //
 //              For handheld motion controllers:
 //                  A fixed position within the controller that generally lines up
 //                  with the palm centroid when held by a hand in a neutral position.
 //                  This position should be adjusted left or right to center the
-//                  position within the controller’s grip.
+//                  position within the controllerï¿½s grip.
 //
-//          The grip orientation’s +X axis:
+//          The grip orientationï¿½s +X axis:
 //                  When you completely open your hand to form a flat 5-finger pose,
-//                  the ray that is normal to the user’s palm (away from the palm
+//                  the ray that is normal to the userï¿½s palm (away from the palm
 //                  in the left hand, into the palm in the right hand).
 //
-//          The grip orientation’s -Z axis:
+//          The grip orientationï¿½s -Z axis:
 //                  When you close your hand partially (as if holding the controller),
 //                  the ray that goes through the center of the tube formed by your
 //                  non-thumb fingers, in the direction of little finger to thumb.
 //
-//          The grip orientation’s +Y axis:
+//          The grip orientationï¿½s +Y axis:
 //                  orthogonal to +Z and +X using the right-hand rule.
 //
 // aim
 //      A pose that allows applications to point in the world using the input source,
-//      according to the platform’s conventions for aiming with that kind of source.
+//      according to the platformï¿½s conventions for aiming with that kind of source.
 //      The aim pose is defined as follows:
 //
 //          For tracked hands:
@@ -757,7 +778,7 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 //              objects in the world with the motion controller, with +Y up, +X to
 //              the right, and -Z forward. This is usually for applications that
 //              are rendering a model matching the physical controller, as an
-//              application rendering a virtual object in the user’s hand likel
+//              application rendering a virtual object in the userï¿½s hand likel
 //              prefers to point based on the geometry of that virtual object.
 //              The ray chosen will be runtime-dependent, although this will often
 //              emerge from the frontmost tip of a motion controller.
@@ -869,10 +890,10 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 //      .../input/grip/pose
 //      .../input/aim/pose
 //      .../output/haptic
-constexpr const char* c_interaction_profile_simple_controller = "/interaction_profiles/khr/simple_controller";
+//constexpr const char* c_interaction_profile_simple_controller = "/interaction_profiles/khr/simple_controller";
 constexpr const char* c_interaction_profile_vive_controller   = "/interaction_profiles/htc/vive_controller";
-constexpr const char* c_interaction_profile_index_controller  = "/interaction_profiles/valve/index_controller";
-constexpr const char* c_interaction_profile_vive_pro          = "/interaction_profiles/htc/vive_pro";
+//constexpr const char* c_interaction_profile_index_controller  = "/interaction_profiles/valve/index_controller";
+//constexpr const char* c_interaction_profile_vive_pro          = "/interaction_profiles/htc/vive_pro";
 
 constexpr const char* c_user_hand_left  = "/user/hand/left";
 constexpr const char* c_user_hand_right = "/user/hand/right";

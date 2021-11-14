@@ -17,7 +17,7 @@ namespace editor {
 
 using namespace std;
 
-static thread_local erhe::toolkit::Context_window* s_worker_thread_context = nullptr;
+//static thread_local erhe::toolkit::Context_window* s_worker_thread_context = nullptr;
 
 Editor_time::Editor_time()
     : erhe::components::Component{c_name}

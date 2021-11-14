@@ -61,7 +61,7 @@ public:
         return *build_info_set.gl.buffer.vertex_format.get();
     }
 
-    auto gl_index_type() const -> const gl::Draw_elements_type
+    auto gl_index_type() const -> gl::Draw_elements_type
     {
         return build_info_set.gl.buffer.index_type;
     }

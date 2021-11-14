@@ -19,7 +19,7 @@
             ],
             "defines": [],
             "compilerPath":          "/usr/bin/clang",
-            "compileCommands":       "${workspaceFolder}/build/compile_commands.json",
+            "compileCommands":       "${workspaceFolder}/vscode-cmake-build/compile_commands.json",
             "cStandard":             "c11",
             "cppStandard":           "c++20",
             "intelliSenseMode":      "clang-x64",

@@ -14,12 +14,14 @@ class Null_world
     : public IWorld
 {
 public:
+    virtual ~Null_world() override;
+
     // Implements IWorld
     void enable_physics_updates    ()                        override;
     void disable_physics_updates   ()                        override;
     auto is_physics_updates_enabled() const -> bool          override;
     void update_fixed_step         (const double dt)         override;
-    void set_gravity               (const glm::vec3 gravity) ;
+    void set_gravity               (const glm::vec3 gravity) override;
     auto get_gravity               () const -> glm::vec3     override;
     void add_rigid_body            (IRigid_body* rigid_body) override;
     void remove_rigid_body         (IRigid_body* rigid_body) override;

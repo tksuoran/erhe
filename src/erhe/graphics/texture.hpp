@@ -39,7 +39,7 @@ public:
     int                 level_count           {1};
     int                 row_stride            {0};
     Buffer*             buffer                {nullptr};
-    int                 wrap_texture_name     {0};
+    GLuint              wrap_texture_name     {0};
 };
 
 class Texture

@@ -27,7 +27,7 @@ auto IRigid_body::create_shared(
 
 Null_rigid_body::Null_rigid_body(
     IRigid_body_create_info& create_info,
-    IMotion_state*           motion_state
+    IMotion_state*           /*motion_state*/
 )
     : m_collision_shape{create_info.collision_shape}
     , m_mass           {create_info.mass}
@@ -40,14 +40,21 @@ Null_rigid_body::Null_rigid_body(
 {
 }
 
+Null_rigid_body::~Null_rigid_body() = default;
+
 auto Null_rigid_body::get_motion_mode() const -> Motion_mode
 {
     return m_motion_mode;
 }
 
-auto Null_rigid_body::get_collision_shape() const -> ICollision_shape*
+void Null_rigid_body::set_collision_shape (const std::shared_ptr<ICollision_shape>& collision_shape)
 {
-    return m_collision_shape.get();
+    m_collision_shape = collision_shape;
+}
+
+auto Null_rigid_body::get_collision_shape() const -> std::shared_ptr<ICollision_shape>
+{
+    return m_collision_shape;
 }
 
 auto Null_rigid_body::get_friction() const -> float
@@ -91,6 +98,13 @@ void Null_rigid_body::end_move()
 void Null_rigid_body::set_motion_mode(const Motion_mode motion_mode)
 {
     m_motion_mode = motion_mode;
+}
+
+void Null_rigid_body::set_center_of_mass_transform(const glm::mat3 basis, const glm::vec3 origin)
+{
+    // TODO
+    static_cast<void>(basis);
+    static_cast<void>(origin);
 }
 
 void Null_rigid_body::set_world_transform(const glm::mat3 basis, const glm::vec3 origin)

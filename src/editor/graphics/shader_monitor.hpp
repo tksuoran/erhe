@@ -27,7 +27,7 @@ public:
     void initialize_component() override;
 
     // Implements IUpdate_once_per_frame
-    void update_once_per_frame(const erhe::components::Time_context& time_context);
+    void update_once_per_frame(const erhe::components::Time_context& time_context) override;
 
     void add(
         erhe::graphics::Shader_stages::Create_info    create_info,

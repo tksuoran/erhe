@@ -25,36 +25,36 @@ using namespace erhe::geometry;
 enum class Command : unsigned int
 {
     Unknown = 0,
-    Basis_matrix,
-    Bevel_interpolation,
-    Color_interpolation,
-    Connectivity,
-    Curve,
-    Curve_2D,
-    Curve_approximation_technique,
-    Curve_type,
-    Degree,
-    Dissolve_interpolation,
-    End,
+    //Basis_matrix,
+    //Bevel_interpolation,
+    //Color_interpolation,
+    //Connectivity,
+    //Curve,
+    //Curve_2D,
+    //Curve_approximation_technique,
+    //Curve_type,
+    //Degree,
+    //Dissolve_interpolation,
+    //End,
     Face,
     Group_name,
-    Inner_trimming_loop,
-    Level_of_detail,
-    Line,
+    //Inner_trimming_loop,
+    //Level_of_detail,
+    //Line,
     Material_library,
-    Merging_group,
+    //Merging_group,
     Object_name,
-    Outer_trimming,
-    Parameter_values,
-    Point,
-    Ray_tracing,
-    Shadow_casting,
-    Smoothing_group,
-    Special_curve,
-    Special_point,
-    Step_size,
-    Surface,
-    Surface_approximation_technique,
+    //Outer_trimming,
+    //Parameter_values,
+    //Point,
+    //Ray_tracing,
+    //Shadow_casting,
+    //Smoothing_group,
+    //Special_curve,
+    //Special_point,
+    //Step_size,
+    //Surface,
+    //Surface_approximation_technique,
     Use_material,
     Vertex_parameter_space,
     Vertex_position,
@@ -73,43 +73,43 @@ Command tokenize(const std::string& text)
     // Element data
     if (text == "f")          return Command::Face;
     if (text == "fo")         return Command::Face; // Face outline
-    if (text == "l")          return Command::Line;
-    if (text == "p")          return Command::Point;
-    if (text == "curv")       return Command::Curve;
-    if (text == "curv2D")     return Command::Curve_2D;
-    if (text == "s")          return Command::Surface;
+    //if (text == "l")          return Command::Line;
+    //if (text == "p")          return Command::Point;
+    //if (text == "curv")       return Command::Curve;
+    //if (text == "curv2D")     return Command::Curve_2D;
+    //if (text == "s")          return Command::Surface;
 
     // Surface data
-    if (text == "deg")        return Command::Degree;
-    if (text == "bmat")       return Command::Basis_matrix;
-    if (text == "step")       return Command::Step_size;
-    if (text == "cstype")     return Command::Curve_type;
-    if (text == "con")        return Command::Connectivity;
+    //if (text == "deg")        return Command::Degree;
+    //if (text == "bmat")       return Command::Basis_matrix;
+    //if (text == "step")       return Command::Step_size;
+    //if (text == "cstype")     return Command::Curve_type;
+    //if (text == "con")        return Command::Connectivity;
 
-    if (text == "parm")       return Command::Parameter_values;
-    if (text == "trim")       return Command::Outer_trimming;
-    if (text == "hole")       return Command::Inner_trimming_loop;
-    if (text == "scrv")       return Command::Special_curve;
-    if (text == "sp")         return Command::Special_point;
-    if (text == "end")        return Command::End;
+    //if (text == "parm")       return Command::Parameter_values;
+    //if (text == "trim")       return Command::Outer_trimming;
+    //if (text == "hole")       return Command::Inner_trimming_loop;
+    //if (text == "scrv")       return Command::Special_curve;
+    //if (text == "sp")         return Command::Special_point;
+    //if (text == "end")        return Command::End;
 
     // Grouping data
     if (text == "g")          return Command::Group_name;
-    if (text == "s")          return Command::Smoothing_group;
-    if (text == "mg")         return Command::Merging_group;
+    //if (text == "s")          return Command::Smoothing_group;
+    //if (text == "mg")         return Command::Merging_group;
     if (text == "o")          return Command::Object_name;
 
     // Display and rendering data
-    if (text == "bevel")      return Command::Bevel_interpolation;
-    if (text == "c_interp")   return Command::Color_interpolation;
-    if (text == "d_interp")   return Command::Dissolve_interpolation;
-    if (text == "lod")        return Command::Level_of_detail;
+    //if (text == "bevel")      return Command::Bevel_interpolation;
+    //if (text == "c_interp")   return Command::Color_interpolation;
+    //if (text == "d_interp")   return Command::Dissolve_interpolation;
+    //if (text == "lod")        return Command::Level_of_detail;
     if (text == "usemtl")     return Command::Use_material;
     if (text == "mtllib")     return Command::Material_library;
-    if (text == "shadow_obj") return Command::Shadow_casting;
-    if (text == "trace_obj")  return Command::Ray_tracing;
-    if (text == "ctech")      return Command::Curve_approximation_technique;
-    if (text == "stech")      return Command::Surface_approximation_technique;
+    //if (text == "shadow_obj") return Command::Shadow_casting;
+    //if (text == "trace_obj")  return Command::Ray_tracing;
+    //if (text == "ctech")      return Command::Curve_approximation_technique;
+    //if (text == "stech")      return Command::Surface_approximation_technique;
 
     return Command::Unknown;
 }
@@ -389,16 +389,12 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                             (obj_vertex_index > 0)
                                 ? obj_vertex_index - 1
                                 : obj_vertex_index + static_cast<int>(positions.size());
-                        if (position_index < 0) 
-                        {
-                            DebugBreak();
-                        }
 
                         // Vertex indices in OBJ file are global.
                         // Each erhe::geometry Geometry has it's own namespace for Point_id.
                         // This maps OBJ vertex indices to geometry Point_id.
                         constexpr auto null_point = std::numeric_limits<Point_id>::max();
-                        while (obj_point_to_geometry_point.size() <= position_index)
+                        while (static_cast<int>(obj_point_to_geometry_point.size()) <= position_index)
                         {
                             obj_point_to_geometry_point.push_back(null_point);
                         }
@@ -409,7 +405,8 @@ auto parse_obj_geometry(const std::filesystem::path& path)
 
                         const Point_id  point_id  = obj_point_to_geometry_point[position_index];
                         const Corner_id corner_id = geometry->make_polygon_corner(polygon_id, point_id);
-                        VERIFY(position_index < positions.size());
+                        VERIFY(position_index >= 0);
+                        VERIFY(position_index < static_cast<int>(positions.size()));
 
                         point_positions->put(point_id, positions[position_index]);
 
@@ -418,33 +415,25 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                             point_colors->put(point_id, colors[position_index]);
                         }
 
-                        if (j < face_vertex_texcoord_indices.size())
+                        if (j < static_cast<int>(face_vertex_texcoord_indices.size()))
                         {
                             const int obj_texcoord_index = face_vertex_texcoord_indices[j];
                             const int texcoord_index =
                                 (obj_texcoord_index > 0)
                                     ? obj_texcoord_index - 1
                                     : obj_texcoord_index + static_cast<int>(texcoords.size());
-                            if (texcoord_index < 0) 
-                            {
-                                DebugBreak();
-                            }
-                            VERIFY(texcoord_index < texcoords.size());
+                            VERIFY(texcoord_index < static_cast<int>(texcoords.size()));
                             corner_texcoords->put(corner_id, texcoords[texcoord_index]);
                         }
 
-                        if (j < face_vertex_normal_indices.size())
+                        if (j < static_cast<int>(face_vertex_normal_indices.size()))
                         {
                             const int obj_normal_index = face_vertex_normal_indices[j];
                             const int normal_index =
                                 (obj_normal_index > 0)
                                     ? obj_normal_index - 1
                                     : obj_normal_index + static_cast<int>(normals.size());
-                            if (normal_index < 0) 
-                            {
-                                DebugBreak();
-                            }
-                            VERIFY(normal_index < normals.size());
+                            VERIFY(normal_index < static_cast<int>(normals.size()));
                             corner_normals->put(corner_id, normals[normal_index]);
                         }
                     }

@@ -6,13 +6,25 @@
 #include "erhe/xr/xr.hpp"
 #include "erhe/xr/xr_swapchain_image.hpp"
 
-#define GLFW_EXPOSE_NATIVE_WIN32 1
-#define GLFW_EXPOSE_NATIVE_WGL   1
+#ifdef _WIN32
+#   define GLFW_EXPOSE_NATIVE_WIN32 1
+#   define GLFW_EXPOSE_NATIVE_WGL   1
+#endif
 #include <GLFW/glfw3.h>
-#include <GLFW/glfw3native.h>
 
-#include <unknwn.h>
-#define XR_USE_PLATFORM_WIN32      1
+#ifdef _WIN32
+#   include <GLFW/glfw3native.h>
+#endif
+
+#ifdef _WIN32
+#   include <unknwn.h>
+#   define XR_USE_PLATFORM_WIN32      1
+#endif
+
+#ifdef linux
+#   define XR_USE_PLATFORM_LINUX      1
+#endif
+
 //#define XR_USE_GRAPHICS_API_VULKAN 1
 #define XR_USE_GRAPHICS_API_OPENGL 1
 #include <openxr/openxr.h>
@@ -111,6 +123,7 @@ auto Xr_session::create_session() -> bool
         return false;
     }
 
+#ifdef _WIN32
     XrGraphicsBindingOpenGLWin32KHR graphics_binding_opengl_win32;
     graphics_binding_opengl_win32.type  = XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR;
     graphics_binding_opengl_win32.next  = nullptr;
@@ -133,6 +146,13 @@ auto Xr_session::create_session() -> bool
     {
         return false;
     }
+#endif
+
+#ifdef linux
+    // TODO
+    abort();
+#endif
+
     if (m_xr_session == XR_NULL_HANDLE)
     {
         log_xr.error("xrCreateSession() created XR_NULL_HANDLE session\n");

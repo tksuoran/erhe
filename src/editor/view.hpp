@@ -25,7 +25,7 @@ public:
     ~Editor_view() override;
 
     // Implements Component
-    void connect();
+    void connect() override;
 
     // Implements View
     void update        () override;

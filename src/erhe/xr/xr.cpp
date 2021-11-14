@@ -3,9 +3,12 @@
 
 #include <openxr/openxr_reflection.h>
 
+#include <sstream>
+#include <thread>
+
 #define GEN_C_STR_CASE(name, val) case name: return #name;
 #define GEN_C_STR(T)                            \
-    constexpr const char* c_str(::T e) noexcept \
+    const char* c_str(::T e) noexcept \
     {                                           \
         switch (e)                              \
         {                                       \

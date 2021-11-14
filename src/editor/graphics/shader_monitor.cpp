@@ -126,7 +126,7 @@ void Shader_monitor::poll_thread()
     log_shader_monitor.info("Exiting shader monitor poll thread");
 }
 
-static constexpr const char* c_shader_monitor_poll = "shader monitor poll";
+// static constexpr const char* c_shader_monitor_poll = "shader monitor poll";
 
 void Shader_monitor::update_once_per_frame(const erhe::components::Time_context& time_context)
 {

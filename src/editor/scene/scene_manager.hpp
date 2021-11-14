@@ -100,10 +100,10 @@ public:
     }
 
     // Implements IUpdate_once_per_frame
-    void update_once_per_frame(const erhe::components::Time_context& time_context);
+    void update_once_per_frame(const erhe::components::Time_context& time_context) override;
 
     // Implements IUpdate_fixed_step
-    void update_fixed_step(const erhe::components::Time_context& time_context);
+    void update_fixed_step(const erhe::components::Time_context& time_context) override;
 
 private:
     auto build_info_set           () -> erhe::primitive::Build_info_set&;

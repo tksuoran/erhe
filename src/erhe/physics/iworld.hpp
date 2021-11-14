@@ -14,6 +14,8 @@ class IRigid_body;
 class IWorld
 {
 public:
+    virtual ~IWorld(){}
+
     static auto create() -> IWorld*;
     static auto create_shared() -> std::shared_ptr<IWorld>;
     static auto create_unique() -> std::unique_ptr<IWorld>;

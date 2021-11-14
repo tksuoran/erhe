@@ -27,6 +27,8 @@ class Vertex_buffer_writer;
 class Buffer_sink
 {
 public:
+    virtual ~Buffer_sink();
+
     virtual auto allocate_vertex_buffer(
         const size_t vertex_count,
         const size_t vertex_element_size
@@ -50,6 +52,7 @@ public:
         const std::shared_ptr<erhe::graphics::Buffer>& vertex_buffer,
         const std::shared_ptr<erhe::graphics::Buffer>& index_buffer
     );
+    ~Gl_buffer_sink() override;
 
     auto allocate_vertex_buffer(
         const size_t vertex_count,
@@ -78,6 +81,7 @@ public:
         const std::shared_ptr<erhe::raytrace::IBuffer>& vertex_buffer,
         const std::shared_ptr<erhe::raytrace::IBuffer>& index_buffer
     );
+    ~Embree_buffer_sink() override;
 
     auto allocate_vertex_buffer(
         const size_t vertex_count,

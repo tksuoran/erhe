@@ -18,6 +18,8 @@ enum class Axis : int
 class ICollision_shape
 {
 public:
+    virtual ~ICollision_shape(){};
+    
     static auto create_box_shape                   (const glm::vec3 half_extents) -> ICollision_shape*;
     static auto create_box_shape_shared            (const glm::vec3 half_extents) -> std::shared_ptr<ICollision_shape>;
 

@@ -5,14 +5,19 @@ set(source_list
     file.hpp
     math_util.cpp
     math_util.hpp
-    space_mouse.cpp
-    space_mouse.hpp
     tracy_client.hpp
     verify.hpp
     view.cpp
     view.hpp
     window.hpp
 )
+
+if (WIN32)
+    list(APPEND source_list
+        space_mouse.cpp
+        space_mouse.hpp
+    )
+endif ()
 
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
     list(APPEND source_list
@@ -38,9 +43,16 @@ target_link_libraries(
     erhe_gl
     fmt::fmt
     glm::glm
-    hidapi
     Microsoft.GSL::GSL
 )
+
+if (WIN32)
+    target_link_libraries(
+        ${_target}
+        PRIVATE
+        hidapi
+    )
+endif ()
 
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
     target_link_libraries(${_target} PUBLIC glfw)

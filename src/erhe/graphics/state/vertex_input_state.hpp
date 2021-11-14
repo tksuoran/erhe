@@ -13,9 +13,10 @@
 #include <cstddef>
 #include <deque>
 #include <memory>
-#include <optional>
-#include <vector>
 #include <mutex>
+#include <optional>
+#include <thread>
+#include <vector>
 
 namespace erhe::graphics
 {

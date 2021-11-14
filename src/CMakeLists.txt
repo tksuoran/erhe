@@ -1,6 +1,8 @@
 # CMakeLists.txt for erhe/src
 
-add_subdirectory(hidapi)
+if (WIN32)
+    add_subdirectory(hidapi)
+endif ()
 add_subdirectory(imgui)
 add_subdirectory(mikktspace)
 add_subdirectory(erhe)

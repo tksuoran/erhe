@@ -3,7 +3,10 @@
 #include "scene/frame_controller.hpp"
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
-#include "erhe/toolkit/space_mouse.hpp"
+
+#ifdef _WIN32
+#   include "erhe/toolkit/space_mouse.hpp"
+#endif
 
 namespace erhe::scene
 {
@@ -19,6 +22,7 @@ class Fly_camera_tool;
 class Scene_manager;
 class Scene_root;
 
+#ifdef _WIN32
 class Fly_camera_space_mouse_listener
     : public erhe::toolkit::Space_mouse_listener
 {
@@ -36,6 +40,7 @@ private:
     bool             m_is_active{false};
     Fly_camera_tool& m_fly_camera_tool;
 };
+#endif
 
 class Fly_camera_tool
     : public erhe::components::Component
@@ -86,8 +91,10 @@ private:
     std::mutex                            m_mutex;
     std::shared_ptr<Scene_root>           m_scene_root;
     Frame_controller                      m_camera_controller;
+#ifdef _WIN32
     Fly_camera_space_mouse_listener       m_space_mouse_listener;
     erhe::toolkit::Space_mouse_controller m_space_mouse_controller;
+#endif
     State                                 m_state      {State::Passive};
     double                                m_mouse_x    {0.0};
     double                                m_mouse_y    {0.0};

@@ -50,6 +50,8 @@ public:
         IMotion_state*           motion_state
     ) -> std::shared_ptr<IRigid_body>;
 
+    virtual ~IRigid_body(){}
+
     virtual void set_collision_shape         (const std::shared_ptr<ICollision_shape>& collision_shape) = 0;
     virtual auto get_collision_shape         () const -> std::shared_ptr<ICollision_shape>              = 0;
     virtual void set_motion_mode             (const Motion_mode motion_mode)                            = 0;

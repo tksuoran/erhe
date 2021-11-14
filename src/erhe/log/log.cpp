@@ -67,21 +67,21 @@ void Log::set_text_color(int c)
 #    else
     switch (c)
     {
-        case Log::Color::DARK_BLUE:    fputs("\033[22;34m", stdout); break;
-        case Log::Color::DARK_GREEN:   fputs("\033[22;32m", stdout); break;
-        case Log::Color::DARK_RED:     fputs("\033[22;31m", stdout); break;
-        case Log::Color::DARK_CYAN:    fputs("\033[22;36m", stdout); break;
-        case Log::Color::DARK_MAGENTA: fputs("\033[22;35m", stdout); break;
-        case Log::Color::DARK_YELLOW:  fputs("\033[22;33m", stdout); break;
-        case Log::Color::BLUE:         fputs("\033[1;34m", stdout); break;
-        case Log::Color::GREEN:        fputs("\033[1;32m", stdout); break;
-        case Log::Color::RED:          fputs("\033[1;31m", stdout); break;
-        case Log::Color::CYAN:         fputs("\033[1;36m", stdout); break;
-        case Log::Color::MAGENTA:      fputs("\033[1;35m", stdout); break;
-        case Log::Color::YELLOW:       fputs("\033[1;33m", stdout); break;
-        case Log::Color::DARK_GREY:    fputs("\033[1;30m", stdout); break;
-        case Log::Color::GREY:         fputs("\033[22;37m", stdout); break;
-        case Log::Color::WHITE:        fputs("\033[1;37m", stdout); break;
+        case Color::DARK_BLUE:    fputs("\033[22;34m", stdout); break;
+        case Color::DARK_GREEN:   fputs("\033[22;32m", stdout); break;
+        case Color::DARK_RED:     fputs("\033[22;31m", stdout); break;
+        case Color::DARK_CYAN:    fputs("\033[22;36m", stdout); break;
+        case Color::DARK_MAGENTA: fputs("\033[22;35m", stdout); break;
+        case Color::DARK_YELLOW:  fputs("\033[22;33m", stdout); break;
+        case Color::BLUE:         fputs("\033[1;34m", stdout); break;
+        case Color::GREEN:        fputs("\033[1;32m", stdout); break;
+        case Color::RED:          fputs("\033[1;31m", stdout); break;
+        case Color::CYAN:         fputs("\033[1;36m", stdout); break;
+        case Color::MAGENTA:      fputs("\033[1;35m", stdout); break;
+        case Color::YELLOW:       fputs("\033[1;33m", stdout); break;
+        case Color::DARK_GREY:    fputs("\033[1;30m", stdout); break;
+        case Color::GREY:         fputs("\033[22;37m", stdout); break;
+        case Color::WHITE:        fputs("\033[1;37m", stdout); break;
         default: break;
     }
 #    endif
@@ -105,7 +105,7 @@ void Log::indent(int indent_amount)
 }
 
 void Category::write(bool indent, int level, const char* format, fmt::format_args args)
-{                       
+{
     if (level < m_level)
     {
         return;
@@ -140,7 +140,7 @@ auto timestamp() -> std::string
 #ifdef _MSC_VER
     localtime_s(&time, &ts.tv_sec);
 #else
-    localtime_s(&ts.tv_sec, &time);
+    localtime_r(&ts.tv_sec, &time);
 #endif
 
     // Write time

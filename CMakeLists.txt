@@ -3,7 +3,7 @@
 cmake_policy(SET CMP0048 NEW) # The project() command manages VERSION variables.
 cmake_policy(SET CMP0079 NEW) # target_link_libraries() allows use with targets in other directories.
 project(erhe VERSION 1.0 LANGUAGES C CXX)
-cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.16.3 FATAL_ERROR)
 
 set(ERHE_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/src")
 

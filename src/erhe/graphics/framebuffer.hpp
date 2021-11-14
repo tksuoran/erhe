@@ -6,6 +6,7 @@
 #include <optional>
 
 #include <mutex>
+#include <thread>
 #include <vector>
 
 namespace erhe::graphics

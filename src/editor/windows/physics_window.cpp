@@ -59,7 +59,7 @@ void Physics_window::imgui(Pointer_context& /*pointer_context*/)
 
     ImGui::Begin("Physics");
 
-    const auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
+    //const auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
     auto& physics_world = m_scene_root->physics_world();
     const bool physics_enabled = physics_world.is_physics_updates_enabled();
     bool updated_physics_enabled = physics_enabled;
@@ -117,8 +117,8 @@ void Physics_window::imgui(Pointer_context& /*pointer_context*/)
         }
     }
 
-    const auto& selecion = m_selection_tool->selection();
-    for (const auto item : selecion)
+    const auto& selection = m_selection_tool->selection();
+    for (const auto& item : selection)
     {
         auto* node_physics = as_physics(item.get());
         if (!node_physics)
