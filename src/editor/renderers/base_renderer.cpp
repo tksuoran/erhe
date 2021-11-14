@@ -16,6 +16,7 @@
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/scene/scene.hpp"
 #include "erhe/scene/viewport.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
@@ -106,13 +107,15 @@ auto Base_renderer::id_ranges() const -> const std::vector<Id_range>&
     return m_id_ranges;
 }
 
-auto Base_renderer::update_primitive_buffer(const Mesh_collection&   meshes,
-                                            const Visibility_filter& visibility_filter)
+auto Base_renderer::update_primitive_buffer(
+    const Mesh_layer&        mesh_layer,
+    const Visibility_filter& visibility_filter
+)
 -> Base_renderer::Buffer_range
 {
     ZoneScoped;
 
-    log_render.trace("{}(meshes.size() = {})\n", __func__, meshes.size());
+    log_render.trace("{}(meshes.size() = {})\n", __func__, mesh_layer.meshes.size());
 
     m_primitive_writer.begin();
     const auto&  shader_resources   = *m_program_interface->shader_resources.get();
@@ -120,7 +123,7 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection&   meshes,
     auto         primitive_gpu_data = current_frame_resources().primitive_buffer.map();
     const auto&  offsets            = shader_resources.primitive_block_offsets;
     size_t       primitive_index    = 0;
-    for (auto mesh : meshes)
+    for (auto mesh : mesh_layer.meshes)
     {
         VERIFY(mesh);
         if (!visibility_filter(mesh->visibility_mask()))
@@ -128,8 +131,10 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection&   meshes,
             continue;
         }
 
+        const auto& mesh_data = mesh->data;
+
         size_t mesh_primitive_index{0};
-        for (auto& primitive : mesh->primitives)
+        for (auto& primitive : mesh_data.primitives)
         {
             const auto* const primitive_geometry = primitive.primitive_geometry.get();
             log_render.trace("primitive_index = {}\n", primitive_index);
@@ -151,12 +156,12 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection&   meshes,
             const uint32_t extra2          = 0;
             const uint32_t extra3          = 0;
             const auto color_span =
-                (primitive_color_source == Primitive_color_source::id_offset           ) ? as_span(id_offset_vec4          ) :
-                (primitive_color_source == Primitive_color_source::mesh_wireframe_color) ? as_span(mesh->wireframe_color   ) :
+                (primitive_color_source == Primitive_color_source::id_offset           ) ? as_span(id_offset_vec4           ) :
+                (primitive_color_source == Primitive_color_source::mesh_wireframe_color) ? as_span(mesh_data.wireframe_color) :
                                                                                            as_span(primitive_constant_color);
             const auto size_span =
-                (primitive_size_source == Primitive_size_source::mesh_point_size) ? as_span(mesh->point_size       ) :
-                (primitive_size_source == Primitive_size_source::mesh_line_width) ? as_span(mesh->line_width       ) :
+                (primitive_size_source == Primitive_size_source::mesh_point_size) ? as_span(mesh_data.point_size   ) :
+                (primitive_size_source == Primitive_size_source::mesh_line_width) ? as_span(mesh_data.line_width   ) :
                                                                                     as_span(primitive_constant_size);
             //memset(reinterpret_cast<uint8_t*>(model_gpu_data.data()) + offset, 0, entry_size);
             {
@@ -190,14 +195,14 @@ auto Base_renderer::update_primitive_buffer(const Mesh_collection&   meshes,
 }
 
 auto Base_renderer::update_light_buffer(
-    const Light_collection& lights,
-    const Viewport          light_texture_viewport,
-    const glm::vec4         ambient_light)
+    const Light_layer&      light_layer,
+    const Viewport          light_texture_viewport
+)
 -> Base_renderer::Buffer_range
 {
     ZoneScoped;
 
-    log_render.trace("{}(lights.size() = {})\n", __func__, lights.size());
+    log_render.trace("{}(lights.size() = {})\n", __func__, light_layer.lights.size());
 
     const auto&  shader_resources = *m_program_interface->shader_resources.get();
     const size_t entry_size       = shader_resources.light_struct.size_bytes();
@@ -212,7 +217,7 @@ auto Base_renderer::update_light_buffer(
 
     m_light_writer.write_offset += offsets.light_struct;
 
-    for (auto light : lights)
+    for (auto light : light_layer.lights)
     {
         VERIFY(light);
 
@@ -241,17 +246,19 @@ auto Base_renderer::update_light_buffer(
         m_light_writer.write_offset += entry_size;
         ++light_index;
     }
-    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.directional_light_count, as_span(directional_light_count));
-    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.point_light_count,       as_span(point_light_count)      );
-    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.spot_light_count,        as_span(spot_light_count)       );
-    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.ambient_light,           as_span(ambient_light)          );
+    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.directional_light_count, as_span(directional_light_count)  );
+    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.point_light_count,       as_span(point_light_count)        );
+    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.spot_light_count,        as_span(spot_light_count)         );
+    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.ambient_light,           as_span(light_layer.ambient_light));
 
     m_light_writer.end();
 
     return m_light_writer.range;
 }
 
-auto Base_renderer::update_material_buffer(const Material_collection& materials) -> Base_renderer::Buffer_range
+auto Base_renderer::update_material_buffer(
+    const Material_collection& materials
+) -> Base_renderer::Buffer_range
 {
     ZoneScoped;
 
@@ -332,7 +339,7 @@ auto Base_renderer::update_camera_buffer(
 
 
 auto Base_renderer::update_draw_indirect_buffer(
-    const Mesh_collection&   meshes,
+    const Mesh_layer&        mesh_layer,
     const Primitive_mode     primitive_mode,
     const Visibility_filter& visibility_filter
 ) -> Base_renderer::Draw_indirect_buffer_range
@@ -344,13 +351,13 @@ auto Base_renderer::update_draw_indirect_buffer(
     uint32_t base_instance      {0};
     size_t   draw_indirect_count{0};
     m_draw_indirect_writer.begin();
-    for (auto mesh : meshes)
+    for (auto mesh : mesh_layer.meshes)
     {
         if (!visibility_filter(mesh->visibility_mask()))
         {
             continue;
         }
-        for (auto& primitive : mesh->primitives)
+        for (auto& primitive : mesh->data.primitives)
         {
             const auto* const primitive_geometry = primitive.primitive_geometry.get();
             const auto index_range = primitive_geometry->index_range(primitive_mode);

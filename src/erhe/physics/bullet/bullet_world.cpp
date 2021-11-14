@@ -53,10 +53,7 @@ Debug_draw_adapter::Debug_draw_adapter() = default;
 
 void Debug_draw_adapter::set_debug_draw(IDebug_draw* debug_draw)
 {
-    if (m_debug_draw != nullptr)
-    {
-        m_debug_draw = debug_draw;
-    }
+    m_debug_draw = debug_draw;
 }
 
 // Implements btIDebugDraw

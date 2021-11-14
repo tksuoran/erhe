@@ -46,6 +46,11 @@ void Transform::fix_inverse()
     m_inverse_matrix = glm::inverse(m_matrix);
 }
 
+auto Transform::inverse(const Transform& transform) -> const Transform
+{
+    return Transform{transform.inverse_matrix(), transform.matrix()};
+}
+
 void Transform::set_translation(const float x, const float y, const float z)
 {
     m_matrix         = erhe::toolkit::create_translation( x,  y,  z);
@@ -191,6 +196,14 @@ void Transform::catenate(const mat4 m)
 {
     m_matrix         = m_matrix * m;
     m_inverse_matrix = glm::inverse(m_matrix);
+}
+
+auto operator*(const Transform& lhs, const Transform& rhs) -> Transform
+{
+    return Transform{
+        lhs.matrix() * rhs.matrix(),
+        rhs.inverse_matrix() * lhs.inverse_matrix()
+    };
 }
 
 } // namespace erhe::scene

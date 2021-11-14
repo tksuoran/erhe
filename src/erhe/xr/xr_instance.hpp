@@ -2,7 +2,14 @@
 
 #include <vector>
 
+//#include <openxr/openxr.h>
+
+#include <unknwn.h>
+#define XR_USE_PLATFORM_WIN32      1
+//#define XR_USE_GRAPHICS_API_VULKAN 1
+#define XR_USE_GRAPHICS_API_OPENGL 1
 #include <openxr/openxr.h>
+#include <openxr/openxr_platform.h>
 
 namespace erhe::xr {
 
@@ -32,7 +39,7 @@ public:
     auto get_xr_instance                () const -> XrInstance;
     auto get_xr_system_id               () const -> XrSystemId;
     auto get_xr_view_configuration_type () const -> XrViewConfigurationType;
-    auto get_xr_view_conriguration_views() const -> const std::vector<XrViewConfigurationView>&;
+    auto get_xr_view_configuration_views() const -> const std::vector<XrViewConfigurationView>&;
     auto get_xr_environment_blend_mode  () const -> XrEnvironmentBlendMode;
     auto update_actions                 (Xr_session& session) -> bool;
     auto get_current_interaction_profile(Xr_session& session) -> bool;
@@ -83,6 +90,10 @@ public:
 
     Paths   paths;
     Actions actions;
+
+    PFN_xrCreateDebugUtilsMessengerEXT     xrCreateDebugUtilsMessengerEXT    {nullptr};
+    PFN_xrGetVisibilityMaskKHR             xrGetVisibilityMaskKHR            {nullptr};
+    PFN_xrGetOpenGLGraphicsRequirementsKHR xrGetOpenGLGraphicsRequirementsKHR{nullptr};
 
 private:
     auto enumerate_layers               () -> bool;

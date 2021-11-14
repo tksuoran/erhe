@@ -83,7 +83,7 @@ void Editor_view::update_pointer()
             pointer_context.hover_content     = pointer_context.hover_layer == &m_scene_root->content_layer();
             if (pointer_context.hover_mesh != nullptr)
             {
-                const auto& primitive        = pointer_context.hover_mesh->primitives[pointer_context.hover_primitive];
+                const auto& primitive        = pointer_context.hover_mesh->data.primitives[pointer_context.hover_primitive];
                 auto*       geometry         = primitive.primitive_geometry->source_geometry.get();
                 pointer_context.geometry     = geometry;
                 pointer_context.hover_normal = {};

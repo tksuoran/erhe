@@ -176,13 +176,13 @@ void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
     }
 }
 
-void Id_renderer::render_layer(erhe::scene::Layer* layer)
+void Id_renderer::render_layer(const erhe::scene::Mesh_layer& mesh_layer)
 {
     ZoneScoped;
 
     Layer_range layer_range;
     layer_range.offset = id_offset();
-    layer_range.layer  = layer;
+    layer_range.layer  = &mesh_layer;
 
     erhe::scene::Visibility_filter id_filter{
         erhe::scene::Node::c_visibility_id,
@@ -190,9 +190,9 @@ void Id_renderer::render_layer(erhe::scene::Layer* layer)
         0u,
         0u
     };
-    update_primitive_buffer(layer->meshes, id_filter);
+    update_primitive_buffer(mesh_layer, id_filter);
     auto draw_indirect_buffer_range = update_draw_indirect_buffer(
-        layer->meshes,
+        mesh_layer,
         Primitive_mode::polygon_fill,
         id_filter
     );
@@ -217,13 +217,13 @@ static constexpr std::string_view c_id_renderer_render_tool   {"Id_renderer::ren
 static constexpr std::string_view c_id_renderer_render_read   {"Id_renderer::render() read"   };
 
 void Id_renderer::render(
-    const erhe::scene::Viewport viewport,
-    const Layer_collection&     content_layers,
-    const Layer_collection&     tool_layers,
-    erhe::scene::ICamera&       camera,
-    const double                time,
-    const int                   x,
-    const int                   y)
+    const erhe::scene::Viewport  viewport,
+    const Mesh_layer_collection& content_mesh_layers,
+    const Mesh_layer_collection& tool_mesh_layers,
+    erhe::scene::ICamera&        camera,
+    const double                 time,
+    const int                    x,
+    const int                    y)
 {
     ZoneScoped;
 
@@ -293,10 +293,10 @@ void Id_renderer::render(
     m_layer_ranges.clear();
 
     m_pipeline_state_tracker->execute(&m_pipeline);
-    for (auto layer : content_layers)
+    for (auto layer : content_mesh_layers)
     {
         TracyGpuZone(c_id_renderer_render_content.data())
-        render_layer(layer.get());
+        render_layer(*layer);
     }
 
     // Clear depth for tool pixels
@@ -305,9 +305,9 @@ void Id_renderer::render(
         TracyGpuZone(c_id_renderer_render_tool.data())
         m_pipeline_state_tracker->execute(&m_selective_depth_clear_pipeline);
         gl::depth_range(0.0f, 0.0f);
-        for (auto layer : tool_layers)
+        for (auto layer : tool_mesh_layers)
         {
-            render_layer(layer.get());
+            render_layer(*layer);
         }
     }
 
@@ -318,9 +318,9 @@ void Id_renderer::render(
         m_pipeline_state_tracker->execute(&m_pipeline);
         gl::depth_range(0.0f, 1.0f);
 
-        for (auto layer : tool_layers)
+        for (auto layer : tool_mesh_layers)
         {
-            render_layer(layer.get());
+            render_layer(*layer);
         }
     }
 

@@ -1,9 +1,9 @@
 out vec2      v_texcoord;
 out vec4      v_position;
-out vec4      v_color;
 out mat3      v_TBN;
 out flat uint v_material_index;
 out float     v_tangent_scale;
+out vec4      v_color;
 
 void main()
 {

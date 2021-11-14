@@ -411,14 +411,22 @@ void Editor_tools::delete_selected_meshes()
         {
             continue;
         }
+
+        auto node_physics = get_physics_node(mesh.get());
+        auto* parent = node_physics
+            ? node_physics->parent()
+            : mesh->parent();
+
         Mesh_insert_remove_operation::Context context{
             m_selection_tool,
             scene_root->scene(),
             scene_root->content_layer(),
             scene_root->physics_world(),
             mesh,
-            get_physics_node(mesh.get()),
-            mesh->parent()->shared_from_this(),
+            node_physics,
+            (parent != nullptr)
+                ? parent->shared_from_this()
+                : std::shared_ptr<Node_physics>{},
             Scene_item_operation::Mode::remove
         };
         auto op = make_shared<Mesh_insert_remove_operation>(context);

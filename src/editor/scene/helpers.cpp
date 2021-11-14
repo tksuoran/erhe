@@ -22,7 +22,7 @@ using namespace std;
 
 void add_to_scene_layer(
     Scene&           scene,
-    Layer&           layer,
+    Mesh_layer&      layer,
     shared_ptr<Mesh> mesh
 )
 {
@@ -64,7 +64,7 @@ void add_to_scene_layer(
 
 void add_to_scene_layer(
     Scene&            scene,
-    Layer&            layer,
+    Light_layer&      layer,
     shared_ptr<Light> light
 )
 {
@@ -133,7 +133,7 @@ void add_to_physics_world(
 
 void remove_from_scene_layer(
     Scene&           scene,
-    Layer&           layer,
+    Mesh_layer&      layer,
     shared_ptr<Mesh> mesh
 )
 {
@@ -195,7 +195,7 @@ void remove_from_physics_world(
 
 void remove_from_scene_layer(
     Scene&            scene,
-    Layer&            layer,
+    Light_layer&      layer,
     shared_ptr<Light> light
 )
 {

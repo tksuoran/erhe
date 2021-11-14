@@ -343,6 +343,22 @@ void Forward_renderer::initialize_component()
     m_pipeline_line_hidden_blend.color_blend    = &m_color_blend_constant_point_two;
     m_pipeline_line_hidden_blend.viewport       = nullptr;
 
+    m_pipeline_brush_back.shader_stages  = m_programs->brush.get();
+    m_pipeline_brush_back.vertex_input   = m_vertex_input.get();
+    m_pipeline_brush_back.input_assembly = &Input_assembly_state::triangles;
+    m_pipeline_brush_back.rasterization  = &Rasterization_state::cull_mode_front;
+    m_pipeline_brush_back.depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
+    m_pipeline_brush_back.color_blend    = &Color_blend_state::color_blend_premultiplied;
+    m_pipeline_brush_back.viewport       = nullptr;
+
+    m_pipeline_brush_front.shader_stages  = m_programs->brush.get();
+    m_pipeline_brush_front.vertex_input   = m_vertex_input.get();
+    m_pipeline_brush_front.input_assembly = &Input_assembly_state::triangles;
+    m_pipeline_brush_front.rasterization  = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_brush_front.depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
+    m_pipeline_brush_front.color_blend    = &Color_blend_state::color_blend_premultiplied;
+    m_pipeline_brush_front.viewport       = nullptr;
+
     gl::pop_debug_group();
 }
 
@@ -350,17 +366,19 @@ auto Forward_renderer::select_pipeline(Pass pass) const -> const erhe::graphics:
 {
     switch (pass)
     {
-        case Pass::polygon_fill                              : return &m_pipeline_fill;
-        case Pass::edge_lines                                : return &m_pipeline_edge_lines;
-        case Pass::polygon_centroids                         : return &m_pipeline_points;
+        case Pass::brush_back                                : return &m_pipeline_brush_back;
+        case Pass::brush_front                               : return &m_pipeline_brush_front;
+        case Pass::clear_depth                               : return &m_pipeline_tool_depth_clear_pass;
         case Pass::corner_points                             : return &m_pipeline_points;
+        case Pass::depth_only                                : return &m_pipeline_tool_depth_pass;
+        case Pass::edge_lines                                : return &m_pipeline_edge_lines;
+        case Pass::hidden_line_with_blend                    : return &m_pipeline_line_hidden_blend;
+        case Pass::polygon_centroids                         : return &m_pipeline_points;
+        case Pass::polygon_fill                              : return &m_pipeline_fill;
+        case Pass::require_stencil_tag_depth_hidden_and_blend: return &m_pipeline_tool_hidden_color_pass;
+        case Pass::require_stencil_tag_depth_visible         : return &m_pipeline_tool_visible_color_pass;
         case Pass::tag_depth_hidden_with_stencil             : return &m_pipeline_tool_hidden_stencil_pass;
         case Pass::tag_depth_visible_with_stencil            : return &m_pipeline_tool_visible_stencil_pass;
-        case Pass::clear_depth                               : return &m_pipeline_tool_depth_clear_pass;
-        case Pass::depth_only                                : return &m_pipeline_tool_depth_pass;
-        case Pass::require_stencil_tag_depth_visible         : return &m_pipeline_tool_visible_color_pass;
-        case Pass::require_stencil_tag_depth_hidden_and_blend: return &m_pipeline_tool_hidden_color_pass;
-        case Pass::hidden_line_with_blend                    : return &m_pipeline_line_hidden_blend;
         default:
             FATAL("bad pass\n");
     }
@@ -370,27 +388,31 @@ auto Forward_renderer::select_primitive_mode(Pass pass) const -> erhe::primitive
 {
     switch (pass)
     {
-        case Pass::polygon_fill                              : return Primitive_mode::polygon_fill;
-        case Pass::edge_lines                                : return Primitive_mode::edge_lines;
-        case Pass::polygon_centroids                         : return Primitive_mode::polygon_centroids;
+        case Pass::brush_back                                : return Primitive_mode::polygon_fill;
+        case Pass::brush_front                               : return Primitive_mode::polygon_fill;
+        case Pass::clear_depth                               : return Primitive_mode::polygon_fill;
         case Pass::corner_points                             : return Primitive_mode::corner_points;
+        case Pass::depth_only                                : return Primitive_mode::polygon_fill;
+        case Pass::edge_lines                                : return Primitive_mode::edge_lines;
+        case Pass::hidden_line_with_blend                    : return Primitive_mode::edge_lines;
+        case Pass::polygon_centroids                         : return Primitive_mode::polygon_centroids;
+        case Pass::polygon_fill                              : return Primitive_mode::polygon_fill;
+        case Pass::require_stencil_tag_depth_hidden_and_blend: return Primitive_mode::polygon_fill;
+        case Pass::require_stencil_tag_depth_visible         : return Primitive_mode::polygon_fill;
         case Pass::tag_depth_hidden_with_stencil             : return Primitive_mode::polygon_fill;
         case Pass::tag_depth_visible_with_stencil            : return Primitive_mode::polygon_fill;
-        case Pass::clear_depth                               : return Primitive_mode::polygon_fill;
-        case Pass::depth_only                                : return Primitive_mode::polygon_fill;
-        case Pass::require_stencil_tag_depth_visible         : return Primitive_mode::polygon_fill;
-        case Pass::require_stencil_tag_depth_hidden_and_blend: return Primitive_mode::polygon_fill;
-        case Pass::hidden_line_with_blend                    : return Primitive_mode::edge_lines;
         default:
             FATAL("bad pass\n");
     }
 }
 
 static constexpr std::string_view c_forward_renderer_render{"Forward_renderer::render()"};
+
 void Forward_renderer::render(
     Viewport                              viewport,
     ICamera&                              camera,
-    Layer_collection&                     layers,
+    const Mesh_layer_collection&          mesh_layers,
+    const erhe::scene::Light_layer&       light_layer,
     const Material_collection&            materials,
     const std::initializer_list<Pass>     passes,
     const erhe::scene::Visibility_filter& visibility_filter
@@ -440,15 +462,15 @@ void Forward_renderer::render(
         );
         update_material_buffer(materials);
         update_camera_buffer  (camera, viewport);
-        bind_material_buffer();
-        bind_camera_buffer();
-        for (auto layer : layers)
+        bind_material_buffer  ();
+        bind_camera_buffer    ();
+        update_light_buffer   (light_layer, m_shadow_renderer->viewport());
+        for (auto mesh_layer : mesh_layers)
         {
             TracyGpuZone(c_forward_renderer_render.data())
 
-            update_light_buffer    (layer->lights, m_shadow_renderer->viewport(), layer->ambient_light);
-            update_primitive_buffer(layer->meshes, visibility_filter);
-            const auto draw_indirect_buffer_range = update_draw_indirect_buffer(layer->meshes, primitive_mode, visibility_filter);
+            update_primitive_buffer(*mesh_layer, visibility_filter);
+            const auto draw_indirect_buffer_range = update_draw_indirect_buffer(*mesh_layer, primitive_mode, visibility_filter);
 
             bind_light_buffer();
             bind_primitive_buffer();

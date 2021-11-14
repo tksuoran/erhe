@@ -372,7 +372,7 @@ void Brushes::update_mesh_node_transform()
         }
     }
     m_brush_mesh->set_parent_from_node(transform);
-    m_brush_mesh->primitives.front().primitive_geometry = brush_scaled.primitive_geometry;
+    m_brush_mesh->data.primitives.front().primitive_geometry = brush_scaled.primitive_geometry;
 }
 
 void Brushes::do_insert_operation()
@@ -384,13 +384,15 @@ void Brushes::do_insert_operation()
 
     log_brush.trace("{} scale = {}\n", __func__, m_transform_scale);
 
-    const auto transform = get_brush_transform();
-    const auto material  = m_materials[m_selected_material];
-    const auto instance  = m_brush->make_instance(
-        transform,
+    const auto hover_from_brush = get_brush_transform();
+    const auto world_from_brush = m_hover_mesh->world_from_node() * hover_from_brush;
+    const auto material         = m_materials[m_selected_material];
+    const auto instance         = m_brush->make_instance(
+        world_from_brush,
         material,
         m_transform_scale
     );
+    instance.mesh->visibility_mask() &= ~Node::c_visibility_brush;
     instance.mesh->visibility_mask() |=
         (Node::c_visibility_content     |
          Node::c_visibility_shadow_cast |

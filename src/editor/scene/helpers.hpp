@@ -19,9 +19,10 @@ namespace erhe::scene
 {
     class Camera;
     class ICamera;
-    class Layer;
     class Light;
+    class Light_layer;
     class Mesh;
+    class Mesh_layer;
     class Scene;
 }
 
@@ -37,13 +38,13 @@ class Node_physics;
 
 void add_to_scene_layer(
     erhe::scene::Scene&                scene,
-    erhe::scene::Layer&                layer,
+    erhe::scene::Mesh_layer&           layer,
     std::shared_ptr<erhe::scene::Mesh> mesh_node
 );
 
 void add_to_scene_layer(
     erhe::scene::Scene&                 scene,
-    erhe::scene::Layer&                 layer,
+    erhe::scene::Light_layer&           layer,
     std::shared_ptr<erhe::scene::Light> light_node
 );
 
@@ -55,13 +56,13 @@ void add_to_physics_world(
 
 void remove_from_scene_layer(
     erhe::scene::Scene&                scene,
-    erhe::scene::Layer&                layer,
+    erhe::scene::Mesh_layer&           layer,
     std::shared_ptr<erhe::scene::Mesh> mesh_node
 );
 
 void remove_from_scene_layer(
     erhe::scene::Scene&                 scene,
-    erhe::scene::Layer&                 layer,
+    erhe::scene::Light_layer&           layer,
     std::shared_ptr<erhe::scene::Light> light_node
 );
 

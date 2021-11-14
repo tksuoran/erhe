@@ -23,6 +23,7 @@ namespace erhe::scene
 {
     class Camera;
     class Mesh;
+    class Mesh_layer;
 }
 
 namespace editor
@@ -39,7 +40,7 @@ public:
     {
     public:
         std::shared_ptr<erhe::scene::Mesh> mesh                {nullptr};
-        erhe::scene::Layer*                layer               {nullptr};
+        const erhe::scene::Mesh_layer*     layer               {nullptr};
         size_t                             mesh_primitive_index{0};
         size_t                             local_index         {0};
         bool                               valid               {false};
@@ -54,13 +55,13 @@ public:
     void initialize_component() override;
 
     void render(
-        const erhe::scene::Viewport viewport,
-        const Layer_collection&     content_layers,
-        const Layer_collection&     tool_layers,
-        erhe::scene::ICamera&       camera,
-        const double                time,
-        const int                   x,
-        const int                   y
+        const erhe::scene::Viewport  viewport,
+        const Mesh_layer_collection& content_mesh_layers,
+        const Mesh_layer_collection& tool_mesh_layers,
+        erhe::scene::ICamera&        camera,
+        const double                 time,
+        const int                    x,
+        const int                    y
     );
 
     auto get(const int x, const int y, uint32_t& id, float& depth) -> bool;
@@ -147,7 +148,7 @@ private:
     void create_id_frame_resources ();
     auto current_id_frame_resources() -> Id_frame_resources&;
     void update_framebuffer        (const erhe::scene::Viewport viewport);
-    void render_layer              (erhe::scene::Layer* layer);
+    void render_layer              (const erhe::scene::Mesh_layer& layer);
 
     erhe::scene::Viewport                                 m_viewport{0, 0, 0, 0, true};
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
@@ -176,9 +177,9 @@ private:
     class Layer_range
     {
     public:
-        uint32_t            offset{0};
-        uint32_t            end   {0};
-        erhe::scene::Layer* layer {nullptr};
+        uint32_t                       offset{0};
+        uint32_t                       end   {0};
+        const erhe::scene::Mesh_layer* layer {nullptr};
     };
 
     std::vector<Range>       m_ranges;

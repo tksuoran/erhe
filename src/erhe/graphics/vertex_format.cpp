@@ -60,9 +60,7 @@ void Vertex_format::make_attribute(
     }
 
     m_attributes.emplace_back(usage, shader_type, data_type, m_stride, 0);
-    auto& attribute = m_attributes.back();
-
-    assert(stride == attribute.stride());
+    assert(stride == m_attributes.back().stride());
     m_stride += stride;
     //return attribute;
 }

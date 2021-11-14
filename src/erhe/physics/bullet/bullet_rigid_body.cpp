@@ -78,9 +78,17 @@ auto Bullet_rigid_body::get_motion_mode() const -> Motion_mode
     return m_motion_mode;
 }
 
-auto Bullet_rigid_body::get_collision_shape() const -> ICollision_shape*
+void Bullet_rigid_body::set_collision_shape(const std::shared_ptr<ICollision_shape>& collision_shape)
 {
-    return m_collision_shape.get();
+    m_bullet_rigid_body.setCollisionShape(
+        dynamic_cast<Bullet_collision_shape*>(collision_shape.get())->get_bullet_collision_shape()
+    );
+    m_collision_shape = collision_shape;
+}
+
+auto Bullet_rigid_body::get_collision_shape() const -> std::shared_ptr<ICollision_shape>
+{
+    return m_collision_shape;
 }
 
 auto Bullet_rigid_body::get_friction() const -> float
@@ -156,6 +164,12 @@ void Bullet_rigid_body::set_motion_mode(const Motion_mode motion_mode)
         }
     }
     m_bullet_rigid_body.setCollisionFlags(flags);
+}
+
+void Bullet_rigid_body::set_center_of_mass_transform(const glm::mat3 basis, const glm::vec3 origin)
+{
+    const btTransform transform{from_glm(basis), from_glm(origin)};
+    m_bullet_rigid_body.setCenterOfMassTransform(transform);
 }
 
 void Bullet_rigid_body::set_world_transform(const glm::mat3 basis, const glm::vec3 origin)

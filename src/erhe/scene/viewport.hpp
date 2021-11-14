@@ -8,11 +8,11 @@ namespace erhe::scene
 class Viewport
 {
 public:
-    auto aspect_ratio() const
-    -> float
+    auto aspect_ratio() const -> float
     {
-        return (height != 0.0f) ? (static_cast<float>(width) / static_cast<float>(height))
-                                : 1.0f;
+        return (height != 0.0f)
+            ? (static_cast<float>(width) / static_cast<float>(height))
+            : 1.0f;
     }
 
     // TODO

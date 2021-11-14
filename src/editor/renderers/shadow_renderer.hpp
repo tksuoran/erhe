@@ -16,9 +16,9 @@ namespace erhe::graphics
 namespace erhe::scene
 {
     class Camera;
-    class Layer;
     class Light;
     class Mesh;
+    class Mesh_layer;
 }
 
 namespace editor
@@ -28,8 +28,8 @@ class Configuration;
 class Mesh_memory;
 
 class Shadow_renderer
-    : public erhe::components::Component,
-      public Base_renderer
+    : public erhe::components::Component
+    , public Base_renderer
 {
 public:
     static constexpr std::string_view c_name{"Shadow_renderer"};
@@ -40,7 +40,11 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-    void render  (Layer_collection& layers, const erhe::scene::ICamera& camera);
+    void render(
+        const Mesh_layer_collection&    mesh_layers,
+        const erhe::scene::Light_layer& light_layer,
+        const erhe::scene::ICamera&     camera
+    );
     auto texture () const -> erhe::graphics::Texture*;
     auto viewport() const -> erhe::scene::Viewport;
 

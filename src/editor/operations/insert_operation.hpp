@@ -13,7 +13,8 @@ namespace erhe::geometry
 
 namespace erhe::scene
 {
-    class Layer;
+    class Light_layer;
+    class Mesh_layer;
     class Scene;
 };
 
@@ -35,7 +36,7 @@ public:
     class Context
     {
     public:
-        erhe::scene::Layer&                layer;
+        erhe::scene::Mesh_layer&           layer;
         erhe::scene::Scene&                scene;
         erhe::physics::IWorld&             physics_world;
         std::shared_ptr<erhe::scene::Node> node;
@@ -86,7 +87,7 @@ public:
     public:
         std::shared_ptr<Selection_tool>    selection_tool;
         erhe::scene::Scene&                scene;
-        erhe::scene::Layer&                layer;
+        erhe::scene::Mesh_layer&           layer;
         erhe::physics::IWorld&             physics_world;
         std::shared_ptr<erhe::scene::Mesh> mesh;
         std::shared_ptr<Node_physics>      node_physics;
@@ -114,7 +115,7 @@ public:
     class Context
     {
     public:
-        erhe::scene::Layer&                 layer;
+        erhe::scene::Light_layer&           layer;
         erhe::scene::Scene&                 scene;
         std::shared_ptr<erhe::scene::Light> light;
         std::shared_ptr<erhe::scene::Node>  parent;

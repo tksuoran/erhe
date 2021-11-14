@@ -88,6 +88,8 @@ auto project_to_screen_space(
     const auto viewport_center_y = viewport_y + viewport_height * 0.5f;
     const auto s                 = depth_range_far - depth_range_near;
     const auto b                 = depth_range_near;
+    //const auto s = clip_negative_one_to_one ? (depth_range_far - depth_range_near) * 0.5f : (depth_range_far - depth_range_near);
+    //const auto b = clip_negative_one_to_one ? ((depth_range_near + depth_range_far) * 0.5) : depth_range_near;
 
     const vec4 clip = clip_from_world * vec4{position_in_world, 1.0f};
 

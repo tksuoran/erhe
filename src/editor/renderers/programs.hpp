@@ -58,6 +58,7 @@ public:
     std::unique_ptr<erhe::graphics::Sampler>         linear_sampler;
 
     std::unique_ptr<erhe::graphics::Shader_stages> basic;
+    std::unique_ptr<erhe::graphics::Shader_stages> brush;
     std::unique_ptr<erhe::graphics::Shader_stages> standard;    // standard material, polygon fill
     std::unique_ptr<erhe::graphics::Shader_stages> edge_lines;
     std::unique_ptr<erhe::graphics::Shader_stages> wide_lines;

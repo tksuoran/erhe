@@ -11,6 +11,15 @@
 namespace erhe::scene
 {
 
+class Mesh_data
+{
+public:
+    std::vector<erhe::primitive::Primitive> primitives;
+    glm::vec4                               wireframe_color{0.0f, 0.0f, 0.0f, 1.0f};
+    float                                   point_size     {3.0f};
+    float                                   line_width     {1.0f};
+};
+
 class Mesh
     : public Node
 {
@@ -22,10 +31,7 @@ public:
 
     auto node_type() const -> const char* override;
 
-    std::vector<erhe::primitive::Primitive> primitives;
-    glm::vec4                               wireframe_color{0.0f, 0.0f, 0.0f, 1.0f};
-    float                                   point_size     {3.0f};
-    float                                   line_width     {1.0f};
+    Mesh_data data;
 
     erhe::toolkit::Unique_id<Mesh> m_id;
 };

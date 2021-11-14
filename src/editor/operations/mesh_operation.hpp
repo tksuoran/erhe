@@ -23,8 +23,8 @@ namespace erhe::primitive
 
 namespace erhe::scene
 {
-    class Layer;
     class Mesh;
+    class Mesh_layer;
     class Node;
     class Scene;
 }
@@ -44,7 +44,7 @@ public:
     public:
         erhe::primitive::Build_info_set& build_info_set;
         erhe::scene::Scene&              scene;
-        erhe::scene::Layer&              layer;
+        erhe::scene::Mesh_layer&         layer;
         erhe::physics::IWorld&           physics_world;
         std::shared_ptr<Selection_tool>  selection_tool;
     };
@@ -54,11 +54,11 @@ protected:
     {
     public:
         erhe::scene::Scene&                scene;
-        erhe::scene::Layer&                layer;
+        erhe::scene::Mesh_layer&           layer;
         erhe::physics::IWorld&             physics_world;
         std::shared_ptr<erhe::scene::Mesh> mesh;
-        erhe::scene::Mesh                  before;
-        erhe::scene::Mesh                  after;
+        erhe::scene::Mesh_data             before;
+        erhe::scene::Mesh_data             after;
     };
 
     Mesh_operation ();

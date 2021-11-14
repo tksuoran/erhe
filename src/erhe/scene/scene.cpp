@@ -8,9 +8,22 @@
 namespace erhe::scene
 {
 
-Layer::Layer(const std::string_view name)
+Mesh_layer::Mesh_layer(const std::string_view name)
     : name{name}
 {
+}
+
+Light_layer::Light_layer(const std::string_view name)
+    : name{name}
+{
+}
+
+void Scene::sanity_check() const
+{
+    for (auto& node : nodes)
+    {
+        node->sanity_check();
+    }
 }
 
 void Scene::sort_transform_nodes()

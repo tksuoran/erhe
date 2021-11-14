@@ -22,7 +22,7 @@ Mesh::Mesh(
     : Node{name}
 {
     m_flag_bits |= (Node::c_flag_bit_is_mesh | Node::c_flag_bit_is_transform);
-    primitives.emplace_back(primitive);
+    data.primitives.emplace_back(primitive);
 }
 
 Mesh::~Mesh() = default;

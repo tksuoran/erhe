@@ -7,18 +7,17 @@
 namespace erhe::geometry::operation
 {
 
-class Clone
+class Reverse
     : public Geometry_operation
 {
 public:
-    explicit Clone(
+    explicit Reverse(
         Geometry& source,
-        Geometry& destination,
-        glm::mat4 transform
+        Geometry& destination
     );
 };
 
-auto clone(erhe::geometry::Geometry& source, glm::mat4 transform)
+auto reverse(erhe::geometry::Geometry& source)
 -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

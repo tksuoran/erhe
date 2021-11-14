@@ -121,7 +121,8 @@ auto Xr_instance::create_instance() -> bool
         XR_KHR_OPENGL_ENABLE_EXTENSION_NAME,
         XR_VARJO_QUAD_VIEWS_EXTENSION_NAME,
         XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
-        XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME
+        XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME,
+        XR_KHR_VISIBILITY_MASK_EXTENSION_NAME
         //XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME,
     };
 
@@ -144,7 +145,7 @@ auto Xr_instance::create_instance() -> bool
     create_info.applicationInfo.apiVersion         = XR_CURRENT_API_VERSION;
     create_info.enabledApiLayerCount               = 0;
     create_info.enabledApiLayerNames               = nullptr;
-    create_info.enabledExtensionCount              = 5;
+    create_info.enabledExtensionCount              = 6;
     create_info.enabledExtensionNames              = required_extensions;
 
     //for (;;)
@@ -191,7 +192,6 @@ auto Xr_instance::create_instance() -> bool
     debug_utils_messenger_create_info.userCallback      = xr_debug_utils_messenger_callback;
     debug_utils_messenger_create_info.userData          = this;
 
-    PFN_xrCreateDebugUtilsMessengerEXT xrCreateDebugUtilsMessengerEXT{nullptr};
     if (
         !check(
             "xrGetInstanceProcAddr",
@@ -201,7 +201,35 @@ auto Xr_instance::create_instance() -> bool
                 reinterpret_cast<PFN_xrVoidFunction*>(&xrCreateDebugUtilsMessengerEXT)
             )
         )
+    )
+    {
+        return false;
+    }
+
+    if (
+        !check(
+            "xrGetInstanceProcAddr",
+            xrGetInstanceProcAddr(
+                m_xr_instance,
+                "xrGetOpenGLGraphicsRequirementsKHR",
+                reinterpret_cast<PFN_xrVoidFunction*>(&xrGetOpenGLGraphicsRequirementsKHR)
+            )
         )
+    )
+    {
+        return false;
+    }
+
+    if (
+        !check(
+            "xrGetInstanceProcAddr",
+            xrGetInstanceProcAddr(
+                m_xr_instance,
+                "xrGetVisibilityMaskKHR",
+                reinterpret_cast<PFN_xrVoidFunction*>(&xrGetVisibilityMaskKHR)
+            )
+        )
+    )
     {
         return false;
     }
@@ -255,7 +283,7 @@ auto Xr_instance::get_xr_view_configuration_type() const -> XrViewConfigurationT
     return m_xr_view_configuration_type;
 }
 
-auto Xr_instance::get_xr_view_conriguration_views() const
+auto Xr_instance::get_xr_view_configuration_views() const
 -> const std::vector<XrViewConfigurationView>&
 {
     return m_xr_view_configuration_views;
@@ -477,7 +505,7 @@ auto Xr_instance::enumerate_blend_modes() -> bool
         }
     }
 
-    log_xr.error("Selected environment blend mode: {}\n", c_str(m_xr_environment_blend_mode));
+    log_xr.info("Selected environment blend mode: {}\n", c_str(m_xr_environment_blend_mode));
     return true;
 }
 
@@ -1257,6 +1285,10 @@ auto Xr_instance::poll_xr_events(Xr_session& session) -> bool
             {
                 get_current_interaction_profile(session);
             }
+
+            // if (buffer.type == XR_TYPE_EVENT_DATA_VISIBILITY_MASK_CHANGED_KHR)
+            // {
+            // }
 
             continue;
         }

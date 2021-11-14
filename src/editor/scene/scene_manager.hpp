@@ -35,9 +35,9 @@ namespace erhe::scene
 {
     class Camera;
     class ICamera;
-    class Layer;
     class Light;
     class Mesh;
+    class Mesh_layer;
     class Scene;
 }
 

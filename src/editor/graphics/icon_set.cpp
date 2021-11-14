@@ -1,6 +1,7 @@
 #include "icon_set.hpp"
 #include "gl_context_provider.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/scene/light.hpp"
 #include "lunasvg.h"
 
 namespace editor {
@@ -104,5 +105,37 @@ void Icon_set::icon(ImVec2 uv0, glm::vec4 tint_color) const
     );
     ImGui::SameLine();
 }
+
+auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const ImVec2
+{
+    switch (type)
+    {
+        case erhe::scene::Light_type::spot:        return icons.spot_light;
+        case erhe::scene::Light_type::directional: return icons.directional_light;
+        case erhe::scene::Light_type::point:       return icons.point_light;
+        default: return {};
+    }
+}
+
+void Icon_set::icon(const erhe::scene::Camera&) const
+{
+    icon(icons.camera);
+}
+
+void Icon_set::icon(const erhe::scene::Light& light) const
+{
+    icon(get_icon(light.type), glm::vec4{light.color, 1.0f});
+}
+
+void Icon_set::icon(const erhe::scene::Mesh&) const
+{
+    icon(icons.mesh);
+}
+
+void Icon_set::icon(const erhe::scene::Node&) const
+{
+    icon(icons.node);
+}
+
 
 }

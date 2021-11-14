@@ -12,6 +12,8 @@ set(source_list
     graphics/textures.cpp
     graphics/textures.hpp
 
+    operations/attach_detach_operation.cpp
+    operations/attach_detach_operation.hpp
     operations/compound_operation.cpp
     operations/compound_operation.hpp
     operations/geometry_operations.cpp
@@ -154,6 +156,8 @@ set(source_list
     res/shaders/anisotropic.frag
     res/shaders/basic.vert
     res/shaders/basic.frag
+    res/shaders/brush.vert
+    res/shaders/brush.frag
     res/shaders/color.vert
     res/shaders/color.frag
     res/shaders/depth.vert
@@ -171,6 +175,8 @@ set(source_list
     res/shaders/standard.frag
     res/shaders/text.vert
     res/shaders/text.frag
+    res/shaders/tool.vert
+    res/shaders/tool.frag
     res/shaders/wide_lines.vert
     res/shaders/wide_lines.geom
     res/shaders/wide_lines.frag

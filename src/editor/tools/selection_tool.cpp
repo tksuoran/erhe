@@ -262,7 +262,7 @@ auto Selection_tool::remove_from_selection(std::shared_ptr<erhe::scene::Node> it
         return true;
     }
 
-    log_selection.warn("Removing item {} from selection failed - was not in selection\n", item->name());
+    log_selection.info("Removing item {} from selection failed - was not in selection\n", item->name());
     return false;
 }
 

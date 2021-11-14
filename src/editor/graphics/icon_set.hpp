@@ -11,6 +11,15 @@ namespace erhe::graphics
     class Texture;
 }
 
+namespace erhe::scene
+{
+    class Camera;
+    class Light;
+    class Mesh;
+    class Node;
+    enum class Light_type : unsigned int;
+}
+
 namespace editor {
 
 class Icon_set
@@ -31,6 +40,13 @@ public:
     void icon(ImVec2 uv0, glm::vec4 tint_color = glm::vec4{1.0f}) const;
 
     std::shared_ptr<erhe::graphics::Texture> texture;
+
+    void icon(const erhe::scene::Camera& camera) const;
+    void icon(const erhe::scene::Light& light) const;
+    void icon(const erhe::scene::Mesh& mesh) const;
+    void icon(const erhe::scene::Node& node) const;
+
+    auto get_icon(const erhe::scene::Light_type type) const -> const ImVec2;
 
     struct Icons
     {

@@ -80,10 +80,14 @@ public:
 
     void remap_keys(const std::vector<Key_type>& key_new_to_old);
 
-    void interpolate(Property_map_collection<Key_type>&                          destination,
-                     const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds);
+    void interpolate(
+        Property_map_collection<Key_type>&                          destination,
+        const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds
+    );
 
     void merge_to(Property_map_collection<Key_type>& source, glm::mat4 transform);
+
+    auto clone() -> Property_map_collection<Key_type>;
 
     auto clone_with_transform(glm::mat4 transform) -> Property_map_collection<Key_type>;
 

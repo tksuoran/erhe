@@ -9,6 +9,7 @@
 #include "erhe/geometry/operation/dual.hpp"
 #include "erhe/geometry/operation/ambo.hpp"
 #include "erhe/geometry/operation/truncate.hpp"
+#include "erhe/geometry/operation/reverse.hpp"
 
 namespace editor
 {
@@ -60,6 +61,13 @@ Truncate_operator::~Truncate_operator() = default;
 Truncate_operator::Truncate_operator(const Context& context)
 {
     make_entries(context, erhe::geometry::operation::truncate);
+}
+
+Reverse_operation::~Reverse_operation() = default;
+
+Reverse_operation::Reverse_operation(const Context& context)
+{
+    make_entries(context, erhe::geometry::operation::reverse);
 }
 
 } // namespace editor

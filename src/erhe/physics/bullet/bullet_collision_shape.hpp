@@ -1,4 +1,4 @@
-#pragma once
+    #pragma once
 
 #include "erhe/physics/icollision_shape.hpp"
 
@@ -32,6 +32,12 @@ public:
         std::shared_ptr<ICollision_shape> shape,
         const glm::mat3                   basis,
         const glm::vec3                   origin
+    )                                                                  override;
+    void calculate_principal_axis_transform(
+        const std::vector<float>& child_masses,
+        glm::mat3&                principal_transform_basis,
+        glm::vec3&                principal_transform_origin,
+        glm::vec3&                inertia
     )                                                                  override;
 
     auto get_bullet_collision_shape() -> btCollisionShape*

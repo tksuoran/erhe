@@ -58,7 +58,7 @@ inline auto to_glm(const XrPosef& p) -> glm::mat4
 auto to_string_message_severity(XrDebugUtilsMessageSeverityFlagsEXT severity_flags) -> std::string;
 auto to_string_message_type    (XrDebugUtilsMessageTypeFlagsEXT     type_flags)     -> std::string;
 
-auto check(const char* function_name, XrResult result) -> bool;
+auto check(const char* function_name, XrResult result, bool error_is_handled = false) -> bool;
 
 void check_gl_context_in_current_in_this_thread();
 

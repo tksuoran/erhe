@@ -1,5 +1,6 @@
 #include "windows/operations.hpp"
 #include "tools.hpp"
+#include "operations/attach_detach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/merge_operation.hpp"
@@ -82,6 +83,30 @@ void Operations::imgui(Pointer_context& pointer_context)
         m_operation_stack->redo();
     }
 
+    if (ImGui::Button("Attach", button_size))
+    {
+        Attach_detach_operation::Context attach_context{
+            m_scene_root->scene(),
+            m_scene_root->content_layer(),
+            m_selection_tool,
+            true
+        };
+        auto op = std::make_shared<Attach_detach_operation>(attach_context);
+        m_operation_stack->push(op);
+    }
+
+    if (ImGui::Button("Detach", button_size))
+    {
+        Attach_detach_operation::Context detach_context{
+            m_scene_root->scene(),
+            m_scene_root->content_layer(),
+            m_selection_tool,
+            false
+        };
+        auto op = std::make_shared<Attach_detach_operation>(detach_context);
+        m_operation_stack->push(op);
+    }
+
     if (ImGui::Button("Merge", button_size))
     {
         Merge_operation::Context merge_context{
@@ -107,6 +132,11 @@ void Operations::imgui(Pointer_context& pointer_context)
     if (ImGui::Button("Triangulate", button_size))
     {
         auto op = std::make_shared<Triangulate_operation>(context);
+        m_operation_stack->push(op);
+    }
+    if (ImGui::Button("Reverse", button_size))
+    {
+        auto op = std::make_shared<Reverse_operation>(context);
         m_operation_stack->push(op);
     }
     if (ImGui::Button("Subdivide", button_size))

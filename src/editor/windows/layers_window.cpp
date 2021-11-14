@@ -44,17 +44,6 @@ void Layers_window::initialize_component()
     get<Editor_tools>()->register_imgui_window(this);
 }
 
-auto Layers_window::get_icon(const Light_type type) const -> const ImVec2
-{
-    switch (type)
-    {
-        case Light_type::spot:        return m_icon_set->icons.spot_light;
-        case Light_type::directional: return m_icon_set->icons.directional_light;
-        case Light_type::point:       return m_icon_set->icons.point_light;
-        default: return {};
-    }
-}
-
 void Layers_window::imgui(Pointer_context&)
 {
     const ImGuiTreeNodeFlags parent_flags{
@@ -69,55 +58,49 @@ void Layers_window::imgui(Pointer_context&)
     };
 
     const auto& scene = m_scene_root->scene();
-    ImGui::Begin("Layers");
-    ImGui::Checkbox("Show meshes", &m_show_meshes);
-    ImGui::Checkbox("Show lights", &m_show_lights);
-    for (const auto& layer : scene.layers)
+    ImGui::Begin("Mesh layers");
+    for (const auto& layer : scene.mesh_layers)
     {
         if (ImGui::TreeNodeEx(layer->name.c_str(), parent_flags))
         {
-            if (m_show_meshes)
+            const auto& meshes = layer->meshes;
+            for (const auto& mesh : meshes)
             {
-                if (ImGui::TreeNodeEx("Meshes", parent_flags))
+                m_icon_set->icon(*mesh.get());
+                ImGui::TreeNodeEx(
+                    mesh->name().c_str(),
+                    leaf_flags | (mesh->is_selected()
+                        ? ImGuiTreeNodeFlags_Selected
+                        : ImGuiTreeNodeFlags_None)
+                );
+                if (ImGui::IsItemClicked())
                 {
-                    const auto& meshes = layer->meshes;
-                    for (const auto& mesh : meshes)
-                    {
-                        m_icon_set->icon(m_icon_set->icons.mesh);
-                        ImGui::TreeNodeEx(
-                            mesh->name().c_str(),
-                            leaf_flags | (mesh->is_selected()
-                                ? ImGuiTreeNodeFlags_Selected
-                                : ImGuiTreeNodeFlags_None)
-                        );
-                        if (ImGui::IsItemClicked())
-                        {
-                            m_node_clicked = mesh->shared_from_this();
-                        }
-                    }
-                    ImGui::TreePop();
+                    m_node_clicked = mesh->shared_from_this();
                 }
             }
-            if (m_show_lights)
+            ImGui::TreePop();
+        }
+    }
+    ImGui::End();
+
+    ImGui::Begin("Light layers");
+    for (const auto& layer : scene.light_layers)
+    {
+        if (ImGui::TreeNodeEx(layer->name.c_str(), parent_flags))
+        {
+            const auto& lights = layer->lights;
+            for (const auto& light : lights)
             {
-                if (ImGui::TreeNodeEx("Lights", parent_flags | ImGuiTreeNodeFlags_SpanFullWidth))
+                m_icon_set->icon(*light.get());
+                ImGui::TreeNodeEx(
+                    light->name().c_str(),
+                    leaf_flags | (light->is_selected()
+                        ? ImGuiTreeNodeFlags_Selected
+                        : ImGuiTreeNodeFlags_None)
+                );
+                if (ImGui::IsItemClicked())
                 {
-                    const auto& lights = layer->lights;
-                    for (const auto& light : lights)
-                    {
-                        m_icon_set->icon(get_icon(light->type), glm::vec4{light->color, 1.0f});
-                        ImGui::TreeNodeEx(
-                            light->name().c_str(),
-                            leaf_flags | (light->is_selected()
-                                ? ImGuiTreeNodeFlags_Selected
-                                : ImGuiTreeNodeFlags_None)
-                        );
-                        if (ImGui::IsItemClicked())
-                        {
-                            m_node_clicked = light->shared_from_this();
-                        }
-                    }
-                    ImGui::TreePop();
+                    m_node_clicked = light->shared_from_this();
                 }
             }
             ImGui::TreePop();

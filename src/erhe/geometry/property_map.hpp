@@ -64,6 +64,8 @@ public:
         const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds
     ) const = 0;
 
+    virtual void import_from(Property_map_base<Key_type>* source) = 0;
+
     virtual void import_from(Property_map_base<Key_type>* source, glm::mat4 transform) = 0;
 
 protected:
@@ -109,6 +111,9 @@ public:
         Property_map_base<Key_type>*                                destination,
         const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds
     ) const final;
+
+
+    void import_from(Property_map_base<Key_type>* source) final;
 
     void import_from(Property_map_base<Key_type>* source, glm::mat4 transform) final;
 

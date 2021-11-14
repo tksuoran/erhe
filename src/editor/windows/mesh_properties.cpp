@@ -54,11 +54,13 @@ void Mesh_properties::imgui(Pointer_context&)
         }
         if (ImGui::TreeNode(mesh->name().c_str()))
         {
-            ImGui::ColorEdit3("Wireframe Color", &mesh->wireframe_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);
+            auto& mesh_data = mesh->data;
+            const auto& primitives = mesh_data.primitives;
+            ImGui::ColorEdit3("Wireframe Color", &mesh_data.wireframe_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);
 
-            const int max_primitive_index = static_cast<int>(mesh->primitives.size()) - 1;
+            const int max_primitive_index = static_cast<int>(primitives.size()) - 1;
             ImGui::SliderInt("Primitive", &m_primitive_index, 0, max_primitive_index);
-            const auto& primitive = mesh->primitives.at(m_primitive_index);
+            const auto& primitive = primitives.at(m_primitive_index);
             const auto  geometry  = primitive.primitive_geometry->source_geometry;
             if (geometry != nullptr)
             {
@@ -102,7 +104,7 @@ void Mesh_properties::render(const Render_context& render_context)
             continue;
         }
         const glm::mat4 world_from_node = mesh->world_from_node() ;
-        for (auto& primitive : mesh->primitives)
+        for (auto& primitive : mesh->data.primitives)
         {
             const auto geometry = primitive.primitive_geometry->source_geometry;
             if (!geometry)

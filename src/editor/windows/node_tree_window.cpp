@@ -44,17 +44,6 @@ void Node_tree_window::initialize_component()
     get<Editor_tools>()->register_imgui_window(this);
 }
 
-auto Node_tree_window::get_icon(const Light_type type) const -> const ImVec2
-{
-    switch (type)
-    {
-        case Light_type::spot:        return m_icon_set->icons.spot_light;
-        case Light_type::directional: return m_icon_set->icons.directional_light;
-        case Light_type::point:       return m_icon_set->icons.point_light;
-        default: return {};
-    }
-}
-
 void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
 {
     //erhe::log::Indenter log_indent;
@@ -64,35 +53,31 @@ void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
     if (is_empty(node))
     {
         //log_tools.info("E {} ({})\n", node->name());
-        m_icon_set->icon(m_icon_set->icons.node);
+        m_icon_set->icon(*node);
     }
     else if (is_mesh(node))
     {
         //log_tools.info("M {} ({})\n", node->name(), mesh->m_id.get_id());
-        m_icon_set->icon(m_icon_set->icons.mesh);
+        m_icon_set->icon(*as_mesh(node));
+    }
+    else if (is_light(node)) // note light is before camera - light is also camera
+    {
+        m_icon_set->icon(*as_light(node));
     }
     else if (is_camera(node))
     {
         //log_tools.info("C {}\n", node->name());
-        m_icon_set->icon(m_icon_set->icons.camera);
-    }
-    else if (is_light(node))
-    {
-        auto* light = as_light(node);
-        m_icon_set->icon(
-            get_icon(light->type),
-            glm::vec4{light->color, 1.0f}
-        );
+        m_icon_set->icon(*as_camera(node));
     }
     else if (is_physics(node))
     {
         //log_tools.info("P {}\n", node->name());
-        m_icon_set->icon(m_icon_set->icons.node);
+        m_icon_set->icon(*node);
     }
     else
     {
         //log_tools.info("? {} ({})\n", node->name());
-        m_icon_set->icon(m_icon_set->icons.node);
+        m_icon_set->icon(*node);
     }
 
     const auto child_count = node->child_count();
@@ -110,7 +95,8 @@ void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
             ? ImGuiTreeNodeFlags_Selected
             : ImGuiTreeNodeFlags_None)};
 
-    const auto node_open = ImGui::TreeNodeEx(node->name().c_str(), node_flags);
+    std::string label = fmt::format("{} ({})", node->name(), node->depth());
+    const auto node_open = ImGui::TreeNodeEx(label.c_str(), node_flags);
     if (ImGui::IsItemClicked())
     {
         m_node_clicked = node->shared_from_this();

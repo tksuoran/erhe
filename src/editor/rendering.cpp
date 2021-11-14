@@ -211,6 +211,7 @@ void Editor_rendering::render(const double time)
         {
             render_content    (camera, scene_viewport);
             render_selection  (camera, scene_viewport);
+            render_brush      (camera, scene_viewport);
             render_tool_meshes(camera, scene_viewport);
         }
 
@@ -260,7 +261,11 @@ void Editor_rendering::render_shadowmaps()
         return;
     }
 
-    m_shadow_renderer->render(m_scene_root->content_layers(), *camera);
+    m_shadow_renderer->render(
+        m_scene_root->content_layers(),
+        *m_scene_root->light_layer().get(),
+        *camera
+    );
 }
 
 void Editor_rendering::render_id(const double time)
@@ -347,6 +352,7 @@ void Editor_rendering::render_content(
             viewport,
             *camera,
             m_scene_root->content_layers(),
+            *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
             { Forward_renderer::Pass::polygon_fill },
             content_not_selected_filter
@@ -365,6 +371,7 @@ void Editor_rendering::render_content(
             viewport,
             *camera,
             m_scene_root->content_fill_layers(),
+            *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
             { Forward_renderer::Pass::edge_lines },
             content_not_selected_filter
@@ -381,6 +388,7 @@ void Editor_rendering::render_content(
             viewport,
             *camera,
             m_scene_root->content_layers(),
+            *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
             { Forward_renderer::Pass::polygon_centroids },
             content_not_selected_filter
@@ -396,6 +404,7 @@ void Editor_rendering::render_content(
             viewport,
             *camera,
             m_scene_root->content_layers(),
+            *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
             { Forward_renderer::Pass::corner_points },
             content_not_selected_filter
@@ -437,6 +446,7 @@ void Editor_rendering::render_selection(
             viewport,
             *camera,
             m_scene_root->content_layers(),
+            *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
             { Forward_renderer::Pass::polygon_fill },
             content_selected_filter
@@ -457,6 +467,7 @@ void Editor_rendering::render_selection(
             viewport,
             *camera,
             m_scene_root->content_layers(),
+            *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
             {
                 Forward_renderer::Pass::edge_lines,
@@ -479,6 +490,7 @@ void Editor_rendering::render_selection(
             viewport,
             *camera,
             m_scene_root->content_layers(),
+            *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
             { Forward_renderer::Pass::polygon_centroids },
             content_selected_filter
@@ -495,6 +507,7 @@ void Editor_rendering::render_selection(
             viewport,
             *camera,
             m_scene_root->content_layers(),
+            *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
             { Forward_renderer::Pass::corner_points },
             content_selected_filter
@@ -516,9 +529,8 @@ void Editor_rendering::render_tool_meshes(
     }
 
     constexpr erhe::scene::Visibility_filter tool_filter{
-        0u,                                     // all set
-        erhe::scene::Node::c_visibility_tool |
-        erhe::scene::Node::c_visibility_brush,  // at least one set
+        erhe::scene::Node::c_visibility_tool,   // all set
+        0u,                                     // at least one set
         0u,                                     // all clear
         0u};                                    // at least one cler
 
@@ -526,6 +538,7 @@ void Editor_rendering::render_tool_meshes(
         viewport,
         *camera,
         m_scene_root->tool_layers(),
+        *m_scene_root->light_layer().get(),
         m_scene_root->materials(),
         {
             Forward_renderer::Pass::tag_depth_hidden_with_stencil,
@@ -536,6 +549,43 @@ void Editor_rendering::render_tool_meshes(
             Forward_renderer::Pass::require_stencil_tag_depth_hidden_and_blend,
         },
         tool_filter
+    );
+}
+
+void Editor_rendering::render_brush(
+    erhe::scene::ICamera*       camera,
+    const erhe::scene::Viewport viewport
+)
+{
+    ZoneScoped;
+
+    if (!m_viewport_config)
+    {
+        return;
+    }
+
+    if (camera == nullptr)
+    {
+        return;
+    }
+
+    constexpr erhe::scene::Visibility_filter brush_filter{
+        erhe::scene::Node::c_visibility_brush,  // all set
+        0u,                                     // at least one set
+        0u,                                     // all clear
+        0u};                                    // at least one cler
+
+    m_forward_renderer->render(
+        viewport,
+        *camera,
+        m_scene_root->brush_layers(),
+        *m_scene_root->light_layer().get(),
+        m_scene_root->materials(),
+        {
+            Forward_renderer::Pass::brush_back,
+            Forward_renderer::Pass::brush_front
+        },
+        brush_filter
     );
 }
 

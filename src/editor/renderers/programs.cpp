@@ -56,6 +56,7 @@ void Programs::initialize_component()
     m_shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
 
     basic      = make_program("basic");
+    brush      = make_program("brush");
     standard   = make_program("standard");
     edge_lines = make_program("edge_lines");
     wide_lines = make_program("wide_lines");

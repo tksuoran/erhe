@@ -155,18 +155,18 @@ void Trs_tool::Visualization::update_visibility(const bool visible, const Handle
     y_rotate_ring_mesh   ->visibility_mask() = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_y    ) || show_all) ? visible_mask : 0;
     z_rotate_ring_mesh   ->visibility_mask() = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_z    ) || show_all) ? visible_mask : 0;
 
-    x_arrow_cylinder_mesh->primitives.front().material = (active_handle == Handle::e_handle_translate_x ) ? highlight_material : x_material;
-    x_arrow_cone_mesh    ->primitives.front().material = (active_handle == Handle::e_handle_translate_x ) ? highlight_material : x_material;
-    y_arrow_cylinder_mesh->primitives.front().material = (active_handle == Handle::e_handle_translate_y ) ? highlight_material : y_material;
-    y_arrow_cone_mesh    ->primitives.front().material = (active_handle == Handle::e_handle_translate_y ) ? highlight_material : y_material;
-    z_arrow_cylinder_mesh->primitives.front().material = (active_handle == Handle::e_handle_translate_z ) ? highlight_material : z_material;
-    z_arrow_cone_mesh    ->primitives.front().material = (active_handle == Handle::e_handle_translate_z ) ? highlight_material : z_material;
-    xy_box_mesh          ->primitives.front().material = (active_handle == Handle::e_handle_translate_xy) ? highlight_material : z_material;
-    xz_box_mesh          ->primitives.front().material = (active_handle == Handle::e_handle_translate_xz) ? highlight_material : y_material;
-    yz_box_mesh          ->primitives.front().material = (active_handle == Handle::e_handle_translate_yz) ? highlight_material : x_material;
-    x_rotate_ring_mesh   ->primitives.front().material = (active_handle == Handle::e_handle_rotate_x    ) ? highlight_material : x_material;
-    y_rotate_ring_mesh   ->primitives.front().material = (active_handle == Handle::e_handle_rotate_y    ) ? highlight_material : y_material;
-    z_rotate_ring_mesh   ->primitives.front().material = (active_handle == Handle::e_handle_rotate_z    ) ? highlight_material : z_material;
+    x_arrow_cylinder_mesh->data.primitives.front().material = (active_handle == Handle::e_handle_translate_x ) ? highlight_material : x_material;
+    x_arrow_cone_mesh    ->data.primitives.front().material = (active_handle == Handle::e_handle_translate_x ) ? highlight_material : x_material;
+    y_arrow_cylinder_mesh->data.primitives.front().material = (active_handle == Handle::e_handle_translate_y ) ? highlight_material : y_material;
+    y_arrow_cone_mesh    ->data.primitives.front().material = (active_handle == Handle::e_handle_translate_y ) ? highlight_material : y_material;
+    z_arrow_cylinder_mesh->data.primitives.front().material = (active_handle == Handle::e_handle_translate_z ) ? highlight_material : z_material;
+    z_arrow_cone_mesh    ->data.primitives.front().material = (active_handle == Handle::e_handle_translate_z ) ? highlight_material : z_material;
+    xy_box_mesh          ->data.primitives.front().material = (active_handle == Handle::e_handle_translate_xy) ? highlight_material : z_material;
+    xz_box_mesh          ->data.primitives.front().material = (active_handle == Handle::e_handle_translate_xz) ? highlight_material : y_material;
+    yz_box_mesh          ->data.primitives.front().material = (active_handle == Handle::e_handle_translate_yz) ? highlight_material : x_material;
+    x_rotate_ring_mesh   ->data.primitives.front().material = (active_handle == Handle::e_handle_rotate_x    ) ? highlight_material : x_material;
+    y_rotate_ring_mesh   ->data.primitives.front().material = (active_handle == Handle::e_handle_rotate_y    ) ? highlight_material : y_material;
+    z_rotate_ring_mesh   ->data.primitives.front().material = (active_handle == Handle::e_handle_rotate_z    ) ? highlight_material : z_material;
 }
 
 void Trs_tool::Visualization::initialize(Mesh_memory& mesh_memory, Scene_root& scene_root)
@@ -191,7 +191,6 @@ void Trs_tool::Visualization::initialize(Mesh_memory& mesh_memory, Scene_root& s
     auto       rotate_ring_geometry     = make_torus   (rotate_ring_major_radius, rotate_ring_minor_radius, 80, 32);
     // Torus geometry is on xz plane, swap x and y to make it yz plane
     rotate_ring_geometry.transform(mat4_swap_xy);
-    rotate_ring_geometry.reverse_polygons();
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
     auto  arrow_cylinder_pg = make_primitive_shared(arrow_cylinder_geometry, mesh_memory.build_info_set.gl);

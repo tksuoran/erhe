@@ -71,24 +71,29 @@ void Scene_root::initialize_component()
     ZoneScoped;
 
     // Layer configuration
-    m_content_layer    = make_shared<Layer>("content");
-    m_controller_layer = make_shared<Layer>("controller");
-    m_tool_layer       = make_shared<Layer>("tool");
-    m_brush_layer      = make_shared<Layer>("brush");
+    m_content_layer    = make_shared<Mesh_layer>("content");
+    m_controller_layer = make_shared<Mesh_layer>("controller");
+    m_tool_layer       = make_shared<Mesh_layer>("tool");
+    m_brush_layer      = make_shared<Mesh_layer>("brush");
+    m_light_layer      = make_shared<Light_layer>("lights");
+
     m_scene            = std::make_unique<Scene>();
-    m_scene->layers      .push_back(m_content_layer);
-    m_scene->layers      .push_back(m_controller_layer);
-    m_scene->layers      .push_back(m_tool_layer);
-    m_scene->layers      .push_back(m_brush_layer);
-    m_all_layers         .push_back(m_content_layer);
-    m_all_layers         .push_back(m_controller_layer);
-    m_all_layers         .push_back(m_tool_layer);
-    m_all_layers         .push_back(m_brush_layer);
-    m_content_layers     .push_back(m_content_layer);
-    m_content_fill_layers.push_back(m_content_layer);
-    m_content_fill_layers.push_back(m_controller_layer);
-    m_tool_layers        .push_back(m_tool_layer);
-    m_tool_layers        .push_back(m_brush_layer);
+
+    m_scene->mesh_layers .push_back(m_content_layer);
+    m_scene->mesh_layers .push_back(m_controller_layer);
+    m_scene->mesh_layers .push_back(m_tool_layer);
+    m_scene->mesh_layers .push_back(m_brush_layer);
+    m_scene->light_layers.push_back(m_light_layer);
+
+    m_all_layers         .push_back(m_content_layer.get());
+    m_all_layers         .push_back(m_controller_layer.get());
+    m_all_layers         .push_back(m_tool_layer.get());
+    m_all_layers         .push_back(m_brush_layer.get());
+    m_content_layers     .push_back(m_content_layer.get());
+    m_content_fill_layers.push_back(m_content_layer.get());
+    m_content_fill_layers.push_back(m_controller_layer.get());
+    m_tool_layers        .push_back(m_tool_layer.get());
+    m_brush_layers       .push_back(m_brush_layer.get());
 
     m_physics_world = erhe::physics::IWorld::create_unique();
 }
@@ -115,7 +120,7 @@ auto Scene_root::scene() -> erhe::scene::Scene&
     return *m_scene.get();
 }
 
-auto Scene_root::content_layer() -> erhe::scene::Layer&
+auto Scene_root::content_layer() -> erhe::scene::Mesh_layer&
 {
     VERIFY(m_content_layer);
     return *m_content_layer.get();
@@ -141,28 +146,33 @@ auto Scene_root::add(const shared_ptr<Mesh>& mesh)
 auto Scene_root::add(const shared_ptr<Light>& light)
 -> shared_ptr<Light>
 {
-    m_content_layer->lights.push_back(light);
+    m_light_layer->lights.push_back(light);
     return light;
 }
 
-auto Scene_root::brush_layer() const -> std::shared_ptr<erhe::scene::Layer>
+auto Scene_root::brush_layer() const -> std::shared_ptr<erhe::scene::Mesh_layer>
 {
     return m_brush_layer;
 }
 
-auto Scene_root::content_layer() const -> std::shared_ptr<erhe::scene::Layer>
+auto Scene_root::content_layer() const -> std::shared_ptr<erhe::scene::Mesh_layer>
 {
     return m_content_layer;
 }
 
-auto Scene_root::controller_layer() const -> std::shared_ptr<erhe::scene::Layer>
+auto Scene_root::controller_layer() const -> std::shared_ptr<erhe::scene::Mesh_layer>
 {
     return m_controller_layer;
 }
 
-auto Scene_root::tool_layer() const -> std::shared_ptr<erhe::scene::Layer>
+auto Scene_root::tool_layer() const -> std::shared_ptr<erhe::scene::Mesh_layer>
 {
     return m_tool_layer;
+}
+
+auto Scene_root::light_layer() const -> std::shared_ptr<erhe::scene::Light_layer>
+{
+    return m_light_layer;
 }
 
 auto Scene_root::make_mesh_node(
@@ -180,13 +190,13 @@ auto Scene_root::make_mesh_node(
     const string_view                     name,
     const shared_ptr<Primitive_geometry>& primitive_geometry,
     const shared_ptr<Material>&           material,
-    Layer&                                layer,
+    Mesh_layer&                           layer,
     Node*                                 parent,
     const glm::vec3                       position
 ) -> shared_ptr<Mesh>
 {
     auto mesh = make_shared<Mesh>(name);
-    mesh->primitives.emplace_back(primitive_geometry, material);
+    mesh->data.primitives.emplace_back(primitive_geometry, material);
 
     mesh->set_parent_from_node(Transform::create_translation(position));
 

@@ -124,7 +124,7 @@ class Node:
 
         elif parsed.node_type == 'GLboolean':
             format_entry = 'gl::c_str({})'
-        elif parsed.node_type == 'GLbitfield':
+        elif     parsed.node_type == 'GLbitfield':
             format_entry = "{}"
         elif parsed.ptype == 'GLenum':
             format_entry = 'gl::enum_string({})'

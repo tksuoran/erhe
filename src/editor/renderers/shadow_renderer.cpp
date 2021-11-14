@@ -122,8 +122,12 @@ void Shadow_renderer::initialize_component()
 }
 
 static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::render()"};
-void Shadow_renderer::render(Layer_collection& layers,
-                             const ICamera&    camera)
+
+void Shadow_renderer::render(
+    const Mesh_layer_collection&    mesh_layers,
+    const erhe::scene::Light_layer& light_layer,
+    const erhe::scene::ICamera&     camera
+)
 {
     if constexpr (!s_enable)
     {
@@ -153,12 +157,12 @@ void Shadow_renderer::render(Layer_collection& layers,
         0u
     };
 
-    for (auto layer : layers)
+    update_light_buffer(light_layer, m_viewport);
+    for (auto mesh_layer : mesh_layers)
     {
-        update_light_buffer(layer->lights, m_viewport);
-        update_primitive_buffer(layer->meshes, shadow_filter);
+        update_primitive_buffer(*mesh_layer, shadow_filter);
         auto draw_indirect_buffer_range = update_draw_indirect_buffer(
-            layer->meshes,
+            *mesh_layer,
             Primitive_mode::polygon_fill,
             shadow_filter
         );
@@ -168,7 +172,7 @@ void Shadow_renderer::render(Layer_collection& layers,
         bind_draw_indirect_buffer();
 
         size_t light_index = 0;
-        for (auto light : layer->lights)
+        for (auto light : light_layer.lights)
         {
             light->update(m_viewport);
             if (!light->cast_shadow)

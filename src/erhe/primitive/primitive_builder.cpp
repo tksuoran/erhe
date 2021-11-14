@@ -628,7 +628,28 @@ void Build_context::build_vertex_texcoord()
     vertex_writer.write(root.attributes.texcoord, texcoord);
 }
 
-void Build_context::build_vertex_color()
+namespace {
+
+constexpr glm::vec3 unique_colors[13] =
+{
+    {1.0f, 0.3f, 0.7f}, //  3
+    {1.0f, 0.7f, 0.3f}, //  4
+    {0.7f, 1.0f, 0.3f}, //  5
+    {0.3f, 1.0f, 0.7f}, //  6
+    {0.3f, 0.7f, 1.0f}, //  7
+    {0.7f, 0.3f, 1.0f}, //  8
+    {0.8f, 0.0f, 0.0f}, //  9
+    {0.0f, 0.8f, 0.0f}, // 14
+    {0.0f, 0.0f, 0.8f}, // 15
+    {0.7f, 0.7f, 0.0f}, // 12
+    {0.7f, 0.0f, 0.7f}, // 13
+    {0.0f, 0.7f, 0.7f}, // 10
+    {0.7f, 0.7f, 0.7f}  // 11
+};
+
+}
+
+void Build_context::build_vertex_color(uint32_t polygon_corner_count)
 {
     if (!root.build_info.format.features.color || !root.attributes.color.is_valid())
     {
@@ -650,6 +671,11 @@ void Build_context::build_vertex_color()
     {
         color = root.build_info.format.constant_color;
         log_primitive_builder.trace("point {} corner {} constant color {}\n", point_id, corner_id, color);
+    }
+
+    if (polygon_corner_count > 3)
+    {
+        color = glm::vec4{unique_colors[(polygon_corner_count - 3) % 13], 1.0f};
     }
 
     vertex_writer.write(root.attributes.color, color);
@@ -754,6 +780,7 @@ void Build_context::build_polygon_fill()
             corner_id            = root.geometry.polygon_corners[polygon_corner_id];
             const Corner& corner = root.geometry.corners[corner_id];
             point_id             = corner.point_id;
+            //const Point& point   = root.geometry.points[point_id];
 
             build_polygon_id      ();
             build_vertex_position ();
@@ -761,7 +788,7 @@ void Build_context::build_polygon_fill()
             build_vertex_tangent  ();
             build_vertex_bitangent();
             build_vertex_texcoord ();
-            build_vertex_color    ();
+            build_vertex_color    (polygon.corner_count);
 
             // Indices
             property_maps.corner_indices->put(corner_id, vertex_index);
@@ -813,7 +840,8 @@ void Build_context::build_edge_lines()
 
         VERIFY(edge.a != edge.b);
 
-        if (property_maps.corner_indices->has(corner_id_a) &&
+        if (
+            property_maps.corner_indices->has(corner_id_a) &&
             property_maps.corner_indices->has(corner_id_b))
         {
             const auto v0 = property_maps.corner_indices->get(corner_id_a);
@@ -864,7 +892,8 @@ void Build_context_root::allocate_index_range(
     // If index buffer has not yet been allocated, no check for enough room for index range
     VERIFY(
         (primitive_geometry->index_buffer_range.count == 0) ||
-        (next_index_range_start <= primitive_geometry->index_buffer_range.count));
+        (next_index_range_start <= primitive_geometry->index_buffer_range.count)
+    );
 }
 
 
@@ -889,7 +918,7 @@ auto make_primitive_shared(
     auto result = std::make_shared<Primitive_geometry>();
     Primitive_builder builder{geometry, build_info, normal_style};
     builder.build(result.get());
-    result->source_normal_style = build_info.format.normal_style;
+    result->source_normal_style = normal_style;
     return result;
 }
 

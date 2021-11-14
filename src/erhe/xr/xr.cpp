@@ -111,11 +111,20 @@ auto to_string_message_type(XrDebugUtilsMessageTypeFlagsEXT type_flags) -> std::
     return ss.str();
 }
 
-auto check(const char* function_name, XrResult result) -> bool
+auto check(const char* function_name, XrResult result, bool error_is_allowed) -> bool
 {
     if (result != XR_SUCCESS)
     {
-        log_xr.error("{} returned error {}\n", function_name, c_str(result));
+        log_xr.write(
+            true,
+            error_is_allowed ? Level::LEVEL_INFO : Level::LEVEL_ERROR,
+            "{} returned error {}\n",
+            fmt::make_format_args(function_name, c_str(result))
+        );
+        //log_xr.log(
+        //if (error_is_allowed)
+        //{
+        //    log_xr.error("{} returned error {}\n", function_name, c_str(result));
         return false;
     }
     return true;

@@ -237,6 +237,23 @@ Property_map_collection<Key_type>::merge_to(
 
 template <typename Key_type>
 inline auto
+Property_map_collection<Key_type>::clone()
+-> Property_map_collection<Key_type>
+{
+    Property_map_collection<Key_type> result;
+    for (auto& entry : m_entries)
+    {
+        Property_map_base<Key_type>* this_map   = entry.value.get();
+        const auto&                  descriptor = this_map->descriptor();
+        Property_map_base<Key_type>* target_map = this_map->constructor(descriptor);
+        result.insert(target_map);
+        target_map->import_from(this_map);
+    }
+    return result;
+}
+
+template <typename Key_type>
+inline auto
 Property_map_collection<Key_type>::clone_with_transform(glm::mat4 transform)
 -> Property_map_collection<Key_type>
 {

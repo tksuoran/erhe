@@ -47,7 +47,7 @@ Xr_session::Xr_session(
         return;
     }
 
-    m_xr_views.resize(instance.get_xr_view_conriguration_views().size());
+    m_xr_views.resize(instance.get_xr_view_configuration_views().size());
 
     if (!create_session())
     {
@@ -86,22 +86,6 @@ auto Xr_session::create_session() -> bool
     const auto xr_instance = m_instance.get_xr_instance();
     VERIFY(xr_instance != XR_NULL_HANDLE);
 
-    PFN_xrGetOpenGLGraphicsRequirementsKHR xrGetOpenGLGraphicsRequirementsKHR{nullptr};
-
-    if (
-        !check(
-            "xrGetInstanceProcAddr",
-            xrGetInstanceProcAddr(
-                xr_instance,
-                "xrGetOpenGLGraphicsRequirementsKHR",
-                reinterpret_cast<PFN_xrVoidFunction*>(&xrGetOpenGLGraphicsRequirementsKHR)
-            )
-        )
-    )
-    {
-        return false;
-    }
-
     XrGraphicsRequirementsOpenGLKHR xr_graphics_requirements_opengl;
     xr_graphics_requirements_opengl.type = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_KHR;
     xr_graphics_requirements_opengl.next = nullptr;
@@ -109,7 +93,7 @@ auto Xr_session::create_session() -> bool
     if (
         !check(
             "xrGetOpenGLGraphicsRequirementsKHR",
-            xrGetOpenGLGraphicsRequirementsKHR(
+            m_instance.xrGetOpenGLGraphicsRequirementsKHR(
                 xr_instance,
                 m_instance.get_xr_system_id(),
                 &xr_graphics_requirements_opengl
@@ -311,7 +295,7 @@ auto Xr_session::create_swapchains() -> bool
         return false;
     }
 
-    const auto& views = m_instance.get_xr_view_conriguration_views();
+    const auto& views = m_instance.get_xr_view_configuration_views();
     m_view_swapchains.clear();
     for (const auto& view : views)
     {
@@ -587,12 +571,41 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
     }
     VERIFY(view_count_output == view_capacity_input);
 
-    const auto& view_configuration_views = m_instance.get_xr_view_conriguration_views();
+    const auto& view_configuration_views = m_instance.get_xr_view_configuration_views();
 
     m_xr_composition_layer_projection_views.resize(view_count_output);
     m_xr_composition_layer_depth_infos     .resize(view_count_output);
     for (uint32_t i = 0; i < view_count_output; ++i)
     {
+        if (m_instance.xrGetVisibilityMaskKHR != nullptr)
+        {
+            XrVisibilityMaskKHR visibility_mask;
+            visibility_mask.type                = XR_TYPE_VISIBILITY_MASK_KHR;
+            visibility_mask.next                = nullptr;
+            visibility_mask.vertexCapacityInput = 0; // uint32_t
+            visibility_mask.vertexCountOutput   = 0; // uint32_t
+            visibility_mask.vertices            = 0; // XrVector2f*
+            visibility_mask.indexCapacityInput  = 0; // uint32_t
+            visibility_mask.indexCountOutput    = 0; // uint32_t
+            visibility_mask.indices             = 0; // uint32_t*
+
+            if (
+                !check(
+                    "xrGetVisibilityMaskKHR",
+                    m_instance.xrGetVisibilityMaskKHR(
+                        m_xr_session,
+                        m_instance.get_xr_view_configuration_type(),
+                        i,
+                        XR_VISIBILITY_MASK_TYPE_HIDDEN_TRIANGLE_MESH_KHR,
+                        &visibility_mask
+                    )
+                )
+            )
+            {
+                return false;
+            }
+        }
+
         auto& swapchain = m_view_swapchains[i];
         auto acquired_color_swapchain_image_opt = swapchain.color_swapchain.acquire();
         auto acquired_depth_swapchain_image_opt = swapchain.depth_swapchain.acquire();
@@ -642,8 +655,10 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
         composition_layer_depth_info.next                      = nullptr;
         composition_layer_depth_info.subImage.swapchain        = swapchain.depth_swapchain.get_xr_swapchain();
         composition_layer_depth_info.subImage.imageRect.offset = { 0, 0 };
-        composition_layer_depth_info.subImage.imageRect.extent = { static_cast<int32_t>(view_configuration_views[i].recommendedImageRectWidth),
-                                                                   static_cast<int32_t>(view_configuration_views[i].recommendedImageRectHeight) };
+        composition_layer_depth_info.subImage.imageRect.extent = {
+            static_cast<int32_t>(view_configuration_views[i].recommendedImageRectWidth),
+            static_cast<int32_t>(view_configuration_views[i].recommendedImageRectHeight)
+        };
         composition_layer_depth_info.minDepth                  = 0.0f;
         composition_layer_depth_info.maxDepth                  = 1.0f;
         composition_layer_depth_info.nearZ                     = render_view.far_depth;
@@ -656,8 +671,10 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
         composition_layer_projection_view.fov                       = m_xr_views[i].fov;
         composition_layer_projection_view.subImage.swapchain        = swapchain.color_swapchain.get_xr_swapchain();
         composition_layer_projection_view.subImage.imageRect.offset = { 0, 0 };
-        composition_layer_projection_view.subImage.imageRect.extent = { static_cast<int32_t>(view_configuration_views[i].recommendedImageRectWidth),
-                                                                        static_cast<int32_t>(view_configuration_views[i].recommendedImageRectHeight) };
+        composition_layer_projection_view.subImage.imageRect.extent = {
+            static_cast<int32_t>(view_configuration_views[i].recommendedImageRectWidth),
+            static_cast<int32_t>(view_configuration_views[i].recommendedImageRectHeight)
+        };
     }
 
     return true;

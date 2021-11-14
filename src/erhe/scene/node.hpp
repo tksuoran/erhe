@@ -46,9 +46,12 @@ public:
     virtual void on_transform_changed() {}
     virtual auto node_type           () const -> const char*;
 
+    void set_depth_recursive       (size_t depth);
     void update_transform          (const uint64_t serial = 0);
     void update_transform_recursive(const uint64_t serial = 0);
 
+    void sanity_check              () const;
+    void sanity_check_root_path    (const Node* node) const;
     auto parent                    () const -> Node*;
     auto depth                     () const -> size_t;
     auto children                  () const -> const std::vector<std::shared_ptr<Node>>&;
@@ -57,8 +60,10 @@ public:
     auto flag_bits                 () const -> uint64_t;
     auto flag_bits                 () -> uint64_t&;
     auto parent_from_node_transform() const -> const Transform&;
+    auto node_from_parent_transform() const -> const Transform;
     auto parent_from_node          () const -> glm::mat4;
-    auto world_from_node_transform() const -> const Transform&;
+    auto world_from_node_transform () const -> const Transform&;
+    auto node_from_world_transform () const -> const Transform;
     auto world_from_node           () const -> glm::mat4;
     auto node_from_parent          () const -> glm::mat4;
     auto node_from_world           () const -> glm::mat4;
@@ -68,10 +73,16 @@ public:
 
     void set_parent_from_node      (const glm::mat4 matrix);
     void set_parent_from_node      (const Transform& transform);
+    
+    void set_node_from_parent      (const glm::mat4 matrix);
+    void set_node_from_parent      (const Transform& transform);
+
+    void set_world_from_node       (const glm::mat4 matrix);
+    void set_world_from_node       (const Transform& transform);
 
     auto is_selected() const -> bool;
     void attach     (const std::shared_ptr<Node>& node);
-    auto detach     (const std::shared_ptr<Node>& node) -> bool;
+    auto detach     (Node* node) -> bool;
     void unparent   ();
     auto root       () -> Node*;
     auto root       () const -> const Node*;

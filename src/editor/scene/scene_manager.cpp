@@ -105,10 +105,10 @@ void Scene_manager::initialize_camera()
     scene.nodes.emplace_back(m_camera);
     scene.nodes_sorted = false;
 
-    const glm::vec3 position{4.0f, 3.0f, 4.0f};
+    const glm::vec3 position{4.0f, 1.65f, 4.0f};
     const mat4 m = erhe::toolkit::create_look_at(
         position,                 // eye
-        vec3{0.0f,  0.0f, 0.0f},  // center
+        vec3{0.0f,  1.65f, 0.0f}, // center
         vec3{0.0f,  0.0f, 1.0f}   // up
     );
     m_camera->set_parent_from_node(m);
@@ -211,11 +211,11 @@ void Scene_manager::make_brushes()
                 constexpr bool instantiate = true;
 
                 constexpr float original_scale = 1.0f;
-                //make_brush(instantiate, make_dodecahedron (original_scale), context);
-                //make_brush(instantiate, make_icosahedron  (original_scale), context);
-                //make_brush(instantiate, make_octahedron   (original_scale), context);
-                //make_brush(instantiate, make_tetrahedron  (original_scale), context);
-                //make_brush(instantiate, make_cuboctahedron(original_scale), context);
+                make_brush(instantiate, make_dodecahedron (original_scale), context);
+                make_brush(instantiate, make_icosahedron  (original_scale), context);
+                make_brush(instantiate, make_octahedron   (original_scale), context);
+                make_brush(instantiate, make_tetrahedron  (original_scale), context);
+                make_brush(instantiate, make_cuboctahedron(original_scale), context);
                 make_brush(
                     instantiate,
                     make_cube(original_scale),
@@ -227,7 +227,7 @@ void Scene_manager::make_brushes()
     }
 
     // Sphere
-    if constexpr (false)
+    if constexpr (true)
     {
         execution_queue.enqueue(
             [this]()
@@ -254,7 +254,7 @@ void Scene_manager::make_brushes()
     }
 
     // Torus
-    if constexpr (false)
+    if constexpr (true)
     {
         execution_queue.enqueue(
             [this]()
@@ -375,7 +375,6 @@ void Scene_manager::make_brushes()
         const float ring_minor_radius = 0.55f; // 0.15f;
         auto        ring_geometry     = make_torus(ring_major_radius, ring_minor_radius, 80, 32);
         ring_geometry.transform(erhe::toolkit::mat4_swap_xy);
-        ring_geometry.reverse_polygons();
         //auto ring_geometry = make_shared<Geometry>(move(ring_geometry));
         auto rotate_ring_pg = make_primitive_shared(ring_geometry, build_info_set().gl);
 
@@ -467,6 +466,8 @@ void Scene_manager::add_floor()
 void Scene_manager::make_mesh_nodes()
 {
     ZoneScoped;
+
+    m_scene_root->scene().sanity_check();
 
     class Pack_entry
     {
@@ -580,6 +581,8 @@ void Scene_manager::make_mesh_nodes()
         }
 
         material_index = (material_index + 1) % m_scene_root->materials().size();
+
+        m_scene_root->scene().sanity_check();
     }
 }
 
@@ -612,7 +615,7 @@ auto Scene_manager::make_directional_light(
 
     add_to_scene_layer(
         m_scene_root->scene(),
-        m_scene_root->content_layer(),
+        *m_scene_root->light_layer().get(),
         light
     );
 
@@ -646,7 +649,7 @@ auto Scene_manager::make_spot_light(
 
     add_to_scene_layer(
         m_scene_root->scene(),
-        m_scene_root->content_layer(),
+        *m_scene_root->light_layer().get(),
         light
     );
 
@@ -729,7 +732,8 @@ void Scene_manager::update_once_per_frame(const erhe::components::Time_context& 
 void Scene_manager::animate_lights(double time_d)
 {
     const float time        = static_cast<float>(time_d);
-    const auto& lights      = m_scene_root->content_layer().lights;
+    const auto& light_layer = *m_scene_root->light_layer().get();
+    const auto& lights      = light_layer.lights;
     const int   n_lights    = static_cast<int>(lights.size());
     int         light_index = 0;
 
@@ -774,7 +778,7 @@ void Scene_manager::add_scene()
 {
     ZoneScoped;
 
-    m_scene_root->content_layer().ambient_light = vec4{0.1f, 0.15f, 0.2f, 0.0f};
+    m_scene_root->light_layer()->ambient_light = vec4{0.1f, 0.15f, 0.2f, 0.0f};
 
     make_brushes();
     make_mesh_nodes();
@@ -813,13 +817,8 @@ public:
 void Scene_manager::sort_lights()
 {
     sort(
-        m_scene_root->content_layer().lights.begin(),
-        m_scene_root->content_layer().lights.end(),
-        Light_comparator()
-    );
-    sort(
-        m_scene_root->tool_layer()->lights.begin(),
-        m_scene_root->tool_layer()->lights.end(),
+        m_scene_root->light_layer()->lights.begin(),
+        m_scene_root->light_layer()->lights.end(),
         Light_comparator()
     );
 }

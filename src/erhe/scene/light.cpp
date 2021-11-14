@@ -9,7 +9,7 @@ namespace erhe::scene
 Light::Light(const std::string_view name)
     : ICamera{name}
 {
-    m_flag_bits |= (Node::c_flag_bit_is_camera | Node::c_flag_bit_is_transform);
+    m_flag_bits |= (Node::c_flag_bit_is_light | Node::c_flag_bit_is_transform);
 }
 
 Light::~Light() = default;
@@ -103,7 +103,7 @@ auto as_light(Node* const node) -> Light*
     return reinterpret_cast<Light*>(node);
 }
 
-auto as_light(std::shared_ptr<Node> node) -> std::shared_ptr<Light>
+auto as_light(const std::shared_ptr<Node>& node) -> std::shared_ptr<Light>
 {
     if (!node)
     {

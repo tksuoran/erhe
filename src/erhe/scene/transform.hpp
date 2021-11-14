@@ -45,6 +45,7 @@ public:
     void set                       (const glm::mat4 matrix, const glm::mat4 inverse_matrix);
     void catenate                  (const glm::mat4 m);
 
+    static auto inverse           (const Transform& transform)                      -> const Transform;
     static auto create_translation(const float x, const float y, const float z)     -> const Transform;
     static auto create_translation(const glm::vec3 translation)                     -> const Transform;
     static auto create_rotation   (const float angle_radians, const glm::vec3 axis) -> const Transform;
@@ -58,5 +59,7 @@ private:
     glm::mat4 m_matrix        {1.0f};
     glm::mat4 m_inverse_matrix{1.0f};
 };
+
+auto operator*(const Transform& lhs, const Transform& rhs) -> Transform;
 
 } // namespace erhe::scene

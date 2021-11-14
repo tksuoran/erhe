@@ -26,8 +26,9 @@ namespace erhe::scene
 {
     class ICamera;
     class Camera;
-    class Layer;
     class Light;
+    class Light_layer;
+    class Mesh_layer;
     class Node;
     class Viewport;
     class Visibility_filter;
@@ -57,12 +58,15 @@ public:
 
     static constexpr std::array<const char*, 3> c_primitive_color_source_strings_data{
         std::apply(
-            [](auto&&... s) {
+            [](auto&&... s)
+            {
                 return std::array{s.data()...};
             },
             c_primitive_color_source_strings
         )
     };
+
+    using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
     Primitive_color_source primitive_color_source  {Primitive_color_source::constant_color};
     glm::vec4              primitive_constant_color{1.0f, 1.0f, 1.0f, 1.0f};
@@ -99,10 +103,7 @@ public:
         size_t                             primitive_index{0};
     };
 
-    using Layer_collection    = std::vector<std::shared_ptr<erhe::scene::Layer>>;
-    using Light_collection    = std::vector<std::shared_ptr<erhe::scene::Light>>;
     using Material_collection = std::vector<std::shared_ptr<erhe::primitive::Material>>;
-    using Mesh_collection     = std::vector<std::shared_ptr<erhe::scene::Mesh>>;
 
     Base_renderer();
     virtual ~Base_renderer();
@@ -124,14 +125,13 @@ public:
     void base_connect(const erhe::components::Component* component);
 
     auto update_primitive_buffer(
-        const Mesh_collection&                meshes,
+        const erhe::scene::Mesh_layer&        mesh_layer,
         const erhe::scene::Visibility_filter& visibility_filter
     ) -> Buffer_range;
 
     auto update_light_buffer(
-        const Light_collection&     lights,
-        const erhe::scene::Viewport light_texture_viewport,
-        const glm::vec4             ambient_light = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f}
+        const erhe::scene::Light_layer& light_layer,
+        const erhe::scene::Viewport     light_texture_viewport
     ) -> Buffer_range;
 
     auto update_material_buffer(const Material_collection& materials)
@@ -143,7 +143,7 @@ public:
     ) -> Buffer_range;
 
     auto update_draw_indirect_buffer(
-        const Mesh_collection&                meshes,
+        const erhe::scene::Mesh_layer&        mesh_layer,
         const erhe::primitive::Primitive_mode primitive_mode,
         const erhe::scene::Visibility_filter& visibility_filter
     ) -> Draw_indirect_buffer_range;

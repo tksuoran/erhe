@@ -43,9 +43,10 @@ namespace erhe::scene
 {
     class Camera;
     class ICamera;
-    class Layer;
     class Light;
+    class Light_layer;
     class Mesh;
+    class Mesh_layer;
     class Scene;
 }
 
@@ -104,14 +105,16 @@ public:
     }
 
 
-    auto brush_layer        () const -> std::shared_ptr<erhe::scene::Layer>;
-    auto content_layer      () const -> std::shared_ptr<erhe::scene::Layer>;
-    auto controller_layer   () const -> std::shared_ptr<erhe::scene::Layer>;
-    auto tool_layer         () const -> std::shared_ptr<erhe::scene::Layer>;
-    auto all_layers         () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_all_layers; }
-    auto content_fill_layers() -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_content_fill_layers; }
-    auto content_layers     () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_content_layers; }
-    auto tool_layers        () -> std::vector<std::shared_ptr<erhe::scene::Layer>>& { return m_tool_layers; }
+    auto brush_layer        () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
+    auto content_layer      () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
+    auto controller_layer   () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
+    auto tool_layer         () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
+    auto light_layer        () const -> std::shared_ptr<erhe::scene::Light_layer>;
+    auto all_layers         () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_all_layers; }
+    auto content_fill_layers() -> std::vector<const erhe::scene::Mesh_layer*>& { return m_content_fill_layers; }
+    auto content_layers     () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_content_layers; }
+    auto tool_layers        () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_tool_layers; }
+    auto brush_layers       () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_brush_layers; }
 
     auto make_mesh_node(
         const std::string_view                                      name,
@@ -125,7 +128,7 @@ public:
         const std::string_view                                      name,
         const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry,
         const std::shared_ptr<erhe::primitive::Material>&           material,
-        erhe::scene::Layer&                                         layer,
+        erhe::scene::Mesh_layer&                                    mesh_layer,
         erhe::scene::Node*                                          parent   = nullptr,
         const glm::vec3                                             position = glm::vec3{0.0f}
     ) -> std::shared_ptr<erhe::scene::Mesh>;
@@ -137,25 +140,27 @@ public:
     auto materials    () const -> const std::vector<std::shared_ptr<erhe::primitive::Material>>&;
     auto physics_world() -> erhe::physics::IWorld&;
     auto scene        () -> erhe::scene::Scene&;
-    auto content_layer() -> erhe::scene::Layer&;
+    auto content_layer() -> erhe::scene::Mesh_layer&;
 
 private:
     std::mutex                                              m_materials_mutex;
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
 
-    std::unique_ptr<erhe::physics::IWorld>           m_physics_world;
-    std::unique_ptr<erhe::scene::Scene>              m_scene;
-    std::shared_ptr<erhe::scene::Layer>              m_content_layer;
-    std::shared_ptr<erhe::scene::Layer>              m_controller_layer;
-    std::shared_ptr<erhe::scene::Layer>              m_tool_layer;
-    std::shared_ptr<erhe::scene::Layer>              m_brush_layer;
-    std::shared_ptr<erhe::scene::Camera>             m_camera;
-    std::shared_ptr<Frame_controller>                m_camera_controls;
+    std::unique_ptr<erhe::physics::IWorld>    m_physics_world;
+    std::unique_ptr<erhe::scene::Scene>       m_scene;
+    std::shared_ptr<erhe::scene::Mesh_layer>  m_content_layer;
+    std::shared_ptr<erhe::scene::Mesh_layer>  m_controller_layer;
+    std::shared_ptr<erhe::scene::Mesh_layer>  m_tool_layer;
+    std::shared_ptr<erhe::scene::Mesh_layer>  m_brush_layer;
+    std::shared_ptr<erhe::scene::Light_layer> m_light_layer;
+    std::shared_ptr<erhe::scene::Camera>      m_camera;
+    std::shared_ptr<Frame_controller>         m_camera_controls;
 
-    std::vector<std::shared_ptr<erhe::scene::Layer>> m_all_layers;
-    std::vector<std::shared_ptr<erhe::scene::Layer>> m_content_fill_layers;
-    std::vector<std::shared_ptr<erhe::scene::Layer>> m_content_layers;
-    std::vector<std::shared_ptr<erhe::scene::Layer>> m_tool_layers;
+    std::vector<const erhe::scene::Mesh_layer*> m_all_layers;
+    std::vector<const erhe::scene::Mesh_layer*> m_content_fill_layers;
+    std::vector<const erhe::scene::Mesh_layer*> m_content_layers;
+    std::vector<const erhe::scene::Mesh_layer*> m_tool_layers;
+    std::vector<const erhe::scene::Mesh_layer*> m_brush_layers;
 };
 
 } // namespace editor

@@ -26,6 +26,8 @@ set(source_list
     operation/clone.hpp
     operation/geometry_operation.cpp
     operation/geometry_operation.hpp
+    operation/reverse.cpp
+    operation/reverse.hpp
     operation/subdivide.cpp
     operation/subdivide.hpp
     operation/triangulate.cpp

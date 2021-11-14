@@ -3,6 +3,7 @@
 #include "scene/scene_manager.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
+#include "erhe/scene/scene.hpp"
 
 namespace editor
 {
@@ -20,8 +21,11 @@ void Mesh_operation::execute()
 {
     for (const auto& entry : m_entries)
     {
-        Mesh* mesh_ptr = entry.mesh.get();
-        *mesh_ptr = entry.after;
+        entry.scene.sanity_check();
+
+        entry.mesh->data = entry.after;
+
+        entry.scene.sanity_check();
     }
 }
 
@@ -29,8 +33,11 @@ void Mesh_operation::undo()
 {
     for (const auto& entry : m_entries)
     {
-        Mesh* mesh_ptr = entry.mesh.get();
-        *mesh_ptr = entry.before;
+        entry.scene.sanity_check();
+
+        entry.mesh->data = entry.before;
+
+        entry.scene.sanity_check();
     }
 }
 
@@ -39,6 +46,8 @@ void Mesh_operation::make_entries(
     const function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation
 )
 {
+    context.scene.sanity_check();
+
     m_selection_tool = context.selection_tool;
     for (auto item : context.selection_tool->selection())
     {
@@ -52,10 +61,11 @@ void Mesh_operation::make_entries(
             context.scene,
             context.layer,
             context.physics_world,
-            mesh,
-            *mesh,
-            *mesh
+            mesh,       // mesh shared ptr
+            mesh->data, // contents before
+            mesh->data  // contents after
         };
+
         for (auto& primitive : entry.after.primitives)
         {
             auto geometry = primitive.primitive_geometry->source_geometry;
@@ -79,6 +89,8 @@ void Mesh_operation::make_entries(
         }
         add_entry(std::move(entry));
     }
+
+    context.scene.sanity_check();
 }
 
 void Mesh_operation::add_entry(Entry&& entry)

@@ -28,6 +28,13 @@ public:
         const glm::vec3                   origin
     ) override;
 
+    void calculate_principal_axis_transform(
+        const std::vector<float>& child_masses,
+        glm::mat3&                principal_transform_basis,
+        glm::vec3&                principal_transform_origin,
+        glm::vec3&                inertia
+    ) override;
+
 private:
     btCompoundShape                                m_compound_shape;
     std::vector<std::shared_ptr<ICollision_shape>> m_children;

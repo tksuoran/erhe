@@ -54,10 +54,10 @@ Subdivide::Subdivide(Geometry& src, Geometry& destination)
                 log_subdivide.warn("midpoint for edge {} {} not found\n", std::min(b, c), std::max(b, c));
                 return;
             }
-            make_new_corner_from_polygon_centroid(new_polygon_id, i.polygon_id);
-            make_new_corner_from_point           (new_polygon_id, next_edge_midpoint);
-            make_new_corner_from_corner          (new_polygon_id, j.corner_id);
             make_new_corner_from_point           (new_polygon_id, previous_edge_midpoint);
+            make_new_corner_from_corner          (new_polygon_id, j.corner_id);
+            make_new_corner_from_point           (new_polygon_id, next_edge_midpoint);
+            make_new_corner_from_polygon_centroid(new_polygon_id, i.polygon_id);
         });
     });
 

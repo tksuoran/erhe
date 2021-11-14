@@ -266,8 +266,7 @@ template <>           struct transform_properties<glm::vec4> { static const bool
 template <typename Key_type, typename Value_type>
 inline void
 Property_map<Key_type, Value_type>::import_from(
-    Property_map_base<Key_type>* source_base,
-    glm::mat4                    transform
+    Property_map_base<Key_type>* source_base
 )
 {
     ZoneScoped;
@@ -280,6 +279,29 @@ Property_map<Key_type, Value_type>::import_from(
 
     values .reserve(values.size()  + source->values.size());
     present.reserve(present.size() + source->present.size());
+    present.insert(present.end(), source->present.begin(), source->present.end());
+    values.insert(values.end(), source->values.begin(), source->values.end());
+}
+
+template <typename Key_type, typename Value_type>
+inline void
+Property_map<Key_type, Value_type>::import_from(
+    Property_map_base<Key_type>* source_base,
+    glm::mat4                    transform
+)
+{
+    ZoneScoped;
+
+    auto* source = dynamic_cast<Property_map<Key_type, Value_type>*>(source_base);
+    VERIFY(source != nullptr);
+
+    VERIFY(values.size() == present.size());
+    VERIFY(source->values.size() == source->present.size());
+
+    const auto combined_values_size = values.size()  + source->values.size();
+    const auto combined_present_size = present.size() + source->present.size();
+    values .reserve(combined_values_size);
+    present.reserve(combined_present_size);
     present.insert(present.end(), source->present.begin(), source->present.end());
     if constexpr(!transform_properties<Value_type>::is_transformable)
     {

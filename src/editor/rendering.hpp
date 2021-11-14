@@ -61,6 +61,7 @@ public:
     void render_content      (erhe::scene::ICamera* camera, const erhe::scene::Viewport viewport);
     void render_selection    (erhe::scene::ICamera* camera, const erhe::scene::Viewport viewport);
     void render_tool_meshes  (erhe::scene::ICamera* camera, const erhe::scene::Viewport viewport);
+    void render_brush        (erhe::scene::ICamera* camera, const erhe::scene::Viewport viewport);
 
 private:
     void render_shadowmaps   ();

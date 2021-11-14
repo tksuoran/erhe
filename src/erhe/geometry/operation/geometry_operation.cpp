@@ -48,9 +48,11 @@ void Geometry_operation::reserve_edge_to_new_points()
 {
     const uint32_t point_count = source.point_count();
     m_old_edge_to_new_points.resize(static_cast<size_t>(point_count) * s_max_edge_point_slots);
-    std::fill(begin(m_old_edge_to_new_points),
-              end(m_old_edge_to_new_points),
-              std::numeric_limits<uint32_t>::max());
+    std::fill(
+        begin(m_old_edge_to_new_points),
+        end(m_old_edge_to_new_points),
+        std::numeric_limits<uint32_t>::max()
+    );
 }
 
 auto Geometry_operation::find_or_make_point_from_edge(Point_id point_a, Point_id point_b, size_t count)

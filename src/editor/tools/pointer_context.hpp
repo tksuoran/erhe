@@ -19,8 +19,8 @@ namespace erhe::scene
 {
     class ICamera;
     class Camera;
-    class Layer;
     class Mesh;
+    class Mesh_layer;
 }
 
 namespace editor
@@ -95,7 +95,7 @@ public:
     bool                               hover_valid     {false};
     std::shared_ptr<erhe::scene::Mesh> hover_mesh;
     std::optional<glm::vec3>           hover_normal;
-    erhe::scene::Layer*                hover_layer      {nullptr};
+    const erhe::scene::Mesh_layer*     hover_layer      {nullptr};
     size_t                             hover_primitive  {0};
     size_t                             hover_local_index{0};
     bool                               hover_tool       {false};

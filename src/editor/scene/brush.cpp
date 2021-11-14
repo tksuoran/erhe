@@ -432,7 +432,7 @@ auto Brush::create_scaled(const int scale_key)
 const std::string empty_string = {};
 
 auto Brush::make_instance(
-    const glm::mat4                                   local_to_parent,
+    const glm::mat4                                   world_from_node,
     const std::shared_ptr<erhe::primitive::Material>& material,
     const float                                       scale
 ) -> Instance
@@ -446,7 +446,7 @@ auto Brush::make_instance(
         : empty_string;
 
     auto mesh = std::make_shared<Mesh>(name);
-    mesh->primitives.emplace_back(scaled.primitive_geometry, material);
+    mesh->data.primitives.emplace_back(scaled.primitive_geometry, material);
 
     Node* node{nullptr};
 
@@ -470,7 +470,7 @@ auto Brush::make_instance(
         node = mesh.get();
     }
 
-    node->set_parent_from_node(local_to_parent);
+    node->set_world_from_node(world_from_node);
 
     return { mesh, node_physics };
 }

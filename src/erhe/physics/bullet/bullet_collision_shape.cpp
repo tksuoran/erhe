@@ -1,5 +1,6 @@
 #include "erhe/physics/bullet/bullet_collision_shape.hpp"
 #include "erhe/physics/bullet/glm_conversions.hpp"
+#include "erhe/physics/log.hpp"
 
 namespace erhe::physics
 {
@@ -134,6 +135,18 @@ void Bullet_collision_shape::add_child_shape(
     const glm::vec3                   /*origin*/
 )
 {
+    log_physics.error("Bullet_collision_shape::Bullet_collision_shape::add_child_shape() called\n");
+    assert(false);
+}
+
+void Bullet_collision_shape::calculate_principal_axis_transform(
+    const std::vector<float>& /*child_masses*/,
+    glm::mat3&                /*principal_transform_basis*/,
+    glm::vec3&                /*principal_transform_origin*/,
+    glm::vec3&                /*inertia*/
+)
+{
+    log_physics.error("Bullet_collision_shape::calculate_principal_axis_transform() called\n");
     assert(false);
 }
 

@@ -61,4 +61,12 @@ public:
     ~Truncate_operator        () override;
 };
 
+class Reverse_operation
+    : public Mesh_operation
+{
+public:
+    explicit Reverse_operation(const Context& context);
+    ~Reverse_operation        () override;
+};
+
 }

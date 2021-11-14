@@ -26,8 +26,8 @@ namespace erhe::primitive
 
 namespace erhe::scene
 {
-    class Layer;
     class Mesh;
+    class Mesh_layer;
     class Node;
     class Scene;
 }
@@ -141,7 +141,7 @@ public:
     auto create_scaled(const int scale_key) -> Scaled;
 
     auto make_instance(
-        const glm::mat4                                   local_to_parent,
+        const glm::mat4                                   world_from_node,
         const std::shared_ptr<erhe::primitive::Material>& material,
         const float                                       scale
     ) -> Instance;

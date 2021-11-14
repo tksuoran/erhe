@@ -1,9 +1,9 @@
 in vec2      v_texcoord;
 in vec4      v_position;
-in vec4      v_color;
 in mat3      v_TBN;
 in flat uint v_material_index;
 in float     v_tangent_scale;
+in vec4      v_color;
 
 float sample_light_visibility(vec4  position,
                               uint  light_index,
@@ -223,7 +223,7 @@ NormalInfo getNormalInfo(vec3 v)
 
 vec3 getBaseColor()
 {
-    return material.materials[v_material_index].base_color.rgb;
+    return v_color.rgb * material.materials[v_material_index].base_color.rgb;
 }
 
 MaterialInfo getSpecularGlossinessInfo(MaterialInfo info)
@@ -231,7 +231,7 @@ MaterialInfo getSpecularGlossinessInfo(MaterialInfo info)
     //info.f0                  = material.materials[v_material_index].specular_and_roughness.rgb;
     //info.perceptualRoughness = material.materials[v_material_index].glossiness;
     //info.perceptualRoughness = 1.0 - info.perceptualRoughness; // 1 - glossiness
-    info.albedoColor         = info.baseColor.rgb * (1.0 - max(max(info.f0.r, info.f0.g), info.f0.b));
+    info.albedoColor         = v_color.rgb * info.baseColor.rgb * (1.0 - max(max(info.f0.r, info.f0.g), info.f0.b));
     return info;
 }
 
@@ -392,7 +392,7 @@ void main()
         vec3  pointToLight = light.direction_and_outer_spot_cos.xyz;
         vec3  l            = normalize(pointToLight);   // Direction from surface point to light
 
-        vec3  C   = material.base_color.rgb;
+        vec3  C   = v_color.rgb * material.base_color.rgb;
         //vec3  C_i = vec3(1.0) - C;
         float r   = material.roughness * material.roughness;
         float p0  = 1.0 - material.anisotropy;
@@ -433,7 +433,8 @@ void main()
         //out_color.rgb = vec3(pow(1.0 - vn, 5.0));
     }
     //out_color.r = 0.1;
-
-    //out_color.rgb = v_color.rgb;
+    out_color.a = 0.4;
+    out_color.rgb = 0.8 * out_color.rgb + 0.2 * v_color.rgb;
+    out_color.rgb *= out_color.a;
 
 }

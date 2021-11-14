@@ -15,11 +15,15 @@ Node::Node(std::string_view name)
 
 Node::~Node()
 {
+    sanity_check();
+
     for (auto& child : m_children)
     {
         child->on_detached_from(*this);
     }
     unparent();
+
+    sanity_check();
 }
 
 auto Node::node_type() const -> const char*
@@ -80,11 +84,15 @@ void Node::attach(const std::shared_ptr<Node>& child_node)
     child_node->on_attached_to(*this);
 }
 
-auto Node::detach(const std::shared_ptr<Node>& child_node) -> bool
+auto Node::detach(Node* child_node) -> bool
 {
     ZoneScoped;
 
-    VERIFY(child_node);
+    if (!child_node)
+    {
+        log.warn("empty child_node, cannot detach\n");
+        return false;
+    }
 
     log.info(
         "{} ({}).detach({} ({}))\n",
@@ -98,6 +106,7 @@ auto Node::detach(const std::shared_ptr<Node>& child_node) -> bool
     {
         log.warn(
             "Child node {} parent {} != this {}\n",
+            child_node->name(),
             child_node->parent()
                 ? child_node->parent()->name()
                 : "(none)",
@@ -106,13 +115,14 @@ auto Node::detach(const std::shared_ptr<Node>& child_node) -> bool
         return false;
     }
 
-    if (!child_node)
-    {
-        log.warn("empty child_node, cannot detach\n");
-        return false;
-    }
-
-    const auto i = std::remove(m_children.begin(), m_children.end(), child_node);
+    const auto i = std::remove_if(
+        m_children.begin(),
+        m_children.end(),
+        [child_node](const std::shared_ptr<Node>& node)
+        {
+            return node.get() == child_node;
+        }
+    );
     if (i != m_children.end())
     {
         log.trace("Removing attachment {} from node\n", child_node->name());
@@ -125,15 +135,39 @@ auto Node::detach(const std::shared_ptr<Node>& child_node) -> bool
     return false;
 }
 
-void Node::on_attached_to(Node& node)
+void Node::on_attached_to(Node& parent_node)
 {
+    if (m_parent == &parent_node)
+    {
+        return;
+    }
+
+    const auto world_from_node = world_from_node_transform();
+    //m_parent_node->attach(attachment.node);
+
     if (m_parent != nullptr)
     {
-        m_parent->detach(shared_from_this());
+        m_parent->detach(this);
     }
-    m_parent = &node;
-    m_depth = node.m_depth + 1;
+    m_parent = &parent_node;
+    set_depth_recursive(parent_node.depth() + 1);
+
+    const auto parent_from_node = parent_node.node_from_world_transform() * world_from_node;
+    set_parent_from_node(parent_from_node);
     update_transform_recursive();
+}
+
+void Node::set_depth_recursive(size_t depth)
+{
+    if (m_depth == depth)
+    {
+        return;
+    }
+    m_depth = depth;
+    for (const auto& child : m_children)
+    {
+        child->set_depth_recursive(depth + 1);
+    }
 }
 
 void Node::on_detached_from(Node& node)
@@ -149,14 +183,18 @@ void Node::on_detached_from(Node& node)
         return;
     }
     m_parent = nullptr;
-    m_depth = 0;
+    set_depth_recursive(0);
+
+    auto world_from_node = world_from_node_transform();
+    set_parent_from_node(world_from_node);
+
 }
 
 void Node::unparent()
 {
     if (m_parent != nullptr)
     {
-        m_parent->detach(shared_from_this());
+        m_parent->detach(this);
     }
 }
 
@@ -225,6 +263,59 @@ void Node::update_transform_recursive(const uint64_t serial)
     }
 }
 
+void Node::sanity_check() const
+{
+    sanity_check_root_path(this);
+
+    if (m_parent != nullptr)
+    {
+        bool child_found_in_parent = false;
+        for (const auto& child : m_parent->children())
+        {
+            if (child.get() == this)
+            {
+                child_found_in_parent = true;
+                break;
+            }
+        }
+        if (!child_found_in_parent)
+        {
+            log.error("Node {} parent {} does not have node as child\n", name(), m_parent->name());
+        }
+    }
+
+    for (const auto& child : m_children)
+    {
+        if (child->parent() != this)
+        {
+            log.error("Node {} child {} parent == {}\n", name(), child->name());
+        }
+        if (child->depth() != depth() + 1)
+        {
+            log.error(
+                "Node {} depth = {}, child {} depth = {}\n",
+                name(),
+                depth(),
+                child->name(),
+                child->depth()
+            );
+        }
+        child->sanity_check();
+    }
+}
+
+void Node::sanity_check_root_path(const Node* node) const
+{
+    if (parent() == node)
+    {
+        log.error("Node {} has itself as an ancestor\n", node->name());
+    }
+    if (parent())
+    {
+        parent()->sanity_check_root_path(node);
+    }
+}
+
 auto Node::parent() const -> Node*
 {
     return m_parent;
@@ -265,6 +356,11 @@ auto Node::parent_from_node_transform() const -> const Transform&
     return m_transforms.parent_from_node;
 }
 
+auto Node::node_from_parent_transform() const -> const Transform
+{
+    return Transform::inverse(m_transforms.parent_from_node);
+}
+
 auto Node::parent_from_node() const -> glm::mat4
 {
     return m_transforms.parent_from_node.matrix();
@@ -273,6 +369,11 @@ auto Node::parent_from_node() const -> glm::mat4
 auto Node::world_from_node_transform() const -> const Transform&
 {
     return m_transforms.world_from_node;
+}
+
+auto Node::node_from_world_transform() const -> const Transform
+{
+    return Transform::inverse(m_transforms.world_from_node);
 }
 
 auto Node::world_from_node() const -> glm::mat4
@@ -321,6 +422,44 @@ void Node::set_parent_from_node(const Transform& transform)
     m_transforms.parent_from_node = transform;
     m_last_transform_update_serial = 0;
     on_transform_changed();
+}
+
+void Node::set_node_from_parent(const glm::mat4 matrix)
+{
+    m_transforms.parent_from_node.set(glm::inverse(matrix), matrix);
+    m_last_transform_update_serial = 0;
+    on_transform_changed();
+}
+
+void Node::set_node_from_parent(const Transform& transform)
+{
+    m_transforms.parent_from_node = Transform::inverse(transform);
+    m_last_transform_update_serial = 0;
+    on_transform_changed();
+}
+
+void Node::set_world_from_node(const glm::mat4 matrix)
+{
+    if (m_parent == nullptr)
+    {
+        set_parent_from_node(matrix);
+    }
+    else
+    {
+        set_parent_from_node(m_parent->node_from_world() * matrix);
+    }
+}
+
+void Node::set_world_from_node(const Transform& transform)
+{
+    if (m_parent == nullptr)
+    {
+        set_parent_from_node(transform);
+    }
+    else
+    {
+        set_parent_from_node(m_parent->node_from_world_transform() * transform);
+    }
 }
 
 auto is_empty(const Node* const node) -> bool

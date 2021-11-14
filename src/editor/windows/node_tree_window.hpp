@@ -43,7 +43,6 @@ public:
 
 private:
     void imgui_tree_node(erhe::scene::Node* node);
-    auto get_icon       (const erhe::scene::Light_type type) const -> const ImVec2;
 
     std::shared_ptr<Scene_root>        m_scene_root;
     std::shared_ptr<Selection_tool>    m_selection_tool;
