@@ -15,11 +15,12 @@
 #include "tools/physics_tool.hpp"
 #include "tools/trs_tool.hpp"
 #include "windows/brushes.hpp"
+
 #include "erhe/imgui/imgui_impl_erhe.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 
-#include "backends/imgui_impl_glfw.h"
+#include <backends/imgui_impl_glfw.h>
 
 namespace editor {
 
@@ -27,6 +28,7 @@ using namespace std;
 
 Editor_tools::Editor_tools()
     : erhe::components::Component{c_name}
+    , Imgui_window               {c_title}
 {
 }
 
@@ -73,8 +75,8 @@ void Editor_tools::initialize_component()
     //builder.AddRanges(io.Fonts->GetGlyphRangesThai());                   // Default + Thai characters
     //builder.AddRanges(io.Fonts->GetGlyphRangesVietnamese());             // Default + Vietnamese characters
 
-    builder.BuildRanges(&m_glyphRanges);
-    io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 18.0f, nullptr, m_glyphRanges.Data);
+    builder.BuildRanges(&m_glyph_ranges);
+    io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 18.0f, nullptr, m_glyph_ranges.Data);
 
     ImGui::StyleColorsDark();
     auto* const glfw_window = reinterpret_cast<GLFWwindow*>(get<Window>()->get_context_window()->get_glfw_window());
@@ -84,6 +86,91 @@ void Editor_tools::initialize_component()
     get<Editor_tools>()->register_imgui_window(this);
 }
 
+void Editor_tools::menu()
+{
+    if (ImGui::BeginMainMenuBar())
+    {
+        if (ImGui::BeginMenu("Edit"))
+        {
+            if (ImGui::MenuItem("Undo"      )) {}
+            if (ImGui::MenuItem("Redo"      )) {}
+            ImGui::Separator();
+            if (ImGui::MenuItem("Select All")) {}
+            if (ImGui::MenuItem("Deselect"  )) {}
+            ImGui::Separator();
+            if (ImGui::MenuItem("Translate" )) {}
+            if (ImGui::MenuItem("Rotate"    )) {}
+            if (ImGui::MenuItem("Scale"     )) {}
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Create"))
+        {
+            if (ImGui::MenuItem("Cube"  )) {}
+            if (ImGui::MenuItem("Box"   )) {}
+            if (ImGui::MenuItem("Sphere")) {}
+            if (ImGui::MenuItem("Torus" )) {}
+            if (ImGui::MenuItem("Cone"  )) {}
+            if (ImGui::BeginMenu("Brush"))
+            {
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Modify"))
+        {
+            if (ImGui::MenuItem("Ambo"    )) {}
+            if (ImGui::MenuItem("Dual"    )) {}
+            if (ImGui::MenuItem("Truncate")) {}
+            ImGui::EndMenu();
+        }
+        window_menu();
+        ImGui::EndMainMenuBar();
+    }
+
+    //ImGui::End();
+}
+
+void Editor_tools::window_menu()
+{
+    if (ImGui::BeginMenu("Window"))
+    {
+        for (auto window : m_imgui_windows)
+        {
+            bool enabled = window->is_visibile();
+            if (ImGui::MenuItem(window->title().data(), "", &enabled))
+            {
+                if (enabled) {
+                    window->show();
+                }
+                else
+                {
+                    window->hide();
+                }
+            }
+        }
+        ImGui::MenuItem("Tool Properties", "", &m_show_tool_properties);
+        ImGui::Separator();
+        if (ImGui::MenuItem("Close All"))
+        {
+            for (auto window : m_imgui_windows)
+            {
+                window->hide();
+            }
+            m_show_tool_properties = false;
+        }
+        if (ImGui::MenuItem("Open All"))
+        {
+            for (auto window : m_imgui_windows)
+            {
+                window->show();
+            }
+            m_show_tool_properties = true;
+        }
+        ImGui::EndMenu();
+    }
+}
+
+
 void Editor_tools::gui_begin_frame()
 {
     ZoneScoped;
@@ -91,6 +178,8 @@ void Editor_tools::gui_begin_frame()
     ImGui_ImplErhe_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+
+    menu();    
 }
 
 void Editor_tools::imgui_render()
@@ -120,12 +209,12 @@ auto Editor_tools::get_action_tool(Action action) const -> Tool*
     // clang-format off
     switch (action)
     {
-        case Action::select:    return m_selection_tool.get();
-        case Action::add:       return m_brushes.get();
-        case Action::remove:    return m_brushes.get();
-        case Action::translate: return m_trs_tool.get();
-        case Action::rotate:    return m_trs_tool.get();
-        case Action::drag:      return m_physics_tool.get();
+        case Action::select:    return m_selection_tool;
+        case Action::add:       return m_brushes;
+        case Action::remove:    return m_brushes;
+        case Action::translate: return m_trs_tool;
+        case Action::rotate:    return m_trs_tool;
+        case Action::drag:      return m_physics_tool;
         default:                return nullptr;
     }
     // clang-format on
@@ -140,9 +229,9 @@ void Editor_tools::set_priority_action(Action action)
 {
     log_tools.trace("set_priority_action(action = {})\n", c_action_strings[static_cast<int>(action)]);
     m_priority_action = action;
-    auto* tool        = get_action_tool(action);
+    auto* tool = get_action_tool(action);
 
-    if (m_trs_tool)
+    if (m_trs_tool != nullptr)
     {
         switch (action)
         {
@@ -230,14 +319,29 @@ void Editor_tools::register_imgui_window(Imgui_window* window)
 void Editor_tools::imgui()
 {
     const auto initial_priority_action = get_priority_action();
+    if (m_editor_view == nullptr)
+    {
+        return;
+    }
+
     auto& pointer_context = m_editor_view->pointer_context;
     for (auto imgui_window : m_imgui_windows)
     {
-        imgui_window->imgui(pointer_context);
+        if (imgui_window->is_visibile())
+        {
+            imgui_window->imgui(pointer_context);
+        }
     }
     if (pointer_context.priority_action != initial_priority_action)
     {
         set_priority_action(pointer_context.priority_action);
+    }
+    auto priority_action_tool = get_action_tool(pointer_context.priority_action);
+    if (m_show_tool_properties && (priority_action_tool != nullptr))
+    {
+        ImGui::Begin("Tool Properties");
+        priority_action_tool->tool_properties();
+        ImGui::End();
     }
     // if (m_forward_renderer)
     // {
@@ -413,9 +517,7 @@ void Editor_tools::delete_selected_meshes()
         }
 
         auto node_physics = get_physics_node(mesh.get());
-        auto* parent = node_physics
-            ? node_physics->parent()
-            : mesh->parent();
+        auto* parent = mesh->parent();
 
         Mesh_insert_remove_operation::Context context{
             m_selection_tool,
@@ -426,7 +528,7 @@ void Editor_tools::delete_selected_meshes()
             node_physics,
             (parent != nullptr)
                 ? parent->shared_from_this()
-                : std::shared_ptr<Node_physics>{},
+                : std::shared_ptr<erhe::scene::Node>{},
             Scene_item_operation::Mode::remove
         };
         auto op = make_shared<Mesh_insert_remove_operation>(context);

@@ -27,12 +27,15 @@ class Hover_tool
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name{"Hover_tool"};
+    static constexpr std::string_view c_name {"Hover_tool"};
+    static constexpr std::string_view c_title{"Hover"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Hover_tool ();
     ~Hover_tool() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -49,7 +52,7 @@ private:
     void deselect();
     void select  (Pointer_context& pointer_context);
 
-    std::shared_ptr<Scene_root>        m_scene_root;
+    Scene_root*                        m_scene_root{nullptr};
 
     std::shared_ptr<erhe::scene::Mesh> m_hover_mesh           {nullptr};
     size_t                             m_hover_primitive_index{0};

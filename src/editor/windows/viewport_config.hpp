@@ -2,6 +2,7 @@
 
 #include "renderers/base_renderer.hpp"
 #include "windows/imgui_window.hpp"
+
 #include "erhe/graphics/configuration.hpp"
 
 #include <glm/glm.hpp>
@@ -43,12 +44,15 @@ class Viewport_config
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name{"Viewport_config"};
+    static constexpr std::string_view c_name {"Viewport_config"};
+    static constexpr std::string_view c_title{"Viewport Properties"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Viewport_config ();
     ~Viewport_config() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 

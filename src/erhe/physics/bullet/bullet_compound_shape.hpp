@@ -3,7 +3,6 @@
 #include "erhe/physics/bullet/bullet_collision_shape.hpp"
 
 #include <BulletCollision/CollisionShapes/btCompoundShape.h>
-
 #include <glm/glm.hpp>
 
 #include <memory>
@@ -24,14 +23,12 @@ public:
     // Implements ICompound_shape
     void add_child_shape(
         std::shared_ptr<ICollision_shape> shape,
-        const glm::mat3                   basis,
-        const glm::vec3                   origin
+        Transform                         transform
     ) override;
 
     void calculate_principal_axis_transform(
         const std::vector<float>& child_masses,
-        glm::mat3&                principal_transform_basis,
-        glm::vec3&                principal_transform_origin,
+        Transform&                principal_transform,
         glm::vec3&                inertia
     ) override;
 

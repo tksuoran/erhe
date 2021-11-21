@@ -1,6 +1,7 @@
 #pragma once
 
 #include "operations/ioperation.hpp"
+
 #include "erhe/scene/mesh.hpp"
 
 #include <functional>
@@ -46,7 +47,7 @@ public:
         erhe::scene::Scene&              scene;
         erhe::scene::Mesh_layer&         layer;
         erhe::physics::IWorld&           physics_world;
-        std::shared_ptr<Selection_tool>  selection_tool;
+        Selection_tool*                  selection_tool{nullptr};
     };
 
 protected:
@@ -70,14 +71,16 @@ protected:
     );
 
     // Implements IOperation
-    void execute() override;
-    void undo   () override;
+    void execute () const override;
+    void undo    () const override;
+    auto describe() const -> std::string override;
 
     void add_entry(Entry&& entry);
 
+
 private:
-    std::vector<Entry>              m_entries;
-    std::shared_ptr<Selection_tool> m_selection_tool;
+    std::vector<Entry> m_entries;
+    Selection_tool*    m_selection_tool{nullptr};
 };
 
 }

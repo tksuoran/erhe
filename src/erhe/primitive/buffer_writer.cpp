@@ -9,7 +9,6 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/packing.hpp>
-
 #include <gsl/span>
 
 namespace erhe::primitive

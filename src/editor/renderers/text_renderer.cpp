@@ -58,7 +58,7 @@ void Text_renderer::initialize_component()
 {
     ZoneScoped;
 
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,

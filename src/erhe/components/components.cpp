@@ -3,13 +3,13 @@
 #include "erhe/components/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include <mango/core/thread.hpp>
-
 #define ERHE_TRACY_NO_GL 1
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include <fmt/ostream.h>
+#include <mango/core/thread.hpp>
 
+#include <algorithm>
 #include <sstream>
 
 namespace erhe::components
@@ -25,13 +25,9 @@ Components::Components()
 Components::~Components() = default;
 
 auto Components::add(const shared_ptr<Component>& component)
--> const std::shared_ptr<erhe::components::Component>&
+-> Component&
 {
-    // Silently ignores nullptr Components
-    if (!component)
-    {
-        return component;
-    }
+    VERIFY(component);
 
     component->register_as_component(this);
     components.insert(component);
@@ -48,7 +44,7 @@ auto Components::add(const shared_ptr<Component>& component)
         once_per_frame_updates.insert(once_per_frame_update);
     }
 
-    return component;
+    return *component.get();
 }
 
 void Components::cleanup_components()
@@ -196,7 +192,15 @@ void Components::launch_component_initialization()
 
     show_dependencies();
 
-    m_uninitialized_components = components;
+    std::transform(
+        components.begin(),
+        components.end(),
+        std::inserter(m_uninitialized_components, m_uninitialized_components.begin()),
+        [](const std::shared_ptr<Component>& c) -> Component*
+        {
+            return c.get();
+        }
+    );
 
     log_components.info("Initializing {} Components:\n", m_initialize_component_count_worker_thread);
 
@@ -222,7 +226,7 @@ void Components::launch_component_initialization()
     }
 }
 
-auto Components::get_component_to_initialize(const bool in_worker_thread) -> shared_ptr<Component>
+auto Components::get_component_to_initialize(const bool in_worker_thread) -> Component*
 {
     {
         std::lock_guard<std::mutex> lock(m_mutex);

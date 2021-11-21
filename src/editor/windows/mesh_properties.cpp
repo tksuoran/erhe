@@ -4,11 +4,13 @@
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
+
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
 
-#include "imgui.h"
+#include <imgui.h>
+#include <imgui/misc/cpp/imgui_stdlib.h>
 
 using namespace erhe::geometry;
 
@@ -16,7 +18,8 @@ namespace editor
 {
 
 Mesh_properties::Mesh_properties()
-    : erhe::components::Component(c_name)
+    : erhe::components::Component{c_name}
+    , Imgui_window               {c_title}
 {
 }
 
@@ -42,44 +45,12 @@ auto Mesh_properties::state() const -> State
 
 void Mesh_properties::imgui(Pointer_context&)
 {
-    ImGui::Begin("Mesh");
+    ImGui::Begin(c_title.data());
+
     ImGui::SliderInt("Max Labels", &m_max_labels, 0, 2000);
-    ImGui::Separator();
-    for (auto item : m_selection_tool->selection())
-    {
-        const auto mesh = as_mesh(item);
-        if (!mesh)
-        {
-            continue;
-        }
-        if (ImGui::TreeNode(mesh->name().c_str()))
-        {
-            auto& mesh_data = mesh->data;
-            const auto& primitives = mesh_data.primitives;
-            ImGui::ColorEdit3("Wireframe Color", &mesh_data.wireframe_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);
-
-            const int max_primitive_index = static_cast<int>(primitives.size()) - 1;
-            ImGui::SliderInt("Primitive", &m_primitive_index, 0, max_primitive_index);
-            const auto& primitive = primitives.at(m_primitive_index);
-            const auto  geometry  = primitive.primitive_geometry->source_geometry;
-            if (geometry != nullptr)
-            {
-                if (ImGui::TreeNode(geometry->name.c_str()))
-                {
-                    ImGui::Text("Points: %d",   geometry->point_count());
-                    ImGui::Text("Polygons: %d", geometry->polygon_count());
-                    ImGui::Text("Edges: %d",    geometry->edge_count());
-                    ImGui::Text("Corners: %d",  geometry->corner_count());
-
-                    ImGui::Checkbox("Show Points",   &m_show_points);
-                    ImGui::Checkbox("Show Polygons", &m_show_polygons);
-                    ImGui::Checkbox("Show Edges",    &m_show_edges);
-                    ImGui::TreePop();
-                }
-            }
-            ImGui::TreePop();
-        }
-    }
+    ImGui::Checkbox("Show Points",   &m_show_points);
+    ImGui::Checkbox("Show Polygons", &m_show_polygons);
+    ImGui::Checkbox("Show Edges",    &m_show_edges);
     ImGui::End();
 }
 

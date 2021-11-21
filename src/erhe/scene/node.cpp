@@ -6,6 +6,18 @@
 namespace erhe::scene
 {
 
+INode_attachment::~INode_attachment() = default;
+
+auto INode_attachment::flag_bits() const -> uint64_t
+{
+    return m_flag_bits;
+}
+
+auto INode_attachment::flag_bits() -> uint64_t&
+{
+    return m_flag_bits;
+}
+
 Node::Node(std::string_view name)
     : m_id   {}
     , m_name {name}
@@ -52,6 +64,82 @@ void Node::set_name(const std::string_view name)
     m_label = fmt::format("{}##Node{}", name, m_id.get_id());
 }
 
+void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
+{
+    ZoneScoped;
+
+    VERIFY(attachment);
+
+    log.info(
+        "{} ({}).attach({})\n",
+        name(),
+        node_type(),
+        attachment->node_attachment_type()
+    );
+
+#ifndef NDEBUG
+    const auto i = std::find(m_attachments.begin(), m_attachments.end(), attachment);
+    if (i != m_attachments.end())
+    {
+        log.error("Attachment {} already attached to {}\n", attachment->node_attachment_type(), name());
+        return;
+    }
+#endif
+
+    m_attachments.push_back(attachment);
+    attachment->on_attached_to(*this);
+}
+
+auto Node::detach(INode_attachment* attachment) -> bool
+{
+    ZoneScoped;
+
+    if (!attachment)
+    {
+        log.warn("empty attachment, cannot detach\n");
+        return false;
+    }
+
+    log.info(
+        "{} ({}).detach({})\n",
+        name(),
+        node_type(),
+        attachment->node_attachment_type()
+    );
+
+    if (attachment->node() != this)
+    {
+        log.warn(
+            "Attachment {} node {} != this {}\n",
+            attachment->node_attachment_type(),
+            attachment->node()
+                ? attachment->node()->name()
+                : "(none)",
+            name()
+        );
+        return false;
+    }
+
+    const auto i = std::remove_if(
+        m_attachments.begin(),
+        m_attachments.end(),
+        [attachment](const std::shared_ptr<INode_attachment>& node_attachment)
+        {
+            return node_attachment.get() == attachment;
+        }
+    );
+    if (i != m_attachments.end())
+    {
+        log.trace("Removing {} attachment from node\n", attachment->node_attachment_type(), name());
+        m_attachments.erase(i, m_attachments.end());
+        attachment->on_detached_from(*this);
+        return true;
+    }
+
+    log.warn("Detaching {} from node {} failed - was not attached\n", attachment->node_attachment_type(), name());
+    return false;
+}
+
 auto Node::child_count() const -> size_t
 {
     return m_children.size();
@@ -72,7 +160,7 @@ void Node::attach(const std::shared_ptr<Node>& child_node)
     );
 
 #ifndef NDEBUG
-    const auto i = std::remove(m_children.begin(), m_children.end(), child_node);
+    const auto i = std::find(m_children.begin(), m_children.end(), child_node);
     if (i != m_children.end())
     {
         log.error("Attachment {} already attached to {}\n", child_node->name(), name());
@@ -190,6 +278,14 @@ void Node::on_detached_from(Node& node)
 
 }
 
+void Node::on_transform_changed()
+{
+    for (const auto& attachment : m_attachments)
+    {
+        attachment->on_node_transform_changed();
+    }
+}
+
 void Node::unparent()
 {
     if (m_parent != nullptr)
@@ -288,7 +384,14 @@ void Node::sanity_check() const
     {
         if (child->parent() != this)
         {
-            log.error("Node {} child {} parent == {}\n", name(), child->name());
+            log.error(
+                "Node {} child {} parent == {}\n",
+                name(),
+                child->name(),
+                (child->parent() != nullptr)
+                    ? child->parent()->name()
+                    : "(none)"
+            );
         }
         if (child->depth() != depth() + 1)
         {
@@ -329,6 +432,11 @@ auto Node::depth() const -> size_t
 auto Node::children() const -> const std::vector<std::shared_ptr<Node>>&
 {
     return m_children;
+}
+
+auto Node::attachments() const -> const std::vector<std::shared_ptr<INode_attachment>>&
+{
+    return m_attachments;
 }
 
 auto Node::visibility_mask() const -> uint64_t

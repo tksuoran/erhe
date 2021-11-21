@@ -1,16 +1,17 @@
 #include "tools/selection_tool.hpp"
+#include "log.hpp"
 #include "tools.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
 #include "renderers/text_renderer.hpp"
 #include "scene/scene_manager.hpp"
 #include "scene/node_physics.hpp"
+
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
-#include "log.hpp"
 
-#include "imgui.h"
+#include <imgui.h>
 
 namespace editor
 {
@@ -64,21 +65,6 @@ void Selection_tool::unsubscribe_selection_change_notification(int handle)
         ),
         m_selection_change_subscriptions.end()
     );
-}
-
-void Selection_tool::imgui(Pointer_context&)
-{
-    ImGui::Begin("Selection");
-    for (const auto& item : m_selection)
-    {
-        VERIFY(item);
-        if (!item)
-        {
-            continue;
-        }
-        ImGui::Text("%s: %s", item->node_type(), item->name().c_str());
-    }
-    ImGui::End();
 }
 
 void Selection_tool::cancel_ready()

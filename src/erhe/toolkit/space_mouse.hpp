@@ -6,7 +6,7 @@
 #include <wchar.h>
 #include <cstring>
 #include <cstdlib>
-#include "hidapi.h"
+#include <hidapi.h>
 
 namespace erhe::toolkit
 {

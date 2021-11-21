@@ -57,10 +57,13 @@ class Scene_manager
 {
 public:
     static constexpr std::string_view c_name{"Scene_manager"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
     Scene_manager();
     ~Scene_manager() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -116,9 +119,9 @@ private:
     void make_punctual_light_nodes();
 
     // Components
-    std::shared_ptr<Brushes>     m_brushes;
-    std::shared_ptr<Mesh_memory> m_mesh_memory;
-    std::shared_ptr<Scene_root>  m_scene_root;
+    Brushes*     m_brushes    {nullptr};
+    Mesh_memory* m_mesh_memory{nullptr};
+    Scene_root*  m_scene_root {nullptr};
 
     // Self owned parts
     std::shared_ptr<erhe::scene::ICamera> m_view_camera;

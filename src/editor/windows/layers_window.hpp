@@ -29,12 +29,15 @@ class Layers_window
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name{"Node_tree"};
+    static constexpr std::string_view c_name {"Layers_window"};
+    static constexpr std::string_view c_title{"Layers"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Layers_window ();
     ~Layers_window() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -44,11 +47,10 @@ public:
 private:
     auto get_icon(const erhe::scene::Light_type type) const -> const ImVec2;
 
-    bool                               m_show_meshes{true};
-    bool                               m_show_lights{true};
-    std::shared_ptr<Scene_root>        m_scene_root;
-    std::shared_ptr<Selection_tool>    m_selection_tool;
-    std::shared_ptr<Icon_set>          m_icon_set;
+    Scene_root*     m_scene_root    {nullptr};
+    Selection_tool* m_selection_tool{nullptr};
+    Icon_set*       m_icon_set      {nullptr};
+
     std::shared_ptr<erhe::scene::Node> m_node_clicked;
 };
 

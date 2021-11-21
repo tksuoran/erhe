@@ -2,6 +2,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/scene_manager.hpp"
 #include "log.hpp"
+
 #include "erhe/geometry/operation/clone.hpp"
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/irigid_body.hpp"
@@ -447,11 +448,9 @@ auto Brush::make_instance(
 
     auto mesh = std::make_shared<Mesh>(name);
     mesh->data.primitives.emplace_back(scaled.primitive_geometry, material);
-
-    Node* node{nullptr};
+    mesh->set_world_from_node(world_from_node);
 
     std::shared_ptr<Node_physics> node_physics;
-
     if (collision_shape || collision_shape_generator)
     {
         ZoneScopedN("make brush node physics");
@@ -461,16 +460,8 @@ auto Brush::make_instance(
             scaled.local_inertia
         };
         node_physics = make_shared<Node_physics>(create_info);
-        node_physics->set_name(name);
-        node = node_physics.get();
-        node_physics->attach(mesh);
+        mesh->attach(node_physics);
     }
-    else
-    {
-        node = mesh.get();
-    }
-
-    node->set_world_from_node(world_from_node);
 
     return { mesh, node_physics };
 }

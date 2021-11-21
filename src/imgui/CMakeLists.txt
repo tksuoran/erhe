@@ -5,6 +5,8 @@ set(source_list
     imgui_tables.cpp
     imgui_widgets.cpp
     imgui.cpp
+    misc/cpp/imgui_stdlib.cpp
+    misc/cpp/imgui_stdlib.h
     backends/imgui_impl_glfw.cpp
 )
 
@@ -12,6 +14,7 @@ if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
     add_definitions(-DIMGUI_ENABLE_FREETYPE)
     list(APPEND source_list
         misc/freetype/imgui_freetype.cpp
+        misc/freetype/imgui_freetype.h
     )
 endif()
 

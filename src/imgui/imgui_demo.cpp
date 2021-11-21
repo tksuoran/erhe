@@ -6227,7 +6227,7 @@ static void ShowExampleMenuFile()
     if (ImGui::MenuItem("Save", "Ctrl+S")) {}
     if (ImGui::MenuItem("Save As..")) {}
 
-    ImGui::Separator();
+    ImGui::Separator() ;
     if (ImGui::BeginMenu("Options"))
     {
         static bool enabled = true;

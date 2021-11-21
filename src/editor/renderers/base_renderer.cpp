@@ -26,8 +26,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-
-#include "imgui.h"
+#include <imgui.h>
 
 namespace editor
 {
@@ -109,7 +108,8 @@ auto Base_renderer::id_ranges() const -> const std::vector<Id_range>&
 
 auto Base_renderer::update_primitive_buffer(
     const Mesh_layer&        mesh_layer,
-    const Visibility_filter& visibility_filter
+    const Visibility_filter& visibility_filter,
+    const bool               use_id_ranges
 )
 -> Base_renderer::Buffer_range
 {
@@ -176,14 +176,17 @@ auto Base_renderer::update_primitive_buffer(
             }
             m_primitive_writer.write_offset += entry_size;
 
-            Id_range r;
-            r.offset          = m_id_offset;
-            r.length          = count;
-            r.mesh            = mesh;
-            r.primitive_index = mesh_primitive_index++;
-            m_id_ranges.push_back(r);
+            if (use_id_ranges)
+            {
+                Id_range r;
+                r.offset          = m_id_offset;
+                r.length          = count;
+                r.mesh            = mesh;
+                r.primitive_index = mesh_primitive_index++;
+                m_id_ranges.push_back(r);
 
-            m_id_offset += count;
+                m_id_offset += count;
+            }
 
             ++primitive_index;
         }

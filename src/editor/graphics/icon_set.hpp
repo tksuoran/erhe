@@ -1,10 +1,11 @@
 #pragma once
 
 #include "erhe/components/component.hpp"
-#include <filesystem>
-#include "imgui.h"
 
+#include <imgui.h>
 #include <glm/glm.hpp>
+
+#include <filesystem>
 
 namespace erhe::graphics
 {
@@ -27,12 +28,14 @@ class Icon_set
 {
 public:
     static constexpr std::string_view c_name{"Icon_set"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Icon_set(int icon_width = 16, int icon_height = 16, int row_count = 16, int column_count = 16);
     ~Icon_set() override;
 
     // Implements Component
-    void connect()              override;
+    auto get_type_hash       () const -> uint32_t override { return hash; }
+    void connect             () override;
     void initialize_component() override;
 
     auto load(const std::filesystem::path& path) -> ImVec2;

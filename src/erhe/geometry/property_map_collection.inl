@@ -16,8 +16,7 @@ Property_map_collection<Key_type>::clear()
 
 template <typename Key_type>
 inline auto
-Property_map_collection<Key_type>::size() const
-    -> size_t
+Property_map_collection<Key_type>::size() const -> size_t
 {
     return m_entries.size();
 }
@@ -42,7 +41,7 @@ Property_map_collection<Key_type>::remove(const std::string& name)
 {
     ZoneScoped;
 
-    auto i = std::remove_if(
+    const auto i = std::remove_if(
         m_entries.begin(),
         m_entries.end(),
         [name](const Entry& entry)
@@ -66,7 +65,7 @@ Property_map_collection<Key_type>::contains(const std::string& name) const
 
     for (const auto& entry : m_entries)
     {
-        bool match = entry.key == name;
+        const bool match = entry.key == name;
         if (match)
         {
             return true;
@@ -106,7 +105,7 @@ Property_map_collection<Key_type>::create(const Property_map_descriptor& descrip
         VERIFY(entry.key != descriptor.name);
     }
 
-    auto p = new Property_map<Key_type, Value_type>(descriptor);
+    const auto p = new Property_map<Key_type, Value_type>(descriptor);
     m_entries.emplace_back(descriptor.name, p);
     //log_attribute_maps.trace("Added attribute map {}\n", descriptor.name);
 
@@ -116,8 +115,9 @@ Property_map_collection<Key_type>::create(const Property_map_descriptor& descrip
 template <typename Key_type>
 template <typename Value_type>
 inline auto
-Property_map_collection<Key_type>::find(const Property_map_descriptor& descriptor) const
-    -> Property_map<Key_type, Value_type>*
+Property_map_collection<Key_type>::find(
+    const Property_map_descriptor& descriptor
+) const -> Property_map<Key_type, Value_type>*
 {
     ZoneScoped;
 
@@ -125,8 +125,8 @@ Property_map_collection<Key_type>::find(const Property_map_descriptor& descripto
     {
         if (entry.key == descriptor.name)
         {
-            auto p = entry.value.get();
-            auto typed_p = dynamic_cast<Property_map<Key_type, Value_type>*>(p);
+            const auto p       = entry.value.get();
+            const auto typed_p = dynamic_cast<Property_map<Key_type, Value_type>*>(p);
             if (typed_p != nullptr)
             {
                 return typed_p;
@@ -148,8 +148,8 @@ Property_map_collection<Key_type>::find_or_create(const Property_map_descriptor&
     {
         if (entry.key == descriptor.name)
         {
-            auto p = entry.value.get();
-            auto typed_p = dynamic_cast<Property_map<Key_type, Value_type>*>(p);
+            const auto p       = entry.value.get();
+            const auto typed_p = dynamic_cast<Property_map<Key_type, Value_type>*>(p);
             if (typed_p != nullptr)
             {
                 return typed_p;
@@ -158,7 +158,7 @@ Property_map_collection<Key_type>::find_or_create(const Property_map_descriptor&
     }
 
     // New entry
-    auto p = new Property_map<Key_type, Value_type>(descriptor);
+    const auto p = new Property_map<Key_type, Value_type>(descriptor);
     m_entries.emplace_back(descriptor.name, p);
     //log_attribute_maps.trace("Added attribute map {}\n", descriptor.name);
     return p;
@@ -206,7 +206,7 @@ Property_map_collection<Key_type>::interpolate(
         }
         Property_map_base<Key_type>* destination_map = src_map->constructor(descriptor);
 
-        //log_interpolate.trace("\ninterpolating {}\n", src_map->descriptor().name);
+        log_interpolate.trace("\ninterpolating {}\n", src_map->descriptor().name);
         src_map->interpolate(destination_map, key_new_to_olds);
 
         destination.insert(destination_map);
@@ -217,7 +217,7 @@ template <typename Key_type>
 inline void
 Property_map_collection<Key_type>::merge_to(
     Property_map_collection<Key_type>& destination,
-    glm::mat4                          transform)
+    const glm::mat4                    transform)
 {
     ZoneScoped;
 
@@ -254,7 +254,7 @@ Property_map_collection<Key_type>::clone()
 
 template <typename Key_type>
 inline auto
-Property_map_collection<Key_type>::clone_with_transform(glm::mat4 transform)
+Property_map_collection<Key_type>::clone_with_transform(const glm::mat4 transform)
 -> Property_map_collection<Key_type>
 {
     Property_map_collection<Key_type> result;

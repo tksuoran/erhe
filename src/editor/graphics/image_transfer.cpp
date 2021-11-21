@@ -22,7 +22,7 @@ void Image_transfer::connect()
 
 void Image_transfer::initialize_component()
 {
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     m_slots = std::make_unique<std::array<Slot, 4>>();
 }

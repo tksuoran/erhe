@@ -2,6 +2,7 @@
 
 #include "erhe/graphics/vertex_attribute.hpp"
 #include "erhe/graphics/vertex_attribute_mapping.hpp"
+
 #include <gsl/pointers>
 
 #include <memory>

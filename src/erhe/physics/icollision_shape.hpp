@@ -1,6 +1,6 @@
 #pragma once
 
-#include <glm/glm.hpp>
+#include "erhe/physics/transform.hpp"
 
 #include <memory>
 #include <vector>
@@ -46,11 +46,10 @@ public:
 
     virtual void calculate_local_inertia        (const float mass, glm::vec3& inertia) const = 0;
     virtual auto is_convex                      () const -> bool = 0;
-    virtual void add_child_shape                (std::shared_ptr<ICollision_shape> shape, const glm::mat3 basis, const glm::vec3 origin) = 0;
+    virtual void add_child_shape                (std::shared_ptr<ICollision_shape> shape, Transform transform) = 0;
     virtual void calculate_principal_axis_transform(
         const std::vector<float>& child_masses,
-        glm::mat3&                principal_transform_basis,
-        glm::vec3&                principal_transform_origin,
+        Transform&                principal_transform,
         glm::vec3&                inertia
     ) = 0;
 

@@ -4,7 +4,7 @@
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/window.hpp"
 
-#include "renderdoc_app.h"
+#include <renderdoc_app.h>
 
 namespace editor {
 
@@ -14,9 +14,13 @@ class Application
 {
 public:
     static constexpr std::string_view c_name{"Application"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Application ();
     ~Application() override;
+
+    // Implements Component
+    auto get_type_hash() const -> uint32_t override { return hash; }
 
     auto initialize_components(int argc, char** argv) -> bool;
     void run();

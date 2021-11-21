@@ -17,6 +17,7 @@
 #include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/physics/irigid_body.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/camera.hpp"
@@ -25,7 +26,7 @@
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 
-#include "imgui.h"
+#include <imgui.h>
 
 namespace editor
 {
@@ -246,12 +247,12 @@ void Trs_tool::initialize_component()
 {
     ZoneScoped;
 
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     VERIFY(m_mesh_memory);
     VERIFY(m_scene_root);
 
-    m_visualization.initialize(*m_mesh_memory.get(), *m_scene_root.get());
+    m_visualization.initialize(*m_mesh_memory, *m_scene_root);
     m_handles[m_visualization.x_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_x;
     m_handles[m_visualization.x_arrow_cone_mesh    .get()] = Handle::e_handle_translate_x;
     m_handles[m_visualization.y_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_y;
@@ -284,15 +285,14 @@ void Trs_tool::initialize_component()
     get<Editor_tools>()->register_tool(this);
 }
 
-void Trs_tool::imgui(Pointer_context&)
+void Trs_tool::tool_properties()
 {
+    using namespace erhe::imgui;
     ZoneScoped;
 
     const bool show_translate = m_visualization.show_translate;
     const bool show_rotate    = m_visualization.show_rotate;
-    ImGui::Begin("Transform");
-
-    const auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
+    const auto button_size    = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
 
     if (make_button("Local", (m_local) ? Item_mode::active : Item_mode::normal, button_size))
     {
@@ -339,10 +339,10 @@ void Trs_tool::imgui(Pointer_context&)
         }
     }
 
-    ImGui::Separator  ();
-    ImGui::Checkbox   ("Hide Inactive", &m_visualization.hide_inactive);
-    ImGui::Separator  ();
-    ImGui::End();
+    ImGui::Separator();
+    ImGui::Checkbox ("Hide Inactive", &m_visualization.hide_inactive);
+    ImGui::Separator();
+
     if ((show_translate != m_visualization.show_translate) ||
         (show_rotate    != m_visualization.show_rotate   ))
     {
@@ -1102,10 +1102,10 @@ void Trs_tool::update_transforms()
     }
     const auto serial = m_scene_root->scene().transform_update_serial();
     root()->update_transform(serial);
-    if (m_node_physics)
-    {
-        m_node_physics->on_node_updated();
-    }
+    //if (m_node_physics)
+    //{
+    //    m_node_physics->on_node_updated();
+    //}
     m_visualization.update_transforms(serial);
 }
 

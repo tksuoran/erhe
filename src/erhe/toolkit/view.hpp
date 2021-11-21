@@ -251,9 +251,9 @@ class Root_view
 public:
     explicit Root_view(Context_window* window);
 
-    void set_view(std::shared_ptr<View> view);
+    void set_view(View* view);
 
-    void reset_view(std::shared_ptr<View> view);
+    void reset_view(View* view);
 
     void on_idle() override;
 
@@ -270,9 +270,9 @@ public:
     void on_mouse_click(const Mouse_button button, const int count) override;
 
 private:
-    Context_window*       m_window;
-    std::shared_ptr<View> m_view;
-    std::shared_ptr<View> m_last_view;
+    Context_window* m_window   {nullptr};
+    View*           m_view     {nullptr};
+    View*           m_last_view{nullptr};
 };
 
 } // namespace erhe::toolkit

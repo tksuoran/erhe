@@ -1,9 +1,12 @@
 #pragma once
 
 #include "operations/ioperation.hpp"
+
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/transform.hpp"
+
+#include <string>
 #include <vector>
 
 namespace erhe::physics
@@ -36,25 +39,21 @@ public:
     class Context
     {
     public:
-        erhe::scene::Scene&             scene;
-        erhe::scene::Mesh_layer&        layer;
-        std::shared_ptr<Selection_tool> selection_tool;
-        bool                            attach{true};
-
-        // auto detach() const -> bool
-        // {
-        //     return !attach;
-        // }
+        erhe::scene::Scene&      scene;
+        erhe::scene::Mesh_layer& layer;
+        Selection_tool*          selection_tool;
+        bool                     attach{true};
     };
 
     explicit Attach_detach_operation(Context& context);
 
     // Implements IOperation
-    void execute() override;
-    void undo   () override;
+    void execute () const override;
+    void undo    () const override;
+    auto describe() const -> std::string override;
 
 private:
-    void execute(bool attach);
+    void execute(bool attach) const;
 
     struct Entry
     {
@@ -70,7 +69,7 @@ private:
 
     Context                            m_context;
     std::shared_ptr<erhe::scene::Node> m_parent_node;
-    std::vector<Entry>                 m_attachments;
+    std::vector<Entry>                 m_entries;
 };
 
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe/physics/transform.hpp"
+
 #include <glm/glm.hpp>
 
 #include <memory>
@@ -62,8 +64,8 @@ public:
     virtual void set_rolling_friction        (float friction)                                           = 0;
     virtual auto get_restitution             () const -> float                                          = 0;
     virtual void set_restitution             (float restitution)                                        = 0;
-    virtual void set_center_of_mass_transform(const glm::mat3 basis, const glm::vec3 origin)            = 0;
-    virtual void set_world_transform         (const glm::mat3 basis, const glm::vec3 origin)            = 0;
+    virtual void set_center_of_mass_transform(Transform transform)                                      = 0;
+    virtual void set_world_transform         (Transform transform)                                      = 0;
     virtual void set_linear_velocity         (const glm::vec3 velocity)                                 = 0;
     virtual void set_angular_velocity        (const glm::vec3 velocity)                                 = 0;
     virtual auto get_linear_damping          () const -> float                                          = 0;

@@ -49,6 +49,8 @@ class Text_renderer
 {
 public:
     static constexpr std::string_view c_name{"Text_renderer"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
     Text_renderer ();
     ~Text_renderer() override;
     Text_renderer (const Text_renderer&) = delete;
@@ -57,6 +59,7 @@ public:
     void operator=(Text_renderer&&)      = delete;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -142,18 +145,18 @@ private:
 
     auto current_frame_resources() -> Frame_resources&;
 
+    erhe::graphics::OpenGL_state_tracker*            m_pipeline_state_tracker{nullptr};
 
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    erhe::graphics::Fragment_outputs                      m_fragment_outputs;
-    erhe::graphics::Vertex_attribute_mappings             m_attribute_mappings;
-    erhe::graphics::Vertex_format                         m_vertex_format;
-    std::shared_ptr<erhe::graphics::Buffer>               m_index_buffer;
-    std::unique_ptr<erhe::graphics::Shader_resource>      m_projection_block;
-    std::unique_ptr<erhe::graphics::Shader_stages>        m_shader_stages;
-    std::unique_ptr<erhe::ui::Font>                       m_font;
-    erhe::graphics::Shader_resource                       m_default_uniform_block; // containing sampler uniforms
-    std::unique_ptr<erhe::graphics::Sampler>              m_nearest_sampler;
-    int                                                   m_font_sampler_location{0};
+    erhe::graphics::Fragment_outputs                 m_fragment_outputs;
+    erhe::graphics::Vertex_attribute_mappings        m_attribute_mappings;
+    erhe::graphics::Vertex_format                    m_vertex_format;
+    std::shared_ptr<erhe::graphics::Buffer>          m_index_buffer;
+    std::unique_ptr<erhe::graphics::Shader_resource> m_projection_block;
+    std::unique_ptr<erhe::graphics::Shader_stages>   m_shader_stages;
+    std::unique_ptr<erhe::ui::Font>                  m_font;
+    erhe::graphics::Shader_resource                  m_default_uniform_block; // containing sampler uniforms
+    std::unique_ptr<erhe::graphics::Sampler>         m_nearest_sampler;
+    int                                              m_font_sampler_location{0};
 
     std::deque<Frame_resources> m_frame_resources;
     size_t                      m_current_frame_resource_slot{0};

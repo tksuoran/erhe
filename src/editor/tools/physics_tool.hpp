@@ -28,21 +28,25 @@ class Physics_tool
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name{"Physics_tool"};
+    static constexpr std::string_view c_name {"Physics_tool"};
+    static constexpr std::string_view c_title{"Physics Tool"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Physics_tool ();
     ~Physics_tool() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
     // Implements Tool
-    auto update      (Pointer_context& pointer_context) -> bool override;
-    void render      (const Render_context& render_context)     override;
-    auto state       () const -> State                          override;
-    void cancel_ready()                                         override;
-    auto description () -> const char*                          override;
+    auto update         (Pointer_context& pointer_context) -> bool override;
+    void render         (const Render_context& render_context)     override;
+    auto state          () const -> State                          override;
+    void cancel_ready   ()                                         override;
+    auto description    () -> const char*                          override;
+    void tool_properties()                                         override;
 
     // Implements Imgui_window
     void imgui(Pointer_context& pointer_context) override;
@@ -51,7 +55,8 @@ private:
     void update_internal(Pointer_context& pointer_context);
 
     State                                       m_state{State::Passive};
-    std::shared_ptr<Scene_root>                 m_scene_root;
+
+    Scene_root*                                 m_scene_root{nullptr};
 
     std::shared_ptr<erhe::scene::Mesh>          m_drag_mesh;
     std::shared_ptr<Node_physics>               m_drag_node_physics;

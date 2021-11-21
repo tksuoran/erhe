@@ -12,13 +12,14 @@
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
 
-#include "imgui.h"
+#include <imgui.h>
 
 namespace editor
 {
 
 Physics_window::Physics_window()
-    : erhe::components::Component(c_name)
+    : erhe::components::Component{c_name}
+    , Imgui_window               {c_title}
 {
 }
 
@@ -52,7 +53,7 @@ auto Physics_window::description() -> const char*
 
 void Physics_window::imgui(Pointer_context& /*pointer_context*/)
 {
-    if (m_selection_tool.get() == nullptr)
+    if (m_selection_tool == nullptr)
     {
         return;
     }
@@ -120,7 +121,7 @@ void Physics_window::imgui(Pointer_context& /*pointer_context*/)
     const auto& selection = m_selection_tool->selection();
     for (const auto& item : selection)
     {
-        auto* node_physics = as_physics(item.get());
+        auto* node_physics = get_physics_node(item.get()).get();
         if (!node_physics)
         {
             continue;

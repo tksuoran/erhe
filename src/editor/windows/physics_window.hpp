@@ -19,12 +19,15 @@ class Physics_window
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name{"Physics_window"};
+    static constexpr std::string_view c_name {"Physics_window"};
+    static constexpr std::string_view c_title{"Physics"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Physics_window ();
     ~Physics_window() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -55,9 +58,9 @@ public:
     auto get_debug_draw_parameters() -> Debug_draw_parameters;
 
 private:
-    std::shared_ptr<Selection_tool> m_selection_tool;
-    std::shared_ptr<Scene_root>     m_scene_root;
-    Debug_draw_parameters           m_debug_draw;
+    Selection_tool*       m_selection_tool{nullptr};
+    Scene_root*           m_scene_root    {nullptr};
+    Debug_draw_parameters m_debug_draw;
 };
 
 } // namespace editor

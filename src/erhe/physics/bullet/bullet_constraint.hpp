@@ -3,7 +3,6 @@
 #include "erhe/physics/iconstraint.hpp"
 
 #include <BulletDynamics/ConstraintSolver/btPoint2PointConstraint.h>
-
 #include <glm/glm.hpp>
 
 #include <memory>

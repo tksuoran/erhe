@@ -2,19 +2,11 @@
 
 #include "windows/imgui_window.hpp"
 
-#include <glm/glm.hpp>
-
 #include <memory>
-
-namespace erhe::graphics
-{
-    class Texture;
-}
 
 namespace erhe::scene
 {
     class Node;
-    enum class Light_type : unsigned int;
 }
 
 namespace editor
@@ -29,12 +21,15 @@ class Node_tree_window
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name{"Node_tree"};
+    static constexpr std::string_view c_name {"Node_tree"};
+    static constexpr std::string_view c_title{"Scene"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Node_tree_window ();
     ~Node_tree_window() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -44,9 +39,10 @@ public:
 private:
     void imgui_tree_node(erhe::scene::Node* node);
 
-    std::shared_ptr<Scene_root>        m_scene_root;
-    std::shared_ptr<Selection_tool>    m_selection_tool;
-    std::shared_ptr<Icon_set>          m_icon_set;
+    Scene_root*     m_scene_root    {nullptr};
+    Selection_tool* m_selection_tool{nullptr};
+    Icon_set*       m_icon_set      {nullptr};
+
     std::shared_ptr<erhe::scene::Node> m_node_clicked;
 };
 

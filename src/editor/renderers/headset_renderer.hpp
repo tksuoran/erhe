@@ -43,7 +43,6 @@ public:
 
     std::shared_ptr<erhe::graphics::Texture>      color_texture;
     std::shared_ptr<erhe::graphics::Texture>      depth_texture;
-    //std::unique_ptr<erhe::graphics::Renderbuffer> depth_stencil_renderbuffer;
     std::unique_ptr<erhe::graphics::Framebuffer>  framebuffer;
     std::shared_ptr<erhe::scene::Camera>          camera;
     bool                                          is_valid{false};
@@ -70,11 +69,13 @@ class Headset_renderer
 {
 public:
     static constexpr std::string_view c_name{"Headset_renderer"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Headset_renderer ();
     ~Headset_renderer() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
     auto initialization_requires_main_thread() const -> bool override { return true; }
@@ -89,11 +90,11 @@ private:
     std::vector<Headset_view_resources>       m_view_resources;
     std::unique_ptr<Controller_visualization> m_controller_visualization;
 
-    std::shared_ptr<Application>              m_application;
-    std::shared_ptr<Editor_rendering>         m_editor_rendering;
-    std::shared_ptr<Line_renderer>            m_line_renderer;
-    std::shared_ptr<Scene_manager>            m_scene_manager;
-    std::shared_ptr<Scene_root>               m_scene_root;
+    Application*              m_application     {nullptr};
+    Editor_rendering*         m_editor_rendering{nullptr};
+    Line_renderer*            m_line_renderer   {nullptr};
+    Scene_manager*            m_scene_manager   {nullptr};
+    Scene_root*               m_scene_root      {nullptr};
 };
 
 }

@@ -4,6 +4,7 @@
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_manager.hpp"
+
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
@@ -58,6 +59,26 @@ namespace editor
 //    return principalTransform;
 //}
 
+auto Merge_operation::describe() const -> std::string
+{
+    std::stringstream ss;
+    ss << "Merge ";
+    bool first = true;
+    for (const auto& entry : m_source_entries)
+    {
+        if (first)
+        {
+            first = false;
+        }
+        else
+        {
+            ss << ", ";
+        }
+        ss << entry.mesh->name();
+    }
+    return ss.str();
+}
+
 Merge_operation::Merge_operation(Context& context)
     : m_context(context)
 {
@@ -94,16 +115,17 @@ Merge_operation::Merge_operation(Context& context)
             ? rigid_body->get_collision_shape()
             : std::shared_ptr<erhe::physics::ICollision_shape>{};
 
-        m_hold_nodes.push_back(node_physics); // Otherwise these nodes will get deleted
+        //m_hold_nodes.push_back(node_physics); // Otherwise these nodes will get deleted
+        //m_hold_node_attachments.push_back(node_physics);
         if (first_mesh)
         {
             reference_node_from_world = mesh->node_from_world();
             transform  = mat4{1};
             first_mesh = false;
-            m_parent = node_physics ? node_physics->parent() : mesh->parent();
+            m_parent = mesh->parent();
             m_state_after.selection.push_back(mesh);
             m_state_before.collision_shape = collision_shape;
-            m_state_before.mass            = node_physics ? node_physics->rigid_body()->get_mass() : 0.0f;
+            m_state_before.mass            = node_physics ? node_physics->rigid_body()->get_mass()          : 0.0f;
             m_state_before.local_inertia   = node_physics ? node_physics->rigid_body()->get_local_inertia() : glm::vec3{0.0f};
         }
         else
@@ -113,12 +135,9 @@ Merge_operation::Merge_operation(Context& context)
 
         if (node_physics)
         {
-            glm::vec3 origin = glm::vec3{transform[3]};
-            glm::mat3 basis  = glm::mat3{transform};
             m_state_after.collision_shape->add_child_shape(
                 collision_shape,
-                basis,
-                origin
+                erhe::physics::Transform{transform}
             );
             const auto child_mass = rigid_body->get_mass();
             child_masses.push_back(child_mass);
@@ -155,14 +174,15 @@ Merge_operation::Merge_operation(Context& context)
     }
 
 
-    m_state_before.center_of_mass_transform_basis = glm::mat3{1.0f};
-    m_state_before.center_of_mass_transform_origin = glm::vec3{0.0f};
+    m_state_before.rigidbody_from_node = erhe::physics::Transform{};
+    erhe::physics::Transform principal_axis_transform;
     m_state_after.collision_shape->calculate_principal_axis_transform(
         child_masses, 
-        m_state_after.center_of_mass_transform_basis,
-        m_state_after.center_of_mass_transform_origin,
+        principal_axis_transform,
         m_state_after.local_inertia
     );
+
+    m_state_after.rigidbody_from_node = inverse(principal_axis_transform);
 
     const erhe::geometry::Geometry::Weld_settings weld_settings;
     combined_geometry.weld(weld_settings);
@@ -177,7 +197,7 @@ Merge_operation::Merge_operation(Context& context)
     m_combined_primitive_geometry->source_normal_style = normal_style;
 }
 
-void Merge_operation::execute()
+void Merge_operation::execute() const
 {
     m_context.scene.sanity_check();
 
@@ -194,10 +214,11 @@ void Merge_operation::execute()
             auto node_physics = get_physics_node(mesh.get());
             if (node_physics)
             {
+                node_physics->set_rigidbody_from_node(m_state_after.rigidbody_from_node);
+
                 auto* const rigid_body = node_physics->rigid_body();
-                rigid_body->set_collision_shape         (m_state_after.collision_shape);
-                rigid_body->set_center_of_mass_transform(m_state_after.center_of_mass_transform_basis, m_state_after.center_of_mass_transform_origin);
-                rigid_body->set_mass_properties         (m_state_after.mass, m_state_after.local_inertia);
+                rigid_body->set_collision_shape(m_state_after.collision_shape);
+                rigid_body->set_mass_properties(m_state_after.mass, m_state_after.local_inertia);
             }
         }
         else
@@ -206,14 +227,10 @@ void Merge_operation::execute()
             auto node_physics = get_physics_node(mesh.get());
             if (node_physics)
             {
-                remove_from_physics_world(m_context.scene, m_context.physics_world, node_physics);
-                node_physics->unparent();
-                VERIFY(mesh->parent() == node_physics.get());
+                remove_from_physics_world(m_context.physics_world, node_physics);
+                mesh->detach(node_physics.get());
             }
-            else
-            {
-                mesh->unparent();
-            }
+            mesh->unparent();
             remove_from_scene_layer(m_context.scene, m_context.layer, mesh);
         }
     }
@@ -222,7 +239,7 @@ void Merge_operation::execute()
     m_context.scene.sanity_check();
 }
 
-void Merge_operation::undo()
+void Merge_operation::undo() const
 {
     m_context.scene.sanity_check();
 
@@ -238,10 +255,11 @@ void Merge_operation::undo()
             auto node_physics = get_physics_node(mesh.get());
             if (node_physics)
             {
+                node_physics->set_rigidbody_from_node(m_state_before.rigidbody_from_node);
+
                 auto* const rigid_body = node_physics->rigid_body();
-                rigid_body->set_collision_shape         (m_state_before.collision_shape);
-                rigid_body->set_center_of_mass_transform(m_state_before.center_of_mass_transform_basis, m_state_before.center_of_mass_transform_origin);
-                rigid_body->set_mass_properties         (m_state_before.mass, m_state_before.local_inertia);
+                rigid_body->set_collision_shape(m_state_before.collision_shape);
+                rigid_body->set_mass_properties(m_state_before.mass, m_state_before.local_inertia);
             }
         }
         else
@@ -250,19 +268,12 @@ void Merge_operation::undo()
             auto node_physics = get_physics_node(mesh.get());
             if (node_physics)
             {
-                add_to_physics_world(m_context.scene, m_context.physics_world, node_physics);
-                if (m_parent != nullptr)
-                {
-                    m_parent->attach(node_physics);
-                }
-                VERIFY(mesh->parent() == node_physics.get());
+                add_to_physics_world(m_context.physics_world, node_physics);
+                mesh->attach(node_physics);
             }
-            else
+            if (m_parent != nullptr)
             {
-                if (m_parent != nullptr)
-                {
-                    m_parent->attach(mesh);
-                }
+                m_parent->attach(mesh);
             }
             add_to_scene_layer(m_context.scene, m_context.layer, mesh);
         }

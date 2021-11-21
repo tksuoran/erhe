@@ -9,6 +9,7 @@
 #include "erhe/ui/bitmap.hpp"
 #include "erhe/ui/glyph.hpp"
 #include "erhe/ui/log.hpp"
+
 #include <cstdio>
 #include <map>
 #include <stdexcept>

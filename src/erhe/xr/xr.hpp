@@ -3,7 +3,6 @@
 #include <openxr/openxr_reflection.h>
 
 #include "erhe/gl/gl.hpp"
-
 #include "erhe/log/log.hpp"
 
 #include <glm/glm.hpp>

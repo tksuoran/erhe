@@ -50,12 +50,15 @@ class Fly_camera_tool
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name{"Fly_camera_tool"};
+    static constexpr std::string_view c_name {"Fly_camera_tool"};
+    static constexpr std::string_view c_title{"Fly Camera"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Fly_camera_tool ();
     ~Fly_camera_tool() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -89,7 +92,9 @@ private:
     auto end  (Pointer_context& pointer_context) -> bool;
 
     std::mutex                            m_mutex;
-    std::shared_ptr<Scene_root>           m_scene_root;
+
+    Scene_root*                           m_scene_root{nullptr};
+
     Frame_controller                      m_camera_controller;
 #ifdef _WIN32
     Fly_camera_space_mouse_listener       m_space_mouse_listener;

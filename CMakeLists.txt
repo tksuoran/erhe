@@ -1,17 +1,25 @@
 # CMakeLists.txt for erhe
 
-cmake_policy(SET CMP0048 NEW) # The project() command manages VERSION variables.
-cmake_policy(SET CMP0079 NEW) # target_link_libraries() allows use with targets in other directories.
-project(erhe VERSION 1.0 LANGUAGES C CXX)
-cmake_minimum_required(VERSION 3.16.3 FATAL_ERROR)
-
-set(ERHE_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/src")
-
 # Require out-of-source builds
 file(TO_CMAKE_PATH "${PROJECT_BINARY_DIR}/CMakeLists.txt" LOC_PATH)
 if (EXISTS "${LOC_PATH}")
     message(FATAL_ERROR "You cannot build in a source directory (or any directory with a CMakeLists.txt file). Please make a build subdirectory. Feel free to remove CMakeCache.txt and CMakeFiles.")
 endif ()
+
+cmake_policy(SET CMP0048 NEW) # The project() command manages VERSION variables.
+cmake_policy(SET CMP0079 NEW) # target_link_libraries() allows use with targets in other directories.
+cmake_minimum_required(VERSION 3.16.3 FATAL_ERROR)
+
+project(
+    erhe
+    VERSION 1.0
+    HOMEPAGE_URL "https://github.com/tksuoran/erhe"
+    LANGUAGES C CXX
+)
+
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/../cache")
+set(ERHE_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/src")
 
 # Split parts to cmake/
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
@@ -32,7 +40,7 @@ set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Ei
 
 # These are in cmake/ directory
 #message("Compiler = ${CMAKE_CXX_COMPILER_ID}")
-include("${CMAKE_CXX_COMPILER_ID}")
+include(${CMAKE_CXX_COMPILER_ID})
 include(libraries)
 include(common_options)
 include(mango)

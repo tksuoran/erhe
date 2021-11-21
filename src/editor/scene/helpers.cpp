@@ -70,7 +70,7 @@ void add_to_scene_layer(
 {
     VERIFY(light);
 
-    log_scene.trace("add_to_scene_layer(trace = {})\n", light->name());
+    log_scene.trace("add_to_scene_layer(light = {})\n", light->name());
 
     {
         auto& lights = layer.lights;
@@ -104,30 +104,14 @@ void add_to_scene_layer(
 }
 
 void add_to_physics_world(
-    Scene&                   scene,
     IWorld&                  physics_world,
     shared_ptr<Node_physics> node_physics
 )
 {
     VERIFY(node_physics);
 
-    log_scene.trace("add_to_physics_world(node_physics = {})\n", node_physics->name());
+    log_scene.trace("add_to_physics_world()\n");
 
-    {
-        auto& nodes = scene.nodes;
-#ifndef NDEBUG
-        const auto i = std::find(nodes.begin(), nodes.end(), node_physics);
-        if (i != nodes.end())
-        {
-            log_scene.error("node physics {} already in scene nodes\n", node_physics->name());
-        }
-        else
-#endif
-        {
-            nodes.push_back(node_physics);
-            scene.nodes_sorted = false;
-        }
-    }
     physics_world.add_rigid_body(node_physics->rigid_body());
 }
 
@@ -139,14 +123,12 @@ void remove_from_scene_layer(
 {
     VERIFY(mesh);
 
-    log_scene.trace("remove_from_scene_layer(mesh = {})\n", mesh->name());
-
     {
         auto& meshes = layer.meshes;
         const auto i = std::remove(meshes.begin(), meshes.end(), mesh);
         if (i == meshes.end()) 
         {
-            log_scene.error("mesh {} not in layer meshes\n");
+            log_scene.error("mesh {} not in layer meshes\n", mesh->name());
         }
         else
         {
@@ -159,7 +141,7 @@ void remove_from_scene_layer(
         const auto i = std::remove(nodes.begin(), nodes.end(), mesh);
         if (i == nodes.end())
         {
-            log_scene.error("mesh {} not in scene nodes\n");
+            log_scene.error("mesh {} not in scene nodes\n", mesh->name());
         }
         else
         {
@@ -169,28 +151,13 @@ void remove_from_scene_layer(
 }
 
 void remove_from_physics_world(
-    Scene&                   scene,
     IWorld&                  physics_world,
     shared_ptr<Node_physics> node_physics
 )
 {
     VERIFY(node_physics);
 
-    log_scene.trace("remove_from_physics_world(node_physics = {})\n", node_physics->name());
-
-    auto& nodes = scene.nodes;
-
     physics_world.remove_rigid_body(node_physics->rigid_body());
-
-    const auto i = std::remove(nodes.begin(), nodes.end(), node_physics);
-    if (i == nodes.end())
-    {
-        log_scene.error("node physics {} not in physics world\n", node_physics->name());
-    }
-    else
-    {
-        nodes.erase(i, nodes.end());
-    }
 }
 
 void remove_from_scene_layer(

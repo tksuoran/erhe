@@ -1,5 +1,4 @@
-#include "imgui.h"
-#include "imgui_impl_erhe.hpp"
+#include "erhe/imgui/imgui_impl_erhe.hpp"
 
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
@@ -15,6 +14,8 @@ using std::shared_ptr;
 using std::unique_ptr;
 using std::make_shared;
 using std::make_unique;
+
+namespace {
 
 erhe::log::Category log_imgui(erhe::log::Color::CYAN, erhe::log::Color::GRAY, erhe::log::Level::LEVEL_INFO);
 
@@ -333,7 +334,7 @@ public:
         m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % frame_resources_count;
     }
 
-    shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker;
+    erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker{nullptr};
 
     unique_ptr<erhe::graphics::Texture>         font_texture;
     unique_ptr<erhe::graphics::Shader_stages>   shader_stages;
@@ -456,9 +457,12 @@ private:
     std::vector<GLuint>                         m_used_textures;
 };
 
+static constexpr std::string_view c_imgui_render{"ImGui_ImplErhe_RenderDrawData()"};
+
+} // anonymous namespace
 
 // Functions
-bool ImGui_ImplErhe_Init(shared_ptr<erhe::graphics::OpenGL_state_tracker> pipeline_state_tracker)
+bool ImGui_ImplErhe_Init(erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker)
 {
     imgui_renderer.pipeline_state_tracker = pipeline_state_tracker;
 
@@ -540,7 +544,6 @@ void ImGui_ImplErhe_NewFrame()
     }
 }
 
-static constexpr std::string_view c_imgui_render{"ImGui_ImplErhe_RenderDrawData()"};
 void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
 {
     if (draw_data == nullptr)

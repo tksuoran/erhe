@@ -674,6 +674,8 @@ public:
 
     void reverse_polygons();
 
+    void flip_reversed_polygons();
+
     void debug_trace() const;
 
     void merge(Geometry& other, const glm::mat4 transform);

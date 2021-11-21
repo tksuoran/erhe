@@ -3,6 +3,8 @@ set(_target "erhe_imgui")
 set(source_list
     imgui_impl_erhe.cpp
     imgui_impl_erhe.hpp
+    imgui_helpers.cpp
+    imgui_helpers.hpp
 )
 
 add_library(${_target} ${source_list})
@@ -16,6 +18,7 @@ target_link_libraries(${_target}
 )
 
 target_strict_cxx(${_target})
+set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
 
 foreach(source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)

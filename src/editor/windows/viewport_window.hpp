@@ -1,8 +1,8 @@
 #pragma once
 
-#include "erhe/scene/viewport.hpp"
-
 #include "windows/imgui_window.hpp"
+
+#include "erhe/scene/viewport.hpp"
 
 #include <glm/glm.hpp>
 
@@ -25,12 +25,15 @@ class Viewport_window
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name{"Viewport_window"};
+    static constexpr std::string_view c_name {"Viewport_window"};
+    static constexpr std::string_view c_title{"View"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Viewport_window ();
     ~Viewport_window() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void initialize_component() override;
 
     // Implements Imgui_window

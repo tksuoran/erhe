@@ -3,9 +3,9 @@
 #include "erhe/graphics/gl_objects.hpp"
 
 #include <gsl/pointers>
-#include <optional>
 
 #include <mutex>
+#include <optional>
 #include <thread>
 #include <vector>
 

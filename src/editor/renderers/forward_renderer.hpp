@@ -1,6 +1,7 @@
 #pragma once
 
 #include "renderers/base_renderer.hpp"
+
 #include "erhe/components/component.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/primitive/primitive.hpp"
@@ -78,10 +79,13 @@ public:
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer *>;
 
     static constexpr std::string_view c_name{"Forward_renderer"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
     Forward_renderer ();
     ~Forward_renderer() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -99,11 +103,11 @@ private:
     auto select_pipeline      (Pass pass) const -> const erhe::graphics::Pipeline*;
     auto select_primitive_mode(Pass pass) const -> erhe::primitive::Primitive_mode;
 
-    std::shared_ptr<Configuration>                        m_configuration;
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<Mesh_memory>                          m_mesh_memory;
-    std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
-    std::shared_ptr<Programs>                             m_programs;
+    Configuration*                        m_configuration         {nullptr};
+    erhe::graphics::OpenGL_state_tracker* m_pipeline_state_tracker{nullptr};
+    Mesh_memory*                          m_mesh_memory           {nullptr};
+    Shadow_renderer*                      m_shadow_renderer       {nullptr};
+    Programs*                             m_programs              {nullptr};
 
     erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_set_hidden;
     erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_set_visible;

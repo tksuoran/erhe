@@ -2,9 +2,10 @@
 #include "erhe/log/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+#include <gsl/assert>
+
 #include <algorithm>
 #include <cassert>
-#include <gsl/assert>
 
 namespace erhe::graphics
 {

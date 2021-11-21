@@ -1,7 +1,5 @@
 #pragma once
 
-#include <vector>
-
 //#include <openxr/openxr.h>
 
 #ifdef _WIN32
@@ -17,6 +15,8 @@
 #define XR_USE_GRAPHICS_API_OPENGL 1
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
+
+#include <vector>
 
 namespace erhe::xr {
 

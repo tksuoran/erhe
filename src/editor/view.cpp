@@ -1,4 +1,5 @@
 #include "rendering.hpp"
+#include "log.hpp"
 #include "time.hpp"
 #include "tools.hpp"
 #include "view.hpp"
@@ -7,10 +8,12 @@
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
-#include "backends/imgui_impl_glfw.h"
+
 #include "erhe/scene/camera.hpp"
 #include "erhe/imgui/imgui_impl_erhe.hpp"
 #include "erhe/toolkit/math_util.hpp"
+
+#include <backends/imgui_impl_glfw.h>
 
 namespace editor {
 
@@ -122,6 +125,11 @@ void Editor_view::on_enter()
     get<Editor_time     >()->start_time();
 }
 
+void Editor_view::on_exit()
+{
+    log_startup.info("exiting\n");
+}
+
 void Editor_view::on_key(
     const bool                   pressed,
     const erhe::toolkit::Keycode code,
@@ -148,32 +156,40 @@ void Editor_view::on_key(
         case Keycode::Key_s:          return m_fly_camera_tool->z_pos_control(pressed);
         case Keycode::Key_a:          return m_fly_camera_tool->x_neg_control(pressed);
         case Keycode::Key_d:          return m_fly_camera_tool->x_pos_control(pressed);
+        default:                      break;
+    }
 
-        case Keycode::Key_z:
+    if (pressed)
+    {
+        switch (code)
         {
-            if (pointer_context.control && m_operation_stack->can_undo())
+            case Keycode::Key_z:
             {
-                m_operation_stack->undo();
+                if (pointer_context.control && m_operation_stack->can_undo())
+                {
+                    m_operation_stack->undo();
+                }
+                break;
             }
-            break;
-        }
 
-        case Keycode::Key_y:
-        {
-            if (pointer_context.control && m_operation_stack->can_redo())
+            case Keycode::Key_y:
             {
-                m_operation_stack->redo();
+                if (pointer_context.control && m_operation_stack->can_redo())
+                {
+                    m_operation_stack->redo();
+                }
+                break;
             }
-            break;
-        }
 
-        case Keycode::Key_delete:
-        {
-            m_editor_tools->delete_selected_meshes();
-            break;
-        }
+            case Keycode::Key_delete:
+            {
+                log_input.info("Delete pressed\n");
+                m_editor_tools->delete_selected_meshes();
+                break;
+            }
 
-        default: break;
+            default: break;
+        }
     }
     // clang-format on
 }

@@ -19,11 +19,11 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/type_precision.hpp>
-
 #include <gsl/span>
+
+#include <cassert>
 #include <map>
 #include <stdexcept>
-#include <cassert>
 
 namespace erhe::primitive
 {
@@ -367,7 +367,7 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
         primitive_geometry
     };
 
-    const auto &features = m_build_info.format.features;
+    const auto& features = m_build_info.format.features;
 
     if (features.fill_triangles)
     {

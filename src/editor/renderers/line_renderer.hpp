@@ -58,10 +58,13 @@ class Line_renderer
 {
 public:
     static constexpr std::string_view c_name{"Line_renderer"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
     Line_renderer ();
     ~Line_renderer() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -204,8 +207,9 @@ private:
 
     uint32_t m_line_color{0xffffffffu};
 
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<Shader_monitor>                       m_shader_monitor;
+    erhe::graphics::OpenGL_state_tracker* m_pipeline_state_tracker{nullptr};
+    Shader_monitor*                       m_shader_monitor        {nullptr};
+
     erhe::graphics::Fragment_outputs                      m_fragment_outputs;
     erhe::graphics::Vertex_attribute_mappings             m_attribute_mappings;
     erhe::graphics::Vertex_format                         m_vertex_format;

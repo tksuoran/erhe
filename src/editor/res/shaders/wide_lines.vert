@@ -25,7 +25,7 @@ void main()
     float NdotV           = dot(normal, v);
     float d               = distance(view_position_in_world, position.xyz);
     float bias            = 0.0005 * NdotV * NdotV * camera.cameras[0].clip_depth_direction;
-    float max_size        = min(4.0 * primitive.primitives[gl_DrawID].size, 2.0);
+    float max_size        = min(4.0 * primitive.primitives[gl_DrawID].size, 20.0);
 
     gl_Position   = clip_from_world * position;
     gl_Position.z -= bias;

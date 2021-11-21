@@ -2,7 +2,7 @@
 
 #include "erhe/toolkit/verify.hpp"
 
-#include "renderdoc_app.h"
+#include <renderdoc_app.h>
 
 #if defined(_WIN32)
 #   ifndef _CRT_SECURE_NO_WARNINGS
@@ -36,10 +36,37 @@ void initialize_renderdoc_capture_support()
     HMODULE renderdoc_module = LoadLibraryExA("C:\\Program Files\\RenderDoc\\renderdoc.dll", NULL, 0);
     if (renderdoc_module)
     {
-        pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(renderdoc_module, "RENDERDOC_GetAPI");
+        auto RENDERDOC_GetAPI = reinterpret_cast<pRENDERDOC_GetAPI>(
+            GetProcAddress(
+                renderdoc_module,
+                "RENDERDOC_GetAPI"
+            )
+        );
+        if (RENDERDOC_GetAPI == nullptr)
+        {
+            log_renderdoc.trace("RenderDoc: RENDERDOC_GetAPI() not found in renderdoc.dll\n");
+            return;
+        }
+        //auto RENDERDOC_MaskOverlayBits = reinterpret_cast<pRENDERDOC_MaskOverlayBits>(
+        //    GetProcAddress(
+        //        renderdoc_module,
+        //        "RENDERDOC_MaskOverlayBits"
+        //    )
+        //);
+
         int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&renderdoc_api);
         log_renderdoc.trace("Loaded RenderDoc DLL, RENDERDOC_GetAPI() return value = {}\n", ret);
         VERIFY(ret == 1);
+
+        if (renderdoc_api->MaskOverlayBits == nullptr)
+        {
+            log_renderdoc.trace("RenderDoc: RENDERDOC_MaskOverlayBits() not found in renderdoc.dll\n");
+        }
+        else
+        {
+            renderdoc_api->MaskOverlayBits(eRENDERDOC_Overlay_None, eRENDERDOC_Overlay_None);
+        }
+
     }
 #elif __unix__
     // For android replace librenderdoc.so with libVkLayer_GLES_RenderDoc.so

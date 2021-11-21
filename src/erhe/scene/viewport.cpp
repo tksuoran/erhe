@@ -2,8 +2,6 @@
 #include "erhe/scene/log.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
-#include <glm/glm.hpp>
-
 namespace erhe::scene
 {
 

@@ -14,10 +14,13 @@ class Editor_time
 {
 public:
     static constexpr std::string_view c_name{"Editor_time"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
     Editor_time();
     ~Editor_time() override;
 
     // Implements Component
+    auto get_type_hash        () const -> uint32_t override { return hash; }
     void connect              () override;
 
     void start_time           ();
@@ -30,10 +33,10 @@ public:
     double                                m_time            {0.0};
     uint64_t                              m_frame_number{0};
 
-    std::shared_ptr<Editor_rendering> m_editor_rendering;
-    std::shared_ptr<Application     > m_application;
-    std::shared_ptr<Scene_root      > m_scene_root;
-    std::shared_ptr<Window          > m_window;
+    Editor_rendering* m_editor_rendering{nullptr};
+    Application*      m_application     {nullptr};
+    Scene_root*       m_scene_root      {nullptr};
+    Window*           m_window          {nullptr};
 };  
    
 

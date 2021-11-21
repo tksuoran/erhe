@@ -28,12 +28,15 @@ class Mesh_properties
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name{"Mesh_properties"};
+    static constexpr std::string_view c_name {"Mesh_properties"};
+    static constexpr std::string_view c_title{"Mesh Debug"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Mesh_properties ();
     ~Mesh_properties() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -46,15 +49,14 @@ public:
     void imgui(Pointer_context& pointer_context) override;
 
 private:
-    std::shared_ptr<Scene_manager>  m_scene_manager;
-    std::shared_ptr<Scene_root>     m_scene_root;
-    std::shared_ptr<Selection_tool> m_selection_tool;
+    Scene_manager*  m_scene_manager {nullptr};
+    Scene_root*     m_scene_root    {nullptr};
+    Selection_tool* m_selection_tool{nullptr};
 
-    int  m_max_labels     {400};
-    int  m_primitive_index{0};
-    bool m_show_points    {false};
-    bool m_show_polygons  {false};
-    bool m_show_edges     {false};
+    int  m_max_labels   {400};
+    bool m_show_points  {false};
+    bool m_show_polygons{false};
+    bool m_show_edges   {false};
 };
 
 } // namespace editor

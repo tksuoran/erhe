@@ -1,5 +1,4 @@
 #include "erhe/geometry/geometry.hpp"
-#include "mikktspace.h"
 #include "erhe/geometry/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -7,6 +6,7 @@
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include <glm/glm.hpp>
+#include <mikktspace.h>
 
 namespace erhe::geometry
 {

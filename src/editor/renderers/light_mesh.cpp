@@ -1,5 +1,6 @@
 #include "renderers/light_mesh.hpp"
 #include "renderers/program_interface.hpp"
+
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/regular_polygon.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"

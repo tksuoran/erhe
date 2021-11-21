@@ -58,6 +58,14 @@ Subdivide::Subdivide(Geometry& src, Geometry& destination)
             make_new_corner_from_corner          (new_polygon_id, j.corner_id);
             make_new_corner_from_point           (new_polygon_id, next_edge_midpoint);
             make_new_corner_from_polygon_centroid(new_polygon_id, i.polygon_id);
+            //log_subdivide.warn(
+            //    "Polygon {} = {} {} {} {}\n",
+            //    new_polygon_id,
+            //    previous_edge_midpoint,
+            //    source.corners[j.corner_id].point_id,
+            //    next_edge_midpoint,
+            //    old_polygon_centroid_to_new_points[i.polygon_id]
+            //);
         });
     });
 

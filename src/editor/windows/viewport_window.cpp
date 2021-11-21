@@ -9,7 +9,7 @@
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 
-#include "imgui.h"
+#include <imgui.h>
 
 namespace editor
 {
@@ -105,6 +105,7 @@ void dump_fbo(int fbo_name)
 
 Viewport_window::Viewport_window()
     : erhe::components::Component{c_name}
+    , Imgui_window               {c_title}
 {
 }
 

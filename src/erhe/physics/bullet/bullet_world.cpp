@@ -5,10 +5,9 @@
 #include "erhe/physics/idebug_draw.hpp"
 #include "erhe/physics/log.hpp"
 #include "erhe/toolkit/verify.hpp"
-
 #include "erhe/toolkit/tracy_client.hpp"
 
-#include "btBulletDynamicsCommon.h"
+#include <btBulletDynamicsCommon.h>
 
 namespace erhe::physics
 {
@@ -21,13 +20,13 @@ auto Debug_draw_adapter::getDefaultColors() const -> DefaultColors
     }
     const auto colors = m_debug_draw->get_colors();
     DefaultColors bullet_colors;
-	bullet_colors.m_activeObject               = from_glm(colors.active_object               );
-	bullet_colors.m_deactivatedObject          = from_glm(colors.deactivated_object          );
-	bullet_colors.m_wantsDeactivationObject    = from_glm(colors.wants_deactivation_object   );
-	bullet_colors.m_disabledDeactivationObject = from_glm(colors.disabled_deactivation_object);
-	bullet_colors.m_disabledSimulationObject   = from_glm(colors.disabled_simulation_object  );
-	bullet_colors.m_aabb                       = from_glm(colors.aabb                        );
-	bullet_colors.m_contactPoint               = from_glm(colors.contact_point               );
+	bullet_colors.m_activeObject               = to_bullet(colors.active_object               );
+	bullet_colors.m_deactivatedObject          = to_bullet(colors.deactivated_object          );
+	bullet_colors.m_wantsDeactivationObject    = to_bullet(colors.wants_deactivation_object   );
+	bullet_colors.m_disabledDeactivationObject = to_bullet(colors.disabled_deactivation_object);
+	bullet_colors.m_disabledSimulationObject   = to_bullet(colors.disabled_simulation_object  );
+	bullet_colors.m_aabb                       = to_bullet(colors.aabb                        );
+	bullet_colors.m_contactPoint               = to_bullet(colors.contact_point               );
 
     return bullet_colors;
 }
@@ -39,13 +38,13 @@ void Debug_draw_adapter::setDefaultColors(const DefaultColors& bullet_colors)
         return;
     }
     IDebug_draw::Colors colors;
-	colors.active_object                = to_glm(bullet_colors.m_activeObject              );
-	colors.deactivated_object           = to_glm(bullet_colors.m_deactivatedObject         );
-	colors.wants_deactivation_object    = to_glm(bullet_colors.m_wantsDeactivationObject   );
-	colors.disabled_deactivation_object = to_glm(bullet_colors.m_disabledDeactivationObject);
-	colors.disabled_simulation_object   = to_glm(bullet_colors.m_disabledSimulationObject  );
-	colors.aabb                         = to_glm(bullet_colors.m_aabb                      );
-	colors.contact_point                = to_glm(bullet_colors.m_contactPoint              );
+	colors.active_object                = from_bullet(bullet_colors.m_activeObject              );
+	colors.deactivated_object           = from_bullet(bullet_colors.m_deactivatedObject         );
+	colors.wants_deactivation_object    = from_bullet(bullet_colors.m_wantsDeactivationObject   );
+	colors.disabled_deactivation_object = from_bullet(bullet_colors.m_disabledDeactivationObject);
+	colors.disabled_simulation_object   = from_bullet(bullet_colors.m_disabledSimulationObject  );
+	colors.aabb                         = from_bullet(bullet_colors.m_aabb                      );
+	colors.contact_point                = from_bullet(bullet_colors.m_contactPoint              );
     m_debug_draw->set_colors(colors);
 }
 
@@ -61,7 +60,7 @@ void Debug_draw_adapter::drawLine(const btVector3& from, const btVector3& to, co
 {
     if (m_debug_draw != nullptr)
     {
-        m_debug_draw->draw_line(to_glm(from), to_glm(to), to_glm(color));
+        m_debug_draw->draw_line(from_bullet(from), from_bullet(to), from_bullet(color));
     }
 }
 
@@ -69,7 +68,7 @@ void Debug_draw_adapter::draw3dText(const btVector3& location, const char* textS
 {
     if (m_debug_draw != nullptr)
     {
-        m_debug_draw->draw_3d_text(to_glm(location), textString);
+        m_debug_draw->draw_3d_text(from_bullet(location), textString);
     }
 }
 
@@ -100,11 +99,11 @@ void Debug_draw_adapter::drawContactPoint(
     if (m_debug_draw != nullptr)
     {
         m_debug_draw->draw_contact_point(
-            to_glm(PointOnB),
-            to_glm(normalOnB),
+            from_bullet(PointOnB),
+            from_bullet(normalOnB),
             static_cast<float>(distance),
             lifeTime,
-            to_glm(color)
+            from_bullet(color)
         );
     }
 }
@@ -213,12 +212,12 @@ void Bullet_world::remove_constraint(IConstraint* constraint)
 
 void Bullet_world::set_gravity(const glm::vec3 gravity)
 {
-    m_bullet_dynamics_world.setGravity(from_glm(gravity));
+    m_bullet_dynamics_world.setGravity(to_bullet(gravity));
 }
 
 auto Bullet_world::get_gravity() const -> glm::vec3
 {
-    return to_glm(m_bullet_dynamics_world.getGravity());
+    return from_bullet(m_bullet_dynamics_world.getGravity());
 }
 
 void Bullet_world::set_debug_drawer(IDebug_draw* debug_draw)

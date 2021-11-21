@@ -1,8 +1,9 @@
 #pragma once
 
 #include "erhe/toolkit/verify.hpp"
-
 #include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/geometry/log.hpp"
+#include "erhe/log/log_glm.hpp"
 
 #include <gsl/assert>
 
@@ -50,8 +51,8 @@ template <typename Key_type, typename Value_type>
 inline void
 Property_map<Key_type, Value_type>::remap_keys(const std::vector<Key_type>& key_new_to_old)
 {
-    auto old_values  = values;
-    auto old_present = present;
+    const auto old_values  = values;
+    const auto old_present = present;
     for (Key_type new_key = 0, end = static_cast<Key_type>(key_new_to_old.size()); new_key < end; ++new_key)
     {
         Key_type old_key = key_new_to_old[new_key];
@@ -66,7 +67,7 @@ Property_map<Key_type, Value_type>::put(Key_type key, Value_type value)
 {
     ZoneScoped;
 
-    size_t i = static_cast<size_t>(key);
+    const size_t i = static_cast<size_t>(key);
     if (values.size() <= i)
     {
         values.resize(i + s_grow_size);
@@ -83,7 +84,7 @@ Property_map<Key_type, Value_type>::get(Key_type key) const
 {
     ZoneScoped;
 
-    size_t i = static_cast<size_t>(key);
+    const size_t i = static_cast<size_t>(key);
     if ((values.size() <= i) || !present[i])
     {
         FATAL("Value not found");
@@ -97,7 +98,7 @@ Property_map<Key_type, Value_type>::erase(Key_type key)
 {
     ZoneScoped;
 
-    size_t i = static_cast<size_t>(key);
+    const size_t i = static_cast<size_t>(key);
     if (values.size() <= i)
     {
         values.resize(i + s_grow_size);
@@ -113,7 +114,7 @@ Property_map<Key_type, Value_type>::maybe_get(Key_type key, Value_type& out_valu
 {
     ZoneScoped;
 
-    size_t i = static_cast<size_t>(key);
+    const size_t i = static_cast<size_t>(key);
     if ((values.size() <= i) || !present[i])
     {
         return false;
@@ -130,7 +131,7 @@ Property_map<Key_type, Value_type>::has(Key_type key) const
 {
     ZoneScoped;
 
-    size_t i = static_cast<size_t>(key);
+    const size_t i = static_cast<size_t>(key);
     if ((values.size() <= i) || !present[i])
     {
         return false;
@@ -164,7 +165,7 @@ Property_map<Key_type, Value_type>::interpolate(
 
     if (m_descriptor.interpolation_mode == Interpolation_mode::none)
     {
-        //log_interpolate.trace("\tinterpolation mode none, skipping this map\n");
+        log_interpolate.trace("\tinterpolation mode none, skipping this map\n");
         return;
     }
 
@@ -172,12 +173,12 @@ Property_map<Key_type, Value_type>::interpolate(
     {
         const std::vector<std::pair<float, Key_type>>& old_keys = key_new_to_olds[new_key];
 
-        //log_interpolate.trace("\tkey = {} from\n", new_key);
-        float sum_weights = 0.0f;
+        log_interpolate.trace("\tkey = {} from\n", new_key);
+        float sum_weights{0.0f};
         for (auto j : old_keys)
         {
-            Key_type old_key = j.second;
-            //log_interpolate.trace("\told key {} weight {}\n", static_cast<unsigned int>(old_key), static_cast<float>(j.first));
+            const Key_type old_key = j.second;
+            log_interpolate.trace("\told key {} weight {}\n", static_cast<unsigned int>(old_key), static_cast<float>(j.first));
             if (has(old_key))
             {
                 sum_weights += j.first;
@@ -186,26 +187,25 @@ Property_map<Key_type, Value_type>::interpolate(
 
         if (sum_weights == 0.0f)
         {
-            //log_interpolate.trace("\tzero sum\n");
+            log_interpolate.trace("\tzero sum\n");
             continue;
         }
 
         Value_type new_value(0);
         for (auto j : old_keys)
         {
-            float      weight  = j.first;
-            Key_type   old_key = j.second;
-            Value_type old_value;
+            const float      weight  = j.first;
+            const Key_type   old_key = j.second;
 
             if (has(old_key))
             {
-                old_value  = get(old_key);
-                //log_interpolate.trace("\told value {} weight {}\n", old_value, (weight / sum_weights));
+                const Value_type old_value = get(old_key);
+                log_interpolate.trace("\told value {} weight {}\n", old_value, (weight / sum_weights));
                 new_value += static_cast<Value_type>((weight / sum_weights) * old_value);
             }
             else
             {
-                //log_interpolate.trace("\told value not found\n");
+                log_interpolate.trace("\told value not found\n");
             }
         }
 
@@ -215,7 +215,7 @@ Property_map<Key_type, Value_type>::interpolate(
             if (m_descriptor.interpolation_mode == Interpolation_mode::normalized)
             {
                 new_value = glm::normalize(new_value);
-                //log_interpolate.trace("\tnormalized\n", new_value);
+                log_interpolate.trace("\tnormalized\n", new_value);
             }
         }
 
@@ -224,12 +224,17 @@ Property_map<Key_type, Value_type>::interpolate(
         {
             if (m_descriptor.interpolation_mode == Interpolation_mode::normalized_vec3_float)
             {
-                new_value = glm::vec4{glm::normalize(glm::vec3{new_value}), new_value.z};
-                //log_interpolate.trace("\tnormalized vec3-float\n", new_value);
+                new_value = glm::vec4{
+                    glm::normalize(
+                        glm::vec3{new_value}
+                    ),
+                    new_value.z
+                };
+                log_interpolate.trace("\tnormalized vec3-float\n", new_value);
             }
         }
 
-        //log_interpolate.trace("\tvalue = {}\n", new_value);
+        log_interpolate.trace("\tvalue = {}\n", new_value);
 
         destination->put(static_cast<Key_type>(new_key), new_value);
     }
@@ -271,7 +276,7 @@ Property_map<Key_type, Value_type>::import_from(
 {
     ZoneScoped;
 
-    auto* source = dynamic_cast<Property_map<Key_type, Value_type>*>(source_base);
+    const auto* const source = dynamic_cast<Property_map<Key_type, Value_type>*>(source_base);
     VERIFY(source != nullptr);
 
     VERIFY(values.size() == present.size());
@@ -287,7 +292,7 @@ template <typename Key_type, typename Value_type>
 inline void
 Property_map<Key_type, Value_type>::import_from(
     Property_map_base<Key_type>* source_base,
-    glm::mat4                    transform
+    const glm::mat4              transform
 )
 {
     ZoneScoped;
@@ -322,35 +327,37 @@ Property_map<Key_type, Value_type>::import_from(
             {
                 for (size_t i = 0, end = source->values.size(); i < end; ++i)
                 {
-                    Value_type source_value = source->values[i];
-                    Value_type result       = apply_transform(source_value, transform, 1.0f);
+                    const Value_type source_value = source->values[i];
+                    const Value_type result       = apply_transform(source_value, transform, 1.0f);
                     values.push_back(result);
                 }
                 break;
             }
 
+            // TODO Use cofactor matrix for bivectors?
             case Transform_mode::normalize_inverse_transpose_matrix:           
             {
-                glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
+                const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
                 for (size_t i = 0, end = source->values.size(); i < end; ++i)
                 {
-                    Value_type source_value = source->values[i];
-                    Value_type result       = glm::normalize(apply_transform(source_value, inverse_transpose_transform, 0.0f));
+                    const Value_type source_value = source->values[i];
+                    const Value_type result       = glm::normalize(apply_transform(source_value, inverse_transpose_transform, 0.0f));
                     values.push_back(result);
                 }
                 break;
             }
 
+            // TODO Use cofactor matrix for bivectors?
             case Transform_mode::normalize_inverse_transpose_matrix_vec3_float:
             {
                 if constexpr (std::is_same_v<Value_type, glm::vec4>)
                 {
-                    glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
+                    const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
                     for (size_t i = 0, end = source->values.size(); i < end; ++i)
                     {
-                        Value_type source_value     = source->values[i];
-                        glm::vec3  transformed_vec3 = glm::normalize(apply_transform(glm::vec3{source_value}, inverse_transpose_transform, 0.0f));
-                        Value_type result           = glm::vec4{transformed_vec3, source_value.w};
+                        const Value_type source_value     = source->values[i];
+                        const glm::vec3  transformed_vec3 = glm::normalize(apply_transform(glm::vec3{source_value}, inverse_transpose_transform, 0.0f));
+                        const Value_type result           = glm::vec4{transformed_vec3, source_value.w};
                         values.push_back(result);
                     }
                 }

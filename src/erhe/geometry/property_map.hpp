@@ -1,5 +1,7 @@
 #pragma once
 
+#include <glm/glm.hpp>
+
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -7,11 +9,10 @@
 #include <typeinfo>
 #include <vector>
 
-#include <glm/glm.hpp>
-
 namespace erhe::geometry
 {
 
+// TODO Use cofactor matrix for bivectors?
 enum class Transform_mode : unsigned int
 {
     none = 0, // texture coordinates, colors, ...
@@ -66,7 +67,7 @@ public:
 
     virtual void import_from(Property_map_base<Key_type>* source) = 0;
 
-    virtual void import_from(Property_map_base<Key_type>* source, glm::mat4 transform) = 0;
+    virtual void import_from(Property_map_base<Key_type>* source, const glm::mat4 transform) = 0;
 
 protected:
     Property_map_base() = default;
@@ -82,7 +83,7 @@ public:
     {
     };
 
-    virtual auto descriptor() const -> Property_map_descriptor override
+    auto descriptor() const -> Property_map_descriptor override
     {
         return m_descriptor;
     }
@@ -115,7 +116,7 @@ public:
 
     void import_from(Property_map_base<Key_type>* source) final;
 
-    void import_from(Property_map_base<Key_type>* source, glm::mat4 transform) final;
+    void import_from(Property_map_base<Key_type>* source, const glm::mat4 transform) final;
 
     auto constructor(const Property_map_descriptor& descriptor) const
         -> Property_map_base<Key_type>* final;

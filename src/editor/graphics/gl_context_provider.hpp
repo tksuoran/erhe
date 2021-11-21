@@ -35,12 +35,17 @@ class Gl_context_provider
 {
 public:
     static constexpr std::string_view c_name{"Gl_context_provider"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
     Gl_context_provider ();
     ~Gl_context_provider() override;
     Gl_context_provider (const Gl_context_provider&) = delete;
     void operator=      (const Gl_context_provider&) = delete;
     Gl_context_provider (Gl_context_provider&&)      = delete;
     void operator=      (Gl_context_provider&&)      = delete;
+
+    // Implements Component
+    auto get_type_hash() const -> uint32_t override { return hash; }
 
     auto acquire_gl_context     () -> Gl_worker_context;
     void release_gl_context     (Gl_worker_context context);

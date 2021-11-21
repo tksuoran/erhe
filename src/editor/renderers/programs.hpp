@@ -1,11 +1,11 @@
 #pragma once
 
 #include "erhe/components/component.hpp"
+#include "erhe/gl/wrapper_enums.hpp"
 
 #include <filesystem>
 #include <string_view>
 #include <vector>
-
 
 namespace erhe::graphics
 {
@@ -26,6 +26,8 @@ class Programs
 {
 public:
     static constexpr std::string_view c_name{"Programs"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
     Programs      ();
     ~Programs     () override;
     Programs      (const Programs&) = delete;
@@ -34,13 +36,15 @@ public:
     void operator=(Programs&&)      = delete;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
 private:
     auto make_program(
-        std::string_view                name,
-        const std::vector<std::string>& defines
+        std::string_view                                            name,
+        const std::vector<std::string>&                             defines,
+        const std::vector<std::pair<gl::Shader_type, std::string>>& extensions = {}
     ) -> std::unique_ptr<erhe::graphics::Shader_stages>;
 
     auto make_program(
@@ -68,9 +72,9 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages> tool;
 
 private:
-    std::shared_ptr<Program_interface> m_program_interface;
-    std::shared_ptr<Shader_monitor>    m_shader_monitor;
-    std::filesystem::path              m_shader_path;
+    Program_interface*    m_program_interface{nullptr};
+    Shader_monitor*       m_shader_monitor   {nullptr};
+    std::filesystem::path m_shader_path;
 };
 
 }

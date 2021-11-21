@@ -187,8 +187,8 @@ auto Geometry::compute_polygon_normals() -> bool
 
     log_geometry.info("{} for {}\n", __func__, name);
 
-    auto*       polygon_normals = polygon_attributes().find_or_create<vec3>(c_polygon_normals);
-    const auto* point_locations = point_attributes()  .find          <vec3>(c_point_locations);
+    auto*       const polygon_normals = polygon_attributes().find_or_create<vec3>(c_polygon_normals);
+    const auto* const point_locations = point_attributes()  .find          <vec3>(c_point_locations);
 
     if (point_locations == nullptr)
     {
@@ -232,8 +232,8 @@ auto Geometry::compute_polygon_centroids() -> bool
 
     log_geometry.info("{} for {}\n", __func__, name);
 
-    auto*       polygon_centroids = polygon_attributes().find_or_create<vec3>(c_polygon_centroids);
-    const auto* point_locations   = point_attributes()  .find          <vec3>(c_point_locations);
+    auto*       const polygon_centroids = polygon_attributes().find_or_create<vec3>(c_polygon_centroids);
+    const auto* const point_locations   = point_attributes()  .find          <vec3>(c_point_locations);
 
     if (point_locations == nullptr)
     {
@@ -397,9 +397,9 @@ auto Geometry::compute_point_normal(const Point_id point_id)
     Expects(point_id < points.size());
 
     compute_polygon_normals();
-    const auto* polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
+    const auto* const polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
 
-    vec3 normal_sum(0.0f, 0.0f, 0.0f);
+    vec3 normal_sum{0.0f};
 
     points[point_id].for_each_corner(*this, [&](auto& i)
     {
@@ -429,7 +429,7 @@ auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) 
         return true;
     }
 
-    auto*       point_normals   = point_attributes().find_or_create<vec3>(descriptor);
+    auto* const point_normals   = point_attributes().find_or_create<vec3>(descriptor);
     const auto* polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
     if (polygon_normals == nullptr)
     {
@@ -445,7 +445,7 @@ auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) 
 
     for_each_point([&](auto& i)
     {
-        vec3 normal_sum(0.0f, 0.0f, 0.0f);
+        vec3 normal_sum{0.0f};
         i.point.for_each_corner(*this, [&](auto& j)
         {
             if (polygon_normals->has(j.corner.polygon_id))
@@ -468,12 +468,12 @@ auto Geometry::transform(const mat4& m) -> Geometry&
     const mat4 it = glm::transpose(glm::inverse(m));
 
     // Check.. Did I forget something?
-    auto* polygon_centroids = polygon_attributes().find<vec3>(c_polygon_centroids);
-    auto* polygon_normals   = polygon_attributes().find<vec3>(c_polygon_normals  );
-    auto* point_locations   = point_attributes()  .find<vec3>(c_point_locations  );
-    auto* point_normals     = point_attributes()  .find<vec3>(c_point_normals    );
-    auto* corner_normals    = corner_attributes() .find<vec3>(c_corner_normals   );
-    auto* corner_tangents   = corner_attributes() .find<vec4>(c_corner_tangents  );
+    auto* const polygon_centroids = polygon_attributes().find<vec3>(c_polygon_centroids);
+    auto* const polygon_normals   = polygon_attributes().find<vec3>(c_polygon_normals  );
+    auto* const point_locations   = point_attributes()  .find<vec3>(c_point_locations  );
+    auto* const point_normals     = point_attributes()  .find<vec3>(c_point_normals    );
+    auto* const corner_normals    = corner_attributes() .find<vec3>(c_corner_normals   );
+    auto* const corner_tangents   = corner_attributes() .find<vec4>(c_corner_tangents  );
 
     for (Point_id point_id = 0; point_id < m_next_point_id; ++point_id)
     {
@@ -517,7 +517,7 @@ auto Geometry::transform(const mat4& m) -> Geometry&
         }
     }
 
-    auto det = glm::determinant(m);
+    const auto det = glm::determinant(m);
     if (det < 0.0f)
     {
         reverse_polygons();
@@ -535,6 +535,29 @@ void Geometry::reverse_polygons()
     for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
     {
         polygons[polygon_id].reverse(*this);
+    }
+}
+
+void Geometry::flip_reversed_polygons()
+{
+    ZoneScoped;
+
+    ++m_serial;
+
+    compute_polygon_normals();
+    compute_polygon_centroids();
+
+    const auto* const polygon_normals   = polygon_attributes().find_or_create<vec3>(c_polygon_normals);
+    const auto* const polygon_centroids = polygon_attributes().find_or_create<vec3>(c_polygon_centroids);
+
+    for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
+    {
+        const auto normal   = polygon_normals->get(polygon_id);
+        const auto centroid = glm::normalize(polygon_centroids->get(polygon_id));
+        if (glm::dot(normal, centroid) < 0.0f)
+        {
+            polygons[polygon_id].reverse(*this);
+        }
     }
 }
 
@@ -556,12 +579,12 @@ void Geometry::generate_texture_coordinates_spherical()
 
     compute_polygon_normals();
     compute_point_normals(c_point_normals);
-    const auto* polygon_normals      = polygon_attributes().find          <vec3>(c_polygon_normals     );
-    const auto* corner_normals       = corner_attributes ().find          <vec3>(c_corner_normals      );
-    const auto* point_normals        = point_attributes  ().find          <vec3>(c_point_normals       );
-    const auto* point_normals_smooth = point_attributes  ().find          <vec3>(c_point_normals_smooth);
-          auto* corner_texcoords     = corner_attributes ().find_or_create<vec2>(c_corner_texcoords    );
-    const auto* point_locations      = point_attributes  ().find          <vec3>(c_point_locations     );
+    const auto* const polygon_normals      = polygon_attributes().find          <vec3>(c_polygon_normals     );
+    const auto* const corner_normals       = corner_attributes ().find          <vec3>(c_corner_normals      );
+    const auto* const point_normals        = point_attributes  ().find          <vec3>(c_point_normals       );
+    const auto* const point_normals_smooth = point_attributes  ().find          <vec3>(c_point_normals_smooth);
+          auto* const corner_texcoords     = corner_attributes ().find_or_create<vec2>(c_corner_texcoords    );
+    const auto* const point_locations      = point_attributes  ().find          <vec3>(c_point_locations     );
 
     for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
     {
@@ -618,7 +641,7 @@ void Geometry::generate_texture_coordinates_spherical()
             //    u = (-normal.x / std::abs(normal.z) + 1.0f) / 2.0f;
             //    v = (-normal.y / std::abs(normal.z) + 1.0f) / 2.0f;
             //}
-            corner_texcoords->put(corner_id, glm::vec2(u, v));
+            corner_texcoords->put(corner_id, glm::vec2{u, v});
         }
     }
 }
@@ -641,10 +664,10 @@ auto Geometry::generate_polygon_texture_coordinates(const bool overwrite_existin
 
     compute_polygon_normals();
     compute_polygon_centroids();
-    const auto* polygon_normals   = polygon_attributes().find          <vec3>(c_polygon_normals  );
-    const auto* polygon_centroids = polygon_attributes().find          <vec3>(c_polygon_centroids);
-    const auto* point_locations   = point_attributes  ().find          <vec3>(c_point_locations  );
-          auto* corner_texcoords  = corner_attributes ().find_or_create<vec2>(c_corner_texcoords );
+    const auto* const polygon_normals   = polygon_attributes().find          <vec3>(c_polygon_normals  );
+    const auto* const polygon_centroids = polygon_attributes().find          <vec3>(c_polygon_centroids);
+    const auto* const point_locations   = point_attributes  ().find          <vec3>(c_point_locations  );
+          auto* const corner_texcoords  = corner_attributes ().find_or_create<vec2>(c_corner_texcoords );
 
     if (point_locations == nullptr)
     {
@@ -837,8 +860,8 @@ auto Geometry::volume() -> float
         return 0.0f;
     }
 
-    const auto* point_locations   = point_attributes  ().find<vec3>(c_point_locations);
-    const auto* polygon_centroids = polygon_attributes().find<vec3>(c_polygon_centroids);
+    const auto* const point_locations   = point_attributes  ().find<vec3>(c_point_locations);
+    const auto* const polygon_centroids = polygon_attributes().find<vec3>(c_polygon_centroids);
 
     float sum{0.0f};
     for_each_polygon([&](auto& i)

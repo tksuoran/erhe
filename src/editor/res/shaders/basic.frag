@@ -14,9 +14,11 @@ float srgb_to_linear(float x)
 
 vec3 srgb_to_linear(vec3 v)
 {
-    return vec3(srgb_to_linear(v.x),
-                srgb_to_linear(v.y),
-                srgb_to_linear(v.z));
+    return vec3(
+        srgb_to_linear(v.x),
+        srgb_to_linear(v.y),
+        srgb_to_linear(v.z)
+    );
 }
 
 void main(void)

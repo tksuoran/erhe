@@ -51,25 +51,26 @@ public:
             const Fragment_outputs*          fragment_outputs
         );
 
-        // Adds #version, #defines, fragment outputs, uniform blocks, samplers,
+        // Adds #version, #extensions, #defines, fragment outputs, uniform blocks, samplers,
         // and source (possibly read from file).
         auto final_source(const Shader_stage& shader) const -> std::string;
 
         void add_interface_block(gsl::not_null<const Shader_resource*> uniform_block);
 
-        std::string                                         name;
+        std::string                                          name;
 
+        std::vector<std::pair<std::string, std::string>>     defines;
+        std::vector<std::pair<gl::Shader_type, std::string>> extensions;
         // https://stackoverflow.com/questions/35525777/use-of-string-view-for-map-lookup
-        std::vector<std::pair<std::string, std::string>>    defines;
         std::map<std::string, gsl::not_null<const Shader_resource*>, std::less<>>
-                                                            interface_blocks;
-        std::vector<const Shader_resource*>                 struct_types;
-        const Vertex_attribute_mappings*                    vertex_attribute_mappings{nullptr};
-        const Fragment_outputs*                             fragment_outputs         {nullptr};
-        const Shader_resource*                              default_uniform_block    {nullptr}; // contains sampler uniforms
-        std::vector<std::string>                            transform_feedback_varyings;
-        gl::Transform_feedback_buffer_mode                  transform_feedback_buffer_mode{gl::Transform_feedback_buffer_mode::separate_attribs};
-        std::vector<Shader_stage>                           shaders;
+                                                             interface_blocks;
+        std::vector<const Shader_resource*>                  struct_types;
+        const Vertex_attribute_mappings*                     vertex_attribute_mappings{nullptr};
+        const Fragment_outputs*                              fragment_outputs         {nullptr};
+        const Shader_resource*                               default_uniform_block    {nullptr}; // contains sampler uniforms
+        std::vector<std::string>                             transform_feedback_varyings;
+        gl::Transform_feedback_buffer_mode                   transform_feedback_buffer_mode{gl::Transform_feedback_buffer_mode::separate_attribs};
+        std::vector<Shader_stage>                            shaders;
     };
 
     class Prototype final

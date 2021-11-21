@@ -11,6 +11,8 @@ class Catmull_clark_subdivision_operation
 public:
     explicit Catmull_clark_subdivision_operation(const Context& context);
     ~Catmull_clark_subdivision_operation        () override;
+
+    auto describe() const -> std::string override;
 };
 
 class Sqrt3_subdivision_operation
@@ -19,6 +21,8 @@ class Sqrt3_subdivision_operation
 public:
     explicit Sqrt3_subdivision_operation(const Context& context);
     ~Sqrt3_subdivision_operation        () override;
+
+    auto describe() const -> std::string override;
 };
 
 class Triangulate_operation
@@ -27,6 +31,8 @@ class Triangulate_operation
 public:
     explicit Triangulate_operation(const Context& context);
     ~Triangulate_operation        () override;
+
+    auto describe() const -> std::string override;
 };
 
 class Subdivide_operation
@@ -34,7 +40,17 @@ class Subdivide_operation
 {
 public:
     explicit Subdivide_operation(const Context& context);
-    ~Subdivide_operation        () override;
+
+    auto describe() const -> std::string override;
+};
+
+class Gyro_operation
+    : public Mesh_operation
+{
+public:
+    explicit Gyro_operation(const Context& context);
+
+    auto describe() const -> std::string override;
 };
 
 class Dual_operator
@@ -43,6 +59,8 @@ class Dual_operator
 public:
     explicit Dual_operator(const Context& context);
     ~Dual_operator        () override;
+
+    auto describe() const -> std::string override;
 };
 
 class Ambo_operator
@@ -51,6 +69,8 @@ class Ambo_operator
 public:
     explicit Ambo_operator(const Context& context);
     ~Ambo_operator        () override;
+
+    auto describe() const -> std::string override;
 };
 
 class Truncate_operator
@@ -59,6 +79,8 @@ class Truncate_operator
 public:
     explicit Truncate_operator(const Context& context);
     ~Truncate_operator        () override;
+
+    auto describe() const -> std::string override;
 };
 
 class Reverse_operation
@@ -67,6 +89,8 @@ class Reverse_operation
 public:
     explicit Reverse_operation(const Context& context);
     ~Reverse_operation        () override;
+
+    auto describe() const -> std::string override;
 };
 
 }

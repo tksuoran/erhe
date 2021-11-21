@@ -4,6 +4,7 @@
 #include "erhe/primitive/primitive_geometry.hpp"
 
 #include <glm/glm.hpp>
+
 #include <map>
 #include <memory>
 
@@ -26,10 +27,13 @@ class Light_mesh
 {
 public:
     static constexpr std::string_view c_name{"Light_mesh"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
     Light_mesh ();
     ~Light_mesh() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -40,7 +44,7 @@ public:
 private:
     void update_light_model(const erhe::scene::Light& light);
 
-    std::shared_ptr<Program_interface>  m_program_interface;
+    Program_interface*                  m_program_interface{nullptr};
     erhe::primitive::Primitive_geometry m_quad_mesh;
     erhe::primitive::Primitive_geometry m_cone_mesh;
     int                                 m_light_cone_sides;

@@ -14,11 +14,13 @@ float sample_light_visibility(vec4  position,
 
     vec4  position_in_light_texture = position_in_light_texture_homogeneous / position_in_light_texture_homogeneous.w;
     float depth_in_light_texture    = position_in_light_texture.z;
-    float sampled_depth             = texture(s_shadow,
-                                              vec3(position_in_light_texture.xy,
-                                                   float(light_index)
-                                              )
-                                             ).x;
+    float sampled_depth = texture(
+        s_shadow,
+        vec3(
+            position_in_light_texture.xy,
+            float(light_index)
+        )
+    ).x;
 
     float bias = 0.0005 * sqrt(1.0 - NdotL * NdotL) / NdotL; // tan(acos(NdotL))
     bias = clamp(bias, 0.0, 0.01);
@@ -60,8 +62,10 @@ vec3 srgb_to_linear(vec3 v)
 
 vec2 srgb_to_linear(vec2 v)
 {
-    return vec2(srgb_to_linear(v.r),
-                srgb_to_linear(v.g));
+    return vec2(
+        srgb_to_linear(v.r),
+        srgb_to_linear(v.g)
+    );
 }
 
 const float M_PI = 3.141592653589793;
@@ -101,9 +105,10 @@ vec3 F_Schlick(vec3 f0, vec3 f90, float VdotH)
     return f0 + (f90 - f0) * pow(clamp(1.0 - VdotH, 0.0, 1.0), 5.0);
 }
 
-float V_GGX(float NdotL,
-            float NdotV,
-            float alphaRoughness)
+float V_GGX(
+    float NdotL,
+    float NdotV,
+    float alphaRoughness)
 {
     float alphaRoughnessSq = alphaRoughness * alphaRoughness;
     float GGXV             = NdotL * sqrt(NdotV * NdotV * (1.0 - alphaRoughnessSq) + alphaRoughnessSq);
@@ -116,15 +121,16 @@ float V_GGX(float NdotL,
     return 0.0;
 }
 
-float V_GGX_anisotropic(float NdotL,
-                        float NdotV,
-                        float BdotV,
-                        float TdotV,
-                        float TdotL,
-                        float BdotL,
-                        float anisotropy,
-                        float at,
-                        float ab)
+float V_GGX_anisotropic(
+    float NdotL,
+    float NdotV,
+    float BdotV,
+    float TdotV,
+    float TdotL,
+    float BdotL,
+    float anisotropy,
+    float at,
+    float ab)
 {
     float GGXV = NdotL * length(vec3(at * TdotV, ab * BdotV, NdotV));
     float GGXL = NdotV * length(vec3(at * TdotL, ab * BdotL, NdotL));
@@ -314,9 +320,11 @@ void main()
             float BdotH     = dot(b, h);
             vec3  intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, NdotL);
             f_diffuse  += intensity * NdotL * BRDF_lambertian(materialInfo.f0, materialInfo.f90, materialInfo.albedoColor, VdotH);
-            f_specular += intensity * NdotL * BRDF_specularAnisotropicGGX(materialInfo.f0, materialInfo.f90, materialInfo.alphaRoughness,
-                                                                          VdotH, NdotL, NdotV, NdotH,
-                                                                          BdotV, TdotV, TdotL, BdotL, TdotH, BdotH, anisotropy);
+            f_specular += intensity * NdotL * BRDF_specularAnisotropicGGX(
+                materialInfo.f0, materialInfo.f90, materialInfo.alphaRoughness,
+                VdotH, NdotL, NdotV, NdotH,
+                BdotV, TdotV, TdotL, BdotL, TdotH, BdotH, anisotropy
+            );
         }
     }
 
@@ -344,9 +352,11 @@ void main()
             vec3  intensity        = rangeAttenuation * spotAttenuation * light.radiance_and_range.rgb * lightVisibility; // sample_light_visibility(v_position, light_index);
 
             f_diffuse  += intensity * NdotL * BRDF_lambertian(materialInfo.f0, materialInfo.f90, materialInfo.albedoColor, VdotH);
-            f_specular += intensity * NdotL * BRDF_specularAnisotropicGGX(materialInfo.f0, materialInfo.f90, materialInfo.alphaRoughness,
-                                                                          VdotH, NdotL, NdotV, NdotH,
-                                                                          BdotV, TdotV, TdotL, BdotL, TdotH, BdotH, anisotropy);
+            f_specular += intensity * NdotL * BRDF_specularAnisotropicGGX(
+                materialInfo.f0, materialInfo.f90, materialInfo.alphaRoughness,
+                VdotH, NdotL, NdotV, NdotH,
+                BdotV, TdotV, TdotL, BdotL, TdotH, BdotH, anisotropy
+            );
         }
     }
 
@@ -422,9 +432,12 @@ void main()
 
         float a;
         float b = 4.0 * r * (1.0 - r);
-        if (r < 0.5) {
+        if (r < 0.5)
+        {
             a = 0.0;
-        } else {
+        }
+        else
+        {
             a = 1.0 - b;
         }
 

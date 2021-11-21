@@ -3,6 +3,7 @@
 #include "erhe/toolkit/verify.hpp"
 
 #include <gsl/span>
+
 #include <cassert>
 #include <cmath>
 #include <cstddef>

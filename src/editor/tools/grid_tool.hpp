@@ -14,12 +14,15 @@ class Grid_tool
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name{"Grid_tool"};
+    static constexpr std::string_view c_name {"Grid_tool"};
+    static constexpr std::string_view c_title{"Grid"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Grid_tool ();
     ~Grid_tool() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void initialize_component() override;
 
     // Implements Tool

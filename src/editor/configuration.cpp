@@ -1,5 +1,6 @@
 #include "configuration.hpp"
 #include "log.hpp"
+
 #include "erhe/graphics/state/depth_stencil_state.hpp"
 
 #include <cxxopts.hpp>

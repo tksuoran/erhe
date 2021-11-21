@@ -80,6 +80,7 @@ class Program_interface
 public:
     static constexpr size_t           c_max_light_count{120};
     static constexpr std::string_view c_name           {"Program_interface"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Program_interface ();
     ~Program_interface() override;
@@ -89,6 +90,7 @@ public:
     void operator=    (Program_interface&&)      = delete;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -119,7 +121,7 @@ public:
         erhe::graphics::Shader_resource primitive_struct{"Primitive"};
     };
 
-    std::unique_ptr<Shader_resources>         shader_resources;
+    std::unique_ptr<Shader_resources> shader_resources;
 };
 
 }

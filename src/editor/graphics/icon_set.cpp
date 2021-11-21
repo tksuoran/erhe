@@ -1,8 +1,10 @@
 #include "icon_set.hpp"
 #include "gl_context_provider.hpp"
+
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/light.hpp"
-#include "lunasvg.h"
+
+#include <lunasvg.h>
 
 namespace editor {
 
@@ -26,7 +28,7 @@ void Icon_set::connect()
 
 void Icon_set::initialize_component()
 {
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     const erhe::graphics::Texture_create_info create_info{
         gl::Texture_target::texture_2d,

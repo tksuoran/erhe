@@ -2,8 +2,6 @@
 
 #include <glm/glm.hpp>
 
-#include <map>
-#include <memory>
 #include <string_view>
 
 namespace erhe::primitive

@@ -126,7 +126,8 @@ public:
 
     auto update_primitive_buffer(
         const erhe::scene::Mesh_layer&        mesh_layer,
-        const erhe::scene::Visibility_filter& visibility_filter
+        const erhe::scene::Visibility_filter& visibility_filter,
+        const bool                            use_id_ranges = false
     ) -> Buffer_range;
 
     auto update_light_buffer(
@@ -195,9 +196,10 @@ protected:
     };
 
 private:
-    std::shared_ptr<Program_interface> m_program_interface;
-    std::vector<Frame_resources>       m_frame_resources;
-    size_t                             m_current_frame_resource_slot{0};
+    Program_interface*           m_program_interface{nullptr};
+
+    std::vector<Frame_resources> m_frame_resources;
+    size_t                       m_current_frame_resource_slot{0};
 
     Buffer_writer                m_material_writer;
     Buffer_writer                m_light_writer;

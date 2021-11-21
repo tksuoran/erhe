@@ -3,6 +3,7 @@
 #include "scene/collision_generator.hpp"
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
+
 #include "erhe/primitive/enums.hpp"
 
 #include <memory>
@@ -61,12 +62,15 @@ class Brushes
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name{"Brushes"};
+    static constexpr std::string_view c_name {"Brushes"};
+    static constexpr std::string_view c_title{"Brushes"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Brushes ();
     ~Brushes() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -112,11 +116,11 @@ private:
     void remove_brush_mesh         ();
     void update_mesh_node_transform();
 
-    std::shared_ptr<Editor>             m_editor;
-    std::shared_ptr<Operation_stack>    m_operation_stack;
-    std::shared_ptr<Scene_root>         m_scene_root;
-    std::shared_ptr<Selection_tool>     m_selection_tool;
-    std::shared_ptr<Grid_tool>          m_grid_tool;
+    Editor*          m_editor         {nullptr};
+    Operation_stack* m_operation_stack{nullptr};
+    Scene_root*      m_scene_root     {nullptr};
+    Selection_tool*  m_selection_tool {nullptr};
+    Grid_tool*       m_grid_tool      {nullptr};
 
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
     std::vector<const char*>            m_material_names;

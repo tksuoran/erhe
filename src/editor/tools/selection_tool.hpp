@@ -2,6 +2,7 @@
 
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
+
 #include "erhe/scene/node.hpp"
 
 #include <functional>
@@ -20,14 +21,16 @@ class Scene_manager;
 class Selection_tool
     : public erhe::components::Component
     , public Tool
-    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name{"Selection_tool"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
     Selection_tool();
     ~Selection_tool() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -37,9 +40,6 @@ public:
     auto state       () const -> State                          override;
     void cancel_ready()                                         override;
     auto description () -> const char*                          override;
-
-    // Implements Window
-    void imgui(Pointer_context& pointer_context) override;
 
     using Selection            = std::vector<std::shared_ptr<erhe::scene::Node>>;
     using On_selection_changed = std::function<void(const Selection&)>;
@@ -119,7 +119,8 @@ private:
     int                             m_next_selection_change_subscription{1};
     Selection                       m_selection;
     std::vector<Subscription_entry> m_selection_change_subscriptions;
-    std::shared_ptr<Scene_manager>  m_scene_manager;
+
+    Scene_manager*                     m_scene_manager{nullptr};
 
     std::shared_ptr<erhe::scene::Mesh> m_hover_mesh;
     glm::vec3                          m_hover_position{0.0f, 0.0f, 0.0f};

@@ -15,6 +15,7 @@
 #include "scene/scene_root.hpp"
 #include "windows/viewport_config.hpp"
 #include "windows/viewport_window.hpp"
+
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
@@ -178,9 +179,9 @@ void Editor_rendering::render(const double time)
 
     const Render_context render_context{
         &pointer_context,
-        m_scene_manager.get(),
-        m_line_renderer.get(),
-        m_text_renderer.get(),
+        m_scene_manager,
+        m_line_renderer,
+        m_text_renderer,
         scene_viewport,
         time
     };

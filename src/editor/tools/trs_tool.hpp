@@ -1,9 +1,10 @@
 #pragma once
 
-#include "erhe/scene/node.hpp"
 #include "tools/tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/imgui_window.hpp"
+
+#include "erhe/scene/node.hpp"
 
 #include <glm/glm.hpp>
 
@@ -45,7 +46,6 @@ class Text_renderer;
 class Trs_tool
     : public erhe::components::Component
     , public Tool
-    , public Imgui_window
 {
 public:
     enum class Reference_mode : unsigned int
@@ -62,25 +62,26 @@ public:
         "World"
     };
 
-    static constexpr std::string_view c_name{"Trs_tool"};
+    static constexpr std::string_view c_name {"Trs_tool"};
+    static constexpr std::string_view c_title{"Transform"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Trs_tool ();
     ~Trs_tool() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
     // Implements Tool
-    auto update       (Pointer_context& pointer_context) -> bool override;
-    void render_update(const Render_context& render_context)     override;
-    void render       (const Render_context& render_context)     override;
-    auto state        () const -> State                          override;
-    void cancel_ready ()                                         override;
-    auto description  () -> const char*                          override;
-
-    // Implements Imgui_window
-    void imgui(Pointer_context& pointer_context) override;
+    auto update         (Pointer_context& pointer_context) -> bool override;
+    void render_update  (const Render_context& render_context)     override;
+    void render         (const Render_context& render_context)     override;
+    auto state          () const -> State                          override;
+    void cancel_ready   ()                                         override;
+    auto description    () -> const char*                          override;
+    void tool_properties()                                         override;
 
     void set_translate(const bool enabled);
     void set_rotate   (const bool enabled);
@@ -158,10 +159,12 @@ private:
     auto root() -> erhe::scene::Node*;
 
     bool m_local{true};
-    std::shared_ptr<Operation_stack>           m_operation_stack;
-    std::shared_ptr<Mesh_memory>               m_mesh_memory;
-    std::shared_ptr<Scene_root>                m_scene_root;
-    std::shared_ptr<Selection_tool>            m_selection_tool;
+
+    Operation_stack* m_operation_stack{nullptr};
+    Mesh_memory*     m_mesh_memory    {nullptr};
+    Scene_root*      m_scene_root     {nullptr};
+    Selection_tool*  m_selection_tool {nullptr};
+
     State                                      m_state        {State::Passive};
     Handle                                     m_active_handle{Handle::e_handle_none};
     std::optional<Selection_tool::Subcription> m_selection_subscription;

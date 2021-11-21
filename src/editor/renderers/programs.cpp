@@ -28,14 +28,13 @@ void Programs::connect()
     m_shader_monitor    = require<Shader_monitor>();
 }
 
-
 void Programs::initialize_component()
 {
     ZoneScoped;
 
     erhe::log::Indenter indenter;
 
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
         gl::Texture_min_filter::nearest,
@@ -57,7 +56,8 @@ void Programs::initialize_component()
 
     basic      = make_program("basic");
     brush      = make_program("brush");
-    standard   = make_program("standard");
+    standard   = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
+    //standard   = make_program("standard");
     edge_lines = make_program("edge_lines");
     wide_lines = make_program("wide_lines");
     points     = make_program("points");
@@ -85,8 +85,9 @@ auto Programs::make_program(
 }
 
 auto Programs::make_program(
-    std::string_view                name,
-    const std::vector<std::string>& defines
+    std::string_view                                            name,
+    const std::vector<std::string>&                             defines,
+    const std::vector<std::pair<gl::Shader_type, std::string>>& extensions
 )
 -> std::unique_ptr<erhe::graphics::Shader_stages>
 {
@@ -135,6 +136,7 @@ auto Programs::make_program(
     {
         create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
     }
+    create_info.extensions = extensions;
 
     Shader_stages::Prototype prototype(create_info);
     VERIFY(prototype.is_valid());

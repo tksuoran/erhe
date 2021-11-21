@@ -1,21 +1,19 @@
 #include "windows/node_tree_window.hpp"
+#include "graphics/icon_set.hpp"
 #include "log.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
-#include "graphics/icon_set.hpp"
 #include "erhe/graphics/texture.hpp"
-
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 
-#include "imgui.h"
-
 #include <gsl/gsl>
+#include <imgui.h>
 
 namespace editor
 {
@@ -24,6 +22,7 @@ using Light_type = erhe::scene::Light_type;
 
 Node_tree_window::Node_tree_window()
     : erhe::components::Component{c_name}
+    , Imgui_window               {c_title}
 {
 }
 
@@ -69,11 +68,11 @@ void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
         //log_tools.info("C {}\n", node->name());
         m_icon_set->icon(*as_camera(node));
     }
-    else if (is_physics(node))
-    {
-        //log_tools.info("P {}\n", node->name());
-        m_icon_set->icon(*node);
-    }
+    //else if (is_physics(node))
+    //{
+    //    //log_tools.info("P {}\n", node->name());
+    //    m_icon_set->icon(*node);
+    //}
     else
     {
         //log_tools.info("? {} ({})\n", node->name());

@@ -49,10 +49,13 @@ class Mesh_memory
 {
 public:
     static constexpr std::string_view c_name{"Mesh_memory"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
     Mesh_memory ();
     ~Mesh_memory() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 

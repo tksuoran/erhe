@@ -121,7 +121,7 @@ void Bullet_collision_shape::calculate_local_inertia(float mass, glm::vec3& iner
 {
     btVector3 bulletInertia{inertia.x, inertia.y, inertia.z};
     m_bullet_collision_shape->calculateLocalInertia(static_cast<btScalar>(mass), bulletInertia);
-    inertia = to_glm(bulletInertia);
+    inertia = from_bullet(bulletInertia);
 }
 
 auto Bullet_collision_shape::is_convex() const -> bool
@@ -131,8 +131,7 @@ auto Bullet_collision_shape::is_convex() const -> bool
 
 void Bullet_collision_shape::add_child_shape(
     std::shared_ptr<ICollision_shape> /*shape*/,
-    const glm::mat3                   /*basis*/,
-    const glm::vec3                   /*origin*/
+    Transform                         /*transform*/
 )
 {
     log_physics.error("Bullet_collision_shape::Bullet_collision_shape::add_child_shape() called\n");
@@ -141,8 +140,7 @@ void Bullet_collision_shape::add_child_shape(
 
 void Bullet_collision_shape::calculate_principal_axis_transform(
     const std::vector<float>& /*child_masses*/,
-    glm::mat3&                /*principal_transform_basis*/,
-    glm::vec3&                /*principal_transform_origin*/,
+    Transform&                /*principal_transform*/,
     glm::vec3&                /*inertia*/
 )
 {
@@ -152,7 +150,7 @@ void Bullet_collision_shape::calculate_principal_axis_transform(
 
 Bullet_box_shape::Bullet_box_shape(const glm::vec3 half_extents)
     : Bullet_collision_shape{&m_box_shape}
-    , m_box_shape           {from_glm(half_extents)}
+    , m_box_shape           {to_bullet(half_extents)}
 {
 }
 
@@ -194,19 +192,19 @@ Bullet_cone_z_shape::Bullet_cone_z_shape(const float base_radius, const float he
 
 Bullet_cylinder_x_shape::Bullet_cylinder_x_shape(const glm::vec3 half_extents)
     : Bullet_collision_shape{&m_cylinder_shape}
-    , m_cylinder_shape      {from_glm(half_extents)}
+    , m_cylinder_shape      {to_bullet(half_extents)}
 {
 }
 
 Bullet_cylinder_y_shape::Bullet_cylinder_y_shape(const glm::vec3 half_extents)
     : Bullet_collision_shape{&m_cylinder_shape}
-    , m_cylinder_shape      {from_glm(half_extents)}
+    , m_cylinder_shape      {to_bullet(half_extents)}
 {
 }
 
 Bullet_cylinder_z_shape::Bullet_cylinder_z_shape(const glm::vec3 half_extents)
     : Bullet_collision_shape{&m_cylinder_shape}
-    , m_cylinder_shape      {from_glm(half_extents)}
+    , m_cylinder_shape      {to_bullet(half_extents)}
 {
 }
 

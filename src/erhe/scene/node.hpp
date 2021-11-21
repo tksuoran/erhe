@@ -12,10 +12,26 @@ namespace erhe::scene
 
 class Node;
 
-class Node_physics;
-class Light;
-class Camera;
-class Mesh;
+class INode_attachment
+{
+public:
+    virtual ~INode_attachment();
+
+    static constexpr uint64_t c_flag_bit_none       = 0;
+    static constexpr uint64_t c_flag_bit_is_physics = (1 << 0);
+
+    virtual void on_attached_to           (Node& node) = 0;
+    virtual void on_detached_from         (Node& node) = 0;
+    virtual void on_node_transform_changed() = 0;
+    virtual auto node_attachment_type     () const -> const char* = 0;
+    virtual auto node                     () const -> Node* = 0;
+
+    auto flag_bits() const -> uint64_t;
+    auto flag_bits() -> uint64_t&;
+
+protected:
+    uint64_t m_flag_bits{c_flag_bit_none};
+};
 
 class Node
     : public std::enable_shared_from_this<Node>
@@ -43,7 +59,7 @@ public:
 
     virtual void on_attached_to      (Node& node);
     virtual void on_detached_from    (Node& node);
-    virtual void on_transform_changed() {}
+    virtual void on_transform_changed();
     virtual auto node_type           () const -> const char*;
 
     void set_depth_recursive       (size_t depth);
@@ -55,6 +71,7 @@ public:
     auto parent                    () const -> Node*;
     auto depth                     () const -> size_t;
     auto children                  () const -> const std::vector<std::shared_ptr<Node>>&;
+    auto attachments               () const -> const std::vector<std::shared_ptr<INode_attachment>>&;
     auto visibility_mask           () const -> uint64_t;
     auto visibility_mask           () -> uint64_t&;
     auto flag_bits                 () const -> uint64_t;
@@ -83,6 +100,8 @@ public:
     auto is_selected() const -> bool;
     void attach     (const std::shared_ptr<Node>& node);
     auto detach     (Node* node) -> bool;
+    void attach     (const std::shared_ptr<INode_attachment>& attachment);
+    auto detach     (INode_attachment* node) -> bool;
     void unparent   ();
     auto root       () -> Node*;
     auto root       () const -> const Node*;
@@ -103,6 +122,7 @@ protected:
     std::uint64_t                      m_last_transform_update_serial{0};
     Node*                              m_parent         {nullptr};
     std::vector<std::shared_ptr<Node>> m_children;
+    std::vector<std::shared_ptr<INode_attachment>> m_attachments;
     uint64_t                           m_visibility_mask{c_visibility_none};
     uint64_t                           m_flag_bits      {c_flag_bit_none};
     size_t                             m_depth          {0};

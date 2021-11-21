@@ -43,12 +43,14 @@ class Editor_rendering
 {
 public:
     static constexpr std::string_view c_name{"Editor_rendering"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Editor_rendering ();
     ~Editor_rendering() override;
 
     // Implements Component
-    void connect() override;
+    auto get_type_hash() const -> uint32_t override { return hash; }
+    void connect      () override;
 
     void init_state         ();
     void render             (const double time);
@@ -76,23 +78,23 @@ private:
     auto width () const -> int;
     auto height() const -> int;
 
-    std::shared_ptr<Application>                          m_application;
-    std::shared_ptr<Configuration>                        m_configuration;
-    std::shared_ptr<Editor_view>                          m_editor_view;
-    std::shared_ptr<Editor_tools>                         m_editor_tools;
-    std::shared_ptr<Forward_renderer>                     m_forward_renderer;
-    std::shared_ptr<Headset_renderer>                     m_headset_renderer;
-    std::shared_ptr<Id_renderer>                          m_id_renderer;
-    std::shared_ptr<Line_renderer>                        m_line_renderer;
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<Scene_manager>                        m_scene_manager;
-    std::shared_ptr<Scene_root>                           m_scene_root;
-    std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
-    std::shared_ptr<Text_renderer>                        m_text_renderer;
-    std::shared_ptr<Viewport_config>                      m_viewport_config;
-    std::shared_ptr<Viewport_window>                      m_viewport_window;
+    Application*                          m_application           {nullptr};
+    Configuration*                        m_configuration         {nullptr};
+    Editor_view*                          m_editor_view           {nullptr};
+    Editor_tools*                         m_editor_tools          {nullptr};
+    Forward_renderer*                     m_forward_renderer      {nullptr};
+    Headset_renderer*                     m_headset_renderer      {nullptr};
+    Id_renderer*                          m_id_renderer           {nullptr};
+    Line_renderer*                        m_line_renderer         {nullptr};
+    erhe::graphics::OpenGL_state_tracker* m_pipeline_state_tracker{nullptr};
+    Scene_manager*                        m_scene_manager         {nullptr};
+    Scene_root*                           m_scene_root            {nullptr};
+    Shadow_renderer*                      m_shadow_renderer       {nullptr};
+    Text_renderer*                        m_text_renderer         {nullptr};
+    Viewport_config*                      m_viewport_config       {nullptr};
+    Viewport_window*                      m_viewport_window       {nullptr};
 
-    bool                                                  m_trigger_capture{false};
+    bool                                  m_trigger_capture{false};
 };
 
 }

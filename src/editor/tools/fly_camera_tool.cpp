@@ -4,10 +4,11 @@
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
+
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
 
-#include "imgui.h"
+#include <imgui.h>
 
 namespace editor
 {
@@ -55,6 +56,7 @@ void Fly_camera_space_mouse_listener::on_button(const int)
 
 Fly_camera_tool::Fly_camera_tool()
     : erhe::components::Component{c_name}
+    , Imgui_window               {c_title}
 #ifdef _WIN32
     , m_space_mouse_listener     {*this}
     , m_space_mouse_controller   {m_space_mouse_listener}
@@ -286,7 +288,7 @@ void Fly_camera_tool::imgui(Pointer_context&)
 
     float speed = m_camera_controller.translate_z.max_delta();
 
-    ImGui::Begin      ("Fly Camera");
+    ImGui::Begin      (c_title.data());
     ImGui::SliderFloat("Sensitivity", &m_sensitivity, 0.2f,   2.0f);
     ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
     ImGui::End        ();

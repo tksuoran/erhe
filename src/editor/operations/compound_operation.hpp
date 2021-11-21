@@ -2,6 +2,7 @@
 
 #include "operations/ioperation.hpp"
 
+#include <string>
 #include <vector>
 
 namespace editor {
@@ -20,8 +21,9 @@ public:
     ~Compound_operation        () override;
 
     // Implements IOperation
-    void execute() override;
-    void undo   () override;
+    void execute () const override;
+    void undo    () const override;
+    auto describe() const -> std::string override;
 
 private:
     Context m_context;

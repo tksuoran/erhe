@@ -1,9 +1,9 @@
 #include "erhe/raytrace/buffer.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include <mutex>
-
 #include <gsl/assert>
+
+#include <mutex>
 
 namespace erhe::raytrace
 {

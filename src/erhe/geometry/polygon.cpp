@@ -43,13 +43,40 @@ auto Polygon::compute_normal(
     // Make sure all points are unique from others
     if ((p0 == p1) || (p0 == p2) || (p1 == p2))
     {
-        return glm::vec3{0.0f, 1.0f, 0.0f};
+        abort();
+        //return glm::vec3{0.0f, 1.0f, 0.0f};
     }
     auto pos0   = point_locations.get(p0);
     auto pos1   = point_locations.get(p1);
     auto pos2   = point_locations.get(p2);
     auto normal = glm::cross((pos2 - pos0), (pos1 - pos0));
-    return glm::normalize(normal);
+    //return glm::normalize(normal);
+ 
+    vec3 newell_normal{0.0f};
+
+    for_each_corner_neighborhood_const(
+        geometry,
+        [&geometry, &newell_normal, &point_locations](const Polygon_corner_neighborhood_context_const& i)
+        {
+            //const Point_id a     = i.prev_corner.point_id;
+            const Point_id a     = i.corner     .point_id;
+            const Point_id b     = i.next_corner.point_id;
+            const auto     pos_a = point_locations.get(a);
+            const auto     pos_b = point_locations.get(b);
+            newell_normal += glm::cross(pos_a, pos_b);
+        }
+    );
+
+    normal = glm::normalize(normal);
+    newell_normal = glm::normalize(-newell_normal);
+
+    //const float d = glm::dot(normal, newell_normal);
+    //if (d < 0.99f)
+    //{
+    //    DebugBreak();
+    //}
+
+    return newell_normal;
  }
 
 void Polygon::compute_normal(
@@ -75,7 +102,7 @@ auto Polygon::compute_centroid(
     const Property_map<Point_id, vec3>& point_locations
 ) const -> glm::vec3
 {
-    vec3 centroid(0.0f, 0.0f, 0.0f);
+    vec3 centroid{0.0f, 0.0f, 0.0f};
     int  count{0};
 
     for_each_corner_const(

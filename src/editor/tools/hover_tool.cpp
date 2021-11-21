@@ -13,13 +13,11 @@
 #include "erhe/primitive/material.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 
-#include "imgui.h"
-
 #include <fmt/core.h>
+#include <fmt/format.h>
+#include <imgui.h>
 
 #include <string>
-
-#include <fmt/format.h>
 
 namespace editor
 {
@@ -29,6 +27,7 @@ using namespace erhe::geometry;
 
 Hover_tool::Hover_tool()
     : erhe::components::Component{c_name}
+    , Imgui_window               {c_title}
 {
 }
 

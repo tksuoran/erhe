@@ -4,6 +4,7 @@ out vec4      v_color;
 out mat3      v_TBN;
 out flat uint v_material_index;
 out float     v_tangent_scale;
+out float     v_line_width;
 
 void main()
 {
@@ -25,4 +26,5 @@ void main()
     v_material_index = primitive.primitives[gl_DrawID].material_index;
     v_texcoord       = a_texcoord;
     v_color          = a_color;
+    v_line_width     = primitive.primitives[gl_DrawID].size;
 }

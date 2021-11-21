@@ -11,11 +11,15 @@ class Configuration
 {
 public:
     static constexpr std::string_view c_name{"Configuration"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Configuration(int argc, char** argv);
 
+    // Implements Component
+    auto get_type_hash() const -> uint32_t override { return hash; }
+
     bool gui                    {true};
-    bool openxr                 {true};
+    bool openxr                 {false};
     bool parallel_initialization{true};
     bool reverse_depth          {true};
 

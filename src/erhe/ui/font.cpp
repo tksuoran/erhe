@@ -1,34 +1,23 @@
 #include "erhe/ui/font.hpp"
-
-#include "erhe/graphics/configuration.hpp"
-#include "erhe/graphics/texture.hpp"
-
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
-#include "erhe/ui/bitmap.hpp"
+#include "erhe/graphics/configuration.hpp"
+#define ERHE_TRACY_NO_GL 1
+#include "erhe/toolkit/tracy_client.hpp"
 #include "erhe/ui/glyph.hpp"
 #include "erhe/ui/log.hpp"
 
-#define ERHE_TRACY_NO_GL 1
-#include "erhe/toolkit/tracy_client.hpp"
-
-#include "SkylineBinPack.h" // RectangleBinPack
-
 #include <fmt/printf.h>
-
 #include <freetype/freetype.h>
 #include <freetype/ftbitmap.h>
 #include <freetype/ftglyph.h>
 #include <freetype/ftstroke.h>
-
 #include <hb.h>
 #include <hb-ft.h>
+#include <SkylineBinPack.h> // RectangleBinPack
 
-#include <map>
-#include <memory>
 #include <stdexcept>
 #include <string_view>
-
 
 namespace erhe::ui
 {

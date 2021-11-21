@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe/geometry/property_map.hpp"
+
 #include <memory>
 
 namespace erhe::geometry
@@ -50,8 +51,7 @@ private:
 public:
     void clear();
 
-    auto size() const
-    -> size_t;
+    auto size() const -> size_t;
 
     template <typename Value_type>
     auto create(const Property_map_descriptor& descriptor)
@@ -85,11 +85,11 @@ public:
         const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds
     );
 
-    void merge_to(Property_map_collection<Key_type>& source, glm::mat4 transform);
+    void merge_to(Property_map_collection<Key_type>& source, const glm::mat4 transform);
 
     auto clone() -> Property_map_collection<Key_type>;
 
-    auto clone_with_transform(glm::mat4 transform) -> Property_map_collection<Key_type>;
+    auto clone_with_transform(const glm::mat4 transform) -> Property_map_collection<Key_type>;
 
 private:
     Collection_type m_entries;

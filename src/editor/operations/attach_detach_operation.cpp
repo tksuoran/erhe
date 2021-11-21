@@ -4,6 +4,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/scene_manager.hpp"
 #include "log.hpp"
+
 #include "erhe/scene/scene.hpp"
 
 #include <memory>
@@ -32,68 +33,91 @@ Attach_detach_operation::Attach_detach_operation(Context& context)
         }
         else
         {
-            auto node_physics = get_physics_node(node.get());
-            auto child_node = node_physics ? node_physics : node;
+            //auto node_physics = get_physics_node(node.get());
 
             if (context.attach)
             {
-                if (child_node->parent() == nullptr)
+                if (node->parent() == nullptr)
                 {
-                    m_attachments.emplace_back(child_node);
+                    m_entries.emplace_back(node);
                 }
                 else
                 {
-                    log_tools.info("Node {} is already attached and thus cannot be attached to {}\n", child_node->name(), m_parent_node->name());
+                    log_tools.info(
+                        "Node {} is already attached and thus cannot be attached to {}\n",
+                        node->name(),
+                        m_parent_node->name()
+                    );
                 }
             }
             else
             {
-                if (child_node->parent() == m_parent_node.get())
+                if (node->parent() == m_parent_node.get())
                 {
-                    m_attachments.emplace_back(child_node);
+                    m_entries.emplace_back(node);
                 }
                 else
                 {
-                    log_tools.info("Node {} is not attached to {} and thus cannot be detached from it\n", child_node->name(), m_parent_node->name());
+                    log_tools.info(
+                        "Node {} is not attached to {} and thus cannot be detached from it\n",
+                        node->name(),
+                        m_parent_node->name()
+                    );
                 }
             }
         }
     }
 }
 
-void Attach_detach_operation::execute()
+auto Attach_detach_operation::describe() const -> std::string
+{
+    std::stringstream ss;
+    ss << m_context.attach ? "Attach " : "Detach ";
+    bool first = true;
+    for (const auto& entry : m_entries)
+    {
+        VERIFY(entry.node);
+        if (first)
+        {
+            first = false;
+        }
+        else
+        {
+            ss << ", ";
+        }
+        ss << entry.node->name();
+    }
+    ss << m_context.attach ? "to " : "from ";
+    VERIFY(m_parent_node);
+    ss << m_parent_node->name();
+    return ss.str();
+}
+
+void Attach_detach_operation::execute() const
 {
     execute(m_context.attach);
 }
 
-void Attach_detach_operation::undo()
+void Attach_detach_operation::undo() const
 {
     execute(!m_context.attach);
 }
 
-void Attach_detach_operation::execute(bool attach)
+void Attach_detach_operation::execute(bool attach) const
 {
     m_context.scene.sanity_check();
 
     VERIFY(m_parent_node);
 
-    if (attach)
+    for (auto& entry : m_entries)
     {
-        for (auto& attachment : m_attachments)
+        if (attach)
         {
-            //const auto world_from_node = attachment.node->world_from_node_transform();
-            m_parent_node->attach(attachment.node);
-            //const auto parent_from_node = m_parent_node->node_from_world_transform() * world_from_node;
-            //attachment.node->set_parent_from_node(parent_from_node);
+            m_parent_node->attach(entry.node);
         }
-    }
-    else
-    {
-        for (auto& attachment : m_attachments)
+        else
         {
-            //auto world_from_node = attachment.node->world_from_node_transform();
-            attachment.node->unparent();
-            //attachment.node->set_parent_from_node(world_from_node);
+            entry.node->unparent();
         }
     }
 

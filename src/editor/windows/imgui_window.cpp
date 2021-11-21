@@ -2,49 +2,34 @@
 
 namespace editor {
 
-const ImVec4 Imgui_window::c_color         = ImVec4(0.3f, 0.4, 0.8f, 1.0f);
-const ImVec4 Imgui_window::c_color_hovered = ImVec4(0.4f, 0.5, 0.9f, 1.0f);
-const ImVec4 Imgui_window::c_color_active  = ImVec4(0.5f, 0.6, 1.0f, 1.0f); // pressed
-
-const ImVec4 Imgui_window::c_color_disabled         = ImVec4(0.3f, 0.3, 0.3f, 1.0f);
-const ImVec4 Imgui_window::c_color_disabled_hovered = ImVec4(0.3f, 0.3, 0.3f, 1.0f);
-const ImVec4 Imgui_window::c_color_disabled_active  = ImVec4(0.3f, 0.3, 0.3f, 1.0f); // pressed
-
-bool Imgui_window::make_button(const char* label, const Item_mode mode, const ImVec2 size)
+Imgui_window::Imgui_window(const std::string_view title)
+    : m_title{title}
 {
-    if (mode == Item_mode::active)
-    {
-        ImGui::PushStyleColor(ImGuiCol_Button,        c_color);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, c_color_hovered);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  c_color_active);
-    }
-    else if (mode == Item_mode::disabled)
-    {
-        ImGui::PushStyleColor(ImGuiCol_Button,        c_color_disabled);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, c_color_disabled_hovered);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  c_color_disabled_active);
-    }
-    const bool pressed = ImGui::Button(label, size) && (mode != Item_mode::disabled);
-    if (mode != Item_mode::normal)
-    {
-        ImGui::PopStyleColor(3);
-    }
-    return pressed;
 }
 
-void Imgui_window::make_check_box(const char* label, bool* value, const Item_mode mode)
+void Imgui_window::show()
 {
-    const bool original_value = *value;
-    if (mode == Item_mode::disabled)
-    {
-        ImGui::PushStyleColor(ImGuiCol_CheckMark, c_color_disabled);
-    }
-    ImGui::Checkbox(label, value);
-    if (mode == Item_mode::disabled)
-    {
-        ImGui::PopStyleColor(1);
-        *value = original_value;
-    }
+    m_is_visible = true;
+}
+
+void Imgui_window::hide()
+{
+    m_is_visible = false;
+}
+
+void Imgui_window::toggle_visibility()
+{
+    m_is_visible = !m_is_visible;
+}
+
+auto Imgui_window::is_visibile() const -> bool
+{
+    return m_is_visible;
+}
+
+auto Imgui_window::title() const -> const std::string_view
+{
+    return m_title;
 }
 
 }

@@ -15,10 +15,13 @@ class Debug_draw
 {
 public:
     static constexpr std::string_view c_name{"Debug_draw"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
     Debug_draw();
     ~Debug_draw() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -41,10 +44,10 @@ public:
     float line_width{4.0f};
 
 private:
-    std::shared_ptr<Line_renderer> m_line_renderer;
-    std::shared_ptr<Text_renderer> m_text_renderer;
-    int                            m_debug_mode{0};
-    Colors                         m_colors;
+    Line_renderer* m_line_renderer{nullptr};
+    Text_renderer* m_text_renderer{nullptr};
+    int            m_debug_mode{0};
+    Colors         m_colors;
 };
 
 } // namespace editor

@@ -47,10 +47,13 @@ public:
     };
 
     static constexpr std::string_view c_name{"Id_renderer"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
     Id_renderer ();
     ~Id_renderer() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -150,10 +153,12 @@ private:
     void update_framebuffer        (const erhe::scene::Viewport viewport);
     void render_layer              (const erhe::scene::Mesh_layer& layer);
 
-    erhe::scene::Viewport                                 m_viewport{0, 0, 0, 0, true};
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<Programs>                             m_programs;
-    std::shared_ptr<Mesh_memory>                          m_mesh_memory;
+    erhe::scene::Viewport                 m_viewport{0, 0, 0, 0, true};
+
+    erhe::graphics::OpenGL_state_tracker* m_pipeline_state_tracker{nullptr};
+    Programs*                             m_programs              {nullptr};
+    Mesh_memory*                          m_mesh_memory           {nullptr};
+
     erhe::graphics::Pipeline                              m_pipeline;
     erhe::graphics::Pipeline                              m_selective_depth_clear_pipeline;
     std::unique_ptr<erhe::graphics::Vertex_input_state>   m_vertex_input;

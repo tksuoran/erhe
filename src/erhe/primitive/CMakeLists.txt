@@ -45,12 +45,10 @@ target_link_libraries(${_target}
 )
 
 target_strict_cxx(${_target})
+set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
 
 if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
-    target_link_libraries(${_target}
-        PUBLIC
-            embree
-    )
+    target_link_libraries(${_target} PUBLIC embree)
 endif ()
 
 foreach(source IN LISTS source_list)

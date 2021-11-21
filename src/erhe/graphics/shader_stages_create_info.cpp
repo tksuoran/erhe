@@ -51,6 +51,19 @@ auto Shader_stages::Create_info::final_source(const Shader_stage& shader) const
     std::stringstream sb;
     sb << "#version 460 core\n\n";
 
+    if (extensions.size() > 0)
+    {
+        sb << "// Extensions\n";
+        for (const auto& i : extensions)
+        {
+            if (i.first == shader.type)
+            {
+                sb << "#extension " << i.second << " : require\n";
+            }
+        }
+        sb << "\n";
+    }
+
     if (shader.type == gl::Shader_type::vertex_shader)
     {
         // Apply attrib location bindings

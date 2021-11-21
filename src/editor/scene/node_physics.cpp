@@ -1,5 +1,7 @@
 #include "scene/node_physics.hpp"
+
 #include "erhe/physics/log.hpp"
+#include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -10,152 +12,122 @@ using namespace erhe::scene;
 using namespace erhe::physics;
 using namespace std;
 
-auto is_physics(const Node* const node) -> bool
+Node_physics::Node_physics(IRigid_body_create_info& create_info)
+    : m_rigidbody_from_node{}
+    , m_node_from_rigidbody{}
+    , m_rigid_body         {IRigid_body::create_shared(create_info, this)}
+    , m_collision_shape    {create_info.collision_shape}
 {
-    if (node == nullptr)
-    {
-        return false;
-    }
-    return (node->flag_bits() & Node::c_flag_bit_is_physics) == Node::c_flag_bit_is_physics;
+    m_flag_bits |= INode_attachment::c_flag_bit_is_physics;
 }
 
-auto is_physics(const std::shared_ptr<Node>& node) -> bool
-{
-    return is_physics(node.get());
-}
-
-auto as_physics(Node* node) -> Node_physics*
-{
-    if (node == nullptr)
-    {
-        return nullptr;
-    }
-    if ((node->flag_bits() & Node::c_flag_bit_is_physics) == 0)
-    {
-        return nullptr;
-    }
-    return reinterpret_cast<Node_physics*>(node);
-}
-
-auto as_physics(const std::shared_ptr<Node>& node) -> std::shared_ptr<Node_physics>
-{
-    if (!node)
-    {
-        return {};
-    }
-    if ((node->flag_bits() & Node::c_flag_bit_is_physics) == 0)
-    {
-        return {};
-    }
-    return std::dynamic_pointer_cast<Node_physics>(node);
-}
-
-auto get_physics_node(Node* node) -> std::shared_ptr<Node_physics>
-{
-    if (node == nullptr)
-    {
-        return {};
-    }
-    if ((node->flag_bits() & Node::c_flag_bit_is_physics) == Node::c_flag_bit_is_physics)
-    {
-        return std::dynamic_pointer_cast<Node_physics>(node->shared_from_this());
-    }
-    return get_physics_node(node->parent());
-}
-
-auto Node_physics::node_type() const -> const char*
+auto Node_physics::node_attachment_type() const -> const char*
 {
     return "Node_physics";
 }
-
-Node_physics::Node_physics(IRigid_body_create_info& create_info)
-    : Node{{}}
-    , m_rigid_body     {IRigid_body::create_shared(create_info, this)}
-    , m_collision_shape{create_info.collision_shape}
-{
-    flag_bits() |= Node::c_flag_bit_is_physics;
-}
-
-Node_physics::~Node_physics() = default;
 
 void Node_physics::on_attached_to(Node& node)
 {
     ZoneScoped;
 
-    erhe::scene::Node::on_attached_to(node);
-
-    glm::mat3 basis{};
-    glm::vec3 origin{};
-    get_world_transform(basis, origin);
-    VERIFY(m_rigid_body);
-    m_rigid_body->set_world_transform(basis, origin);
+    m_node = &node;
+    on_node_transform_changed();
 }
 
-void Node_physics::on_transform_changed()
+void Node_physics::on_detached_from(Node& node)
+{
+    static_cast<void>(node);
+    m_node = nullptr;
+}
+
+void Node_physics::on_node_transform_changed()
 {
     if (m_transform_change_from_physics)
     {
         return;
     }
 
-    update_transform();
-    glm::mat3 basis{};
-    glm::vec3 origin{};
-    get_world_transform(basis, origin);
+    node()->update_transform();
+    const erhe::physics::Transform world_from_node = get_world_from_node();
     VERIFY(m_rigid_body);
-    m_rigid_body->set_world_transform(basis, origin);
-}
-
-//auto Node_physics::get_node_transform() const -> glm::mat4
-void Node_physics::get_world_transform(glm::mat3& basis, glm::vec3& origin)
-{
-    ZoneScoped;
-
-    glm::mat4 m = world_from_node();
-    glm::vec3 p = glm::vec3{m[3]};
-
-    basis = glm::mat3{m};
-    origin = p;
-}
-
-void Node_physics::set_world_transform(const glm::mat3 basis, const glm::vec3 origin) 
-{
-    ZoneScoped;
-
-    // TODO Take center of mass into account
-
-    if (origin.y < -100.0f)
-    {
-        const glm::vec3 p{0.0f, 8.0f, 0.0f};
-        m_rigid_body->set_world_transform(basis, p);
-        m_rigid_body->set_linear_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
-        m_rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
-    }
-
-    m_transform_change_from_physics = true;
-
-    const auto& m = basis;
-    glm::mat4 transform{m};
-    transform[3] = glm::vec4{origin.x, origin.y, origin.z, 1.0f};
-    unparent();
-    set_parent_from_node(transform);
-
-    m_transform_change_from_physics = false;
-}
-
-void Node_physics::on_node_updated()
-{
-    ZoneScoped;
-
     if (m_rigid_body->get_motion_mode() == Motion_mode::e_static)
     {
         log_physics.warn("Attempt to move static rigid body - promoting to kinematic.\n");
         m_rigid_body->set_motion_mode(Motion_mode::e_kinematic);
     }
-    glm::mat3 basis{};
-    glm::vec3 origin{};
-    get_world_transform(basis, origin);
-    m_rigid_body->set_world_transform(basis, origin);
+    m_rigid_body->set_world_transform(world_from_node * m_node_from_rigidbody);
+}
+
+auto Node_physics::node() const -> Node*
+{
+    return m_node;
+}
+
+void Node_physics::set_rigidbody_from_node(const erhe::physics::Transform rigidbody_from_node)
+{
+    m_rigidbody_from_node = rigidbody_from_node;
+    m_node_from_rigidbody = inverse(rigidbody_from_node);
+}
+
+auto Node_physics::get_world_from_rigidbody() const -> erhe::physics::Transform
+{
+    return get_world_from_node() * m_node_from_rigidbody;
+}
+
+auto Node_physics::get_world_from_node() const -> erhe::physics::Transform
+{
+    ZoneScoped;
+
+    if (m_node == nullptr)
+    {
+        return erhe::physics::Transform{};
+    }
+
+    glm::mat4 m = m_node->world_from_node();
+    glm::vec3 p = glm::vec3{m[3]};
+
+    return erhe::physics::Transform{
+        glm::mat3{m},
+        p
+    };
+}
+
+void Node_physics::set_world_from_rigidbody(const erhe::physics::Transform world_from_rigidbody) 
+{
+    set_world_from_node(world_from_rigidbody * m_rigidbody_from_node);
+}
+
+void Node_physics::set_world_from_node(const erhe::physics::Transform world_from_node) 
+{
+    ZoneScoped;
+
+    VERIFY(m_node != nullptr);
+
+    // TODO Take center of mass into account
+
+    if (world_from_node.origin.y < -100.0f)
+    {
+        const glm::vec3 respawn_location{0.0f, 8.0f, 0.0f};
+        m_rigid_body->set_world_transform(erhe::physics::Transform{world_from_node.basis, respawn_location});
+        m_rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
+        m_rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
+    }
+
+    m_transform_change_from_physics = true;
+
+    const auto& m = world_from_node.basis;
+    glm::mat4 matrix{m};
+    matrix[3] = glm::vec4{
+        world_from_node.origin.x,
+        world_from_node.origin.y,
+        world_from_node.origin.z,
+        1.0f
+    };
+    // TODO don't unparent, call set_world_from_node() instead
+    m_node->unparent();
+    m_node->set_parent_from_node(matrix);
+
+    m_transform_change_from_physics = false;
 }
 
 auto Node_physics::rigid_body() -> IRigid_body*
@@ -168,5 +140,57 @@ auto Node_physics::rigid_body() const -> const IRigid_body*
     return m_rigid_body.get();
 }
 
+auto is_physics(const INode_attachment* const attachment) -> bool
+{
+    if (attachment == nullptr)
+    {
+        return false;
+    }
+    return (attachment->flag_bits() & INode_attachment::c_flag_bit_is_physics) == INode_attachment::c_flag_bit_is_physics;
+}
+
+auto is_physics(const std::shared_ptr<INode_attachment>& attachment) -> bool
+{
+    return is_physics(attachment.get());
+}
+
+auto as_physics(INode_attachment* attachment) -> Node_physics*
+{
+    if (attachment == nullptr)
+    {
+        return nullptr;
+    }
+    if ((attachment->flag_bits() & INode_attachment::c_flag_bit_is_physics) == 0)
+    {
+        return nullptr;
+    }
+    return reinterpret_cast<Node_physics*>(attachment);
+}
+
+auto as_physics(const std::shared_ptr<INode_attachment>& attachment) -> std::shared_ptr<Node_physics>
+{
+    if (!attachment)
+    {
+        return {};
+    }
+    if ((attachment->flag_bits() & INode_attachment::c_flag_bit_is_physics) == 0)
+    {
+        return {};
+    }
+    return std::dynamic_pointer_cast<Node_physics>(attachment);
+}
+
+auto get_physics_node(Node* node) -> std::shared_ptr<Node_physics>
+{
+    for (const auto& attachment : node->attachments())
+    {
+        auto node_physics = as_physics(attachment);
+        if (node_physics)
+        {
+            return node_physics;
+        }
+    }
+    return {};
+}
 
 }

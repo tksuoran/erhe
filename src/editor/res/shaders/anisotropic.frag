@@ -36,9 +36,11 @@ float srgb_to_linear(float x)
 
 vec3 srgb_to_linear(vec3 v)
 {
-    return vec3(srgb_to_linear(v.x),
-                srgb_to_linear(v.y),
-                srgb_to_linear(v.z));
+    return vec3(
+        srgb_to_linear(v.x),
+        srgb_to_linear(v.y),
+        srgb_to_linear(v.z)
+    );
 }
 
 struct Surface {
@@ -88,11 +90,12 @@ float sample_light_visibility(vec4 position, uint light_index) {
 
     vec4  position_in_light_texture = position_in_light_texture_homogeneous / position_in_light_texture_homogeneous.w;
     float depth_in_light_texture    = position_in_light_texture.z;
-    float sampled_depth             = texture(s_shadow,
-                                              vec3(position_in_light_texture.xy,
-                                                   float(light_index)
-                                              )
-                                             ).x;
+    float sampled_depth             = texture(
+        s_shadow,
+        vec3(position_in_light_texture.xy,
+            float(light_index)
+        )
+    ).x;
 
     if (depth_in_light_texture - 0.005 <= sampled_depth)
     {
@@ -159,7 +162,8 @@ void main(void) {
     uint spot_light_count         = light.spot_light_count;
     uint directional_light_offset = 0;
     uint spot_light_offset        = directional_light_count;
-    for (uint i = 0; i < directional_light_count; ++i) {
+    for (uint i = 0; i < directional_light_count; ++i)
+    {
         uint light_index = directional_light_offset + i;
 
         s.L = light.lights[light_index].direction;
@@ -179,7 +183,8 @@ void main(void) {
         }
     }
 
-    for (uint i = 0; i < spot_light_count; ++i) {
+    for (uint i = 0; i < spot_light_count; ++i)
+    {
         uint light_index = spot_light_offset + i;
         vec3 to_light    = light.lights[light_index].position - v_position.xyz;
         s.L              = normalize(to_light);

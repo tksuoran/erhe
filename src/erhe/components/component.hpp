@@ -2,7 +2,8 @@
 
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/verify.hpp"
-
+//#include "erhe/toolkit/string_hash.hpp"
+#include "erhe/toolkit/xxhash.hpp"
 #include <memory>
 #include <set>
 #include <string_view>
@@ -32,10 +33,6 @@ public:
     virtual void update_once_per_frame(const Time_context&) = 0;
 };
 
-// Workaround for https://stackoverflow.com/questions/9838862/why-argument-dependent-lookup-doesnt-work-with-function-template-dynamic-pointe
-template<int>
-void dynamic_pointer_cast();
-
 class Component
 {
 public:
@@ -61,25 +58,25 @@ public:
     virtual void connect() {};
 
     template<typename T>
-    auto get() const -> std::shared_ptr<T>
+    auto get() const -> T*
     {
         if (m_components == nullptr)
         {
             return nullptr;
         }
+
         for (const auto& component : m_components->components)
         {
-            const auto typed_component = dynamic_pointer_cast<T>(component);
-            if (typed_component)
+            if (component->get_type_hash() == T::hash)
             {
-                return typed_component;
+                return reinterpret_cast<T*>(component.get());
             }
         }
         return {};
     }
 
     template<typename T>
-    auto require() -> std::shared_ptr<T>
+    auto require() -> T*
     {
         const auto component = get<T>();
         VERIFY(component);
@@ -87,13 +84,18 @@ public:
         return component;
     }
 
+    virtual auto get_type_hash() const -> uint32_t = 0;
+
     virtual void initialize_component() {}
 
     virtual void on_thread_exit() {}
 
     virtual void on_thread_enter() {}
 
-    virtual auto initialization_requires_main_thread() const -> bool { return false; }
+    virtual auto initialization_requires_main_thread() const -> bool
+    {
+        return false;
+    }
 
     auto name() const -> std::string_view
     {
@@ -107,7 +109,7 @@ public:
         return m_components != nullptr;
     }
 
-    void register_as_component(erhe::components::Components* components)
+    void register_as_component(Components* components)
     {
         m_components = components;
     }
@@ -119,12 +121,11 @@ public:
 
     auto is_ready_to_initialize(const bool in_worker_thread) const -> bool;
 
-    void remove_dependency(const std::shared_ptr<Component>& component);
+    void remove_dependency(Component* component);
 
-    void initialization_depends_on(const std::shared_ptr<Component>& dependency);
+    void initialization_depends_on(Component* dependency);
 
-    auto dependencies()
-    -> const std::set<std::shared_ptr<Component>>&
+    auto dependencies() -> const std::set<Component*>&
     {
         return m_dependencies;
     }
@@ -134,12 +135,12 @@ public:
     void set_ready();
 
 protected:
-    Components*                          m_components{nullptr};
+    Components*          m_components{nullptr};
 
 private:
-    std::string_view                     m_name;
-    Component_state                      m_state      {Component_state::Constructed};
-    std::set<std::shared_ptr<Component>> m_dependencies;
+    std::string_view     m_name;
+    Component_state      m_state      {Component_state::Constructed};
+    std::set<Component*> m_dependencies;
 };
 
 } // namespace erhe::components

@@ -60,7 +60,7 @@ auto IConstraint::create_point_to_point_constraint_unique(
 Bullet_point_to_point_constraint::Bullet_point_to_point_constraint(IRigid_body* rigid_body, const glm::vec3 point)
     : m_bullet_constraint{
         *static_cast<Bullet_rigid_body*>(rigid_body)->get_bullet_rigid_body(),
-        from_glm(point)
+        to_bullet(point)
     }
 {
 }
@@ -73,30 +73,30 @@ Bullet_point_to_point_constraint::Bullet_point_to_point_constraint(
     : m_bullet_constraint{
         *static_cast<Bullet_rigid_body*>(rigid_body_a)->get_bullet_rigid_body(),
         *static_cast<Bullet_rigid_body*>(rigid_body_b)->get_bullet_rigid_body(),
-        from_glm(pivot_in_a),
-        from_glm(pivot_in_b)
+        to_bullet(pivot_in_a),
+        to_bullet(pivot_in_b)
     }
 {
 }
 
 void Bullet_point_to_point_constraint::set_pivot_in_a(const glm::vec3 pivot_in_a)
 {
-    m_bullet_constraint.setPivotA(from_glm(pivot_in_a));
+    m_bullet_constraint.setPivotA(to_bullet(pivot_in_a));
 }
 
 void Bullet_point_to_point_constraint::set_pivot_in_b(const glm::vec3 pivot_in_b)
 {
-    m_bullet_constraint.setPivotB(from_glm(pivot_in_b));
+    m_bullet_constraint.setPivotB(to_bullet(pivot_in_b));
 }
 
 auto Bullet_point_to_point_constraint::get_pivot_in_a() -> glm::vec3
 {
-    return to_glm(m_bullet_constraint.getPivotInA());
+    return from_bullet(m_bullet_constraint.getPivotInA());
 }
 
 auto Bullet_point_to_point_constraint::get_pivot_in_b() -> glm::vec3
 {
-    return to_glm(m_bullet_constraint.getPivotInB());
+    return from_bullet(m_bullet_constraint.getPivotInB());
 }
 
 void Bullet_point_to_point_constraint::set_impulse_clamp(const float impulse_clamp)

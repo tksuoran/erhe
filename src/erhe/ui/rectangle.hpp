@@ -81,14 +81,12 @@ public:
         m_min = value;
     }
 
-    auto max() const noexcept
-    -> const glm::vec2&
+    auto max() const noexcept -> const glm::vec2&
     {
         return m_max;
     }
 
-    auto max() noexcept
-    -> glm::vec2&
+    auto max() noexcept -> glm::vec2&
     {
         return m_max;
     }
@@ -98,11 +96,12 @@ public:
         m_max = value;
     }
 
-    auto size() const noexcept
-    -> const glm::vec2
+    auto size() const noexcept -> const glm::vec2
     {
-        return glm::vec2(m_max.x - m_min.x + 1.0f,
-                         m_max.y - m_min.y + 1.0f);
+        return glm::vec2{
+            m_max.x - m_min.x + 1.0f,
+            m_max.y - m_min.y + 1.0f
+        };
     }
 
     void set_size(const glm::vec2 value) noexcept
@@ -111,14 +110,12 @@ public:
         m_max.y = m_min.y + value.y + 1.0f;
     }
 
-    inline auto half_size() const noexcept
-    -> const glm::vec2
+    inline auto half_size() const noexcept -> const glm::vec2
     {
         return size() / 2.0f;
     }
 
-    inline auto center() const noexcept
-    -> const glm::vec2
+    inline auto center() const noexcept -> const glm::vec2
     {
         return min() + half_size();
     }
@@ -131,8 +128,7 @@ public:
         m_max.y = -std::numeric_limits<float>::max();
     }
 
-    auto hit(const glm::vec2 hit_position) const noexcept
-    -> bool
+    auto hit(const glm::vec2 hit_position) const noexcept -> bool
     {
         if ((hit_position.x < m_min.x) ||
             (hit_position.y < m_min.y) ||
@@ -144,13 +140,14 @@ public:
         return true;
     }
 
-    auto hit(const glm::ivec2 hit_position) const noexcept
-    -> bool
+    auto hit(const glm::ivec2 hit_position) const noexcept -> bool
     {
-        if ((hit_position.x < m_min.x) ||
+        if (
+            (hit_position.x < m_min.x) ||
             (hit_position.y < m_min.y) ||
             (hit_position.x > m_max.x) ||
-            (hit_position.y > m_max.y))
+            (hit_position.y > m_max.y)
+        )
         {
             return false;
         }
@@ -173,8 +170,7 @@ public:
         m_max.y = std::min(m_max.y, reference.max().y);
     }
 
-    auto shrink(const glm::vec2 padding) noexcept
-    -> Rectangle
+    auto shrink(const glm::vec2 padding) noexcept -> Rectangle
     {
         return Rectangle(m_min + padding, m_max - padding);
     }

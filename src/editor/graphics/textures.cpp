@@ -32,12 +32,9 @@ void Textures::initialize_component()
 {
     Expects(m_image_transfer);
 
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
-    background  = load(std::filesystem::path("res") / "images" / "background.png");
-    camera_icon = load(std::filesystem::path("res") / "icons" / "camera16.png");
-    mesh_icon   = load(std::filesystem::path("res") / "icons" / "mesh16.png");
-    light_icon  = load(std::filesystem::path("res") / "icons" / "light16.png");
+    background = load(std::filesystem::path("res") / "images" / "background.png");
 }
 
 gl::Internal_format to_gl(erhe::graphics::Image_format format)

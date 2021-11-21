@@ -11,7 +11,7 @@ class Motion_state_adapter
     : public btMotionState
 {
 public:
-    explicit    Motion_state_adapter(IMotion_state* motion_state);
+    explicit Motion_state_adapter(IMotion_state* motion_state);
 
 	void getWorldTransform(btTransform& worldTrans) const override;
 	void setWorldTransform(const btTransform& worldTrans) override;
@@ -40,8 +40,8 @@ public:
     void set_rolling_friction        (const float rolling_friction)                             override;
     auto get_restitution             () const -> float                                          override;
     void set_restitution             (const float restitution)                                  override;
-    void set_center_of_mass_transform(const glm::mat3 basis, const glm::vec3 origin)            override;
-    void set_world_transform         (const glm::mat3 basis, const glm::vec3 origin)            override;
+    void set_center_of_mass_transform(Transform transform)                                      override;
+    void set_world_transform         (Transform transform)                                      override;
     void set_linear_velocity         (const glm::vec3 velocity)                                 override;
     void set_angular_velocity        (const glm::vec3 velocity)                                 override;
     auto get_linear_damping          () const -> float                                          override;

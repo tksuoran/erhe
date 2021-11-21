@@ -1,6 +1,7 @@
 #pragma once
 
 #include "operations/ioperation.hpp"
+
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
@@ -48,8 +49,9 @@ public:
     ~Node_transform_operation        () override;
 
     // Implements IOperation
-    void execute() override;
-    void undo   () override;
+    void execute () const override;
+    void undo    () const override;
+    auto describe() const -> std::string override;
 
 private:
     Context m_context;
@@ -85,7 +87,7 @@ public:
     class Context
     {
     public:
-        std::shared_ptr<Selection_tool>    selection_tool;
+        Selection_tool*                    selection_tool{nullptr};
         erhe::scene::Scene&                scene;
         erhe::scene::Mesh_layer&           layer;
         erhe::physics::IWorld&             physics_world;
@@ -99,13 +101,16 @@ public:
     ~Mesh_insert_remove_operation        () override;
 
     // Implements IOperation
-    void execute() override;
-    void undo   () override;
+    void execute () const override;
+    void undo    () const override;
+    auto describe() const -> std::string override;
 
 private:
-    void execute(const Mode mode);
+    void execute(const Mode mode) const;
 
-    Context m_context;
+    Context                                         m_context;
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_before;
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_after;
 };
 
 class Light_insert_remove_operation
@@ -115,6 +120,7 @@ public:
     class Context
     {
     public:
+        std::shared_ptr<Selection_tool>     selection_tool;
         erhe::scene::Light_layer&           layer;
         erhe::scene::Scene&                 scene;
         std::shared_ptr<erhe::scene::Light> light;
@@ -125,13 +131,16 @@ public:
     explicit Light_insert_remove_operation(const Context& context);
     ~Light_insert_remove_operation        () override;
 
-    void execute() override;
-    void undo   () override;
+    void execute () const override;
+    void undo    () const override;
+    auto describe() const -> std::string override;
 
 private:
-    void execute(const Mode mode);
+    void execute(const Mode mode) const;
 
-    Context m_context;
+    Context                                         m_context;
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_before;
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_after;
 };
 
 }

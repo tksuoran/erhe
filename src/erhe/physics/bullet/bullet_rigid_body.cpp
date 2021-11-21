@@ -17,18 +17,13 @@ Motion_state_adapter::Motion_state_adapter(IMotion_state* motion_state)
 
 void Motion_state_adapter::getWorldTransform(btTransform& worldTrans) const
 {
-    glm::mat3 basis{1.0f};
-    glm::vec3 origin{0.0f};
-    m_motion_state->get_world_transform(basis, origin);
-    worldTrans = btTransform{from_glm(basis), from_glm(origin)};
+    Transform world_transform = m_motion_state->get_world_from_rigidbody();
+    worldTrans = to_bullet(world_transform);
 }
 
 void Motion_state_adapter::setWorldTransform(const btTransform& worldTrans)
 {
-    const auto basis  = worldTrans.getBasis();
-    const auto origin = worldTrans.getOrigin();
-
-    m_motion_state->set_world_transform(to_glm(basis), to_glm(origin));
+    m_motion_state->set_world_from_rigidbody(from_bullet(worldTrans));
 }
 
 auto IRigid_body::create(
@@ -58,7 +53,7 @@ Bullet_rigid_body::Bullet_rigid_body(
             static_cast<btScalar>(create_info.mass),
             &m_motion_state_adapter,
             dynamic_cast<Bullet_collision_shape*>(m_collision_shape.get())->get_bullet_collision_shape(),
-            from_glm(create_info.local_inertia)
+            to_bullet(create_info.local_inertia)
         }
     }
     , m_motion_mode{
@@ -166,26 +161,24 @@ void Bullet_rigid_body::set_motion_mode(const Motion_mode motion_mode)
     m_bullet_rigid_body.setCollisionFlags(flags);
 }
 
-void Bullet_rigid_body::set_center_of_mass_transform(const glm::mat3 basis, const glm::vec3 origin)
+void Bullet_rigid_body::set_center_of_mass_transform(const Transform transform)
 {
-    const btTransform transform{from_glm(basis), from_glm(origin)};
-    m_bullet_rigid_body.setCenterOfMassTransform(transform);
+    m_bullet_rigid_body.setCenterOfMassTransform(to_bullet(transform));
 }
 
-void Bullet_rigid_body::set_world_transform(const glm::mat3 basis, const glm::vec3 origin)
+void Bullet_rigid_body::set_world_transform(const Transform transform)
 {
-    const btTransform transform{from_glm(basis), from_glm(origin)};
-    m_bullet_rigid_body.setWorldTransform(transform);
+    m_bullet_rigid_body.setWorldTransform(to_bullet(transform));
 }
 
 void Bullet_rigid_body::set_linear_velocity(const glm::vec3 velocity)
 {
-    m_bullet_rigid_body.setLinearVelocity(from_glm(velocity));
+    m_bullet_rigid_body.setLinearVelocity(to_bullet(velocity));
 }
 
 void Bullet_rigid_body::set_angular_velocity(const glm::vec3 velocity)
 {
-    m_bullet_rigid_body.setAngularVelocity(from_glm(velocity));
+    m_bullet_rigid_body.setAngularVelocity(to_bullet(velocity));
 }
 
 auto Bullet_rigid_body::get_linear_damping() const -> float
@@ -205,7 +198,7 @@ auto Bullet_rigid_body::get_angular_damping () const -> float
 
 auto Bullet_rigid_body::get_local_inertia() const -> glm::vec3
 {
-    return to_glm(m_bullet_rigid_body.getLocalInertia());
+    return from_bullet(m_bullet_rigid_body.getLocalInertia());
 }
 
 auto Bullet_rigid_body::get_mass() const -> float
@@ -215,7 +208,7 @@ auto Bullet_rigid_body::get_mass() const -> float
 
 void Bullet_rigid_body::set_mass_properties(const float mass, const glm::vec3 local_inertia)
 {
-    m_bullet_rigid_body.setMassProps(static_cast<btScalar>(mass), from_glm(local_inertia));
+    m_bullet_rigid_body.setMassProps(static_cast<btScalar>(mass), to_bullet(local_inertia));
 }
 
 auto Bullet_rigid_body::get_bullet_rigid_body() -> btRigidBody*

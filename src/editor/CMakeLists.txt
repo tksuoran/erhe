@@ -96,12 +96,8 @@ set(source_list
 
     windows/brushes.cpp
     windows/brushes.hpp
-    windows/camera_properties.cpp
-    windows/camera_properties.hpp
     windows/layers_window.cpp
     windows/layers_window.hpp
-    windows/light_properties.cpp
-    windows/light_properties.hpp
     windows/material_properties.cpp
     windows/material_properties.hpp
     windows/mesh_properties.cpp
@@ -218,6 +214,7 @@ set_target_properties(
 )
 
 target_strict_cxx(${_target})
+set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
 
 foreach(source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)

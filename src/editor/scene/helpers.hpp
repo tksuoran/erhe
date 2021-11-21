@@ -49,7 +49,6 @@ void add_to_scene_layer(
 );
 
 void add_to_physics_world(
-    erhe::scene::Scene&           scene,
     erhe::physics::IWorld&        physics_world,
     std::shared_ptr<Node_physics> node_physics
 );
@@ -67,7 +66,6 @@ void remove_from_scene_layer(
 );
 
 void remove_from_physics_world(
-    erhe::scene::Scene&           scene,
     erhe::physics::IWorld&        physics_world,
     std::shared_ptr<Node_physics> node_physics
 );

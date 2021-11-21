@@ -23,15 +23,16 @@ Bullet_compound_shape::Bullet_compound_shape()
 
 void Bullet_compound_shape::add_child_shape(
     std::shared_ptr<ICollision_shape> shape,
-    const glm::mat3                   basis,
-    const glm::vec3                   origin
+    Transform                         transform
 )
 {
     auto bullet_collision_shape = dynamic_pointer_cast<Bullet_collision_shape>(shape);
     VERIFY(bullet_collision_shape);
     m_children.push_back(bullet_collision_shape);
-    const btTransform transform{from_glm(basis), from_glm(origin)};
-    m_compound_shape.addChildShape(transform, bullet_collision_shape->get_bullet_collision_shape());
+    m_compound_shape.addChildShape(
+        to_bullet(transform),
+        bullet_collision_shape->get_bullet_collision_shape()
+    );
 }
 
 auto Bullet_compound_shape::is_convex() const -> bool
@@ -41,8 +42,7 @@ auto Bullet_compound_shape::is_convex() const -> bool
 
 void Bullet_compound_shape::calculate_principal_axis_transform(
     const std::vector<float>& child_masses,
-    glm::mat3&                principal_transform_basis,
-    glm::vec3&                principal_transform_origin,
+    Transform&                principal_transform,
     glm::vec3&                inertia)
 {
 	/// computes
@@ -72,13 +72,13 @@ void Bullet_compound_shape::calculate_principal_axis_transform(
 
     for (int child_index = 0; child_index < child_count; ++child_index)
     {
-        btTransform child_transform = m_compound_shape.getChildTransform(child_index);
-        m_compound_shape.updateChildTransform(child_index, child_transform * inverse_principal_transform);
+        btTransform child_transform     = m_compound_shape.getChildTransform(child_index);
+        btTransform new_child_transform = inverse_principal_transform * child_transform;
+        m_compound_shape.updateChildTransform(child_index, new_child_transform);
     }
 
-    principal_transform_basis  = to_glm(bullet_principal_transform.getBasis());
-    principal_transform_origin = to_glm(bullet_principal_transform.getOrigin());
-    inertia                    = to_glm(bullet_inertia);
+    principal_transform = from_bullet(bullet_principal_transform);
+    inertia             = from_bullet(bullet_inertia);
 }
 
 

@@ -1,6 +1,7 @@
 #include "operations/mesh_operation.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/scene_manager.hpp"
+
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/scene.hpp"
@@ -13,30 +14,45 @@ using namespace erhe::geometry;
 using namespace erhe::primitive;
 using namespace erhe::scene;
 
+auto Mesh_operation::describe() const -> std::string
+{
+    std::stringstream ss;
+    bool first = true;
+    for (const auto& entry : m_entries)
+    {
+        if (first)
+        {
+            first = false;
+        }
+        else
+        {
+            ss << ", ";
+        }
+        ss << entry.mesh->name();
+    }
+    return ss.str();
+}
+
 Mesh_operation::Mesh_operation() = default;
 
 Mesh_operation::~Mesh_operation() = default;
 
-void Mesh_operation::execute()
+void Mesh_operation::execute() const
 {
     for (const auto& entry : m_entries)
     {
         entry.scene.sanity_check();
-
         entry.mesh->data = entry.after;
-
         entry.scene.sanity_check();
     }
 }
 
-void Mesh_operation::undo()
+void Mesh_operation::undo() const
 {
     for (const auto& entry : m_entries)
     {
         entry.scene.sanity_check();
-
         entry.mesh->data = entry.before;
-
         entry.scene.sanity_check();
     }
 }

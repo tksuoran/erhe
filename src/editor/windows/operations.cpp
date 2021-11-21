@@ -1,4 +1,5 @@
 #include "windows/operations.hpp"
+#include "log.hpp"
 #include "tools.hpp"
 #include "operations/attach_detach_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -8,17 +9,19 @@
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/pointer_context.hpp"
-#include "log.hpp"
+
+#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
 
-#include "imgui.h"
+#include <imgui.h>
 
 namespace editor
 {
 
 Operations::Operations()
     : erhe::components::Component{c_name}
+    , Imgui_window               {c_title}
 {
 }
 
@@ -37,9 +40,25 @@ void Operations::initialize_component()
     get<Editor_tools>()->register_imgui_window(this);
 }
 
+auto Operations::count_selected_meshes() const -> size_t
+{
+    const auto& selection = m_selection_tool->selection();
+    size_t count = 0;
+    for (const auto& node : selection)
+    {
+        if (is_mesh(node))
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
 void Operations::imgui(Pointer_context& pointer_context)
 {
-    if (m_selection_tool.get() == nullptr)
+    using namespace erhe::imgui;
+
+    if (m_selection_tool == nullptr)
     {
         return;
     }
@@ -53,8 +72,9 @@ void Operations::imgui(Pointer_context& pointer_context)
         const auto button_action  = static_cast<Action>(i);
         const bool button_pressed = make_button(
             c_action_strings[i].data(),
-            (button_action == active_action) ? Item_mode::active
-                                             : Item_mode::normal,
+            (button_action == active_action)
+                ? Item_mode::active
+                : Item_mode::normal,
             button_size
         );
         if (button_pressed && (active_action != button_action))
@@ -71,19 +91,29 @@ void Operations::imgui(Pointer_context& pointer_context)
         m_scene_root->physics_world(),
         m_selection_tool
     };
-    const auto mode = m_operation_stack->can_undo()
+
+    const auto undo_mode = m_operation_stack->can_undo()
         ? Item_mode::normal
         : Item_mode::disabled;
-    if (make_button("Undo", mode, button_size))
+    if (make_button("Undo", undo_mode, button_size))
     {
         m_operation_stack->undo();
     }
-    if (make_button("Redo", mode, button_size))
+
+    const auto redo_mode = m_operation_stack->can_redo()
+        ? Item_mode::normal
+        : Item_mode::disabled;
+    if (make_button("Redo", redo_mode, button_size))
     {
         m_operation_stack->redo();
     }
 
-    if (ImGui::Button("Attach", button_size))
+    const auto selected_mesh_count = count_selected_meshes();
+
+    const auto multi_select_mode = (selected_mesh_count >= 2)
+        ? Item_mode::normal
+        : Item_mode::disabled;
+    if (make_button("Attach", multi_select_mode, button_size))
     {
         Attach_detach_operation::Context attach_context{
             m_scene_root->scene(),
@@ -95,7 +125,7 @@ void Operations::imgui(Pointer_context& pointer_context)
         m_operation_stack->push(op);
     }
 
-    if (ImGui::Button("Detach", button_size))
+    if (make_button("Detach", multi_select_mode, button_size))
     {
         Attach_detach_operation::Context detach_context{
             m_scene_root->scene(),
@@ -107,7 +137,7 @@ void Operations::imgui(Pointer_context& pointer_context)
         m_operation_stack->push(op);
     }
 
-    if (ImGui::Button("Merge", button_size))
+    if (make_button("Merge", multi_select_mode, button_size))
     {
         Merge_operation::Context merge_context{
             m_mesh_memory->build_info_set,
@@ -119,42 +149,51 @@ void Operations::imgui(Pointer_context& pointer_context)
         auto op = std::make_shared<Merge_operation>(merge_context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Catmull-Clark", button_size))
+
+    const auto has_selection_mode = (selected_mesh_count >= 1)
+        ? Item_mode::normal
+        : Item_mode::disabled;
+    if (make_button("Catmull-Clark", has_selection_mode, button_size))
     {
         auto op = std::make_shared<Catmull_clark_subdivision_operation>(context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Sqrt3", button_size))
+    if (make_button("Sqrt3", has_selection_mode, button_size))
     {
         auto op = std::make_shared<Sqrt3_subdivision_operation>(context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Triangulate", button_size))
+    if (make_button("Triangulate", has_selection_mode, button_size))
     {
         auto op = std::make_shared<Triangulate_operation>(context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Reverse", button_size))
+    if (make_button("Reverse", has_selection_mode, button_size))
     {
         auto op = std::make_shared<Reverse_operation>(context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Subdivide", button_size))
+    if (make_button("Subdivide", has_selection_mode, button_size))
     {
         auto op = std::make_shared<Subdivide_operation>(context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Dual", button_size))
+    if (make_button("Gyro", has_selection_mode, button_size))
+    {
+        auto op = std::make_shared<Gyro_operation>(context);
+        m_operation_stack->push(op);
+    }
+    if (make_button("Dual", has_selection_mode, button_size))
     {
         auto op = std::make_shared<Dual_operator>(context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Ambo", button_size))
+    if (make_button("Ambo", has_selection_mode, button_size))
     {
         auto op = std::make_shared<Ambo_operator>(context);
         m_operation_stack->push(op);
     }
-    if (ImGui::Button("Truncate", button_size))
+    if (make_button("Truncate", has_selection_mode, button_size))
     {
         auto op = std::make_shared<Truncate_operator>(context);
         m_operation_stack->push(op);

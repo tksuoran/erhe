@@ -1,22 +1,21 @@
 #pragma once
 
-#include "Rect.h"
-
 #include "erhe/ui/rectangle.hpp"
 #include "erhe/ui/bitmap.hpp"
 #include "erhe/ui/glyph.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include <string>
-#include <vector>
 
 #include <freetype/freetype.h>
 #include <freetype/ftstroke.h>
 #include <freetype/ftglyph.h>
 #include <freetype/ftbitmap.h>
+#include <Rect.h>
 
 #include <cstdio>
 #include <map>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace erhe::ui
 {
@@ -24,12 +23,14 @@ namespace erhe::ui
 class Glyph
 {
 public:
-    Glyph(FT_Library          library,
-          FT_Face             font_face,
-          const unsigned char c,
-          const float         bolding,
-          const float         outline_thickness,
-          const int           hint_mode);
+    Glyph(
+        FT_Library          library,
+        FT_Face             font_face,
+        const unsigned char c,
+        const float         bolding,
+        const float         outline_thickness,
+        const int           hint_mode
+    );
 
     auto buffer() const
     -> const std::vector<unsigned char>&

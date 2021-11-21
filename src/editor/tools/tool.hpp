@@ -41,10 +41,11 @@ public:
     }
 
     // Visual rendering of the tool.
-    virtual void render_update(const Render_context&) {}
-    virtual void render       (const Render_context&) {}
-    virtual auto state        () const -> State = 0;
-    virtual void cancel_ready () {}
+    virtual void render_update  (const Render_context&) {}
+    virtual void render         (const Render_context&) {}
+    virtual auto state          () const -> State = 0;
+    virtual void cancel_ready   () {}
+    virtual void tool_properties() {}
 };
 
 } // namespace editor

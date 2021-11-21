@@ -10,7 +10,7 @@
 #include "erhe/physics/iworld.hpp"
 #include "erhe/physics/iconstraint.hpp"
 
-#include "imgui.h"
+#include <imgui.h>
 
 namespace editor
 {
@@ -19,6 +19,7 @@ using namespace erhe::toolkit;
 
 Physics_tool::Physics_tool()
     : erhe::components::Component{c_name}
+    , Imgui_window               {c_title}
 {
 }
 
@@ -46,8 +47,10 @@ auto Physics_tool::description() -> const char*
 
 void Physics_tool::imgui(Pointer_context&)
 {
-    ImGui::Begin("Physics Tool");
+}
 
+void Physics_tool::tool_properties()
+{
     ImGui::Text("State: %s", Tool::c_state_str[static_cast<int>(m_state)]);
     ImGui::Text("Mesh: %s", m_drag_mesh ? m_drag_mesh->name().c_str() : "");
     ImGui::Text("Drag depth: %f", m_drag_depth);
@@ -57,7 +60,6 @@ void Physics_tool::imgui(Pointer_context&)
     ImGui::SliderFloat("Impulse Clamp",   &m_impulse_clamp,   0.0f, 10.0f);
     ImGui::SliderFloat("Linear Damping",  &m_linear_damping,  0.0f,  1.0f);
     ImGui::SliderFloat("Angular Damping", &m_angular_damping, 0.0f,  1.0f);
-    ImGui::End();
 }
 
 void Physics_tool::cancel_ready()

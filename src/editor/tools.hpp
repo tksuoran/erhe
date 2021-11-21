@@ -1,10 +1,11 @@
 #pragma once
 
-#include "erhe/components/component.hpp"
-#include "erhe/scene/viewport.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/imgui_window.hpp"
+
+#include "erhe/components/component.hpp"
+#include "erhe/scene/viewport.hpp"
 
 #include <gsl/gsl>
 
@@ -38,12 +39,15 @@ class Editor_tools
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name{"Editor_tools"};
+    static constexpr std::string_view c_name {"Editor_tools"};
+    static constexpr std::string_view c_title{"Tools"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Editor_tools ();
     ~Editor_tools() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -73,14 +77,18 @@ public:
     void register_imgui_window   (Imgui_window* window);
 
 private:
+    void menu();
+    void window_menu();
+
     Action m_priority_action{Action::select};
 
-    std::shared_ptr<Brushes>        m_brushes;
-    std::shared_ptr<Editor_view>    m_editor_view;
-    std::shared_ptr<Editor_time>    m_editor_time;
-    std::shared_ptr<Physics_tool>   m_physics_tool;
-    std::shared_ptr<Selection_tool> m_selection_tool;
-    std::shared_ptr<Trs_tool>       m_trs_tool;
+    Brushes*        m_brushes       {nullptr};
+    Editor_view*    m_editor_view   {nullptr};
+    Editor_time*    m_editor_time   {nullptr};
+    Physics_tool*   m_physics_tool  {nullptr};
+    Selection_tool* m_selection_tool{nullptr};
+    Trs_tool*       m_trs_tool      {nullptr};
+    bool            m_show_tool_properties{true};
 
     std::optional<Selection_tool::Subcription> m_selection_layer_update_subscription;
 
@@ -89,7 +97,7 @@ private:
     std::vector<gsl::not_null<Tool*>>         m_background_tools;
     std::vector<gsl::not_null<Imgui_window*>> m_imgui_windows;
     ImGuiContext*                             m_imgui_context{nullptr};
-    ImVector<ImWchar>                         m_glyphRanges;
+    ImVector<ImWchar>                         m_glyph_ranges;
 };
 
 }

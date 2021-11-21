@@ -1,4 +1,4 @@
-    #pragma once
+#pragma once
 
 #include "erhe/physics/icollision_shape.hpp"
 
@@ -7,7 +7,6 @@
 #include <BulletCollision/CollisionShapes/btConeShape.h>
 #include <BulletCollision/CollisionShapes/btCylinderShape.h>
 #include <BulletCollision/CollisionShapes/btSphereShape.h>
-
 #include <glm/glm.hpp>
 
 #include <memory>
@@ -30,13 +29,11 @@ public:
     auto is_convex              () const -> bool                       override;
     void add_child_shape(
         std::shared_ptr<ICollision_shape> shape,
-        const glm::mat3                   basis,
-        const glm::vec3                   origin
+        Transform                         transform
     )                                                                  override;
     void calculate_principal_axis_transform(
         const std::vector<float>& child_masses,
-        glm::mat3&                principal_transform_basis,
-        glm::vec3&                principal_transform_origin,
+        Transform&                out_principal_transform,
         glm::vec3&                inertia
     )                                                                  override;
 

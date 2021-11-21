@@ -14,11 +14,11 @@ Component::Component(const std::string_view name)
     ZoneScoped;
 }
 
-void Component::initialization_depends_on(const std::shared_ptr<Component>& dependency)
+void Component::initialization_depends_on(Component* dependency)
 {
     ZoneScoped;
 
-    if (!dependency)
+    if (dependency == nullptr)
     {
         return;
     }
@@ -66,8 +66,13 @@ auto Component::is_ready_to_initialize(const bool in_worker_thread) const
         );
 }
 
-void Component::remove_dependency(const std::shared_ptr<Component>& dependency)
+void Component::remove_dependency(Component* dependency)
 {
+    if (dependency == nullptr)
+    {
+        return;
+    }
+
     m_dependencies.erase(dependency);
 }
 

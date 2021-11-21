@@ -2,6 +2,7 @@
 #include "configuration.hpp"
 #include "log.hpp"
 #include "renderdoc_capture_support.hpp"
+
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/png_loader.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
@@ -28,7 +29,7 @@ auto Window::create_gl_window() -> bool
 {
     ZoneScoped;
 
-    const auto& configuration = *get<Configuration>().get();
+    const auto& configuration = *get<Configuration>();
 
     int msaa_sample_count = configuration.gui ? 0 : 16;
 

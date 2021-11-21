@@ -1,11 +1,12 @@
 #pragma once
 
 #include "erhe/geometry/geometry.hpp"
+
+#include <nlohmann/json.hpp>
+
 #include <filesystem>
 #include <string>
 #include <vector>
-
-#include <nlohmann/json.hpp>
 
 namespace editor {
 

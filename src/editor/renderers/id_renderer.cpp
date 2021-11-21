@@ -1,9 +1,9 @@
 #include "renderers/id_renderer.hpp"
 #include "configuration.hpp"
 #include "graphics/gl_context_provider.hpp"
+#include "log.hpp"
 #include "renderers/program_interface.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "log.hpp"
 
 #include "erhe/components/component.hpp"
 #include "erhe/graphics/buffer.hpp"
@@ -68,7 +68,7 @@ void Id_renderer::initialize_component()
     ZoneScoped;
 
     TracyMessageL("ID: Waiting for GL context");
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
     TracyMessageL("ID: Got GL context");
 
     create_frame_resources(1, 1, 1, 1000, 1000);
@@ -190,7 +190,7 @@ void Id_renderer::render_layer(const erhe::scene::Mesh_layer& mesh_layer)
         0u,
         0u
     };
-    update_primitive_buffer(mesh_layer, id_filter);
+    update_primitive_buffer(mesh_layer, id_filter, true);
     auto draw_indirect_buffer_range = update_draw_indirect_buffer(
         mesh_layer,
         Primitive_mode::polygon_fill,

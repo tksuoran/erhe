@@ -74,7 +74,7 @@ void Scene_manager::initialize_component()
 {
     ZoneScoped;
 
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>().get()};
+    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     m_scene_root = Component::get<Scene_root>();
 
@@ -166,23 +166,32 @@ void Scene_manager::make_brushes()
         }
     );
 
-    // Teapot
-    if constexpr (false)
+    constexpr bool obj_files               = true;
+    constexpr bool platonic_solids         = true;
+    constexpr bool sphere                  = true;
+    constexpr bool torus                   = true;
+    constexpr bool cylinder                = true;
+    constexpr bool cone                    = true;
+    constexpr bool anisotropic_test_object = false;
+    constexpr bool johnson_solids          = true;
+
+    if constexpr (obj_files)
     {
         execution_queue.enqueue(
             [this]()
             {
-                ZoneScopedN("teapot from .obj");
+                ZoneScopedN("parse .obj files");
 
-                const Brush_create_context context{build_info_set(), Normal_style::point_normals};
+                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 constexpr bool instantiate = true;
 
-                const char* teaset[] = {
-                    "res/models/teapot.obj",
-                    "res/models/teacup.obj",
-                    "res/models/spoon.obj"
+                const char* obj_files_names[] = {
+                    "res/models/cobra_mk3.obj"
+                    //"res/models/teapot.obj",
+                    //"res/models/teacup.obj",
+                    //"res/models/spoon.obj"
                 };
-                for (auto* path : teaset)
+                for (auto* path : obj_files_names)
                 {
                     auto geometries = parse_obj_geometry(path);
 
@@ -190,8 +199,12 @@ void Scene_manager::make_brushes()
                     {
                         geometry->compute_polygon_normals();
                         // The real teapot is ~33% taller (ratio 4:3)
-                        const mat4 scale_t = erhe::toolkit::create_scale(0.5f, 0.5f * 4.0f / 3.0f, 0.5f);
+                        //const mat4 scale_t = erhe::toolkit::create_scale(0.5f, 0.5f * 4.0f / 3.0f, 0.5f);
+                        //geometry->transform(scale_t);
+
+                        const mat4 scale_t = erhe::toolkit::create_scale(0.01f);
                         geometry->transform(scale_t);
+                        geometry->flip_reversed_polygons();
                         make_brush(instantiate, move(geometry), context);
                     }
                 }
@@ -199,8 +212,7 @@ void Scene_manager::make_brushes()
         );
     }
 
-    // Platonic solids
-    if constexpr (true)
+    if constexpr (platonic_solids)
     {
         execution_queue.enqueue(
             [this]()
@@ -226,8 +238,7 @@ void Scene_manager::make_brushes()
         );
     }
 
-    // Sphere
-    if constexpr (true)
+    if constexpr (sphere)
     {
         execution_queue.enqueue(
             [this]()
@@ -237,12 +248,6 @@ void Scene_manager::make_brushes()
                 const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 constexpr bool instantiate = true;
 
-                //make_brush(
-                //    instantiate,
-                //    make_box(3.0f, 2.0f, 4.0f),
-                //    context,
-                //    erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{1.5f, 1.0f, 2.0f})
-                //);
                 make_brush(
                     instantiate,
                     make_sphere(1.0f, 24 * 4, 6 * 4),
@@ -253,8 +258,7 @@ void Scene_manager::make_brushes()
         );
     }
 
-    // Torus
-    if constexpr (true)
+    if constexpr (torus)
     {
         execution_queue.enqueue(
             [this]()
@@ -299,7 +303,13 @@ void Scene_manager::make_brushes()
                         const glm::dquat q        = glm::angleAxis(theta, forward);
                         const glm::dmat3 m        = glm::toMat3(q);
 
-                        torus_shape->add_child_shape(capsule, glm::mat3{m}, glm::vec3{position});
+                        torus_shape->add_child_shape(
+                            capsule,
+                            erhe::physics::Transform{
+                                glm::mat3{m},
+                                glm::vec3{position}
+                            }
+                        );
                     }
                     return torus_shape;
                 };
@@ -319,8 +329,7 @@ void Scene_manager::make_brushes()
         );
     }
 
-    // Cylinder and cone
-    if constexpr (false)
+    if constexpr (cylinder)
     {
         execution_queue.enqueue(
             [this]()
@@ -343,7 +352,10 @@ void Scene_manager::make_brushes()
                 );
             }
         );
+    }
 
+    if constexpr (cone)
+    {
         execution_queue.enqueue(
             [this]()
             {
@@ -366,8 +378,7 @@ void Scene_manager::make_brushes()
         );
     }
 
-    // Test scene for anisotropic debugging
-    if constexpr (false)
+    if constexpr (anisotropic_test_object)
     {
         ZoneScopedN("test scene for anisotropic debugging");
 
@@ -392,8 +403,7 @@ void Scene_manager::make_brushes()
         z_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
     }
 
-    // Johnson solids
-    if constexpr (false)
+    if constexpr (johnson_solids)
     {
         execution_queue.enqueue(
             [this]()
@@ -460,7 +470,6 @@ void Scene_manager::add_floor()
     if (instance.node_physics)
     {
         add_to_physics_world(
-            m_scene_root->scene(),
             m_scene_root->physics_world(),
             instance.node_physics
         );
@@ -577,7 +586,6 @@ void Scene_manager::make_mesh_nodes()
         if (instance.node_physics)
         {
             add_to_physics_world(
-                m_scene_root->scene(),
                 m_scene_root->physics_world(),
                 instance.node_physics
             );
@@ -683,7 +691,7 @@ void Scene_manager::make_punctual_light_nodes()
             name,
             position,
             color,
-            intensity
+            intensity * 0.2f
         );
     }
 
@@ -782,7 +790,7 @@ void Scene_manager::add_scene()
 {
     ZoneScoped;
 
-    m_scene_root->light_layer()->ambient_light = vec4{0.1f, 0.15f, 0.2f, 0.0f};
+    m_scene_root->light_layer()->ambient_light = 0.2f * vec4{0.1f, 0.15f, 0.2f, 0.0f};
 
     make_brushes();
     make_mesh_nodes();

@@ -67,6 +67,7 @@ using std::make_shared;
 void Application::run()
 {
     get<Window>()->get_context_window()->enter_event_loop();
+    m_components.cleanup_components();
 }
 
 auto Application::initialize_components(int argc, char** argv)
@@ -86,7 +87,6 @@ auto Application::initialize_components(int argc, char** argv)
         m_components.add(shared_from_this());
         m_components.add(gl_context_provider);
         m_components.add(make_shared<Brushes             >());
-        m_components.add(make_shared<Camera_properties   >());
         m_components.add(make_shared<Debug_draw          >());
         m_components.add(make_shared<Editor_rendering    >());
         m_components.add(make_shared<Editor_time         >());
@@ -100,7 +100,6 @@ auto Application::initialize_components(int argc, char** argv)
         m_components.add(make_shared<Icon_set            >());
         m_components.add(make_shared<Id_renderer         >());
         m_components.add(make_shared<Layers_window       >());
-        m_components.add(make_shared<Light_properties    >());
         m_components.add(make_shared<Line_renderer       >());
         m_components.add(make_shared<Material_properties >());
         m_components.add(make_shared<Mesh_memory         >());

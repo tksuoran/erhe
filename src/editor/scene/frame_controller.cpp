@@ -4,7 +4,6 @@
 #include "erhe/toolkit/math_util.hpp"
 #include "log.hpp"
 
-//#define GLM_SWIZZLE_XYZW
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 

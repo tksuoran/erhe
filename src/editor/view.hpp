@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tools/pointer_context.hpp"
+
 #include "erhe/components/component.hpp"
 #include "erhe/toolkit/view.hpp"
 
@@ -21,15 +22,19 @@ class Editor_view
 {
 public:
     static constexpr std::string_view c_name{"Editor_view"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
     Editor_view();
     ~Editor_view() override;
 
     // Implements Component
-    void connect() override;
+    auto get_type_hash() const -> uint32_t override { return hash; }
+    void connect      () override;
 
     // Implements View
     void update        () override;
     void on_enter      () override;
+    void on_exit       () override;
     void on_mouse_move (const double x, const double y) override;
     void on_mouse_click(const erhe::toolkit::Mouse_button button, const int count) override;
     void on_key_press  (const erhe::toolkit::Keycode code, const uint32_t modifier_mask) override;
@@ -41,14 +46,14 @@ public:
     Pointer_context pointer_context;
 
 private:
-    std::shared_ptr<Editor_rendering> m_editor_rendering;
-    std::shared_ptr<Editor_time>      m_editor_time;
-    std::shared_ptr<Editor_tools>     m_editor_tools;
-    std::shared_ptr<Fly_camera_tool>  m_fly_camera_tool;
-    std::shared_ptr<Id_renderer>      m_id_renderer;
-    std::shared_ptr<Operation_stack>  m_operation_stack;
-    std::shared_ptr<Scene_manager>    m_scene_manager;
-    std::shared_ptr<Scene_root>       m_scene_root;
+    Editor_rendering* m_editor_rendering{nullptr};
+    Editor_time*      m_editor_time     {nullptr};
+    Editor_tools*     m_editor_tools    {nullptr};
+    Fly_camera_tool*  m_fly_camera_tool {nullptr};
+    Id_renderer*      m_id_renderer     {nullptr};
+    Operation_stack*  m_operation_stack {nullptr};
+    Scene_manager*    m_scene_manager   {nullptr};
+    Scene_root*       m_scene_root      {nullptr};
 };
 
 }

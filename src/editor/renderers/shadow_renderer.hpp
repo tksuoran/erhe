@@ -1,6 +1,7 @@
 #pragma once
 
 #include "renderers/base_renderer.hpp"
+
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/scene/viewport.hpp"
 #include "erhe/components/component.hpp"
@@ -33,10 +34,13 @@ class Shadow_renderer
 {
 public:
     static constexpr std::string_view c_name{"Shadow_renderer"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
     Shadow_renderer ();
     ~Shadow_renderer() override;
 
     // Implements Component
+    auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -54,9 +58,11 @@ public:
 
 private:
     erhe::scene::Viewport                                     m_viewport{0, 0, 0, 0, true};
-    std::shared_ptr<Configuration>                            m_configuration;
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker>     m_pipeline_state_tracker;
-    std::shared_ptr<Mesh_memory>                              m_mesh_memory;
+
+    Configuration*                        m_configuration         {nullptr};
+    erhe::graphics::OpenGL_state_tracker* m_pipeline_state_tracker{nullptr};
+    Mesh_memory*                          m_mesh_memory           {nullptr};
+
     erhe::graphics::Pipeline                                  m_pipeline;
     std::unique_ptr<erhe::graphics::Vertex_input_state>       m_vertex_input;
     std::unique_ptr<erhe::graphics::Texture>                  m_texture;

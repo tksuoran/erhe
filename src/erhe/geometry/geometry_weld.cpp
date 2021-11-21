@@ -2,11 +2,11 @@
 #include "erhe/geometry/log.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/toolkit/math_util.hpp"
+#define ERHE_TRACY_NO_GL 1
+#include "erhe/toolkit/tracy_client.hpp"
 
 #include <glm/glm.hpp>
 
-#define ERHE_TRACY_NO_GL 1
-#include "erhe/toolkit/tracy_client.hpp"
 
 namespace erhe::geometry
 {

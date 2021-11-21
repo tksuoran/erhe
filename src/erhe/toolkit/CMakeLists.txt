@@ -12,7 +12,7 @@ set(source_list
     window.hpp
 )
 
-if (WIN32)
+if (CMAKE_SYSTEM_NAME MATCHES "(Windows|MSYS)")
     list(APPEND source_list
         space_mouse.cpp
         space_mouse.hpp
@@ -46,10 +46,10 @@ target_link_libraries(
     Microsoft.GSL::GSL
 )
 
-if (WIN32)
+if (CMAKE_SYSTEM_NAME MATCHES "(Windows|MSYS)")
     target_link_libraries(
         ${_target}
-        PRIVATE
+        PUBLIC
         hidapi
     )
 endif ()
@@ -63,6 +63,7 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
 endif()
 
 target_strict_cxx(${_target})
+set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
 
 foreach(source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)

@@ -49,11 +49,11 @@ public:
     Components    (Components&&)      = delete;
     void operator=(Components&&)      = delete;
 
-    auto add                                   (const std::shared_ptr<Component>& component) -> const std::shared_ptr<Component>&;
+    auto add                                   (const std::shared_ptr<Component>& component) -> Component&;
     void show_dependencies                     () const;
     void cleanup_components                    ();
     void launch_component_initialization       ();
-    auto get_component_to_initialize           (const bool in_worker_thread) -> std::shared_ptr<Component>;
+    auto get_component_to_initialize           (const bool in_worker_thread) -> Component*;
     auto is_component_initialization_complete  () -> bool;
     void wait_component_initialization_complete();
     void on_thread_exit                        ();
@@ -66,13 +66,13 @@ public:
 private:
     void initialize_component(const bool in_worker_thread);
 
-    std::mutex                           m_mutex;
-    bool                                 m_is_ready{false};
-    std::condition_variable              m_component_initialized;
-    std::set<std::shared_ptr<Component>> m_uninitialized_components;
-    std::unique_ptr<IExecution_queue>    m_execution_queue;
-    size_t                               m_initialize_component_count_worker_thread{0};
-    size_t                               m_initialize_component_count_main_thread  {0};
+    std::mutex                        m_mutex;
+    bool                              m_is_ready{false};
+    std::condition_variable           m_component_initialized;
+    std::set<Component*>              m_uninitialized_components;
+    std::unique_ptr<IExecution_queue> m_execution_queue;
+    size_t                            m_initialize_component_count_worker_thread{0};
+    size_t                            m_initialize_component_count_main_thread  {0};
 
     static constexpr bool s_parallel_component_initialization{true};
 };

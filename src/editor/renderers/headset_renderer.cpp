@@ -8,6 +8,7 @@
 #include "renderers/mesh_memory.hpp"
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
+
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/graphics/framebuffer.hpp"
@@ -284,8 +285,8 @@ void Headset_renderer::initialize_component()
     auto* view_root   = m_scene_manager->get_view_camera().get();
 
     m_controller_visualization = std::make_unique<Controller_visualization>(
-        *mesh_memory.get(),
-        *m_scene_root.get(),
+        *mesh_memory,
+        *m_scene_root,
         view_root
     );
 }

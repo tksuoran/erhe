@@ -83,6 +83,7 @@ target_link_libraries(
 )
 
 target_strict_cxx(${_target})
+set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
 
 foreach(source IN LISTS source_list)
     get_filename_component(source_path "${source}" PATH)

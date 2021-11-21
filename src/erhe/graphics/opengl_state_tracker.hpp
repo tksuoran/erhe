@@ -10,7 +10,9 @@
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/sampler.hpp"
+
 #include <gsl/pointers>
+
 #include <memory>
 #include <stack>
 
@@ -25,11 +27,15 @@ class OpenGL_state_tracker
 {
 public:
     static constexpr std::string_view c_name{"erhe::graphics::OpenGL_state_tracker"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     OpenGL_state_tracker ();
     ~OpenGL_state_tracker() override;
     OpenGL_state_tracker (const OpenGL_state_tracker&) = delete;
     void operator=       (const OpenGL_state_tracker&) = delete;
+
+    // Implements Component
+    auto get_type_hash() const -> uint32_t override { return hash; }
 
     void on_thread_exit () override;
     void on_thread_enter() override;

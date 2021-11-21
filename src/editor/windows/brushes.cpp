@@ -13,14 +13,14 @@
 
 #include "erhe/geometry/operation/clone.hpp"
 #include "erhe/geometry/geometry.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 
-#include "imgui.h"
-
 #include <glm/gtx/transform.hpp>
+#include <imgui.h>
 
 namespace editor
 {
@@ -43,7 +43,8 @@ Brush_create_context::Brush_create_context(
 }
 
 Brushes::Brushes()
-    : erhe::components::Component(c_name)
+    : erhe::components::Component{c_name}
+    , Imgui_window               {c_title}
 {
 }
 
@@ -454,6 +455,8 @@ void Brushes::update_mesh()
 
 void Brushes::imgui(Pointer_context&)
 {
+    using namespace erhe::imgui;
+
     ImGui::Begin("Brushes");
 
     ImGui::InputFloat("Hover scale",     &debug_info.hover_frame_scale);
@@ -486,8 +489,8 @@ void Brushes::imgui(Pointer_context&)
             "Snap to Grid",
             &m_snap_to_grid,
             m_snap_to_hover_polygon
-                ? Imgui_window::Item_mode::disabled
-                : Imgui_window::Item_mode::normal
+                ? Item_mode::disabled
+                : Item_mode::normal
         );
     }
     ImGui::End();
@@ -501,8 +504,9 @@ void Brushes::imgui(Pointer_context&)
         {
             const bool button_pressed = make_button(
                 m_material_names[i],
-                (m_selected_material == i) ? Item_mode::active
-                                           : Item_mode::normal,
+                (m_selected_material == i)
+                    ? Item_mode::active
+                    : Item_mode::normal,
                 button_size
             );
             if (button_pressed)

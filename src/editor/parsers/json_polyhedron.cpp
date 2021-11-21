@@ -81,6 +81,7 @@ auto Json_library::make_geometry(const std::string& key_name) const
             }
         }
     }
+    geometry.flip_reversed_polygons();
     geometry.make_point_corners();
     geometry.build_edges();
     geometry.generate_polygon_texture_coordinates();

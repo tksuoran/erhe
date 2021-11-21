@@ -1,15 +1,17 @@
 #include "tools/grid_tool.hpp"
 #include "renderers/line_renderer.hpp"
 #include "tools.hpp"
+
 #include "erhe/toolkit/tracy_client.hpp"
 
-#include "imgui.h"
+#include <imgui.h>
 
 namespace editor
 {
 
 Grid_tool::Grid_tool()
     : erhe::components::Component{c_name}
+    , Imgui_window               {c_title}
 {
 }
 
@@ -105,7 +107,7 @@ void Grid_tool::imgui(Pointer_context&)
 {
     ZoneScoped;
 
-    ImGui::Begin      ("Grid");
+    ImGui::Begin      (c_title.data());
     ImGui::Checkbox   ("Enable",     &m_enable);
     ImGui::SliderFloat("Cell Size",  &m_cell_size,  0.0f, 10.0f);
     ImGui::SliderInt  ("Cell Div",   &m_cell_div,   0,    10);
