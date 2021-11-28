@@ -1,8 +1,6 @@
 #include "erhe/geometry/operation/subdivide.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/log.hpp"
-
-#define ERHE_TRACY_NO_GL 1
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include <glm/glm.hpp>

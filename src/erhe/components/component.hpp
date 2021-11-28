@@ -33,17 +33,20 @@ public:
     virtual void update_once_per_frame(const Time_context&) = 0;
 };
 
+enum class Component_state : unsigned int
+{
+    Constructed,
+    Connected,
+    Initializing,
+    Ready,
+    Deinitializing,
+    Deinitialized
+};
+
+auto c_str(const Component_state state) -> const char*;
+
 class Component
 {
-public:
-    enum class Component_state : unsigned int
-    {
-        Constructed,
-        Connected,
-        Initializing,
-        Ready
-    };
-
 protected:
     Component     (const Component&) = delete;
     Component     (Component&&)      = delete;
@@ -52,7 +55,7 @@ protected:
 
     explicit Component(const std::string_view name);
 
-    virtual ~Component() = default;
+    virtual ~Component();
 
 public:
     virtual void connect() {};
@@ -80,67 +83,43 @@ public:
     {
         const auto component = get<T>();
         VERIFY(component);
-        initialization_depends_on(component);
+        depends_on(component);
         return component;
     }
 
-    virtual auto get_type_hash() const -> uint32_t = 0;
+    virtual auto get_type_hash                  () const -> uint32_t = 0;
+    virtual void initialize_component           () {}
+    virtual void on_thread_exit                 () {}
+    virtual void on_thread_enter                () {}
+    virtual auto processing_requires_main_thread() const -> bool;
 
-    virtual void initialize_component() {}
-
-    virtual void on_thread_exit() {}
-
-    virtual void on_thread_enter() {}
-
-    virtual auto initialization_requires_main_thread() const -> bool
-    {
-        return false;
-    }
-
-    auto name() const -> std::string_view
-    {
-        return m_name;
-    }
-
-    auto get_state() const -> Component_state;
-
-    auto is_registered() const -> bool
-    {
-        return m_components != nullptr;
-    }
-
-    void register_as_component(Components* components)
-    {
-        m_components = components;
-    }
-
-    void unregister()
-    {
-        m_components = nullptr;
-    }
-
-    auto is_ready_to_initialize(const bool in_worker_thread) const -> bool;
-
-    void remove_dependency(Component* component);
-
-    void initialization_depends_on(Component* dependency);
-
-    auto dependencies() -> const std::set<Component*>&
-    {
-        return m_dependencies;
-    }
-
-    void set_connected();
-    void set_initializing();
-    void set_ready();
+    auto name                    () const -> std::string_view;
+    auto get_state               () const -> Component_state;
+    auto is_registered           () const -> bool;
+    void register_as_component   (Components* components);
+    auto is_ready_to_initialize  (const bool in_worker_thread) const -> bool;
+    auto is_ready_to_deinitialize() const -> bool;
+    void component_initialized   (Component* component);
+    void component_deinitialized (Component* component);
+    void depends_on              (Component* dependency);
+    auto dependencies            () -> const std::set<Component*>&;
+    auto depended_by             () -> const std::set<Component*>&;
+    void set_connected           ();
+    void set_initializing        ();
+    void set_ready               ();
+    void set_deinitializing      ();
 
 protected:
     Components*          m_components{nullptr};
 
 private:
+    void add_depended_by(Component* component);
+    void unregister     ();
+
     std::string_view     m_name;
-    Component_state      m_state      {Component_state::Constructed};
+    Component_state      m_state{Component_state::Constructed};
     std::set<Component*> m_dependencies;
+    std::set<Component*> m_depended_by;
 };
 
 } // namespace erhe::components

@@ -29,9 +29,8 @@ public:
     }
 
     void add_child_shape(
-        std::shared_ptr<ICollision_shape>,
-        const glm::mat3,
-        const glm::vec3
+        const std::shared_ptr<ICollision_shape>&,
+        const Transform
     ) override
     {
         assert(false);
@@ -39,8 +38,7 @@ public:
 
     virtual void calculate_principal_axis_transform(
         const std::vector<float>& /*child_masses*/,
-        glm::mat3&                /*principal_transform_basis*/,
-        glm::vec3&                /*principal_transform_origin*/,
+        Transform&                /*principal_transform*/,
         glm::vec3&                /*inertia*/
     ) override
     {

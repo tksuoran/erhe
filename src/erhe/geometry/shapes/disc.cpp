@@ -1,6 +1,4 @@
 #include "erhe/geometry/shapes/disc.hpp"
-
-#define ERHE_TRACY_NO_GL 1
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include <glm/glm.hpp>
@@ -156,7 +154,7 @@ public:
             polygon_centroids->put(polygon_id, vec3{0.0f, 0.0f, 0.0f});
             polygon_normals->put(polygon_id, vec3{0.0f, 0.0f, 1.0f});
 
-            for (int slice = slice_count - 1; slice >= 0; --slice)
+            for (int slice = 0; slice < slice_count; ++slice)
             {
                 make_corner(polygon_id, slice, 0);
             }
@@ -184,9 +182,9 @@ public:
                 polygon_normals->put(polygon_id, vec3{0.0f, 0.0f, 1.0f});
                 if ((stack == 0) && (inner_radius == 0.0))
                 {
-                    const Corner_id tip_corner_id = make_corner(polygon_id, slice, stack);
-                    make_corner(polygon_id, slice + 1, stack + 1);
                     make_corner(polygon_id, slice, stack + 1);
+                    make_corner(polygon_id, slice + 1, stack + 1);
+                    const Corner_id tip_corner_id = make_corner(polygon_id, slice, stack);
 
                     const vec2 t1               = point_texcoords->get(get_point(slice, stack));
                     const vec2 t2               = point_texcoords->get(get_point(slice + 1, stack));
@@ -195,10 +193,10 @@ public:
                 }
                 else
                 {
-                    make_corner(polygon_id, slice + 1, stack + 1);
-                    make_corner(polygon_id, slice, stack + 1);
-                    make_corner(polygon_id, slice, stack);
                     make_corner(polygon_id, slice + 1, stack);
+                    make_corner(polygon_id, slice, stack);
+                    make_corner(polygon_id, slice, stack + 1);
+                    make_corner(polygon_id, slice + 1, stack + 1);
                 }
             }
         }
@@ -221,7 +219,7 @@ auto make_disc(
         "disc",
         [=](auto& geometry)
         {
-        Disc_builder builder{geometry, outer_radius, inner_radius, slice_count, stack_count};
+            Disc_builder builder{geometry, outer_radius, inner_radius, slice_count, stack_count};
             builder.build();
         }
     };

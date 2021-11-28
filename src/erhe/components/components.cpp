@@ -2,8 +2,6 @@
 #include "erhe/components/component.hpp"
 #include "erhe/components/log.hpp"
 #include "erhe/toolkit/verify.hpp"
-
-#define ERHE_TRACY_NO_GL 1
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include <fmt/ostream.h>
@@ -17,6 +15,22 @@ namespace erhe::components
 
 using std::set;
 using std::shared_ptr;
+
+namespace {
+
+constexpr bool s_parallel_component_initialization{false};
+
+}
+
+auto Components::parallel_component_initialization() -> bool
+{
+    return s_parallel_component_initialization;
+}
+
+auto Components::serial_component_initialization() -> bool
+{
+    return !parallel_component_initialization();
+}
 
 Components::Components()
 {
@@ -47,16 +61,89 @@ auto Components::add(const shared_ptr<Component>& component)
     return *component.get();
 }
 
+void Components::deitialize_component(Component* component)
+{
+    {
+        auto* fixed_step_update = dynamic_cast<IUpdate_fixed_step*>(component);
+        if (fixed_step_update != nullptr)
+        {
+            const auto erase_count = fixed_step_updates.erase(fixed_step_update);
+            if (erase_count == 0)
+            {
+                log_components.error("Component/IUpdate_fixed_step {} not found\n", component->name());
+            }
+        }
+    }
+
+    {
+        auto* once_per_frame_update = dynamic_cast<IUpdate_once_per_frame*>(component);
+        if (once_per_frame_update != nullptr)
+        {
+            const auto erase_count = once_per_frame_updates.erase(once_per_frame_update);
+            if (erase_count == 0)
+            {
+                log_components.error("Component/IUpdate_once_per_frame {} not found\n", component->name());
+            }
+        }
+    }
+
+    {
+        const auto erase_count = m_components_to_process.erase(component);
+        if (erase_count != 1)
+        {
+            log_components.error("Component {} not found in components to process\n", component->name());
+        }
+    }
+
+    // This must be last
+    {
+        const auto erase_count = erase_if(
+            components,
+            [component](const std::shared_ptr<Component>& shared_component)
+            {
+                return shared_component.get() == component;
+            }
+        );
+        if (erase_count == 0)
+        {
+            log_components.error("Component {} not found\n", component->name());
+        }
+        else if (erase_count != 1)
+        {
+            log_components.error("Component {} found more than once: {}\n", component->name(), erase_count);
+        }
+    }
+}
+
 void Components::cleanup_components()
 {
     ZoneScoped;
 
-    for (const auto& component : components)
-    {
-        component->unregister();
-    }
+    queue_all_components_to_be_processed();
 
-    components.clear();
+    log_components.info("Deinitializing {} Components:\n", m_components_to_process.size());
+    show_depended_by();
+
+    for (;;)
+    {
+        auto* component = get_component_to_deinitialize();
+        if (component == nullptr)
+        {
+            break;
+        }
+        log_components.info("Deinitializing {}\n", component->name());
+        deitialize_component(component);
+        for (auto component_ : m_components_to_process)
+        {
+            component_->component_deinitialized(component);
+        }
+    }
+    if (components.size() > 0)
+    {
+        log_components.error("Not all components were deinitialized\n");
+        show_depended_by();
+        components.clear();
+    }
 }
 
 IExecution_queue::~IExecution_queue() = default;
@@ -113,7 +200,7 @@ void Components::show_dependencies() const
         log_components.info(
             "    {} - {}:\n",
             component->name(),
-            component->initialization_requires_main_thread()
+            component->processing_requires_main_thread()
                 ? "main"
                 : "worker"
         );
@@ -122,9 +209,28 @@ void Components::show_dependencies() const
             log_components.info(
                 "        {} - {}\n",
                 dependency->name(),
-                dependency->initialization_requires_main_thread()
+                dependency->processing_requires_main_thread()
                     ? "main"
                     : "worker"
+            );
+        }
+    }
+}
+
+void Components::show_depended_by() const
+{
+    log_components.info("Component depended by:\n");
+    for (auto const& component : components)
+    {
+        log_components.info(
+            "    {}:\n",
+            component->name()
+        );
+        for (auto const& depended_by : component->depended_by())
+        {
+            log_components.info(
+                "        {}\n",
+                depended_by->name()
             );
         }
     }
@@ -154,20 +260,33 @@ void Components::initialize_component(const bool in_worker_thread)
 
         std::lock_guard<std::mutex> lock(m_mutex);
         component->set_ready();
-        m_uninitialized_components.erase(component);
-        for (auto component_ : m_uninitialized_components)
+        m_components_to_process.erase(component);
+        for (auto component_ : m_components_to_process)
         {
-            component_->remove_dependency(component);
+            component_->component_initialized(component);
         }
         const std::string message_text = fmt::format("{} initialized", component->name());
         TracyMessage(message_text.c_str(), message_text.length());
-        m_component_initialized.notify_all();
-        if (m_uninitialized_components.empty())
+        m_component_processed.notify_all();
+        if (m_components_to_process.empty())
         {
             m_is_ready = true;
             TracyMessageL("all components initialized");
         }
     }
+}
+
+void Components::queue_all_components_to_be_processed()
+{
+    std::transform(
+        components.begin(),
+        components.end(),
+        std::inserter(m_components_to_process, m_components_to_process.begin()),
+        [](const std::shared_ptr<Component>& c) -> Component*
+        {
+            return c.get();
+        }
+    );
 }
 
 void Components::launch_component_initialization()
@@ -180,7 +299,7 @@ void Components::launch_component_initialization()
     {
         component->connect();
         component->set_connected();
-        if (component->initialization_requires_main_thread())
+        if (component->processing_requires_main_thread())
         {
             ++m_initialize_component_count_main_thread;
         }
@@ -191,20 +310,11 @@ void Components::launch_component_initialization()
     }
 
     show_dependencies();
+    queue_all_components_to_be_processed();
 
-    std::transform(
-        components.begin(),
-        components.end(),
-        std::inserter(m_uninitialized_components, m_uninitialized_components.begin()),
-        [](const std::shared_ptr<Component>& c) -> Component*
-        {
-            return c.get();
-        }
-    );
+    log_components.info("Initializing {} Components:\n", m_components_to_process.size());
 
-    log_components.info("Initializing {} Components:\n", m_initialize_component_count_worker_thread);
-
-    if constexpr (s_parallel_component_initialization)
+    if (parallel_component_initialization())
     {
         m_execution_queue = std::make_unique<Concurrent_execution_queue>();
     }
@@ -213,12 +323,11 @@ void Components::launch_component_initialization()
         m_execution_queue = std::make_unique<Serial_execution_queue>();
     }
 
-    constexpr bool in_worker_thread = s_parallel_component_initialization;
-
+    const bool in_worker_thread = parallel_component_initialization();
     for (size_t i = 0; i < m_initialize_component_count_worker_thread; ++i)
     {
         m_execution_queue->enqueue(
-            [this]()
+            [this, in_worker_thread]()
             {
                 initialize_component(in_worker_thread);
             }
@@ -231,7 +340,7 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
-        if (m_uninitialized_components.empty())
+        if (m_components_to_process.empty())
         {
             FATAL("No uninitialized component found\n");
         }
@@ -242,16 +351,14 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             const auto i = std::find_if(
-                m_uninitialized_components.begin(),
-                m_uninitialized_components.end(),
+                m_components_to_process.begin(),
+                m_components_to_process.end(),
                 [in_worker_thread](auto& component)
                 {
-                    return
-                        component->get_state() == Component::Component_state::Connected &&
-                        component->is_ready_to_initialize(in_worker_thread);
+                    return component->is_ready_to_initialize(in_worker_thread);
                 }
             );
-            if (i != m_uninitialized_components.end())
+            if (i != m_components_to_process.end())
             {
                 auto component = *i;
                 component->set_initializing();
@@ -259,13 +366,40 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
             }
         }
 
+        if (serial_component_initialization())
+        {
+            log_components.error("no component to initialize\n");
+            abort();
+        }
+
         {
             ZoneScopedNC("wait", 0x444444);
 
             std::unique_lock<std::mutex> unique_lock(m_mutex);
-            m_component_initialized.wait(unique_lock);
+            m_component_processed.wait(unique_lock);
         }
     }
+}
+
+auto Components::get_component_to_deinitialize() -> Component*
+{
+    const auto i = std::find_if(
+        m_components_to_process.begin(),
+        m_components_to_process.end(),
+        [](auto& component)
+        {
+            const bool is_ready = component->is_ready_to_deinitialize();
+            return is_ready;
+        }
+    );
+    if (i == m_components_to_process.end())
+    {
+        log_components.error("Unable to find component to deinitialize\n");
+        return nullptr;
+    }
+    auto component = *i;
+    component->set_deinitializing();
+    return component;
 }
 
 auto Components::is_component_initialization_complete() -> bool

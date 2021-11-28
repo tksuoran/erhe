@@ -1,7 +1,5 @@
 #include "erhe/geometry/operation/sqrt3_subdivision.hpp"
 #include "erhe/geometry/geometry.hpp"
-
-#define ERHE_TRACY_NO_GL 1
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include <fmt/format.h>
@@ -11,19 +9,19 @@
 namespace erhe::geometry::operation
 {
 
-//  Sqrt(3): Replace edges with two triangles               
-//  For each corner in the old polygon, add one triangle    
-//  (centroid, corner, opposite centroid)                   
-//                                                          
-//  Centroids:                                              
-//                                                          
-//  (1) q := 1/3 (p_i + p_j + p_k)                          
-//                                                          
-//  Refine old vertices:                                    
-//                                                          
-//  (2) S(p) := (1 - alpha_n) p + alpha_n 1/n SUM p_i       
-//                                                          
-//  (6) alpha_n = (4 - 2 cos(2Pi/n)) / 9                    
+//  Sqrt(3): Replace edges with two triangles
+//  For each corner in the old polygon, add one triangle
+//  (centroid, corner, opposite centroid)
+//
+//  Centroids:
+//
+//  (1) q := 1/3 (p_i + p_j + p_k)
+//
+//  Refine old vertices:
+//
+//  (2) S(p) := (1 - alpha_n) p + alpha_n 1/n SUM p_i
+//
+//  (6) alpha_n = (4 - 2 cos(2Pi/n)) / 9
 Sqrt3_subdivision::Sqrt3_subdivision(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {

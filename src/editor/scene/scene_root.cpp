@@ -6,6 +6,7 @@
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/physics/iworld.hpp"
+#include "erhe/raytrace/iscene.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -96,6 +97,8 @@ void Scene_root::initialize_component()
     m_brush_layers       .push_back(m_brush_layer.get());
 
     m_physics_world = erhe::physics::IWorld::create_unique();
+
+    m_raytrace_scene = erhe::raytrace::IScene::create_unique();
 }
 
 auto Scene_root::materials() -> vector<shared_ptr<Material>>&
@@ -199,6 +202,8 @@ auto Scene_root::make_mesh_node(
     mesh->data.primitives.emplace_back(primitive_geometry, material);
 
     mesh->set_parent_from_node(Transform::create_translation(position));
+
+    std::lock_guard<std::mutex> lock{m_scene_mutex};
 
     add_to_scene_layer(scene(), layer, mesh);
     if (parent != nullptr)

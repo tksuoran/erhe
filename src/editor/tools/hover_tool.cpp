@@ -102,12 +102,27 @@ void Hover_tool::render(const Render_context& render_context)
             position.x += 50.0f;
             position.z  = -0.5f;
             std::string text = fmt::format(
-                "{} {} {} {}",
-                m_hover_mesh->name(),
-                render_context.pointer_context->hover_primitive,
-                render_context.pointer_context->hover_local_index,
-                render_context.pointer_context->pointer_z
+                "{}",
+                m_hover_mesh->name()
+                //m_hover_mesh->position_in_world()
             );
+            //std::string text = fmt::format(
+            //    "{} {} {} {}",
+            //    m_hover_mesh->name(),
+            //    render_context.pointer_context->hover_primitive,
+            //    render_context.pointer_context->hover_local_index,
+            //    render_context.pointer_context->pointer_z
+            //);
+
+            //std::string text = fmt::format(
+            //    "I:{} RI:{} HP:{} RP:{}",
+            //    render_context.pointer_context->hover_local_index,
+            //    render_context.pointer_context->raytrace_local_index,
+            //    m_hover_position_world.has_value()
+            //        ? glm::vec3{m_hover_position_world.value()}
+            //        : glm::vec3{0.0},
+            //    render_context.pointer_context->raytrace_hit_position
+            //);
 
             render_context.text_renderer->print(
                 position,
@@ -120,11 +135,17 @@ void Hover_tool::render(const Render_context& render_context)
         }
         if (m_hover_position_world.has_value() && m_hover_normal.has_value())
         {
-            const glm::vec3 p0 = m_hover_position_world.value();
-            const glm::vec3 p1 = m_hover_position_world.value() + m_hover_normal.value();
-            render_context.line_renderer->set_line_color(0xffffffffu);
+            const glm::vec3 p0 = m_hover_position_world.value() + 0.1f * m_hover_normal.value();
+            const glm::vec3 p1 = m_hover_position_world.value() + 1.1f * m_hover_normal.value();
+            render_context.line_renderer->set_line_color(0xff0000ffu);
             render_context.line_renderer->add_lines( { {p0, p1} }, 10.0f);
         }
+        const glm::vec3 p0 = render_context.pointer_context->raytrace_hit_position;
+        const glm::vec3 p1 = p0 + render_context.pointer_context->raytrace_hit_normal;
+        const bool same_polygon = render_context.pointer_context->raytrace_local_index == render_context.pointer_context->hover_local_index;
+        const uint32_t color = same_polygon ? 0xffff0000u : 0xff00ff00u;
+        render_context.line_renderer->set_line_color(color);
+        render_context.line_renderer->add_lines( { {p0, p1} }, 10.0f);
     }
 }
 

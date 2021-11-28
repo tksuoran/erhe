@@ -11,9 +11,7 @@
 namespace editor
 {
 
-Render_style::Render_style()
-{
-}
+Render_style::Render_style() = default;
 
 Render_style::Render_style(const Configuration& configuration)
     : polygon_offset_factor{configuration.reverse_depth ? -1.0000f : 1.0000f}
@@ -39,8 +37,10 @@ void Viewport_config::initialize_component()
 {
     render_style_not_selected            = Render_style(*get<Configuration>());
     render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
+    render_style_not_selected.edge_lines = false;
 
-    render_style_selected     = Render_style(*get<Configuration>());
+    render_style_selected            = Render_style(*get<Configuration>());
+    render_style_selected.edge_lines = true;
 
     get<Editor_tools>()->register_imgui_window(this);
 }

@@ -42,18 +42,18 @@ public:
     auto world_from_texture() const -> glm::mat4;
 
     // Implements ICamera
-    void update         (const Viewport viewport)                override;
-    auto projection     () -> Projection*                        override;
-    auto projection     () const -> const Projection*            override;
-    auto clip_from_node () const -> glm::mat4                    override;
-    auto clip_from_world() const -> glm::mat4                    override;
-    auto node_from_clip () const -> glm::mat4                    override;
-    auto world_from_clip() const -> glm::mat4                    override;
+    void update         (const Viewport viewport)     override;
+    auto projection     () -> Projection*             override;
+    auto projection     () const -> const Projection* override;
+    auto clip_from_node () const -> glm::mat4         override;
+    auto clip_from_world() const -> glm::mat4         override;
+    auto node_from_clip () const -> glm::mat4         override;
+    auto world_from_clip() const -> glm::mat4         override;
 
     Type      type            {Type::directional};
     glm::vec3 color           {1.0f, 1.0f, 1.0f};
     float     intensity       {1.0f};
-    float     range           {100.0f};
+    float     range           {100.0f}; // TODO projection far?
     float     inner_spot_angle{glm::pi<float>() * 0.4f};
     float     outer_spot_angle{glm::pi<float>() * 0.5f};
     bool      cast_shadow     {true};

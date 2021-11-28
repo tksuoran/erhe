@@ -1,6 +1,4 @@
 #include "erhe/geometry/shapes/box.hpp"
-
-#define ERHE_TRACY_NO_GL 1
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include <glm/glm.hpp>
@@ -55,12 +53,12 @@ auto make_box(
             geometry.make_point( x, -y, -z, 1, 0); // 6
             geometry.make_point(-x, -y, -z, 0, 0); // 7
 
-            geometry.make_polygon( {0, 1, 2, 3} );
-            geometry.make_polygon( {0, 3, 7, 4} );
-            geometry.make_polygon( {0, 4, 5, 1} ); // top
-            geometry.make_polygon( {5, 4, 7, 6} );
-            geometry.make_polygon( {2, 1, 5, 6} );
-            geometry.make_polygon( {7, 3, 2, 6} ); // bottom
+            geometry.make_polygon_reverse( {0, 1, 2, 3} );
+            geometry.make_polygon_reverse( {0, 3, 7, 4} );
+            geometry.make_polygon_reverse( {0, 4, 5, 1} ); // top
+            geometry.make_polygon_reverse( {5, 4, 7, 6} );
+            geometry.make_polygon_reverse( {2, 1, 5, 6} );
+            geometry.make_polygon_reverse( {7, 3, 2, 6} ); // bottom
 
             geometry.make_point_corners();
             geometry.build_edges();
@@ -93,12 +91,12 @@ auto make_box(
             geometry.make_point(max_x, min_y, min_z, 1, 0); // 6
             geometry.make_point(min_x, min_y, min_z, 0, 0); // 7
 
-            geometry.make_polygon( {0, 1, 2, 3} );
-            geometry.make_polygon( {0, 3, 7, 4} );
-            geometry.make_polygon( {0, 4, 5, 1} ); // top
-            geometry.make_polygon( {5, 4, 7, 6} );
-            geometry.make_polygon( {2, 1, 5, 6} );
-            geometry.make_polygon( {7, 3, 2, 6} ); // bottom
+            geometry.make_polygon_reverse( {0, 1, 2, 3} );
+            geometry.make_polygon_reverse( {0, 3, 7, 4} );
+            geometry.make_polygon_reverse( {0, 4, 5, 1} ); // top
+            geometry.make_polygon_reverse( {5, 4, 7, 6} );
+            geometry.make_polygon_reverse( {2, 1, 5, 6} );
+            geometry.make_polygon_reverse( {7, 3, 2, 6} ); // bottom
 
             geometry.make_point_corners();
             geometry.build_edges();
@@ -314,16 +312,16 @@ public:
                 const float rel_z2 = 0.5f + static_cast<float>(z + 1) / size.z;
 
                 const Polygon_id top_id = geometry.make_polygon();
-                make_corner(top_id, x + 1, div.y, z,     unit_y, rel_x2, rel_z1);
-                make_corner(top_id, x + 1, div.y, z + 1, unit_y, rel_x2, rel_z2);
-                make_corner(top_id, x,     div.y, z + 1, unit_y, rel_x1, rel_z2);
                 make_corner(top_id, x,     div.y, z,     unit_y, rel_x1, rel_z1);
+                make_corner(top_id, x,     div.y, z + 1, unit_y, rel_x1, rel_z2);
+                make_corner(top_id, x + 1, div.y, z + 1, unit_y, rel_x2, rel_z2);
+                make_corner(top_id, x + 1, div.y, z,     unit_y, rel_x2, rel_z1);
 
                 const Polygon_id bottom_id = geometry.make_polygon();
-                make_corner(bottom_id, x,     -div.y, z,     -unit_y, rel_x1, rel_z1);
-                make_corner(bottom_id, x,     -div.y, z + 1, -unit_y, rel_x1, rel_z2);
-                make_corner(bottom_id, x + 1, -div.y, z + 1, -unit_y, rel_x2, rel_z2);
                 make_corner(bottom_id, x + 1, -div.y, z,     -unit_y, rel_x2, rel_z1);
+                make_corner(bottom_id, x + 1, -div.y, z + 1, -unit_y, rel_x2, rel_z2);
+                make_corner(bottom_id, x,     -div.y, z + 1, -unit_y, rel_x1, rel_z2);
+                make_corner(bottom_id, x,     -div.y, z,     -unit_y, rel_x1, rel_z1);
 
                 polygon_normals->put(top_id, unit_y);
                 polygon_normals->put(bottom_id, -unit_y);
@@ -334,16 +332,16 @@ public:
                 const float rel_y2 = 0.5f + static_cast<float>(y + 1) / size.y;
 
                 const Polygon_id back_id = geometry.make_polygon();
-                make_corner(back_id, x,     y,     div.z, unit_z, rel_x1, rel_y1);
-                make_corner(back_id, x,     y + 1, div.z, unit_z, rel_x1, rel_y2);
-                make_corner(back_id, x + 1, y + 1, div.z, unit_z, rel_x2, rel_y2);
                 make_corner(back_id, x + 1, y,     div.z, unit_z, rel_x2, rel_y1);
+                make_corner(back_id, x + 1, y + 1, div.z, unit_z, rel_x2, rel_y2);
+                make_corner(back_id, x,     y + 1, div.z, unit_z, rel_x1, rel_y2);
+                make_corner(back_id, x,     y,     div.z, unit_z, rel_x1, rel_y1);
 
                 const Polygon_id front_id = geometry.make_polygon();
-                make_corner(front_id, x + 1, y,     -div.z, -unit_z, rel_x2, rel_y1);
-                make_corner(front_id, x + 1, y + 1, -div.z, -unit_z, rel_x2, rel_y2);
-                make_corner(front_id, x,     y + 1, -div.z, -unit_z, rel_x1, rel_y2);
                 make_corner(front_id, x,     y,     -div.z, -unit_z, rel_x1, rel_y1);
+                make_corner(front_id, x,     y + 1, -div.z, -unit_z, rel_x1, rel_y2);
+                make_corner(front_id, x + 1, y + 1, -div.z, -unit_z, rel_x2, rel_y2);
+                make_corner(front_id, x + 1, y,     -div.z, -unit_z, rel_x2, rel_y1);
 
                 polygon_normals->put(back_id, unit_z);
                 polygon_normals->put(front_id, -unit_z);
@@ -361,16 +359,16 @@ public:
                 const float rel_y2 = 0.5f + static_cast<float>(y + 1) / size.y;
 
                 const Polygon_id right_id = geometry.make_polygon();
-                make_corner(right_id, div.x, y,     z,     unit_x, rel_y1, rel_z1);
-                make_corner(right_id, div.x, y,     z + 1, unit_x, rel_y1, rel_z2);
-                make_corner(right_id, div.x, y + 1, z + 1, unit_x, rel_y2, rel_z2);
                 make_corner(right_id, div.x, y + 1, z,     unit_x, rel_y2, rel_z1);
+                make_corner(right_id, div.x, y + 1, z + 1, unit_x, rel_y2, rel_z2);
+                make_corner(right_id, div.x, y,     z + 1, unit_x, rel_y1, rel_z2);
+                make_corner(right_id, div.x, y,     z,     unit_x, rel_y1, rel_z1);
 
                 const Polygon_id left_id = geometry.make_polygon();
-                make_corner(left_id, -div.x, y + 1, z,     -unit_x, rel_y2, rel_z1);
-                make_corner(left_id, -div.x, y + 1, z + 1, -unit_x, rel_y2, rel_z2);
-                make_corner(left_id, -div.x, y,     z + 1, -unit_x, rel_y1, rel_z2);
                 make_corner(left_id, -div.x, y,     z,     -unit_x, rel_y1, rel_z1);
+                make_corner(left_id, -div.x, y,     z + 1, -unit_x, rel_y1, rel_z2);
+                make_corner(left_id, -div.x, y + 1, z + 1, -unit_x, rel_y2, rel_z2);
+                make_corner(left_id, -div.x, y + 1, z,     -unit_x, rel_y2, rel_z1);
 
                 polygon_normals->put(right_id, unit_x);
                 polygon_normals->put(left_id, -unit_x);

@@ -99,7 +99,7 @@ public:
     public:
         uint32_t                           offset         {0};
         uint32_t                           length         {0};
-        std::shared_ptr<erhe::scene::Mesh> mesh           {nullptr};
+        std::shared_ptr<erhe::scene::Mesh> mesh           {};
         size_t                             primitive_index{0};
     };
 

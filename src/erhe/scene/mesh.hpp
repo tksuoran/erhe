@@ -8,6 +8,11 @@
 
 #include <vector>
 
+namespace erhe::geometry
+{
+    class Geometry;
+}
+
 namespace erhe::scene
 {
 

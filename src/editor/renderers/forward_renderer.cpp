@@ -46,7 +46,9 @@ Forward_renderer::Forward_renderer()
 {
 }
 
-Forward_renderer::~Forward_renderer() = default;
+Forward_renderer::~Forward_renderer()
+{
+}
 
 void Forward_renderer::connect()
 {
@@ -90,7 +92,7 @@ void Forward_renderer::initialize_component()
     m_pipeline_fill.shader_stages  = m_programs->standard.get();
     m_pipeline_fill.vertex_input   = m_vertex_input.get();
     m_pipeline_fill.input_assembly = &Input_assembly_state::triangles;
-    m_pipeline_fill.rasterization  = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_fill.rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth);
     m_pipeline_fill.depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
     m_pipeline_fill.color_blend    = &Color_blend_state::color_blend_disabled;
     m_pipeline_fill.viewport       = nullptr;
@@ -263,7 +265,7 @@ void Forward_renderer::initialize_component()
     m_pipeline_tool_hidden_stencil_pass.shader_stages  = m_programs->tool.get();
     m_pipeline_tool_hidden_stencil_pass.vertex_input   = m_vertex_input.get();
     m_pipeline_tool_hidden_stencil_pass.input_assembly = &Input_assembly_state::triangles;
-    m_pipeline_tool_hidden_stencil_pass.rasterization  = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_tool_hidden_stencil_pass.rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth);
     m_pipeline_tool_hidden_stencil_pass.depth_stencil  = &m_depth_stencil_tool_set_hidden;
     m_pipeline_tool_hidden_stencil_pass.color_blend    = &Color_blend_state::color_writes_disabled;
     m_pipeline_tool_hidden_stencil_pass.viewport       = nullptr;
@@ -273,7 +275,7 @@ void Forward_renderer::initialize_component()
     m_pipeline_tool_visible_stencil_pass.shader_stages  = m_programs->tool.get();
     m_pipeline_tool_visible_stencil_pass.vertex_input   = m_vertex_input.get();
     m_pipeline_tool_visible_stencil_pass.input_assembly = &Input_assembly_state::triangles;
-    m_pipeline_tool_visible_stencil_pass.rasterization  = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_tool_visible_stencil_pass.rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth);
     m_pipeline_tool_visible_stencil_pass.depth_stencil  = &m_depth_stencil_tool_set_visible;
     m_pipeline_tool_visible_stencil_pass.color_blend    = &Color_blend_state::color_writes_disabled;
     m_pipeline_tool_visible_stencil_pass.viewport       = nullptr;
@@ -283,7 +285,7 @@ void Forward_renderer::initialize_component()
     m_pipeline_tool_depth_clear_pass.shader_stages      = m_programs->tool.get();
     m_pipeline_tool_depth_clear_pass.vertex_input       = m_vertex_input.get();
     m_pipeline_tool_depth_clear_pass.input_assembly     = &Input_assembly_state::triangles;
-    m_pipeline_tool_depth_clear_pass.rasterization      = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_tool_depth_clear_pass.rasterization      = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth);
     m_pipeline_tool_depth_clear_pass.depth_stencil      = &Depth_stencil_state::depth_test_always_stencil_test_disabled;
     m_pipeline_tool_depth_clear_pass.color_blend        = &Color_blend_state::color_writes_disabled;
     m_pipeline_tool_depth_clear_pass.viewport           = nullptr;
@@ -293,7 +295,7 @@ void Forward_renderer::initialize_component()
     m_pipeline_tool_depth_pass.shader_stages            = m_programs->tool.get();
     m_pipeline_tool_depth_pass.vertex_input             = m_vertex_input.get();
     m_pipeline_tool_depth_pass.input_assembly           = &Input_assembly_state::triangles;
-    m_pipeline_tool_depth_pass.rasterization            = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_tool_depth_pass.rasterization            = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth);
     m_pipeline_tool_depth_pass.depth_stencil            = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
     m_pipeline_tool_depth_pass.color_blend              = &Color_blend_state::color_writes_disabled;
     m_pipeline_tool_depth_pass.viewport                 = nullptr;
@@ -303,7 +305,7 @@ void Forward_renderer::initialize_component()
     m_pipeline_tool_visible_color_pass.shader_stages    = m_programs->tool.get();
     m_pipeline_tool_visible_color_pass.vertex_input     = m_vertex_input.get();
     m_pipeline_tool_visible_color_pass.input_assembly   = &Input_assembly_state::triangles;
-    m_pipeline_tool_visible_color_pass.rasterization    = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_tool_visible_color_pass.rasterization    = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth);
     m_pipeline_tool_visible_color_pass.depth_stencil    = &m_depth_stencil_tool_test_for_visible;
     m_pipeline_tool_visible_color_pass.color_blend      = &Color_blend_state::color_blend_disabled;
     m_pipeline_tool_visible_color_pass.viewport         = nullptr;
@@ -313,7 +315,7 @@ void Forward_renderer::initialize_component()
     m_pipeline_tool_hidden_color_pass.shader_stages     = m_programs->tool.get();
     m_pipeline_tool_hidden_color_pass.vertex_input      = m_vertex_input.get();
     m_pipeline_tool_hidden_color_pass.input_assembly    = &Input_assembly_state::triangles;
-    m_pipeline_tool_hidden_color_pass.rasterization     = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_tool_hidden_color_pass.rasterization     = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth);
     m_pipeline_tool_hidden_color_pass.depth_stencil     = &m_depth_stencil_tool_test_for_hidden;
     m_pipeline_tool_hidden_color_pass.color_blend       = &m_color_blend_constant_point_six;
     m_pipeline_tool_hidden_color_pass.viewport          = nullptr;
@@ -322,23 +324,23 @@ void Forward_renderer::initialize_component()
     m_pipeline_edge_lines.shader_stages  = m_programs->wide_lines.get();
     m_pipeline_edge_lines.vertex_input   = m_vertex_input.get();
     m_pipeline_edge_lines.input_assembly = &Input_assembly_state::lines;
-    m_pipeline_edge_lines.rasterization  = &Rasterization_state::cull_mode_back_ccw;
-    m_pipeline_edge_lines.depth_stencil  =  Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
+    m_pipeline_edge_lines.rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth);
+    m_pipeline_edge_lines.depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
     m_pipeline_edge_lines.color_blend    = &Color_blend_state::color_blend_premultiplied;
     m_pipeline_edge_lines.viewport       = nullptr;
 
     m_pipeline_points.shader_stages  = m_programs->points.get();
     m_pipeline_points.vertex_input   = m_vertex_input.get();
     m_pipeline_points.input_assembly = &Input_assembly_state::points;
-    m_pipeline_points.rasterization  = &Rasterization_state::cull_mode_back_ccw;
-    m_pipeline_points.depth_stencil  =  Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
+    m_pipeline_points.rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth);
+    m_pipeline_points.depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
     m_pipeline_points.color_blend    = &Color_blend_state::color_blend_disabled;
     m_pipeline_points.viewport       = nullptr;
 
     m_pipeline_line_hidden_blend.shader_stages  = m_programs->wide_lines.get();
     m_pipeline_line_hidden_blend.vertex_input   = m_vertex_input.get();
     m_pipeline_line_hidden_blend.input_assembly = &Input_assembly_state::lines;
-    m_pipeline_line_hidden_blend.rasterization  = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_line_hidden_blend.rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth);
     m_pipeline_line_hidden_blend.depth_stencil  = &m_depth_hidden;
     m_pipeline_line_hidden_blend.color_blend    = &m_color_blend_constant_point_two;
     m_pipeline_line_hidden_blend.viewport       = nullptr;
@@ -346,7 +348,7 @@ void Forward_renderer::initialize_component()
     m_pipeline_brush_back.shader_stages  = m_programs->brush.get();
     m_pipeline_brush_back.vertex_input   = m_vertex_input.get();
     m_pipeline_brush_back.input_assembly = &Input_assembly_state::triangles;
-    m_pipeline_brush_back.rasterization  = &Rasterization_state::cull_mode_front;
+    m_pipeline_brush_back.rasterization  = Rasterization_state::cull_mode_front_cw(m_configuration->reverse_depth);
     m_pipeline_brush_back.depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
     m_pipeline_brush_back.color_blend    = &Color_blend_state::color_blend_premultiplied;
     m_pipeline_brush_back.viewport       = nullptr;
@@ -354,7 +356,7 @@ void Forward_renderer::initialize_component()
     m_pipeline_brush_front.shader_stages  = m_programs->brush.get();
     m_pipeline_brush_front.vertex_input   = m_vertex_input.get();
     m_pipeline_brush_front.input_assembly = &Input_assembly_state::triangles;
-    m_pipeline_brush_front.rasterization  = &Rasterization_state::cull_mode_back_ccw;
+    m_pipeline_brush_front.rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth);
     m_pipeline_brush_front.depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
     m_pipeline_brush_front.color_blend    = &Color_blend_state::color_blend_premultiplied;
     m_pipeline_brush_front.viewport       = nullptr;

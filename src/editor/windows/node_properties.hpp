@@ -7,6 +7,7 @@
 namespace erhe::scene
 {
     class Camera;
+    class ICamera;
     class Light;
     class Mesh;
     class Node;
@@ -16,6 +17,7 @@ namespace editor
 {
 
 class Scene_manager;
+class Scene_root;
 class Selection_tool;
 
 class Node_properties
@@ -39,12 +41,13 @@ public:
     void imgui(Pointer_context& pointer_context) override;
 
 private:
-    void camera_properties   (erhe::scene::Camera& camera) const;
+    void icamera_properties  (erhe::scene::ICamera& camera) const;
     void light_properties    (erhe::scene::Light& light) const;
     void mesh_properties     (erhe::scene::Mesh& mesh) const;
     void transform_properties(erhe::scene::Node& node) const;
 
     Scene_manager*  m_scene_manager {nullptr};
+    Scene_root*     m_scene_root    {nullptr};
     Selection_tool* m_selection_tool{nullptr};
 };
 

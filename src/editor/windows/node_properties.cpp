@@ -2,6 +2,7 @@
 #include "tools.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/scene_manager.hpp"
+#include "scene/scene_root.hpp"
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/imgui/imgui_helpers.hpp"
@@ -12,6 +13,7 @@
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/scene/scene.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -34,6 +36,7 @@ Node_properties::~Node_properties() = default;
 void Node_properties::connect()
 {
     m_scene_manager  = get<Scene_manager>();
+    m_scene_root     = get<Scene_root>();
     m_selection_tool = get<Selection_tool>();
 }
 
@@ -42,7 +45,7 @@ void Node_properties::initialize_component()
     get<Editor_tools>()->register_imgui_window(this);
 }
 
-void Node_properties::camera_properties(erhe::scene::Camera& camera) const
+void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
 {
     using namespace erhe::imgui;
 
@@ -158,9 +161,20 @@ void Node_properties::light_properties(erhe::scene::Light& light) const
         ImGui::SliderFloat("Inner Spot", &light.inner_spot_angle, 0.0f, glm::pi<float>());
         ImGui::SliderFloat("Outer Spot", &light.outer_spot_angle, 0.0f, glm::pi<float>());
     }
+    ImGui::SliderFloat("Range",     &light.range,     1.00f, 2000.0f, "%.3f", logarithmic);
     ImGui::SliderFloat("Intensity", &light.intensity, 0.01f, 2000.0f, "%.3f", logarithmic);
     ImGui::ColorEdit3 ("Color",     &light.color.x,   ImGuiColorEditFlags_Float);
+
+    if (m_scene_root != nullptr)
+    {
+        ImGui::ColorEdit3(
+            "Ambient",     
+            &m_scene_root->light_layer()->ambient_light.x,
+            ImGuiColorEditFlags_Float
+        );
+    }
 }
+
 
 void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
 {
@@ -266,10 +280,10 @@ void Node_properties::imgui(Pointer_context&)
             }
         }
 
-        auto camera = as_camera(node);
-        if (camera)
+        auto icamera = as_icamera(node);
+        if (icamera)
         {
-            camera_properties(*camera.get());
+            icamera_properties(*icamera.get());
         }
 
         auto light = as_light(node);

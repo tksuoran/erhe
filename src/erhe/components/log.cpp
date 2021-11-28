@@ -5,6 +5,6 @@ namespace erhe::components
 
 using namespace erhe::log;
 
-Category log_components(Color::WHITE, Color::GRAY, Level::LEVEL_TRACE);
+Category log_components(Color::WHITE, Color::GRAY, Level::LEVEL_INFO);
 
 } // namespace erhe::components

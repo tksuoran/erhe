@@ -115,7 +115,7 @@ void main(void)
 #else
 
 #if STRIP
-#if 0
+#if 1
     gl_Position = d; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();
     gl_Position = a; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();
     gl_Position = c; v_color = vs_color[1]; v_line_width = vs_line_width[1]; EmitVertex();

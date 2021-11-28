@@ -117,6 +117,15 @@ auto ICollision_shape::create_sphere_shape_shared(const float radius)
     return std::make_shared<Bullet_sphere_shape>(radius);
 }
 
+Bullet_collision_shape::Bullet_collision_shape(btCollisionShape* shape)
+    : m_bullet_collision_shape{shape}
+{
+}
+
+Bullet_collision_shape::~Bullet_collision_shape()
+{
+}
+
 void Bullet_collision_shape::calculate_local_inertia(float mass, glm::vec3& inertia) const
 {
     btVector3 bulletInertia{inertia.x, inertia.y, inertia.z};
@@ -130,8 +139,8 @@ auto Bullet_collision_shape::is_convex() const -> bool
 }
 
 void Bullet_collision_shape::add_child_shape(
-    std::shared_ptr<ICollision_shape> /*shape*/,
-    Transform                         /*transform*/
+    const std::shared_ptr<ICollision_shape>& /*shape*/,
+    const Transform                          /*transform*/
 )
 {
     log_physics.error("Bullet_collision_shape::Bullet_collision_shape::add_child_shape() called\n");

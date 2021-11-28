@@ -1,6 +1,7 @@
 #include "erhe/scene/projection.hpp"
 #include "erhe/scene/transform.hpp"
 #include "erhe/scene/viewport.hpp"
+#include "erhe/toolkit/math_util.hpp"
 
 namespace erhe::scene
 {
@@ -8,99 +9,135 @@ namespace erhe::scene
 void Projection::update(
     Transform&     transform,
     const Viewport viewport
-) const
+)
 {
-    const auto clip_range = viewport.reverse_depth ? Clip_range{z_far, z_near} : Clip_range{z_near, z_far};
+    last_aspect_ratio = viewport.aspect_ratio();
+    const auto m = get_projection_matrix(last_aspect_ratio, viewport.reverse_depth);
+    transform.set(m, glm::inverse(m));
+}
+
+auto Projection::get_projection_matrix(
+    const float aspect_ratio,
+    const bool  reverse_depth
+) const -> glm::mat4
+{
+    const auto clip_range = reverse_depth ? Clip_range{z_far, z_near} : Clip_range{z_near, z_far};
 
     switch (projection_type)
     {
         case Projection::Type::perspective:
         {
-            transform.set_perspective(clip_range, fov_x, fov_y);
-            break;
+            return erhe::toolkit::create_perspective(
+                fov_x,
+                fov_y,
+                clip_range.z_near,
+                clip_range.z_far
+            );
         }
 
         case Projection::Type::perspective_xr:
         {
-            transform.set_perspective_xr(clip_range, fov_left, fov_right, fov_up, fov_down);
-            break;
+            return erhe::toolkit::create_perspective_xr(
+                fov_left,
+                fov_right,
+                fov_up,
+                fov_down,
+                clip_range.z_near,
+                clip_range.z_far
+            );
         }
 
         case Projection::Type::perspective_horizontal:
         {
-            transform.set_perspective_horizontal(clip_range, fov_x, viewport.aspect_ratio());
-            break;
+            return erhe::toolkit::create_perspective_horizontal(
+                fov_x,
+                aspect_ratio,
+                clip_range.z_near,
+                clip_range.z_far
+            );
         }
 
         case Projection::Type::perspective_vertical:
         {
-            transform.set_perspective_vertical(clip_range, fov_y, viewport.aspect_ratio());
-            break;
+            return erhe::toolkit::create_perspective_vertical(
+                fov_y,
+                aspect_ratio,
+                clip_range.z_near,
+                clip_range.z_far
+            );
         }
 
         case Projection::Type::orthogonal_horizontal:
         {
-            transform.set_orthographic(
-                clip_range,
+            return erhe::toolkit::create_orthographic(
                 -0.5f * ortho_width,
                  0.5f * ortho_width,
-                -0.5f * ortho_width / viewport.aspect_ratio(),
-                 0.5f * ortho_width / viewport.aspect_ratio()
+                -0.5f * ortho_width / aspect_ratio,
+                 0.5f * ortho_width / aspect_ratio,
+                clip_range.z_near,
+                clip_range.z_far
             );
-            break;
         }
 
         case Projection::Type::orthogonal_vertical:
         {
-            transform.set_orthographic(
-                clip_range,
-                -0.5f * ortho_height / viewport.aspect_ratio(),
-                 0.5f * ortho_height / viewport.aspect_ratio(),
+            return erhe::toolkit::create_orthographic(
+                -0.5f * ortho_height / aspect_ratio,
+                 0.5f * ortho_height / aspect_ratio,
                 -0.5f * ortho_height,
-                 0.5f * ortho_height
+                 0.5f * ortho_height,
+                clip_range.z_near,
+                clip_range.z_far
             );
-            break;
         }
 
         case Projection::Type::orthogonal:
         {
-            transform.set_orthographic(
-                clip_range,
+            return erhe::toolkit::create_orthographic(
                 -0.5f * ortho_width,
                  0.5f * ortho_width,
                 -0.5f * ortho_height,
-                 0.5f * ortho_height
+                 0.5f * ortho_height,
+                clip_range.z_near,
+                clip_range.z_far
             );
-            break;
         }
 
         case Projection::Type::orthogonal_rectangle:
         {
-            transform.set_orthographic(
-                clip_range,
+            return erhe::toolkit::create_orthographic(
                 ortho_left,
                 ortho_left + ortho_width,
                 ortho_bottom,
-                ortho_bottom + ortho_height
+                ortho_bottom + ortho_height,
+                clip_range.z_near,
+                clip_range.z_far
             );
-            break;
         }
 
         case Projection::Type::generic_frustum:
         {
-            transform.set_frustum(
-                clip_range,
+            return erhe::toolkit::create_frustum(
                 frustum_left,
                 frustum_right,
                 frustum_bottom,
-                frustum_top
+                frustum_top,
+                clip_range.z_near,
+                clip_range.z_far
             );
-            break;
         }
 
         case Projection::Type::other:
+        {
             // TODO(tksuoran@gmail.com): Implement
-            break;
+            return glm::mat4{1.0f};
+        }
+
+        default:
+        {
+            // TODO(tksuoran@gmail.com): Implement
+            return glm::mat4{1.0f};
+        }
     }
 }
 

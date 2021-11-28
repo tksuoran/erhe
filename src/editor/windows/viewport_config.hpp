@@ -22,7 +22,7 @@ public:
     explicit Render_style(const Configuration& configuration);
 
     bool                                  polygon_fill         {true};
-    bool                                  edge_lines           {true};  // for selection
+    bool                                  edge_lines           {false};  // for selection
     bool                                  polygon_centroids    {false}; // for selection
     bool                                  corner_points        {false}; // for selection
     bool                                  polygon_offset_enable{false};
@@ -64,8 +64,8 @@ public:
     Render_style render_style_not_selected;
     Render_style render_style_selected;
 
-    //glm::vec4 clear_color          {0.18f, 0.41f, 0.58f, 1.0f};
-    glm::vec4 clear_color          {0.02f, 0.02f, 0.02f, 0.0f};
+    glm::vec4 clear_color          {0.18f, 0.41f, 0.58f, 1.0f};
+    //glm::vec4 clear_color          {0.02f, 0.02f, 0.02f, 0.0f};
 };
 
 } // namespace editor

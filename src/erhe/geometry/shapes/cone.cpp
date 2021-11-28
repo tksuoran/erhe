@@ -1,8 +1,6 @@
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/log.hpp"
 #include "erhe/log/log_glm.hpp"
-
-#define ERHE_TRACY_NO_GL 1
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include <glm/glm.hpp>
@@ -314,7 +312,8 @@ public:
         {
             const auto rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
 
-            for (int stack = -stack_division - bottom_not_singular;
+            for (
+                int stack = -stack_division - bottom_not_singular;
                 stack <= stack_division + top_not_singular;
                 ++stack)
             {
@@ -342,6 +341,7 @@ public:
                 make_corner(polygon_id, slice + 1, stack);
                 make_corner(polygon_id, slice,     stack);
                 const Corner_id tip_corner_id = make_corner(polygon_id, slice, -stack_division - 1);
+
                 const auto p0 = get_point(slice, stack);
                 const auto p1 = get_point(slice + 1, stack);
 
@@ -388,8 +388,7 @@ public:
 
                 for (int slice = 0; slice < slice_count; ++slice)
                 {
-                    const int reverse_slice = slice_count - 1 - slice;
-                    make_corner(polygon_id, reverse_slice, -stack_division - 1, true);
+                    make_corner(polygon_id, slice, -stack_division - 1, true);
                 }
 
                 geometry.polygons[polygon_id].compute_planar_texture_coordinates(
@@ -411,7 +410,8 @@ public:
         // Middle quads, bottom up
         log_cone.trace("Middle quads, bottom up\n");
         //if (false)
-        for (int stack = -stack_division - bottom_not_singular;
+        for (
+            int stack = -stack_division - bottom_not_singular;
             stack < stack_division + top_not_singular;
             ++stack)
         {
@@ -424,10 +424,10 @@ public:
                     (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
 
                 const Polygon_id polygon_id = geometry.make_polygon();
-                make_corner(polygon_id, slice + 1, stack + 1);
-                make_corner(polygon_id, slice, stack + 1);
-                make_corner(polygon_id, slice, stack);
                 make_corner(polygon_id, slice + 1, stack);
+                make_corner(polygon_id, slice, stack);
+                make_corner(polygon_id, slice, stack + 1);
+                make_corner(polygon_id, slice + 1, stack + 1);
 
                 const Point_id centroid_id = cone_point(rel_slice_centroid, rel_stack_centroid);
                 if constexpr (use_geometric_centroids)
@@ -451,9 +451,10 @@ public:
                 const auto rel_stack_centroid = 1.0 - (0.5 / (static_cast<double>(stack_division) + 1));
 
                 const Polygon_id polygon_id    = geometry.make_polygon();
-                const Corner_id  tip_corner_id = make_corner(polygon_id, slice, stack_division + 1);
-                make_corner(polygon_id, slice,     stack);
+
                 make_corner(polygon_id, slice + 1, stack);
+                make_corner(polygon_id, slice,     stack);
+                const Corner_id  tip_corner_id = make_corner(polygon_id, slice, stack_division + 1);
 
                 auto p0 = get_point(slice,     stack);
                 auto p1 = get_point(slice + 1, stack);
@@ -500,7 +501,8 @@ public:
 
                 for (int slice = 0; slice < slice_count; ++slice)
                 {
-                    make_corner(polygon_id, slice, stack_division + 1, true);
+                    const int reverse_slice = slice_count - 1 - slice;
+                    make_corner(polygon_id, reverse_slice, stack_division + 1, true);
                 }
 
                 geometry.polygons[polygon_id].compute_planar_texture_coordinates(

@@ -27,15 +27,15 @@ public:
 
     Build_info_set(
         Buffer_sink* gl_buffer_sink,
-        Buffer_sink* embree_buffer_sink
+        Buffer_sink* raytrace_buffer_sink
     )
-        : gl    {gl_buffer_sink}
-        , embree{embree_buffer_sink}
+        : gl      {gl_buffer_sink}
+        , raytrace{raytrace_buffer_sink}
     {
     }
 
     Build_info gl;
-    Build_info embree;
+    Build_info raytrace;
 };
 
 } // namespace erhe::primitive

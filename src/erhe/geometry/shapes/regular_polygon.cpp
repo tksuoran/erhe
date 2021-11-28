@@ -1,6 +1,4 @@
 #include "erhe/geometry/shapes/regular_polygon.hpp"
-
-#define ERHE_TRACY_NO_GL 1
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include <cmath>  // for sqrt
@@ -23,7 +21,7 @@ auto make_triangle(const double r)
             geometry.make_point(static_cast<float>(r *  0.57735027f), static_cast<float>(r *  0.0f), 0.0f, 1.0f, 1.0f);
             geometry.make_point(static_cast<float>(r * -0.28867513f), static_cast<float>(r * -0.5f), 0.0f, 1.0f, 0.0f);
 
-            geometry.make_polygon( {0, 1, 2} );
+            geometry.make_polygon_reverse( {0, 1, 2} );
 
             geometry.make_point_corners();
             geometry.build_edges();

@@ -2,8 +2,6 @@
 #include "erhe/geometry/property_map.hpp"
 #include "erhe/geometry/log.hpp"
 #include "erhe/toolkit/verify.hpp"
-
-#define ERHE_TRACY_NO_GL 1
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include <cmath>
@@ -25,40 +23,12 @@ auto Polygon::compute_normal(
         return {};
     }
 
-    const Polygon_corner_id polygon_corner_id0 = first_polygon_corner_id;
-    const Polygon_corner_id polygon_corner_id1 = first_polygon_corner_id + 1;
-    const Polygon_corner_id polygon_corner_id2 = first_polygon_corner_id + 2;
-
-    const Corner_id corner_id0 = geometry.polygon_corners[polygon_corner_id0];
-    const Corner_id corner_id1 = geometry.polygon_corners[polygon_corner_id1];
-    const Corner_id corner_id2 = geometry.polygon_corners[polygon_corner_id2];
-
-    const Corner&  c0 = geometry.corners[corner_id0];
-    const Corner&  c1 = geometry.corners[corner_id1];
-    const Corner&  c2 = geometry.corners[corner_id2];
-    const Point_id p0 = c0.point_id;
-    const Point_id p1 = c1.point_id;
-    const Point_id p2 = c2.point_id;
-
-    // Make sure all points are unique from others
-    if ((p0 == p1) || (p0 == p2) || (p1 == p2))
-    {
-        abort();
-        //return glm::vec3{0.0f, 1.0f, 0.0f};
-    }
-    auto pos0   = point_locations.get(p0);
-    auto pos1   = point_locations.get(p1);
-    auto pos2   = point_locations.get(p2);
-    auto normal = glm::cross((pos2 - pos0), (pos1 - pos0));
-    //return glm::normalize(normal);
- 
     vec3 newell_normal{0.0f};
 
     for_each_corner_neighborhood_const(
         geometry,
         [&geometry, &newell_normal, &point_locations](const Polygon_corner_neighborhood_context_const& i)
         {
-            //const Point_id a     = i.prev_corner.point_id;
             const Point_id a     = i.corner     .point_id;
             const Point_id b     = i.next_corner.point_id;
             const auto     pos_a = point_locations.get(a);
@@ -67,14 +37,7 @@ auto Polygon::compute_normal(
         }
     );
 
-    normal = glm::normalize(normal);
-    newell_normal = glm::normalize(-newell_normal);
-
-    //const float d = glm::dot(normal, newell_normal);
-    //if (d < 0.99f)
-    //{
-    //    DebugBreak();
-    //}
+    newell_normal = glm::normalize(newell_normal);
 
     return newell_normal;
  }

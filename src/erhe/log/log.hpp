@@ -49,6 +49,12 @@ public:
     static constexpr int WHITE       {1 | 2 | 4 | 8};
 };
 
+class ILog_sink
+{
+public:
+    virtual void write(std::string_view text) = 0;
+};
+
 class Category
 {
 public:
@@ -58,6 +64,8 @@ public:
         , m_colorizer(colorizer)
     {
     }
+
+    void set_sink(ILog_sink* sink);
 
     void write(bool indent, int level, const char* format, fmt::format_args args);
 
@@ -128,6 +136,7 @@ protected:
     Colorizer          m_colorizer{Colorizer::default_};
     int                m_indent   {0};
     bool               m_newline  {true};
+    ILog_sink*         m_sink     {nullptr};
 };
 
 class Log

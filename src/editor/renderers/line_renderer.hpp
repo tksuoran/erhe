@@ -53,6 +53,15 @@ public:
     glm::vec3 p1;
 };
 
+//class Color_line
+//{
+//public:
+//    glm::vec4 color0;
+//    glm::vec3 p0;
+//    glm::vec4 color1;
+//    glm::vec3 p1;
+//};
+
 class Line_renderer
     : public erhe::components::Component
 {
@@ -73,15 +82,47 @@ public:
         const erhe::scene::ICamera& camera
     );
 
-    void set_line_color(uint32_t color)
+    void put(
+        const glm::vec3      point,
+        const float          thickness,
+        const uint32_t       color,
+        gsl::span<float>&    gpu_float_data, 
+        gsl::span<uint32_t>& gpu_uint_data,
+        size_t&              word_offset
+    );
+
+    void set_line_color(const uint32_t color)
     {
         m_line_color = color;
     }
 
     void add_lines(
         const std::initializer_list<Line> lines,
-        const float thickness = 2.0f
+        const float                       thickness = 2.0f
     );
+
+    void add_lines(
+        const glm::mat4                   transform,
+        const std::initializer_list<Line> lines,
+        const float                       thickness = 2.0f
+    );
+
+    void add_lines(
+        const glm::mat4                   transform,
+        const uint32_t                    color,
+        const std::initializer_list<Line> lines,
+        const float                       thickness = 2.0f
+    )
+    {
+        set_line_color(color);
+        add_lines(transform, lines, thickness);
+    }
+
+    //void add_lines(
+    //    const glm::mat4                         transform,
+    //    const std::initializer_list<Color_line> color_lines,
+    //    const float                             thickness = 2.0f
+    //);
 
     void next_frame();
 
@@ -205,8 +246,6 @@ private:
     void create_frame_resources ();
     auto current_frame_resources() -> Frame_resources&;
 
-    uint32_t m_line_color{0xffffffffu};
-
     erhe::graphics::OpenGL_state_tracker* m_pipeline_state_tracker{nullptr};
     Shader_monitor*                       m_shader_monitor        {nullptr};
 
@@ -219,6 +258,7 @@ private:
 
     std::deque<Frame_resources> m_frame_resources;
     size_t                      m_current_frame_resource_slot{0};
+    uint32_t                    m_line_color                 {0xffffffffu};
 
     class Buffer_range
     {

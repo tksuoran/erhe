@@ -75,10 +75,10 @@ public:
     ~Headset_renderer() override;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
-    auto initialization_requires_main_thread() const -> bool override { return true; }
+    auto get_type_hash                  () const -> uint32_t override { return hash; }
+    void connect                        () override;
+    void initialize_component           () override;
+    auto processing_requires_main_thread() const -> bool override { return true; }
 
     void begin_frame();
     void render     ();

@@ -39,7 +39,7 @@ public:
     class Mesh_primitive
     {
     public:
-        std::shared_ptr<erhe::scene::Mesh> mesh                {nullptr};
+        std::shared_ptr<erhe::scene::Mesh> mesh                {};
         const erhe::scene::Mesh_layer*     layer               {nullptr};
         size_t                             mesh_primitive_index{0};
         size_t                             local_index         {0};

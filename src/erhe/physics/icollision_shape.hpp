@@ -46,7 +46,10 @@ public:
 
     virtual void calculate_local_inertia        (const float mass, glm::vec3& inertia) const = 0;
     virtual auto is_convex                      () const -> bool = 0;
-    virtual void add_child_shape                (std::shared_ptr<ICollision_shape> shape, Transform transform) = 0;
+    virtual void add_child_shape(
+        const std::shared_ptr<ICollision_shape>& shape,
+        const Transform                          transform
+    ) = 0;
     virtual void calculate_principal_axis_transform(
         const std::vector<float>& child_masses,
         Transform&                principal_transform,

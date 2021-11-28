@@ -7,6 +7,7 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
 #include <string>
 
 namespace erhe::scene
@@ -42,12 +43,12 @@ public:
     void update(const Viewport viewport) override;
 
     // Implements ICamera
-    auto projection     () -> Projection*                        override;
-    auto projection     () const -> const Projection*            override;
-    auto clip_from_node () const -> glm::mat4                    override;
-    auto clip_from_world() const -> glm::mat4                    override;
-    auto node_from_clip () const -> glm::mat4                    override;
-    auto world_from_clip() const -> glm::mat4                    override;
+    auto projection     () -> Projection*             override;
+    auto projection     () const -> const Projection* override;
+    auto clip_from_node () const -> glm::mat4         override;
+    auto clip_from_world() const -> glm::mat4         override;
+    auto node_from_clip () const -> glm::mat4         override;
+    auto world_from_clip() const -> glm::mat4         override;
 
 private:
     Projection m_projection;
@@ -61,6 +62,11 @@ private:
 
     Transforms m_camera_transforms;
 };
+
+auto is_icamera(const Node* const node) -> bool;
+auto is_icamera(const std::shared_ptr<Node>& node) -> bool;
+auto as_icamera(Node* const node) -> ICamera*;
+auto as_icamera(const std::shared_ptr<Node>& node) -> std::shared_ptr<ICamera>;
 
 auto is_camera(const Node* const node) -> bool;
 auto is_camera(const std::shared_ptr<Node>& node) -> bool;

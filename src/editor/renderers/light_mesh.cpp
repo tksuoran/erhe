@@ -110,10 +110,10 @@ auto Light_mesh::get_light_transform(const Light& light) -> glm::mat4
             //   /         |         \         \______________/         .
             //  +----------+----------+                                 .
 
-            float alpha   = light.outer_spot_angle;
-            float length  = light.range;
-            float apothem = length * std::tan(alpha * 0.5f);
-            float radius  = apothem / std::cos(glm::pi<float>() / static_cast<float>(m_light_cone_sides));
+            const float alpha   = light.outer_spot_angle;
+            const float length  = light.range;
+            const float apothem = length * std::tan(alpha * 0.5f);
+            const float radius  = apothem / std::cos(glm::pi<float>() / static_cast<float>(m_light_cone_sides));
 
             return create_scale(radius, radius, length);
         }

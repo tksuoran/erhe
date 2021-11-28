@@ -7,6 +7,8 @@
 namespace erhe::raytrace
 {
 
+
+
 class IBuffer
 {
 public:
@@ -19,7 +21,5 @@ public:
     static auto create(const size_t capacity_bytes_count) -> IBuffer*;
     static auto create_shared(const size_t capacity_bytes_count) -> std::shared_ptr<IBuffer>;
 };
-
-
 
 } // namespace erhe::raytrace

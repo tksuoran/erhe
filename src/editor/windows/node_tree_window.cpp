@@ -94,7 +94,7 @@ void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
             ? ImGuiTreeNodeFlags_Selected
             : ImGuiTreeNodeFlags_None)};
 
-    std::string label = fmt::format("{} ({})", node->name(), node->depth());
+    std::string label = fmt::format("{}", node->name());
     const auto node_open = ImGui::TreeNodeEx(label.c_str(), node_flags);
     if (ImGui::IsItemClicked())
     {

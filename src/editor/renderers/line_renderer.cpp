@@ -156,7 +156,27 @@ void Line_renderer::next_frame()
     m_line_count = 0;
 }
 
-void Line_renderer::add_lines(const std::initializer_list<Line> lines, const float thickness)
+void Line_renderer::put(
+    const glm::vec3      point,
+    const float          thickness,
+    const uint32_t       color,
+    gsl::span<float>&    gpu_float_data, 
+    gsl::span<uint32_t>& gpu_uint_data,
+    size_t&              word_offset
+)
+{
+    gpu_float_data[word_offset++] = point.x;
+    gpu_float_data[word_offset++] = point.y;
+    gpu_float_data[word_offset++] = point.z;
+    gpu_float_data[word_offset++] = thickness;
+    gpu_uint_data [word_offset++] = color;
+}
+
+void Line_renderer::add_lines(
+    const glm::mat4                   transform,
+    const std::initializer_list<Line> lines,
+    const float                       thickness
+)
 {
     auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
 
@@ -171,16 +191,37 @@ void Line_renderer::add_lines(const std::initializer_list<Line> lines, const flo
     size_t word_offset = 0;
     for (const Line& line : lines)
     {
-        gpu_float_data[word_offset++] = line.p0.x;
-        gpu_float_data[word_offset++] = line.p0.y;
-        gpu_float_data[word_offset++] = line.p0.z;
-        gpu_float_data[word_offset++] = thickness;
-        gpu_uint_data [word_offset++] = m_line_color;
-        gpu_float_data[word_offset++] = line.p1.x;
-        gpu_float_data[word_offset++] = line.p1.y;
-        gpu_float_data[word_offset++] = line.p1.z;
-        gpu_float_data[word_offset++] = thickness;
-        gpu_uint_data [word_offset++] = m_line_color;
+        const glm::vec4 p0{transform * glm::vec4{line.p0, 1.0f}};
+        const glm::vec4 p1{transform * glm::vec4{line.p1, 1.0f}};
+        put(vec3{p0} / p0.w, thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
+        put(vec3{p1} / p1.w, thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
+    }
+
+    m_vertex_writer.write_offset += lines.size() * 2 * m_vertex_format.stride();
+    m_line_count += lines.size();
+    m_vertex_writer.end();
+}
+
+void Line_renderer::add_lines(
+    const std::initializer_list<Line> lines,
+    const float                       thickness
+)
+{
+    auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+
+    m_vertex_writer.begin();
+
+    std::byte* const    start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
+    const size_t        byte_count = vertex_gpu_data.size_bytes();
+    const size_t        word_count = byte_count / sizeof(float);
+    gsl::span<float>    gpu_float_data(reinterpret_cast<float*   >(start), word_count);
+    gsl::span<uint32_t> gpu_uint_data (reinterpret_cast<uint32_t*>(start), word_count);
+
+    size_t word_offset = 0;
+    for (const Line& line : lines)
+    {
+        put(line.p0, thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
+        put(line.p1, thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
     }
 
     m_vertex_writer.write_offset += lines.size() * 2 * m_vertex_format.stride();

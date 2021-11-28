@@ -57,6 +57,10 @@ auto IConstraint::create_point_to_point_constraint_unique(
     return std::make_unique<Bullet_point_to_point_constraint>(rigid_body_a, rigid_body_b, pivot_in_a, pivot_in_b);
 }
 
+Bullet_constraint::~Bullet_constraint()
+{
+}
+
 Bullet_point_to_point_constraint::Bullet_point_to_point_constraint(IRigid_body* rigid_body, const glm::vec3 point)
     : m_bullet_constraint{
         *static_cast<Bullet_rigid_body*>(rigid_body)->get_bullet_rigid_body(),

@@ -6,7 +6,7 @@
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/primitive/buffer_sink.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/raytrace/buffer.hpp"
+#include "erhe/raytrace/ibuffer.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/tracy_client.hpp"
 
@@ -60,12 +60,15 @@ void Mesh_memory::initialize_component()
         gl_vertex_buffer,
         gl_index_buffer
     );
-    embree_vertex_buffer = erhe::raytrace::IBuffer::create_shared(vertex_byte_count);
-    embree_index_buffer  = erhe::raytrace::IBuffer::create_shared(index_byte_count);
-    embree_buffer_sink   = make_unique<erhe::primitive::Embree_buffer_sink>(embree_vertex_buffer, embree_index_buffer);
+    raytrace_vertex_buffer = erhe::raytrace::IBuffer::create_shared(vertex_byte_count);
+    raytrace_index_buffer  = erhe::raytrace::IBuffer::create_shared(index_byte_count);
+    raytrace_buffer_sink   = make_unique<erhe::primitive::Raytrace_buffer_sink>(
+        raytrace_vertex_buffer,
+        raytrace_index_buffer
+    );
 
-    build_info_set.gl    .buffer.buffer_sink = gl_buffer_sink.get();
-    build_info_set.embree.buffer.buffer_sink = embree_buffer_sink.get();
+    build_info_set.gl      .buffer.buffer_sink = gl_buffer_sink.get();
+    build_info_set.raytrace.buffer.buffer_sink = raytrace_buffer_sink.get();
 
     auto& gl_format_info = build_info_set.gl.format;
     auto& gl_buffer_info = build_info_set.gl.buffer;
@@ -86,9 +89,6 @@ void Mesh_memory::initialize_component()
     gl_format_info.features.id               = true;
     gl_format_info.normal_style              = Normal_style::corner_normals;
     gl_format_info.vertex_attribute_mappings = &Component::get<Program_interface>()->shader_resources->attribute_mappings;
-
-    //embree_vertex_buffer = make_shared<erhe::raytrace::Buffer>(vertex_byte_count);
-    //embree_index_buffer  = make_shared<erhe::raytrace::Buffer>(index_byte_count);
 
     Primitive_builder::prepare_vertex_format(build_info_set.gl);
 }

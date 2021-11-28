@@ -41,7 +41,7 @@ Property_map_collection<Key_type>::remove(const std::string& name)
 {
     ZoneScoped;
 
-    const auto i = std::remove_if(
+    std::erase_if(
         m_entries.begin(),
         m_entries.end(),
         [name](const Entry& entry)
@@ -49,10 +49,6 @@ Property_map_collection<Key_type>::remove(const std::string& name)
             return entry.key == name;
         }
     );
-    if (i != m_entries.end())
-    {
-        m_entries.erase(i, m_entries.end());
-    }
 }
 
 template <typename Key_type>

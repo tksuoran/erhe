@@ -14,7 +14,7 @@ public:
     explicit Material(
         std::string_view name,
         glm::vec4        base_color = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        float            roughness  = 1.0f,
+        float            roughness  = 0.5f,
         float            anisotropy = 0.0f,
         float            metallic   = 0.6f
     );
@@ -28,6 +28,7 @@ public:
     float       transparency{0.0f};
     glm::vec4   base_color  {1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec4   emissive    {0.0f, 0.0f, 0.0f, 0.0f};
+    bool        visible     {false};
 };
 
 } // namespace erhe::primitive

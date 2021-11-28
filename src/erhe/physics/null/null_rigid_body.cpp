@@ -100,17 +100,15 @@ void Null_rigid_body::set_motion_mode(const Motion_mode motion_mode)
     m_motion_mode = motion_mode;
 }
 
-void Null_rigid_body::set_center_of_mass_transform(const glm::mat3 basis, const glm::vec3 origin)
+void Null_rigid_body::set_center_of_mass_transform(const Transform transform)
 {
     // TODO
-    static_cast<void>(basis);
-    static_cast<void>(origin);
+    static_cast<void>(transform);
 }
 
-void Null_rigid_body::set_world_transform(const glm::mat3 basis, const glm::vec3 origin)
+void Null_rigid_body::set_world_transform(const Transform transform)
 {
-    m_transform_basis = basis;
-    m_transform_origin = origin;
+    m_transform = transform;
 }
 
 void Null_rigid_body::set_linear_velocity(const glm::vec3 velocity)

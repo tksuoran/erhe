@@ -16,14 +16,15 @@ class Bullet_compound_shape
 {
 public:
     Bullet_compound_shape();
+    ~Bullet_compound_shape() override;
 
     // Implements ICollision_shape
     auto is_convex() const -> bool override;
 
     // Implements ICompound_shape
     void add_child_shape(
-        std::shared_ptr<ICollision_shape> shape,
-        Transform                         transform
+        const std::shared_ptr<ICollision_shape>& shape,
+        const Transform                          transform
     ) override;
 
     void calculate_principal_axis_transform(

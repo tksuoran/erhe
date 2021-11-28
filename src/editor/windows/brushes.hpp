@@ -40,6 +40,7 @@ namespace editor
 class Brush;
 class Editor;
 class Grid_tool;
+class Materials;
 class Operation_stack;
 class Scene_root;
 class Selection_tool;
@@ -75,18 +76,18 @@ public:
     void initialize_component() override;
 
     // Implements Tool
-    auto update       (Pointer_context& pointer_context) -> bool override;
-    void render       (const Render_context& render_context) override;
-    auto state        () const -> State override;
-    void cancel_ready () override;
-    auto description  () -> const char* override { return c_name.data(); }
-    void render_update(const Render_context&) override;
+    auto update         (Pointer_context& pointer_context) -> bool override;
+    void render         (const Render_context& render_context) override;
+    auto state          () const -> State override;
+    void cancel_ready   () override;
+    auto description    () -> const char* override { return c_name.data(); }
+    void render_update  (const Render_context&) override;
+    void tool_properties() override;
 
     // Implements Imgui_window
     void imgui(Pointer_context& pointer_context) override;
 
     //void add_brush     (const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry);
-    void add_material  (const std::shared_ptr<erhe::primitive::Material>& material);
     auto allocate_brush(erhe::primitive::Build_info_set& build_info_set) -> std::shared_ptr<Brush>;
     auto make_brush    (
         erhe::geometry::Geometry&&                              geometry,
@@ -108,7 +109,6 @@ public:
     ) -> std::shared_ptr<Brush>;
 
 private:
-    void make_materials            ();
     void update_mesh               ();
     auto get_brush_transform       () -> glm::mat4; // Places brush in parent (hover) mesh
     void do_insert_operation       ();
@@ -117,13 +117,11 @@ private:
     void update_mesh_node_transform();
 
     Editor*          m_editor         {nullptr};
+    Materials*       m_materials      {nullptr};
     Operation_stack* m_operation_stack{nullptr};
     Scene_root*      m_scene_root     {nullptr};
     Selection_tool*  m_selection_tool {nullptr};
     Grid_tool*       m_grid_tool      {nullptr};
-
-    std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
-    std::vector<const char*>            m_material_names;
 
     std::mutex                          m_brush_mutex;
     std::vector<std::shared_ptr<Brush>> m_brushes;

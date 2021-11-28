@@ -2,12 +2,14 @@
 #include "erhe/geometry/log.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
-
-#define ERHE_TRACY_NO_GL 1
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
+
+#if defined(ERHE_USE_GEOMETRIC_TOOLS)
+#   include <Mathematics/PolyhedralMassProperties.h>
+#endif
 
 #include <cmath>
 #include <stdexcept>
@@ -280,6 +282,7 @@ void Geometry::build_edges()
     log_build_edges.trace("build_edges() : {} polygons\n", m_next_polygon_id);
     erhe::log::Indenter scope_indent;
 
+    // First pass - shared edges 
     size_t polygon_index{0};
     for_each_polygon([&](auto& i)
     {
@@ -294,7 +297,7 @@ void Geometry::build_edges()
                 log_build_edges.warn("Bad edge {} - {}\n", a, b);
                 return;
             }
-            if (a < b)
+            if (a < b) // This does not work for non-shared edges going wrong direction
             {
                 const Edge_id edge_id = make_edge(a, b);
                 const Point&  pa      = points[a];
@@ -313,6 +316,42 @@ void Geometry::build_edges()
                          ++polygon_index;
                      }
                 });
+            }
+        });
+    });
+
+    // Second pass - non-shared edges wrong direction
+    for_each_polygon([&](auto& i)
+    {
+        erhe::log::Indenter scope_indent;
+
+        i.polygon.for_each_corner_neighborhood(*this, [&](auto& j)
+        {
+            const Point_id a = j.prev_corner.point_id;
+            const Point_id b = j.corner.point_id;
+            auto edge = find_edge(a, b);
+            if (!edge)
+            {
+                VERIFY(b < a);
+                {
+                    const Edge_id edge_id = make_edge(b, a); // Swapped a, b because b < a
+                    const Point&  pb      = points[b];
+                    make_edge_polygon(edge_id, i.polygon_id);
+                    VERIFY(pb.corner_count > 0);
+                    pb.for_each_corner_const(*this, [&](auto& k)
+                    {
+                         const Polygon_id polygon_id_in_point = k.corner.polygon_id;
+                         const Polygon&   polygon_in_point    = polygons[polygon_id_in_point];
+                         const Corner_id  prev_corner_id      = polygon_in_point.prev_corner(*this, k.corner_id);
+                         const Corner&    prev_corner         = corners[prev_corner_id];
+                         const Point_id   prev_point_id       = prev_corner.point_id;
+                         if (prev_point_id == a)
+                         {
+                             make_edge_polygon(edge_id, polygon_id_in_point);
+                             ++polygon_index;
+                         }
+                    });
+                }
             }
         });
     });
@@ -853,25 +892,30 @@ void Geometry::sanity_check() const
     }
 }
 
-auto Geometry::volume() -> float
+auto Geometry::get_mass_properties() -> Mass_properties
 {
     if (!compute_polygon_centroids())
     {
-        return 0.0f;
+        return Mass_properties{
+            0.0f,
+            glm::vec3{0.0f},
+            glm::mat3{1.0f}
+        };
     }
 
+#if !defined(ERHE_USE_GEOMETRIC_TOOLS)
     const auto* const point_locations   = point_attributes  ().find<vec3>(c_point_locations);
     const auto* const polygon_centroids = polygon_attributes().find<vec3>(c_polygon_centroids);
 
     float sum{0.0f};
-    for_each_polygon([&](auto& i)
+    for_each_polygon_const([&](auto& i)
     {
         if (i.polygon.corner_count < 3)
         {
             return;
         }
         const vec3 p0 = polygon_centroids->get(i.polygon_id);
-        i.polygon.for_each_corner_neighborhood(*this, [&](auto& j)
+        i.polygon.for_each_corner_neighborhood_const(*this, [&](auto& j)
         {
             const vec3 p1 = point_locations->get(j.corner.point_id);
             const vec3 p2 = point_locations->get(j.next_corner.point_id);
@@ -883,7 +927,82 @@ auto Geometry::volume() -> float
         });
     });
 
-    return sum / 6.0f;
+    const float mass = sum / 6.0f;
+    return Mass_properties{
+        mass,
+        glm::vec3{0.0f},
+        glm::mat3{1.0f}
+    };
+#else
+    // Copy vertex data in gt format
+    std::vector<gte::Vector3<float>> vertex_data;
+    vertex_data.reserve(point_count());
+    for_each_point_const([&](auto& i)
+    {
+        glm::vec3 position = point_locations->get(i.point_id);
+        vertex_data.push_back(
+            gte::Vector3<float>{position.x, position.y, position.z}
+        );
+    });
+
+    const int triangle_count = static_cast<int>(count_polygon_triangles());
+
+    std::vector<int> triangles;
+    triangles.reserve(triangle_count * 3);
+    for_each_polygon([&](auto& i)
+    {
+        const Corner_id first_corner_id = i.polygon.first_polygon_corner_id;
+        const Point_id  first_point_id  = corners[first_corner_id].point_id;
+        i.polygon.for_each_corner_neighborhood(*this, [&](auto& j)
+        {
+            const Corner_id corner_id      = j.corner_id;
+            const Corner_id next_corner_id = j.next_corner_id;
+            const Point_id  point_id       = corners[corner_id].point_id;
+            const Point_id  next_point_id  = corners[next_corner_id].point_id;
+            if (first_point_id == point_id)
+            {
+                return;
+            }
+            if (first_point_id == next_point_id)
+            {
+                return;
+            }
+            triangles.push_back(first_point_id);
+            triangles.push_back(point_id);
+            triangles.push_back(next_point_id);
+        });
+    });
+
+    VERIFY(triangles.size() == triangle_count * 3);
+
+    //auto vertex_data = reinterpret_cast<gte::Vector3<float> const*>(point_locations->values.data());
+    float mass{0.0f};
+    gte::Vector3<float> center_of_mass{0.0f, 0.0f, 0.0f};
+    gte::Matrix3x3<float> inertia{};
+    gte::ComputeMassProperties<float>(
+        vertex_data.data(),
+        triangle_count,
+        triangles.data(),
+        true, // inertia relative to center of mass
+        mass,
+        center_of_mass,
+        inertia
+    );
+
+    return Mass_properties{
+        std::abs(mass),
+        glm::vec3{
+            center_of_mass[0],
+            center_of_mass[1],
+            center_of_mass[2]
+        },
+        glm::mat3{
+            inertia(0, 0), inertia(1, 0), inertia(2, 0),
+            inertia(0, 1), inertia(1, 1), inertia(2, 1),
+            inertia(0, 2), inertia(1, 2), inertia(2, 2)
+        }
+    };
+#endif
 }
 
 } // namespace erhe::geometry

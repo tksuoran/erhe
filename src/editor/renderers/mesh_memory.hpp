@@ -19,7 +19,7 @@ namespace erhe::graphics
 
 namespace erhe::primitive
 {
-    class Embree_buffer_sink;
+    class Raytrace_buffer_sink;
     class Gl_buffer_sink;
     class Material;
     class Primitive;
@@ -71,13 +71,13 @@ public:
 
     std::unique_ptr<erhe::graphics::Buffer_transfer_queue> gl_buffer_transfer_queue;
     std::unique_ptr<erhe::primitive::Gl_buffer_sink>       gl_buffer_sink;
-    std::unique_ptr<erhe::primitive::Embree_buffer_sink>   embree_buffer_sink;
+    std::unique_ptr<erhe::primitive::Raytrace_buffer_sink> raytrace_buffer_sink;
     std::shared_ptr<erhe::graphics::Buffer>                gl_vertex_buffer;
     std::shared_ptr<erhe::graphics::Buffer>                gl_index_buffer;
     erhe::primitive::Build_info_set                        build_info_set;
 
-    std::shared_ptr<erhe::raytrace::IBuffer> embree_vertex_buffer;
-    std::shared_ptr<erhe::raytrace::IBuffer> embree_index_buffer;
+    std::shared_ptr<erhe::raytrace::IBuffer> raytrace_vertex_buffer;
+    std::shared_ptr<erhe::raytrace::IBuffer> raytrace_index_buffer;
 };
 
 } // namespace editor

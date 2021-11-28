@@ -21,9 +21,13 @@ Bullet_compound_shape::Bullet_compound_shape()
 {
 }
 
+Bullet_compound_shape::~Bullet_compound_shape()
+{
+}
+
 void Bullet_compound_shape::add_child_shape(
-    std::shared_ptr<ICollision_shape> shape,
-    Transform                         transform
+    const std::shared_ptr<ICollision_shape>& shape,
+    const Transform                          transform
 )
 {
     auto bullet_collision_shape = dynamic_pointer_cast<Bullet_collision_shape>(shape);

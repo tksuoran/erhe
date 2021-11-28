@@ -32,11 +32,17 @@ public:
 
     static auto get_next_serial() -> size_t;
 
+    static auto cull_mode_front_cw (const bool reverse_depth) -> Rasterization_state*;
+    static auto cull_mode_front_ccw(const bool reverse_depth) -> Rasterization_state*;
+    static auto cull_mode_back_cw  (const bool reverse_depth) -> Rasterization_state*;
+    static auto cull_mode_back_ccw (const bool reverse_depth) -> Rasterization_state*;
+
     static size_t              s_serial;
     static Rasterization_state cull_mode_none;
-    static Rasterization_state cull_mode_front;
-    static Rasterization_state cull_mode_back_cw;
-    static Rasterization_state cull_mode_back_ccw;
+    static Rasterization_state s_cull_mode_front_cw;
+    static Rasterization_state s_cull_mode_front_ccw;
+    static Rasterization_state s_cull_mode_back_cw;
+    static Rasterization_state s_cull_mode_back_ccw;
     static Rasterization_state cull_mode_front_and_back;
 };
 

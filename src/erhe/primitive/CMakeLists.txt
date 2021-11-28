@@ -34,13 +34,14 @@ add_library(${_target} ${source_list})
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(${_target}
-    PUBLIC
+    PRIVATE
+        erhe_log
         fmt::fmt
-        glm::glm
         Microsoft.GSL::GSL
+    PUBLIC
+        glm::glm
         erhe_geometry
         erhe_gl
-        erhe_log
         erhe_raytrace
 )
 

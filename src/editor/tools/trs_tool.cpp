@@ -185,7 +185,7 @@ void Trs_tool::Visualization::initialize(Mesh_memory& mesh_memory, Scene_root& s
     constexpr float box_length               = 1.0f;
     constexpr float arrow_tip                = arrow_cylinder_length + arrow_cone_length;
     constexpr float rotate_ring_major_radius = 4.0f;
-    constexpr float rotate_ring_minor_radius = 0.25f;
+    constexpr float rotate_ring_minor_radius = 0.125f;
     const auto arrow_cylinder_geometry  = make_cylinder(0.0, arrow_cylinder_length, arrow_cylinder_radius, true, true, 32, 4);
     const auto arrow_cone_geometry      = make_cone    (arrow_cylinder_length, arrow_tip, arrow_cone_radius, true, 32, 4);
     const auto box_geometry             = make_box     (0.0, box_length, 0.0, box_length, -box_half_thickness, box_half_thickness);

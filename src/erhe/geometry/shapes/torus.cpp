@@ -1,6 +1,4 @@
 #include "erhe/geometry/shapes/torus.hpp"
-
-#define ERHE_TRACY_NO_GL 1
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include <glm/glm.hpp>
@@ -183,16 +181,17 @@ public:
 
             for (int minor = 0; minor < minor_axis_steps; ++minor)
             {
-                int  next_minor     = (minor + 1);
-                auto rel_minor      = static_cast<double>(minor) / static_cast<double>(minor_axis_steps);
-                auto rel_next_minor = static_cast<double>(next_minor) / static_cast<double>(minor_axis_steps);
-                auto avg_minor      = (rel_minor + rel_next_minor) / 2.0;
-                Point_id   centroid_id = torus_point(avg_major, avg_minor);
-                Polygon_id polygon_id  = geometry.make_polygon();
-                make_corner(polygon_id, next_major, next_minor);
-                make_corner(polygon_id, major,      next_minor);
-                make_corner(polygon_id, major,      minor);
+                const int        next_minor     = (minor + 1);
+                const auto       rel_minor      = static_cast<double>(minor) / static_cast<double>(minor_axis_steps);
+                const auto       rel_next_minor = static_cast<double>(next_minor) / static_cast<double>(minor_axis_steps);
+                const auto       avg_minor      = (rel_minor + rel_next_minor) / 2.0;
+                const Point_id   centroid_id    = torus_point(avg_major, avg_minor);
+                const Polygon_id polygon_id     = geometry.make_polygon();
+
                 make_corner(polygon_id, next_major, minor);
+                make_corner(polygon_id, major,      minor);
+                make_corner(polygon_id, major,      next_minor);
+                make_corner(polygon_id, next_major, next_minor);
 
                 if constexpr (use_geometric_centroids)
                 {

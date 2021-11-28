@@ -73,15 +73,15 @@ private:
     std::shared_ptr<erhe::graphics::Buffer> m_index_buffer;
 };
 
-class Embree_buffer_sink
+class Raytrace_buffer_sink
     : public Buffer_sink
 {
 public:
-    Embree_buffer_sink(
+    Raytrace_buffer_sink(
         const std::shared_ptr<erhe::raytrace::IBuffer>& vertex_buffer,
         const std::shared_ptr<erhe::raytrace::IBuffer>& index_buffer
     );
-    ~Embree_buffer_sink() override;
+    ~Raytrace_buffer_sink() override;
 
     auto allocate_vertex_buffer(
         const size_t vertex_count,

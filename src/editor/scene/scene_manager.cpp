@@ -10,6 +10,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "windows/brushes.hpp"
+#include "windows/materials.hpp"
 #include "log.hpp"
 
 #include "SkylineBinPack.h" // RectangleBinPack
@@ -65,6 +66,7 @@ void Scene_manager::connect()
 {
     require<Gl_context_provider>();
 
+    require<Materials>();
     m_brushes     = require<Brushes>();
     m_mesh_memory = require<Mesh_memory>();
     m_scene_root  = require<Scene_root>();
@@ -78,8 +80,7 @@ void Scene_manager::initialize_component()
 
     m_scene_root = Component::get<Scene_root>();
 
-    initialize_camera();
-    add_scene();
+    setup_scene();
 }
 
 void Scene_manager::set_view_camera(std::shared_ptr<erhe::scene::ICamera> camera)
@@ -92,28 +93,39 @@ auto Scene_manager::get_view_camera() const -> std::shared_ptr<erhe::scene::ICam
     return m_view_camera;
 }
 
-void Scene_manager::initialize_camera()
+auto Scene_manager::make_camera(
+    std::string_view name,
+    glm::vec3        position,
+    glm::vec3        look_at
+) -> std::shared_ptr<erhe::scene::Camera>
 {
-    m_camera = make_shared<erhe::scene::Camera>("Camera");
-    m_camera->projection()->fov_y           = erhe::toolkit::degrees_to_radians(35.0f);
-    m_camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
-    m_camera->projection()->z_near          = 0.03f;
-    m_camera->projection()->z_far           = 200.0f;
-    m_scene_root->scene().cameras.push_back(m_camera);
+    auto camera = make_shared<erhe::scene::Camera>(name);
+    camera->projection()->fov_y           = erhe::toolkit::degrees_to_radians(35.0f);
+    camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
+    camera->projection()->z_near          = 0.03f;
+    camera->projection()->z_far           = 200.0f;
+    m_scene_root->scene().cameras.push_back(camera);
 
     auto& scene = m_scene_root->scene();
-    scene.nodes.emplace_back(m_camera);
+    scene.nodes.emplace_back(camera);
     scene.nodes_sorted = false;
 
-    const glm::vec3 position{4.0f, 1.65f, 4.0f};
     const mat4 m = erhe::toolkit::create_look_at(
-        position,                 // eye
-        vec3{0.0f,  1.65f, 0.0f}, // center
-        vec3{0.0f,  0.0f, 1.0f}   // up
+        position, // eye
+        look_at,  // center
+        vec3{0.0f, 1.0f,  0.0f}  // up
     );
-    m_camera->set_parent_from_node(m);
+    camera->set_parent_from_node(m);
 
-    set_view_camera(m_camera);
+    return camera;
+}
+
+void Scene_manager::setup_cameras()
+{
+    auto camera_a = make_camera("Camera A", glm::vec3{ 1.0f, 4.00f, 12.0f});
+    auto camera_b = make_camera("Camera B", glm::vec3{-1.0f, 1.65f,  4.0f});
+
+    set_view_camera(camera_a);
 }
 
 auto Scene_manager::build_info_set() -> erhe::primitive::Build_info_set&
@@ -144,12 +156,10 @@ void Scene_manager::make_brushes()
             context.normal_style = Normal_style::polygon_normals;
 
             auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
-                //std::move(
-                    make_box(
-                        vec3{40.0f, 1.0f, 40.0f},
-                        ivec3{40, 1, 40}
-                    )
-                //)
+                make_box(
+                    vec3{40.0f, 1.0f, 40.0f},
+                    ivec3{40, 1, 40}
+                )
             );
             floor_geometry->name = "floor";
             floor_geometry->build_edges();
@@ -173,7 +183,7 @@ void Scene_manager::make_brushes()
     constexpr bool cylinder                = true;
     constexpr bool cone                    = true;
     constexpr bool anisotropic_test_object = false;
-    constexpr bool johnson_solids          = true;
+    constexpr bool johnson_solids          = false;
 
     if constexpr (obj_files)
     {
@@ -234,6 +244,15 @@ void Scene_manager::make_brushes()
                     context,
                     erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{original_scale * 0.5f})
                 );
+                make_brush(
+                    instantiate,
+                    make_box(
+                        vec3{1.0f, 1.0f, 1.0f},
+                        ivec3{3, 3, 3}
+                    ),
+                    context,
+                    erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{original_scale * 0.5f})
+                );
             }
         );
     }
@@ -245,7 +264,8 @@ void Scene_manager::make_brushes()
             {
                 ZoneScopedN("Sphere");
 
-                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                const Brush_create_context context{build_info_set(), Normal_style::corner_normals};
                 constexpr bool instantiate = true;
 
                 make_brush(
@@ -265,7 +285,8 @@ void Scene_manager::make_brushes()
             {
                 ZoneScopedN("Torus");
 
-                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                const Brush_create_context context{build_info_set(), Normal_style::corner_normals};
                 constexpr bool instantiate = true;
 
                 constexpr float major_radius = 1.0f;
@@ -317,9 +338,7 @@ void Scene_manager::make_brushes()
                 make_brush(
                     instantiate,
                     make_shared<erhe::geometry::Geometry>(
-                        //move(
-                            make_torus(major_radius, minor_radius, 42, 32)
-                        //),
+                        make_torus(major_radius, minor_radius, 42, 32)
                     ),
                     context,
                     torus_collision_volume_calculator,
@@ -336,7 +355,8 @@ void Scene_manager::make_brushes()
             {
                 ZoneScopedN("Cylinder");
 
-                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                const Brush_create_context context{build_info_set(), Normal_style::corner_normals};
                 constexpr bool instantiate = true;
                 auto cylinder_geometry = make_cylinder(-1.0f, 1.0f, 1.0f, true, true, 32, 2); // always axis = x
                 cylinder_geometry.transform(erhe::toolkit::mat4_swap_xy);                     // convert to axis = y
@@ -361,7 +381,8 @@ void Scene_manager::make_brushes()
             {
                 ZoneScopedN("Cone");
 
-                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                const Brush_create_context context{build_info_set(), Normal_style::corner_normals};
                 constexpr bool instantiate = true;
                 auto cone_geometry = make_cone(-1.0f, 1.0f, 1.0f, true, 42, 4); // always axis = x
                 cone_geometry.transform(erhe::toolkit::mat4_swap_xy);           // convert to axis = y
@@ -390,17 +411,30 @@ void Scene_manager::make_brushes()
         const float ring_minor_radius = 0.55f; // 0.15f;
         auto        ring_geometry     = make_torus(ring_major_radius, ring_minor_radius, 80, 32);
         ring_geometry.transform(erhe::toolkit::mat4_swap_xy);
-        //auto ring_geometry = make_shared<Geometry>(move(ring_geometry));
         auto rotate_ring_pg = make_primitive_shared(ring_geometry, build_info_set().gl);
 
-        const vec3 pos{0.0f, 0.0f, 0.0f};
+        const vec3 pos{20.0f, 0.0f, 0.0f};
         auto x_rotate_ring_mesh = m_scene_root->make_mesh_node("X ring", rotate_ring_pg, x_material, nullptr, pos);
-        auto y_rotate_ring_mesh = m_scene_root->make_mesh_node("Y ring", rotate_ring_pg, y_material, nullptr, pos);
-        auto z_rotate_ring_mesh = m_scene_root->make_mesh_node("Z ring", rotate_ring_pg, z_material, nullptr, pos);
+        auto y_rotate_ring_mesh = m_scene_root->make_mesh_node("Y ring", rotate_ring_pg, y_material, x_rotate_ring_mesh.get());
+        auto z_rotate_ring_mesh = m_scene_root->make_mesh_node("Z ring", rotate_ring_pg, z_material, x_rotate_ring_mesh.get());
 
         // x_rotate_ring_mesh identity
         y_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
         z_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
+
+        x_rotate_ring_mesh->visibility_mask() |= 
+            (Node::c_visibility_content     |
+             Node::c_visibility_shadow_cast |
+             Node::c_visibility_id);
+        y_rotate_ring_mesh->visibility_mask() |= 
+            (Node::c_visibility_content     |
+             Node::c_visibility_shadow_cast |
+             Node::c_visibility_id);
+        z_rotate_ring_mesh->visibility_mask() |= 
+            (Node::c_visibility_content     |
+             Node::c_visibility_shadow_cast |
+             Node::c_visibility_id);
+
     }
 
     if constexpr (johnson_solids)
@@ -525,8 +559,10 @@ void Scene_manager::make_mesh_nodes()
             const int width = static_cast<int>(256.0f * (size.x + gap));
             const int depth = static_cast<int>(256.0f * (size.z + gap));
             entry.rectangle = packer.Insert(width + 1, depth + 1, rbp::SkylineBinPack::LevelBottomLeft);
-            if ((entry.rectangle.width  == 0) ||
-                (entry.rectangle.height == 0))
+            if (
+                (entry.rectangle.width  == 0) ||
+                (entry.rectangle.height == 0)
+            )
             {
                 pack_failed = true;
                 break;
@@ -589,7 +625,6 @@ void Scene_manager::make_mesh_nodes()
                 m_scene_root->physics_world(),
                 instance.node_physics
             );
-            //instance.node_physics->attach(instance.mesh);
         }
 
         material_index = (material_index + 1) % m_scene_root->materials().size();
@@ -602,26 +637,26 @@ auto Scene_manager::make_directional_light(
     string_view name,
     vec3        position,
     vec3        color,
-    float       intensity)
--> shared_ptr<Light>
+    float       intensity
+) -> shared_ptr<Light>
 {
     auto light = make_shared<Light>(name);
     light->type                          = Light::Type::directional;
     light->color                         = color;
     light->intensity                     = intensity;
-    light->range                         =  60.0f;
+    light->range                         =  80.0f;
     light->projection()->projection_type = Projection::Type::orthogonal;
-    light->projection()->ortho_left      = -25.0f;
-    light->projection()->ortho_width     =  50.0f;
-    light->projection()->ortho_bottom    = -25.0f;
-    light->projection()->ortho_height    =  50.0f;
-    light->projection()->z_near          =  20.0f;
-    light->projection()->z_far           =  60.0f;
+    light->projection()->ortho_left      = -40.0f;
+    light->projection()->ortho_width     =  80.0f;
+    light->projection()->ortho_bottom    = -40.0f;
+    light->projection()->ortho_height    =  80.0f;
+    light->projection()->z_near          =  10.0f;
+    light->projection()->z_far           =  80.0f;
 
     mat4 m = erhe::toolkit::create_look_at(
         position,                 // eye
         vec3{0.0f,  0.0f, 0.0f},  // center
-        vec3{0.0f,  0.0f, 1.0f}   // up
+        vec3{0.0f,  1.0f, 0.0f}   // up
     );
     light->set_parent_from_node(m);
 
@@ -640,8 +675,8 @@ auto Scene_manager::make_spot_light(
     vec3        target,
     vec3        color,
     float       intensity,
-    vec2        spot_cone_angle)
--> shared_ptr<Light>
+    vec2        spot_cone_angle
+) -> shared_ptr<Light>
 {
     auto light = make_shared<Light>(name);
     light->type                          = Light::Type::spot;
@@ -668,40 +703,29 @@ auto Scene_manager::make_spot_light(
     return light;
 }
 
-void Scene_manager::make_punctual_light_nodes()
+void Scene_manager::setup_lights()
 {
-    constexpr size_t directional_light_count = 1;
-    for (size_t i = 0; i < directional_light_count; ++i)
-    {
-        const float rel = i / static_cast<float>(directional_light_count);
-        const float h   = rel * 90.0f;
-        const float s   = (directional_light_count == 1) ? 0.0f : 1.0f;
-        const float v   = 1.0f;
-        float r, g, b;
-        erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
+    m_scene_root->light_layer()->ambient_light = vec4{0.033f, 0.055f, 0.077f, 0.0f};
 
-        const float x = 30.0f * cos(rel * 2.0f * pi<float>());
-        const float z = 30.0f * sin(rel * 2.0f * pi<float>());
+    make_directional_light(
+        "Key",
+        glm::vec3{30.0f, 30.0f, 30.0f},
+        glm::vec3{1.0f, 0.9f, 0.8f},
+        2.0f
+    );
+    make_directional_light(
+        "Fill",
+        glm::vec3{-30.0f, 20.0f, -20.0f},
+        glm::vec3{0.8f, 0.9f, 1.0f},
+        1.0f
+    );
 
-        const vec3   color     = vec3{r, g, b};
-        const float  intensity = (8.0f / static_cast<float>(directional_light_count));
-        const string name      = fmt::format("Directional light {}", i);
-        const vec3   position  = vec3{x, 30.0f, z};
-        make_directional_light(
-            name,
-            position,
-            color,
-            intensity * 0.2f
-        );
-    }
-
-    int spot_light_count = 0;
+    int spot_light_count = 2;
     for (int i = 0; i < spot_light_count; ++i)
     {
         const float rel   = static_cast<float>(i) / static_cast<float>(spot_light_count);
-        const float t     = std::pow(rel, 0.5f);
-        const float theta = t * 6.0f;
-        const float R     = 0.5f + 20.0f * t;
+        const float theta = rel * two_pi<float>();
+        const float R     = 0.5f + 20.0f * rel;
         const float h     = fract(theta) * 360.0f;
         const float s     = 0.9f;
         const float v     = 1.0f;
@@ -709,16 +733,14 @@ void Scene_manager::make_punctual_light_nodes()
 
         erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
 
-        const vec3   color     = vec3{r, g, b};
-        const float  intensity = 100.0f;
-        const string name      = fmt::format("Spot {}", i);
-
-        const float x_pos = R * sin(t * 6.0f * 2.0f * pi<float>());
-        const float z_pos = R * cos(t * 6.0f * 2.0f * pi<float>());
-
-        const vec3 position        = vec3{x_pos, 10.0f, z_pos};
-        const vec3 target          = vec3{x_pos * 0.5, 0.0f, z_pos * 0.5f};
-        const vec2 spot_cone_angle = vec2{
+        const vec3   color           = vec3{r, g, b};
+        const float  intensity       = 100.0f;
+        const string name            = fmt::format("Spot {}", i);
+        const float  x_pos           = R * sin(rel * 6.0f * two_pi<float>());
+        const float  z_pos           = R * cos(rel * 6.0f * two_pi<float>());
+        const vec3   position        = vec3{x_pos, 10.0f, z_pos};
+        const vec3   target          = vec3{x_pos * 0.5, 0.0f, z_pos * 0.5f};
+        const vec2   spot_cone_angle = vec2{
             pi<float>() / 5.0f,
             pi<float>() / 4.0f
         };
@@ -738,7 +760,9 @@ void Scene_manager::update_once_per_frame(const erhe::components::Time_context& 
     ZoneScoped;
 
     buffer_transfer_queue().flush();
-    animate_lights(time_context.time);
+
+    static_cast<void>(time_context);
+    //animate_lights(time_context.time);
 }
 
 void Scene_manager::animate_lights(double time_d)
@@ -786,15 +810,14 @@ void Scene_manager::animate_lights(double time_d)
     }
 }
 
-void Scene_manager::add_scene()
+void Scene_manager::setup_scene()
 {
     ZoneScoped;
 
-    m_scene_root->light_layer()->ambient_light = 0.2f * vec4{0.1f, 0.15f, 0.2f, 0.0f};
-
+    setup_cameras();
+    setup_lights();
     make_brushes();
     make_mesh_nodes();
-    make_punctual_light_nodes();
     add_floor();
 }
 

@@ -32,6 +32,11 @@ namespace erhe::graphics
     class Vertex_format;
 }
 
+namespace erhe::raytrace
+{
+    class IScene;
+}
+
 namespace erhe::primitive
 {
     class Material;
@@ -146,9 +151,11 @@ public:
 
 private:
     std::mutex                                              m_materials_mutex;
+    std::mutex                                              m_scene_mutex;
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
 
     std::unique_ptr<erhe::physics::IWorld>    m_physics_world;
+    std::unique_ptr<erhe::raytrace::IScene>   m_raytrace_scene;
     std::unique_ptr<erhe::scene::Scene>       m_scene;
     std::shared_ptr<erhe::scene::Mesh_layer>  m_content_layer;
     std::shared_ptr<erhe::scene::Mesh_layer>  m_controller_layer;

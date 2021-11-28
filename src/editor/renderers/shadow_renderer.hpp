@@ -52,12 +52,12 @@ public:
     auto texture () const -> erhe::graphics::Texture*;
     auto viewport() const -> erhe::scene::Viewport;
 
-    static constexpr size_t s_max_light_count    = 8;
+    static constexpr size_t s_max_light_count    = 4;
     static constexpr size_t s_texture_resolution = 4 * 1024;
     static constexpr bool   s_enable             = true;
 
 private:
-    erhe::scene::Viewport                                     m_viewport{0, 0, 0, 0, true};
+    erhe::scene::Viewport                 m_viewport{0, 0, 0, 0, true};
 
     Configuration*                        m_configuration         {nullptr};
     erhe::graphics::OpenGL_state_tracker* m_pipeline_state_tracker{nullptr};

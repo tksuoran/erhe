@@ -12,26 +12,28 @@ set(source_list
     geometry.inl
     log.cpp
     log.hpp
+    operation/ambo.cpp
+    operation/ambo.hpp
     operation/catmull_clark_subdivision.cpp
     operation/catmull_clark_subdivision.hpp
-    operation/ambo.hpp
-    operation/ambo.cpp
-    operation/dual.hpp
-    operation/dual.cpp
-    operation/truncate.hpp
-    operation/truncate.cpp
-    operation/sqrt3_subdivision.cpp
-    operation/sqrt3_subdivision.hpp
     operation/clone.cpp
     operation/clone.hpp
+    operation/dual.cpp
+    operation/dual.hpp
     operation/geometry_operation.cpp
     operation/geometry_operation.hpp
+    operation/gyro.cpp
+    operation/gyro.hpp
     operation/reverse.cpp
     operation/reverse.hpp
+    operation/sqrt3_subdivision.cpp
+    operation/sqrt3_subdivision.hpp
     operation/subdivide.cpp
     operation/subdivide.hpp
     operation/triangulate.cpp
     operation/triangulate.hpp
+    operation/truncate.cpp
+    operation/truncate.hpp
     polygon.cpp
     polygon.inl
     property_map_collection.hpp
@@ -67,6 +69,7 @@ target_link_libraries(${_target}
         erhe_toolkit
         fmt::fmt
         glm::glm
+        #gtmathematics
         Microsoft.GSL::GSL
         mikktspace
         TracyClient

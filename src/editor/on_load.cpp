@@ -34,8 +34,11 @@
 
 #include "windows/brushes.hpp"
 #include "windows/camera_properties.hpp"
+#include "windows/frame_log_window.hpp"
+#include "windows/imgui_demo_window.hpp"
 #include "windows/layers_window.hpp"
 #include "windows/light_properties.hpp"
+#include "windows/materials.hpp"
 #include "windows/material_properties.hpp"
 #include "windows/mesh_properties.hpp"
 #include "windows/node_properties.hpp"
@@ -94,13 +97,16 @@ auto Application::initialize_components(int argc, char** argv)
         m_components.add(make_shared<Editor_view         >());
         m_components.add(make_shared<Fly_camera_tool     >());
         m_components.add(make_shared<Forward_renderer    >());
+        m_components.add(make_shared<Frame_log_window    >());
         m_components.add(make_shared<Grid_tool           >());
         m_components.add(make_shared<Headset_renderer    >());
         m_components.add(make_shared<Hover_tool          >());
         m_components.add(make_shared<Icon_set            >());
         m_components.add(make_shared<Id_renderer         >());
+        m_components.add(make_shared<Imgui_demo_window   >());
         m_components.add(make_shared<Layers_window       >());
         m_components.add(make_shared<Line_renderer       >());
+        m_components.add(make_shared<Materials           >());
         m_components.add(make_shared<Material_properties >());
         m_components.add(make_shared<Mesh_memory         >());
         m_components.add(make_shared<Mesh_properties     >());

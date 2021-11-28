@@ -6,6 +6,7 @@
 #include <glm/ext/matrix_transform.hpp>
 
 #include <algorithm>
+#include <array>
 #include <stdexcept>
 
 namespace erhe::toolkit
@@ -31,8 +32,7 @@ auto unproject(
     const float viewport_y,
     const float viewport_width,
     const float viewport_height
-)
--> vec3
+) -> vec3
 {
     const float viewport_center_x = viewport_x + viewport_width  * 0.5f;
     const float viewport_center_y = viewport_y + viewport_height * 0.5f;
@@ -81,8 +81,7 @@ auto project_to_screen_space(
     const float viewport_y,
     const float viewport_width,
     const float viewport_height
-)
--> vec3
+) -> vec3
 {
     const auto viewport_center_x = viewport_x + viewport_width  * 0.5f;
     const auto viewport_center_y = viewport_y + viewport_height * 0.5f;
@@ -106,8 +105,14 @@ auto project_to_screen_space(
     };
 }
 
-auto create_frustum(const float left, const float right, const float bottom, const float top, const float z_near, const float z_far)
--> mat4
+auto create_frustum(
+    const float left,
+    const float right,
+    const float bottom,
+    const float top,
+    const float z_near,
+    const float z_far
+) -> mat4
 {
     const float x =  (2.0f  * z_near        ) / (right  - left  );
     const float y =  (2.0f  * z_near        ) / (top    - bottom);
@@ -138,8 +143,13 @@ auto create_frustum(const float left, const float right, const float bottom, con
     return result;
 }
 
-auto create_frustum_infinite_far(const float left, const float right, const float bottom, const float top, const float z_near)
--> mat4
+auto create_frustum_infinite_far(
+    const float left,
+    const float right,
+    const float bottom,
+    const float top,
+    const float z_near
+) -> mat4
 {
     assert(z_near >= -0.0f);
     const float x =  (2.0f  * z_near        ) / (right  - left  );
@@ -171,14 +181,22 @@ auto create_frustum_infinite_far(const float left, const float right, const floa
     return result;
 }
 
-auto create_frustum_simple(const float width, const float height, const float z_near, const float z_far)
--> mat4
+auto create_frustum_simple(
+    const float width,
+    const float height,
+    const float z_near,
+    const float z_far
+) -> mat4
 {
     return create_frustum(-width / 2.0f, width / 2.0f, -height / 2.0f, height / 2.0f, z_near, z_far);
 }
 
-auto create_perspective(const float fov_x, const float fov_y, const float z_near, const float z_far)
--> mat4
+auto create_perspective(
+    const float fov_x,
+    const float fov_y,
+    const float z_near,
+    const float z_far
+) -> mat4
 {
     const auto fov_y_clamped    = std::min(std::max(fov_y, epsilon), pi_minus_epsilon);
     const auto fov_x_clamped    = std::min(std::max(fov_x, epsilon), pi_minus_epsilon);
@@ -189,8 +207,14 @@ auto create_perspective(const float fov_x, const float fov_y, const float z_near
     return create_frustum_simple(width, height, z_near, z_far);
 }
 
-auto create_perspective_xr(const float fov_left, const float fov_right, const float fov_up, const float fov_down, const float z_near, const float z_far)
--> glm::mat4
+auto create_perspective_xr(
+    const float fov_left,
+    const float fov_right,
+    const float fov_up,
+    const float fov_down,
+    const float z_near,
+    const float z_far
+) -> glm::mat4
 {
     const auto fov_left_clamped  = std::min(std::max(fov_left,  -pi_minus_epsilon), pi_minus_epsilon);
     const auto fov_right_clamped = std::min(std::max(fov_right, -pi_minus_epsilon), pi_minus_epsilon);
@@ -207,15 +231,23 @@ auto create_perspective_xr(const float fov_left, const float fov_right, const fl
     return create_frustum(left, right, down, up, z_near, z_far);
 }
 
-auto create_perspective_vertical(const float fov_y, const float aspect_ratio, const float z_near, const float z_far)
--> mat4
+auto create_perspective_vertical(
+    const float fov_y,
+    const float aspect_ratio,
+    const float z_near,
+    const float z_far
+) -> mat4
 {
-    const float fov_y_clamped  = std::min(std::max(fov_y, epsilon), pi_minus_epsilon);
+    const float fov_y_clamped = std::min(std::max(fov_y, epsilon), pi_minus_epsilon);
     return glm::perspective(fov_y_clamped, aspect_ratio, z_near, z_far);
 }
 
-auto create_perspective_horizontal(const float fov_x, const float aspect_ratio, const float z_near, const float z_far)
--> mat4
+auto create_perspective_horizontal(
+    const float fov_x,
+    const float aspect_ratio,
+    const float z_near,
+    const float z_far
+) -> mat4
 {
     const auto fov_x_clamped  = std::min(std::max(fov_x, epsilon), pi_minus_epsilon);
     const auto tan_half_angle = std::tan(fov_x_clamped * 0.5f);
@@ -235,8 +267,8 @@ auto create_projection(
     const float n, const float f, // Near and z_far z clip depths
     const float w, const float h, // Width and height of viewport (at depth vz)
     const vec3  v,                // Center of viewport
-    const vec3  e)                // Center of projection (eye position)
--> mat4
+    const vec3  e                 // Center of projection (eye position) 
+) -> mat4
 {
     mat4 result;
     result[0][0] =  2.0f / w;
@@ -267,8 +299,14 @@ auto create_projection(
     return result;
 }
 
-auto create_orthographic(const float left, const float right, const float bottom, const float top, const float z_near, const float z_far)
--> mat4
+auto create_orthographic(
+    const float left,
+    const float right,
+    const float bottom,
+    const float top,
+    const float z_near,
+    const float z_far
+) -> mat4
 {
     mat4 result;
     result[0][0] = 2.0f / (right - left);
@@ -290,7 +328,12 @@ auto create_orthographic(const float left, const float right, const float bottom
     return result;
 }
 
-auto create_orthographic_centered(const float width, const float height, const float z_near, const float z_far) -> mat4
+auto create_orthographic_centered(
+    const float width,
+    const float height,
+    const float z_near,
+    const float z_far
+) -> mat4
 {
     // TODO Check bottom and top
     return create_orthographic(-width / 2, width / 2, height / 2, -height / 2, z_near, z_far);
@@ -448,7 +491,7 @@ auto create_scale(const float s) -> mat4
 auto create_look_at(const vec3 eye, const vec3 center, const vec3 up0) -> mat4
 {
 #if 0
-    // This does NOT give the same result
+    // This does NOT? give the same result
     return glm::lookAt(eye, center, up0);
 #else
     if (eye == center)

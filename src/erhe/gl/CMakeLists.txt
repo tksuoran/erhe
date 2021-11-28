@@ -99,6 +99,7 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
     )
 endif ()
 
+target_compile_definitions(${_target} PUBLIC -DERHE_TRACY_GL)
 target_strict_cxx(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
 

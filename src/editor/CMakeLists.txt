@@ -72,6 +72,8 @@ set(source_list
     scene/helpers.hpp
     scene/node_physics.cpp
     scene/node_physics.hpp
+    scene/node_raytrace.cpp
+    scene/node_raytrace.hpp
     scene/scene_manager.cpp
     scene/scene_manager.hpp
     scene/scene_root.cpp
@@ -96,8 +98,14 @@ set(source_list
 
     windows/brushes.cpp
     windows/brushes.hpp
+    windows/frame_log_window.cpp
+    windows/frame_log_window.hpp
+    windows/imgui_demo_window.cpp
+    windows/imgui_demo_window.hpp
     windows/layers_window.cpp
     windows/layers_window.hpp
+    windows/materials.cpp
+    windows/materials.hpp
     windows/material_properties.cpp
     windows/material_properties.hpp
     windows/mesh_properties.cpp

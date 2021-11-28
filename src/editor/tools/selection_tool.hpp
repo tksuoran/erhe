@@ -100,13 +100,16 @@ public:
         call_selection_change_subscriptions();
     }
     auto clear_selection      () -> bool;
-    auto is_in_selection      (std::shared_ptr<erhe::scene::Node> item) -> bool;
-    auto add_to_selection     (std::shared_ptr<erhe::scene::Node> item) -> bool;
-    auto remove_from_selection(std::shared_ptr<erhe::scene::Node> item) -> bool;
+    auto is_in_selection      (const std::shared_ptr<erhe::scene::Node>& item) const -> bool;
+    auto add_to_selection     (const std::shared_ptr<erhe::scene::Node>& item) -> bool;
+    auto remove_from_selection(const std::shared_ptr<erhe::scene::Node>& item) -> bool;
 
 private:
     void call_selection_change_subscriptions();
-    void toggle_selection(std::shared_ptr<erhe::scene::Node> item, const bool clear_others);
+    void toggle_selection(
+        const std::shared_ptr<erhe::scene::Node>& item,
+        const bool clear_others
+    );
 
     class Subscription_entry
     {

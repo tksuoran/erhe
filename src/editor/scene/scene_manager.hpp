@@ -69,8 +69,13 @@ public:
 
     void set_view_camera(std::shared_ptr<erhe::scene::ICamera> camera);
     auto get_view_camera() const -> std::shared_ptr<erhe::scene::ICamera>;
-    void add_scene      ();
+    void setup_scene    ();
     void sort_lights    ();
+    auto make_camera(
+        std::string_view name,
+        glm::vec3        position,
+        glm::vec3        look_at = glm::vec3{0.0f, 0.0f, 0.0f}
+    ) -> std::shared_ptr<erhe::scene::Camera>;
     auto make_directional_light(
         std::string_view name,
         glm::vec3        position,
@@ -109,14 +114,14 @@ public:
     void update_fixed_step(const erhe::components::Time_context& time_context) override;
 
 private:
-    auto build_info_set           () -> erhe::primitive::Build_info_set&;
-    void initialize_camera        ();
-    void animate_lights           (double time_d);
-    auto buffer_transfer_queue    () -> erhe::graphics::Buffer_transfer_queue&;
-    void add_floor                ();
-    void make_brushes             ();
-    void make_mesh_nodes          ();
-    void make_punctual_light_nodes();
+    auto build_info_set       () -> erhe::primitive::Build_info_set&;
+    void setup_cameras        ();
+    void animate_lights       (double time_d);
+    auto buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&;
+    void add_floor            ();
+    void make_brushes         ();
+    void make_mesh_nodes      ();
+    void setup_lights         ();
 
     // Components
     Brushes*     m_brushes    {nullptr};
@@ -132,8 +137,8 @@ private:
     std::unique_ptr<Brush>                m_floor_brush;
     std::mutex                            m_scene_brushes_mutex;
     std::vector<std::shared_ptr<Brush>>   m_scene_brushes;
-    std::shared_ptr<erhe::scene::Camera>  m_camera;
-    std::shared_ptr<Frame_controller>     m_camera_controls;
+    //std::shared_ptr<erhe::scene::Camera>  m_camera;
+    //std::shared_ptr<Frame_controller>     m_camera_controls;
 
     std::vector<std::shared_ptr<erhe::physics::ICollision_shape>> m_collision_shapes;
 };

@@ -68,6 +68,14 @@ FetchContent_Declare(
 )
 
 FetchContent_Declare(
+    GeometricTools
+    GIT_REPOSITORY https://github.com/tksuoran/GeometricTools.git
+    GIT_TAG        cmake # GTE-version-5.14
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
     GIT_TAG        3.3.4

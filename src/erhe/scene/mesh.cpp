@@ -1,7 +1,11 @@
 #include "erhe/scene/mesh.hpp"
 
+#include "erhe/primitive/primitive_geometry.hpp"
+#include "erhe/geometry/geometry.hpp"
+
 namespace erhe::scene
 {
+
 
 Mesh::Mesh()
     : Node{{}}

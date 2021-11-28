@@ -43,14 +43,15 @@ Light_debug_renderer::Light_debug_renderer()
 }
 
 void Light_debug_renderer::connect(
-    shared_ptr<renderstack::graphics::Renderer> renderer_,
-    shared_ptr<Programs>                  programs_,
-    shared_ptr<Light_mesh>                light_mesh_)
+    const shared_ptr<renderstack::graphics::Renderer>& renderer_,
+    const shared_ptr<Programs>&                        programs_,
+    const shared_ptr<Light_mesh>&                      light_mesh_
+)
 {
     base_connect(renderer_, programs_, light_mesh_);
 
-    initialization_depends_on(renderer_);
-    initialization_depends_on(programs_);
+    depends_on(renderer_);
+    depends_on(programs_);
 }
 
 void Light_debug_renderer::initialize_service()
@@ -133,17 +134,18 @@ void Light_debug_renderer::light_pass(const Light_collection &lights, const Came
         gl::draw_elements_type::value index_type    = gl::draw_elements_type::unsigned_int;
         GLvoid *                      index_pointer = reinterpret_cast<GLvoid *>((index_range.first_index + mesh->first_index()) * mesh->index_buffer()->stride());
         GLint                         base_vertex   = configuration::can_use.draw_elements_base_vertex
-                                ? static_cast<GLint>(mesh->first_vertex())
-                                : 0;
+            ? static_cast<GLint>(mesh->first_vertex())
+            : 0;
 
         assert(index_range.index_count > 0);
 
         r.draw_elements_base_vertex(*vertex_stream,
-                                    begin_mode,
-                                    count,
-                                    index_type,
-                                    index_pointer,
-                                    base_vertex);
+            begin_mode,
+            count,
+            index_type,
+            index_pointer,
+            base_vertex
+        );
 
         ++light_index;
     }

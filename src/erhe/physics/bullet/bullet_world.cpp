@@ -146,7 +146,9 @@ Bullet_world::Bullet_world()
     m_bullet_dynamics_world.setGravity(btVector3(0, -10, 0));
 }
 
-Bullet_world::~Bullet_world() = default;
+Bullet_world::~Bullet_world()
+{
+}
 
 void Bullet_world::enable_physics_updates()
 {

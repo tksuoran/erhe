@@ -220,15 +220,17 @@ Depth_stencil_state Depth_stencil_state::s_depth_test_enabled_greater_or_equal_s
 auto Depth_stencil_state::depth_test_enabled_stencil_test_disabled(bool reverse_depth)
 -> Depth_stencil_state*
 {
-    return reverse_depth ? &s_depth_test_enabled_stencil_test_disabled_reverse_depth
-                         : &s_depth_test_enabled_stencil_test_disabled_forward_depth;
+    return reverse_depth
+        ? &s_depth_test_enabled_stencil_test_disabled_reverse_depth
+        : &s_depth_test_enabled_stencil_test_disabled_forward_depth;
 }
 
 auto Depth_stencil_state::depth_test_enabled_greater_or_equal_stencil_test_disabled(bool reverse_depth)
 -> Depth_stencil_state*
 {
-    return reverse_depth ? &s_depth_test_enabled_stencil_test_disabled_reverse_depth
-                         : &s_depth_test_enabled_stencil_test_disabled_forward_depth;
+    return reverse_depth
+        ? &s_depth_test_enabled_stencil_test_disabled_reverse_depth
+        : &s_depth_test_enabled_stencil_test_disabled_forward_depth;
 }
 
 Depth_stencil_state Depth_stencil_state::depth_test_always_stencil_test_disabled = Depth_stencil_state{

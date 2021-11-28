@@ -10,6 +10,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/pointer_context.hpp"
+#include "windows/materials.hpp"
 
 #include "erhe/geometry/operation/clone.hpp"
 #include "erhe/geometry/geometry.hpp"
@@ -57,52 +58,18 @@ auto Brushes::state() const -> State
 
 void Brushes::connect()
 {
+    m_grid_tool       = get<Grid_tool>();
+    m_materials       = get<Materials>();
     m_operation_stack = get<Operation_stack>();
     m_scene_root      = require<Scene_root>();
     m_selection_tool  = get<Selection_tool>();
-    m_grid_tool       = get<Grid_tool>();
 }
 
 void Brushes::initialize_component()
 {
-    make_materials();
-
     m_selected_brush_index = 0;
 
     get<Editor_tools>()->register_tool(this);
-}
-
-void Brushes::make_materials()
-{
-    if constexpr (true) // White default material
-    {
-        auto m = m_scene_root->make_material(
-            fmt::format("Default Material"),
-            vec4{1.0f, 1.0f, 1.0f, 1.0f},
-            0.50f,
-            0.00f,
-            0.50f
-        );
-        add_material(m);
-    }
-
-    for (size_t i = 0, end = 10; i < end; ++i)
-    {
-        const float rel        = static_cast<float>(i) / static_cast<float>(end);
-        const float hue        = rel * 360.0f;
-        const float saturation = 0.9f;
-        const float value      = 1.0f;
-        float R, G, B;
-        erhe::toolkit::hsv_to_rgb(hue, saturation, value, R, G, B);
-        auto m = m_scene_root->make_material(
-            fmt::format("Hue {}", static_cast<int>(hue)),
-            vec4{R, G, B, 1.0f},
-            1.00f,
-            0.95f,
-            0.70f
-        );
-        add_material(m);
-    }
 }
 
 auto Brushes::allocate_brush(Build_info_set& build_info_set)
@@ -142,12 +109,14 @@ auto Brushes::make_brush(
 
     const float density = 1.0f;
 
+    const auto mass_properties = geometry->get_mass_properties();
+
     Brush::Create_info create_info{
         geometry,
         context.build_info_set,
         context.normal_style,
         density,
-        geometry->volume(),
+        mass_properties.volume,
         collision_shape
     };
 
@@ -183,12 +152,6 @@ auto Brushes::make_brush(
     const auto brush = allocate_brush(context.build_info_set);
     brush->initialize(create_info);
     return brush;
-}
-
-void Brushes::add_material(const shared_ptr<Material>& material)
-{
-    m_materials.push_back(material);
-    m_material_names.push_back(material->name.c_str());
 }
 
 void Brushes::cancel_ready()
@@ -387,7 +350,7 @@ void Brushes::do_insert_operation()
 
     const auto hover_from_brush = get_brush_transform();
     const auto world_from_brush = m_hover_mesh->world_from_node() * hover_from_brush;
-    const auto material         = m_materials[m_selected_material];
+    const auto material         = m_materials->selected_material();
     const auto instance         = m_brush->make_instance(
         world_from_brush,
         material,
@@ -415,16 +378,17 @@ void Brushes::do_insert_operation()
 
 void Brushes::add_brush_mesh()
 {
-    if (m_materials.empty())
-    {
-        return;
-    }
     if ((m_brush == nullptr) || !m_hover_position.has_value())
     {
         return;
     }
 
-    const auto  material     = m_materials[m_selected_material];
+    const auto material = m_materials->selected_material();
+    if (!material)
+    {
+        return;
+    }
+
     const auto& brush_scaled = m_brush->get_scaled(m_transform_scale);
     m_brush_mesh = m_scene_root->make_mesh_node(
         brush_scaled.primitive_geometry->source_geometry->name,
@@ -453,15 +417,29 @@ void Brushes::update_mesh()
     update_mesh_node_transform();
 }
 
+void Brushes::tool_properties()
+{
+    using namespace erhe::imgui;
+
+    ImGui::InputFloat("Hover scale",     &debug_info.hover_frame_scale);
+    ImGui::InputFloat("Brush scale",     &debug_info.brush_frame_scale);
+    ImGui::InputFloat("Transform scale", &debug_info.transform_scale);
+    ImGui::SliderFloat("Scale", &m_scale, 0.0f, 2.0f);
+    make_check_box("Snap to Polygon", &m_snap_to_hover_polygon);
+    make_check_box(
+        "Snap to Grid",
+        &m_snap_to_grid,
+        m_snap_to_hover_polygon
+            ? Item_mode::disabled
+            : Item_mode::normal
+    );
+}
+
 void Brushes::imgui(Pointer_context&)
 {
     using namespace erhe::imgui;
 
     ImGui::Begin("Brushes");
-
-    ImGui::InputFloat("Hover scale",     &debug_info.hover_frame_scale);
-    ImGui::InputFloat("Brush scale",     &debug_info.brush_frame_scale);
-    ImGui::InputFloat("Transform scale", &debug_info.transform_scale);
 
     const size_t brush_count = m_brushes.size();
 
@@ -481,37 +459,6 @@ void Brushes::imgui(Pointer_context&)
             {
                 m_selected_brush_index = i;
                 m_brush = brush;
-            }
-        }
-        ImGui::SliderFloat("Scale", &m_scale, 0.0f, 2.0f);
-        make_check_box("Snap to Polygon", &m_snap_to_hover_polygon);
-        make_check_box(
-            "Snap to Grid",
-            &m_snap_to_grid,
-            m_snap_to_hover_polygon
-                ? Item_mode::disabled
-                : Item_mode::normal
-        );
-    }
-    ImGui::End();
-
-    ImGui::Begin("Materials");
-    if (!m_material_names.empty())
-    {
-        const size_t material_count = m_material_names.size();
-        const auto   button_size    = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
-        for (int i = 0; i < static_cast<int>(material_count); ++i)
-        {
-            const bool button_pressed = make_button(
-                m_material_names[i],
-                (m_selected_material == i)
-                    ? Item_mode::active
-                    : Item_mode::normal,
-                button_size
-            );
-            if (button_pressed)
-            {
-                m_selected_material = i;
             }
         }
     }

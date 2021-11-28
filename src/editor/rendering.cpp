@@ -121,7 +121,6 @@ void Editor_rendering::gui_render()
 
     Expects(m_pipeline_state_tracker);
 
-    ImGui::ShowDemoWindow();
     ImGui::Render();
 
     // Pipeline state required for NVIDIA driver not to complain about texture
@@ -415,7 +414,8 @@ void Editor_rendering::render_content(
 
 void Editor_rendering::render_selection(
     erhe::scene::ICamera*       camera,
-    const erhe::scene::Viewport viewport)
+    const erhe::scene::Viewport viewport
+)
 {
     VERIFY(m_viewport_config);
     if (camera == nullptr)
@@ -574,7 +574,8 @@ void Editor_rendering::render_brush(
         erhe::scene::Node::c_visibility_brush,  // all set
         0u,                                     // at least one set
         0u,                                     // all clear
-        0u};                                    // at least one cler
+        0u                                      // at least one cler
+    };                                    
 
     m_forward_renderer->render(
         viewport,

@@ -227,7 +227,7 @@ void Merge_operation::execute() const
             auto node_physics = get_physics_node(mesh.get());
             if (node_physics)
             {
-                remove_from_physics_world(m_context.physics_world, node_physics);
+                remove_from_physics_world(m_context.physics_world, *node_physics.get());
                 mesh->detach(node_physics.get());
             }
             mesh->unparent();

@@ -8,9 +8,14 @@
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
+#include "windows/frame_log_window.hpp"
 
-#include "erhe/scene/camera.hpp"
+#include "erhe/geometry/geometry.hpp"
 #include "erhe/imgui/imgui_impl_erhe.hpp"
+#include "erhe/raytrace/mesh_intersect.hpp"
+#include "erhe/scene/camera.hpp"
+#include "erhe/scene/camera.hpp"
+#include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 #include <backends/imgui_impl_glfw.h>
@@ -67,6 +72,86 @@ void Editor_view::update_pointer()
     pointer_context.viewport.reverse_depth = m_editor_rendering->scene_viewport.reverse_depth;
     pointer_context.scene_view_focus       = m_editor_rendering->is_content_in_focus();
     pointer_context.geometry               = nullptr;
+
+    pointer_context.raytrace_hit_position = {};
+    pointer_context.raytrace_hit_normal   = {};
+    if (pointer_context.pointer_in_content_area())
+    {
+        auto* frame_log = get<Frame_log_window>();
+        frame_log->new_frame();
+
+        const glm::vec3 pointer_near  = pointer_context.position_in_world(1.0f);
+        const glm::vec3 pointer_far   = pointer_context.position_in_world(0.0f);
+        const glm::vec3 origin        = pointer_near;
+        const glm::vec3 direction     = glm::normalize(pointer_far - pointer_near);
+        frame_log->log("Camera: {}", glm::vec3{camera->position_in_world()});
+        frame_log->log("Far: {}", pointer_far);
+        frame_log->log("Near: {}", pointer_near);
+        frame_log->log("Direction: {}", direction);
+        frame_log->log("Camera -Z: {}", glm::vec3{-camera->direction_in_world()});
+#if 0
+        erhe::scene::Mesh*         hit_mesh      {nullptr};
+        erhe::geometry::Geometry*  hit_geometry  {nullptr};
+        erhe::geometry::Polygon_id hit_polygon_id{0};
+        float                      hit_t         {std::numeric_limits<float>::max()};
+        float                      hit_u         {0.0f};
+        float                      hit_v         {0.0f};
+        const auto& content_layer = m_scene_root->content_layer();
+        for (auto& mesh : content_layer.meshes)
+        {
+            erhe::geometry::Geometry*  geometry  {nullptr};
+            erhe::geometry::Polygon_id polygon_id{0};
+            float                      t         {std::numeric_limits<float>::max()};
+            float                      u         {0.0f};
+            float                      v         {0.0f};
+            const bool hit = erhe::raytrace::intersect(
+                *mesh.get(),
+                origin,
+                direction,
+                geometry,
+                polygon_id,
+                t,
+                u,
+                v
+            );
+            if (hit)
+            {
+                frame_log->log(
+                    "hit mesh {}, t = {}, polygon id = {}",
+                    mesh->name(),
+                    t,
+                    static_cast<uint32_t>(polygon_id)
+                );
+            }
+            if (hit && (t < hit_t))
+            {
+                hit_mesh       = mesh.get();
+                hit_geometry   = geometry;
+                hit_polygon_id = polygon_id;
+                hit_t          = t;
+                hit_u          = u;
+                hit_v          = v;
+            }
+        }
+        if (hit_t != std::numeric_limits<float>::max())
+        {
+            pointer_context.raytrace_hit_position = origin + hit_t * direction;
+            if (hit_polygon_id < hit_geometry->polygon_count())
+            {
+                auto* polygon_normals = hit_geometry->polygon_attributes().find<glm::vec3>(c_polygon_normals);
+                if ((polygon_normals != nullptr) && polygon_normals->has(hit_polygon_id))
+                {
+                    auto local_normal    = polygon_normals->get(hit_polygon_id);
+                    auto world_from_node = hit_mesh->world_from_node();
+                    pointer_context.raytrace_local_index = static_cast<size_t>(hit_polygon_id);
+                    pointer_context.raytrace_hit_normal = glm::vec3{
+                        world_from_node * glm::vec4{local_normal, 0.0f}
+                    };
+                }
+            }
+        }
+#endif
+    }
 
     if (pointer_context.pointer_in_content_area() && m_id_renderer)
     {

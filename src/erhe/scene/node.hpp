@@ -17,19 +17,21 @@ class INode_attachment
 public:
     virtual ~INode_attachment();
 
-    static constexpr uint64_t c_flag_bit_none       = 0;
-    static constexpr uint64_t c_flag_bit_is_physics = (1 << 0);
+    static constexpr uint64_t c_flag_bit_none        = 0;
+    static constexpr uint64_t c_flag_bit_is_physics  = (1 << 0);
+    static constexpr uint64_t c_flag_bit_is_raytrace = (1 << 1);
 
     virtual void on_attached_to           (Node& node) = 0;
     virtual void on_detached_from         (Node& node) = 0;
     virtual void on_node_transform_changed() = 0;
     virtual auto node_attachment_type     () const -> const char* = 0;
-    virtual auto node                     () const -> Node* = 0;
 
+    auto node     () const -> Node*;
     auto flag_bits() const -> uint64_t;
     auto flag_bits() -> uint64_t&;
 
 protected:
+    Node*    m_node     {nullptr};
     uint64_t m_flag_bits{c_flag_bit_none};
 };
 
@@ -53,9 +55,10 @@ public:
     static constexpr uint64_t c_flag_bit_is_transform = (1 << 0);
     static constexpr uint64_t c_flag_bit_is_empty     = (1 << 1);
     static constexpr uint64_t c_flag_bit_is_physics   = (1 << 2);
-    static constexpr uint64_t c_flag_bit_is_light     = (1 << 3);
-    static constexpr uint64_t c_flag_bit_is_camera    = (1 << 4);
-    static constexpr uint64_t c_flag_bit_is_mesh      = (1 << 5);
+    static constexpr uint64_t c_flag_bit_is_icamera   = (1 << 4);
+    static constexpr uint64_t c_flag_bit_is_camera    = (1 << 5);
+    static constexpr uint64_t c_flag_bit_is_light     = (1 << 6);
+    static constexpr uint64_t c_flag_bit_is_mesh      = (1 << 7);
 
     virtual void on_attached_to      (Node& node);
     virtual void on_detached_from    (Node& node);
@@ -90,7 +93,7 @@ public:
 
     void set_parent_from_node      (const glm::mat4 matrix);
     void set_parent_from_node      (const Transform& transform);
-    
+                            
     void set_node_from_parent      (const glm::mat4 matrix);
     void set_node_from_parent      (const Transform& transform);
 
@@ -101,7 +104,7 @@ public:
     void attach     (const std::shared_ptr<Node>& node);
     auto detach     (Node* node) -> bool;
     void attach     (const std::shared_ptr<INode_attachment>& attachment);
-    auto detach     (INode_attachment* node) -> bool;
+    auto detach     (INode_attachment* attachment) -> bool;
     void unparent   ();
     auto root       () -> Node*;
     auto root       () const -> const Node*;
@@ -118,17 +121,17 @@ protected:
         Transform world_from_node;  // calculated by update_transform()
     };
 
-    Transforms                         m_transforms;
-    std::uint64_t                      m_last_transform_update_serial{0};
-    Node*                              m_parent         {nullptr};
-    std::vector<std::shared_ptr<Node>> m_children;
+    Transforms                                     m_transforms;
+    std::uint64_t                                  m_last_transform_update_serial{0};
+    Node*                                          m_parent         {nullptr};
+    std::vector<std::shared_ptr<Node>>             m_children;
     std::vector<std::shared_ptr<INode_attachment>> m_attachments;
-    uint64_t                           m_visibility_mask{c_visibility_none};
-    uint64_t                           m_flag_bits      {c_flag_bit_none};
-    size_t                             m_depth          {0};
-    erhe::toolkit::Unique_id<Node>     m_id;
-    std::string                        m_name;
-    std::string                        m_label;
+    uint64_t                                       m_visibility_mask{c_visibility_none};
+    uint64_t                                       m_flag_bits      {c_flag_bit_none};
+    size_t                                         m_depth          {0};
+    erhe::toolkit::Unique_id<Node>                 m_id;
+    std::string                                    m_name;
+    std::string                                    m_label;
 };
 
 auto is_empty    (const Node* const node) -> bool;

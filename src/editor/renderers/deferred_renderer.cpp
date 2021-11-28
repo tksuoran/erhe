@@ -38,23 +38,25 @@ using namespace glm;
 using namespace std;
 
 Deferred_renderer::Deferred_renderer()
-    : service("Deferred_renderer")
-    , m_gbuffer_fbo(0)
-    , m_linear_fbo(0)
-    , m_stencil_rbo(0)
+    : service      {"Deferred_renderer"}
+    , m_gbuffer_fbo{0}
+    , m_linear_fbo {0}
+    , m_stencil_rbo{0}
 {
 }
 
-void Deferred_renderer::connect(shared_ptr<Renderer>      renderer,
-                                shared_ptr<Programs>      programs,
-                                shared_ptr<Quad_renderer> quad_renderer,
-                                shared_ptr<Light_mesh>    light_mesh)
+void Deferred_renderer::connect(
+    shared_ptr<Renderer>      renderer,
+    shared_ptr<Programs>      programs,
+    shared_ptr<Quad_renderer> quad_renderer,
+    shared_ptr<Light_mesh>    light_mesh
+)
 {
     base_connect(renderer, programs, light_mesh);
     m_quad_renderer = quad_renderer;
 
-    initialization_depends_on(renderer);
-    initialization_depends_on(programs);
+    depends_on(renderer);
+    depends_on(programs);
 }
 
 void Deferred_renderer::initialize_service()
@@ -139,48 +141,58 @@ void Deferred_renderer::resize(int width, int height)
         {
             m_gbuffer_rt[i].reset();
 
-            m_gbuffer_rt[i] = make_shared<Texture>(Texture::Target::texture_2d,
-                                                   formats[i],
-                                                   false,
-                                                   Base_renderer::width(),
-                                                   Base_renderer::height(),
-                                                   0);
+            m_gbuffer_rt[i] = make_shared<Texture>(
+                Texture::Target::texture_2d,
+                formats[i],
+                false,
+                Base_renderer::width(),
+                Base_renderer::height(),
+                0
+            );
             m_gbuffer_rt[i]->allocate_storage(renderer());
             m_gbuffer_rt[i]->set_mag_filter(gl::texture_mag_filter::nearest);
             m_gbuffer_rt[i]->set_min_filter(gl::texture_min_filter::nearest);
             m_gbuffer_rt[i]->set_wrap(0, gl::texture_wrap_mode::clamp_to_edge);
             m_gbuffer_rt[i]->set_wrap(1, gl::texture_wrap_mode::clamp_to_edge);
 
-            gl::framebuffer_texture_2d(GL_DRAW_FRAMEBUFFER,
-                                       GL_COLOR_ATTACHMENT0 + i,
-                                       GL_TEXTURE_2D,
-                                       m_gbuffer_rt[i]->gl_name(),
-                                       0);
+            gl::framebuffer_texture_2d(
+                GL_DRAW_FRAMEBUFFER,
+                GL_COLOR_ATTACHMENT0 + i,
+                GL_TEXTURE_2D,
+                m_gbuffer_rt[i]->gl_name(),
+                0
+            );
         }
 
-        GLenum depth_format = use_stencil() ? GL_DEPTH32F_STENCIL8
-                                            : GL_DEPTH_COMPONENT32F;
-        GLenum attachment_point = use_stencil() ? GL_DEPTH_STENCIL_ATTACHMENT
-                                                : GL_DEPTH_ATTACHMENT;
+        GLenum depth_format = use_stencil()
+            ? GL_DEPTH32F_STENCIL8
+            : GL_DEPTH_COMPONENT32F;
+        GLenum attachment_point = use_stencil()
+            ? GL_DEPTH_STENCIL_ATTACHMENT
+            : GL_DEPTH_ATTACHMENT;
 
         m_depth.reset();
-        m_depth = make_shared<Texture>(Texture::Target::texture_2d,
-                                       depth_format,
-                                       false,
-                                       Base_renderer::width(),
-                                       Base_renderer::height(),
-                                       0);
+        m_depth = make_shared<Texture>(
+            Texture::Target::texture_2d,
+            depth_format,
+            false,
+            Base_renderer::width(),
+            Base_renderer::height(),
+            0
+        );
         m_depth->set_mag_filter(gl::texture_mag_filter::nearest);
         m_depth->set_min_filter(gl::texture_min_filter::nearest);
         m_depth->set_wrap(0, gl::texture_wrap_mode::clamp_to_edge);
         m_depth->set_wrap(1, gl::texture_wrap_mode::clamp_to_edge);
         m_depth->allocate_storage(renderer());
 
-        gl::framebuffer_texture_2d(GL_DRAW_FRAMEBUFFER,
-                                   attachment_point,
-                                   GL_TEXTURE_2D,
-                                   m_depth->gl_name(),
-                                   0);
+        gl::framebuffer_texture_2d(
+            GL_DRAW_FRAMEBUFFER,
+            attachment_point,
+            GL_TEXTURE_2D,
+            m_depth->gl_name(),
+            0
+        );
 
         GLenum a = gl::check_framebuffer_status(GL_FRAMEBUFFER);
         if (a != GL_FRAMEBUFFER_COMPLETE)
@@ -203,23 +215,27 @@ void Deferred_renderer::resize(int width, int height)
         {
             m_linear_rt[i].reset();
 
-            m_linear_rt[i] = make_shared<Texture>(Texture::Target::texture_2d,
-                                                  formats[i],
-                                                  false,
-                                                  Base_renderer::width(),
-                                                  Base_renderer::height(),
-                                                  0);
+            m_linear_rt[i] = make_shared<Texture>(
+                Texture::Target::texture_2d,
+                formats[i],
+                false,
+                Base_renderer::width(),
+                Base_renderer::height(),
+                0
+            );
             m_linear_rt[i]->allocate_storage(renderer());
             m_linear_rt[i]->set_mag_filter(gl::texture_mag_filter::nearest);
             m_linear_rt[i]->set_min_filter(gl::texture_min_filter::nearest);
             m_linear_rt[i]->set_wrap(0, gl::texture_wrap_mode::clamp_to_edge);
             m_linear_rt[i]->set_wrap(1, gl::texture_wrap_mode::clamp_to_edge);
 
-            gl::framebuffer_texture_2d(GL_DRAW_FRAMEBUFFER,
-                                       GL_COLOR_ATTACHMENT0 + i,
-                                       GL_TEXTURE_2D,
-                                       m_linear_rt[i]->gl_name(),
-                                       0);
+            gl::framebuffer_texture_2d(
+                GL_DRAW_FRAMEBUFFER,
+                GL_COLOR_ATTACHMENT0 + i,
+                GL_TEXTURE_2D,
+                m_linear_rt[i]->gl_name(),
+                0
+            );
         }
 
         if (use_stencil())
@@ -231,14 +247,18 @@ void Deferred_renderer::resize(int width, int height)
 
             gl::bind_renderbuffer(GL_RENDERBUFFER, m_stencil_rbo);
 
-            gl::renderbuffer_storage(GL_RENDERBUFFER,
-                                     GL_DEPTH32F_STENCIL8,
-                                     Base_renderer::width(),
-                                     Base_renderer::height());
-            gl::framebuffer_renderbuffer(GL_FRAMEBUFFER,
-                                         GL_DEPTH_STENCIL_ATTACHMENT,
-                                         GL_RENDERBUFFER,
-                                         m_stencil_rbo);
+            gl::renderbuffer_storage(
+                GL_RENDERBUFFER,
+                GL_DEPTH32F_STENCIL8,
+                Base_renderer::width(),
+                Base_renderer::height()
+            );
+            gl::framebuffer_renderbuffer(
+                GL_FRAMEBUFFER,
+                GL_DEPTH_STENCIL_ATTACHMENT,
+                GL_RENDERBUFFER,
+                m_stencil_rbo
+            );
         }
 
         GLenum a = gl::check_framebuffer_status(GL_FRAMEBUFFER);
@@ -299,9 +319,11 @@ void Deferred_renderer::fbo_clear()
     // cartesian_to_spherical(T, normal_tangent_clear[2], normal_tangent_clear[3]);
 }
 
-void Deferred_renderer::geometry_pass(const Material_collection &materials,
-                                      const Model_collection &models,
-                                      const Camera &camera)
+void Deferred_renderer::geometry_pass(
+    const Material_collection& materials,
+    const Model_collection&    models,
+    const Camera&              camera
+)
 {
     bind_gbuffer_fbo();
 
@@ -344,8 +366,8 @@ void Deferred_renderer::geometry_pass(const Material_collection &materials,
         gl::draw_elements_type::value index_type    = gl::draw_elements_type::unsigned_int;
         GLvoid *                      index_pointer = reinterpret_cast<GLvoid *>((index_range.first_index + mesh->first_index()) * mesh->index_buffer()->stride());
         GLint                         base_vertex   = configuration::can_use.draw_elements_base_vertex
-                                ? static_cast<GLint>(mesh->first_vertex())
-                                : 0;
+            ? static_cast<GLint>(mesh->first_vertex())
+            : 0;
 
         bind_model(model_index);
         bind_material(material_index);
@@ -353,12 +375,14 @@ void Deferred_renderer::geometry_pass(const Material_collection &materials,
         auto vertex_stream = model->geometry_mesh->vertex_stream().get();
         assert(vertex_stream != nullptr);
 
-        r.draw_elements_base_vertex(*vertex_stream,
-                                    begin_mode,
-                                    count,
-                                    index_type,
-                                    index_pointer,
-                                    base_vertex);
+        r.draw_elements_base_vertex(
+            *vertex_stream,
+            begin_mode,
+            count,
+            index_type,
+            index_pointer,
+            base_vertex
+        );
         ++model_index;
     }
 }
@@ -372,10 +396,12 @@ void Deferred_renderer::bind_linear_fbo()
     if (use_stencil())
     {
         gl::bind_framebuffer(GL_READ_FRAMEBUFFER, m_gbuffer_fbo);
-        gl::blit_framebuffer(0, 0, width(), height(),
-                             0, 0, width(), height(),
-                             GL_DEPTH_BUFFER_BIT,
-                             GL_NEAREST);
+        gl::blit_framebuffer(
+            0, 0, width(), height(),
+            0, 0, width(), height(),
+            GL_DEPTH_BUFFER_BIT,
+            GL_NEAREST
+        );
     }
 
     GLenum a = gl::check_framebuffer_status(GL_FRAMEBUFFER);
@@ -457,8 +483,8 @@ void Deferred_renderer::light_pass(const Light_collection &lights, const Camera 
         gl::draw_elements_type::value index_type    = gl::draw_elements_type::unsigned_int;
         GLvoid *                      index_pointer = reinterpret_cast<GLvoid *>((index_range.first_index + mesh->first_index()) * mesh->index_buffer()->stride());
         GLint                         base_vertex   = configuration::can_use.draw_elements_base_vertex
-                                ? static_cast<GLint>(mesh->first_vertex())
-                                : 0;
+            ? static_cast<GLint>(mesh->first_vertex())
+            : 0;
 
         assert(index_range.index_count > 0);
 

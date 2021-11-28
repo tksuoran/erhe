@@ -174,6 +174,10 @@ void Shadow_renderer::render(
         size_t light_index = 0;
         for (auto light : light_layer.lights)
         {
+            if (light_index >= s_max_light_count)
+            {
+                break; // TODO
+            }
             light->update(m_viewport);
             if (!light->cast_shadow)
             {

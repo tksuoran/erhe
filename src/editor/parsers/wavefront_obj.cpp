@@ -145,9 +145,10 @@ auto parse_obj_geometry(const std::filesystem::path& path)
         const std::string& delimiters  = " \t\v";
         const std::string& end_of_line = "\n";
         const std::string& slash       = "/\r";
+        const std::string& comment     = "#";
 
-        std::string::size_type line_last_pos  = text.find_first_not_of(end_of_line, 0);
-        std::string::size_type line_pos       = text.find_first_of(end_of_line, line_last_pos);
+        std::string::size_type line_last_pos = text.find_first_not_of(end_of_line, 0);
+        std::string::size_type line_pos      = text.find_first_of(end_of_line, line_last_pos);
         std::vector<glm::vec3> positions;
         std::vector<glm::vec3> colors;
         std::vector<glm::vec3> normals;
@@ -158,10 +159,27 @@ auto parse_obj_geometry(const std::filesystem::path& path)
 
         bool has_vertex_colors = false;
 
-        while ((line_pos != std::string::npos) || (line_last_pos != std::string::npos))
+        while (
+            (line_pos != std::string::npos) ||
+            (line_last_pos != std::string::npos)
+        )
         {
             auto line = text.substr(line_last_pos, line_pos - line_last_pos);
-            line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
+            line.erase(
+                std::remove(
+                    line.begin(),
+                    line.end(),
+                    '\r'
+                ),
+                line.end()
+            );
+
+            // Drop comments
+            const auto coment_pos = line.find_first_of(comment);
+            if (coment_pos != std::string::npos)
+            {
+                line.erase(line.begin() + coment_pos, line.end());
+            }
 
             //log_parsers.trace("line: {}\n", line);
             if (line.length() == 0)
@@ -202,7 +220,7 @@ auto parse_obj_geometry(const std::filesystem::path& path)
 
                     case Command::Group_name:
                     {
-                        token_last_pos = line.find_first_not_of(end_of_line, token_pos);
+                        token_last_pos = line.find_first_not_of(delimiters, token_pos);
                         token_pos      = line.find_first_of(end_of_line, token_last_pos);
                         if (token_last_pos != std::string::npos || token_pos != std::string::npos)
                         {
@@ -383,8 +401,7 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                     const int        corner_count = static_cast<int>(face_vertex_position_indices.size());
                     for (int i = 0; i < corner_count; ++i)
                     {
-                        const int j = corner_count - 1 - i; // reverse polygon
-                        const int obj_vertex_index = face_vertex_position_indices[j];
+                        const int obj_vertex_index = face_vertex_position_indices[i];
                         const int position_index =
                             (obj_vertex_index > 0)
                                 ? obj_vertex_index - 1
@@ -415,9 +432,9 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                             point_colors->put(point_id, colors[position_index]);
                         }
 
-                        if (j < static_cast<int>(face_vertex_texcoord_indices.size()))
+                        if (i < static_cast<int>(face_vertex_texcoord_indices.size()))
                         {
-                            const int obj_texcoord_index = face_vertex_texcoord_indices[j];
+                            const int obj_texcoord_index = face_vertex_texcoord_indices[i];
                             const int texcoord_index =
                                 (obj_texcoord_index > 0)
                                     ? obj_texcoord_index - 1
@@ -426,9 +443,9 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                             corner_texcoords->put(corner_id, texcoords[texcoord_index]);
                         }
 
-                        if (j < static_cast<int>(face_vertex_normal_indices.size()))
+                        if (i < static_cast<int>(face_vertex_normal_indices.size()))
                         {
-                            const int obj_normal_index = face_vertex_normal_indices[j];
+                            const int obj_normal_index = face_vertex_normal_indices[i];
                             const int normal_index =
                                 (obj_normal_index > 0)
                                     ? obj_normal_index - 1

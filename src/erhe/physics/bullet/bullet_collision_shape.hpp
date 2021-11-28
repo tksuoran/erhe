@@ -19,28 +19,29 @@ class Bullet_collision_shape
     : public ICollision_shape
 {
 public:
-    explicit Bullet_collision_shape(btCollisionShape* shape)
-        : m_bullet_collision_shape{shape}
-    {
-    }
+    explicit Bullet_collision_shape(btCollisionShape* shape);
+    ~Bullet_collision_shape() override;
 
     // Implements ICollision_shape
     void calculate_local_inertia(float mass, glm::vec3& inertia) const override;
     auto is_convex              () const -> bool                       override;
+
     void add_child_shape(
-        std::shared_ptr<ICollision_shape> shape,
-        Transform                         transform
-    )                                                                  override;
+        const std::shared_ptr<ICollision_shape>& shape,
+        const Transform                          transform
+    ) override;
+
     void calculate_principal_axis_transform(
         const std::vector<float>& child_masses,
         Transform&                out_principal_transform,
         glm::vec3&                inertia
-    )                                                                  override;
+    ) override;
 
     auto get_bullet_collision_shape() -> btCollisionShape*
     {
         return m_bullet_collision_shape;
     }
+
     auto get_bullet_collision_shape() const -> const btCollisionShape*
     {
         return m_bullet_collision_shape;

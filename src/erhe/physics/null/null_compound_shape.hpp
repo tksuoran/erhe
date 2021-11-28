@@ -14,19 +14,16 @@ class Compound_child
 {
 public:
     Compound_child(
-        std::shared_ptr<ICollision_shape> shape,
-        const glm::mat3                   basis,
-        const glm::vec3                   origin
+        const std::shared_ptr<ICollision_shape>& shape,
+        const Transform                          transform
     )
-        : shape{shape}
-        , basis{basis}
-        , origin{origin}
+        : shape    {shape}
+        , transform{transform}
     {
     }
 
     std::shared_ptr<ICollision_shape> shape;
-    const glm::mat3                   basis;
-    const glm::vec3                   origin;
+    const Transform                   transform;
 };
 
 class Null_compound_shape
@@ -41,12 +38,11 @@ public:
 
     // Implements ICompound_shape
     void add_child_shape(
-        std::shared_ptr<ICollision_shape> shape,
-        const glm::mat3                   basis,
-        const glm::vec3                   origin
+        const std::shared_ptr<ICollision_shape>& shape,
+        const Transform                          transform
     ) override
     {
-        m_children.emplace_back(std::make_shared<Compound_child>(shape, basis, origin));
+        m_children.emplace_back(std::make_shared<Compound_child>(shape, transform));
     }
 
 private:

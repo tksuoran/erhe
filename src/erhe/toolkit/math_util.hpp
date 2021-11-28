@@ -157,8 +157,7 @@ auto unproject(
     const float     viewport_y,
     const float     viewport_width,
     const float     viewport_height
-)
--> glm::vec3;
+) -> glm::vec3;
 
 auto project_to_screen_space(
     const glm::mat4 clip_from_world,
@@ -169,8 +168,7 @@ auto project_to_screen_space(
     const float     viewport_y,
     const float     viewport_width,
     const float     viewport_height
-)
--> glm::vec3;
+) -> glm::vec3;
 
 auto create_frustum(const float left, const float right, const float bottom, const float top, const float z_near, const float z_far)
 -> glm::mat4;

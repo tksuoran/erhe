@@ -12,6 +12,7 @@ namespace erhe::primitive
 namespace editor
 {
 
+class Materials;
 class Scene_root;
 class Selection_tool;
 
@@ -36,10 +37,7 @@ public:
     void imgui(Pointer_context& pointer_context) override;
 
 private:
-    void materials();
-
-    Scene_root* m_scene_root{nullptr};
-    erhe::primitive::Material*  m_selected_material{nullptr};
+    Materials* m_materials{nullptr};
 };
 
 } // namespace editor

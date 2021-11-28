@@ -100,8 +100,12 @@ public:
     size_t                             hover_local_index{0};
     bool                               hover_tool       {false};
     bool                               hover_content    {false};
-    erhe::geometry::Geometry*          geometry{nullptr};
-    uint64_t                           frame_number{0};
+    erhe::geometry::Geometry*          geometry         {nullptr};
+    uint64_t                           frame_number     {0};
+    glm::vec3                          raytrace_hit_position{0.0f};
+    glm::vec3                          raytrace_hit_normal  {0.0f};
+    size_t                             raytrace_primitive   {0};
+    size_t                             raytrace_local_index {0};
 };
 
 } // namespace editor

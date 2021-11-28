@@ -104,6 +104,11 @@ void Log::indent(int indent_amount)
     s_indent += indent_amount;
 }
 
+void Category::set_sink(ILog_sink* sink)
+{
+    m_sink = sink;
+}
+
 void Category::write(bool indent, int level, const char* format, fmt::format_args args)
 {
     if (level < m_level)
@@ -113,7 +118,14 @@ void Category::write(bool indent, int level, const char* format, fmt::format_arg
 
     std::string text = fmt::vformat(format, args);
 
-    write(indent, text);
+    if (m_sink != nullptr)
+    {
+        m_sink->write(text);
+    }
+    else
+    {
+        write(indent, text);
+    }
 }
 
 void Category::write(bool indent, int level, const std::string& text)

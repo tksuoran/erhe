@@ -416,6 +416,13 @@ public:
     void trace(erhe::log::Category& log) const;
 };
 
+struct Mass_properties
+{
+    float     volume;
+    glm::vec3 center_of_gravity;
+    glm::mat3 inertial;
+};
+
 class Geometry
 {
 public:
@@ -598,6 +605,8 @@ public:
 
     auto make_polygon(const std::initializer_list<Point_id> point_list) -> Polygon_id;
 
+    auto make_polygon_reverse(const std::initializer_list<Point_id> point_list) -> Polygon_id;
+
     // Requires point locations.
     // Returns false if point locations are not available.
     // Returns true on success.
@@ -693,7 +702,7 @@ public:
 
     void sanity_check() const;
 
-    auto volume() -> float;
+    auto get_mass_properties() -> Mass_properties;
 
     class Corner_context
     {

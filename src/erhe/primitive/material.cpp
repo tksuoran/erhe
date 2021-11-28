@@ -20,6 +20,7 @@ Material::Material(
     , anisotropy{anisotropy}
     , base_color{base_color}
     , emissive  {0.0f, 0.0f, 0.0f, 0.0f}
+    , visible   {false}
 {
 }
 

@@ -68,6 +68,10 @@ Bullet_rigid_body::Bullet_rigid_body(
     m_bullet_rigid_body.setRollingFriction(0.1);
 }
 
+Bullet_rigid_body::~Bullet_rigid_body()
+{
+}
+
 auto Bullet_rigid_body::get_motion_mode() const -> Motion_mode
 {
     return m_motion_mode;

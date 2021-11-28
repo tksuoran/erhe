@@ -1,7 +1,5 @@
 #include "erhe/geometry/shapes/sphere.hpp"
 #include "erhe/geometry/log.hpp"
-
-#define ERHE_TRACY_NO_GL 1
 #include "erhe/toolkit/tracy_client.hpp"
 
 #include <glm/glm.hpp>
@@ -209,8 +207,8 @@ public:
     {
         bottom_point_id = sphere_point(0.5f, -1.0f);
         top_point_id    = sphere_point(0.5f,  1.0f);
-        point_normals->put(bottom_point_id,  vec3{0.0f,-1.0f, 0.0f});
-        point_normals->put(top_point_id,     vec3{0.0f, 1.0f, 0.0f});
+        point_normals ->put(bottom_point_id, vec3{0.0f,-1.0f, 0.0f});
+        point_normals ->put(top_point_id,    vec3{0.0f, 1.0f, 0.0f});
         point_tangents->put(bottom_point_id, vec4{0.0f, 0.0f, 0.0f, 0.0f});
         point_tangents->put(top_point_id,    vec4{0.0f, 0.0f, 0.0f, 0.0f});
 
@@ -241,9 +239,11 @@ public:
                 const double     rel_stack   = 1.0 - (0.5 / (static_cast<double>(stack) + 1));
                 const Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
                 const Polygon_id polygon_id  = geometry.make_polygon();
-                make_corner(polygon_id, next_slice, stack_base0);
-                make_corner(polygon_id, slice,      stack_base0);
+
                 const Corner_id tip_corner_id = make_corner(polygon_id, slice, stack_base0_bottom);
+                make_corner(polygon_id, slice,      stack_base0);
+                make_corner(polygon_id, next_slice, stack_base0);
+
                 const auto      p0            = get_point(next_slice, stack);
                 const auto      p1            = get_point(slice,      stack);
 
@@ -287,10 +287,11 @@ public:
                 const double     rel_slice   = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
                 const Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
                 const Polygon_id polygon_id  = geometry.make_polygon();
-                make_corner(polygon_id, next_slice, next_stack_base0);
-                make_corner(polygon_id, slice, next_stack_base0);
-                make_corner(polygon_id, slice, stack_base0);
+
                 make_corner(polygon_id, next_slice, stack_base0);
+                make_corner(polygon_id, slice,      stack_base0);
+                make_corner(polygon_id, slice,      next_stack_base0);
+                make_corner(polygon_id, next_slice, next_stack_base0);
 
                 if constexpr (use_geometric_centroids)
                 {
@@ -311,9 +312,10 @@ public:
             const double     rel_stack     = 1.0 - (0.5 / (static_cast<double>(stack) + 1));
             const Point_id   centroid_id   = sphere_point(rel_slice, rel_stack);
             const Polygon_id polygon_id    = geometry.make_polygon();
-            const Corner_id  tip_corner_id = make_corner(polygon_id, slice, stack_base0_top);
-            make_corner(polygon_id, slice,      stack_base0);
+
             make_corner(polygon_id, next_slice, stack_base0);
+            make_corner(polygon_id, slice,      stack_base0);
+            const Corner_id  tip_corner_id = make_corner(polygon_id, slice, stack_base0_top);
 
             const Point_id p0 = get_point(slice,      stack);
             const Point_id p1 = get_point(next_slice, stack);

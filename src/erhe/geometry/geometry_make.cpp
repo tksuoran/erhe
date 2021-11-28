@@ -387,5 +387,23 @@ auto Geometry::make_polygon(const std::initializer_list<Point_id> point_list)
     return polygon_id;
 }
 
+auto Geometry::make_polygon_reverse(const std::initializer_list<Point_id> point_list)
+-> Polygon_id
+{
+    ZoneScoped;
+
+    const Polygon_id polygon_id = make_polygon();
+    for (
+        auto i = rbegin(point_list), end = rend(point_list);
+        i != end;
+        ++i
+    )
+    {
+        const Point_id point_id = *i;
+        make_polygon_corner(polygon_id, point_id);
+    }
+    return polygon_id;
+}
+
 
 }

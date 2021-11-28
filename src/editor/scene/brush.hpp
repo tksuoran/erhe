@@ -24,6 +24,12 @@ namespace erhe::primitive
     class Primitive_geometry;
 }
 
+//namespace erhe::raytrace
+//{
+//    class IGeometry;
+//    class IScene;
+//}
+
 namespace erhe::scene
 {
     class Mesh;
@@ -36,6 +42,7 @@ namespace editor
 {
 
 class Node_physics;
+class Node_raytrace;
 class Scene_manager;
 
 class Reference_frame
@@ -106,6 +113,7 @@ class Instance
 public:
     std::shared_ptr<erhe::scene::Mesh> mesh;
     std::shared_ptr<Node_physics>      node_physics;
+    std::shared_ptr<Node_raytrace>     node_raytrace;
 };
 
 class Brush final

@@ -28,6 +28,7 @@ public:
         IRigid_body_create_info& create_info,
         IMotion_state*           motion_state
     );
+    ~Bullet_rigid_body() override;
 
     // Implements IRigid_body
     void set_motion_mode             (const Motion_mode motion_mode)                            override;

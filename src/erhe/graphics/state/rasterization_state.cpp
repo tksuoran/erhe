@@ -57,10 +57,39 @@ auto Rasterization_state_hash::operator()(const Rasterization_state& rasterizati
 }
 
 Rasterization_state Rasterization_state::cull_mode_none          {false, gl::Cull_face_mode::back,           gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_front         {true,  gl::Cull_face_mode::front,          gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_back_cw       {true,  gl::Cull_face_mode::back,           gl::Front_face_direction::cw,  gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_back_ccw      {true,  gl::Cull_face_mode::back,           gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::s_cull_mode_front_cw    {true,  gl::Cull_face_mode::front,          gl::Front_face_direction::cw,  gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::s_cull_mode_front_ccw   {true,  gl::Cull_face_mode::front,          gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::s_cull_mode_back_cw     {true,  gl::Cull_face_mode::back,           gl::Front_face_direction::cw,  gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::s_cull_mode_back_ccw    {true,  gl::Cull_face_mode::back,           gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
 Rasterization_state Rasterization_state::cull_mode_front_and_back{true,  gl::Cull_face_mode::front_and_back, gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
+
+auto Rasterization_state::cull_mode_front_cw(const bool reverse_depth) -> Rasterization_state*
+{
+    return reverse_depth 
+        ? &s_cull_mode_front_ccw
+        : &s_cull_mode_front_cw;
+}
+
+auto Rasterization_state::cull_mode_front_ccw(bool reverse_depth) -> Rasterization_state*
+{
+    return reverse_depth
+        ? &s_cull_mode_front_cw
+        : &s_cull_mode_front_ccw;
+}
+
+auto Rasterization_state::cull_mode_back_cw(bool reverse_depth) -> Rasterization_state*
+{
+    return reverse_depth
+        ? &s_cull_mode_back_ccw
+        : &s_cull_mode_back_cw;
+}
+
+auto Rasterization_state::cull_mode_back_ccw(bool reverse_depth) -> Rasterization_state*
+{
+    return reverse_depth
+        ? &s_cull_mode_back_cw
+        : &s_cull_mode_back_ccw;
+}
 
 void Rasterization_state_tracker::reset()
 {

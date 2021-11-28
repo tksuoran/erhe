@@ -6,7 +6,19 @@
 namespace erhe::scene
 {
 
-INode_attachment::~INode_attachment() = default;
+INode_attachment::~INode_attachment()
+{
+    auto* const host = node();
+    if (host != nullptr)
+    {
+        host->detach(this);
+    }
+}
+
+auto INode_attachment::node() const -> Node*
+{
+    return m_node;
+}
 
 auto INode_attachment::flag_bits() const -> uint64_t
 {
@@ -32,6 +44,10 @@ Node::~Node()
     for (auto& child : m_children)
     {
         child->on_detached_from(*this);
+    }
+    for (auto& attachment : m_attachments)
+    {
+        attachment->on_detached_from(*this);
     }
     unparent();
 

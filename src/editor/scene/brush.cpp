@@ -8,6 +8,8 @@
 #include "erhe/physics/irigid_body.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
+#include "erhe/raytrace/igeometry.hpp"
+#include "erhe/raytrace/iscene.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
@@ -461,6 +463,8 @@ auto Brush::make_instance(
         };
         node_physics = make_shared<Node_physics>(create_info);
         mesh->attach(node_physics);
+
+        
     }
 
     return { mesh, node_physics };

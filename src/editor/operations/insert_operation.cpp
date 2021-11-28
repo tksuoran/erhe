@@ -99,7 +99,7 @@ void Mesh_insert_remove_operation::execute(const Mode mode) const
         remove_from_scene_layer(m_context.scene, m_context.layer, m_context.mesh);
         if (m_context.node_physics)
         {
-            remove_from_physics_world(m_context.physics_world, m_context.node_physics);
+            remove_from_physics_world(m_context.physics_world, *m_context.node_physics.get());
         }
         if (m_context.parent)
         {

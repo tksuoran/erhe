@@ -1,4 +1,5 @@
 #include "scene/node_physics.hpp"
+#include "scene/helpers.hpp"
 
 #include "erhe/physics/log.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -21,6 +22,14 @@ Node_physics::Node_physics(IRigid_body_create_info& create_info)
     m_flag_bits |= INode_attachment::c_flag_bit_is_physics;
 }
 
+Node_physics::~Node_physics()
+{
+    if (m_physics_world != nullptr)
+    {
+        remove_from_physics_world(*m_physics_world, *this);
+    }
+}
+
 auto Node_physics::node_attachment_type() const -> const char*
 {
     return "Node_physics";
@@ -40,6 +49,17 @@ void Node_physics::on_detached_from(Node& node)
     m_node = nullptr;
 }
 
+void Node_physics::on_attached_to(erhe::physics::IWorld* world)
+{
+    m_physics_world = world;
+}
+
+void Node_physics::on_detached_from(erhe::physics::IWorld* world)
+{
+    static_cast<void>(world);
+    m_physics_world = nullptr;
+}
+
 void Node_physics::on_node_transform_changed()
 {
     if (m_transform_change_from_physics)
@@ -56,11 +76,6 @@ void Node_physics::on_node_transform_changed()
         m_rigid_body->set_motion_mode(Motion_mode::e_kinematic);
     }
     m_rigid_body->set_world_transform(world_from_node * m_node_from_rigidbody);
-}
-
-auto Node_physics::node() const -> Node*
-{
-    return m_node;
 }
 
 void Node_physics::set_rigidbody_from_node(const erhe::physics::Transform rigidbody_from_node)
@@ -83,8 +98,8 @@ auto Node_physics::get_world_from_node() const -> erhe::physics::Transform
         return erhe::physics::Transform{};
     }
 
-    glm::mat4 m = m_node->world_from_node();
-    glm::vec3 p = glm::vec3{m[3]};
+    const glm::mat4 m = m_node->world_from_node();
+    const glm::vec3 p = glm::vec3{m[3]};
 
     return erhe::physics::Transform{
         glm::mat3{m},

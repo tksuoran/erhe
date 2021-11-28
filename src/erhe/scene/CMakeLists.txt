@@ -27,12 +27,14 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(
     ${_target}
-    PUBLIC
+    PRIVATE
     erhe_gl
     fmt::fmt
-    glm::glm
     Microsoft.GSL::GSL
     TracyClient
+    PUBLIC
+    erhe_primitive
+    glm::glm
 )
 
 target_strict_cxx(${_target})
