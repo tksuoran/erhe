@@ -242,6 +242,10 @@ void Instance::initialize()
     gl::get_integer_v(gl::Get_p_name::max_uniform_buffer_bindings,     &limits.max_uniform_buffer_bindings);
     gl::get_integer_v(gl::Get_p_name::max_vertex_uniform_blocks,       &limits.max_vertex_uniform_blocks);
     gl::get_integer_v(gl::Get_p_name::max_fragment_uniform_blocks,     &limits.max_fragment_uniform_blocks);
+    if (uniform_buffer_offset_alignment == 32)
+    {
+        uniform_buffer_offset_alignment = 64;
+    }
     implementation_defined.uniform_buffer_offset_alignment = static_cast<unsigned int>(uniform_buffer_offset_alignment);
     log_configuration.info(
         "uniform block (max size = {}"

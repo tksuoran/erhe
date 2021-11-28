@@ -56,8 +56,9 @@ void Programs::initialize_component()
 
     basic      = make_program("basic");
     brush      = make_program("brush");
-    standard   = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
-    //standard   = make_program("standard");
+    // Not available on Dell laptop.
+    //standard   = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
+    standard   = make_program("standard");
     edge_lines = make_program("edge_lines");
     wide_lines = make_program("wide_lines");
     points     = make_program("points");

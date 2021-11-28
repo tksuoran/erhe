@@ -453,29 +453,29 @@ void main()
     //out_color.rgb = v_color.rgb;
 }
 
-float edge_factor()
-{
-    vec3 d = fwidth(gl_BaryCoordNoPerspNV);
-    vec3 f = step(d * v_line_width, gl_BaryCoordNoPerspNV);
-    return min(min(f.x, f.y), f.z);
-}
+//float edge_factor()
+//{
+//    vec3 d = fwidth(gl_BaryCoordNoPerspNV);
+//    vec3 f = step(d * v_line_width, gl_BaryCoordNoPerspNV);
+//    return min(min(f.x, f.y), f.z);
+//}
 
-void main_debug()
-{
+//void main_debug()
+//{
     //out_color.r = gl_BaryCoordNoPerspNV.r;
     //out_color.g = gl_BaryCoordNoPerspNV.g;
     //out_color.b = gl_BaryCoordNoPerspNV.b;
     //out_color.r = fwidth(gl_BaryCoordNoPerspNV.x) / gl_BaryCoordNoPerspNV.x;
     //out_color.g = fwidth(gl_BaryCoordNoPerspNV.y) / gl_BaryCoordNoPerspNV.y;
     //out_color.b = fwidth(gl_BaryCoordNoPerspNV.z) / gl_BaryCoordNoPerspNV.z;
-    vec3 b = fwidth(gl_BaryCoordNV) / gl_BaryCoordNV;
-    float d = min(b.x, min(b.y, b.z));
-    float e = max(b.x, max(b.y, b.z));
-    out_color.r = e;
-    out_color.g = e;
-    out_color.b = e;
-    out_color.r = fwidth(gl_BaryCoordNoPerspNV.x) / gl_BaryCoordNoPerspNV.x;
-    out_color.g = fwidth(gl_BaryCoordNoPerspNV.y) / gl_BaryCoordNoPerspNV.y;
-    out_color.b = fwidth(gl_BaryCoordNoPerspNV.z) / gl_BaryCoordNoPerspNV.z;
-    out_color.a = 1.0;
-}
+//    vec3 b = fwidth(gl_BaryCoordNV) / gl_BaryCoordNV;
+//    float d = min(b.x, min(b.y, b.z));
+//    float e = max(b.x, max(b.y, b.z));
+//    out_color.r = e;
+//    out_color.g = e;
+//    out_color.b = e;
+//    out_color.r = fwidth(gl_BaryCoordNoPerspNV.x) / gl_BaryCoordNoPerspNV.x;
+//    out_color.g = fwidth(gl_BaryCoordNoPerspNV.y) / gl_BaryCoordNoPerspNV.y;
+//    out_color.b = fwidth(gl_BaryCoordNoPerspNV.z) / gl_BaryCoordNoPerspNV.z;
+//    out_color.a = 1.0;
+//}

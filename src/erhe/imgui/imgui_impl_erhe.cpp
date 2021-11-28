@@ -1,6 +1,7 @@
 #include "erhe/imgui/imgui_impl_erhe.hpp"
 
 #include "erhe/graphics/buffer.hpp"
+#include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
@@ -585,23 +586,32 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
     size_t list_index_offset         {0};
     size_t draw_indirect_count       {0};
 
-    const float scale[2] = { 2.0f / draw_data->DisplaySize.x,
-                             2.0f / draw_data->DisplaySize.y};
-    float translate[2] = { -1.0f - draw_data->DisplayPos.x * scale[0],
-                           -1.0f - draw_data->DisplayPos.y * scale[1]};
+    const float scale[2] = {
+        2.0f / draw_data->DisplaySize.x,
+        2.0f / draw_data->DisplaySize.y
+    };
+    float translate[2] = {
+        -1.0f - draw_data->DisplayPos.x * scale[0],
+        -1.0f - draw_data->DisplayPos.y * scale[1]
+    };
 
     // Projection block repeats only once
     const size_t start_of_projection_block = draw_parameter_byte_offset;
 
     // Write scale
-    gsl::span<const float> scale_cpu_data(&scale[0], 2);
+    gsl::span<const float> scale_cpu_data{&scale[0], 2};
     erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, scale_cpu_data);
     draw_parameter_byte_offset += scale_cpu_data.size_bytes();
 
     // Write translate
-    gsl::span<const float> translate_cpu_data(&translate[0], 2);
+    gsl::span<const float> translate_cpu_data{&translate[0], 2};
     erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, translate_cpu_data);
     draw_parameter_byte_offset += translate_cpu_data.size_bytes();
+
+    while ((draw_parameter_byte_offset % erhe::graphics::Instance::implementation_defined.uniform_buffer_offset_alignment) != 0)
+    {
+        ++draw_parameter_byte_offset;
+    }
 
     const size_t start_of_draw_parameter_block = draw_parameter_byte_offset;
 
@@ -620,15 +630,19 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
 
         // Upload vertex buffer
-        gsl::span<const uint8_t> vertex_cpu_data(reinterpret_cast<const uint8_t*>(cmd_list->VtxBuffer.begin()),
-                                                 cmd_list->VtxBuffer.size_in_bytes());
+        gsl::span<const uint8_t> vertex_cpu_data{
+            reinterpret_cast<const uint8_t*>(cmd_list->VtxBuffer.begin()),
+            static_cast<size_t>(cmd_list->VtxBuffer.size_in_bytes())
+        };
 
         erhe::graphics::write(vertex_gpu_data, vertex_byte_offset, vertex_cpu_data);
 
         // Upload index buffer
         static_assert(sizeof(uint16_t) == sizeof(ImDrawIdx));
-        gsl::span<const uint16_t> index_cpu_data(cmd_list->IdxBuffer.begin(),
-                                                 cmd_list->IdxBuffer.size());
+        gsl::span<const uint16_t> index_cpu_data{
+            cmd_list->IdxBuffer.begin(),
+            static_cast<size_t>(cmd_list->IdxBuffer.size())
+        };
         erhe::graphics::write(index_gpu_data, index_byte_offset, index_cpu_data);
 
         for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++)
@@ -648,18 +662,21 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
             else
             {
                 // Project scissor/clipping rectangles into framebuffer space
-                ImVec4 clip_rect { (pcmd->ClipRect.x - clip_off.x) * clip_scale.x,
-                                   (pcmd->ClipRect.y - clip_off.y) * clip_scale.y,
-                                   (pcmd->ClipRect.z - clip_off.x) * clip_scale.x,
-                                   (pcmd->ClipRect.w - clip_off.y) * clip_scale.y };
+                ImVec4 clip_rect{
+                    (pcmd->ClipRect.x - clip_off.x) * clip_scale.x,
+                    (pcmd->ClipRect.y - clip_off.y) * clip_scale.y,
+                    (pcmd->ClipRect.z - clip_off.x) * clip_scale.x,
+                    (pcmd->ClipRect.w - clip_off.y) * clip_scale.y
+                };
 
-                if ((clip_rect.x < fb_width)  &&
+                if (
+                    (clip_rect.x < fb_width)  &&
                     (clip_rect.y < fb_height) &&
                     (clip_rect.z >= 0.0f)     &&
                     (clip_rect.w >= 0.0f))
                 {
                     // Write clip rectangle
-                    gsl::span<const float> clip_rect_cpu_data(&clip_rect.x, 4);
+                    gsl::span<const float> clip_rect_cpu_data{&clip_rect.x, 4};
                     erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, clip_rect_cpu_data);
                     draw_parameter_byte_offset += Imgui_renderer::vec4_size;
 
@@ -668,7 +685,7 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
                     auto texture_unit = texture_unit_cache.allocate_texture_unit(texture);
                     VERIFY(texture_unit.has_value());
                     const uint32_t texture_indices[4] = { static_cast<uint32_t>(texture_unit.value()), 0, 0, 0 };
-                    gsl::span<const uint32_t> texture_indices_cpu_data(&texture_indices[0], 4);
+                    gsl::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
                     erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, texture_indices_cpu_data);
                     draw_parameter_byte_offset += Imgui_renderer::uivec4_size;
 
