@@ -467,7 +467,7 @@ auto Brush::make_instance(
         
     }
 
-    return { mesh, node_physics };
+    return { mesh, node_physics, {} };
 }
 
 }

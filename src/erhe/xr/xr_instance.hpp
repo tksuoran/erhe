@@ -111,7 +111,7 @@ private:
     auto enumerate_view_configurations  () -> bool;
     auto path                           (const char* path) -> Xr_path;
 
-    Xr_session*                          m_session                   {nullptr};
+    //Xr_session*                          m_session                   {nullptr};
     XrInstance                           m_xr_instance               {XR_NULL_HANDLE};
     XrSystemGetInfo                      m_xr_system_info;
     XrSystemId                           m_xr_system_id{0};
@@ -123,7 +123,7 @@ private:
     std::vector<XrEnvironmentBlendMode>  m_xr_environment_blend_modes;
     XrDebugUtilsMessengerEXT             m_debug_utils_messenger;
 
-    PFN_xrSetEnvironmentDepthEstimationVARJO m_xrSetEnvironmentDepthEstimationVARJO{nullptr};
+    //PFN_xrSetEnvironmentDepthEstimationVARJO m_xrSetEnvironmentDepthEstimationVARJO{nullptr};
 };
 
 }

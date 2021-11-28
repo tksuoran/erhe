@@ -6,6 +6,8 @@
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/scene.hpp"
 
+#include <sstream>
+
 namespace editor
 {
 

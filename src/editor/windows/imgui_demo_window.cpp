@@ -1,4 +1,4 @@
-#include "windows/Imgui_demo_window.hpp"
+#include "windows/imgui_demo_window.hpp"
 #include "tools.hpp"
 
 #include <imgui.h>

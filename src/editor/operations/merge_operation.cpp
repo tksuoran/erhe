@@ -11,19 +11,20 @@
 #include "erhe/scene/scene.hpp"
 
 #include <memory>
+#include <sstream>
 
 namespace editor
 {
 
 // https://github.com/bulletphysics/bullet3/issues/1352
-// 
+//
 // The btRigidBody is aligned with the center of mass.
 // You need to recompute the shift to make sure the compound shape is re-aligned.
-// 
+//
 // https://github.com/bulletphysics/bullet3/blob/master/examples/ExtendedTutorials/CompoundBoxes.cpp
-// 
+//
 // https://pybullet.org/Bullet/phpBB3/viewtopic.php?t=11004
-// 
+//
 //static btTransform RigidBody_TransformCompoundRecursive(btCompoundShape* compound, btScalar mass)
 //{
 //    btScalar* masses = RigidBody_CalculateMasses(compound, mass);

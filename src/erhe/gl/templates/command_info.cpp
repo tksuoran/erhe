@@ -66,14 +66,14 @@ void check_extension(Command command, Extension extension)
     }}
 }}
 
-void check_alias_command(Command alias_command, Command command)
-{{
-    if (is_enabled(command))
-    {{
-        enable(alias_command);
-        return;
-    }}
-}}
+//void check_alias_command(Command alias_command, Command command)
+//{{
+//    if (is_enabled(command))
+//    {{
+//        enable(alias_command);
+//        return;
+//    }}
+//}}
 
 }} // anonymous namespace
 

@@ -69,7 +69,7 @@ private:
     std::vector<XrCompositionLayerDepthInfoKHR>   m_xr_composition_layer_depth_infos;
     std::vector<XrReferenceSpaceType>             m_xr_reference_space_types;
     XrSpace                                       m_xr_reference_space;
-    XrSessionState                                m_xr_session_state;
+    //XrSessionState                                m_xr_session_state;
     XrFrameState                                  m_xr_frame_state;
 };
 

@@ -116,7 +116,7 @@ private:
     void remove_brush_mesh         ();
     void update_mesh_node_transform();
 
-    Editor*          m_editor         {nullptr};
+    //Editor*          m_editor         {nullptr};
     Materials*       m_materials      {nullptr};
     Operation_stack* m_operation_stack{nullptr};
     Scene_root*      m_scene_root     {nullptr};
@@ -128,7 +128,7 @@ private:
 
     Brush*                              m_brush{nullptr};
     int                                 m_selected_brush_index{0};
-    int                                 m_selected_material   {0};
+    //int                                 m_selected_material   {0};
 
     bool                                m_snap_to_hover_polygon{true};
     bool                                m_snap_to_grid         {false};

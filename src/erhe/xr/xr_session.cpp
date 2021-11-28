@@ -42,7 +42,7 @@ Xr_session::Xr_session(
     , m_swapchain_color_format{gl::Internal_format::srgb8_alpha8}
     , m_swapchain_depth_format{gl::Internal_format::depth24_stencil8}
     , m_xr_reference_space    {XR_NULL_HANDLE}
-    , m_xr_session_state      {XR_SESSION_STATE_VISIBLE}
+    //, m_xr_session_state      {XR_SESSION_STATE_VISIBLE}
     , m_xr_frame_state        {
         XR_TYPE_FRAME_STATE,
         nullptr,

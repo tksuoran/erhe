@@ -8,6 +8,7 @@
 #include "erhe/scene/scene.hpp"
 
 #include <memory>
+#include <sstream>
 
 namespace editor
 {
@@ -72,7 +73,7 @@ Attach_detach_operation::Attach_detach_operation(Context& context)
 auto Attach_detach_operation::describe() const -> std::string
 {
     std::stringstream ss;
-    ss << m_context.attach ? "Attach " : "Detach ";
+    ss << (m_context.attach ? "Attach " : "Detach ");
     bool first = true;
     for (const auto& entry : m_entries)
     {
@@ -87,7 +88,7 @@ auto Attach_detach_operation::describe() const -> std::string
         }
         ss << entry.node->name();
     }
-    ss << m_context.attach ? "to " : "from ";
+    ss << (m_context.attach ? "to " : "from ");
     VERIFY(m_parent_node);
     ss << m_parent_node->name();
     return ss.str();

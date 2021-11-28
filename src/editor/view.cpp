@@ -82,7 +82,6 @@ void Editor_view::update_pointer()
 
         const glm::vec3 pointer_near  = pointer_context.position_in_world(1.0f);
         const glm::vec3 pointer_far   = pointer_context.position_in_world(0.0f);
-        const glm::vec3 origin        = pointer_near;
         const glm::vec3 direction     = glm::normalize(pointer_far - pointer_near);
         frame_log->log("Camera: {}", glm::vec3{camera->position_in_world()});
         frame_log->log("Far: {}", pointer_far);
@@ -90,6 +89,7 @@ void Editor_view::update_pointer()
         frame_log->log("Direction: {}", direction);
         frame_log->log("Camera -Z: {}", glm::vec3{-camera->direction_in_world()});
 #if 0
+        const glm::vec3 origin        = pointer_near;
         erhe::scene::Mesh*         hit_mesh      {nullptr};
         erhe::geometry::Geometry*  hit_geometry  {nullptr};
         erhe::geometry::Polygon_id hit_polygon_id{0};

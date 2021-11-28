@@ -27,7 +27,7 @@ auto Polygon::compute_normal(
 
     for_each_corner_neighborhood_const(
         geometry,
-        [&geometry, &newell_normal, &point_locations](const Polygon_corner_neighborhood_context_const& i)
+        [&newell_normal, &point_locations](const Polygon_corner_neighborhood_context_const& i)
         {
             const Point_id a     = i.corner     .point_id;
             const Point_id b     = i.next_corner.point_id;

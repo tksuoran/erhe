@@ -111,9 +111,9 @@ public:
 class Instance
 {
 public:
-    std::shared_ptr<erhe::scene::Mesh> mesh;
-    std::shared_ptr<Node_physics>      node_physics;
-    std::shared_ptr<Node_raytrace>     node_raytrace;
+    std::shared_ptr<erhe::scene::Mesh> mesh{};
+    std::shared_ptr<Node_physics>      node_physics{};
+    std::shared_ptr<Node_raytrace>     node_raytrace{};
 };
 
 class Brush final

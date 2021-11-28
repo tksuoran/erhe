@@ -42,7 +42,7 @@ void Frame_log_window::imgui(Pointer_context&)
     ImGui::Begin(c_title.data());
     for (const auto& entry : m_entries)
     {
-        ImGui::Text(entry.c_str());
+        ImGui::TextUnformatted(entry.c_str());
     }
     ImGui::End();
 }

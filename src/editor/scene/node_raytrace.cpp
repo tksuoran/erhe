@@ -40,7 +40,7 @@ void Node_raytrace::on_node_transform_changed()
     VERIFY(m_node);
     node()->update_transform();
     VERIFY(m_geometry);
-    const glm::mat4 m = m_node->world_from_node();
+    //const glm::mat4 m = m_node->world_from_node();
     //m_geometry->set_world_transform(world_from_node);
 }
 

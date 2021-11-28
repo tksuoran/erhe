@@ -61,12 +61,12 @@ const std::string_view c_fragment_shader_source =
 class Imgui_renderer
 {
 public:
-    static constexpr size_t vec2_size   = 2 * sizeof(float);
+    //static constexpr size_t vec2_size   = 2 * sizeof(float);
     static constexpr size_t uivec4_size = 4 * sizeof(uint32_t);
     static constexpr size_t vec4_size   = 4 * sizeof(float);
 
     // scale, translation, clip rectangle, texture indices
-    static constexpr size_t draw_parameters_block_size = vec2_size + vec2_size + vec4_size + uivec4_size;
+    //static constexpr size_t draw_parameters_block_size = vec2_size + vec2_size + vec4_size + uivec4_size;
     static constexpr size_t max_draw_count             =   6'000;
     static constexpr size_t max_index_count            = 300'000;
     static constexpr size_t max_vertex_count           = 800'000;

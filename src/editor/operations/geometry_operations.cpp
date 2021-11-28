@@ -13,6 +13,8 @@
 #include "erhe/geometry/operation/triangulate.hpp"
 #include "erhe/geometry/operation/truncate.hpp"
 
+#include <sstream>
+
 namespace editor
 {
 
