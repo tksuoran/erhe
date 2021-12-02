@@ -40,7 +40,7 @@ public:
         const std::string&                                       name
     ) -> erhe::geometry::Property_map<Key_type, Value_type> *
     {
-        ZoneScoped;
+        ERHE_PROFILE_FUNCTION
 
         auto map = geometry_attributes.template find<Value_type>(name);
         if (map == nullptr)

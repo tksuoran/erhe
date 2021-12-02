@@ -7,6 +7,8 @@ namespace erhe::geometry
 
 void Geometry::merge(Geometry& other, const glm::mat4 transform)
 {
+    ERHE_PROFILE_FUNCTION
+
     // Append corners
     const Corner_id combined_corner_count = corner_count() + other.corner_count();
     if (corners.size() < combined_corner_count)

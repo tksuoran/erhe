@@ -21,7 +21,7 @@
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
@@ -67,7 +67,7 @@ void Forward_renderer::connect()
 static constexpr std::string_view c_forward_renderer_initialize_component{"Forward_renderer::initialize_component()"};
 void Forward_renderer::initialize_component()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
@@ -420,7 +420,7 @@ void Forward_renderer::render(
     const erhe::scene::Visibility_filter& visibility_filter
 )
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
@@ -469,7 +469,7 @@ void Forward_renderer::render(
         update_light_buffer   (light_layer, m_shadow_renderer->viewport());
         for (auto mesh_layer : mesh_layers)
         {
-            TracyGpuZone(c_forward_renderer_render.data())
+            ERHE_PROFILE_GPU_SCOPE(c_forward_renderer_render.data())
 
             update_primitive_buffer(*mesh_layer, visibility_filter);
             const auto draw_indirect_buffer_range = update_draw_indirect_buffer(*mesh_layer, primitive_mode, visibility_filter);

@@ -1,7 +1,7 @@
 #include "erhe/geometry/operation/subdivide.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/log.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
@@ -15,7 +15,7 @@ namespace erhe::geometry::operation
 Subdivide::Subdivide(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     // Add midpoints to edges and connect to polygon center
 
@@ -72,13 +72,13 @@ Subdivide::Subdivide(Geometry& src, Geometry& destination)
 
 auto subdivide(Geometry& source) -> Geometry
 {
-    return Geometry(
+    return Geometry{
         fmt::format("subdivide({})", source.name),
         [&source](auto& result)
         {
-            Subdivide operation(source, result);
+            Subdivide operation{source, result};
         }
-    );
+    };
 }
 
 

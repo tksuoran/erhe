@@ -1,6 +1,6 @@
 #include "erhe/geometry/operation/dual.hpp"
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>
@@ -12,7 +12,7 @@ namespace erhe::geometry::operation
 Dual::Dual(Geometry& source, Geometry& destination, bool post_process)
     : Geometry_operation{source, destination}
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     make_polygon_centroids();
 
@@ -35,13 +35,13 @@ Dual::Dual(Geometry& source, Geometry& destination, bool post_process)
 
 auto dual(Geometry& source) -> Geometry
 {
-    return Geometry(
+    return Geometry{
         fmt::format("dual({})", source.name),
         [&source](auto& result)
         {
-            Dual operation(source, result);
+            Dual operation{source, result};
         }
-    );
+    };
 }
 
 

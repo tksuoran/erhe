@@ -1,6 +1,6 @@
 #include "erhe/geometry/operation/sqrt3_subdivision.hpp"
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>
@@ -25,7 +25,7 @@ namespace erhe::geometry::operation
 Sqrt3_subdivision::Sqrt3_subdivision(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     source.for_each_point_const([&](auto& i)
     {
@@ -80,7 +80,7 @@ auto sqrt3_subdivision(Geometry& source) -> Geometry
         fmt::format("sqrt3({})", source.name),
         [&source](auto& result)
         {
-            Sqrt3_subdivision operation(source, result);
+            Sqrt3_subdivision operation{source, result};
         }
     );
 }

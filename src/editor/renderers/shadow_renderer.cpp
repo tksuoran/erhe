@@ -20,7 +20,7 @@
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -61,7 +61,7 @@ static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow
 
 void Shadow_renderer::initialize_component()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
@@ -91,7 +91,8 @@ void Shadow_renderer::initialize_component()
     m_pipeline.viewport       = nullptr;
 
     {
-        ZoneScopedN("allocating shadow map array texture");
+        ERHE_PROFILE_SCOPE("allocating shadow map array texture");
+
         Texture::Create_info create_info;
         create_info.target          = gl::Texture_target::texture_2d_array;
         create_info.internal_format = gl::Internal_format::depth_component32f;
@@ -106,7 +107,8 @@ void Shadow_renderer::initialize_component()
 
     for (size_t i = 0; i < s_max_light_count; ++i)
     {
-        ZoneScopedN("framebuffer creation");
+        ERHE_PROFILE_SCOPE("framebuffer creation");
+
         Framebuffer::Create_info create_info;
         create_info.attach(gl::Framebuffer_attachment::depth_attachment, m_texture.get(), 0, static_cast<unsigned int>(i));
         m_framebuffers.emplace_back(std::make_unique<Framebuffer>(create_info));
@@ -134,8 +136,9 @@ void Shadow_renderer::render(
         return;
     }
 
-    ZoneScoped;
-    TracyGpuZone(c_shadow_renderer_render.data())
+    ERHE_PROFILE_FUNCTION
+
+    ERHE_PROFILE_GPU_SCOPE(c_shadow_renderer_render.data())
 
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,

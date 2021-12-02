@@ -31,12 +31,13 @@ macro (set_option variable_name help_text default_value possible_values)
 endmacro ()
 
 # Options to control which third party libraries are used with erhe
-set_option(ERHE_PNG_LIBRARY                "PNG loading library. Either mango or none"                   "mango"    "mango;none")
-set_option(ERHE_FONT_RASTERIZATION_LIBRARY "Font rasterization library. Either freetype or none"         "freetype" "freetype;none")
-set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype, harfbuzz or none"      "harfbuzz" "harfbuzz;freetype;none")
-set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Either glfw, mango or none" "glfw"     "glfw;mango;none")
-set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree or none"    "none"     "embree;none")
-set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either bullet or none"     "none"   "bullet;none")
+set_option(ERHE_PNG_LIBRARY                "PNG loading library. Either mango or none"                            "mango"    "mango;none")
+set_option(ERHE_FONT_RASTERIZATION_LIBRARY "Font rasterization library. Either freetype or none"                  "freetype" "freetype;none")
+set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype, harfbuzz or none"               "harfbuzz" "harfbuzz;freetype;none")
+set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Either glfw, mango or none"          "glfw"     "glfw;mango;none")
+set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree or none"             "none"     "embree;none")
+set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either bullet or none"              "none"     "bullet;none")
+set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either superluminal, tracy or none" "none"     "superluminal;tracy;none")
 
 # These are in cmake/ directory
 #message("Compiler = ${CMAKE_CXX_COMPILER_ID}")
@@ -63,7 +64,17 @@ FetchContent_MakeAvailable_mango()
 FetchContent_MakeAvailable(nlohmann_json)
 FetchContent_MakeAvailable(OpenXR-SDK)
 FetchContent_MakeAvailable(RectangleBinPack)
-FetchContent_MakeAvailable_tracy()
+
+if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
+    FetchContent_MakeAvailable_tracy()
+    message(STATUS "Erhe configured to use Tracy for profiling.")
+    add_definitions(-DERHE_PROFILE_LIBRARY_TRACY)
+endif ()
+
+if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
+    message(STATUS "Erhe configured to use Superluminal for profiling.")
+    add_definitions(-DERHE_PROFILE_LIBRARY_SUPERLUMINAL)
+endif ()
 
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "bullet")
     FetchContent_MakeAvailable(bullet3)

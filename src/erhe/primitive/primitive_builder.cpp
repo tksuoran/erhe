@@ -66,7 +66,7 @@ Primitive_builder::~Primitive_builder() = default;
 
 void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     auto vf = build_info.buffer.vertex_format;
     if (vf)
@@ -183,7 +183,7 @@ Build_context_root::Build_context_root(
     , vertex_format     {build_info.buffer.vertex_format.get()}
     , vertex_stride     {vertex_format->stride()}
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     get_mesh_info         ();
     get_vertex_attributes ();
@@ -257,7 +257,7 @@ void Build_context_root::get_mesh_info()
 
 void Build_context_root::get_vertex_attributes()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const auto& format_info = build_info.format;
     attributes.position      = Vertex_attribute_info(vertex_format, format_info.position_type,      3, Vertex_attribute::Usage_type::position,  0);
@@ -285,7 +285,7 @@ void Build_context_root::allocate_vertex_buffer()
 
 void Build_context_root::allocate_index_buffer()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Expects(total_index_count > 0);
 
@@ -306,7 +306,7 @@ void Build_context_root::calculate_bounding_box(
     erhe::geometry::Property_map<Point_id, vec3>* point_locations
 )
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Expects(primitive_geometry != nullptr);
 
@@ -347,7 +347,7 @@ Primitive_geometry Primitive_builder::build()
 
 void Primitive_builder::build(Primitive_geometry* primitive_geometry)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Expects(primitive_geometry != nullptr);
 
@@ -649,7 +649,7 @@ constexpr glm::vec3 unique_colors[13] =
 
 }
 
-void Build_context::build_vertex_color(uint32_t polygon_corner_count)
+void Build_context::build_vertex_color(const uint32_t /*polygon_corner_count*/)
 {
     if (!root.build_info.format.features.color || !root.attributes.color.is_valid())
     {
@@ -671,11 +671,10 @@ void Build_context::build_vertex_color(uint32_t polygon_corner_count)
     {
         color = root.build_info.format.constant_color;
         log_primitive_builder.trace("point {} corner {} constant color {}\n", point_id, corner_id, color);
-    }
-
-    if (polygon_corner_count > 3)
-    {
-        color = glm::vec4{unique_colors[(polygon_corner_count - 3) % 13], 1.0f};
+        //if (polygon_corner_count > 3)
+        //{
+        //    color = glm::vec4{unique_colors[(polygon_corner_count - 3) % 13], 1.0f};
+        //}
     }
 
     vertex_writer.write(root.attributes.color, color);

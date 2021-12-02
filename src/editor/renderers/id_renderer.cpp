@@ -21,7 +21,7 @@
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
@@ -65,11 +65,11 @@ static constexpr std::string_view c_id_renderer_initialize_component{"Id_rendere
 
 void Id_renderer::initialize_component()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
-    TracyMessageL("ID: Waiting for GL context");
+    ERHE_PROFILE_MESSAGE_LITERAL("ID: Waiting for GL context");
     Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
-    TracyMessageL("ID: Got GL context");
+    ERHE_PROFILE_MESSAGE_LITERAL("ID: Got GL context");
 
     create_frame_resources(1, 1, 1, 1000, 1000);
 
@@ -113,7 +113,7 @@ void Id_renderer::initialize_component()
 
 void Id_renderer::create_id_frame_resources()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (size_t i = 0; i < s_frame_resources_count; ++i)
     {
@@ -208,7 +208,7 @@ void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
 
 void Id_renderer::render_layer(const erhe::scene::Mesh_layer& mesh_layer)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Layer_range layer_range;
     layer_range.offset = id_offset();
@@ -255,7 +255,7 @@ void Id_renderer::render(
     const int                    x,
     const int                    y)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     m_ranges.clear();
 
@@ -285,7 +285,7 @@ void Id_renderer::render(
     bind_camera_buffer();
 
     {
-        TracyGpuZone(c_id_renderer_render_clear.data())
+        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_clear.data())
 
         m_pipeline_state_tracker->shader_stages.reset();
         m_pipeline_state_tracker->color_blend.execute(&erhe::graphics::Color_blend_state::color_blend_disabled);
@@ -325,14 +325,14 @@ void Id_renderer::render(
     m_pipeline_state_tracker->execute(&m_pipeline);
     for (auto layer : content_mesh_layers)
     {
-        TracyGpuZone(c_id_renderer_render_content.data())
+        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_content.data())
         render_layer(*layer);
     }
 
     // Clear depth for tool pixels
     if constexpr (true)
     {
-        TracyGpuZone(c_id_renderer_render_tool.data())
+        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool.data())
         m_pipeline_state_tracker->execute(&m_selective_depth_clear_pipeline);
         gl::depth_range(0.0f, 0.0f);
         for (auto layer : tool_mesh_layers)
@@ -343,7 +343,7 @@ void Id_renderer::render(
 
     // Resume normal depth usage
     {
-        TracyGpuZone(c_id_renderer_render_tool.data())
+        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool.data())
 
         m_pipeline_state_tracker->execute(&m_pipeline);
         gl::depth_range(0.0f, 1.0f);
@@ -355,7 +355,7 @@ void Id_renderer::render(
     }
 
     {
-        TracyGpuZone(c_id_renderer_render_read.data())
+        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_read.data())
 
         if (m_use_scissor)
         {

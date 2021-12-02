@@ -1,7 +1,7 @@
 #include "erhe/geometry/operation/gyro.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/log.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
@@ -15,8 +15,7 @@ namespace erhe::geometry::operation
 Gyro::Gyro(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
-    ZoneScoped;
-
+    ERHE_PROFILE_FUNCTION
 
     // Add midpoints 1/3 and 2/3 to edges and connect to polygon center
     // New polygon on each old edge
@@ -81,13 +80,13 @@ Gyro::Gyro(Geometry& src, Geometry& destination)
 
 auto gyro(Geometry& source) -> Geometry
 {
-    return Geometry(
+    return Geometry{
         fmt::format("gyro({})", source.name),
         [&source](auto& result)
         {
-            Gyro operation(source, result);
+            Gyro operation{source, result};
         }
-    );
+    };
 }
 
 

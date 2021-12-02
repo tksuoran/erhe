@@ -1,5 +1,5 @@
 #include "erhe/geometry/shapes/torus.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
@@ -220,10 +220,9 @@ auto make_torus(
     const double minor_radius,
     const int    major_axis_steps,
     const int    minor_axis_steps
-)
--> Geometry
+) -> Geometry
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     return Geometry{
         "torus",

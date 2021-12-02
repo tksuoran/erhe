@@ -2,7 +2,7 @@
 #include "erhe/components/component.hpp"
 #include "erhe/components/log.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <fmt/ostream.h>
 #include <mango/core/thread.hpp>
@@ -18,7 +18,7 @@ using std::shared_ptr;
 
 namespace {
 
-constexpr bool s_parallel_component_initialization{false};
+constexpr bool s_parallel_component_initialization{true};
 
 }
 
@@ -117,7 +117,7 @@ void Components::deitialize_component(Component* component)
 
 void Components::cleanup_components()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     queue_all_components_to_be_processed();
 
@@ -238,7 +238,7 @@ void Components::show_depended_by() const
 
 void Components::initialize_component(const bool in_worker_thread)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     auto component = get_component_to_initialize(in_worker_thread);
     if (!component)
@@ -256,7 +256,7 @@ void Components::initialize_component(const bool in_worker_thread)
     component->initialize_component();
 
     {
-        ZoneName(component->name().data(), component->name().length());
+        ERHE_PROFILE_DATA("init component", component->name().data(), component->name().length())
 
         std::lock_guard<std::mutex> lock(m_mutex);
         component->set_ready();
@@ -266,12 +266,12 @@ void Components::initialize_component(const bool in_worker_thread)
             component_->component_initialized(component);
         }
         const std::string message_text = fmt::format("{} initialized", component->name());
-        TracyMessage(message_text.c_str(), message_text.length());
+        ERHE_PROFILE_MESSAGE(message_text.c_str(), message_text.length());
         m_component_processed.notify_all();
         if (m_components_to_process.empty())
         {
             m_is_ready = true;
-            TracyMessageL("all components initialized");
+            ERHE_PROFILE_MESSAGE_LITERAL("all components initialized");
         }
     }
 }
@@ -291,7 +291,7 @@ void Components::queue_all_components_to_be_processed()
 
 void Components::launch_component_initialization()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     m_initialize_component_count_worker_thread = 0;
     m_initialize_component_count_main_thread   = 0;
@@ -373,7 +373,7 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
         }
 
         {
-            ZoneScopedNC("wait", 0x444444);
+            ERHE_PROFILE_COLOR("wait", 0x444444);
 
             std::unique_lock<std::mutex> unique_lock(m_mutex);
             m_component_processed.wait(unique_lock);
@@ -404,14 +404,15 @@ auto Components::get_component_to_deinitialize() -> Component*
 
 auto Components::is_component_initialization_complete() -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
+
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_is_ready;
 }
 
 void Components::wait_component_initialization_complete()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     VERIFY(m_execution_queue);
 
@@ -429,7 +430,7 @@ void Components::wait_component_initialization_complete()
 
 void Components::on_thread_exit()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (const auto& component : components)
     {
@@ -439,7 +440,7 @@ void Components::on_thread_exit()
 
 void Components::on_thread_enter()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (const auto& component : components)
     {

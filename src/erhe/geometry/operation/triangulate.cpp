@@ -1,6 +1,6 @@
 #include "erhe/geometry/operation/triangulate.hpp"
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>
@@ -12,7 +12,7 @@ namespace erhe::geometry::operation
 Triangulate::Triangulate(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     make_points_from_points();
     make_polygon_centroids();
@@ -40,13 +40,13 @@ Triangulate::Triangulate(Geometry& src, Geometry& destination)
 
 auto triangulate(Geometry& source) -> Geometry
 {
-    return Geometry(
+    return Geometry{
         fmt::format("triangulate({})", source.name),
         [&source](auto& result)
         {
-            Triangulate operation(source, result);
+            Triangulate operation{source, result};
         }
-    );
+    };
 }
 
 

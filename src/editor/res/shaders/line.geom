@@ -45,22 +45,47 @@ void main(void)
 #endif
 
     // It is necessary to manually clip the line before homogenization.
-    // Compute line start and end distances to nearplane in clipspace
-    // Distances are t0 = dot(start, plane) and t1 = dot(end, plane)
-    // If signs are not equal then clip
-    float t0 = start.z + start.w;
-    float t1 = end.z   + end.w;
-    if (t0 < 0.0)
+    // For reference: OpenGL specification 13.7.
+    // Using clip control depth mode zero to one (not default in OpenGL)
+    // View volume in depth is 0 < z < w.
+    // Clipping against near plane when z < 0
+    // Clipping against far  plane when z > w
+    //{  Mear plane clipping
+    //{
+    //    float t0 = start.z + start.w;
+    //    float t1 = end.z   + end.w;
+    //    if (start.z < 0.0)
+    //    {
+    //        if (end.z < 0.0)
+    //        {
+    //            return;
+    //        }
+    //        start = mix(start, end, (0 - t0) / (t1 - t0));
+    //    }
+    //    if (end.z < 0.0)
+    //    {
+    //        end = mix(start, end, (0 - t0) / (t1 - t0));
+    //    }
+    //}
+
+    // Assume reverse Z - we only need to clip against 'far' = near plane
     {
-        if (t1 < 0.0)
+        float t0 = start.z - start.w;
+        float t1 = end.z   - end.w;
+        if (t0 > 0) // start.z > start.w
         {
-            return;
+            if (t1 > 0) // end.w > end.w
+            {
+                return;
+            }
+            //  mix(x, y, a) = (1 - a)x + ay
+            // t0 = Az - Aw; t1 = Bz - Bw; t = t0 / (t0 - t1)
+            start = mix(start, end, t0 / (t0 - t1));
         }
-        start = mix(start, end, (0 - t0) / (t1 - t0));
-    }
-    if (t1 < 0.0)
-    {
-        end = mix(start, end, (0 - t0) / (t1 - t0));
+        if (t1 > 0.0)
+        {
+            end = mix(start, end, t0 / (t0 - t1));
+        }
     }
 
 

@@ -1,5 +1,5 @@
 #include "erhe/geometry/shapes/disc.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
@@ -33,16 +33,14 @@ public:
     Property_map<Polygon_id, vec3>* polygon_centroids{nullptr};
     Property_map<Polygon_id, vec3>* polygon_normals  {nullptr};
 
-    auto get_point(int slice, int stack)
-    -> Point_id
+    auto get_point(int slice, int stack) -> Point_id
     {
         return points[std::make_pair(slice, stack)];
     }
 
     // relStackIn is in range -1..1
     // relStack is in range 0..1
-    auto make_point(const double rel_slice, const double rel_stack)
-    -> Point_id
+    auto make_point(const double rel_slice, const double rel_stack) -> Point_id
     {
         const double phi                 = glm::pi<double>() * 2.0 * rel_slice;
         const double sin_phi             = std::sin(phi);
@@ -213,7 +211,7 @@ auto make_disc(
     const int    stack_count
 ) -> Geometry
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     return Geometry{
         "disc",

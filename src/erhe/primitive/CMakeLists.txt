@@ -45,6 +45,14 @@ target_link_libraries(${_target}
         erhe_raytrace
 )
 
+if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
+    target_link_libraries(${_target} PRIVATE TracyClient)
+endif ()
+
+if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
+    target_link_libraries(${_target} PRIVATE SuperluminalAPI)
+endif ()
+
 target_strict_cxx(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
 

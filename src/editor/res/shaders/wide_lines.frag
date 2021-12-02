@@ -29,4 +29,5 @@ void main(void)
     //vec3 color = mix(vec3(1.0, 0.0, 0.0),
     //                 vec3(1.0, 1.0, 0.0), alpha);
     out_color = vec4(v_color.rgb, alpha);
+    //out_color = vec4(v_color.rgb, 1.0);
 }

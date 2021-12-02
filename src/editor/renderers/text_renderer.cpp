@@ -15,7 +15,7 @@
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/ui/font.hpp"
 
 #include <glm/glm.hpp>
@@ -41,7 +41,7 @@ using glm::vec4;
 Text_renderer::Text_renderer()
     : Component(c_name)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 }
 
 Text_renderer::~Text_renderer() = default;
@@ -56,7 +56,7 @@ void Text_renderer::connect()
 static constexpr std::string_view c_text_renderer_initialize_component{"Text_renderer::initialize_component()"};
 void Text_renderer::initialize_component()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
@@ -151,7 +151,7 @@ void Text_renderer::initialize_component()
 
 void Text_renderer::create_frame_resources()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     constexpr size_t vertex_count = 65536;
     for (size_t i = 0; i < s_frame_resources_count; ++i)
@@ -180,11 +180,11 @@ void Text_renderer::next_frame()
 }
 
 void Text_renderer::print(
-    const glm::vec3  text_position,
-    const uint32_t   text_color,
-    std::string_view text)
+    const glm::vec3        text_position,
+    const uint32_t         text_color,
+    const std::string_view text)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
 
@@ -218,8 +218,9 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
         return;
     }
 
-    ZoneScoped;
-    TracyGpuZone(c_text_renderer_render.data())
+    ERHE_PROFILE_FUNCTION
+
+    ERHE_PROFILE_GPU_SCOPE(c_text_renderer_render.data())
 
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,

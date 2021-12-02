@@ -73,10 +73,7 @@ endif()
 
 add_library(${_target} ${source_list})
 
-target_include_directories(${_target}
-    PUBLIC
-        ${ERHE_INCLUDE_ROOT}
-)
+target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(${_target}
     PUBLIC
@@ -87,6 +84,14 @@ target_link_libraries(${_target}
         glm::glm
         Microsoft.GSL::GSL
 )
+
+if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
+    target_link_libraries(${_target} PRIVATE TracyClient)
+endif ()
+
+if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
+    target_link_libraries(${_target} PRIVATE SuperluminalAPI)
+endif ()
 
 if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
     target_link_libraries(${_target} PUBLIC mango)

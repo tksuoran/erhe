@@ -1,5 +1,5 @@
 #include "erhe/geometry/shapes/box.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 
@@ -36,6 +36,8 @@ auto make_box(
     const double z_size
 ) -> Geometry
 {
+    ERHE_PROFILE_FUNCTION
+
     const double x = x_size / 2.0;
     const double y = y_size / 2.0;
     const double z = z_size / 2.0;
@@ -385,7 +387,7 @@ public:
 auto make_box(const glm::vec3 size, const glm::ivec3 div, const float p)
 -> Geometry
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     return Geometry{
         "box",

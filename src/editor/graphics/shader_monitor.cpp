@@ -1,6 +1,6 @@
 #include "graphics/shader_monitor.hpp"
 
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include "erhe/log/log.hpp"
 #include "erhe/toolkit/file.hpp"
@@ -21,7 +21,7 @@ Shader_monitor::Shader_monitor()
 
 Shader_monitor::~Shader_monitor()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     log_shader_monitor.info("Shader_monitor shutting down");
     set_run(false);
@@ -32,7 +32,7 @@ Shader_monitor::~Shader_monitor()
 
 void Shader_monitor::initialize_component()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     set_run(true);
     m_poll_filesystem_thread = std::thread(&Shader_monitor::poll_thread, this);
@@ -90,7 +90,8 @@ void Shader_monitor::poll_thread()
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         {
-            ZoneScoped;
+            ERHE_PROFILE_SCOPE("Shader_monitor::poll_thread");
+
             const std::lock_guard<std::mutex> lock(m_mutex);
             for (auto& i : m_files)
             {
@@ -130,7 +131,7 @@ void Shader_monitor::poll_thread()
 void Shader_monitor::update_once_per_frame(const erhe::components::Time_context& time_context)
 {
     static_cast<void>(time_context);
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const std::lock_guard<std::mutex> lock(m_mutex);
     for (auto* f : m_reload_list)

@@ -49,13 +49,13 @@ Reverse::Reverse(Geometry& source, Geometry& destination)
 
 auto reverse(Geometry& source) -> Geometry
 {
-    return Geometry(
+    return Geometry{
         fmt::format("reverse({})", source.name),
         [&source](auto& result)
         {
-            Reverse operation(source, result);
+            Reverse operation{source, result};
         }
-    );
+    };
 }
 
 } // namespace erhe::geometry::operation

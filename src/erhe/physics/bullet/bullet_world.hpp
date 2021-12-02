@@ -70,7 +70,7 @@ public:
     void debug_draw                ()                        override;
 
 private:
-    bool                                m_physics_enabled{false};
+    bool                                m_physics_enabled{true};
     Debug_draw_adapter                  m_debug_draw_adapter;
     btDefaultCollisionConfiguration     m_bullet_collision_configuration;
     btCollisionDispatcher               m_bullet_collision_dispatcher;

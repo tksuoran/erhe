@@ -3,7 +3,7 @@
 
 #include "erhe/physics/log.hpp"
 #include "erhe/scene/mesh.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace editor
@@ -37,7 +37,7 @@ auto Node_physics::node_attachment_type() const -> const char*
 
 void Node_physics::on_attached_to(Node& node)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     m_node = &node;
     on_node_transform_changed();
@@ -91,7 +91,7 @@ auto Node_physics::get_world_from_rigidbody() const -> erhe::physics::Transform
 
 auto Node_physics::get_world_from_node() const -> erhe::physics::Transform
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (m_node == nullptr)
     {
@@ -114,7 +114,7 @@ void Node_physics::set_world_from_rigidbody(const erhe::physics::Transform world
 
 void Node_physics::set_world_from_node(const erhe::physics::Transform world_from_node) 
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     VERIFY(m_node != nullptr);
 

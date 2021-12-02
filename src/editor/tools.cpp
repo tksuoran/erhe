@@ -18,7 +18,7 @@
 
 #include "erhe/imgui/imgui_impl_erhe.hpp"
 #include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <backends/imgui_impl_glfw.h>
 
@@ -173,7 +173,7 @@ void Editor_tools::window_menu()
 
 void Editor_tools::gui_begin_frame()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     ImGui_ImplErhe_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -351,7 +351,7 @@ void Editor_tools::imgui()
 
 void Editor_tools::update_and_render_tools(const Render_context& render_context)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     auto& pointer_context = m_editor_view->pointer_context;
     for (auto tool : m_background_tools)
@@ -367,7 +367,7 @@ void Editor_tools::update_and_render_tools(const Render_context& render_context)
 
 void Editor_tools::render_update_tools(const Render_context& render_context)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (auto tool : m_background_tools)
     {

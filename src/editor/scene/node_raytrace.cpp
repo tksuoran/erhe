@@ -1,7 +1,7 @@
 #include "scene/node_raytrace.hpp"
 
 #include "erhe/scene/mesh.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace editor
@@ -23,7 +23,7 @@ auto Node_raytrace::node_attachment_type() const -> const char*
 
 void Node_raytrace::on_attached_to(Node& node)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     m_node = &node;
     on_node_transform_changed();

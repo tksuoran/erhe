@@ -1,7 +1,7 @@
 #include "erhe/components/component.hpp"
 #include "erhe/components/log.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace erhe::components
 {
@@ -23,7 +23,7 @@ auto c_str(const Component_state state) -> const char*
 Component::Component(const std::string_view name)
     : m_name{name}
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 }
 
 Component::~Component()
@@ -68,8 +68,6 @@ auto Component::depended_by() -> const std::set<Component*>&
 
 void Component::depends_on(Component* dependency)
 {
-    ZoneScoped;
-
     VERIFY(dependency != nullptr);
 
     if (!dependency->is_registered())

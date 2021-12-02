@@ -7,7 +7,7 @@
 
 #include "erhe/imgui/imgui_impl_erhe.hpp"
 #include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <backends/imgui_impl_glfw.h>
 
@@ -67,7 +67,7 @@ void Editor_time::update()
     m_editor_rendering->render(m_time);
 
     {
-        ZoneScopedN(c_swap_buffers.data());
+        ERHE_PROFILE_SCOPE(c_swap_buffers.data());
         m_window->get_context_window()->swap_buffers();
     }
 
@@ -77,13 +77,12 @@ void Editor_time::update()
     //    m_trigger_capture = false;
     //}
 
-    FrameMark;
-    TracyGpuCollect
+    ERHE_PROFILE_FRAME_END
 }
 
 void Editor_time::update_fixed_step(const erhe::components::Time_context& time_context)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (auto update : m_components->fixed_step_updates)
     {
@@ -93,7 +92,7 @@ void Editor_time::update_fixed_step(const erhe::components::Time_context& time_c
 
 void Editor_time::update_once_per_frame(const erhe::components::Time_context& time_context)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (auto update : m_components->once_per_frame_updates)
     {

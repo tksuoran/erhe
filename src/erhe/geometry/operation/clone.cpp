@@ -47,13 +47,13 @@ Clone::Clone(Geometry& source, Geometry& destination, glm::mat4 transform)
 
 auto clone(Geometry& source, glm::mat4 transform) -> Geometry
 {
-    return Geometry(
+    return Geometry{
         fmt::format("clone({})", source.name),
         [&source, transform](auto& result)
         {
-            Clone operation(source, result, transform);
+            Clone operation{source, result, transform};
         }
-    );
+    };
 }
 
 } // namespace erhe::geometry::operation

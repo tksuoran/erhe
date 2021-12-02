@@ -16,7 +16,7 @@
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -58,7 +58,7 @@ static constexpr std::string_view c_line_renderer_initialize_component{"Line_ren
 
 void Line_renderer::initialize_component()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
@@ -125,7 +125,7 @@ void Line_renderer::initialize_component()
 
 void Line_renderer::create_frame_resources()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const auto       reverse_depth = get<Configuration>()->reverse_depth;
     constexpr size_t vertex_count  = 65536;
@@ -241,8 +241,8 @@ void Line_renderer::render(
         return;
     }
 
-    ZoneScoped;
-    TracyGpuZone(c_line_renderer_render.data())
+    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_GPU_SCOPE(c_line_renderer_render.data())
 
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,

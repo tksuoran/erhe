@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace erhe::geometry
 {
@@ -13,7 +13,7 @@ void Geometry::smooth_normalize(
     const float                                max_smoothing_angle_radians
 ) const
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const float cos_max_smoothing_angle = cos(max_smoothing_angle_radians);
 
@@ -53,7 +53,7 @@ void Geometry::smooth_average(
     const Property_map<Polygon_id, glm::vec3>& point_normals
 ) const
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for_each_polygon(
         [&](auto& i)

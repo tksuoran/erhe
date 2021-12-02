@@ -2,7 +2,7 @@
 #include "renderers/line_renderer.hpp"
 #include "tools.hpp"
 
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <imgui.h>
 
@@ -34,7 +34,7 @@ auto Grid_tool::state() const -> State
 
 void Grid_tool::render(const Render_context& render_context)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (render_context.line_renderer == nullptr)
     {
@@ -105,7 +105,7 @@ void Grid_tool::render(const Render_context& render_context)
 
 void Grid_tool::imgui(Pointer_context&)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     ImGui::Begin      (c_title.data());
     ImGui::Checkbox   ("Enable",     &m_enable);

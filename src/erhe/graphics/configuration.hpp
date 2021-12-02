@@ -27,26 +27,33 @@ public:
     class Limits
     {
     public:
-        int max_vertex_attribs                {0};
-        int max_texture_size                 {64};
-        int max_3d_texture_size               {0};
-        int max_cube_map_texture_size         {0};
-        int max_texture_buffer_size           {0};
-        int max_texture_image_units           {0};  // in fragment shaders
-        int max_combined_texture_image_units  {0};  // combined across all shader stages
-        int max_uniform_block_size            {0};
-        int max_uniform_buffer_bindings       {0};
-        int max_vertex_uniform_blocks         {0};
-        int max_fragment_uniform_blocks       {0};
-        int max_geometry_uniform_blocks       {0};
-        int max_tess_control_uniform_blocks   {0};
-        int max_tess_evaluation_uniform_blocks{0};
+        int max_vertex_attribs                       {0};
+        int max_texture_size                        {64};
+        int max_3d_texture_size                      {0};
+        int max_cube_map_texture_size                {0};
+        int max_texture_buffer_size                  {0};
+        int max_texture_image_units                  {0};  // in fragment shaders
+        int max_combined_texture_image_units         {0};  // combined across all shader stages
+        int max_uniform_block_size                   {0};
+        int max_shader_storage_buffer_bindings       {0};
+        int max_uniform_buffer_bindings              {0};
+        int max_vertex_shader_storage_blocks         {0};
+        int max_vertex_uniform_blocks                {0};
+        int max_fragment_shader_storage_blocks       {0};
+        int max_fragment_uniform_blocks              {0};
+        int max_geometry_shader_storage_blocks       {0};
+        int max_geometry_uniform_blocks              {0};
+        int max_tess_control_shader_storage_blocks   {0};
+        int max_tess_control_uniform_blocks          {0};
+        int max_tess_evaluation_shader_storage_blocks{0};
+        int max_tess_evaluation_uniform_blocks       {0};
     };
 
     class Implementation_defined
     {
     public:
-        unsigned int uniform_buffer_offset_alignment{1024};
+        unsigned int shader_storage_buffer_offset_alignment{256};
+        unsigned int uniform_buffer_offset_alignment       {256};
     };
 
     static Info                   info;

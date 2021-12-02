@@ -5,11 +5,11 @@
 
 erhe is a C++ library for modern OpenGL experiments.
 
--   Use direct state access (DSA)
--   Use persistently mapped buffers
--   Use multi draw indirect
--   Use latest OpenGL and GLSL versions
--   OpenGL state can be managed with pipelines a bit similar to Vulkan
+-   Uses direct state access (DSA)
+-   Uses persistently mapped buffers
+-   Uses multi draw indirect
+-   Uses latest OpenGL and GLSL versions
+-   Uses abstraction for OpenGL pipeline state a bit similar to Vulkan
 -   Simple type safe(r) wrapper for GL API (see erhe::gl)
 -   Supports Windows and Linux
 

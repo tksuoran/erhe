@@ -5,6 +5,7 @@
 #include "renderers/light_mesh.hpp"
 
 #include "erhe/components/component.hpp"
+#include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/graphics/configuration.hpp"
 
 #include "erhe/scene/mesh.hpp"
@@ -168,7 +169,15 @@ protected:
         Buffer_range range;
         size_t       write_offset{0};
 
-        void align()
+        void shader_storage_align()
+        {
+            while (write_offset % erhe::graphics::Instance::implementation_defined.shader_storage_buffer_offset_alignment)
+            {
+                write_offset++;
+            }
+        }
+
+        void uniform_align()
         {
             while (write_offset % erhe::graphics::Instance::implementation_defined.uniform_buffer_offset_alignment)
             {
@@ -176,9 +185,27 @@ protected:
             }
         }
 
-        void begin()
+        void begin_shader_storage()
         {
-            align();
+            shader_storage_align();
+            range.first_byte_offset = write_offset;
+        }
+
+        void begin(const gl::Buffer_target buffer_target)
+        {
+            switch (buffer_target)
+            {
+                case gl::Buffer_target::shader_storage_buffer:
+                {
+                    shader_storage_align();
+                    break;
+                }
+                case gl::Buffer_target::uniform_buffer:
+                {
+                    uniform_align();
+                    break;
+                }
+            }
             range.first_byte_offset = write_offset;
         }
 

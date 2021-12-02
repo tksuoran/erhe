@@ -1,6 +1,6 @@
 #include "erhe/geometry/operation/ambo.hpp"
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>
@@ -12,7 +12,7 @@ namespace erhe::geometry::operation
 Ambo::Ambo(Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     make_polygon_centroids();
     make_edge_midpoints();
@@ -49,12 +49,13 @@ Ambo::Ambo(Geometry& source, Geometry& destination)
 
 auto ambo(Geometry& source) -> Geometry
 {
-    return Geometry(
+    return Geometry{
         fmt::format("ambo({})", source.name),
-        [&source](auto& result) {
-            Ambo operation(source, result);
+        [&source](auto& result)
+        {
+            Ambo operation{source, result};
         }
-    );
+    };
 }
 
 

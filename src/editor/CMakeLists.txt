@@ -208,8 +208,15 @@ target_link_libraries(
     mango
     nlohmann_json::nlohmann_json
     openxr_loader
-    TracyClient
 )
+
+if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
+    target_link_libraries(${_target} PRIVATE TracyClient)
+endif ()
+
+if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
+    target_link_libraries(${_target} PRIVATE SuperluminalAPI)
+endif ()
 
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 

@@ -5,7 +5,7 @@
 #include "erhe/physics/idebug_draw.hpp"
 #include "erhe/physics/log.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <btBulletDynamicsCommon.h>
 
@@ -167,7 +167,7 @@ auto Bullet_world::is_physics_updates_enabled() const -> bool
 
 void Bullet_world::update_fixed_step(const double dt)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (!m_physics_enabled)
     {
@@ -198,6 +198,7 @@ void Bullet_world::remove_rigid_body(IRigid_body* rigid_body)
 
 void Bullet_world::add_constraint(IConstraint* constraint)
 {
+    log_physics.info("add_constraint()\n");
     VERIFY(constraint != nullptr);
     auto* bullet_constraint = dynamic_cast<Bullet_constraint*>(constraint);
     VERIFY(bullet_constraint != nullptr);
@@ -206,6 +207,7 @@ void Bullet_world::add_constraint(IConstraint* constraint)
 
 void Bullet_world::remove_constraint(IConstraint* constraint)
 {
+    log_physics.info("remove_constraint()\n");
     VERIFY(constraint != nullptr);
     auto* bullet_constraint = dynamic_cast<Bullet_constraint*>(constraint);
     VERIFY(bullet_constraint != nullptr);

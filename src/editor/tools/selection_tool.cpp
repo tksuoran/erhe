@@ -30,7 +30,7 @@ Selection_tool::~Selection_tool() = default;
 
 void Selection_tool::connect()
 {
-    m_scene_manager = get<Scene_manager>();
+    m_scene_manager = require<Scene_manager>();
 }
 
 void Selection_tool::initialize_component()
@@ -313,6 +313,7 @@ void Selection_tool::render(const Render_context& render_context)
                     node->world_from_node(),
                     yellow,
                     {
+                        { vec3{box_min.x, box_min.y, box_min.z}, vec3{box_max.x, box_min.y, box_min.z} },
 		                { vec3{box_max.x, box_min.y, box_min.z}, vec3{box_max.x, box_max.y, box_min.z} },
 		                { vec3{box_max.x, box_max.y, box_min.z}, vec3{box_min.x, box_max.y, box_min.z} },
 		                { vec3{box_min.x, box_max.y, box_min.z}, vec3{box_min.x, box_min.y, box_min.z} },

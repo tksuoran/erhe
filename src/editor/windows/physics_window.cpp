@@ -183,7 +183,7 @@ auto Physics_window::get_debug_draw_parameters() -> Debug_draw_parameters
 
 void Physics_window::render(const Render_context& /*render_context*/)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     auto debug_drawer = get<Debug_draw>();
     if (!debug_drawer || !m_debug_draw.enable || !m_scene_root)

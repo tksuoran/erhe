@@ -5,7 +5,7 @@
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace editor {
 
@@ -83,7 +83,7 @@ Program_interface::Shader_resources::Shader_resources()
 
 void Program_interface::initialize_component()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     shader_resources = std::make_unique<Shader_resources>();
 }

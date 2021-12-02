@@ -2,7 +2,7 @@
 #include "log.hpp"
 
 #include "erhe/toolkit/file.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <gsl/gsl>
 
@@ -122,7 +122,7 @@ Command tokenize(const std::string& text)
 auto parse_obj_geometry(const std::filesystem::path& path)
 -> std::vector<std::shared_ptr<erhe::geometry::Geometry>>
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     log_parsers.trace("path = {}\n", path.generic_string());
 
@@ -463,7 +463,7 @@ auto parse_obj_geometry(const std::filesystem::path& path)
 
         for (auto g : result)
         {
-            ZoneScopedN("post processing");
+            ERHE_PROFILE_SCOPE("post processing");
 
             g->make_point_corners();
 

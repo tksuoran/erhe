@@ -176,7 +176,7 @@ void Fly_camera_tool::z_pos_control(const bool pressed)
 
 auto Fly_camera_tool::update(Pointer_context& pointer_context) -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
 

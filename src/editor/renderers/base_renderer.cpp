@@ -19,7 +19,7 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/viewport.hpp"
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/ui/font.hpp"
 #include "erhe/ui/rectangle.hpp"
 
@@ -57,7 +57,7 @@ void Base_renderer::create_frame_resources(
     const size_t draw_count
 )
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const auto& shader_resources = *m_program_interface->shader_resources.get();
 
@@ -110,14 +110,13 @@ auto Base_renderer::update_primitive_buffer(
     const Mesh_layer&        mesh_layer,
     const Visibility_filter& visibility_filter,
     const bool               use_id_ranges
-)
--> Base_renderer::Buffer_range
+) -> Base_renderer::Buffer_range
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     log_render.trace("{}(meshes.size() = {})\n", __func__, mesh_layer.meshes.size());
 
-    m_primitive_writer.begin();
+    m_primitive_writer.begin(current_frame_resources().primitive_buffer.target());
     const auto&  shader_resources   = *m_program_interface->shader_resources.get();
     const size_t entry_size         = shader_resources.primitive_struct.size_bytes();
     auto         primitive_gpu_data = current_frame_resources().primitive_buffer.map();
@@ -137,7 +136,7 @@ auto Base_renderer::update_primitive_buffer(
         for (auto& primitive : mesh_data.primitives)
         {
             const auto* const primitive_geometry = primitive.primitive_geometry.get();
-            log_render.trace("primitive_index = {}\n", primitive_index);
+            //log_render.trace("primitive_index = {}\n", primitive_index);
 
             const uint32_t count        = static_cast<uint32_t>(primitive_geometry->triangle_fill_indices.index_count);
             const uint32_t power_of_two = next_power_of_two(count);
@@ -165,7 +164,7 @@ auto Base_renderer::update_primitive_buffer(
                                                                                     as_span(primitive_constant_size);
             //memset(reinterpret_cast<uint8_t*>(model_gpu_data.data()) + offset, 0, entry_size);
             {
-                ZoneScopedN("write");
+                //ZoneScopedN("write");
 
                 write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.world_from_node, as_span(world_from_node));
                 write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.color,           color_span              );
@@ -200,10 +199,9 @@ auto Base_renderer::update_primitive_buffer(
 auto Base_renderer::update_light_buffer(
     const Light_layer&      light_layer,
     const Viewport          light_texture_viewport
-)
--> Base_renderer::Buffer_range
+) -> Base_renderer::Buffer_range
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     log_render.trace("{}(lights.size() = {})\n", __func__, light_layer.lights.size());
 
@@ -216,7 +214,7 @@ auto Base_renderer::update_light_buffer(
     uint32_t     spot_light_count{0};
     uint32_t     point_light_count{0};
 
-    m_light_writer.begin();
+    m_light_writer.begin(current_frame_resources().light_buffer.target());
 
     m_light_writer.write_offset += offsets.light_struct;
 
@@ -263,7 +261,7 @@ auto Base_renderer::update_material_buffer(
     const Material_collection& materials
 ) -> Base_renderer::Buffer_range
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     log_render.trace("{}(materials.size() = {})\n", __func__, materials.size());
 
@@ -272,7 +270,7 @@ auto Base_renderer::update_material_buffer(
     const auto&  offsets           = shader_resources.material_block_offsets;
     auto         material_gpu_data = current_frame_resources().material_buffer.map();
     size_t       material_index    = 0;
-    m_material_writer.begin();
+    m_material_writer.begin(current_frame_resources().material_buffer.target());
     for (auto material : materials)
     {
         log_render.trace("material_index = {}\n", material_index);
@@ -293,10 +291,10 @@ auto Base_renderer::update_material_buffer(
 
 auto Base_renderer::update_camera_buffer(
     ICamera&       camera,
-    const Viewport viewport)
--> Base_renderer::Buffer_range
+    const Viewport viewport
+) -> Base_renderer::Buffer_range
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     camera.update(viewport);
 
@@ -308,7 +306,7 @@ auto Base_renderer::update_camera_buffer(
     const mat4  clip_from_world  = camera.clip_from_world();
     const float exposure         = 1.0f;
 
-    m_camera_writer.begin();
+    m_camera_writer.begin(current_frame_resources().camera_buffer.target());
     const float viewport_floats[4] {
         static_cast<float>(viewport.x),
         static_cast<float>(viewport.y),
@@ -347,13 +345,13 @@ auto Base_renderer::update_draw_indirect_buffer(
     const Visibility_filter& visibility_filter
 ) -> Base_renderer::Draw_indirect_buffer_range
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     auto     draw_indirect_gpu_data = current_frame_resources().draw_indirect_buffer.map();
     uint32_t instance_count     {1};
     uint32_t base_instance      {0};
     size_t   draw_indirect_count{0};
-    m_draw_indirect_writer.begin();
+    m_draw_indirect_writer.begin(current_frame_resources().draw_indirect_buffer.target());
     for (auto mesh : mesh_layer.meshes)
     {
         if (!visibility_filter(mesh->visibility_mask()))

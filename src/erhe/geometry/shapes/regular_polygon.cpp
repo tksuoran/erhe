@@ -1,15 +1,14 @@
 #include "erhe/geometry/shapes/regular_polygon.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <cmath>  // for sqrt
 
 namespace erhe::geometry::shapes
 {
 
-auto make_triangle(const double r)
--> Geometry
+auto make_triangle(const double r) -> Geometry
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     // 0.57735027 = sqrt(3) / 3
     // 0.28867513 = sqrt(3) / 6
@@ -29,10 +28,9 @@ auto make_triangle(const double r)
     };
 }
 
-auto make_quad(const double edge)
--> Geometry
+auto make_quad(const double edge) -> Geometry
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     //
     //  0.707106781 = sqrt(2) / 2

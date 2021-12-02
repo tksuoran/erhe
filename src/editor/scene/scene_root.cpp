@@ -13,7 +13,7 @@
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <mango/core/thread.hpp>
 #include <glm/gtx/color_space.hpp>
@@ -69,7 +69,7 @@ void Scene_root::connect()
 
 void Scene_root::initialize_component()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     // Layer configuration
     m_content_layer    = make_shared<Mesh_layer>("content");

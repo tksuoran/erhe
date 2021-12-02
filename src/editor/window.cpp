@@ -5,7 +5,7 @@
 
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/png_loader.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/window.hpp"
 
 #if defined(ERHE_WINDOW_LIBRARY_GLFW)
@@ -27,7 +27,7 @@ Window::Window()
 
 auto Window::create_gl_window() -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const auto& configuration = *get<Configuration>();
 
@@ -46,7 +46,7 @@ auto Window::create_gl_window() -> bool
     bool is_regular_file = std::filesystem::is_regular_file(path);
     if (exists && is_regular_file)
     {
-        ZoneScopedN("icon");
+        ERHE_PROFILE_SCOPE("icon");
 
         bool ok = loader.open(path, image_info);
         if (ok)
@@ -68,7 +68,7 @@ auto Window::create_gl_window() -> bool
     }
 #endif
 
-    TracyGpuContext;
+    ERHE_PROFILE_GPU_CONTEXT
 
     erhe::graphics::Instance::initialize();
 

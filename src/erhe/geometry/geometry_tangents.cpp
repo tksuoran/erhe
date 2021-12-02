@@ -1,7 +1,7 @@
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/log.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 #include <mikktspace.h>
@@ -41,12 +41,14 @@ auto Geometry::compute_tangents(
 {
     using namespace glm;
 
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
-    if ((!polygon_tangents   || has_polygon_tangents  ()) &&
+    if (
+        (!polygon_tangents   || has_polygon_tangents  ()) &&
         (!polygon_bitangents || has_polygon_bitangents()) &&
         (!corner_tangents    || has_corner_tangents   ()) &&
-        (!corner_bitangents  || has_corner_bitangents ()))
+        (!corner_bitangents  || has_corner_bitangents ())
+    )
     {
         return true;
     }
@@ -421,7 +423,8 @@ auto Geometry::compute_tangents(
     context.m_pUserData  = &g;
 
     {
-        ZoneScopedN("genTangSpaceDefault")
+        ERHE_PROFILE_SCOPE("genTangSpaceDefault");
+
         const auto res = genTangSpaceDefault(&context);
         if (res == 0)
         {
@@ -433,7 +436,7 @@ auto Geometry::compute_tangents(
     // Post processing: Pick one tangent for polygon
     if (make_polygons_flat)
     {
-        ZoneScopedN("make polygons flat")
+        ERHE_PROFILE_SCOPE("make polygons flat");
 
         for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
         {

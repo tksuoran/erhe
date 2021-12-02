@@ -55,9 +55,9 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/window.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <future>
 
@@ -76,7 +76,7 @@ void Application::run()
 auto Application::initialize_components(int argc, char** argv)
 -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     auto configuration        = make_shared<Configuration>(argc, argv);
     auto window               = make_shared<Window>();
@@ -84,7 +84,8 @@ auto Application::initialize_components(int argc, char** argv)
     auto gl_context_provider  = make_shared<Gl_context_provider>();
 
     {
-        ZoneScopedN("add components");
+        ERHE_PROFILE_SCOPE("add components");
+
         m_components.add(configuration);
         m_components.add(window);
         m_components.add(shared_from_this());

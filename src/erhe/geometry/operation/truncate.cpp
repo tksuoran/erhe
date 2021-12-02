@@ -1,6 +1,6 @@
 #include "erhe/geometry/operation/truncate.hpp"
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>
@@ -12,7 +12,7 @@ namespace erhe::geometry::operation
 Truncate::Truncate(Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     // Trisect each old edge by generating two new points.
     float t0 = 1.0f / 3.0f;
@@ -72,7 +72,7 @@ auto truncate(Geometry& source) -> Geometry
         fmt::format("truncate({})", source.name),
         [&source](auto& result)
         {
-            Truncate operation(source, result);
+            Truncate operation{source, result};
         }
     );
 }

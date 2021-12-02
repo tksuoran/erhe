@@ -1,7 +1,7 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/log.hpp"
 #include "erhe/scene/node.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <algorithm>
 
@@ -48,7 +48,7 @@ auto Scene::transform_update_serial() -> uint64_t
 
 void Scene::update_node_transforms()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (!nodes_sorted)
     {

@@ -87,7 +87,7 @@ auto Brushes::make_brush(
     const shared_ptr<erhe::physics::ICollision_shape>& collision_shape
 ) -> std::shared_ptr<Brush>
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const auto shared_geometry = make_shared<erhe::geometry::Geometry>(move(geometry));
     return make_brush(shared_geometry, context, collision_shape);
@@ -99,7 +99,7 @@ auto Brushes::make_brush(
     const shared_ptr<erhe::physics::ICollision_shape>& collision_shape
 ) -> std::shared_ptr<Brush>
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     geometry->build_edges();
     geometry->compute_polygon_normals();
@@ -133,7 +133,7 @@ auto Brushes::make_brush(
 )
 -> std::shared_ptr<Brush>
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     geometry->build_edges();
     geometry->compute_polygon_normals();
@@ -176,7 +176,7 @@ void Brushes::remove_brush_mesh()
 
 auto Brushes::update(Pointer_context& pointer_context) -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (pointer_context.priority_action != Action::add)
     {

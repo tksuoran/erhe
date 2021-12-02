@@ -12,7 +12,9 @@ class IRigid_body;
 class IConstraint
 {
 public:
-    virtual ~IConstraint() {}
+    IConstraint();
+    virtual ~IConstraint();
+
     static auto create_point_to_point_constraint       (IRigid_body* rigid_body, const glm::vec3 point) -> IConstraint*;
     static auto create_point_to_point_constraint_shared(IRigid_body* rigid_body, const glm::vec3 point) -> std::shared_ptr<IConstraint>;
     static auto create_point_to_point_constraint_unique(IRigid_body* rigid_body, const glm::vec3 point) -> std::unique_ptr<IConstraint>;

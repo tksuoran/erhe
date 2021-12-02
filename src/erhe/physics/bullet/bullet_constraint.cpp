@@ -1,9 +1,20 @@
 #include "erhe/physics/bullet/bullet_constraint.hpp"
 #include "erhe/physics/bullet/bullet_rigid_body.hpp"
 #include "erhe/physics/bullet/glm_conversions.hpp"
+#include "erhe/physics/log.hpp"
 
 namespace erhe::physics
 {
+
+IConstraint::IConstraint()
+{
+    log_physics.info("IConstraint() created\n");
+}
+
+IConstraint::~IConstraint()
+{
+    log_physics.info("IConstraint() destroyed\n");
+}
 
 auto IConstraint::create_point_to_point_constraint(
     IRigid_body*    rigid_body,

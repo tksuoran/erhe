@@ -236,23 +236,33 @@ void Instance::initialize()
     gl::enable(gl::Enable_cap::debug_output);
     gl::enable(gl::Enable_cap::debug_output_synchronous);
 
-    int uniform_buffer_offset_alignment = 0;
-    gl::get_integer_v(gl::Get_p_name::max_uniform_block_size,          &limits.max_uniform_block_size);
-    gl::get_integer_v(gl::Get_p_name::uniform_buffer_offset_alignment, &uniform_buffer_offset_alignment);
-    gl::get_integer_v(gl::Get_p_name::max_uniform_buffer_bindings,     &limits.max_uniform_buffer_bindings);
-    gl::get_integer_v(gl::Get_p_name::max_vertex_uniform_blocks,       &limits.max_vertex_uniform_blocks);
-    gl::get_integer_v(gl::Get_p_name::max_fragment_uniform_blocks,     &limits.max_fragment_uniform_blocks);
-    if (uniform_buffer_offset_alignment == 32)
-    {
-        uniform_buffer_offset_alignment = 64;
-    }
-    implementation_defined.uniform_buffer_offset_alignment = static_cast<unsigned int>(uniform_buffer_offset_alignment);
+    int shader_storage_buffer_offset_alignment{0};
+    int uniform_buffer_offset_alignment       {0};
+    gl::get_integer_v(gl::Get_p_name::shader_storage_buffer_offset_alignment,    &shader_storage_buffer_offset_alignment);
+    gl::get_integer_v(gl::Get_p_name::uniform_buffer_offset_alignment,           &uniform_buffer_offset_alignment);
+    gl::get_integer_v(gl::Get_p_name::max_uniform_block_size,                    &limits.max_uniform_block_size);
+    gl::get_integer_v(gl::Get_p_name::max_shader_storage_buffer_bindings,        &limits.max_shader_storage_buffer_bindings);
+    gl::get_integer_v(gl::Get_p_name::max_uniform_buffer_bindings,               &limits.max_uniform_buffer_bindings);
+    gl::get_integer_v(gl::Get_p_name::max_vertex_shader_storage_blocks,          &limits.max_vertex_shader_storage_blocks);
+    gl::get_integer_v(gl::Get_p_name::max_vertex_uniform_blocks,                 &limits.max_vertex_uniform_blocks);
+    gl::get_integer_v(gl::Get_p_name::max_fragment_shader_storage_blocks,        &limits.max_fragment_shader_storage_blocks);
+    gl::get_integer_v(gl::Get_p_name::max_fragment_uniform_blocks,               &limits.max_fragment_uniform_blocks);
+    gl::get_integer_v(gl::Get_p_name::max_geometry_shader_storage_blocks,        &limits.max_geometry_shader_storage_blocks);
+    gl::get_integer_v(gl::Get_p_name::max_geometry_uniform_blocks,               &limits.max_geometry_uniform_blocks);
+    gl::get_integer_v(gl::Get_p_name::max_tess_control_shader_storage_blocks,    &limits.max_tess_control_shader_storage_blocks);
+    gl::get_integer_v(gl::Get_p_name::max_tess_control_uniform_blocks,           &limits.max_tess_control_uniform_blocks);
+    gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_shader_storage_blocks, &limits.max_tess_evaluation_shader_storage_blocks);
+    gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_uniform_blocks,        &limits.max_tess_evaluation_uniform_blocks);
+
+    implementation_defined.shader_storage_buffer_offset_alignment = static_cast<unsigned int>(shader_storage_buffer_offset_alignment);
+    implementation_defined.uniform_buffer_offset_alignment        = static_cast<unsigned int>(uniform_buffer_offset_alignment);
     log_configuration.info(
-        "uniform block (max size = {}"
-        ", offset alignment = {}"
-        ", max bindings = {}"
-        ", max vertex blocks = {}"
-        ", max fragment blocks = {}"
+        "uniform block ("
+        "max size = {}, "
+        "offset alignment = {}. "
+        "max bindings = {}, "
+        "max vertex blocks = {}, "
+        "max fragment blocks = {}"
         ")\n",
         limits.max_uniform_block_size,
         implementation_defined.uniform_buffer_offset_alignment,
@@ -260,14 +270,18 @@ void Instance::initialize()
         limits.max_vertex_uniform_blocks,
         limits.max_fragment_uniform_blocks
     );
-
-    gl::get_integer_v(gl::Get_p_name::max_geometry_uniform_blocks, &limits.max_geometry_uniform_blocks);
-
-    if (info.gl_version >= 400)
-    {
-        gl::get_integer_v(gl::Get_p_name::max_tess_control_uniform_blocks, &limits.max_tess_control_uniform_blocks);
-        gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_uniform_blocks, &limits.max_tess_evaluation_uniform_blocks);
-    }
+    log_configuration.info(
+        "shader storage block ("
+        "offset alignment = {}"
+        ", max bindings = {}"
+        ", max vertex blocks = {}"
+        ", max fragment blocks = {}"
+        ")\n",
+        implementation_defined.shader_storage_buffer_offset_alignment,
+        limits.max_shader_storage_buffer_bindings,
+        limits.max_vertex_shader_storage_blocks,
+        limits.max_fragment_shader_storage_blocks
+    );
 
     extensions.clear();
 

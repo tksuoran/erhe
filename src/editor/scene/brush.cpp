@@ -13,7 +13,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace editor
 {
@@ -179,7 +179,7 @@ Brush::Brush(erhe::primitive::Build_info_set& build_info_set)
 
 void Brush::initialize(const Create_info& create_info)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     geometry                    = create_info.geometry;
     build_info_set              = create_info.build_info_set;
@@ -193,7 +193,7 @@ void Brush::initialize(const Create_info& create_info)
     VERIFY(geometry.get() != nullptr);
 
     {
-        ZoneScopedN("make brush primitive");
+        ERHE_PROFILE_SCOPE("make brush primitive");
 
         primitive_geometry = make_primitive_shared(
             *create_info.geometry.get(),
@@ -205,7 +205,7 @@ void Brush::initialize(const Create_info& create_info)
 
     if (!collision_shape && !collision_shape_generator)
     {
-        ZoneScopedN("make brush concex hull collision shape");
+        ERHE_PROFILE_SCOPE("make brush concex hull collision shape");
 
         this->collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
             reinterpret_cast<const float*>(geometry->point_attributes().find<vec3>(c_point_locations)->values.data()),
@@ -216,7 +216,7 @@ void Brush::initialize(const Create_info& create_info)
 
     if (this->collision_volume_calculator)
     {
-        ZoneScopedN("calculate brush volume");
+        ERHE_PROFILE_SCOPE("calculate brush volume");
 
         volume = this->collision_volume_calculator(1.0f);
     }
@@ -232,12 +232,12 @@ Brush::Brush(const Create_info& create_info)
     , volume                     {create_info.volume}
     , density                    {create_info.density}
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     VERIFY(geometry.get() != nullptr);
 
     {
-        ZoneScopedN("make brush primitive");
+        ERHE_PROFILE_SCOPE("make brush primitive");
 
         primitive_geometry = make_primitive_shared(
             *create_info.geometry.get(),
@@ -250,7 +250,7 @@ Brush::Brush(const Create_info& create_info)
 
     if (!collision_shape && !collision_shape_generator)
     {
-        ZoneScopedN("make brush concex hull collision shape");
+        ERHE_PROFILE_SCOPE("make brush concex hull collision shape");
 
         this->collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
             reinterpret_cast<const float*>(geometry->point_attributes().find<vec3>(c_point_locations)->values.data()),
@@ -262,7 +262,7 @@ Brush::Brush(const Create_info& create_info)
 
     if (this->collision_volume_calculator)
     {
-        ZoneScopedN("calculate brush volume");
+        ERHE_PROFILE_SCOPE("calculate brush volume");
 
         volume = this->collision_volume_calculator(1.0f);
     }
@@ -329,7 +329,7 @@ auto Brush::get_scaled(const float scale)
 auto Brush::create_scaled(const int scale_key)
 -> Scaled
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     VERIFY(primitive_geometry);
 
@@ -434,13 +434,18 @@ auto Brush::create_scaled(const int scale_key)
 
 const std::string empty_string = {};
 
+auto Brush::name() const -> const std::string&
+{
+    return primitive_geometry->source_geometry->name;
+}
+
 auto Brush::make_instance(
     const glm::mat4                                   world_from_node,
     const std::shared_ptr<erhe::primitive::Material>& material,
     const float                                       scale
 ) -> Instance
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const auto& scaled = get_scaled(scale);
 
@@ -455,7 +460,7 @@ auto Brush::make_instance(
     std::shared_ptr<Node_physics> node_physics;
     if (collision_shape || collision_shape_generator)
     {
-        ZoneScopedN("make brush node physics");
+        ERHE_PROFILE_SCOPE("make brush node physics");
         erhe::physics::IRigid_body_create_info create_info{
             density * scaled.volume,
             scaled.collision_shape,

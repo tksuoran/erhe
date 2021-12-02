@@ -1,7 +1,7 @@
 #pragma once
 
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/geometry/log.hpp"
 #include "erhe/log/log_glm.hpp"
 
@@ -17,7 +17,7 @@ template <typename Key_type, typename Value_type>
 inline void
 Property_map<Key_type, Value_type>::clear()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     values.clear();
     present.clear();
@@ -65,7 +65,7 @@ template <typename Key_type, typename Value_type>
 inline void
 Property_map<Key_type, Value_type>::put(Key_type key, Value_type value)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const size_t i = static_cast<size_t>(key);
     if (values.size() <= i)
@@ -82,7 +82,7 @@ inline auto
 Property_map<Key_type, Value_type>::get(Key_type key) const
     -> Value_type
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const size_t i = static_cast<size_t>(key);
     if ((values.size() <= i) || !present[i])
@@ -96,7 +96,7 @@ template <typename Key_type, typename Value_type>
 inline void
 Property_map<Key_type, Value_type>::erase(Key_type key)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const size_t i = static_cast<size_t>(key);
     if (values.size() <= i)
@@ -112,7 +112,7 @@ inline auto
 Property_map<Key_type, Value_type>::maybe_get(Key_type key, Value_type& out_value) const
     -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const size_t i = static_cast<size_t>(key);
     if ((values.size() <= i) || !present[i])
@@ -129,7 +129,7 @@ inline auto
 Property_map<Key_type, Value_type>::has(Key_type key) const
     -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const size_t i = static_cast<size_t>(key);
     if ((values.size() <= i) || !present[i])
@@ -144,7 +144,7 @@ inline auto
 Property_map<Key_type, Value_type>::constructor(const Property_map_descriptor& descriptor) const
     -> Property_map_base<Key_type>*
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Property_map<Key_type, Value_type>* instance = new Property_map<Key_type, Value_type>(descriptor);
     Property_map_base<Key_type>*        base_ptr = dynamic_cast<Property_map_base<Key_type>*>(instance);
@@ -158,7 +158,7 @@ Property_map<Key_type, Value_type>::interpolate(
     const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds
 ) const
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     auto* destination = dynamic_cast<Property_map<Key_type, Value_type>*>(destination_base);
     VERIFY(destination != nullptr);
@@ -274,7 +274,7 @@ Property_map<Key_type, Value_type>::import_from(
     Property_map_base<Key_type>* source_base
 )
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const auto* const source = dynamic_cast<Property_map<Key_type, Value_type>*>(source_base);
     VERIFY(source != nullptr);
@@ -295,7 +295,7 @@ Property_map<Key_type, Value_type>::import_from(
     const glm::mat4              transform
 )
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     auto* source = dynamic_cast<Property_map<Key_type, Value_type>*>(source_base);
     VERIFY(source != nullptr);

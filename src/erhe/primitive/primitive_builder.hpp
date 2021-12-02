@@ -109,7 +109,7 @@ private:
     void build_vertex_tangent    ();
     void build_vertex_bitangent  ();
     void build_vertex_texcoord   ();
-    void build_vertex_color      (uint32_t polygon_corner_count);
+    void build_vertex_color      (const uint32_t polygon_corner_count);
 
     void build_centroid_position ();
     void build_centroid_normal   ();

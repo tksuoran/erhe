@@ -36,10 +36,9 @@ public:
     auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
-
-    auto get_light_transform(const erhe::scene::Light& light) -> glm::mat4;
-    auto point_in_light     (const glm::vec3 point_in_world, const erhe::scene::Light& light) -> bool;
-    auto get_light_mesh     (const erhe::scene::Light& light) -> erhe::primitive::Primitive_geometry*;
+    auto get_light_transform (const erhe::scene::Light& light) -> glm::mat4;
+    auto point_in_light      (const glm::vec3 point_in_world, const erhe::scene::Light& light) -> bool;
+    auto get_light_mesh      (const erhe::scene::Light& light) -> erhe::primitive::Primitive_geometry*;
 
 private:
     void update_light_model(const erhe::scene::Light& light);

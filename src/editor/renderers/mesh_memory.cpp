@@ -8,7 +8,7 @@
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/raytrace/ibuffer.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace editor {
 
@@ -31,27 +31,36 @@ void Mesh_memory::connect()
 
 void Mesh_memory::initialize_component()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 
-    constexpr size_t vertex_byte_count  = 256 * 1024 * 1024;
-    constexpr size_t index_byte_count   =  64 * 1024 * 1024;
+    constexpr size_t vertex_byte_count  = 128 * 1024 * 1024;
+    constexpr size_t index_byte_count   =  32 * 1024 * 1024;
 
     gl_buffer_transfer_queue = make_unique<Buffer_transfer_queue>();
 
-    gl_vertex_buffer = make_shared<erhe::graphics::Buffer>(
-        gl::Buffer_target::array_buffer,
-        vertex_byte_count,
-        storage_mask
-    );
-    gl_index_buffer = make_shared<erhe::graphics::Buffer>(
-        gl::Buffer_target::element_array_buffer,
-        index_byte_count,
-        storage_mask
-    );
+    {
+        ERHE_PROFILE_SCOPE("GL VBO");
+
+        gl_vertex_buffer = make_shared<erhe::graphics::Buffer>(
+            gl::Buffer_target::array_buffer,
+            vertex_byte_count,
+            storage_mask
+        );
+    }
+
+    {
+        ERHE_PROFILE_SCOPE("GL IBO");
+
+        gl_index_buffer = make_shared<erhe::graphics::Buffer>(
+            gl::Buffer_target::element_array_buffer,
+            index_byte_count,
+            storage_mask
+        );
+    }
     gl_vertex_buffer->set_debug_label("Scene Manager Vertex");
     gl_index_buffer ->set_debug_label("Scene Manager Index");
 
@@ -60,8 +69,18 @@ void Mesh_memory::initialize_component()
         gl_vertex_buffer,
         gl_index_buffer
     );
-    raytrace_vertex_buffer = erhe::raytrace::IBuffer::create_shared(vertex_byte_count);
-    raytrace_index_buffer  = erhe::raytrace::IBuffer::create_shared(index_byte_count);
+
+    {
+        ERHE_PROFILE_SCOPE("RT VBO");
+
+        raytrace_vertex_buffer = erhe::raytrace::IBuffer::create_shared(vertex_byte_count);
+    }
+    {
+        ERHE_PROFILE_SCOPE("RT IBO");
+
+        raytrace_index_buffer  = erhe::raytrace::IBuffer::create_shared(index_byte_count);
+    }
+
     raytrace_buffer_sink   = make_unique<erhe::primitive::Raytrace_buffer_sink>(
         raytrace_vertex_buffer,
         raytrace_index_buffer

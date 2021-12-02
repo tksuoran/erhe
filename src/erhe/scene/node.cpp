@@ -1,7 +1,7 @@
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/log.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace erhe::scene
 {
@@ -82,7 +82,7 @@ void Node::set_name(const std::string_view name)
 
 void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     VERIFY(attachment);
 
@@ -108,7 +108,7 @@ void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
 
 auto Node::detach(INode_attachment* attachment) -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (!attachment)
     {
@@ -163,7 +163,7 @@ auto Node::child_count() const -> size_t
 
 void Node::attach(const std::shared_ptr<Node>& child_node)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     VERIFY(child_node);
 
@@ -190,7 +190,7 @@ void Node::attach(const std::shared_ptr<Node>& child_node)
 
 auto Node::detach(Node* child_node) -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (!child_node)
     {
@@ -330,7 +330,7 @@ auto Node::root() const -> const Node*
 
 void Node::update_transform(const uint64_t serial)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     //log.trace("{} update_transform\n", name());
     if (serial != 0)

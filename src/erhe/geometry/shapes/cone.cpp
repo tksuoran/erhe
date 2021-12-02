@@ -1,7 +1,7 @@
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/log.hpp"
 #include "erhe/log/log_glm.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
@@ -543,12 +543,12 @@ auto make_conical_frustum(
     const bool   use_bottom,
     const bool   use_top,
     const int    slice_count,
-    const int    stack_division)
--> Geometry
+    const int    stack_division
+) -> Geometry
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
-    return Geometry(
+    return Geometry{
         "conical frustum",
         [=](auto& geometry)
         {
@@ -565,7 +565,7 @@ auto make_conical_frustum(
             };
             builder.build();
         }
-    );
+    };
 }
 
 auto make_cone(
@@ -574,12 +574,12 @@ auto make_cone(
     const double bottom_radius,
     const bool   use_bottom,
     const int    slice_count,
-    const int    stack_division)
--> Geometry
+    const int    stack_division
+) -> Geometry
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
-    return Geometry(
+    return Geometry{
         "cone",
         [=](auto& geometry)
         {
@@ -596,7 +596,7 @@ auto make_cone(
             };
             builder.build();
         }
-    );
+    };
 }
 
 auto make_cylinder(
@@ -607,12 +607,11 @@ auto make_cylinder(
     const bool   use_top,
     const int    slice_count,
     const int    stack_division
-)
--> Geometry
+) -> Geometry
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
-    return Geometry(
+    return Geometry{
         "cylinder",
         [=](auto& geometry)
         {
@@ -629,7 +628,7 @@ auto make_cylinder(
             };
             builder.build();
         }
-    );
+    };
 }
 
 } // namespace erhe::geometry::shapes

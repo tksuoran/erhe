@@ -17,7 +17,7 @@ Property_maps::Property_maps(
     const Format_info&              format_info
 )
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     log_primitive_builder.trace("Property_maps::Property_maps() for geometry = {}\n", geometry.name);
     erhe::log::Indenter indenter;

@@ -25,7 +25,7 @@
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/trigonometric.hpp>
 
@@ -81,7 +81,7 @@ auto Editor_rendering::height() const -> int
 
 void Editor_rendering::begin_frame()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (m_configuration->gui)
     {
@@ -117,7 +117,7 @@ auto Editor_rendering::is_primary_scene_output_framebuffer_ready() -> bool
 
 void Editor_rendering::gui_render()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Expects(m_pipeline_state_tracker);
 
@@ -154,7 +154,7 @@ auto Editor_rendering::to_scene_content(const glm::vec2 position_in_root) const 
 
 void Editor_rendering::render(const double time)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Expects(m_application);
     Expects(m_scene_manager);
@@ -270,7 +270,7 @@ void Editor_rendering::render_shadowmaps()
 
 void Editor_rendering::render_id(const double time)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     auto* camera = m_scene_manager->get_view_camera().get();
     if (camera == nullptr)
@@ -293,7 +293,7 @@ void Editor_rendering::render_id(const double time)
 
 void Editor_rendering::render_clear_primary()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     m_pipeline_state_tracker->shader_stages.reset();
     m_pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
@@ -319,7 +319,7 @@ void Editor_rendering::render_content(
     const erhe::scene::Viewport viewport
 )
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (!m_viewport_config)
     {
@@ -457,7 +457,7 @@ void Editor_rendering::render_selection(
 
     if (render_style.edge_lines)
     {
-        ZoneScopedN("selection edge lines");
+        ERHE_PROFILE_SCOPE("selection edge lines");
 
         gl::enable(gl::Enable_cap::sample_alpha_to_coverage);
         m_forward_renderer->primitive_color_source   = Base_renderer::Primitive_color_source::constant_color;
@@ -482,7 +482,8 @@ void Editor_rendering::render_selection(
     gl::enable(gl::Enable_cap::program_point_size);
     if (render_style.polygon_centroids)
     {
-        ZoneScopedN("selection polygon centroids");
+        ERHE_PROFILE_SCOPE("selection polygon centroids");
+
         m_forward_renderer->primitive_color_source   = Base_renderer::Primitive_color_source::constant_color;
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_color = render_style.centroid_color;
@@ -499,7 +500,8 @@ void Editor_rendering::render_selection(
     }
     if (render_style.corner_points)
     {
-        ZoneScopedN("selection corner points");
+        ERHE_PROFILE_SCOPE("selection corner points");
+
         m_forward_renderer->primitive_color_source   = Base_renderer::Primitive_color_source::constant_color;
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_color = render_style.corner_color;
@@ -522,7 +524,7 @@ void Editor_rendering::render_tool_meshes(
     const erhe::scene::Viewport viewport
 )
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (camera == nullptr)
     {
@@ -558,7 +560,7 @@ void Editor_rendering::render_brush(
     const erhe::scene::Viewport viewport
 )
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (!m_viewport_config)
     {

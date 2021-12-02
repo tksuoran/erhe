@@ -35,7 +35,7 @@
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <mango/core/thread.hpp>
 
@@ -74,7 +74,7 @@ void Scene_manager::connect()
 
 void Scene_manager::initialize_component()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
@@ -122,10 +122,12 @@ auto Scene_manager::make_camera(
 
 void Scene_manager::setup_cameras()
 {
-    auto camera_a = make_camera("Camera A", glm::vec3{ 1.0f, 4.00f, 12.0f});
-    auto camera_b = make_camera("Camera B", glm::vec3{-1.0f, 1.65f,  4.0f});
+    auto camera_a  = make_camera("Camera A",  glm::vec3{ 1.0f, 4.00f, 12.0f});
+    auto camera_b  = make_camera("Camera B",  glm::vec3{-1.0f, 1.65f,  4.0f});
+    auto benchmark = make_camera("Benchmark", glm::vec3{ 0.0f, 20.0f, 50.0f});
 
     set_view_camera(camera_a);
+    //set_view_camera(benchmark);
 }
 
 auto Scene_manager::build_info_set() -> erhe::primitive::Build_info_set&
@@ -135,7 +137,8 @@ auto Scene_manager::build_info_set() -> erhe::primitive::Build_info_set&
 
 void Scene_manager::make_brushes()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
+
     const Brush_create_context brush_create_context{build_info_set()};
     mango::ConcurrentQueue     execution_queue;
     //mango::SerialQueue         execution_queue;
@@ -150,7 +153,7 @@ void Scene_manager::make_brushes()
     execution_queue.enqueue(
         [this, &floor_box_shape]()
         {
-            ZoneScopedN("Floor brush");
+            ERHE_PROFILE_SCOPE("Floor brush");
 
             Brush_create_context context{build_info_set()}; //, Normal_style::polygon_normals};
             context.normal_style = Normal_style::polygon_normals;
@@ -159,6 +162,7 @@ void Scene_manager::make_brushes()
                 make_box(
                     vec3{40.0f, 1.0f, 40.0f},
                     ivec3{40, 1, 40}
+                    //ivec3{1, 1, 1}
                 )
             );
             floor_geometry->name = "floor";
@@ -190,7 +194,7 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue(
             [this]()
             {
-                ZoneScopedN("parse .obj files");
+                ERHE_PROFILE_SCOPE("parse .obj files");
 
                 const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 constexpr bool instantiate = true;
@@ -227,7 +231,7 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue(
             [this]()
             {
-                ZoneScopedN("Platonic solids");
+                ERHE_PROFILE_SCOPE("Platonic solids");
 
                 const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 constexpr bool instantiate = true;
@@ -244,15 +248,15 @@ void Scene_manager::make_brushes()
                     context,
                     erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{original_scale * 0.5f})
                 );
-                make_brush(
-                    instantiate,
-                    make_box(
-                        vec3{1.0f, 1.0f, 1.0f},
-                        ivec3{3, 3, 3}
-                    ),
-                    context,
-                    erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{original_scale * 0.5f})
-                );
+                //make_brush(
+                //    instantiate,
+                //    make_box(
+                //        vec3{1.0f, 1.0f, 1.0f},
+                //        ivec3{3, 3, 3}
+                //    ),
+                //    context,
+                //    erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{original_scale * 0.5f})
+                //);
             }
         );
     }
@@ -262,7 +266,7 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue(
             [this]()
             {
-                ZoneScopedN("Sphere");
+                ERHE_PROFILE_SCOPE("Sphere");
 
                 //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 const Brush_create_context context{build_info_set(), Normal_style::corner_normals};
@@ -283,7 +287,7 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue(
             [this]()
             {
-                ZoneScopedN("Torus");
+                ERHE_PROFILE_SCOPE("Torus");
 
                 //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 const Brush_create_context context{build_info_set(), Normal_style::corner_normals};
@@ -299,7 +303,7 @@ void Scene_manager::make_brushes()
                 auto torus_collision_shape_generator = [](float scale)
                 -> std::shared_ptr<erhe::physics::ICollision_shape>
                 {
-                    ZoneScopedN("torus_collision_shape_generator");
+                    ERHE_PROFILE_SCOPE("torus_collision_shape_generator");
 
                     auto torus_shape = erhe::physics::ICollision_shape::create_compound_shape_shared();
 
@@ -353,7 +357,7 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue(
             [this]()
             {
-                ZoneScopedN("Cylinder");
+                ERHE_PROFILE_SCOPE("Cylinder");
 
                 //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 const Brush_create_context context{build_info_set(), Normal_style::corner_normals};
@@ -379,7 +383,7 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue(
             [this]()
             {
-                ZoneScopedN("Cone");
+                ERHE_PROFILE_SCOPE("Cone");
 
                 //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 const Brush_create_context context{build_info_set(), Normal_style::corner_normals};
@@ -401,7 +405,7 @@ void Scene_manager::make_brushes()
 
     if constexpr (anisotropic_test_object)
     {
-        ZoneScopedN("test scene for anisotropic debugging");
+        ERHE_PROFILE_SCOPE("test scene for anisotropic debugging");
 
         auto x_material = m_scene_root->make_material("x", vec4{1.000f, 0.000f, 0.0f, 1.0f}, 0.3f, 0.0f, 0.3f);
         auto y_material = m_scene_root->make_material("y", vec4{0.228f, 1.000f, 0.0f, 1.0f}, 0.3f, 0.0f, 0.3f);
@@ -442,7 +446,7 @@ void Scene_manager::make_brushes()
         execution_queue.enqueue(
             [this]()
             {
-                ZoneScopedN("Johnson solids");
+                ERHE_PROFILE_SCOPE("Johnson solids");
 
                 const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 constexpr bool instantiate = true;
@@ -477,7 +481,7 @@ auto Scene_manager::buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_q
 
 void Scene_manager::add_floor()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     auto floor_material = m_scene_root->make_material(
         "Floor",
@@ -512,7 +516,7 @@ void Scene_manager::add_floor()
 
 void Scene_manager::make_mesh_nodes()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     m_scene_root->scene().sanity_check();
 
@@ -531,6 +535,15 @@ void Scene_manager::make_mesh_nodes()
     };
 
     std::lock_guard<std::mutex> lock(m_scene_brushes_mutex);
+
+    std::sort(
+        m_scene_brushes.begin(),
+        m_scene_brushes.end(),
+        [](const std::shared_ptr<Brush>& lhs, const std::shared_ptr<Brush>& rhs)
+        {
+            return lhs->name() < rhs->name();
+        }
+    );
 
     vector<Pack_entry> pack_entries;
     for (auto brush : m_scene_brushes)
@@ -633,6 +646,44 @@ void Scene_manager::make_mesh_nodes()
     }
 }
 
+void Scene_manager::make_cube_benchmark()
+{
+    ERHE_PROFILE_FUNCTION
+
+    m_scene_root->scene().sanity_check();
+
+    auto material = m_scene_root->make_material("cube", vec4{1.0, 1.000f, 1.0f, 1.0f}, 0.3f, 0.0f, 0.3f);
+    auto cube     = make_cube(0.1f);
+    auto cube_pg  = make_primitive_shared(cube, build_info_set().gl, Normal_style::polygon_normals);
+    //auto cube     = make_sphere(0.1f, 24 * 1, 6 * 1);
+    //auto cube_pg  = make_primitive_shared(cube, build_info_set().gl, Normal_style::point_normals);
+
+    constexpr float scale = 0.5f;
+    constexpr int   x_count = 20;
+    constexpr int   y_count = 20;
+    constexpr int   z_count = 20;
+    for (int i = 0; i < x_count; ++i)
+    {
+        const float x_rel = static_cast<float>(i) - static_cast<float>(x_count) * 0.5f;
+        for (int j = 0; j < y_count; ++j)
+        {
+            const float y_rel = static_cast<float>(j);
+            for (int k = 0; k < z_count; ++k)
+            {
+                const float z_rel = static_cast<float>(k) - static_cast<float>(z_count) * 0.5f;
+                const vec3 pos{scale * x_rel, 1.0f + scale * y_rel, scale * z_rel};
+                auto mesh = m_scene_root->make_mesh_node("", cube_pg, material, nullptr, pos);
+                mesh->visibility_mask() |= 
+                    (Node::c_visibility_content     |
+                     Node::c_visibility_shadow_cast |
+                     Node::c_visibility_id);
+            }
+        }
+    }
+
+    m_scene_root->scene().sanity_check();
+}
+
 auto Scene_manager::make_directional_light(
     string_view name,
     vec3        position,
@@ -650,8 +701,8 @@ auto Scene_manager::make_directional_light(
     light->projection()->ortho_width     =  80.0f;
     light->projection()->ortho_bottom    = -40.0f;
     light->projection()->ortho_height    =  80.0f;
-    light->projection()->z_near          =  10.0f;
-    light->projection()->z_far           =  80.0f;
+    light->projection()->z_near          =  2.0f;
+    light->projection()->z_far           =  60.0f;
 
     mat4 m = erhe::toolkit::create_look_at(
         position,                 // eye
@@ -707,20 +758,41 @@ void Scene_manager::setup_lights()
 {
     m_scene_root->light_layer()->ambient_light = vec4{0.033f, 0.055f, 0.077f, 0.0f};
 
-    make_directional_light(
-        "Key",
-        glm::vec3{30.0f, 30.0f, 30.0f},
-        glm::vec3{1.0f, 0.9f, 0.8f},
-        2.0f
-    );
-    make_directional_light(
-        "Fill",
-        glm::vec3{-30.0f, 20.0f, -20.0f},
-        glm::vec3{0.8f, 0.9f, 1.0f},
-        1.0f
-    );
+    //make_directional_light(
+    //    "Key",
+    //    glm::vec3{10.0f, 10.0f, 10.0f},
+    //    glm::vec3{1.0f, 0.9f, 0.8f},
+    //    2.0f
+    //);
+    //make_directional_light(
+    //    "Fill",
+    //    glm::vec3{-10.0f, 5.0f, -10.0f},
+    //    glm::vec3{0.8f, 0.9f, 1.0f},
+    //    1.0f
+    //);
 
-    int spot_light_count = 2;
+    int directional_light_count = 2;
+    for (int i = 0; i < directional_light_count; ++i)
+    {
+        const float rel = static_cast<float>(i) / static_cast<float>(directional_light_count);
+        const float R   = 1.0f;
+        const float h   = rel * 360.0f;
+        const float s   = 0.9f;
+        const float v   = 1.0f;
+        float r, g, b;
+
+        erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
+
+        const vec3   color     = vec3{r, g, b};
+        const float  intensity = 5.0f / static_cast<float>(directional_light_count);
+        const string name      = fmt::format("Directional light {}", i);
+        const float  x_pos     = R * sin(rel * two_pi<float>());
+        const float  z_pos     = R * cos(rel * two_pi<float>());
+        const vec3   position  = vec3{x_pos, 10.0f, z_pos};
+        make_directional_light(name, position, color, intensity);
+    }   
+
+    int spot_light_count = 0;
     for (int i = 0; i < spot_light_count; ++i)
     {
         const float rel   = static_cast<float>(i) / static_cast<float>(spot_light_count);
@@ -757,12 +829,12 @@ void Scene_manager::update_fixed_step(const erhe::components::Time_context& time
 
 void Scene_manager::update_once_per_frame(const erhe::components::Time_context& time_context)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     buffer_transfer_queue().flush();
 
     static_cast<void>(time_context);
-    //animate_lights(time_context.time);
+    animate_lights(time_context.time);
 }
 
 void Scene_manager::animate_lights(double time_d)
@@ -801,7 +873,7 @@ void Scene_manager::animate_lights(double time_d)
         const auto m = erhe::toolkit::create_look_at(
             eye,
             center,
-            vec3{0.0f, 0.0f, 1.0f} // up
+            vec3{0.0f, 1.0f, 0.0f} // up
         );
 
         l->set_parent_from_node(m);
@@ -812,13 +884,14 @@ void Scene_manager::animate_lights(double time_d)
 
 void Scene_manager::setup_scene()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     setup_cameras();
     setup_lights();
     make_brushes();
     make_mesh_nodes();
     add_floor();
+    //make_cube_benchmark();
 }
 
 namespace

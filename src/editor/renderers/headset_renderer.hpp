@@ -90,11 +90,11 @@ private:
     std::vector<Headset_view_resources>       m_view_resources;
     std::unique_ptr<Controller_visualization> m_controller_visualization;
 
-    Application*              m_application     {nullptr};
-    Editor_rendering*         m_editor_rendering{nullptr};
-    Line_renderer*            m_line_renderer   {nullptr};
-    Scene_manager*            m_scene_manager   {nullptr};
-    Scene_root*               m_scene_root      {nullptr};
+    Application*      m_application     {nullptr};
+    Editor_rendering* m_editor_rendering{nullptr};
+    Line_renderer*    m_line_renderer   {nullptr};
+    Scene_manager*    m_scene_manager   {nullptr};
+    Scene_root*       m_scene_root      {nullptr};
 };
 
 }

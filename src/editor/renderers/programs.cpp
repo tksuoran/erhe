@@ -6,7 +6,7 @@
 
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/sampler.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace editor {
@@ -30,7 +30,7 @@ void Programs::connect()
 
 void Programs::initialize_component()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     erhe::log::Indenter indenter;
 
@@ -92,7 +92,7 @@ auto Programs::make_program(
 )
 -> std::unique_ptr<erhe::graphics::Shader_stages>
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     log_programs.trace("Programs::make_program({})\n", name);
     log_programs.trace("current directory is {}\n", std::filesystem::current_path().string());

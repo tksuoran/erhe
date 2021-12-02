@@ -2,7 +2,7 @@
 #include "erhe/geometry/log.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
@@ -92,7 +92,7 @@ Geometry::Geometry(Geometry&& other) noexcept
 auto Geometry::count_polygon_triangles() const
 -> size_t
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     size_t triangle_count{0};
     for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
@@ -143,7 +143,7 @@ auto Mesh_info::operator+=(const Mesh_info& o)
 
 void Geometry::reserve_points(const size_t point_count)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (point_count > points.size())
     {
@@ -153,7 +153,7 @@ void Geometry::reserve_points(const size_t point_count)
 
 void Geometry::reserve_polygons(const size_t polygon_count)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (polygon_count > polygons.size())
     {
@@ -163,7 +163,7 @@ void Geometry::reserve_polygons(const size_t polygon_count)
 
 auto Geometry::has_polygon_normals() const -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (m_serial_polygon_normals == m_serial)
     {
@@ -180,7 +180,7 @@ auto Geometry::has_polygon_normals() const -> bool
 // Requires point locations
 auto Geometry::compute_polygon_normals() -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (has_polygon_normals())
     {
@@ -225,7 +225,7 @@ auto Geometry::has_polygon_centroids() const -> bool
 
 auto Geometry::compute_polygon_centroids() -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (has_polygon_centroids())
     {
@@ -269,7 +269,7 @@ auto Geometry::has_edges() const -> bool
 
 void Geometry::build_edges()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (has_edges())
     {
@@ -320,20 +320,27 @@ void Geometry::build_edges()
         });
     });
 
-    // Second pass - non-shared edges wrong direction
+    // Second pass - non-shared edges wrong direction or non-manifold wornd direction
     for_each_polygon([&](auto& i)
     {
         erhe::log::Indenter scope_indent;
 
         i.polygon.for_each_corner_neighborhood(*this, [&](auto& j)
         {
-            const Point_id a = j.prev_corner.point_id;
-            const Point_id b = j.corner.point_id;
-            auto edge = find_edge(a, b);
+            const Point_id a_ = j.prev_corner.point_id;
+            const Point_id b_ = j.corner.point_id;
+            if (a_ == b_)
+            {
+                return;
+            }
+
+            auto edge = find_edge(a_, b_);
             if (!edge)
             {
-                VERIFY(b < a);
+                // VERIFY(b < a); This does not hold for non-manifold objects
                 {
+                    const Point_id a = std::max(a_, b_);
+                    const Point_id b = std::min(a_, b_);
                     const Edge_id edge_id = make_edge(b, a); // Swapped a, b because b < a
                     const Point&  pb      = points[b];
                     make_edge_polygon(edge_id, i.polygon_id);
@@ -361,7 +368,7 @@ void Geometry::build_edges()
 
 void Geometry::debug_trace() const
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for_each_corner_const([](auto& i)
     {
@@ -431,7 +438,7 @@ void Geometry::debug_trace() const
 auto Geometry::compute_point_normal(const Point_id point_id)
 -> vec3
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Expects(point_id < points.size());
 
@@ -461,7 +468,7 @@ auto Geometry::has_point_normals() const -> bool
 
 auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (has_point_normals())
     {
@@ -502,7 +509,7 @@ auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) 
 
 auto Geometry::transform(const mat4& m) -> Geometry&
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const mat4 it = glm::transpose(glm::inverse(m));
 
@@ -567,7 +574,7 @@ auto Geometry::transform(const mat4& m) -> Geometry&
 
 void Geometry::reverse_polygons()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     ++m_serial;
 
@@ -579,7 +586,7 @@ void Geometry::reverse_polygons()
 
 void Geometry::flip_reversed_polygons()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     ++m_serial;
 
@@ -612,7 +619,7 @@ void Mesh_info::trace(erhe::log::Category& log) const
 
 void Geometry::generate_texture_coordinates_spherical()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     log_geometry.info("{} for {}\n", __func__, name);
 
@@ -628,10 +635,12 @@ void Geometry::generate_texture_coordinates_spherical()
     for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
     {
         Polygon& polygon = polygons[polygon_id];
-        for (Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id,
-             end = polygon.first_polygon_corner_id + polygon.corner_count;
-             polygon_corner_id < end;
-             ++polygon_corner_id)
+        for (
+            Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id,
+            end = polygon.first_polygon_corner_id + polygon.corner_count;
+            polygon_corner_id < end;
+            ++polygon_corner_id
+        )
         {
             const Corner_id corner_id = polygon_corners[polygon_corner_id];
             const Corner&   corner    = corners[corner_id];
@@ -692,7 +701,7 @@ auto Geometry::has_polygon_texture_coordinates() const -> bool
 
 auto Geometry::generate_polygon_texture_coordinates(const bool overwrite_existing_texture_coordinates) -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (has_polygon_texture_coordinates())
     {
@@ -753,8 +762,10 @@ void Geometry::sanity_check() const
         {
             if (j.corner.point_id != i.point_id)
             {
-                log_geometry.error("Sanity check failure: Point {} uses corner {} but corner {} point is {}\n",
-                          i.point_id, j.corner_id, j.corner_id, j.corner.point_id);
+                log_geometry.error(
+                    "Sanity check failure: Point {} uses corner {} but corner {} point is {}\n",
+                    i.point_id, j.corner_id, j.corner_id, j.corner.point_id
+                );
                 ++error_count;
             }
             if (j.corner.polygon_id >= m_next_polygon_id)
@@ -818,8 +829,10 @@ void Geometry::sanity_check() const
         bool corner_polygon_found{false};
         if (i.corner.point_id >= m_next_point_id)
         {
-            log_geometry.error("Sanity check failure: Corner {} points to invalid point {}\n",
-                      i.corner_id, i.corner.point_id);
+            log_geometry.error(
+                "Sanity check failure: Corner {} points to invalid point {}\n",
+                i.corner_id, i.corner.point_id
+            );
             ++error_count;
         }
         else
@@ -894,6 +907,8 @@ void Geometry::sanity_check() const
 
 auto Geometry::get_mass_properties() -> Mass_properties
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!compute_polygon_centroids())
     {
         return Mass_properties{

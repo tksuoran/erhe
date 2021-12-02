@@ -5,7 +5,7 @@
 #include "erhe/physics/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace erhe::physics
 {

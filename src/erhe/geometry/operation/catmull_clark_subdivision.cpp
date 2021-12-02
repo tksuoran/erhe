@@ -1,7 +1,7 @@
 #include "erhe/geometry/operation/catmull_clark_subdivision.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/log.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <gsl/assert>
 
@@ -25,13 +25,14 @@ namespace erhe::geometry::operation
 Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     //                       (n-3)P
     // Make initial P's with ------
     //                          n
     {
-        ZoneScopedN("initial points");
+        ERHE_PROFILE_SCOPE("initial points");
+
         log_catmull_clark.trace("Make initial points = {} source points\n", source.point_count());
         erhe::log::Indenter scope_indent;
 
@@ -55,7 +56,7 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& de
     //  --
     //   n
     {
-        ZoneScopedN("edge midpoints");
+        ERHE_PROFILE_SCOPE("edge midpoints");
 
         log_catmull_clark.trace("\nMake new edge midpoints - {} source edges\n", source.edge_count());
         erhe::log::Indenter scope_indent;
@@ -93,7 +94,7 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& de
     {
         log_catmull_clark.trace("\nMake new points from centroid - {} source polygons\n", source.polygon_count());
         erhe::log::Indenter scope_indent;
-        ZoneScopedN("face points");
+        ERHE_PROFILE_SCOPE("face points");
 
         source.for_each_polygon_const([&](auto& i)
         {
@@ -129,7 +130,7 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& de
 
     // Subdivide polygons, clone (and corners);
     {
-        ZoneScopedN("subdivide");
+        ERHE_PROFILE_SCOPE("subdivide");
 
         log_catmull_clark.trace("\nSubdivide polygons\n");
         erhe::log::Indenter scope_indent;
@@ -159,12 +160,13 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& de
 
 auto catmull_clark_subdivision(Geometry& source) -> Geometry
 {
-    return Geometry(
+    return Geometry{
         fmt::format("catmull_clark({})", source.name),
-        [&source](auto& result) {
-            Catmull_clark_subdivision operation(source, result);
+        [&source](auto& result)
+        {
+            Catmull_clark_subdivision operation{source, result};
         }
-    );
+    };
 }
 
 } // namespace erhe::geometry::operation

@@ -11,7 +11,7 @@ namespace erhe::geometry::operation
 
 void Geometry_operation::post_processing()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     destination.make_point_corners();
     destination.build_edges();
@@ -24,7 +24,7 @@ void Geometry_operation::post_processing()
 
 void Geometry_operation::make_points_from_points()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     point_old_to_new.reserve(source.point_count());
     source.for_each_point_const([&](auto& i)
@@ -35,7 +35,7 @@ void Geometry_operation::make_points_from_points()
 
 void Geometry_operation::make_polygon_centroids()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     old_polygon_centroid_to_new_points.reserve(source.polygon_count());
     source.for_each_polygon_const([&](auto& i)
@@ -93,7 +93,7 @@ auto Geometry_operation::find_or_make_point_from_edge(
 
 void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> relative_positions)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const size_t split_count = relative_positions.size();
     //uint32_t point_count = source.point_count();

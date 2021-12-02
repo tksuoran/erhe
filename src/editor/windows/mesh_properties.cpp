@@ -56,7 +56,7 @@ void Mesh_properties::imgui(Pointer_context&)
 
 void Mesh_properties::render(const Render_context& render_context)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (render_context.text_renderer == nullptr)
     {

@@ -121,6 +121,7 @@ private:
     void add_floor            ();
     void make_brushes         ();
     void make_mesh_nodes      ();
+    void make_cube_benchmark  ();
     void setup_lights         ();
 
     // Components

@@ -7,7 +7,7 @@
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <imgui.h>
 
@@ -118,7 +118,7 @@ void Viewport_window::initialize_component()
 
 void Viewport_window::imgui(Pointer_context& pointer_context)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     ImGui::Begin("Scene");
 
@@ -184,8 +184,9 @@ void Viewport_window::bind_multisample_framebuffer()
 static constexpr std::string_view c_multisample_resolve{"Viewport_window::multisample_resolve()"};
 void Viewport_window::multisample_resolve()
 {
-    ZoneScoped;
-    TracyGpuZone(c_multisample_resolve.data());
+    ERHE_PROFILE_FUNCTION
+
+    ERHE_PROFILE_GPU_SCOPE(c_multisample_resolve.data());
 
     if (!m_framebuffer_multisample || !m_framebuffer_resolved)
     {
@@ -245,7 +246,7 @@ void Viewport_window::multisample_resolve()
 
 void Viewport_window::update_framebuffer()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (m_content_region_size.x < 1 || m_content_region_size.y < 1)
     {

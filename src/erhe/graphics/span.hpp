@@ -27,24 +27,24 @@ inline auto as_span(const glm::vec2& v) -> gsl::span<const float>
 }
 
 template <typename T>
-auto as_span(const T& value) -> gsl::span<const T>
+inline auto as_span(const T& value) -> gsl::span<const T>
 {
     return gsl::span<const T>(&value, 1);
 }
 
 template <typename T>
-void write(gsl::span<std::byte>& dst, const size_t write_byte_offset, gsl::span<const T> source)
+inline void write(gsl::span<std::byte>& dst, const size_t write_byte_offset, gsl::span<const T> source)
 {
-    Expects(dst.size_bytes() >= source.size_bytes() + write_byte_offset);
+    //Expects(dst.size_bytes() >= source.size_bytes() + write_byte_offset);
     auto source_bytes = gsl::as_bytes(source);
     auto write_dst = gsl::as_writable_bytes(dst).data() + write_byte_offset;
     memcpy(write_dst, source_bytes.data(), source_bytes.size_bytes());
 }
 
 template <typename T>
-void write(gsl::span<T>& dst, const size_t write_byte_offset, gsl::span<const T> source)
+inline void write(gsl::span<T>& dst, const size_t write_byte_offset, gsl::span<const T> source)
 {
-    Expects(dst.size_bytes() >= source.size_bytes() + write_byte_offset);
+    //Expects(dst.size_bytes() >= source.size_bytes() + write_byte_offset);
     auto source_bytes = gsl::as_bytes(source);
     auto write_dst = gsl::as_writable_bytes(dst).data() + write_byte_offset;
     memcpy(write_dst, source_bytes.data(), source_bytes.size_bytes());

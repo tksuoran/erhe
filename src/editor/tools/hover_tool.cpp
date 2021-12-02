@@ -11,7 +11,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/material.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <fmt/core.h>
 #include <fmt/format.h>
@@ -58,7 +58,7 @@ void Hover_tool::initialize_component()
 
 auto Hover_tool::update(Pointer_context& pointer_context) -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     m_hover_position = glm::vec3{
         pointer_context.pointer_x,
@@ -81,7 +81,7 @@ auto Hover_tool::update(Pointer_context& pointer_context) -> bool
 
 void Hover_tool::render(const Render_context& render_context)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const uint32_t text_color =
         m_hover_content ? 0xffffffffu :
@@ -151,7 +151,7 @@ void Hover_tool::render(const Render_context& render_context)
 
 void Hover_tool::deselect()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (m_hover_mesh == nullptr)
     {
@@ -169,7 +169,7 @@ void Hover_tool::deselect()
      
 void Hover_tool::select(Pointer_context& pointer_context)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (pointer_context.hover_mesh == nullptr)
     {

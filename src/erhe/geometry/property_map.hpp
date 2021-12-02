@@ -113,7 +113,6 @@ public:
         const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds
     ) const final;
 
-
     void import_from(Property_map_base<Key_type>* source) final;
 
     void import_from(Property_map_base<Key_type>* source, const glm::mat4 transform) final;

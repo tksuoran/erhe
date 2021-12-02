@@ -24,7 +24,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <imgui.h>
 
@@ -118,7 +118,7 @@ Trs_tool::Visualization::Visualization()
 
 void Trs_tool::Visualization::update_scale(const vec3 view_position_in_world)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (root == nullptr)
     {
@@ -131,7 +131,7 @@ void Trs_tool::Visualization::update_scale(const vec3 view_position_in_world)
 
 void Trs_tool::Visualization::update_visibility(const bool visible, const Handle active_handle)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     constexpr uint64_t visible_mask = erhe::scene::Node::c_visibility_tool | erhe::scene::Node::c_visibility_id;
     const bool show_all = visible && (active_handle == Handle::e_handle_none);
@@ -245,7 +245,7 @@ void Trs_tool::connect()
 
 void Trs_tool::initialize_component()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
@@ -288,7 +288,7 @@ void Trs_tool::initialize_component()
 void Trs_tool::tool_properties()
 {
     using namespace erhe::imgui;
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const bool show_translate = m_visualization.show_translate;
     const bool show_rotate    = m_visualization.show_rotate;
@@ -352,7 +352,7 @@ void Trs_tool::tool_properties()
 
 auto Trs_tool::update(Pointer_context& pointer_context) -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if ((m_state == State::Passive) && pointer_context.mouse_button[Mouse_button_left].pressed)
     {
@@ -407,7 +407,7 @@ auto Trs_tool::get_axis_direction() const -> vec3
 
 void Trs_tool::update_axis_translate(Pointer_context& pointer_context)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     vec3 drag_world_direction = get_axis_direction();
     vec3 P0    = m_drag.initial_position_in_world - drag_world_direction;
@@ -563,7 +563,7 @@ auto Trs_tool::get_plane_side_in_model2() const -> vec3
 
 void Trs_tool::update_plane_translate(Pointer_context& pointer_context)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     vec3 p0 = m_drag.initial_position_in_world;
     vec3 n  = get_plane_normal();
@@ -635,7 +635,7 @@ auto Trs_tool::project_pointer_to_plane(const Pointer_context& pointer_context, 
 
 void Trs_tool::update_rotate(Pointer_context& pointer_context)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     // r = local drag start position
     const vec3  r       = m_rotation.drag_start;
@@ -770,7 +770,7 @@ void Trs_tool::render_update(const Render_context& render_context)
 
 void Trs_tool::render(const Render_context& /*render_context*/)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (m_state != State::Active)
     {
@@ -1076,7 +1076,7 @@ auto Trs_tool::get_axis_color(const Handle handle) const -> uint32_t
 
 void Trs_tool::Visualization::update_transforms(uint64_t serial)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (root == nullptr)
     {

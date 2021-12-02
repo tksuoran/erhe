@@ -1,6 +1,6 @@
 #include "erhe/geometry/shapes/sphere.hpp"
 #include "erhe/geometry/log.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
@@ -53,8 +53,7 @@ public:
     Property_map<Polygon_id, vec3>* polygon_centroids{nullptr};
     Property_map<Polygon_id, vec3>* polygon_normals  {nullptr};
 
-    auto get_point(const int slice, const int stack)
-    -> Point_id
+    auto get_point(const int slice, const int stack) -> Point_id
     {
         return points[std::make_pair(slice, stack)];
     }
@@ -64,8 +63,7 @@ public:
         points[std::make_pair(slice, stack)] = point_id;
     }
 
-    auto sphere_point(const double rel_slice, const double rel_stack)
-    -> Point_id
+    auto sphere_point(const double rel_slice, const double rel_stack) -> Point_id
     {
         const double phi     = (glm::pi<double>() * 2.0 * rel_slice);
         const double sin_phi = std::sin(phi);
@@ -363,10 +361,13 @@ public:
 
 } // namespace
 
-auto make_sphere(const double radius, const unsigned int slice_count, const unsigned int stack_division)
--> Geometry
+auto make_sphere(
+    const double       radius,
+    const unsigned int slice_count,
+    const unsigned int stack_division
+) -> Geometry
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     return Geometry{
         "sphere",

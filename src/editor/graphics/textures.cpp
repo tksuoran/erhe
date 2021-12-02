@@ -54,8 +54,10 @@ gl::Internal_format to_gl(erhe::graphics::Image_format format)
 auto Textures::load(const std::filesystem::path& path)
 -> shared_ptr<Texture>
 {
-    if (!std::filesystem::exists(path) ||
-        std::filesystem::is_empty(path))
+    if (
+        !std::filesystem::exists(path) ||
+        std::filesystem::is_empty(path)
+    )
     {
         return {};
     }

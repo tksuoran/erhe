@@ -5,7 +5,7 @@ set(source_list
     file.hpp
     math_util.cpp
     math_util.hpp
-    tracy_client.hpp
+    profile.hpp
     verify.hpp
     view.cpp
     view.hpp
@@ -61,6 +61,14 @@ endif ()
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
     target_link_libraries(${_target} PUBLIC mango)
 endif()
+
+if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
+    target_link_libraries(${_target} PRIVATE TracyClient)
+endif ()
+
+if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
+    target_link_libraries(${_target} PRIVATE SuperluminalAPI)
+endif ()
 
 target_strict_cxx(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

@@ -19,7 +19,7 @@ public:
     auto get_type_hash() const -> uint32_t override { return hash; }
 
     bool gui                    {true};
-    bool openxr                 {false};
+    bool openxr                 {true};
     bool parallel_initialization{true};
     bool reverse_depth          {true};
 

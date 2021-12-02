@@ -23,7 +23,13 @@ Physics_tool::Physics_tool()
 {
 }
 
-Physics_tool::~Physics_tool() = default;
+Physics_tool::~Physics_tool()
+{
+    if (m_drag_constraint)
+    {
+        m_scene_root->physics_world().remove_constraint(m_drag_constraint.get());
+    }
+}
 
 void Physics_tool::connect()
 {
@@ -33,6 +39,7 @@ void Physics_tool::connect()
 void Physics_tool::initialize_component()
 {
     get<Editor_tools>()->register_tool(this);
+    require<Scene_root>();
 }
 
 auto Physics_tool::state() const -> State
@@ -69,7 +76,7 @@ void Physics_tool::cancel_ready()
 
 auto Physics_tool::update(Pointer_context& pointer_context) -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     auto& physics_world = get<Scene_root>()->physics_world();
     if (!physics_world.is_physics_updates_enabled())
@@ -116,6 +123,10 @@ auto Physics_tool::update(Pointer_context& pointer_context) -> bool
                     m_angular_damping
                 );
                 const glm::vec3 pivot{m_drag_position_in_mesh.x, m_drag_position_in_mesh.y, m_drag_position_in_mesh.z};
+                if (m_drag_constraint)
+                {
+                    m_scene_root->physics_world().remove_constraint(m_drag_constraint.get());
+                }
                 m_drag_constraint = erhe::physics::IConstraint::create_point_to_point_constraint_unique(
                     m_drag_node_physics->rigid_body(),
                     pivot
@@ -197,7 +208,7 @@ void Physics_tool::update_internal(Pointer_context& /*pointer_context*/)
 
 void Physics_tool::render(const Render_context& render_context)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (!m_drag_constraint)
     {

@@ -154,6 +154,8 @@ public:
         const float                                       scale
     ) -> Instance;
 
+    auto name() const -> const std::string&;
+
     std::shared_ptr<erhe::geometry::Geometry>            geometry;
     erhe::primitive::Build_info_set                      build_info_set;
     std::shared_ptr<erhe::primitive::Primitive_geometry> primitive_geometry;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace erhe::geometry
 {
@@ -9,7 +9,7 @@ template <typename Key_type>
 inline void
 Property_map_collection<Key_type>::clear()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     m_entries.clear();
 }
@@ -25,7 +25,7 @@ template <typename Key_type>
 inline void
 Property_map_collection<Key_type>::insert(Property_map_base<Key_type>* map)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (const auto& entry : m_entries)
     {
@@ -39,7 +39,7 @@ template <typename Key_type>
 inline void
 Property_map_collection<Key_type>::remove(const std::string& name)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     std::erase_if(
         m_entries.begin(),
@@ -57,7 +57,7 @@ inline auto
 Property_map_collection<Key_type>::contains(const std::string& name) const
     -> bool
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (const auto& entry : m_entries)
     {
@@ -76,7 +76,7 @@ inline auto
 Property_map_collection<Key_type>::find_base(const Property_map_descriptor& descriptor) const
 -> Property_map_base<Key_type>*
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (const auto& entry : m_entries)
     {
@@ -94,7 +94,7 @@ inline auto
 Property_map_collection<Key_type>::create(const Property_map_descriptor& descriptor)
     -> Property_map<Key_type, Value_type>*
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (const auto& entry : m_entries)
     {
@@ -115,7 +115,7 @@ Property_map_collection<Key_type>::find(
     const Property_map_descriptor& descriptor
 ) const -> Property_map<Key_type, Value_type>*
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (const auto& entry : m_entries)
     {
@@ -138,7 +138,7 @@ inline auto
 Property_map_collection<Key_type>::find_or_create(const Property_map_descriptor& descriptor)
     -> Property_map<Key_type, Value_type>*
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (const auto& entry : m_entries)
     {
@@ -164,7 +164,7 @@ template <typename Key_type>
 inline void
 Property_map_collection<Key_type>::trim(size_t size)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (auto& entry : m_entries)
     {
@@ -176,7 +176,7 @@ template <typename Key_type>
 inline void
 Property_map_collection<Key_type>::remap_keys(const std::vector<Key_type>& key_new_to_old)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (auto& entry : m_entries)
     {
@@ -190,7 +190,7 @@ Property_map_collection<Key_type>::interpolate(
     Property_map_collection<Key_type>&                          destination,
     const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (auto& entry : m_entries)
     {
@@ -215,7 +215,7 @@ Property_map_collection<Key_type>::merge_to(
     Property_map_collection<Key_type>& destination,
     const glm::mat4                    transform)
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     for (auto& entry : m_entries)
     {

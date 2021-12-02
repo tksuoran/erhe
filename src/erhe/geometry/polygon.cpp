@@ -2,7 +2,7 @@
 #include "erhe/geometry/property_map.hpp"
 #include "erhe/geometry/log.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <cmath>
 
@@ -16,7 +16,7 @@ auto Polygon::compute_normal(
     const Property_map<Point_id, glm::vec3>& point_locations
 ) const -> glm::vec3
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (corner_count < 3)
     {
@@ -49,7 +49,7 @@ void Polygon::compute_normal(
     const Property_map<Point_id, vec3>& point_locations
 ) const
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (corner_count < 3)
     {
@@ -194,7 +194,7 @@ void Polygon::compute_planar_texture_coordinates(
     const bool                                 overwrite
 ) const
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (corner_count < 3)
     {

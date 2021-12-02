@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace erhe::geometry
 {
@@ -14,7 +14,7 @@ void Corner::smooth_normalize(
     const Property_map<Polygon_id, glm::vec3>& polygon_normals,
     const float                                cos_max_smoothing_angle) const
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     if (polygon_normals.has(polygon_id) == false)
     {
@@ -35,10 +35,12 @@ void Corner::smooth_normalize(
         const Polygon_id neighbor_polygon_id = i.corner.polygon_id;
         const Polygon&   neighbor_polygon    = geometry.polygons[polygon_id];
 
-        if ((polygon_id != neighbor_polygon_id) &&
+        if (
+            (polygon_id != neighbor_polygon_id) &&
             polygon_normals.has(neighbor_polygon_id) &&
             polygon_attribute.has(neighbor_polygon_id) &&
-            (neighbor_polygon.corner_count > 2))
+            (neighbor_polygon.corner_count > 2)
+        )
         {
             const auto neighbor_normal = polygon_normals.get(neighbor_polygon_id);
             float      cos_angle = glm::dot(polygon_normal, neighbor_normal);
@@ -76,7 +78,7 @@ void Corner::smooth_average(
     const Property_map<Corner_id, glm::vec3>& corner_normals,
     const Property_map<Point_id, glm::vec3>&  point_normals) const
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const bool has_corner_normal = corner_normals.has(this_corner_id);
     if (!has_corner_normal && !point_normals.has(point_id))

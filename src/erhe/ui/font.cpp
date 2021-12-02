@@ -2,7 +2,7 @@
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/graphics/configuration.hpp"
-#include "erhe/toolkit/tracy_client.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/ui/glyph.hpp"
 #include "erhe/ui/log.hpp"
 
@@ -30,7 +30,7 @@ using std::make_unique;
 
 Font::~Font()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     hb_font_destroy(m_harfbuzz_font);
     validate(FT_Done_Face(m_freetype_face));
@@ -46,7 +46,7 @@ Font::Font(
     , m_bolding          {(size > 10) ? 0.5f : 0.0f}
     , m_outline_thickness{outline_thickness}
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     const auto current_path = std::filesystem::current_path();
     log_font.info("current path = {}\n", current_path.string());
@@ -83,7 +83,7 @@ void Font::validate(const int /*FT_Error*/ error)
 
 void Font::render()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     log_font.trace("Font::render()\n");
 
@@ -423,7 +423,7 @@ void Font::trace_info() const
 
 void Font::post_process()
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     Bitmap bm(m_bitmap->width(), m_bitmap->height(), m_bitmap->components());
     m_bitmap->post_process(bm, m_gamma);
@@ -476,7 +476,7 @@ auto Font::print(
     Rectangle&          out_bounds
 ) const -> size_t
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     log_font.trace("Font::print(text = {}, x = {}, y = {}, z = {})\n", text, text_position.x, text_position.y, text_position.z);
 
@@ -569,7 +569,7 @@ auto Font::print(
 
 void Font::measure(const std::string& text, Rectangle& bounds) const
 {
-    ZoneScoped;
+    ERHE_PROFILE_FUNCTION
 
     log_font.trace("Font::measure(text = {}\n", text);
 
