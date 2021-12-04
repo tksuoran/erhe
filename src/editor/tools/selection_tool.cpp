@@ -286,7 +286,7 @@ void Selection_tool::render(const Render_context& render_context)
     //constexpr uint32_t half_yellow = 0x88008888u; // premultiplied
     constexpr uint32_t white       = 0xffffffffu;
     constexpr uint32_t half_white  = 0x88888888u; // premultiplied
-    Line_renderer& line_renderer = *render_context.line_renderer;
+    auto& line_renderer = render_context.line_renderer->hidden;
     for (auto node : m_selection)
     {
         const glm::mat4 m     {node->world_from_node()};

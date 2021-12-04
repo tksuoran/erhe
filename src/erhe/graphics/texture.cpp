@@ -18,8 +18,7 @@ public:
     gl::Pixel_type      type;
 };
 
-auto component_count(const gl::Pixel_format pixel_format)
--> size_t
+auto component_count(const gl::Pixel_format pixel_format) -> size_t
 {
     switch (pixel_format)
     {
@@ -54,8 +53,7 @@ auto component_count(const gl::Pixel_format pixel_format)
     }
 }
 
-auto byte_count(const gl::Pixel_type pixel_type)
--> size_t
+auto byte_count(const gl::Pixel_type pixel_type) -> size_t
 {
     switch (pixel_type)
     {
@@ -133,8 +131,9 @@ constexpr std::array INTERNAL_FORMAT_INFO =
     InternalFormatFormatType{ gl::Internal_format::depth_component16, gl::Pixel_format::depth_component, gl::Pixel_type::unsigned_int   }
 };
 
-auto get_upload_pixel_byte_count(const gl::Internal_format internalformat)
-    -> size_t
+auto get_upload_pixel_byte_count(
+    const gl::Internal_format internalformat
+)-> size_t
 {
     for (const auto& entry : INTERNAL_FORMAT_INFO)
     {
@@ -165,8 +164,7 @@ auto get_format_and_type(
     return false;
 }
 
-auto Texture::storage_dimensions(const gl::Texture_target target)
-    -> int
+auto Texture::storage_dimensions(const gl::Texture_target target) -> int
 {
     switch (target)
     {
@@ -204,8 +202,7 @@ auto Texture::storage_dimensions(const gl::Texture_target target)
     }
 }
 
-auto Texture::mipmap_dimensions(const gl::Texture_target target)
-    -> int
+auto Texture::mipmap_dimensions(const gl::Texture_target target) -> int
 {
     switch (target)
     {
@@ -333,9 +330,9 @@ void Texture_create_info::calculate_level_count()
 
     if (use_mipmaps)
     {
-        auto x_level_count = Texture::size_level_count(width);
-        auto y_level_count = Texture::size_level_count(height);
-        auto z_level_count = Texture::size_level_count(depth);
+        const auto x_level_count = Texture::size_level_count(width);
+        const auto y_level_count = Texture::size_level_count(height);
+        const auto z_level_count = Texture::size_level_count(depth);
         level_count = std::max(std::max(x_level_count, y_level_count), z_level_count);
     }
     else
@@ -450,19 +447,40 @@ Texture::Texture(const Create_info& create_info)
         {
             if (m_sample_count == 0)
             {
-                gl::texture_storage_2d(gl_name(), m_level_count, m_internal_format, m_width, m_height);
+                gl::texture_storage_2d(
+                    gl_name(),
+                    m_level_count,
+                    m_internal_format,
+                    m_width,
+                    m_height
+                );
             }
             else
             {
-                gl::texture_storage_2d_multisample(gl_name(), m_sample_count, m_internal_format,
-                                                   m_width, m_height, m_fixed_sample_locations ? GL_TRUE : GL_FALSE);
+                gl::texture_storage_2d_multisample(
+                    gl_name(),
+                    m_sample_count,
+                    m_internal_format,
+                    m_width,
+                    m_height,
+                    m_fixed_sample_locations
+                        ? GL_TRUE
+                        : GL_FALSE
+                );
             }
             break;
         }
 
         case 3:
         {
-            gl::texture_storage_3d(gl_name(), m_level_count, m_internal_format, m_width, m_height, m_depth);
+            gl::texture_storage_3d(
+                gl_name(),
+                m_level_count,
+                m_internal_format,
+                m_width,
+                m_height,
+                m_depth
+            );
             break;
         }
 
@@ -570,7 +588,7 @@ void Texture::upload(
     }
 }
 
-void Texture::set_debug_label(std::string_view value)
+void Texture::set_debug_label(const std::string_view value)
 {
     m_debug_label = value;
     gl::object_label(

@@ -49,9 +49,9 @@ void Line_renderer::connect()
 {
     require<Gl_context_provider>();
     require<Configuration>();
+    require<Shader_monitor>();
 
     m_pipeline_state_tracker = get<OpenGL_state_tracker>();
-    m_shader_monitor         = require<Shader_monitor>();
 }
 
 static constexpr std::string_view c_line_renderer_initialize_component{"Line_renderer::initialize_component()"};
@@ -69,32 +69,72 @@ void Line_renderer::initialize_component()
         c_line_renderer_initialize_component.data()
     );
 
-    m_fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
+    m_pipeline.initialize(get<Shader_monitor>());
 
-    m_attribute_mappings.add(gl::Attribute_type::float_vec4, "a_position", {erhe::graphics::Vertex_attribute::Usage_type::position,  0}, 0);
-    m_attribute_mappings.add(gl::Attribute_type::float_vec4, "a_color",    {erhe::graphics::Vertex_attribute::Usage_type::color,     0}, 1);
+    visible.create_frame_resources(&m_pipeline, get<Configuration>());
+    hidden.create_frame_resources(&m_pipeline, get<Configuration>());
 
-    m_vertex_format.make_attribute(
-        {erhe::graphics::Vertex_attribute::Usage_type::position, 0},
+    gl::pop_debug_group();
+}
+
+void Line_renderer::Pipeline::initialize(Shader_monitor* shader_monitor)
+{
+    fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
+
+    attribute_mappings.add(
         gl::Attribute_type::float_vec4,
-        {gl::Vertex_attrib_type::float_, false, 4}
+        "a_position",
+        {
+            erhe::graphics::Vertex_attribute::Usage_type::position,
+            0
+        },
+        0
     );
-    m_vertex_format.make_attribute(
-        {erhe::graphics::Vertex_attribute::Usage_type::color, 0},
+    attribute_mappings.add(
         gl::Attribute_type::float_vec4,
-        {gl::Vertex_attrib_type::unsigned_byte, true, 4}
+        "a_color",
+        {
+            erhe::graphics::Vertex_attribute::Usage_type::color,
+            0
+        },
+        1
     );
 
-    m_view_block = std::make_unique<erhe::graphics::Shader_resource>(
+    vertex_format.make_attribute(
+        {
+            erhe::graphics::Vertex_attribute::Usage_type::position,
+            0
+        },
+        gl::Attribute_type::float_vec4,
+        {
+            gl::Vertex_attrib_type::float_,
+            false,
+            4
+        }
+    );
+    vertex_format.make_attribute(
+        {
+            erhe::graphics::Vertex_attribute::Usage_type::color,
+            0
+        },
+        gl::Attribute_type::float_vec4,
+        {
+            gl::Vertex_attrib_type::unsigned_byte,
+            true,
+            4
+        }
+    );
+
+    view_block = std::make_unique<erhe::graphics::Shader_resource>(
         "view",
         0,
         erhe::graphics::Shader_resource::Type::uniform_block
     );
 
-    m_clip_from_world_offset        = m_view_block->add_mat4("clip_from_world"       )->offset_in_parent();
-    m_view_position_in_world_offset = m_view_block->add_vec4("view_position_in_world")->offset_in_parent();
-    m_viewport_offset               = m_view_block->add_vec4("viewport"              )->offset_in_parent();
-    m_fov_offset                    = m_view_block->add_vec4("fov"                   )->offset_in_parent();
+    clip_from_world_offset        = view_block->add_mat4("clip_from_world"       )->offset_in_parent();
+    view_position_in_world_offset = view_block->add_vec4("view_position_in_world")->offset_in_parent();
+    viewport_offset               = view_block->add_vec4("viewport"              )->offset_in_parent();
+    fov_offset                    = view_block->add_vec4("fov"                   )->offset_in_parent();
 
     const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
     const std::filesystem::path vs_path = shader_path / std::filesystem::path("line.vert");
@@ -102,53 +142,61 @@ void Line_renderer::initialize_component()
     const std::filesystem::path fs_path = shader_path / std::filesystem::path("line.frag");
     Shader_stages::Create_info create_info{
         "line",
-        &m_default_uniform_block,
-        &m_attribute_mappings,
-        &m_fragment_outputs
+        &default_uniform_block,
+        &attribute_mappings,
+        &fragment_outputs
     };
-    create_info.add_interface_block(m_view_block.get());
+    create_info.add_interface_block(view_block.get());
     create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
     create_info.shaders.emplace_back(gl::Shader_type::geometry_shader, gs_path);
     create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
     Shader_stages::Prototype prototype(create_info);
-    m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
+    shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
 
-    if (m_shader_monitor)
+    if (shader_monitor)
     {
-        m_shader_monitor->add(create_info, m_shader_stages.get());
+        shader_monitor->add(create_info, shader_stages.get());
     }
-
-    create_frame_resources();
-
-    gl::pop_debug_group();
 }
 
-void Line_renderer::create_frame_resources()
+void Line_renderer::Style::create_frame_resources(
+    Pipeline*                  pipeline,
+    const Configuration* const configuration
+)
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto       reverse_depth = get<Configuration>()->reverse_depth;
+    m_pipeline = pipeline;
+    const auto       reverse_depth = configuration->reverse_depth;
     constexpr size_t vertex_count  = 65536;
+    constexpr size_t view_stride   = 256;
+    constexpr size_t view_count    = 16;
     for (size_t i = 0; i < s_frame_resources_count; ++i)
     {
         m_frame_resources.emplace_back(
             reverse_depth,
-            256,
-            16,
+            view_stride,
+            view_count,
             vertex_count,
-            m_shader_stages.get(),
-            m_attribute_mappings,
-            m_vertex_format
+            pipeline->shader_stages.get(),
+            pipeline->attribute_mappings,
+            pipeline->vertex_format
         );
     }
 }
 
-auto Line_renderer::current_frame_resources() -> Frame_resources&
+auto Line_renderer::Style::current_frame_resources() -> Frame_resources&
 {
     return m_frame_resources[m_current_frame_resource_slot];
 }
 
 void Line_renderer::next_frame()
+{
+    visible.next_frame();
+    hidden.next_frame();
+}
+
+void Line_renderer::Style::next_frame()
 {
     m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % s_frame_resources_count;
     m_view_writer  .reset();
@@ -156,7 +204,7 @@ void Line_renderer::next_frame()
     m_line_count = 0;
 }
 
-void Line_renderer::put(
+void Line_renderer::Style::put(
     const glm::vec3      point,
     const float          thickness,
     const uint32_t       color,
@@ -172,7 +220,7 @@ void Line_renderer::put(
     gpu_uint_data [word_offset++] = color;
 }
 
-void Line_renderer::add_lines(
+void Line_renderer::Style::add_lines(
     const glm::mat4                   transform,
     const std::initializer_list<Line> lines,
     const float                       thickness
@@ -197,12 +245,12 @@ void Line_renderer::add_lines(
         put(vec3{p1} / p1.w, thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
     }
 
-    m_vertex_writer.write_offset += lines.size() * 2 * m_vertex_format.stride();
+    m_vertex_writer.write_offset += lines.size() * 2 * m_pipeline->vertex_format.stride();
     m_line_count += lines.size();
     m_vertex_writer.end();
 }
 
-void Line_renderer::add_lines(
+void Line_renderer::Style::add_lines(
     const std::initializer_list<Line> lines,
     const float                       thickness
 )
@@ -224,7 +272,7 @@ void Line_renderer::add_lines(
         put(line.p1, thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
     }
 
-    m_vertex_writer.write_offset += lines.size() * 2 * m_vertex_format.stride();
+    m_vertex_writer.write_offset += lines.size() * 2 * m_pipeline->vertex_format.stride();
     m_line_count += lines.size();
     m_vertex_writer.end();
 }
@@ -234,6 +282,18 @@ static constexpr std::string_view c_line_renderer_render{"Line_renderer::render(
 void Line_renderer::render(
     const erhe::scene::Viewport viewport,
     const erhe::scene::ICamera& camera
+)
+{
+    visible.render(m_pipeline_state_tracker, viewport, camera, true, false);
+    hidden.render(m_pipeline_state_tracker, viewport, camera, true, true);
+}
+
+void Line_renderer::Style::render(
+    erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker,
+    const erhe::scene::Viewport           viewport,
+    const erhe::scene::ICamera&           camera,
+    const bool                            show_visible_lines,
+    const bool                            show_hidden_lines
 )
 {
     if (m_line_count == 0)
@@ -271,12 +331,12 @@ void Line_renderer::render(
         fov_sides.down
     };
 
-    write(view_gpu_data, m_view_writer.write_offset + m_clip_from_world_offset,        as_span(clip_from_world       ));
-    write(view_gpu_data, m_view_writer.write_offset + m_view_position_in_world_offset, as_span(view_position_in_world));
-    write(view_gpu_data, m_view_writer.write_offset + m_viewport_offset,               as_span(viewport_floats       ));
-    write(view_gpu_data, m_view_writer.write_offset + m_fov_offset,                    as_span(fov_floats            ));
+    write(view_gpu_data, m_view_writer.write_offset + m_pipeline->clip_from_world_offset,        as_span(clip_from_world       ));
+    write(view_gpu_data, m_view_writer.write_offset + m_pipeline->view_position_in_world_offset, as_span(view_position_in_world));
+    write(view_gpu_data, m_view_writer.write_offset + m_pipeline->viewport_offset,               as_span(viewport_floats       ));
+    write(view_gpu_data, m_view_writer.write_offset + m_pipeline->fov_offset,                    as_span(fov_floats            ));
 
-    m_view_writer.write_offset += m_view_block->size_bytes();
+    m_view_writer.write_offset += m_pipeline->view_block->size_bytes();
     m_view_writer.end();
 
     gl::disable          (gl::Enable_cap::framebuffer_srgb);
@@ -284,16 +344,16 @@ void Line_renderer::render(
     gl::viewport         (viewport.x, viewport.y, viewport.width, viewport.height);
     gl::bind_buffer_range(
         view_buffer->target(),
-        static_cast<GLuint>    (m_view_block->binding_point()),
+        static_cast<GLuint>    (m_pipeline->view_block->binding_point()),
         static_cast<GLuint>    (view_buffer->gl_name()),
         static_cast<GLintptr>  (m_view_writer.range.first_byte_offset),
         static_cast<GLsizeiptr>(m_view_writer.range.byte_count)
     );
 
-    if constexpr (false) // Depth fail rendering is currently disabled - visually different effect
+    if (show_hidden_lines)
     {
         const auto& pipeline = current_frame_resources().pipeline_depth_fail;
-        m_pipeline_state_tracker->execute(&pipeline);
+        pipeline_state_tracker->execute(&pipeline);
 
         gl::draw_arrays(
             pipeline.input_assembly->primitive_topology,
@@ -302,10 +362,10 @@ void Line_renderer::render(
         );
     }
 
-    if constexpr (true) // Depth pass rendering is always enabled
+    if (show_visible_lines)
     {
         const auto& pipeline = current_frame_resources().pipeline_depth_pass;
-        m_pipeline_state_tracker->execute(&pipeline);
+        pipeline_state_tracker->execute(&pipeline);
 
         gl::draw_arrays(
             pipeline.input_assembly->primitive_topology,

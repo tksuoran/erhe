@@ -47,8 +47,8 @@ class Texture
 public:
     using Create_info = Texture_create_info;
 
-    static auto storage_dimensions(gl::Texture_target target) -> int;
-    static auto mipmap_dimensions (gl::Texture_target target) -> int;
+    static auto storage_dimensions(const gl::Texture_target target) -> int;
+    static auto mipmap_dimensions (const gl::Texture_target target) -> int;
     static auto size_level_count  (int size) -> int;
 
     explicit Texture(const Create_info& create_info);
@@ -77,7 +77,7 @@ public:
         const int                        z = 0
     );
 
-    void set_debug_label(std::string_view value);
+    void set_debug_label(const std::string_view value);
     auto debug_label    () const -> const std::string&;
     auto width          () const -> int;
     auto height         () const -> int;

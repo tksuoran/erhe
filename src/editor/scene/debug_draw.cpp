@@ -66,8 +66,8 @@ void Debug_draw::set_colors(const Colors& colors)
 void Debug_draw::draw_line(const glm::vec3 from, const glm::vec3 to, const glm::vec3 color)
 {
     auto color_ui32 = ImGui::ColorConvertFloat4ToU32(ImVec4(color.x, color.y, color.z, 1.0f));
-    m_line_renderer->set_line_color(color_ui32);
-    m_line_renderer->add_lines( { {from, to} }, line_width);
+    m_line_renderer->visible.set_line_color(color_ui32);
+    m_line_renderer->visible.add_lines( { {from, to} }, line_width);
 }
 
 void Debug_draw::draw_3d_text(const glm::vec3 location, const char* text)

@@ -46,13 +46,13 @@ void Grid_tool::render(const Render_context& render_context)
         return;
     }
 
-    const uint32_t cell_major_color = 0xff000000u;
-    const uint32_t cell_minor_color = 0xff333333u;
+    constexpr uint32_t cell_major_color = 0xff000000u;
+    constexpr uint32_t cell_minor_color = 0xff333333u;
 
     const float extent     = static_cast<float>(m_cell_count) * m_cell_size;
     const float minor_step = m_cell_size / static_cast<float>(m_cell_div);
     int cell;
-    Line_renderer& line_renderer = *render_context.line_renderer;
+    auto& line_renderer = render_context.line_renderer->visible;
     for (cell = -m_cell_count; cell < m_cell_count; ++cell)
     {
         float xz = static_cast<float>(cell) * m_cell_size;

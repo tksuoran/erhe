@@ -214,8 +214,16 @@ void Physics_tool::render(const Render_context& render_context)
     {
         return;
     }
-    render_context.line_renderer->set_line_color(0xffffffffu);
-    render_context.line_renderer->add_lines({{m_drag_position_start, m_drag_position_end}}, 4.0f);    
+    render_context.line_renderer->hidden.set_line_color(0xffffffffu);
+    render_context.line_renderer->hidden.add_lines(
+        {
+            {
+                m_drag_position_start,
+                m_drag_position_end
+            }
+        },
+        4.0f
+    );
 }
 
 }

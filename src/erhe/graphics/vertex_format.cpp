@@ -26,7 +26,6 @@ void Vertex_format::make_attribute(
     const gl::Attribute_type          shader_type,
     const Vertex_attribute::Data_type data_type
 )
-//-> Vertex_attribute&
 {
     Expects((data_type.dimension >= 1) && (data_type.dimension <= 4));
 
@@ -66,8 +65,7 @@ void Vertex_format::make_attribute(
     //return attribute;
 }
 
-auto Vertex_format::match(const Vertex_format& other) const
--> bool
+auto Vertex_format::match(const Vertex_format& other) const -> bool
 {
     if (m_attributes.size() != other.m_attributes.size())
     {

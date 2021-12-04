@@ -180,9 +180,11 @@ auto Fly_camera_tool::update(Pointer_context& pointer_context) -> bool
 
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
 
-    if ((m_state == State::Passive) &&
+    if (
+        (m_state == State::Passive) &&
         pointer_context.mouse_button[Mouse_button_left].pressed &&
-        !pointer_context.hover_tool)
+        !pointer_context.hover_tool
+    )
     {
         return begin(pointer_context);
     }
@@ -235,10 +237,12 @@ auto Fly_camera_tool::begin(Pointer_context& pointer_context) -> bool
     // Reject drags near edge of viewport.
     // This avoids window resize being misinterpreted as drag.
     constexpr float border = 32.0f;
-    if ((pointer_context.pointer_x < border) ||
+    if (
+        (pointer_context.pointer_x < border) ||
         (pointer_context.pointer_y < border) ||
         (pointer_context.pointer_x >= pointer_context.viewport.width  - border) ||
-        (pointer_context.pointer_y >= pointer_context.viewport.height - border))
+        (pointer_context.pointer_y >= pointer_context.viewport.height - border)
+    )
     {
         return false;
     }

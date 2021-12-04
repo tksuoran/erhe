@@ -21,7 +21,12 @@ void Vertex_attribute_mappings::add(
     const size_t                  layout_location
 )
 {
-    auto mapping = std::make_shared<Vertex_attribute_mapping>(shader_type, name, usage, layout_location);
+    auto mapping = std::make_shared<Vertex_attribute_mapping>(
+        shader_type,
+        name,
+        usage,
+        layout_location
+    );
     mappings.emplace_back(mapping);
 }
 
@@ -33,7 +38,13 @@ void Vertex_attribute_mappings::add(
     const size_t                       layout_location
 )
 {
-    auto mapping = std::make_shared<Vertex_attribute_mapping>(shader_type, name, src_usage, dst_usage_type, layout_location);
+    auto mapping = std::make_shared<Vertex_attribute_mapping>(
+        shader_type,
+        name,
+        src_usage,
+        dst_usage_type,
+        layout_location
+    );
     mappings.emplace_back(mapping);
 }
 
@@ -50,8 +61,12 @@ void Vertex_attribute_mappings::apply_to_vertex_input_state(
 
     for (auto mapping : mappings)
     {
-        if (vertex_format.has_attribute(mapping->src_usage.type,
-                                        static_cast<unsigned int>(mapping->src_usage.index)))
+        if (
+            vertex_format.has_attribute(
+                mapping->src_usage.type,
+                static_cast<unsigned int>(mapping->src_usage.index)
+            )
+        )
         {
             auto attribute = vertex_format.find_attribute(
                 mapping->src_usage.type,

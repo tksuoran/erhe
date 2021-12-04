@@ -1,8 +1,10 @@
 #pragma once
 
+#include "erhe/components/component.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
+#include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/state/color_blend_state.hpp"
@@ -10,15 +12,14 @@
 #include "erhe/graphics/state/input_assembly_state.hpp"
 #include "erhe/graphics/state/rasterization_state.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
-#include "erhe/graphics/pipeline.hpp"
-#include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
-#include "erhe/components/component.hpp"
+#include "erhe/graphics/vertex_format.hpp"
 
 #include <glm/glm.hpp>
 
 #include <cstdint>
 #include <deque>
+#include <list>
 #include <memory>
 #include <vector>
 
@@ -44,6 +45,7 @@ namespace erhe::ui
 namespace editor
 {
 
+class Configuration;
 class Shader_monitor;
 
 class Line
@@ -77,57 +79,34 @@ public:
     void connect             () override;
     void initialize_component() override;
 
+    void next_frame();
     void render(
         const erhe::scene::Viewport camera_viewport,
         const erhe::scene::ICamera& camera
     );
 
-    void put(
-        const glm::vec3      point,
-        const float          thickness,
-        const uint32_t       color,
-        gsl::span<float>&    gpu_float_data, 
-        gsl::span<uint32_t>& gpu_uint_data,
-        size_t&              word_offset
-    );
-
-    void set_line_color(const uint32_t color)
-    {
-        m_line_color = color;
-    }
-
-    void add_lines(
-        const std::initializer_list<Line> lines,
-        const float                       thickness = 2.0f
-    );
-
-    void add_lines(
-        const glm::mat4                   transform,
-        const std::initializer_list<Line> lines,
-        const float                       thickness = 2.0f
-    );
-
-    void add_lines(
-        const glm::mat4                   transform,
-        const uint32_t                    color,
-        const std::initializer_list<Line> lines,
-        const float                       thickness = 2.0f
-    )
-    {
-        set_line_color(color);
-        add_lines(transform, lines, thickness);
-    }
-
-    //void add_lines(
-    //    const glm::mat4                         transform,
-    //    const std::initializer_list<Color_line> color_lines,
-    //    const float                             thickness = 2.0f
-    //);
-
-    void next_frame();
-
 private:
     static constexpr size_t s_frame_resources_count = 4;
+
+    class Pipeline
+    {
+    public:
+        void initialize(Shader_monitor* shader_monitor);
+
+        bool                                             reverse_depth{false};
+        erhe::graphics::Fragment_outputs                 fragment_outputs;
+        erhe::graphics::Vertex_attribute_mappings        attribute_mappings;
+        erhe::graphics::Vertex_format                    vertex_format;
+        std::unique_ptr<erhe::graphics::Shader_resource> view_block;
+        std::unique_ptr<erhe::graphics::Shader_stages>   shader_stages;
+        erhe::graphics::Shader_resource                  default_uniform_block; // containing sampler uniforms
+        size_t                                           clip_from_world_offset       {0};
+        size_t                                           view_position_in_world_offset{0};
+        size_t                                           viewport_offset              {0};
+        size_t                                           fov_offset                   {0};
+    };
+
+    Pipeline m_pipeline;
 
     class Frame_resources
     {
@@ -173,7 +152,6 @@ private:
             gl::Buffer_storage_mask::map_persistent_bit |
             gl::Buffer_storage_mask::map_write_bit
         };
-
         static constexpr gl::Map_buffer_access_mask access_mask{
             gl::Map_buffer_access_mask::map_coherent_bit   |
             gl::Map_buffer_access_mask::map_persistent_bit |
@@ -181,10 +159,10 @@ private:
         };
 
         Frame_resources(
-            bool                                      reverse_depth,
-            size_t                                    view_stride,
-            size_t                                    view_count,
-            size_t                                    vertex_count,
+            const bool                                reverse_depth,
+            const size_t                              view_stride,
+            const size_t                              view_count,
+            const size_t                              vertex_count,
             erhe::graphics::Shader_stages*            shader_stages,
             erhe::graphics::Vertex_attribute_mappings attribute_mappings,
             erhe::graphics::Vertex_format&            vertex_format
@@ -228,13 +206,13 @@ private:
             }
         {
             vertex_buffer.set_debug_label("Line Renderer Vertex");
-            view_buffer.set_debug_label ("Line Renderer View");
+            view_buffer.set_debug_label("Line Renderer View");
         }
 
         Frame_resources(const Frame_resources&) = delete;
         void operator= (const Frame_resources&) = delete;
-        Frame_resources(Frame_resources&& )     = delete;
-        void operator= (Frame_resources&& )     = delete;
+        Frame_resources(Frame_resources&&)      = delete;
+        void operator= (Frame_resources&&)      = delete;
 
         erhe::graphics::Buffer             vertex_buffer;
         erhe::graphics::Buffer             view_buffer;
@@ -243,22 +221,7 @@ private:
         erhe::graphics::Pipeline           pipeline_depth_fail;
     };
 
-    void create_frame_resources ();
-    auto current_frame_resources() -> Frame_resources&;
-
     erhe::graphics::OpenGL_state_tracker* m_pipeline_state_tracker{nullptr};
-    Shader_monitor*                       m_shader_monitor        {nullptr};
-
-    erhe::graphics::Fragment_outputs                      m_fragment_outputs;
-    erhe::graphics::Vertex_attribute_mappings             m_attribute_mappings;
-    erhe::graphics::Vertex_format                         m_vertex_format;
-    std::unique_ptr<erhe::graphics::Shader_resource>      m_view_block;
-    std::unique_ptr<erhe::graphics::Shader_stages>        m_shader_stages;
-    erhe::graphics::Shader_resource                       m_default_uniform_block; // containing sampler uniforms
-
-    std::deque<Frame_resources> m_frame_resources;
-    size_t                      m_current_frame_resource_slot{0};
-    uint32_t                    m_line_color                 {0xffffffffu};
 
     class Buffer_range
     {
@@ -291,14 +254,75 @@ private:
         }
     };
 
-    Buffer_writer m_view_writer;
-    Buffer_writer m_vertex_writer;
-    size_t        m_line_count{0};
+public:
+    class Style
+    {
+    public:
+        void create_frame_resources (Pipeline* pipeline, const Configuration* const configuration);
+        auto current_frame_resources() -> Frame_resources&;
+        void next_frame             ();
 
-    size_t        m_clip_from_world_offset       {0};
-    size_t        m_view_position_in_world_offset{0};
-    size_t        m_viewport_offset              {0};
-    size_t        m_fov_offset                   {0};
+        void render(
+            erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker,
+            const erhe::scene::Viewport           camera_viewport,
+            const erhe::scene::ICamera&           camera,
+            const bool                            show_visible_lines,
+            const bool                            show_hidden_lines
+        );
+
+        void set_line_color(const uint32_t color)
+        {
+            m_line_color = color;
+        }
+
+        void add_lines(
+            const std::initializer_list<Line> lines,
+            const float                       thickness = 2.0f
+        );
+
+        void add_lines(
+            const glm::mat4                   transform,
+            const std::initializer_list<Line> lines,
+            const float                       thickness = 2.0f
+        );
+
+        void add_lines(
+            const glm::mat4                   transform,
+            const uint32_t                    color,
+            const std::initializer_list<Line> lines,
+            const float                       thickness = 2.0f
+        )
+        {
+            set_line_color(color);
+            add_lines(transform, lines, thickness);
+        }
+
+        //void add_lines(
+        //    const glm::mat4                         transform,
+        //    const std::initializer_list<Color_line> color_lines,
+        //    const float                             thickness = 2.0f
+        //);
+    private:
+        void put(
+            const glm::vec3      point,
+            const float          thickness,
+            const uint32_t       color,
+            gsl::span<float>&    gpu_float_data, 
+            gsl::span<uint32_t>& gpu_uint_data,
+            size_t&              word_offset
+        );
+
+        Pipeline*                  m_pipeline{nullptr};
+        std::list<Frame_resources> m_frame_resources;
+        size_t                     m_line_count{0};
+        Buffer_writer              m_view_writer;
+        Buffer_writer              m_vertex_writer;
+        size_t                     m_current_frame_resource_slot{0};
+        uint32_t                   m_line_color                 {0xffffffffu};
+    };
+
+    Style visible;
+    Style hidden;
 };
 
 }

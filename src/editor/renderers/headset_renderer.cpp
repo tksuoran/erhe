@@ -197,9 +197,10 @@ void Headset_renderer::render()
     {
         if (m_line_renderer)
         {
-            uint32_t red   = 0xff0000ffu;
-            uint32_t green = 0xff00ff00u;
-            uint32_t blue  = 0xffff0000u;
+            auto line_renderer = m_line_renderer->hidden;
+            constexpr uint32_t red   = 0xff0000ffu;
+            constexpr uint32_t green = 0xff00ff00u;
+            constexpr uint32_t blue  = 0xffff0000u;
             auto* controller_node      = m_controller_visualization->get_node();
             auto  controller_position  = controller_node->position_in_world();
             auto  controller_direction = controller_node->direction_in_world();
@@ -208,14 +209,14 @@ void Headset_renderer::render()
             glm::vec3 unit_x{1.0f, 0.0f, 0.0f};
             glm::vec3 unit_y{0.0f, 1.0f, 0.0f};
             glm::vec3 unit_z{0.0f, 0.0f, 1.0f};
-            m_line_renderer->set_line_color(red);
-            m_line_renderer->add_lines({{origo, unit_x}}, 10.0f);
-            m_line_renderer->set_line_color(green);
-            m_line_renderer->add_lines({{origo, unit_y}}, 10.0f);
-            m_line_renderer->set_line_color(blue);
-            m_line_renderer->add_lines({{origo, unit_z}}, 10.0f);
-            m_line_renderer->set_line_color(green);
-            m_line_renderer->add_lines({{controller_position, end_position }}, 10.0f);
+            line_renderer.set_line_color(red);
+            line_renderer.add_lines({{origo, unit_x}}, 10.0f);
+            line_renderer.set_line_color(green);
+            line_renderer.add_lines({{origo, unit_y}}, 10.0f);
+            line_renderer.set_line_color(blue);
+            line_renderer.add_lines({{origo, unit_z}}, 10.0f);
+            line_renderer.set_line_color(green);
+            line_renderer.add_lines({{controller_position, end_position }}, 10.0f);
         }
 
         auto callback = [this](erhe::xr::Render_view& render_view) -> bool {

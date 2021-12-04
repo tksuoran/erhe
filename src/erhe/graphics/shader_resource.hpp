@@ -124,7 +124,7 @@ public:
     auto offset_in_parent() const -> size_t;
     auto parent          () const -> Shader_resource*;
     auto member_count    () const -> size_t;
-    auto member          (std::string_view name) const -> Shader_resource*;
+    auto member          (const std::string_view name) const -> Shader_resource*;
     auto binding_point   () const -> unsigned int;
 
     // Returns size of block.
@@ -138,38 +138,52 @@ public:
     auto source(int indent_level = 0) const -> std::string;
 
     auto add_struct(
-        std::string_view                name,
+        const std::string_view          name,
         gsl::not_null<Shader_resource*> struct_type,
         const std::optional<size_t>     array_size = {}
     ) -> Shader_resource*;
 
     auto add_sampler(
-        std::string_view            name,
+        const std::string_view      name,
         const gl::Uniform_type      sampler_type,
         const std::optional<size_t> array_size = {},
         const std::optional<int>    dedicated_texture_unit = {}
     ) -> Shader_resource*;
 
-    auto add_float(std::string_view name, const std::optional<size_t> array_size = {})
-        -> Shader_resource*;
+    auto add_float(
+        const std::string_view      name,
+        const std::optional<size_t> array_size = {}
+    ) -> Shader_resource*;
 
-    auto add_vec2(std::string_view name, const std::optional<size_t> array_size = {})
-        -> Shader_resource*;
+    auto add_vec2(
+        const std::string_view      name,
+        const std::optional<size_t> array_size = {}
+    ) -> Shader_resource*;
 
-    auto add_vec3(std::string_view name, const std::optional<size_t> array_size = {})
-        -> Shader_resource*;
+    auto add_vec3(
+        const std::string_view      name,
+        const std::optional<size_t> array_size = {}
+    ) -> Shader_resource*;
 
-    auto add_vec4(std::string_view name, const std::optional<size_t> array_size = {})
-        -> Shader_resource*;
+    auto add_vec4(
+        const std::string_view      name,
+        const std::optional<size_t> array_size = {}
+    ) -> Shader_resource*;
 
-    auto add_mat4(std::string_view name, const std::optional<size_t> array_size = {})
-        -> Shader_resource*;
+    auto add_mat4(
+        const std::string_view      name,
+        const std::optional<size_t> array_size = {}
+    ) -> Shader_resource*;
 
-    auto add_int(std::string_view name, const std::optional<size_t> array_size = {})
-        -> Shader_resource*;
+    auto add_int(
+        const std::string_view name,
+        const std::optional<size_t> array_size = {}
+    ) -> Shader_resource*;
 
-    auto add_uint(std::string_view name, const std::optional<size_t> array_size = {})
-        -> Shader_resource*;
+    auto add_uint(
+        const std::string_view name,
+        const std::optional<size_t> array_size = {}
+    ) -> Shader_resource*;
 
 private:
     void align_offset_to(const unsigned int alignment);

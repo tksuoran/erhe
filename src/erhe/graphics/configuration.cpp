@@ -20,8 +20,7 @@ Instance::Implementation_defined Instance::implementation_defined;
 namespace
 {
 
-auto to_int(const std::string& text)
--> int
+auto to_int(const std::string& text) -> int
 {
     return stoi(text);
 }
@@ -72,8 +71,10 @@ void opengl_callback(
     }
 }
 
-auto split(std::string text, const char separator)
-    -> std::vector<std::string>
+auto split(
+    const std::string text,
+    const char        separator
+) -> std::vector<std::string>
 {
     std::vector<std::string> result;
     const size_t length = text.size();

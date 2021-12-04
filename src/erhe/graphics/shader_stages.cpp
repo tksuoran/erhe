@@ -7,20 +7,21 @@ namespace erhe::graphics
 
 using std::string;
 
-auto Shader_stages::gl_name() const
--> unsigned int
+auto Shader_stages::gl_name() const -> unsigned int
 {
     return m_handle.gl_name();
 }
 
-auto Shader_stages::format(const string& source)
--> string
+auto Shader_stages::format(const string& source) -> string
 {
     int         line{1};
     const char* head = source.c_str();
 
     std::stringstream sb;
-    sb << std::setw(3) << std::setfill(' ') << line << ": ";
+    sb
+        << std::setw(3)
+        << std::setfill(' ')
+        << line << ": ";
 
     for (;;)
     {
@@ -38,8 +39,12 @@ auto Shader_stages::format(const string& source)
         if (c == '\n')
         {
             ++line;
-            sb << '\n'
-               << std::setw(3) << std::setfill(' ') << line << ": ";
+            sb
+                << '\n'
+                << std::setw(3)
+                << std::setfill(' ')
+                << line
+                << ": ";
             continue;
         }
         sb << c;
@@ -67,9 +72,11 @@ Shader_stages::Shader_stages(Prototype&& prototype)
 
 void Shader_stages::reload(Prototype&& prototype)
 {
-    if (!prototype.is_valid()               ||
+    if (
+        !prototype.is_valid()               ||
         (prototype.m_handle.gl_name() == 0) ||
-        prototype.m_attached_shaders.empty())
+        prototype.m_attached_shaders.empty()
+    )
     {
         return;
     }

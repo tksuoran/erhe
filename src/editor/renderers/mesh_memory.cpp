@@ -37,8 +37,8 @@ void Mesh_memory::initialize_component()
 
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 
-    constexpr size_t vertex_byte_count  = 128 * 1024 * 1024;
-    constexpr size_t index_byte_count   =  32 * 1024 * 1024;
+    constexpr size_t vertex_byte_count  = 256 * 1024 * 1024;
+    constexpr size_t index_byte_count   =  64 * 1024 * 1024;
 
     gl_buffer_transfer_queue = make_unique<Buffer_transfer_queue>();
 

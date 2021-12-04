@@ -22,7 +22,7 @@ namespace erhe::geometry
 {
 
 inline constexpr Property_map_descriptor c_point_locations     { "point_locations"     , Transform_mode::matrix                                       , Interpolation_mode::linear };
-inline constexpr Property_map_descriptor c_point_normals       { "point_normals"       , Transform_mode::normalize_inverse_transpose_matrix           , Interpolation_mode::normalized };
+inline constexpr Property_map_descriptor c_point_normals       { "point_normals"       , Transform_mode::normalize_inverse_transpose_matrix           , Interpolation_mode::none/*Interpolation_mode::normalized*/ };
 inline constexpr Property_map_descriptor c_point_normals_smooth{ "point_normals_smooth", Transform_mode::normalize_inverse_transpose_matrix           , Interpolation_mode::normalized  };
 inline constexpr Property_map_descriptor c_point_texcoords     { "point_texcoords"     , Transform_mode::none                                         , Interpolation_mode::linear };
 inline constexpr Property_map_descriptor c_point_tangents      { "point_tangents"      , Transform_mode::normalize_inverse_transpose_matrix_vec3_float, Interpolation_mode::normalized_vec3_float };

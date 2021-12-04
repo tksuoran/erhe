@@ -22,7 +22,10 @@ namespace erhe::geometry::operation
 //
 // For each corner in the old polygon, add one quad
 // (centroid, previous edge 'edge midpoint', corner, next edge 'edge midpoint')
-Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& destination)
+Catmull_clark_subdivision::Catmull_clark_subdivision(
+    Geometry& src,
+    Geometry& destination
+)
     : Geometry_operation{src, destination}
 {
     ERHE_PROFILE_FUNCTION
@@ -33,15 +36,15 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& de
     {
         ERHE_PROFILE_SCOPE("initial points");
 
-        log_catmull_clark.trace("Make initial points = {} source points\n", source.point_count());
-        erhe::log::Indenter scope_indent;
-
         source.for_each_point_const([&](auto& i)
         {
             const auto n = static_cast<float>(i.point.corner_count);
-            if (i.point.corner_count == 0)
+            if (i.point.corner_count < 3)
             {
-                return; // TODO Debug this. Cylinder.
+                // n = 0   -> centroid points, safe to skip
+                // n = 1,2 -> ?
+                // n = 3   -> ?
+                return;
             }
             const float weight = (n - 3.0f) / n;
             make_new_point_from_point(weight, i.point_id);
@@ -57,9 +60,6 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& de
     //   n
     {
         ERHE_PROFILE_SCOPE("edge midpoints");
-
-        log_catmull_clark.trace("\nMake new edge midpoints - {} source edges\n", source.edge_count());
-        erhe::log::Indenter scope_indent;
 
         reserve_edge_to_new_points();
         source.for_each_edge_const([&](auto& i)
@@ -92,18 +92,12 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& de
     }
 
     {
-        log_catmull_clark.trace("\nMake new points from centroid - {} source polygons\n", source.polygon_count());
-        erhe::log::Indenter scope_indent;
         ERHE_PROFILE_SCOPE("face points");
 
         source.for_each_polygon_const([&](auto& i)
         {
-            log_catmull_clark.trace("old polygon id = {}\n", i.polygon_id);
-            erhe::log::Indenter scope_indent;
-
             const Polygon& src_polygon = source.polygons[i.polygon_id];
 
-            // Make centroid point
             make_new_point_from_polygon_centroid(i.polygon_id);
 
             // Add polygon centroids (F) to all corners' point sources
@@ -116,11 +110,6 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& de
                 const Point_id src_point_id = j.corner.point_id;
                 const Point&   src_point    = source.points[src_point_id];
                 const Point_id new_point_id = point_old_to_new[src_point_id];
-
-                // log_catmull_clark.trace("old corner_id {} old point id {} new point id {}\n",
-                //                         j.corner_id, src_point_id, new_point_id);
-                // erhe::log::Indenter scope_indent;
-
                 const auto point_weight  = 1.0f / static_cast<float>(src_point.corner_count);
                 const auto corner_weight = 1.0f / static_cast<float>(src_polygon.corner_count);
                 add_polygon_centroid(new_point_id, point_weight * point_weight * corner_weight, i.polygon_id);
@@ -132,14 +121,8 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& de
     {
         ERHE_PROFILE_SCOPE("subdivide");
 
-        log_catmull_clark.trace("\nSubdivide polygons\n");
-        erhe::log::Indenter scope_indent;
-
         source.for_each_polygon_const([&](auto& i)
         {
-            //log_catmull_clark.trace("Source polygon {}:\n", i.polygon_id);
-            //erhe::log::Indenter scope_indent;
-
             i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j)
             {
                 const Point_id   previous_edge_midpoint = get_edge_new_point(j.prev_corner.point_id, j.corner.point_id);

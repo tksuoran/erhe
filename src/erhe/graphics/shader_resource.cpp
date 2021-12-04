@@ -472,8 +472,7 @@ auto Shader_resource::basic_type() const
 
 // Only? for uniforms in default uniform block
 // For default uniform block, this is the next available location.
-auto Shader_resource::location() const
--> int
+auto Shader_resource::location() const -> int
 {
     Expects(m_parent != nullptr);
     Expects(m_parent->type() == Type::default_uniform_block);
@@ -481,8 +480,7 @@ auto Shader_resource::location() const
     return m_location;
 }
 
-auto Shader_resource::index_in_parent() const
--> size_t
+auto Shader_resource::index_in_parent() const -> size_t
 {
     Expects(m_parent != nullptr);
     Expects(is_aggregate(m_parent->type()));
@@ -490,8 +488,7 @@ auto Shader_resource::index_in_parent() const
     return m_index_in_parent; // TODO
 }
 
-auto Shader_resource::offset_in_parent() const
--> size_t
+auto Shader_resource::offset_in_parent() const  -> size_t
 {
     Expects(m_parent != nullptr);
     Expects(is_aggregate(m_parent->type()));
@@ -499,22 +496,19 @@ auto Shader_resource::offset_in_parent() const
     return m_offset_in_parent; // TODO
 }
 
-auto Shader_resource::parent() const
--> Shader_resource*
+auto Shader_resource::parent() const -> Shader_resource*
 {
     return m_parent;
 }
 
-auto Shader_resource::member_count() const
--> size_t
+auto Shader_resource::member_count() const -> size_t
 {
     Expects(is_aggregate(m_type));
 
     return m_members.size();
 }
 
-auto Shader_resource::member(std::string_view name) const
--> Shader_resource*
+auto Shader_resource::member(const std::string_view name) const -> Shader_resource*
 {
     for (const auto& member : m_members)
     {
@@ -527,8 +521,7 @@ auto Shader_resource::member(std::string_view name) const
     return {};
 }
 
-auto Shader_resource::binding_point() const
--> unsigned int
+auto Shader_resource::binding_point() const -> unsigned int
 {
     Expects(uses_binding_points(m_type));
     Expects(m_binding_point >= 0);
@@ -537,8 +530,7 @@ auto Shader_resource::binding_point() const
 
 // Returns size of block.
 // For arrays, size of one element is returned.
-auto Shader_resource::size_bytes() const
--> size_t
+auto Shader_resource::size_bytes() const -> size_t
 {
     if (m_type == Type::struct_type)
     {
@@ -584,22 +576,19 @@ auto Shader_resource::size_bytes() const
     }
 }
 
-auto Shader_resource::offset() const
--> size_t
+auto Shader_resource::offset() const -> size_t
 {
     Expects(is_aggregate(m_type));
     return m_offset;
 }
 
-auto Shader_resource::next_member_offset() const
--> size_t
+auto Shader_resource::next_member_offset() const -> size_t
 {
     Expects(is_aggregate(m_type));
     return m_offset;
 }
 
-auto Shader_resource::type_string() const
--> std::string
+auto Shader_resource::type_string() const -> std::string
 {
     if ((m_parent != nullptr) && (m_parent->type() == Type::default_uniform_block))
     {
@@ -653,10 +642,10 @@ auto Shader_resource::type_string() const
     }
 }
 
-auto Shader_resource::layout_string() const
--> std::string
+auto Shader_resource::layout_string() const -> std::string
 {
-    if ((m_location      == -1) &&
+    if (
+        (m_location      == -1) &&
         (m_binding_point == -1))
     {
         return {};
@@ -725,8 +714,10 @@ auto Shader_resource::source(const int indent_level /* = 0 */) const
         if (m_type != Type::default_uniform_block)
         {
             ss << name();
-            if ((m_type == Type::uniform_block       ) ||
-                (m_type == Type::shader_storage_block))
+            if (
+                (m_type == Type::uniform_block       ) ||
+                (m_type == Type::shader_storage_block)
+            )
             {
                 ss << "_block";
             }
@@ -752,8 +743,10 @@ auto Shader_resource::source(const int indent_level /* = 0 */) const
         ss << glsl_token(basic_type());
     }
 
-    if ((m_type != Type::default_uniform_block) &&
-        (m_type != Type::struct_type))
+    if (
+        (m_type != Type::default_uniform_block) &&
+        (m_type != Type::struct_type)
+    )
     {
         ss << " " << name();
         if (array_size().has_value())
@@ -777,11 +770,10 @@ auto Shader_resource::source(const int indent_level /* = 0 */) const
 }
 
 auto Shader_resource::add_struct(
-    std::string_view                name,
+    const std::string_view          name,
     gsl::not_null<Shader_resource*> struct_type,
     const std::optional<size_t>     array_size /* = {} */
-)
--> Shader_resource*
+) -> Shader_resource*
 {
     align_offset_to(4); // align by 4 bytes TODO do what spec says
     auto* const new_member = m_members.emplace_back(std::make_unique<Shader_resource>(name, struct_type, array_size, this)).get();
@@ -790,64 +782,110 @@ auto Shader_resource::add_struct(
 }
 
 auto Shader_resource::add_sampler(
-    std::string_view            name,
+    const std::string_view      name,
     const gl::Uniform_type      sampler_type,
     const std::optional<size_t> array_size /* = {} */,
     const std::optional<int>    dedicated_texture_unit /* = {} */
-)
--> Shader_resource*
+) -> Shader_resource*
 {
     Expects(m_type == Type::default_uniform_block);
     Expects(!array_size.has_value() || array_size.value() > 0); // no unsized sampler arrays
 
-    auto* const new_member = m_members.emplace_back(std::make_unique<Shader_resource>(name, this, m_location, sampler_type, array_size, dedicated_texture_unit)).get();
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(
+            name,
+            this,
+            m_location,
+            sampler_type,
+            array_size,
+            dedicated_texture_unit
+        )
+    ).get();
     const int count = array_size.has_value() ? static_cast<int>(array_size.value()) : 1;
     m_location += count;
     return new_member;
 }
 
-auto Shader_resource::add_float(std::string_view name, const std::optional<size_t> array_size /* = {} */)
--> Shader_resource*
+auto Shader_resource::add_float(
+    const std::string_view      name,
+    const std::optional<size_t> array_size /* = {} */
+) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
     align_offset_to(4); // align by 4 bytes
-    auto* const new_member = m_members.emplace_back(std::make_unique<Shader_resource>(name, gl::Uniform_type::float_, array_size, this)).get();
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(
+            name,
+            gl::Uniform_type::float_,
+            array_size,
+            this
+        )
+    ).get();
     m_offset += new_member->size_bytes();
     return new_member;
 }
 
-auto Shader_resource::add_vec2(std::string_view name, const std::optional<size_t> array_size /* = {} */)
--> Shader_resource*
+auto Shader_resource::add_vec2(
+    const std::string_view      name,
+    const std::optional<size_t> array_size /* = {} */
+) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
     align_offset_to(2 * 4); // align by 2 * 4 bytes
-    auto* const new_member = m_members.emplace_back(std::make_unique<Shader_resource>(name, gl::Uniform_type::float_vec2, array_size, this)).get();
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(
+            name,
+            gl::Uniform_type::float_vec2,
+            array_size,
+            this
+        )
+    ).get();
     m_offset += new_member->size_bytes();
     return new_member;
 }
 
-auto Shader_resource::add_vec3(std::string_view name, const std::optional<size_t> array_size /* = {} */)
--> Shader_resource*
+auto Shader_resource::add_vec3(
+    const std::string_view      name,
+    const std::optional<size_t> array_size /* = {} */
+) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
     align_offset_to(4 * 4); // align by 4 * 4 bytes
-    auto* const new_member = m_members.emplace_back(std::make_unique<Shader_resource>(name, gl::Uniform_type::float_vec3, array_size, this)).get();
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(
+            name,
+            gl::Uniform_type::float_vec3,
+            array_size,
+            this
+        )
+    ).get();
     m_offset += new_member->size_bytes();
     return new_member;
 }
 
-auto Shader_resource::add_vec4(std::string_view name, const std::optional<size_t> array_size /* = {} */)
--> Shader_resource*
+auto Shader_resource::add_vec4(
+    const std::string_view      name,
+    const std::optional<size_t> array_size /* = {} */
+) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
     align_offset_to(4 * 4); // align by 4 * 4 bytes
-    auto* const new_member = m_members.emplace_back(std::make_unique<Shader_resource>(name, gl::Uniform_type::float_vec4, array_size, this)).get();
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(
+            name,
+            gl::Uniform_type::float_vec4,
+            array_size,
+            this
+        )
+    ).get();
     m_offset += new_member->size_bytes();
     return new_member;
 }
 
-auto Shader_resource::add_mat4(std::string_view name, const std::optional<size_t> array_size /* = {} */)
--> Shader_resource*
+auto Shader_resource::add_mat4(
+    const std::string_view name,
+    const std::optional<size_t> array_size /* = {} */
+) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
     align_offset_to(4 * 4); // align by 4 * 4 bytes
@@ -856,22 +894,40 @@ auto Shader_resource::add_mat4(std::string_view name, const std::optional<size_t
     return new_member;
 }
 
-auto Shader_resource::add_int(std::string_view name, const std::optional<size_t> array_size /* = {} */)
--> Shader_resource*
+auto Shader_resource::add_int(
+    const std::string_view      name,
+    const std::optional<size_t> array_size /* = {} */
+) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
     align_offset_to(4); // align by 4 bytes
-    auto* const new_member = m_members.emplace_back(std::make_unique<Shader_resource>(name, gl::Uniform_type::int_, array_size, this)).get();
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(
+            name,
+            gl::Uniform_type::int_,
+            array_size,
+            this
+        )
+    ).get();
     m_offset += new_member->size_bytes();
     return new_member;
 }
 
-auto Shader_resource::add_uint(std::string_view name, const std::optional<size_t> array_size /* = {} */)
--> Shader_resource*
+auto Shader_resource::add_uint(
+    const std::string_view      name,
+    const std::optional<size_t> array_size /* = {} */
+) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
     align_offset_to(4); // align by 4 bytes
-    auto* const new_member = m_members.emplace_back(std::make_unique<Shader_resource>(name, gl::Uniform_type::unsigned_int, array_size, this)).get();
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(
+            name,
+            gl::Uniform_type::unsigned_int,
+            array_size,
+            this
+        )
+    ).get();
     m_offset += new_member->size_bytes();
     return new_member;
 }
@@ -884,7 +940,10 @@ void Shader_resource::align_offset_to(const unsigned int alignment)
     }
 }
 
-void Shader_resource::indent(std::stringstream& ss, const int indent_level) const
+void Shader_resource::indent(
+    std::stringstream& ss,
+    const int indent_level
+) const
 {
     for (int i = 0; i < indent_level; ++i)
     {

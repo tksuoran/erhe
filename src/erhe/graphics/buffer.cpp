@@ -9,8 +9,7 @@ namespace erhe::graphics
 
 using erhe::log::Log;
 
-auto Buffer::gl_name() const noexcept
-    -> unsigned int
+auto Buffer::gl_name() const noexcept -> unsigned int
 {
     return m_handle.gl_name();
 }
@@ -94,8 +93,7 @@ Buffer::Buffer(Buffer&& other) noexcept
     m_map_buffer_access_mask = other.m_map_buffer_access_mask;
 }
 
-auto Buffer::operator=(Buffer&& other) noexcept
-    -> Buffer&
+auto Buffer::operator=(Buffer&& other) noexcept -> Buffer&
 {
     m_handle                 = std::move(other.m_handle);
     m_debug_label            = std::move(other.m_debug_label);
@@ -135,7 +133,10 @@ auto Buffer::debug_label() const noexcept -> const std::string&
     return m_debug_label;
 }
 
-auto Buffer::allocate_bytes(const size_t byte_count, const size_t alignment) noexcept -> size_t
+auto Buffer::allocate_bytes(
+    const size_t byte_count,
+    const size_t alignment
+) noexcept -> size_t
 {
     std::lock_guard<std::mutex> lock(m_allocate_mutex);
 
@@ -151,8 +152,9 @@ auto Buffer::allocate_bytes(const size_t byte_count, const size_t alignment) noe
     return offset;
 }
 
-auto Buffer::map_all_bytes(const gl::Map_buffer_access_mask access_mask) noexcept
-    -> gsl::span<std::byte>
+auto Buffer::map_all_bytes(
+    const gl::Map_buffer_access_mask access_mask
+) noexcept -> gsl::span<std::byte>
 {
     Expects(m_map.empty());
     Expects(gl_name() != 0);
@@ -196,8 +198,8 @@ auto Buffer::map_all_bytes(const gl::Map_buffer_access_mask access_mask) noexcep
 auto Buffer::map_bytes(
     const size_t                     byte_offset,
     const size_t                     byte_count,
-    const gl::Map_buffer_access_mask access_mask) noexcept
--> gsl::span<std::byte>
+    const gl::Map_buffer_access_mask access_mask
+) noexcept -> gsl::span<std::byte>
 {
     VERIFY(byte_count > 0);
     Expects(m_map.empty());
@@ -268,7 +270,10 @@ void Buffer::unmap() noexcept
     Ensures(m_map.empty());
 }
 
-void Buffer::flush_bytes(const size_t byte_offset, const size_t byte_count) noexcept
+void Buffer::flush_bytes(
+    const size_t byte_offset,
+    const size_t byte_count
+) noexcept
 {
     Expects((m_map_buffer_access_mask & gl::Map_buffer_access_mask::map_flush_explicit_bit) == gl::Map_buffer_access_mask::map_flush_explicit_bit);
     Expects(gl_name() != 0);
@@ -300,7 +305,11 @@ void Buffer::dump() const noexcept
     const size_t word_count{byte_count / sizeof(uint32_t)};
 
     int mapped{GL_FALSE};
-    gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_mapped, &mapped);
+    gl::get_named_buffer_parameter_iv(
+        gl_name(),
+        gl::Buffer_p_name::buffer_mapped,
+        &mapped
+    );
 
     uint32_t* data {nullptr};
     bool      unmap{false};

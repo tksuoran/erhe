@@ -137,15 +137,31 @@ void Hover_tool::render(const Render_context& render_context)
         {
             const glm::vec3 p0 = m_hover_position_world.value() + 0.1f * m_hover_normal.value();
             const glm::vec3 p1 = m_hover_position_world.value() + 1.1f * m_hover_normal.value();
-            render_context.line_renderer->set_line_color(0xff0000ffu);
-            render_context.line_renderer->add_lines( { {p0, p1} }, 10.0f);
+            render_context.line_renderer->hidden.set_line_color(0xff0000ffu);
+            render_context.line_renderer->hidden.add_lines(
+                {
+                    {
+                        p0,
+                        p1
+                    }
+                },
+                10.0f
+            );
         }
         const glm::vec3 p0 = render_context.pointer_context->raytrace_hit_position;
         const glm::vec3 p1 = p0 + render_context.pointer_context->raytrace_hit_normal;
         const bool same_polygon = render_context.pointer_context->raytrace_local_index == render_context.pointer_context->hover_local_index;
         const uint32_t color = same_polygon ? 0xffff0000u : 0xff00ff00u;
-        render_context.line_renderer->set_line_color(color);
-        render_context.line_renderer->add_lines( { {p0, p1} }, 10.0f);
+        render_context.line_renderer->hidden.set_line_color(color);
+        render_context.line_renderer->hidden.add_lines(
+            {
+                {
+                    p0,
+                    p1
+                }
+            },
+            10.0f
+        );
     }
 }
 

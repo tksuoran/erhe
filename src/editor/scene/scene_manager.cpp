@@ -161,8 +161,8 @@ void Scene_manager::make_brushes()
             auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
                 make_box(
                     vec3{40.0f, 1.0f, 40.0f},
-                    ivec3{40, 1, 40}
-                    //ivec3{1, 1, 1}
+                    //ivec3{40, 1, 40}
+                    ivec3{1, 1, 1}
                 )
             );
             floor_geometry->name = "floor";
@@ -180,12 +180,12 @@ void Scene_manager::make_brushes()
         }
     );
 
-    constexpr bool obj_files               = true;
-    constexpr bool platonic_solids         = true;
-    constexpr bool sphere                  = true;
-    constexpr bool torus                   = true;
+    constexpr bool obj_files               = false;
+    constexpr bool platonic_solids         = false;
+    constexpr bool sphere                  = false;
+    constexpr bool torus                   = false;
     constexpr bool cylinder                = true;
-    constexpr bool cone                    = true;
+    constexpr bool cone                    = false;
     constexpr bool anisotropic_test_object = false;
     constexpr bool johnson_solids          = false;
 
@@ -362,8 +362,9 @@ void Scene_manager::make_brushes()
                 //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 const Brush_create_context context{build_info_set(), Normal_style::corner_normals};
                 constexpr bool instantiate = true;
-                auto cylinder_geometry = make_cylinder(-1.0f, 1.0f, 1.0f, true, true, 32, 2); // always axis = x
-                cylinder_geometry.transform(erhe::toolkit::mat4_swap_xy);                     // convert to axis = y
+                //auto cylinder_geometry = make_cylinder(-1.0f, 1.0f, 1.0f, true, true, 32, 2); // always axis = x
+                auto cylinder_geometry = make_cylinder(-1.0f, 1.0f, 1.0f, true, true, 8, 1); // always axis = x
+                cylinder_geometry.transform(erhe::toolkit::mat4_swap_xy);                    // convert to axis = y
 
                 make_brush(
                     instantiate,
