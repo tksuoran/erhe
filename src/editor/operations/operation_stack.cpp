@@ -77,7 +77,7 @@ void Operation_stack::imgui(
     ImGui::End();
 }
 
-void Operation_stack::imgui(Pointer_context& /*pointer_context*/)
+void Operation_stack::imgui()
 {
     imgui("Executed", m_executed);
     imgui("Undone", m_undone);

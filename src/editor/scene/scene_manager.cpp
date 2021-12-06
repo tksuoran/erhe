@@ -9,6 +9,7 @@
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/fly_camera_tool.hpp"
 #include "windows/brushes.hpp"
 #include "windows/materials.hpp"
 #include "log.hpp"
@@ -83,15 +84,15 @@ void Scene_manager::initialize_component()
     setup_scene();
 }
 
-void Scene_manager::set_view_camera(std::shared_ptr<erhe::scene::ICamera> camera)
-{
-    m_view_camera = camera;
-}
+//void Scene_manager::set_view_camera(std::shared_ptr<erhe::scene::ICamera> camera)
+//{
+//    m_view_camera = camera;
+//}
 
-auto Scene_manager::get_view_camera() const -> std::shared_ptr<erhe::scene::ICamera>
-{
-    return m_view_camera;
-}
+//auto Scene_manager::get_view_camera() const -> std::shared_ptr<erhe::scene::ICamera>
+//{
+//    return m_view_camera;
+//}
 
 auto Scene_manager::make_camera(
     std::string_view name,
@@ -122,12 +123,10 @@ auto Scene_manager::make_camera(
 
 void Scene_manager::setup_cameras()
 {
-    auto camera_a  = make_camera("Camera A",  glm::vec3{ 1.0f, 4.00f, 12.0f});
-    auto camera_b  = make_camera("Camera B",  glm::vec3{-1.0f, 1.65f,  4.0f});
-    auto benchmark = make_camera("Benchmark", glm::vec3{ 0.0f, 20.0f, 50.0f});
+    auto camera_a = make_camera("Camera A", glm::vec3{ 1.0f, 4.00f, 12.0f});
+    auto camera_b = make_camera("Camera B", glm::vec3{-1.0f, 1.65f,  4.0f});
 
-    set_view_camera(camera_a);
-    //set_view_camera(benchmark);
+    get<Fly_camera_tool>()->set_camera(camera_a.get());
 }
 
 auto Scene_manager::build_info_set() -> erhe::primitive::Build_info_set&
@@ -180,12 +179,12 @@ void Scene_manager::make_brushes()
         }
     );
 
-    constexpr bool obj_files               = false;
-    constexpr bool platonic_solids         = false;
-    constexpr bool sphere                  = false;
-    constexpr bool torus                   = false;
+    constexpr bool obj_files               = true;
+    constexpr bool platonic_solids         = true;
+    constexpr bool sphere                  = true;
+    constexpr bool torus                   = true;
     constexpr bool cylinder                = true;
-    constexpr bool cone                    = false;
+    constexpr bool cone                    = true;
     constexpr bool anisotropic_test_object = false;
     constexpr bool johnson_solids          = false;
 

@@ -63,13 +63,13 @@ public:
 
     // Struct definition
     explicit Shader_resource(
-        std::string_view struct_type_name,
-        Shader_resource* parent = nullptr
+        const std::string_view struct_type_name,
+        Shader_resource*       parent = nullptr
     );
 
     // Struct member
     Shader_resource(
-        std::string_view                struct_member_name,
+        const std::string_view          struct_member_name,
         gsl::not_null<Shader_resource*> struct_type,
         const std::optional<size_t>     array_size = {},
         Shader_resource*                parent = nullptr
@@ -77,7 +77,7 @@ public:
 
     // Block (uniform block or shader storage block)
     Shader_resource(
-        std::string_view            block_name,
+        const std::string_view      block_name,
         const int                   binding_point,
         const Type                  block_type,
         const std::optional<size_t> array_size = {}
@@ -93,7 +93,7 @@ public:
 
     // Sampler
     Shader_resource(
-        std::string_view                sampler_name,
+        const std::string_view          sampler_name,
         gsl::not_null<Shader_resource*> parent,
         const int                       location,
         const gl::Uniform_type          sampler_type,

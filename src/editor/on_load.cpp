@@ -18,17 +18,18 @@
 #include "renderers/forward_renderer.hpp"
 #include "renderers/headset_renderer.hpp"
 #include "renderers/id_renderer.hpp"
+#include "renderers/line_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "renderers/programs.hpp"
 #include "renderers/program_interface.hpp"
+#include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "renderers/text_renderer.hpp"
-#include "renderers/line_renderer.hpp"
 
 #include "tools/fly_camera_tool.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/hover_tool.hpp"
 #include "tools/physics_tool.hpp"
+#include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/trs_tool.hpp"
 
@@ -37,15 +38,13 @@
 #include "windows/frame_log_window.hpp"
 #include "windows/imgui_demo_window.hpp"
 #include "windows/layers_window.hpp"
-#include "windows/light_properties.hpp"
-#include "windows/materials.hpp"
 #include "windows/material_properties.hpp"
+#include "windows/materials.hpp"
 #include "windows/mesh_properties.hpp"
 #include "windows/node_properties.hpp"
 #include "windows/node_tree_window.hpp"
 #include "windows/operations.hpp"
 #include "windows/physics_window.hpp"
-#include "windows/viewport_config.hpp"
 #include "windows/viewport_window.hpp"
 
 #include "scene/debug_draw.hpp"
@@ -56,8 +55,8 @@
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/window.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/window.hpp"
 
 #include <future>
 
@@ -104,33 +103,33 @@ auto Application::initialize_components(int argc, char** argv)
         m_components.add(make_shared<Hover_tool          >());
         m_components.add(make_shared<Icon_set            >());
         m_components.add(make_shared<Id_renderer         >());
+        m_components.add(make_shared<Image_transfer      >());
         m_components.add(make_shared<Imgui_demo_window   >());
         m_components.add(make_shared<Layers_window       >());
         m_components.add(make_shared<Line_renderer       >());
-        m_components.add(make_shared<Materials           >());
         m_components.add(make_shared<Material_properties >());
+        m_components.add(make_shared<Materials           >());
         m_components.add(make_shared<Mesh_memory         >());
         m_components.add(make_shared<Mesh_properties     >());
         m_components.add(make_shared<Node_properties     >());
         m_components.add(make_shared<Node_tree_window    >());
-        m_components.add(make_shared<Image_transfer      >());
         m_components.add(make_shared<OpenGL_state_tracker>());
-        m_components.add(make_shared<Operations          >());
         m_components.add(make_shared<Operation_stack     >());
+        m_components.add(make_shared<Operations          >());
         m_components.add(make_shared<Physics_tool        >());
         m_components.add(make_shared<Physics_window      >());
-        m_components.add(make_shared<Programs            >());
+        m_components.add(make_shared<Pointer_context     >());
         m_components.add(make_shared<Program_interface   >());
+        m_components.add(make_shared<Programs            >());
+        m_components.add(make_shared<Scene_manager       >());
+        m_components.add(make_shared<Scene_root          >());
         m_components.add(make_shared<Selection_tool      >());
         m_components.add(make_shared<Shader_monitor      >());
         m_components.add(make_shared<Shadow_renderer     >());
-        m_components.add(make_shared<Scene_root          >());
-        m_components.add(make_shared<Scene_manager       >());
-        m_components.add(make_shared<Textures            >());
         m_components.add(make_shared<Text_renderer       >());
+        m_components.add(make_shared<Textures            >());
         m_components.add(make_shared<Trs_tool            >());
-        m_components.add(make_shared<Viewport_config     >());
-        m_components.add(make_shared<Viewport_window     >());
+        m_components.add(make_shared<Viewport_windows    >());
     }
 
     if (!window->create_gl_window())

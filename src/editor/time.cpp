@@ -27,19 +27,14 @@ Editor_time::~Editor_time() = default;
 
 void Editor_time::connect()
 {
-    m_application      = get<Application     >();
-    m_editor_rendering = get<Editor_rendering>();
-    m_scene_root       = get<Scene_root      >();
-    m_window           = get<Window          >();
+    m_application = get<Application>();
+    m_scene_root  = get<Scene_root >();
 }
 
 void Editor_time::start_time()
 {
     m_current_time = chrono::steady_clock::now();
 }
-
-static constexpr std::string_view c_swap_buffers{"swap buffers"};
-
 
 void Editor_time::update()
 {
@@ -64,12 +59,6 @@ void Editor_time::update()
 
     update_once_per_frame(erhe::components::Time_context{dt, m_time, m_frame_number});
     m_scene_root->scene().update_node_transforms();
-    m_editor_rendering->render(m_time);
-
-    {
-        ERHE_PROFILE_SCOPE(c_swap_buffers.data());
-        m_window->get_context_window()->swap_buffers();
-    }
 
     //if (m_trigger_capture)
     //{
@@ -101,10 +90,9 @@ void Editor_time::update_once_per_frame(const erhe::components::Time_context& ti
     ++m_frame_number;
 }
 
+auto Editor_time::time() const -> double
+{
+    return m_time;
+}
+
 }  // namespace editor
-
-
-// BaseRenderer UI -> make it sub window
-// Node -
-// Transform
-// Selection

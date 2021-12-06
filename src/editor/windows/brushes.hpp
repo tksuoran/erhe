@@ -6,6 +6,8 @@
 
 #include "erhe/primitive/enums.hpp"
 
+#include <glm/glm.hpp>
+
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -42,6 +44,7 @@ class Editor;
 class Grid_tool;
 class Materials;
 class Operation_stack;
+class Pointer_context;
 class Scene_root;
 class Selection_tool;
 
@@ -76,16 +79,15 @@ public:
     void initialize_component() override;
 
     // Implements Tool
-    auto update         (Pointer_context& pointer_context) -> bool override;
-    void render         (const Render_context& render_context) override;
+    auto tool_update    () -> bool        override;
     auto state          () const -> State override;
-    void cancel_ready   () override;
+    void cancel_ready   ()                override;
     auto description    () -> const char* override { return c_name.data(); }
-    void render_update  (const Render_context&) override;
-    void tool_properties() override;
+    void begin_frame    ()                override;
+    void tool_properties()                override;
 
     // Implements Imgui_window
-    void imgui(Pointer_context& pointer_context) override;
+    void imgui() override;
 
     //void add_brush     (const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry);
     auto allocate_brush(erhe::primitive::Build_info_set& build_info_set) -> std::shared_ptr<Brush>;
@@ -119,6 +121,7 @@ private:
     //Editor*          m_editor         {nullptr};
     Materials*       m_materials      {nullptr};
     Operation_stack* m_operation_stack{nullptr};
+    Pointer_context* m_pointer_context{nullptr};
     Scene_root*      m_scene_root     {nullptr};
     Selection_tool*  m_selection_tool {nullptr};
     Grid_tool*       m_grid_tool      {nullptr};

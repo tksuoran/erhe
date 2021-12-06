@@ -21,6 +21,7 @@ namespace editor
 class Scene_manager;
 class Scene_root;
 class Selection_tool;
+class Text_renderer;
 
 class Mesh_properties
     : public erhe::components::Component
@@ -41,17 +42,18 @@ public:
     void initialize_component() override;
 
     // Implements Tool
-    auto description() -> const char* override { return c_name.data(); }
-    void render     (const Render_context& render_context) override;
-    auto state      () const -> State override;
+    auto description() -> const char*               override { return c_name.data(); }
+    void tool_render(const Render_context& context) override;
+    auto state      () const -> State               override;
 
     // Implements Imgui_window
-    void imgui(Pointer_context& pointer_context) override;
+    void imgui() override;
 
 private:
     Scene_manager*  m_scene_manager {nullptr};
     Scene_root*     m_scene_root    {nullptr};
     Selection_tool* m_selection_tool{nullptr};
+    Text_renderer*  m_text_renderer {nullptr};
 
     int  m_max_labels   {400};
     bool m_show_points  {false};

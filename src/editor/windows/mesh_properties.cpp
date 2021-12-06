@@ -1,4 +1,5 @@
 #include "windows/mesh_properties.hpp"
+#include "rendering.hpp"
 #include "tools.hpp"
 #include "renderers/text_renderer.hpp"
 #include "scene/scene_manager.hpp"
@@ -30,6 +31,7 @@ void Mesh_properties::connect()
     m_scene_manager  = get<Scene_manager >();
     m_scene_root     = get<Scene_root    >();
     m_selection_tool = get<Selection_tool>();
+    m_text_renderer  = get<Text_renderer >();
 }
 
 void Mesh_properties::initialize_component()
@@ -43,7 +45,7 @@ auto Mesh_properties::state() const -> State
     return State::Passive;
 }
 
-void Mesh_properties::imgui(Pointer_context&)
+void Mesh_properties::imgui()
 {
     ImGui::Begin(c_title.data());
 
@@ -54,17 +56,16 @@ void Mesh_properties::imgui(Pointer_context&)
     ImGui::End();
 }
 
-void Mesh_properties::render(const Render_context& render_context)
+void Mesh_properties::tool_render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (render_context.text_renderer == nullptr)
+    if (m_text_renderer == nullptr)
     {
         return;
     }
 
-    const auto*     camera          = m_scene_manager->get_view_camera().get();
-    auto&           text_renderer   = *render_context.text_renderer;
+    const auto*     camera          = context.camera;
     const glm::mat4 clip_from_world = camera->clip_from_world();
     const auto& selection = m_selection_tool->selection();
     for (auto node : selection)
@@ -87,7 +88,7 @@ void Mesh_properties::render(const Render_context& render_context)
             const auto point_locations   = geometry->point_attributes  ().find<glm::vec3>(c_point_locations  );
             if ((point_locations != nullptr) && m_show_points)
             {
-                const uint32_t end = std::min(static_cast<uint32_t>(m_max_labels), geometry->point_count());
+                const uint32_t end = (std::min)(static_cast<uint32_t>(m_max_labels), geometry->point_count());
                 for (Point_id point_id = 0; point_id < end; ++point_id)
                 {
                     if (!point_locations->has(point_id))
@@ -97,7 +98,7 @@ void Mesh_properties::render(const Render_context& render_context)
                     const auto p_in_node    = point_locations->get(point_id);
                     const auto p4_in_node   = glm::vec4{p_in_node, 1.0f};
                     const auto p4_in_world  = world_from_node * p4_in_node;
-                    const auto p3_in_window = render_context.viewport.project_to_screen_space(
+                    const auto p3_in_window = context.viewport.project_to_screen_space(
                         clip_from_world,
                         glm::vec3{p4_in_world},
                         0.0f,
@@ -109,7 +110,11 @@ void Mesh_properties::render(const Render_context& render_context)
                          p3_in_window.y,
                         -p3_in_window.z
                     };
-                    text_renderer.print(p3_in_window_z_negated, text_color, fmt::format("{}", point_id));
+                    m_text_renderer->print(
+                        p3_in_window_z_negated,
+                        text_color,
+                        fmt::format("{}", point_id)
+                    );
                 }
             }
 
@@ -126,7 +131,7 @@ void Mesh_properties::render(const Render_context& render_context)
                     const auto p_in_node    = (point_locations->get(edge.a) + point_locations->get(edge.b)) / 2.0f;
                     const auto p4_in_node   = glm::vec4{p_in_node, 1.0f};
                     const auto p4_in_world  = world_from_node * p4_in_node;
-                    const auto p3_in_window = render_context.viewport.project_to_screen_space(
+                    const auto p3_in_window = context.viewport.project_to_screen_space(
                         clip_from_world,
                         glm::vec3{p4_in_world},
                         0.0f,
@@ -138,7 +143,11 @@ void Mesh_properties::render(const Render_context& render_context)
                          p3_in_window.y,
                         -p3_in_window.z
                     };
-                    text_renderer.print(p3_in_window_z_negated, text_color, fmt::format("{}", edge_id));
+                    m_text_renderer->print(
+                        p3_in_window_z_negated,
+                        text_color,
+                        fmt::format("{}", edge_id)
+                    );
                 }
             }
 
@@ -153,7 +162,7 @@ void Mesh_properties::render(const Render_context& render_context)
                     const glm::vec3 p_in_node    = polygon_centroids->get(polygon_id);
                     const glm::vec4 p4_in_node   = glm::vec4{p_in_node, 1.0f};
                     const glm::vec4 p4_in_world  = world_from_node * p4_in_node;
-                    const glm::vec3 p3_in_window = render_context.viewport.project_to_screen_space(
+                    const glm::vec3 p3_in_window = context.viewport.project_to_screen_space(
                         clip_from_world,
                         glm::vec3{p4_in_world},
                         0.0f,
@@ -165,7 +174,11 @@ void Mesh_properties::render(const Render_context& render_context)
                          p3_in_window.y,
                         -p3_in_window.z
                     };
-                    text_renderer.print(p3_in_window_z_negated, text_color, fmt::format("{}", polygon_id));
+                    m_text_renderer->print(
+                        p3_in_window_z_negated,
+                        text_color,
+                        fmt::format("{}", polygon_id)
+                    );
                 }
             }
         }

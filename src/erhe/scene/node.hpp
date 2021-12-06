@@ -91,6 +91,9 @@ public:
     auto position_in_world         () const -> glm::vec4;
     auto direction_in_world        () const -> glm::vec4;
 
+    auto transform_point_from_world_to_local    (const glm::vec3 p) const -> glm::vec3;
+    auto transform_direction_from_world_to_local(const glm::vec3 p) const -> glm::vec3;
+
     void set_parent_from_node      (const glm::mat4 matrix);
     void set_parent_from_node      (const Transform& transform);
                             

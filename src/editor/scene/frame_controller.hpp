@@ -20,7 +20,7 @@ public:
     Frame_controller();
 
     void set_frame        (erhe::scene::Node* node);
-    auto node             () -> erhe::scene::Node*;
+    auto node             () const -> erhe::scene::Node*;
     void clear            ();
     void update           ();
     void update_fixed_step();

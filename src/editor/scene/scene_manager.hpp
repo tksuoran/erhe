@@ -67,8 +67,8 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-    void set_view_camera(std::shared_ptr<erhe::scene::ICamera> camera);
-    auto get_view_camera() const -> std::shared_ptr<erhe::scene::ICamera>;
+    //void set_view_camera(std::shared_ptr<erhe::scene::ICamera> camera);
+    //auto get_view_camera() const -> std::shared_ptr<erhe::scene::ICamera>;
     void setup_scene    ();
     void sort_lights    ();
     auto make_camera(
@@ -130,7 +130,7 @@ private:
     Scene_root*  m_scene_root {nullptr};
 
     // Self owned parts
-    std::shared_ptr<erhe::scene::ICamera> m_view_camera;
+    //std::shared_ptr<erhe::scene::ICamera> m_view_camera;
     //std::shared_ptr<erhe::scene::ICamera> m_view_camera_position_only;
     //std::shared_ptr<erhe::scene::ICamera> m_view_camera_position_heading;
     //std::shared_ptr<erhe::scene::ICamera> m_view_camera_position_heading_elevation;

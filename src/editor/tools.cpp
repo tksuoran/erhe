@@ -15,6 +15,7 @@
 #include "tools/physics_tool.hpp"
 #include "tools/trs_tool.hpp"
 #include "windows/brushes.hpp"
+#include "windows/frame_log_window.hpp"
 
 #include "erhe/imgui/imgui_impl_erhe.hpp"
 #include "erhe/scene/scene.hpp"
@@ -28,7 +29,7 @@ using namespace std;
 
 Editor_tools::Editor_tools()
     : erhe::components::Component{c_name}
-    , Imgui_window               {c_title}
+    , Imgui_window               {c_description}
 {
 }
 
@@ -39,12 +40,14 @@ void Editor_tools::connect()
     require<Application>();
     require<erhe::graphics::OpenGL_state_tracker>();
     require<Window>();
-    m_brushes        = get<Brushes       >();
-    m_editor_view    = get<Editor_view   >();
-    m_editor_time    = get<Editor_time   >();
-    m_physics_tool   = get<Physics_tool  >();
-    m_selection_tool = get<Selection_tool>();
-    m_trs_tool       = get<Trs_tool      >();
+    m_brushes          = get<Brushes         >();
+    m_editor_view      = get<Editor_view     >();
+    m_editor_time      = get<Editor_time     >();
+    m_frame_log_window = get<Frame_log_window>();
+    m_physics_tool     = get<Physics_tool    >();
+    m_pointer_context  = get<Pointer_context >();
+    m_selection_tool   = get<Selection_tool  >();
+    m_trs_tool         = get<Trs_tool        >();
 }
 
 void Editor_tools::initialize_component()
@@ -132,6 +135,8 @@ void Editor_tools::menu()
 
 void Editor_tools::window_menu()
 {
+    m_frame_log_window->log("menu");
+
     if (ImGui::BeginMenu("Window"))
     {
         for (auto window : m_imgui_windows)
@@ -168,23 +173,6 @@ void Editor_tools::window_menu()
         }
         ImGui::EndMenu();
     }
-}
-
-
-void Editor_tools::gui_begin_frame()
-{
-    ERHE_PROFILE_FUNCTION
-
-    ImGui_ImplErhe_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    menu();    
-}
-
-void Editor_tools::imgui_render()
-{
-    ImGui_ImplErhe_RenderDrawData(ImGui::GetDrawData());
 }
 
 void Editor_tools::cancel_ready_tools(Tool* keep)
@@ -318,124 +306,51 @@ void Editor_tools::register_imgui_window(Imgui_window* window)
 
 void Editor_tools::imgui()
 {
+}
+
+void Editor_tools::imgui_windows()
+{
+    Expects(m_pointer_context != nullptr);
+
+    m_frame_log_window->log("Editor_tools::imgui_windows()");
+
     const auto initial_priority_action = get_priority_action();
     if (m_editor_view == nullptr)
     {
         return;
     }
 
-    auto& pointer_context = m_editor_view->pointer_context;
     for (auto imgui_window : m_imgui_windows)
     {
         if (imgui_window->is_visibile())
         {
-            imgui_window->imgui(pointer_context);
+            imgui_window->imgui();
         }
     }
-    if (pointer_context.priority_action != initial_priority_action)
+
+    imgui_editor_tools();
+
+    if (m_pointer_context->priority_action() != initial_priority_action)
     {
-        set_priority_action(pointer_context.priority_action);
+        set_priority_action(m_pointer_context->priority_action());
     }
-    auto priority_action_tool = get_action_tool(pointer_context.priority_action);
-    if (m_show_tool_properties && (priority_action_tool != nullptr))
+
+    auto priority_action_tool = get_action_tool(m_pointer_context->priority_action());
+    if (
+        m_show_tool_properties &&
+        (priority_action_tool != nullptr)
+    )
     {
         ImGui::Begin("Tool Properties");
         priority_action_tool->tool_properties();
         ImGui::End();
     }
-    // if (m_forward_renderer)
-    // {
-    //     m_forward_renderer->debug_properties_window();
-    // }
 }
 
-void Editor_tools::update_and_render_tools(const Render_context& render_context)
+void Editor_tools::imgui_editor_tools()
 {
-    ERHE_PROFILE_FUNCTION
+    m_frame_log_window->log("Editor_tools::imgui_editor_tools()");
 
-    auto& pointer_context = m_editor_view->pointer_context;
-    for (auto tool : m_background_tools)
-    {
-        tool->update(pointer_context);
-        tool->render(render_context);
-    }
-    for (auto tool : m_tools)
-    {
-        tool->render(render_context);
-    }
-}
-
-void Editor_tools::render_update_tools(const Render_context& render_context)
-{
-    ERHE_PROFILE_FUNCTION
-
-    for (auto tool : m_background_tools)
-    {
-        tool->render_update(render_context);
-    }
-    for (auto tool : m_tools)
-    {
-        tool->render_update(render_context);
-    }
-}
-
-void Editor_tools::update_once_per_frame(const erhe::components::Time_context&)
-{
-    auto& pointer_context = m_editor_view->pointer_context;
-
-    for (auto tool : m_tools)
-    {
-        if ((tool->state() == Tool::State::Active) && tool->update(pointer_context))
-        {
-            return;
-        }
-    }
-}
-
-void Editor_tools::on_pointer()
-{
-    auto& pointer_context = m_editor_view->pointer_context;
-
-    // Pass 1: Active tools
-    for (auto tool : m_tools)
-    {
-        if ((tool->state() == Tool::State::Active) && tool->update(pointer_context))
-        {
-            log_input_events.trace("Active tool {} consumed pointer event\n", tool->description());
-            cancel_ready_tools(nullptr);
-            return;
-        }
-    }
-
-    log_input_events.trace("No tools are active, looking for ready tools\n");
-
-    // Pass 2: Ready tools
-    for (auto tool : m_tools)
-    {
-        if ((tool->state() == Tool::State::Ready) && tool->update(pointer_context))
-        {
-            log_input_events.trace("Ready tool {} consumed pointer event\n", tool->description());
-            cancel_ready_tools(nullptr);
-            return;
-        }
-    }
-
-    log_input_events.trace("No tools are ready, looking for passive tools\n");
-
-    // Oass 3: Passive tools
-    for (auto tool : m_tools)
-    {
-        if ((tool->state() == Tool::State::Passive) && tool->update(pointer_context))
-        {
-            log_input_events.trace("Passive tool {} consumed pointer event\n", tool->description());
-            cancel_ready_tools(tool);
-            return;
-        }
-    }
-}
-
-void Editor_tools::imgui(Pointer_context&)
-{
     ImGui::Begin("Editor Tools");
 
     ImGui::Text("Priority action: %s", c_action_strings[static_cast<int>(m_priority_action)].data());
@@ -491,6 +406,117 @@ void Editor_tools::imgui(Pointer_context&)
     }
     
     ImGui::End();
+}
+
+void Editor_tools::update_tools()
+{
+    ERHE_PROFILE_FUNCTION
+
+    m_frame_log_window->log("Editor_tools::update_tools()");
+
+    for (auto tool : m_background_tools)
+    {
+        tool->tool_update();
+    }
+    for (auto tool : m_tools)
+    {
+        tool->tool_update();
+    }
+}
+
+void Editor_tools::render_tools(const Render_context& context)
+{
+    ERHE_PROFILE_FUNCTION
+
+    m_frame_log_window->log("Editor_tools::render_tools()");
+
+    for (auto tool : m_background_tools)
+    {
+        //tool->tool_update();
+        tool->tool_render(context);
+    }
+    for (auto tool : m_tools)
+    {
+        tool->tool_render(context);
+    }
+}
+
+void Editor_tools::begin_frame()
+{
+    ERHE_PROFILE_FUNCTION
+
+    for (auto tool : m_background_tools)
+    {
+        tool->begin_frame();
+    }
+    for (auto tool : m_tools)
+    {
+        tool->begin_frame();
+    }
+}
+
+void Editor_tools::update_once_per_frame(const erhe::components::Time_context&)
+{
+    for (auto tool : m_tools)
+    {
+        if (
+            (tool->state() == Tool::State::Active) &&
+            tool->tool_update())
+        {
+            return;
+        }
+    }
+}
+
+void Editor_tools::on_pointer()
+{
+    log_input_events.trace("Editor_tools::on_pointer()");
+
+    // Pass 1: Active tools
+    for (auto tool : m_tools)
+    {
+        if (
+            (tool->state() == Tool::State::Active) &&
+            tool->tool_update()
+        )
+        {
+            log_input_events.trace("Active tool {} consumed pointer event\n", tool->description());
+            cancel_ready_tools(nullptr);
+            return;
+        }
+    }
+
+    log_input_events.trace("No tools are active, looking for ready tools\n");
+
+    // Pass 2: Ready tools
+    for (auto tool : m_tools)
+    {
+        if (
+            (tool->state() == Tool::State::Ready) &&
+            tool->tool_update()
+        )
+        {
+            log_input_events.trace("Ready tool {} consumed pointer event\n", tool->description());
+            cancel_ready_tools(nullptr);
+            return;
+        }
+    }
+
+    log_input_events.trace("No tools are ready, looking for passive tools\n");
+
+    // Oass 3: Passive tools
+    for (auto tool : m_tools)
+    {
+        if (
+            (tool->state() == Tool::State::Passive) &&
+            tool->tool_update()
+        )
+        {
+            log_input_events.trace("Passive tool {} consumed pointer event\n", tool->description());
+            cancel_ready_tools(tool);
+            return;
+        }
+    }
 }
 
 void Editor_tools::delete_selected_meshes()

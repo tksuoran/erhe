@@ -14,6 +14,7 @@ namespace editor {
 class Brushes;
 class Editor_view;
 class Editor_time;
+class Frame_log_window;
 class Line_renderer;
 class Physics_tool;
 class Pointer_context;
@@ -22,25 +23,14 @@ class Text_renderer;
 class Tool;
 class Trs_tool;
 
-class Render_context
-{
-public:
-    Pointer_context*      pointer_context{nullptr};
-    Scene_manager*        scene_manager  {nullptr};
-    Line_renderer*        line_renderer  {nullptr};
-    Text_renderer*        text_renderer  {nullptr};
-    erhe::scene::Viewport viewport       {0, 0, 0, 0, true};
-    double                time           {0.0};
-};
-
 class Editor_tools
     : public erhe::components::Component
     , public erhe::components::IUpdate_once_per_frame
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name {"Editor_tools"};
-    static constexpr std::string_view c_title{"Tools"};
+    static constexpr std::string_view c_name       {"Editor_tools"};
+    static constexpr std::string_view c_description{"Tools"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Editor_tools ();
@@ -55,40 +45,39 @@ public:
     void update_once_per_frame(const erhe::components::Time_context&) override;
 
     // Implements Imgui_window
-    void imgui(Pointer_context& pointer_context) override;
+    void imgui                   () override;
 
+    void imgui_windows           ();
+    void imgui_editor_tools      ();
     void gui_begin_frame         ();
-    void imgui                   ();
-    void imgui_render            ();
-    void update_and_render_tools (const Render_context& render_context);
-    void render_update_tools     (const Render_context& render_context);
-
+    void update_tools            ();
+    void render_tools            (const Render_context& context);
+    void begin_frame             ();
     void delete_selected_meshes  ();
-
     auto get_priority_action     () const -> Action;
     void set_priority_action     (Action action);
     void cancel_ready_tools      (Tool* keep);
     auto get_action_tool         (Action action) const -> Tool*;
-
     void on_pointer              ();
-
     void register_tool           (Tool* tool);
     void register_background_tool(Tool* tool);
     void register_imgui_window   (Imgui_window* window);
+    void menu                    ();
 
 private:
-    void menu();
     void window_menu();
 
     Action m_priority_action{Action::select};
 
-    Brushes*        m_brushes       {nullptr};
-    Editor_view*    m_editor_view   {nullptr};
-    Editor_time*    m_editor_time   {nullptr};
-    Physics_tool*   m_physics_tool  {nullptr};
-    Selection_tool* m_selection_tool{nullptr};
-    Trs_tool*       m_trs_tool      {nullptr};
-    bool            m_show_tool_properties{true};
+    Brushes*          m_brushes         {nullptr};
+    Editor_view*      m_editor_view     {nullptr};
+    Editor_time*      m_editor_time     {nullptr};
+    Frame_log_window* m_frame_log_window{nullptr};
+    Physics_tool*     m_physics_tool    {nullptr};
+    Pointer_context*  m_pointer_context {nullptr};
+    Selection_tool*   m_selection_tool  {nullptr};
+    Trs_tool*         m_trs_tool        {nullptr};
+    bool              m_show_tool_properties{true};
 
     std::optional<Selection_tool::Subcription> m_selection_layer_update_subscription;
 

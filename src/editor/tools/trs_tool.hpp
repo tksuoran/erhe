@@ -36,10 +36,11 @@ namespace erhe::scene
 namespace editor
 {
 
-class Operation_stack;
 class Line_renderer;
 class Node_physics;
 class Mesh_memory;
+class Operation_stack;
+class Pointer_context;
 class Scene_root;
 class Text_renderer;
 
@@ -62,8 +63,8 @@ public:
         "World"
     };
 
-    static constexpr std::string_view c_name {"Trs_tool"};
-    static constexpr std::string_view c_title{"Transform"};
+    static constexpr std::string_view c_name       {"Trs_tool"};
+    static constexpr std::string_view c_description{"Transform"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Trs_tool ();
@@ -75,21 +76,21 @@ public:
     void initialize_component() override;
 
     // Implements Tool
-    auto update         (Pointer_context& pointer_context) -> bool override;
-    void render_update  (const Render_context& render_context)     override;
-    void render         (const Render_context& render_context)     override;
-    auto state          () const -> State                          override;
-    void cancel_ready   ()                                         override;
-    auto description    () -> const char*                          override;
-    void tool_properties()                                         override;
+    auto tool_update    () -> bool                      override;
+    void begin_frame    ()                              override;
+    void tool_render    (const Render_context& context) override;
+    auto state          () const -> State               override;
+    void cancel_ready   ()                              override;
+    auto description    () -> const char*               override;
+    void tool_properties()                              override;
 
-    void set_translate(const bool enabled);
-    void set_rotate   (const bool enabled);
+    void set_translate  (const bool enabled);
+    void set_rotate     (const bool enabled);
 
 private:
-    void snap_translate       (glm::vec3& translation) const;
-    auto begin                (Pointer_context& pointer_context) -> bool;
-    auto end                  (Pointer_context& pointer_context) -> bool;
+    auto snap_translate       (const glm::vec3 translation) const -> glm::vec3;
+    auto begin                () -> bool;
+    auto end                  () -> bool;
     void set_node             (const std::shared_ptr<erhe::scene::Node>& node);
     auto is_x_translate_active() const -> bool;
     auto is_y_translate_active() const -> bool;
@@ -118,50 +119,35 @@ private:
         e_handle_type_rotate          = 3
     };
 
-    void update_axis_translate(Pointer_context& pointer_context);
+    void update_axis_translate ();
+    void update_plane_translate();
+    void update_rotate         ();
+    void update_rotate_parallel();
 
-    void update_plane_translate(Pointer_context& pointer_context);
-
-    void update_rotate(Pointer_context& pointer_context);
-
-    void update_rotate_parallel(Pointer_context& pointer_context);
-
-    auto get_handle(erhe::scene::Mesh* mesh) const -> Trs_tool::Handle;
-
-    auto get_handle_type(const Handle handle) const -> Handle_type;
-
-    auto offset_plane_origo(const Handle handle, const glm::vec3 p) const -> glm::vec3;
-
-    auto project_to_offset_plane(const Handle handle, const glm::vec3 p, const glm::vec3 q) const -> glm::vec3;
-
-    auto get_axis_direction() const -> glm::vec3;
-
-    auto get_plane_normal() const -> glm::vec3;
-
+    auto get_handle               (erhe::scene::Mesh* mesh) const -> Trs_tool::Handle;
+    auto get_handle_type          (const Handle handle) const -> Handle_type;
+    auto offset_plane_origo       (const Handle handle, const glm::vec3 p) const -> glm::vec3;
+    auto project_to_offset_plane  (const Handle handle, const glm::vec3 p, const glm::vec3 q) const -> glm::vec3;
+    auto get_axis_direction       () const -> glm::vec3;
+    auto get_plane_normal         () const -> glm::vec3;
     auto get_plane_normal_in_model() const -> glm::vec3;
-
-    auto get_plane_side_in_model() const -> glm::vec3;
-
-    auto get_plane_side_in_model2() const -> glm::vec3;
-
-    auto get_axis_color(Handle handle) const -> uint32_t;
+    auto get_plane_side_in_model  () const -> glm::vec3;
+    auto get_plane_side_in_model2 () const -> glm::vec3;
+    auto get_axis_color           (Handle handle) const -> uint32_t;
 
     // Casts ray from current pointer context position
     // and intersects it to plane of current handle;
-    auto project_pointer_to_plane(const Pointer_context& pointer_context, const glm::vec3 p, glm::vec3& q) -> bool;
-
-    void set_node_world_transform(const glm::mat4 world_from_node);
-
-    void update_transforms();
-
-    void update_visibility();
-
-    auto root() -> erhe::scene::Node*;
+    auto project_pointer_to_plane (const glm::vec3 p, glm::vec3& q) -> bool;
+    void set_node_world_transform (const glm::mat4 world_from_node);
+    void update_transforms        ();
+    void update_visibility        ();
+    auto root                     () -> erhe::scene::Node*;
 
     bool m_local{true};
 
-    Operation_stack* m_operation_stack{nullptr};
     Mesh_memory*     m_mesh_memory    {nullptr};
+    Operation_stack* m_operation_stack{nullptr};
+    Pointer_context* m_pointer_context{nullptr};
     Scene_root*      m_scene_root     {nullptr};
     Selection_tool*  m_selection_tool {nullptr};
 
@@ -179,6 +165,9 @@ private:
     int                                        m_rotate_snap_index    {2};
     float                                      m_rotate_snap          {15.0f};
     erhe::scene::Transform                     m_parent_from_node_before;
+    bool                                       m_mouse_set{false};
+    double                                     m_mouse_x{0.0};
+    double                                     m_mouse_y{0.0};
 
     // These are for debug rendering
     class Debug_rendering
@@ -215,7 +204,7 @@ private:
     class Rotation_context
     {
     public:
-        auto angle_of_rotation_for_point(glm::vec3 q) -> float;
+        auto angle_of_rotation_for_point(const glm::vec3 q) -> float;
 
         glm::vec3 normal; // also rotation axis
         glm::vec3 side;
@@ -238,7 +227,7 @@ private:
         void initialize       (Mesh_memory& mesh_memory, Scene_root& scene_root);
         void update_visibility(const bool show, const Handle active_handle);
         void update_scale     (const glm::vec3 view_position_in_world);
-        void update_transforms(uint64_t serial);
+        void update_transforms(const uint64_t serial);
 
         bool  show_translate{false};
         bool  show_rotate   {false};

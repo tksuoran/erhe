@@ -2,6 +2,7 @@
 #include "application.hpp"
 #include "configuration.hpp"
 #include "log.hpp"
+#include "time.hpp"
 #include "tools.hpp"
 #include "view.hpp"
 #include "window.hpp"
@@ -13,6 +14,8 @@
 #include "renderers/text_renderer.hpp"
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/fly_camera_tool.hpp"
+#include "windows/frame_log_window.hpp"
 #include "windows/viewport_config.hpp"
 #include "windows/viewport_window.hpp"
 
@@ -44,21 +47,23 @@ Editor_rendering::~Editor_rendering()
 
 void Editor_rendering::connect()
 {
-    m_application            = get<Application     >();
-    m_configuration          = get<Configuration   >();
-    m_editor_view            = get<Editor_view     >();
-    m_editor_tools           = get<Editor_tools    >();
-    m_forward_renderer       = get<Forward_renderer>();
-    m_headset_renderer       = get<Headset_renderer>();
-    m_id_renderer            = get<Id_renderer     >();
-    m_line_renderer          = get<Line_renderer   >();
+    m_application            = get<Application      >();
+    m_configuration          = get<Configuration    >();
+    m_editor_view            = get<Editor_view      >();
+    m_editor_time            = get<Editor_time      >();
+    m_editor_tools           = get<Editor_tools     >();
+    m_forward_renderer       = get<Forward_renderer >();
+    m_frame_log_window       = get<Frame_log_window >();
+    m_headset_renderer       = get<Headset_renderer >();
+    m_id_renderer            = get<Id_renderer      >();
+    m_line_renderer          = get<Line_renderer    >();
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-    m_scene_manager          = get<Scene_manager  >();
-    m_scene_root             = get<Scene_root     >();
-    m_shadow_renderer        = get<Shadow_renderer>();
-    m_text_renderer          = get<Text_renderer  >();
-    m_viewport_config        = get<Viewport_config>();
-    m_viewport_window        = get<Viewport_window>();
+    m_pointer_context        = get<Pointer_context >();
+    m_scene_manager          = get<Scene_manager   >();
+    m_scene_root             = get<Scene_root      >();
+    m_shadow_renderer        = get<Shadow_renderer >();
+    m_text_renderer          = get<Text_renderer   >();
+    m_viewport_windows       = get<Viewport_windows>();
 }
 
 void Editor_rendering::init_state()
@@ -85,43 +90,37 @@ void Editor_rendering::begin_frame()
 
     if (m_configuration->gui)
     {
-        m_editor_tools->gui_begin_frame();
-        const auto size       = m_viewport_window->content_region_size();
-        scene_viewport.width  = size.x;
-        scene_viewport.height = size.y;
+        m_editor_tools->menu();
     }
-    else
-    {
-        scene_viewport.width  = width();
-        scene_viewport.height = height();
-    }
-    scene_viewport.reverse_depth = m_configuration->reverse_depth;
 
     if (m_headset_renderer)
     {
+        m_frame_log_window->log("headset rendering");
         m_headset_renderer->begin_frame();
     }
+
+    m_editor_tools->begin_frame();
 }
 
-auto Editor_rendering::is_primary_scene_output_framebuffer_ready() -> bool
-{
-    if (m_configuration->gui)
-    {
-        return m_viewport_window->is_framebuffer_ready();
-    }
-    else
-    {
-        return true;
-    }
-}
+///// auto Editor_rendering::is_primary_scene_output_framebuffer_ready() -> bool
+///// {
+/////     if (m_configuration->gui)
+/////     {
+/////         return m_viewport_window->is_framebuffer_ready();
+/////     }
+/////     else
+/////     {
+/////         return true;
+/////     }
+///// }
 
 void Editor_rendering::gui_render()
 {
     ERHE_PROFILE_FUNCTION
 
-    Expects(m_pipeline_state_tracker);
+    Expects(m_pipeline_state_tracker != nullptr);
 
-    ImGui::Render();
+    m_viewport_windows->render();
 
     // Pipeline state required for NVIDIA driver not to complain about texture
     // unit state when doing the clear.
@@ -132,27 +131,31 @@ void Editor_rendering::gui_render()
     gl::viewport        (0, 0, width(), height());
     gl::clear_color     (0.0f, 0.0f, 0.2f, 0.1f);
     gl::clear           (gl::Clear_buffer_mask::color_buffer_bit);
-    m_editor_tools->imgui_render();
 }
 
-auto Editor_rendering::is_content_in_focus() const -> bool
-{
-    return m_configuration->gui ? m_viewport_window->is_focused() : true;
-}
+//auto Editor_rendering::is_content_in_focus() const -> bool
+//{
+//    return m_configuration->gui 
+//        ? m_viewport_windows->is_content_in_focus()
+//        : true;
+//}
+//
+//auto Editor_rendering::to_scene_content(const glm::vec2 position_in_root) const -> glm::vec2
+//{
+//    if (m_configuration->gui)
+//    {
+//        return m_viewport_windows->to_scene_content(position_in_root);
+//    }
+//    else
+//    {
+//        return {
+//            position_in_root.x,
+//            height() - position_in_root.y
+//        };
+//    }
+//}
 
-auto Editor_rendering::to_scene_content(const glm::vec2 position_in_root) const -> glm::vec2
-{
-    if (m_configuration->gui)
-    {
-        return m_viewport_window->to_scene_content(position_in_root);
-    }
-    else
-    {
-        return { position_in_root.x, height() - position_in_root.y };
-    }
-}
-
-void Editor_rendering::render(const double time)
+void Editor_rendering::render()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -160,12 +163,11 @@ void Editor_rendering::render(const double time)
     Expects(m_scene_manager);
     Expects(m_editor_view);
 
-    auto& pointer_context = m_editor_view->pointer_context;
-
     const int w = width();
     const int h = height();
     if ((w == 0) || (h == 0))
     {
+        m_frame_log_window->log("width and/or height is zero, skipping rendering");
         return;
     }
 
@@ -176,69 +178,53 @@ void Editor_rendering::render(const double time)
 
     begin_frame();
 
-    const Render_context render_context{
-        &pointer_context,
-        m_scene_manager,
-        m_line_renderer,
-        m_text_renderer,
-        scene_viewport,
-        time
-    };
-
-    m_editor_tools->render_update_tools(render_context);
-
-    auto* camera = m_scene_manager ? m_scene_manager->get_view_camera().get() : nullptr;
-    if ((scene_viewport.width  > 0) &&
-        (scene_viewport.height > 0) &&
-        is_primary_scene_output_framebuffer_ready() &&
-        (camera != nullptr))
+    // Render shadow maps
+    if (
+        (m_scene_manager != nullptr) &&
+        (m_shadow_renderer != nullptr)
+    )
     {
-        if (m_scene_manager)
-        {
-            m_scene_manager->sort_lights();
-            render_shadowmaps();
-
-            if (m_id_renderer && pointer_context.pointer_in_content_area())
-            {
-                render_id(time);
-            }
-        }
-
-        bind_primary_scene_output_framebuffer();
-        render_clear_primary();
-
-        if (m_scene_manager && m_forward_renderer)
-        {
-            render_content    (camera, scene_viewport);
-            render_selection  (camera, scene_viewport);
-            render_brush      (camera, scene_viewport);
-            render_tool_meshes(camera, scene_viewport);
-        }
-
-        gl::disable(gl::Enable_cap::framebuffer_srgb);
-
-        m_editor_view->update_pointer();
-
-        m_editor_tools->update_and_render_tools(render_context);
-
-        if (m_line_renderer)
-        {
-            m_line_renderer->render(scene_viewport, *camera);
-        }
-
-        if (m_text_renderer)
-        {
-            m_text_renderer->render(scene_viewport);
-        }
-
-        end_primary_framebuffer();
+        m_frame_log_window->log("rendering shadowmaps");
+        m_scene_manager->sort_lights();
+        m_shadow_renderer->render(
+            m_scene_root->content_layers(),
+            *m_scene_root->light_layer().get()
+        );
     }
 
     if (m_configuration->gui)
     {
-        pointer_context.priority_action = m_editor_tools->get_priority_action();
-        m_editor_tools->imgui();
+        m_frame_log_window->log("rendering gui");
+        m_pointer_context->set_priority_action(m_editor_tools->get_priority_action());
         gui_render();
+        m_editor_tools->imgui_windows();
+    }
+    else
+    {
+        m_frame_log_window->log("rendering scene directly to window");
+        gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
+        gl::viewport(0, 0, width(), height());
+        m_pipeline_state_tracker->shader_stages.reset();
+        m_pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
+        gl::clear_color(0.0f, 0.0f, 0.0f, 1.0f);
+        gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
+        gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
+
+        const Render_context render_context{
+            nullptr,                          // TODO viewport_window
+            nullptr,                          // viewport config
+            get<Fly_camera_tool>()->camera(), // camera for non-gui
+            {                                 // viewport for non-gui
+                0,
+                0,
+                width(),
+                height(),
+                m_configuration->reverse_depth
+            }
+        };
+
+        m_pointer_context->update(nullptr); // TODO
+        render_viewport(render_context);
     }
 
     if (m_headset_renderer)
@@ -253,91 +239,90 @@ void Editor_rendering::render(const double time)
     if (m_line_renderer)    m_line_renderer   ->next_frame();
 }
 
-void Editor_rendering::render_shadowmaps()
+void Editor_rendering::render_viewport(const Render_context& context)
 {
-    auto* camera = m_scene_manager->get_view_camera().get();
-    if (camera == nullptr)
+    m_frame_log_window->log("rendering viewport");
+
+    gl::enable(gl::Enable_cap::framebuffer_srgb);
+
+    if (m_scene_manager && m_forward_renderer)
     {
-        return;
+        render_content    (context);
+        render_selection  (context);
+        render_brush      (context);
+        render_tool_meshes(context);
     }
 
-    m_shadow_renderer->render(
-        m_scene_root->content_layers(),
-        *m_scene_root->light_layer().get(),
-        *camera
-    );
+    gl::disable(gl::Enable_cap::framebuffer_srgb);
+
+    m_editor_tools->render_tools(context);
+
+    if (m_line_renderer)
+    {
+        m_line_renderer->render(context.viewport, *context.camera);
+    }
+
+    if (m_text_renderer)
+    {
+        m_text_renderer->render(context.viewport);
+    }
 }
 
-void Editor_rendering::render_id(const double time)
+void Editor_rendering::render_id(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
-    auto* camera = m_scene_manager->get_view_camera().get();
-    if (camera == nullptr)
+    if (
+        (m_id_renderer == nullptr) ||
+        (m_pointer_context->window() == nullptr) ||
+        !m_pointer_context->pointer_in_content_area() ||
+        (context.camera == nullptr) ||
+        !m_pointer_context->position_in_viewport_window().has_value()
+    )
     {
         return;
     }
 
-    auto& pointer_context = m_editor_view->pointer_context;
+    if (m_pointer_context->window() != context.window)
+    {
+        return;
+    }
+
+    auto pointer = m_pointer_context->position_in_viewport_window().value();
+    m_frame_log_window->log("rendering id @ {}", pointer);
 
     m_id_renderer->render(
-        scene_viewport,
+        context.viewport,
         m_scene_root->content_layers(),
         m_scene_root->tool_layers(),
-        *camera,
-        time,
-        pointer_context.pointer_x,
-        pointer_context.pointer_y
+        *context.camera,
+        m_editor_time->time(),
+        static_cast<int>(pointer.x),
+        static_cast<int>(pointer.y)
     );
 }
 
-void Editor_rendering::render_clear_primary()
+void Editor_rendering::render_content(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
-    m_pipeline_state_tracker->shader_stages.reset();
-    m_pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
-    gl::viewport(
-        scene_viewport.x,
-        scene_viewport.y,
-        scene_viewport.width,
-        scene_viewport.height
-    );
-    gl::enable(gl::Enable_cap::framebuffer_srgb);
-    gl::clear_color(
-        m_viewport_config->clear_color[0],
-        m_viewport_config->clear_color[1],
-        m_viewport_config->clear_color[2],
-        m_viewport_config->clear_color[3]
-    );
-    gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
-    gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
-}
-
-void Editor_rendering::render_content(
-    erhe::scene::ICamera*       camera,
-    const erhe::scene::Viewport viewport
-)
-{
-    ERHE_PROFILE_FUNCTION
-
-    if (!m_viewport_config)
+    if (context.camera == nullptr)
+    {
+        return;
+    }
+    if (context.viewport_config == nullptr)
     {
         return;
     }
 
-    if (camera == nullptr)
-    {
-        return;
-    }
-
-    auto& render_style = m_viewport_config->render_style_not_selected;
+    auto& render_style = context.viewport_config->render_style_not_selected;
 
     constexpr erhe::scene::Visibility_filter content_not_selected_filter{
         erhe::scene::Node::c_visibility_content,    // all set
         0u,                                         // at least one set
         erhe::scene::Node::c_visibility_selected,   // all clear
-        0u};                                        // at least one cler
+        0u                                          // at least one clear
+    };                                        
 
     if (render_style.polygon_fill)
     {
@@ -349,17 +334,18 @@ void Editor_rendering::render_content(
         //                             render_style.polygon_offset_clamp);
         //}
         m_forward_renderer->render(
-            viewport,
-            *camera,
+            context.viewport,
+            *context.camera,
             m_scene_root->content_layers(),
             *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
-            { Forward_renderer::Pass::polygon_fill },
+            {
+                Forward_renderer::Pass::polygon_fill
+            },
             content_not_selected_filter
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
     }
-
     if (render_style.edge_lines)
     {
         gl::enable(gl::Enable_cap::sample_alpha_to_coverage);
@@ -368,12 +354,14 @@ void Editor_rendering::render_content(
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_size  = render_style.line_width;
         m_forward_renderer->render(
-            viewport,
-            *camera,
+            context.viewport,
+            *context.camera,
             m_scene_root->content_fill_layers(),
             *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
-            { Forward_renderer::Pass::edge_lines },
+            {
+                Forward_renderer::Pass::edge_lines
+            },
             content_not_selected_filter
         );
         gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
@@ -385,12 +373,14 @@ void Editor_rendering::render_content(
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_size  = render_style.point_size;
         m_forward_renderer->render(
-            viewport,
-            *camera,
+            context.viewport,
+            *context.camera,
             m_scene_root->content_layers(),
             *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
-            { Forward_renderer::Pass::polygon_centroids },
+            {
+                Forward_renderer::Pass::polygon_centroids
+            },
             content_not_selected_filter
         );
     }
@@ -401,36 +391,41 @@ void Editor_rendering::render_content(
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_size  = render_style.point_size;
         m_forward_renderer->render(
-            viewport,
-            *camera,
+            context.viewport,
+            *context.camera,
             m_scene_root->content_layers(),
             *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
-            { Forward_renderer::Pass::corner_points },
+            {
+                Forward_renderer::Pass::corner_points
+            },
             content_not_selected_filter
         );
     }
 }
 
-void Editor_rendering::render_selection(
-    erhe::scene::ICamera*       camera,
-    const erhe::scene::Viewport viewport
-)
+void Editor_rendering::render_selection(const Render_context& context)
 {
-    VERIFY(m_viewport_config);
-    if (camera == nullptr)
+    if (context.camera == nullptr)
+    {
+        return;
+    }
+    if (context.viewport_config == nullptr)
     {
         return;
     }
 
-    const auto& render_style = m_viewport_config->render_style_selected;
+    const auto& render_style = context.viewport_config->render_style_selected;
 
     constexpr erhe::scene::Visibility_filter content_selected_filter{
-        (erhe::scene::Node::c_visibility_content |  // all set
-         erhe::scene::Node::c_visibility_selected), 
+        (
+            erhe::scene::Node::c_visibility_content |  // all set
+            erhe::scene::Node::c_visibility_selected
+        ), 
         0u,                                         // at least one set
         0u,                                         // all clear
-        0u};                                        // at least one cler
+        0u                                          // at least one cler
+    };                                        
 
     if (render_style.polygon_fill)
     {
@@ -444,12 +439,14 @@ void Editor_rendering::render_selection(
         //m_forward_renderer->primitive_color_source   = Base_renderer::Primitive_color_source::constant_color;
         //m_forward_renderer->primitive_constant_color = render_style.line_color;
         m_forward_renderer->render(
-            viewport,
-            *camera,
+            context.viewport,
+            *context.camera,
             m_scene_root->content_layers(),
             *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
-            { Forward_renderer::Pass::polygon_fill },
+            {
+                Forward_renderer::Pass::polygon_fill
+            },
             content_selected_filter
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
@@ -465,8 +462,8 @@ void Editor_rendering::render_selection(
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_size  = render_style.line_width;
         m_forward_renderer->render(
-            viewport,
-            *camera,
+            context.viewport,
+            *context.camera,
             m_scene_root->content_layers(),
             *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
@@ -489,8 +486,8 @@ void Editor_rendering::render_selection(
         m_forward_renderer->primitive_constant_color = render_style.centroid_color;
         m_forward_renderer->primitive_constant_size  = render_style.point_size;
         m_forward_renderer->render(
-            viewport,
-            *camera,
+            context.viewport,
+            *context.camera,
             m_scene_root->content_layers(),
             *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
@@ -507,26 +504,25 @@ void Editor_rendering::render_selection(
         m_forward_renderer->primitive_constant_color = render_style.corner_color;
         m_forward_renderer->primitive_constant_size  = render_style.point_size;
         m_forward_renderer->render(
-            viewport,
-            *camera,
+            context.viewport,
+            *context.camera,
             m_scene_root->content_layers(),
             *m_scene_root->light_layer().get(),
             m_scene_root->materials(),
-            { Forward_renderer::Pass::corner_points },
+            {
+                Forward_renderer::Pass::corner_points
+            },
             content_selected_filter
         );
     }
     gl::disable(gl::Enable_cap::program_point_size);
 }
 
-void Editor_rendering::render_tool_meshes(
-    erhe::scene::ICamera*       camera,
-    const erhe::scene::Viewport viewport
-)
+void Editor_rendering::render_tool_meshes(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (camera == nullptr)
+    if (context.camera == nullptr)
     {
         return;
     }
@@ -535,11 +531,12 @@ void Editor_rendering::render_tool_meshes(
         erhe::scene::Node::c_visibility_tool,   // all set
         0u,                                     // at least one set
         0u,                                     // all clear
-        0u};                                    // at least one cler
+        0u                                      // at least one cler
+    };                                    
 
     m_forward_renderer->render(
-        viewport,
-        *camera,
+        context.viewport,
+        *context.camera,
         m_scene_root->tool_layers(),
         *m_scene_root->light_layer().get(),
         m_scene_root->materials(),
@@ -555,19 +552,11 @@ void Editor_rendering::render_tool_meshes(
     );
 }
 
-void Editor_rendering::render_brush(
-    erhe::scene::ICamera*       camera,
-    const erhe::scene::Viewport viewport
-)
+void Editor_rendering::render_brush(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (!m_viewport_config)
-    {
-        return;
-    }
-
-    if (camera == nullptr)
+    if (context.camera == nullptr)
     {
         return;
     }
@@ -580,8 +569,8 @@ void Editor_rendering::render_brush(
     };                                    
 
     m_forward_renderer->render(
-        viewport,
-        *camera,
+        context.viewport,
+        *context.camera,
         m_scene_root->brush_layers(),
         *m_scene_root->light_layer().get(),
         m_scene_root->materials(),
@@ -592,29 +581,5 @@ void Editor_rendering::render_brush(
         brush_filter
     );
 }
-
-void Editor_rendering::bind_primary_scene_output_framebuffer()
-{
-    if (m_configuration->gui)
-    {
-        m_viewport_window->bind_multisample_framebuffer();
-    }
-    else
-    {
-        gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
-        gl::viewport(0, 0, width(), height());
-    }
-}
-
-// When using gui, resolves multisample framebuffer to resolved framebuffer / texture
-// so that we can sample from the texture in GUI scene window.
-void Editor_rendering::end_primary_framebuffer()
-{
-    if (m_configuration->gui)
-    {
-        m_viewport_window->multisample_resolve();
-    }
-}
-
 
 }  // namespace editor

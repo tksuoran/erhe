@@ -34,7 +34,7 @@ public:
     void initialize_component() override;
 
     // Implements Imgui_window
-    void imgui(Pointer_context& pointer_context) override;
+    void imgui() override;
 
 private:
     void imgui_tree_node(erhe::scene::Node* node);

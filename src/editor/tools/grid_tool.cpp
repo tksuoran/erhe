@@ -1,4 +1,5 @@
 #include "tools/grid_tool.hpp"
+#include "rendering.hpp"
 #include "renderers/line_renderer.hpp"
 #include "tools.hpp"
 
@@ -11,11 +12,16 @@ namespace editor
 
 Grid_tool::Grid_tool()
     : erhe::components::Component{c_name}
-    , Imgui_window               {c_title}
+    , Imgui_window               {c_description}
 {
 }
 
 Grid_tool::~Grid_tool() = default;
+
+void Grid_tool::connect()
+{
+    m_line_renderer = get<Line_renderer>();
+}
 
 void Grid_tool::initialize_component()
 {
@@ -24,7 +30,7 @@ void Grid_tool::initialize_component()
 
 auto Grid_tool::description() -> const char*
 {
-   return c_name.data();
+   return c_description.data();
 }
 
 auto Grid_tool::state() const -> State
@@ -32,11 +38,11 @@ auto Grid_tool::state() const -> State
     return State::Passive;
 }
 
-void Grid_tool::render(const Render_context& render_context)
+void Grid_tool::tool_render(const Render_context& /*context*/)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (render_context.line_renderer == nullptr)
+    if (m_line_renderer == nullptr)
     {
         return;
     }
@@ -52,7 +58,7 @@ void Grid_tool::render(const Render_context& render_context)
     const float extent     = static_cast<float>(m_cell_count) * m_cell_size;
     const float minor_step = m_cell_size / static_cast<float>(m_cell_div);
     int cell;
-    auto& line_renderer = render_context.line_renderer->visible;
+    auto& line_renderer = m_line_renderer->visible;
     for (cell = -m_cell_count; cell < m_cell_count; ++cell)
     {
         float xz = static_cast<float>(cell) * m_cell_size;
@@ -103,11 +109,11 @@ void Grid_tool::render(const Render_context& render_context)
     );
 }
 
-void Grid_tool::imgui(Pointer_context&)
+void Grid_tool::imgui()
 {
     ERHE_PROFILE_FUNCTION
 
-    ImGui::Begin      (c_title.data());
+    ImGui::Begin      (c_description.data());
     ImGui::Checkbox   ("Enable",     &m_enable);
     ImGui::SliderFloat("Cell Size",  &m_cell_size,  0.0f, 10.0f);
     ImGui::SliderInt  ("Cell Div",   &m_cell_div,   0,    10);

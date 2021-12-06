@@ -534,6 +534,17 @@ auto Node::direction_in_world() const -> glm::vec4
     return world_from_node() * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f};
 }
 
+auto Node::transform_point_from_world_to_local(const glm::vec3 p) const -> glm::vec3
+{
+    // Does not homogenize
+    return glm::vec3{node_from_world() * glm::vec4{p, 1.0f}};
+}
+
+auto Node::transform_direction_from_world_to_local(const glm::vec3 d) const -> glm::vec3
+{
+    return glm::vec3{node_from_world() * glm::vec4{d, 0.0f}};
+}
+
 void Node::set_parent_from_node(const glm::mat4 m)
 {
     m_transforms.parent_from_node.set(m);

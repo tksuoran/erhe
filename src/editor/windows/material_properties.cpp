@@ -28,7 +28,7 @@ void Material_properties::initialize_component()
     get<Editor_tools>()->register_imgui_window(this);
 }
 
-void Material_properties::imgui(Pointer_context&)
+void Material_properties::imgui()
 {
     if (m_materials == nullptr)
     {

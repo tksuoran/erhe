@@ -31,8 +31,9 @@ void Operations::connect()
 {
     m_mesh_memory     = get<Mesh_memory    >();
     m_operation_stack = get<Operation_stack>();
-    m_selection_tool  = get<Selection_tool >();
+    m_pointer_context = get<Pointer_context>();
     m_scene_root      = get<Scene_root     >();
+    m_selection_tool  = get<Selection_tool >();
 }
 
 void Operations::initialize_component()
@@ -54,7 +55,7 @@ auto Operations::count_selected_meshes() const -> size_t
     return count;
 }
 
-void Operations::imgui(Pointer_context& pointer_context)
+void Operations::imgui()
 {
     using namespace erhe::imgui;
 
@@ -66,7 +67,7 @@ void Operations::imgui(Pointer_context& pointer_context)
     ImGui::Begin("Tools");
 
     const auto button_size   = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
-    const auto active_action = pointer_context.priority_action;
+    const auto active_action = m_pointer_context->priority_action();
     for (unsigned int i = 0; i < static_cast<unsigned int>(Action::count); ++i)
     {
         const auto button_action  = static_cast<Action>(i);
@@ -80,7 +81,7 @@ void Operations::imgui(Pointer_context& pointer_context)
         if (button_pressed && (active_action != button_action))
         {
             log_tools.trace("Setting priority action to {}\n", c_action_strings[i]);
-            pointer_context.priority_action = button_action;
+            m_pointer_context->set_priority_action(button_action);
         }
     }
 

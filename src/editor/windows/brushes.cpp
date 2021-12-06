@@ -1,6 +1,8 @@
 #include "windows/brushes.hpp"
 #include "log.hpp"
+#include "rendering.hpp"
 #include "tools.hpp"
+#include "tools/pointer_context.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/insert_operation.hpp"
 #include "renderers/line_renderer.hpp"
@@ -61,6 +63,7 @@ void Brushes::connect()
     m_grid_tool       = get<Grid_tool>();
     m_materials       = get<Materials>();
     m_operation_stack = get<Operation_stack>();
+    m_pointer_context = get<Pointer_context>();
     m_scene_root      = require<Scene_root>();
     m_selection_tool  = get<Selection_tool>();
 }
@@ -174,39 +177,41 @@ void Brushes::remove_brush_mesh()
     }
 }
 
-auto Brushes::update(Pointer_context& pointer_context) -> bool
+auto Brushes::tool_update() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    if (pointer_context.priority_action != Action::add)
+    if (m_pointer_context->priority_action() != Action::add)
     {
         remove_brush_mesh();
         return false;
     }
 
-    m_hover_content     = pointer_context.hover_content;
-    m_hover_tool        = pointer_context.hover_tool;
-    m_hover_mesh        = pointer_context.hover_mesh;
-    m_hover_primitive   = pointer_context.hover_primitive;
-    m_hover_local_index = pointer_context.hover_local_index;
-    m_hover_geometry    = pointer_context.geometry;
+    m_hover_content     = m_pointer_context->hovering_over_content();
+    m_hover_tool        = m_pointer_context->hovering_over_tool();
+    m_hover_mesh        = m_pointer_context->hover_mesh();
+    m_hover_primitive   = m_pointer_context->hover_primitive();
+    m_hover_local_index = m_pointer_context->hover_local_index();
+    m_hover_geometry    = m_pointer_context->hover_geometry();
 
-    m_hover_position = (m_hover_content && pointer_context.hover_valid)
-        ? pointer_context.position_in_world() 
+    m_hover_position = m_hover_content
+        ? m_pointer_context->position_in_world() 
         : optional<vec3>{};
 
-    m_hover_normal = (m_hover_content && pointer_context.hover_valid)
-        ? pointer_context.hover_normal
+    m_hover_normal = m_hover_content
+        ? m_pointer_context->hover_normal()
         : optional<vec3>{};
 
     if (m_hover_mesh && m_hover_position.has_value())
     {
-        m_hover_position = m_hover_mesh->node_from_world() * vec4{m_hover_position.value(), 1.0f};
+        m_hover_position = m_hover_mesh->transform_direction_from_world_to_local(m_hover_position.value());
     }
 
-    if ((m_state == State::Passive) &&
-        pointer_context.mouse_button[Mouse_button_left].pressed &&
-        m_brush_mesh)
+    if (
+        (m_state == State::Passive) &&
+        m_pointer_context->mouse_button_pressed(Mouse_button_left) &&
+        m_brush_mesh
+    )
     {
         m_state = State::Ready;
         return true;
@@ -217,7 +222,10 @@ auto Brushes::update(Pointer_context& pointer_context) -> bool
         return false;
     }
 
-    if (pointer_context.mouse_button[Mouse_button_left].released && m_brush_mesh)
+    if (
+        m_pointer_context->mouse_button_released(Mouse_button_left) &&
+        m_brush_mesh
+    )
     {
         do_insert_operation();
         remove_brush_mesh();
@@ -228,13 +236,9 @@ auto Brushes::update(Pointer_context& pointer_context) -> bool
     return false;
 }
 
-void Brushes::render(const Render_context&)
+void Brushes::begin_frame()
 {
-}
-
-void Brushes::render_update(const Render_context& render_context)
-{
-    if (render_context.pointer_context->priority_action != Action::add)
+    if (m_pointer_context->priority_action() != Action::add)
     {
         remove_brush_mesh();
         return;
@@ -246,7 +250,11 @@ void Brushes::render_update(const Render_context& render_context)
 // Returns transform which places brush in parent (hover) mesh space.
 auto Brushes::get_brush_transform() -> mat4
 {
-    if ((m_hover_mesh == nullptr) || (m_hover_geometry == nullptr) || (m_brush == nullptr))
+    if (
+        (m_hover_mesh == nullptr) ||
+        (m_hover_geometry == nullptr) ||
+        (m_brush == nullptr)
+    )
     {
         return mat4{1};
     }
@@ -435,7 +443,7 @@ void Brushes::tool_properties()
     );
 }
 
-void Brushes::imgui(Pointer_context&)
+void Brushes::imgui()
 {
     using namespace erhe::imgui;
 

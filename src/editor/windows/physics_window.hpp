@@ -32,12 +32,12 @@ public:
     void initialize_component() override;
 
     // Implements Tool
-    void render     (const Render_context& render_context) override;
-    auto state      () const -> State                      override;
-    auto description() -> const char*                      override;
+    void tool_render(const Render_context& context) override;
+    auto state      () const -> State               override;
+    auto description() -> const char*               override;
 
     // Implements Window
-    void imgui(Pointer_context& pointer_context) override;
+    void imgui() override;
 
     class Debug_draw_parameters
     {

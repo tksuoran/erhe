@@ -253,7 +253,8 @@ void Id_renderer::render(
     erhe::scene::ICamera&        camera,
     const double                 time,
     const int                    x,
-    const int                    y)
+    const int                    y
+)
 {
     ERHE_PROFILE_FUNCTION
 

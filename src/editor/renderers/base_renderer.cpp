@@ -110,7 +110,7 @@ auto Base_renderer::update_primitive_buffer(
     const Mesh_layer&        mesh_layer,
     const Visibility_filter& visibility_filter,
     const bool               use_id_ranges
-) -> Base_renderer::Buffer_range
+) -> Buffer_range
 {
     ERHE_PROFILE_FUNCTION
 
@@ -199,7 +199,7 @@ auto Base_renderer::update_primitive_buffer(
 auto Base_renderer::update_light_buffer(
     const Light_layer&      light_layer,
     const Viewport          light_texture_viewport
-) -> Base_renderer::Buffer_range
+) -> Buffer_range
 {
     ERHE_PROFILE_FUNCTION
 
@@ -259,7 +259,7 @@ auto Base_renderer::update_light_buffer(
 
 auto Base_renderer::update_material_buffer(
     const Material_collection& materials
-) -> Base_renderer::Buffer_range
+) -> Buffer_range
 {
     ERHE_PROFILE_FUNCTION
 
@@ -292,7 +292,7 @@ auto Base_renderer::update_material_buffer(
 auto Base_renderer::update_camera_buffer(
     ICamera&       camera,
     const Viewport viewport
-) -> Base_renderer::Buffer_range
+) -> Buffer_range
 {
     ERHE_PROFILE_FUNCTION
 
@@ -377,7 +377,7 @@ auto Base_renderer::update_draw_indirect_buffer(
             const uint32_t first_index = static_cast<uint32_t>(index_range.first_index + base_index);
             const uint32_t base_vertex = primitive_geometry->base_vertex();
 
-            const auto draw_command = gl::Draw_elements_indirect_command{
+            const gl::Draw_elements_indirect_command draw_command{
                 index_count,
                 instance_count,
                 first_index,

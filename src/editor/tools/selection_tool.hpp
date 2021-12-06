@@ -16,6 +16,7 @@ namespace erhe::scene {
 namespace editor
 {
 
+class Line_renderer;
 class Scene_manager;
 
 class Selection_tool
@@ -24,6 +25,7 @@ class Selection_tool
 {
 public:
     static constexpr std::string_view c_name{"Selection_tool"};
+    static constexpr std::string_view c_description{"Selection tool"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Selection_tool();
@@ -31,15 +33,15 @@ public:
 
     // Implements Component
     auto get_type_hash       () const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    void connect             ()                   override;
+    void initialize_component()                   override;
 
     // Implements Tool
-    auto update      (Pointer_context& pointer_context) -> bool override;
-    void render      (const Render_context& render_context)     override;
-    auto state       () const -> State                          override;
-    void cancel_ready()                                         override;
-    auto description () -> const char*                          override;
+    auto tool_update () -> bool        override;
+    void tool_render (const Render_context& context) override;
+    auto state       () const -> State override;
+    void cancel_ready()                override;
+    auto description () -> const char* override;
 
     using Selection            = std::vector<std::shared_ptr<erhe::scene::Node>>;
     using On_selection_changed = std::function<void(const Selection&)>;
@@ -111,6 +113,7 @@ private:
         const bool clear_others
     );
 
+
     class Subscription_entry
     {
     public:
@@ -118,17 +121,17 @@ private:
         int                  handle;
     };
 
-    State                           m_state{State::Passive};
-    int                             m_next_selection_change_subscription{1};
-    Selection                       m_selection;
-    std::vector<Subscription_entry> m_selection_change_subscriptions;
-
-    Scene_manager*                     m_scene_manager{nullptr};
+    Line_renderer*                     m_line_renderer  {nullptr};
+    Pointer_context*                   m_pointer_context{nullptr};
+    Scene_manager*                     m_scene_manager  {nullptr};
+    State                              m_state          {State::Passive};
+    int                                m_next_selection_change_subscription{1};
+    Selection                          m_selection;
+    std::vector<Subscription_entry>    m_selection_change_subscriptions;
 
     std::shared_ptr<erhe::scene::Mesh> m_hover_mesh;
-    glm::vec3                          m_hover_position{0.0f, 0.0f, 0.0f};
-    bool                               m_hover_content {false};
-    bool                               m_hover_tool    {false};
+    bool                               m_hover_content{false};
+    bool                               m_hover_tool   {false};
 };
 
 } // namespace editor

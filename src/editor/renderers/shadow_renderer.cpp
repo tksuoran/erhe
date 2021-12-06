@@ -127,8 +127,7 @@ static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::ren
 
 void Shadow_renderer::render(
     const Mesh_layer_collection&    mesh_layers,
-    const erhe::scene::Light_layer& light_layer,
-    const erhe::scene::ICamera&     camera
+    const erhe::scene::Light_layer& light_layer
 )
 {
     if constexpr (!s_enable)
@@ -146,9 +145,6 @@ void Shadow_renderer::render(
         static_cast<GLsizei>(c_shadow_renderer_render.length()),
         c_shadow_renderer_render.data()
     );
-
-    // For now, camera is ignored.
-    static_cast<void>(camera);
 
     m_pipeline_state_tracker->execute(&m_pipeline);
     gl::viewport(m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);

@@ -1,7 +1,9 @@
 #include "tools/trs_tool.hpp"
 #include "graphics/gl_context_provider.hpp"
 #include "log.hpp"
+#include "rendering.hpp"
 #include "tools.hpp"
+#include "tools/pointer_context.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/insert_operation.hpp"
 #include "renderers/line_renderer.hpp"
@@ -48,7 +50,18 @@ Trs_tool::~Trs_tool() = default;
 
 auto Trs_tool::description() -> const char*
 {
-    return c_name.data();
+    return c_description.data();
+}
+
+void Trs_tool::connect()
+{
+    require<Gl_context_provider>();
+
+    m_operation_stack = get    <Operation_stack>();
+    m_mesh_memory     = require<Mesh_memory>();
+    m_pointer_context = get    <Pointer_context>();
+    m_scene_root      = require<Scene_root>();
+    m_selection_tool  = require<Selection_tool>();
 }
 
 auto Trs_tool::state() const -> State
@@ -233,16 +246,6 @@ void Trs_tool::Visualization::initialize(Mesh_memory& mesh_memory, Scene_root& s
     update_visibility(false, Handle::e_handle_none);
 }
 
-void Trs_tool::connect()
-{
-    require<Gl_context_provider>();
-
-    m_operation_stack = get<Operation_stack>();
-    m_mesh_memory     = require<Mesh_memory>();
-    m_scene_root      = require<Scene_root>();
-    m_selection_tool  = require<Selection_tool>();
-}
-
 void Trs_tool::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
@@ -350,23 +353,47 @@ void Trs_tool::tool_properties()
     }
 }
 
-auto Trs_tool::update(Pointer_context& pointer_context) -> bool
+auto Trs_tool::tool_update() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    if ((m_state == State::Passive) && pointer_context.mouse_button[Mouse_button_left].pressed)
+    if (!m_mouse_set)
     {
-        return begin(pointer_context);
+        m_mouse_x = m_pointer_context->mouse_x();
+        m_mouse_y = m_pointer_context->mouse_y();
+        m_mouse_set = true;
     }
-    if ((m_state != State::Passive) && pointer_context.mouse_button[Mouse_button_left].released)
+    const double x_delta     = m_pointer_context->mouse_x() - m_mouse_x;
+    const double y_delta     = m_pointer_context->mouse_y() - m_mouse_y;
+    const bool   mouse_moved = (std::abs(x_delta) > 0.5) || (std::abs(y_delta) > 0.5);
+    m_mouse_x = m_pointer_context->mouse_x();
+    m_mouse_y = m_pointer_context->mouse_y();
+
+    if (
+        (m_state == State::Passive) &&
+        m_pointer_context->mouse_button_pressed(Mouse_button_left)
+    )
     {
-        return end(pointer_context);
+        return begin();
     }
-    if ((m_state == State::Ready) && pointer_context.mouse_moved)
+
+    if (
+        (m_state != State::Passive) &&
+        m_pointer_context->mouse_button_released(Mouse_button_left)
+    )
+    {
+        return end();
+    }
+
+    if (
+        (m_state == State::Ready) &&
+        mouse_moved
+    )
     {
         log_tools.trace("Trs tool state = Active\n");
         m_state = State::Active;
     }
+
     if (m_state != State::Active)
     {
         // We might be ready, but not consuming event yet
@@ -376,9 +403,9 @@ auto Trs_tool::update(Pointer_context& pointer_context) -> bool
     auto handle_type = get_handle_type(m_active_handle);
     switch (handle_type)
     {
-        case Handle_type::e_handle_type_translate_axis:  update_axis_translate (pointer_context); return true;
-        case Handle_type::e_handle_type_translate_plane: update_plane_translate(pointer_context); return true;
-        case Handle_type::e_handle_type_rotate:          update_rotate         (pointer_context); return true;
+        case Handle_type::e_handle_type_translate_axis:  update_axis_translate (); return true;
+        case Handle_type::e_handle_type_translate_plane: update_plane_translate(); return true;
+        case Handle_type::e_handle_type_rotate:          update_rotate         (); return true;
         case Handle_type::e_handle_type_none:
         default:
             return false;
@@ -405,35 +432,47 @@ auto Trs_tool::get_axis_direction() const -> vec3
     }
 }
 
-void Trs_tool::update_axis_translate(Pointer_context& pointer_context)
+void Trs_tool::update_axis_translate()
 {
     ERHE_PROFILE_FUNCTION
 
-    vec3 drag_world_direction = get_axis_direction();
-    vec3 P0    = m_drag.initial_position_in_world - drag_world_direction;
-    vec3 P1    = m_drag.initial_position_in_world + drag_world_direction;
-    vec3 Q0    = pointer_context.position_in_world(1.0f);
-    vec3 Q1    = pointer_context.position_in_world(0.0f);
-    vec3 ss_P0 = pointer_context.position_in_window(P0);
-    vec3 ss_P1 = pointer_context.position_in_window(P1);
+    const auto* window = m_pointer_context->window();
+    if (window == nullptr)
+    {
+        return;
+    }
+
+    const vec3 drag_world_direction = get_axis_direction();
+    const vec3 P0     = m_drag.initial_position_in_world - drag_world_direction;
+    const vec3 P1     = m_drag.initial_position_in_world + drag_world_direction;
+    const auto Q0_opt = m_pointer_context->position_in_world(1.0f);
+    const auto Q1_opt = m_pointer_context->position_in_world(0.0f);
+    if (
+        !Q0_opt.has_value() ||
+        !Q1_opt.has_value()
+    )
+    {
+        return;
+    }
+    const vec3 Q0    = Q0_opt.value();
+    const vec3 Q1    = Q1_opt.value();
+    const vec3 ss_P0 = window->project_to_viewport(P0); //m_pointer_context->position_in_window(P0);
+    const vec3 ss_P1 = window->project_to_viewport(P1); //m_pointer_context->position_in_window(P1);
     vec2 ss_closest;
     bool use_ss = closest_point(
         vec2{ss_P0},
         vec2{ss_P1},
-        vec2{
-            static_cast<float>(pointer_context.pointer_x),
-            static_cast<float>(pointer_context.pointer_y)
-        },
+        vec2{m_pointer_context->position_in_viewport_window().value()},
         ss_closest);
-    vec3 R0 = pointer_context.position_in_world(vec3{ss_closest, 0.0f});
-    vec3 R1 = pointer_context.position_in_world(vec3{ss_closest, 1.0f});
+    const vec3 R0 = window->unproject_to_world(vec3{ss_closest, 0.0f});
+    const vec3 R1 = window->unproject_to_world(vec3{ss_closest, 1.0f});
     vec3 PC_q;
     vec3 QC;
     vec3 PC_r;
     vec3 RC;
 
-    bool has_closest_points_q = closest_points(P0, P1, Q0, Q1, PC_q, QC);
-    bool has_closest_points_r = closest_points(P0, P1, R0, R1, PC_r, RC);
+    const bool has_closest_points_q = closest_points(P0, P1, Q0, Q1, PC_q, QC);
+    const bool has_closest_points_r = closest_points(P0, P1, R0, R1, PC_r, RC);
     if (use_ss && !has_closest_points_r)
     {
         use_ss = false;
@@ -443,12 +482,15 @@ void Trs_tool::update_axis_translate(Pointer_context& pointer_context)
         }
     }
 
-    vec3 drag_point_new_position_in_world = use_ss ? PC_r : PC_q;
-    vec3 translation_vector = drag_point_new_position_in_world - m_drag.initial_position_in_world;
-    snap_translate(translation_vector);
-    mat4 translation = create_translation(translation_vector);
+    const vec3 drag_point_new_position_in_world{use_ss ? PC_r : PC_q};
+    const vec3 translation_vector{
+        snap_translate(
+            drag_point_new_position_in_world - m_drag.initial_position_in_world
+        )
+    };
+    const mat4 translation = create_translation(translation_vector);
 
-    mat4 world_from_node = translation * m_drag.initial_world_from_local;
+    const mat4 world_from_node = translation * m_drag.initial_world_from_local;
     set_node_world_transform(world_from_node);
     update_transforms();
 }
@@ -485,24 +527,24 @@ auto Trs_tool::is_rotate_active() const -> bool
         (m_active_handle == Handle::e_handle_rotate_z);
 }
 
-void Trs_tool::snap_translate(glm::vec3& translation) const
+auto Trs_tool::snap_translate(const glm::vec3 in_translation) const -> glm::vec3
 {
     if (!m_translate_snap_enable)
     {
-        return;
+        return in_translation;
     }
-    if (is_x_translate_active())
-    {
-        translation.x = std::floor((translation.x + m_translate_snap * 0.5f) / m_translate_snap) * m_translate_snap;
-    }
-    if (is_y_translate_active())
-    {
-        translation.y = std::floor((translation.y + m_translate_snap * 0.5f) / m_translate_snap) * m_translate_snap;
-    }
-    if (is_z_translate_active())
-    {
-        translation.z = std::floor((translation.z + m_translate_snap * 0.5f) / m_translate_snap) * m_translate_snap;
-    }
+
+    const float x = is_x_translate_active()
+        ? std::floor((in_translation.x + m_translate_snap * 0.5f) / m_translate_snap) * m_translate_snap
+        : in_translation.x;
+    const float y = is_y_translate_active()
+        ? std::floor((in_translation.y + m_translate_snap * 0.5f) / m_translate_snap) * m_translate_snap
+        : in_translation.y;
+    const float z = is_z_translate_active()
+        ? std::floor((in_translation.z + m_translate_snap * 0.5f) / m_translate_snap) * m_translate_snap
+        : in_translation.z;
+
+    return glm::vec3{x, y, z};
 }
 
 auto Trs_tool::get_plane_normal() const -> vec3
@@ -561,15 +603,24 @@ auto Trs_tool::get_plane_side_in_model2() const -> vec3
     }
 }
 
-void Trs_tool::update_plane_translate(Pointer_context& pointer_context)
+void Trs_tool::update_plane_translate()
 {
     ERHE_PROFILE_FUNCTION
 
     vec3 p0 = m_drag.initial_position_in_world;
     vec3 n  = get_plane_normal();
 
-    vec3 Q0 = pointer_context.position_in_world(1.0f);
-    vec3 Q1 = pointer_context.position_in_world(0.0f);
+    auto Q0_opt = m_pointer_context->position_in_world(1.0f);
+    auto Q1_opt = m_pointer_context->position_in_world(0.0f);
+    if (
+        !Q0_opt.has_value() ||
+        !Q1_opt.has_value()
+    )
+    {
+        return;
+    }
+    vec3 Q0 = Q0_opt.value();
+    vec3 Q1 = Q1_opt.value();
 
     vec3 v = normalize(Q1 - Q0);
 
@@ -616,11 +667,20 @@ auto Trs_tool::project_to_offset_plane(const Handle handle, const vec3 p, const 
     }
 }
 
-auto Trs_tool::project_pointer_to_plane(const Pointer_context& pointer_context, const vec3 p, vec3& q) -> bool
+auto Trs_tool::project_pointer_to_plane(const vec3 p, vec3& q) -> bool
 {
+    auto near_opt = m_pointer_context->position_in_world(0.0f);
+    auto far_opt  = m_pointer_context->position_in_world(1.0f);
+    if (
+        !near_opt.has_value() ||
+        !far_opt.has_value()
+    )
+    {
+        return false;
+    }
     const vec3 n  = get_plane_normal_in_model();
-    const vec3 q0 = vec3{m_drag.initial_local_from_world * vec4{pointer_context.position_in_world(0.0f), 1.0f}};
-    const vec3 q1 = vec3{m_drag.initial_local_from_world * vec4{pointer_context.position_in_world(1.0f), 1.0f}};
+    const vec3 q0 = vec3{m_drag.initial_local_from_world * vec4{near_opt.value(), 1.0f}};
+    const vec3 q1 = vec3{m_drag.initial_local_from_world * vec4{far_opt .value(), 1.0f}};
     const vec3 v  = normalize(q1 - q0);
     float      t  = 0.0f;
     const bool ok = intersect_plane(n, p, q0, v, t);
@@ -633,9 +693,24 @@ auto Trs_tool::project_pointer_to_plane(const Pointer_context& pointer_context, 
     return true;
  }
 
-void Trs_tool::update_rotate(Pointer_context& pointer_context)
+void Trs_tool::update_rotate()
 {
     ERHE_PROFILE_FUNCTION
+
+    Expects(root() != nullptr);
+
+    auto* window = m_pointer_context->window();
+    if (window == nullptr)
+    {
+        end();
+        return;
+    }
+
+    auto* camera = window->camera();
+    if (camera == nullptr)
+    {
+        return;
+    }
 
     // r = local drag start position
     const vec3  r       = m_rotation.drag_start;
@@ -648,12 +723,12 @@ void Trs_tool::update_rotate(Pointer_context& pointer_context)
     const vec3  up      = m_rotation.up;
 
     constexpr float c_parallel_threshold = 0.4f;
-    const vec3  V0      = vec3{root()->position_in_world()} - vec3{pointer_context.camera->position_in_world()};
+    const vec3  V0      = vec3{root()->position_in_world()} - vec3{camera->position_in_world()};
     const vec3  V       = normalize(m_drag.initial_local_from_world * vec4{V0, 0.0f});
     const float v_dot_n = dot(V, n);
     if (std::abs(v_dot_n) < c_parallel_threshold)
     {
-        return update_rotate_parallel(pointer_context);
+        return update_rotate_parallel();
     }
 
     const vec3 rotation_axis                  = get_axis_direction();
@@ -689,10 +764,10 @@ void Trs_tool::update_rotate(Pointer_context& pointer_context)
     update_transforms();
 #else
     glm::vec3 q;
-    const bool intersection_exists = project_pointer_to_plane(pointer_context, p, q);
+    const bool intersection_exists = project_pointer_to_plane(p, q);
     if (!intersection_exists)
     {
-        return update_rotate_parallel(pointer_context);
+        return update_rotate_parallel();
     }
 
     const vec3  q_ = normalize(q);
@@ -712,19 +787,24 @@ void Trs_tool::update_rotate(Pointer_context& pointer_context)
 
 }
 
-void Trs_tool::update_rotate_parallel(Pointer_context& pointer_context)
+void Trs_tool::update_rotate_parallel()
 {
-    const vec3 r_   = vec3{m_drag.initial_local_from_world * vec4{m_drag.initial_position_in_world, 1.0f}};
-    const vec3 p    = offset_plane_origo(m_active_handle, r_);
-    const vec3 n    = get_plane_normal_in_model();
-    const vec3 side = get_plane_side_in_model();
-    const vec3 up   = cross(n, side);
-    const vec3 pw   = pointer_context.position_in_world(m_drag.initial_window_depth);
-    const vec3 q0   = vec3{m_drag.initial_local_from_world * vec4{pw, 1.0f}};
-    const vec3 q_   = project_to_offset_plane(m_active_handle, p, q0);
+    const vec3 r_     = vec3{m_drag.initial_local_from_world * vec4{m_drag.initial_position_in_world, 1.0f}};
+    const vec3 p      = offset_plane_origo(m_active_handle, r_);
+    const vec3 n      = get_plane_normal_in_model();
+    const vec3 side   = get_plane_side_in_model();
+    const vec3 up     = cross(n, side);
+    auto       pw_opt = m_pointer_context->position_in_world(m_drag.initial_window_depth);
+    if (!pw_opt.has_value())
+    {
+        return;
+    }
+    const vec3 pw     = pw_opt.value();
+    const vec3 q0     = vec3{m_drag.initial_local_from_world * vec4{pw, 1.0f}};
+    const vec3 q_     = project_to_offset_plane(m_active_handle, p, q0);
 
-    const vec3 r = normalize(r_ - p);
-    const vec3 q = normalize(q_ - p);
+    const vec3 r      = normalize(r_ - p);
+    const vec3 q      = normalize(q_ - p);
 
     const float r_dot_side = dot(r, side);
     const float r_dot_up   = dot(r, up);
@@ -754,21 +834,27 @@ void Trs_tool::set_node_world_transform(const glm::mat4 world_from_node)
     root()->set_parent_from_node(parent_from_world);
  }
 
-void Trs_tool::render_update(const Render_context& render_context)
+void Trs_tool::begin_frame()
 {
-    const auto* camera = render_context.pointer_context->camera;
+    auto* window = m_pointer_context->window();
+    if (window == nullptr)
+    {
+        return;
+    }
+
+    const auto* camera = window->camera();
     if (camera == nullptr)
     {
         return;
     }
 
-    const glm::vec3 view_position_in_world = vec3{camera->position_in_world()};
+    const vec3 view_position_in_world = vec3{camera->position_in_world()};
 
     m_visualization.update_scale(view_position_in_world);
     update_transforms();
 }
 
-void Trs_tool::render(const Render_context& /*render_context*/)
+void Trs_tool::tool_render(const Render_context& /*context*/)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -927,35 +1013,40 @@ void Trs_tool::render(const Render_context& /*render_context*/)
 #endif
 }
 
-auto Trs_tool::Rotation_context::angle_of_rotation_for_point(vec3 q) -> float
+auto Trs_tool::Rotation_context::angle_of_rotation_for_point(const vec3 q) -> float
 {
-    vec3  q_         = normalize(q);
-    float q_dot_side = dot(q_, side);
-    float q_dot_up   = dot(q_, up);
-    float angle      = (q_dot_up > 0.0f) ? std::acos(q_dot_side) : 2.0f * pi<float>() - std::acos(q_dot_side);
+    const vec3  q_         = normalize(q);
+    const float q_dot_side = dot(q_, side);
+    const float q_dot_up   = dot(q_, up);
+    const float angle      = (q_dot_up > 0.0f)
+        ? std::acos(q_dot_side)
+        : 2.0f * pi<float>() - std::acos(q_dot_side);
     return angle;
 }
 
-auto Trs_tool::begin(Pointer_context& pointer_context) -> bool
+auto Trs_tool::begin() -> bool
 {
-    if (!pointer_context.hover_mesh)
+    if (!m_pointer_context->hover_mesh())
     {
         return false;
     }
-    m_active_handle = get_handle(pointer_context.hover_mesh.get());
-    if (m_active_handle == Handle::e_handle_none)
+
+    m_active_handle = get_handle(m_pointer_context->hover_mesh().get());
+    if (
+        (m_active_handle == Handle::e_handle_none) ||
+        (root() == nullptr) ||
+        !m_pointer_context->position_in_world().has_value() ||
+        !m_pointer_context->position_in_viewport_window().has_value()
+    )
     {
         return false;
     }
-    if (root() == nullptr)
-    {
-        return false;
-    }
-    m_drag.initial_position_in_world = pointer_context.position_in_world();
+
+    m_drag.initial_position_in_world = m_pointer_context->position_in_world().value();
     m_drag.position_in_root          = root()->node_from_world() * vec4{m_drag.initial_position_in_world, 1.0f};
     m_drag.initial_world_from_local  = root()->world_from_node();
     m_drag.initial_local_from_world  = root()->node_from_world();
-    m_drag.initial_window_depth      = pointer_context.pointer_z;
+    m_drag.initial_window_depth      = m_pointer_context->position_in_viewport_window().value().z;
     if (m_target_node)
     {
         m_drag.initial_parent_from_node_transform = m_target_node->parent_from_node_transform();
@@ -964,7 +1055,7 @@ auto Trs_tool::begin(Pointer_context& pointer_context) -> bool
     // For rotation
     if (is_rotate_active())
     {
-        vec3 rotation_axis_in_world = get_axis_direction();
+        const vec3 rotation_axis_in_world = get_axis_direction();
         m_rotation.drag_start               = vec3{m_drag.initial_local_from_world * vec4{m_drag.initial_position_in_world, 1.0f}};
         m_rotation.center_of_rotation       = vec3{0.0f, 0.0f, 0.0f}; // offset_plane_origo(m_active_handle, m_rotation.drag_start);
         m_rotation.normal                   = get_plane_normal_in_model();
@@ -991,9 +1082,8 @@ auto Trs_tool::begin(Pointer_context& pointer_context) -> bool
     return true;
 }
 
-auto Trs_tool::end(Pointer_context& pointer_context) -> bool
+auto Trs_tool::end() -> bool
 {
-    static_cast<void>(pointer_context);
     bool consume_event = m_state == State::Active;
     cancel_ready();
     update_visibility();
@@ -1074,7 +1164,7 @@ auto Trs_tool::get_axis_color(const Handle handle) const -> uint32_t
     }
 }
 
-void Trs_tool::Visualization::update_transforms(uint64_t serial)
+void Trs_tool::Visualization::update_transforms(const uint64_t serial)
 {
     ERHE_PROFILE_FUNCTION
 

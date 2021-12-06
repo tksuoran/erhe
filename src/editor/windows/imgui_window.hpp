@@ -13,6 +13,12 @@ namespace editor
 class Pointer_context;
 class Scene_manager;
 
+class Imgui_window_context
+{
+public:
+    Pointer_context& pointer_context;
+};
+
 class Imgui_window
 {
 public:
@@ -24,11 +30,11 @@ public:
     auto is_visibile      () const -> bool;
     auto title            () const -> const std::string_view;
 
-    virtual void imgui(Pointer_context& pointer_context) = 0;
+    virtual void imgui() = 0;
 
 protected:
-    bool                   m_is_visible{true};
-    const std::string_view m_title;
+    bool              m_is_visible{true};
+    const std::string m_title;
 };
 
 } // namespace editor

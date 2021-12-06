@@ -84,6 +84,7 @@ void initialize_renderdoc_capture_support()
         log_renderdoc.trace("RenderDoc: SetCaptureKeys(nullptr, 0)\n");
         RENDERDOC_InputButton capture_keys[] = { eRENDERDOC_Key_F1 };
         renderdoc_api->SetCaptureKeys(&capture_keys[0], 1);
+        renderdoc_api->SetCaptureOptionU32(RENDERDOC_CaptureOption::eRENDERDOC_Option_DebugOutputMute, 0);
     }
 }
 

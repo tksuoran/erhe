@@ -1,10 +1,10 @@
 #include "tools/selection_tool.hpp"
 #include "log.hpp"
+#include "rendering.hpp"
 #include "tools.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
 #include "renderers/line_renderer.hpp"
-#include "renderers/text_renderer.hpp"
 #include "scene/scene_manager.hpp"
 #include "scene/node_physics.hpp"
 
@@ -30,7 +30,9 @@ Selection_tool::~Selection_tool() = default;
 
 void Selection_tool::connect()
 {
-    m_scene_manager = require<Scene_manager>();
+    m_line_renderer   = get<Line_renderer>();
+    m_pointer_context = get<Pointer_context>();
+    m_scene_manager   = require<Scene_manager>();
 }
 
 void Selection_tool::initialize_component()
@@ -40,7 +42,7 @@ void Selection_tool::initialize_component()
 
 auto Selection_tool::description() -> const char*
 {
-    return c_name.data();
+    return c_description.data();
 }
 
 auto Selection_tool::state() const -> State
@@ -75,9 +77,9 @@ void Selection_tool::cancel_ready()
     m_state = State::Passive;
 }
 
-auto Selection_tool::update(Pointer_context& pointer_context) -> bool
+auto Selection_tool::tool_update() -> bool
 {
-    if (pointer_context.priority_action != Action::select)
+    if (m_pointer_context->priority_action() != Action::select)
     {
         if (m_state != State::Passive)
         {
@@ -86,23 +88,25 @@ auto Selection_tool::update(Pointer_context& pointer_context) -> bool
         return false;
     }
 
-    if (!pointer_context.scene_view_focus ||
-        !pointer_context.pointer_in_content_area())
+    if (
+        (m_pointer_context->window() == nullptr) ||
+        !m_pointer_context->window()->is_focused() ||
+        !m_pointer_context->pointer_in_content_area()
+    )
     {
         return false;
     }
-    m_hover_mesh     = pointer_context.hover_mesh;
-    m_hover_position = glm::vec3{
-        pointer_context.pointer_x,
-        pointer_context.pointer_y,
-        pointer_context.pointer_z
-    };
-    m_hover_content  = pointer_context.hover_content;
-    m_hover_tool     = pointer_context.hover_tool;
+
+    m_hover_mesh    = m_pointer_context->hover_mesh();
+    m_hover_content = m_pointer_context->hovering_over_content();
+    m_hover_tool    = m_pointer_context->hovering_over_tool();
 
     if (m_state == State::Passive)
     {
-        if (m_hover_content && pointer_context.mouse_button[Mouse_button_left].pressed)
+        if (
+            m_hover_content &&
+            m_pointer_context->mouse_button_pressed(Mouse_button_left)
+        )
         {
             m_state = State::Ready;
             return true;
@@ -115,9 +119,9 @@ auto Selection_tool::update(Pointer_context& pointer_context) -> bool
         return false;
     }
 
-    if (pointer_context.mouse_button[Mouse_button_left].released)
+    if (m_pointer_context->mouse_button_released(Mouse_button_left))
     {
-        if (pointer_context.shift)
+        if (m_pointer_context->shift_key_down())
         {
             if (!m_hover_content)
             {
@@ -127,6 +131,7 @@ auto Selection_tool::update(Pointer_context& pointer_context) -> bool
             m_state = State::Passive;
             return true;
         }
+
         if (!m_hover_content)
         {
             clear_selection();
@@ -270,11 +275,11 @@ void Selection_tool::call_selection_change_subscriptions()
     }
 }
 
-void Selection_tool::render(const Render_context& render_context)
+void Selection_tool::tool_render(const Render_context& context)
 {
     using namespace glm;
 
-    if (render_context.line_renderer == nullptr)
+    if (m_line_renderer == nullptr)
     {
         return;
     }
@@ -283,10 +288,9 @@ void Selection_tool::render(const Render_context& render_context)
     constexpr uint32_t green       = 0xff00ff00u;
     constexpr uint32_t blue        = 0xffff0000u;
     constexpr uint32_t yellow      = 0xff00ffffu;
-    //constexpr uint32_t half_yellow = 0x88008888u; // premultiplied
     constexpr uint32_t white       = 0xffffffffu;
     constexpr uint32_t half_white  = 0x88888888u; // premultiplied
-    auto& line_renderer = render_context.line_renderer->hidden;
+    auto& line_renderer = m_line_renderer->hidden;
     for (auto node : m_selection)
     {
         const glm::mat4 m     {node->world_from_node()};
@@ -306,7 +310,7 @@ void Selection_tool::render(const Render_context& render_context)
                 {
                     continue;
                 }
-                auto* primitive_geometry = primitive.primitive_geometry.get();
+                auto* const primitive_geometry = primitive.primitive_geometry.get();
                 const vec3 box_min = primitive_geometry->bounding_box_min;
                 const vec3 box_max = primitive_geometry->bounding_box_max;
                 line_renderer.add_lines(
@@ -440,7 +444,7 @@ void Selection_tool::render(const Render_context& render_context)
         if (is_icamera(node))
         {
             const auto icamera         = as_icamera(node).get();
-            const mat4 clip_from_node  = icamera->projection()->get_projection_matrix(1.0f, render_context.viewport.reverse_depth);
+            const mat4 clip_from_node  = icamera->projection()->get_projection_matrix(1.0f, context.viewport.reverse_depth);
             const mat4 node_from_clip  = inverse(clip_from_node);
             const mat4 world_from_clip = icamera->world_from_node() * node_from_clip;
             constexpr std::array<glm::vec3, 8> p = {

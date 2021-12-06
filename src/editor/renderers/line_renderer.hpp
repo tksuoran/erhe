@@ -258,6 +258,12 @@ public:
     class Style
     {
     public:
+        Style();
+        Style         (const Style&) = delete; // Due to std::deque<Frame_resources> m_frame_resources
+        void operator=(const Style&) = delete; // Style must be non-copyable and non-movable.
+        Style         (Style&&)      = delete;
+        void operator=(Style&&)      = delete;
+
         void create_frame_resources (Pipeline* pipeline, const Configuration* const configuration);
         auto current_frame_resources() -> Frame_resources&;
         void next_frame             ();
@@ -312,13 +318,13 @@ public:
             size_t&              word_offset
         );
 
-        Pipeline*                  m_pipeline{nullptr};
-        std::list<Frame_resources> m_frame_resources;
-        size_t                     m_line_count{0};
-        Buffer_writer              m_view_writer;
-        Buffer_writer              m_vertex_writer;
-        size_t                     m_current_frame_resource_slot{0};
-        uint32_t                   m_line_color                 {0xffffffffu};
+        std::deque<Frame_resources> m_frame_resources;
+        Pipeline*                   m_pipeline{nullptr};
+        size_t                      m_line_count{0};
+        Buffer_writer               m_view_writer;
+        Buffer_writer               m_vertex_writer;
+        size_t                      m_current_frame_resource_slot{0};
+        uint32_t                    m_line_color                 {0xffffffffu};
     };
 
     Style visible;

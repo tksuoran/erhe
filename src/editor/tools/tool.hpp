@@ -1,15 +1,9 @@
 #pragma once
 
-#include "erhe/scene/viewport.hpp"
-
 namespace editor
 {
 
-class Line_renderer;
-class Pointer_context;
 class Render_context;
-class Scene_manager;
-class Text_renderer;
 
 class Tool
 {
@@ -33,7 +27,7 @@ public:
     virtual auto description() -> const char* = 0;
 
     // Interaction with pointer
-    virtual auto update(Pointer_context&) -> bool
+    virtual auto tool_update() -> bool
     {
         // If derived does not implement update,
         // event will not be consumed.
@@ -41,8 +35,8 @@ public:
     }
 
     // Visual rendering of the tool.
-    virtual void render_update  (const Render_context&) {}
-    virtual void render         (const Render_context&) {}
+    virtual void begin_frame    () {}
+    virtual void tool_render    (const Render_context& context) { static_cast<void>(context); }
     virtual auto state          () const -> State = 0;
     virtual void cancel_ready   () {}
     virtual void tool_properties() {}

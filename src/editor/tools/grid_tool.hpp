@@ -3,6 +3,8 @@
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
 
+#include <glm/glm.hpp>
+
 namespace editor
 {
 
@@ -14,8 +16,8 @@ class Grid_tool
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name {"Grid_tool"};
-    static constexpr std::string_view c_title{"Grid"};
+    static constexpr std::string_view c_name       {"Grid_tool"};
+    static constexpr std::string_view c_description{"Grid"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Grid_tool ();
@@ -23,19 +25,21 @@ public:
 
     // Implements Component
     auto get_type_hash       () const -> uint32_t override { return hash; }
-    void initialize_component() override;
+    void connect             ()                   override;
+    void initialize_component()                   override;
 
     // Implements Tool
-    void render     (const Render_context& render_context) override;
-    auto state      () const -> State                      override;
-    auto description() -> const char*                      override;
+    void tool_render(const Render_context& context) override;
+    auto state      () const -> State               override;
+    auto description() -> const char*               override;
 
     // Implements Imgui_window
-    void imgui(Pointer_context& pointer_context) override;
+    void imgui() override;
 
     auto snap(const glm::vec3 v) const -> glm::vec3;
 
 private:
+    Line_renderer* m_line_renderer{nullptr};
     bool  m_enable    {false};
     float m_cell_size {1.0f};
     int   m_cell_div  {10};

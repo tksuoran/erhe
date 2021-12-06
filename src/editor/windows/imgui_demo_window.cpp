@@ -19,7 +19,7 @@ void Imgui_demo_window::initialize_component()
     get<Editor_tools>()->register_imgui_window(this);
 }
 
-void Imgui_demo_window::imgui(Pointer_context&)
+void Imgui_demo_window::imgui()
 {
     ImGui::ShowDemoWindow();
 }

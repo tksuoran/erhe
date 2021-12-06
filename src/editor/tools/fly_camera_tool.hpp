@@ -12,6 +12,7 @@ namespace erhe::scene
 {
 
 class Camera;
+class ICamera;
 
 }
 
@@ -19,6 +20,7 @@ namespace editor
 {
 
 class Fly_camera_tool;
+class Pointer_context;
 class Scene_manager;
 class Scene_root;
 
@@ -50,8 +52,8 @@ class Fly_camera_tool
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name {"Fly_camera_tool"};
-    static constexpr std::string_view c_title{"Fly Camera"};
+    static constexpr std::string_view c_name       {"Fly_camera_tool"};
+    static constexpr std::string_view c_description{"Fly Camera"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Fly_camera_tool ();
@@ -62,14 +64,17 @@ public:
     void connect             () override;
     void initialize_component() override;
 
+    void set_camera(erhe::scene::ICamera* camera);
+    auto camera    () const -> erhe::scene::ICamera*;
+
     // Implements Tool
-    auto update      (Pointer_context& pointer_context) -> bool override;
-    auto state       () const -> State                          override;
-    void cancel_ready()                                         override;
-    auto description () -> const char*                          override;
+    auto tool_update () -> bool        override;
+    auto state       () const -> State override;
+    void cancel_ready()                override;
+    auto description () -> const char* override;
 
     // Implements Window
-    void imgui(Pointer_context& pointer_context) override;
+    void imgui() override;
 
     // Implements IUpdate_fixed_step
     void update_fixed_step    (const erhe::components::Time_context& time_context) override;
@@ -88,12 +93,13 @@ public:
     void rotation   (const int rx, const int ry, const int rz);
 
 private:
-    auto begin(Pointer_context& pointer_context) -> bool;
-    auto end  (Pointer_context& pointer_context) -> bool;
+    auto begin() -> bool;
+    auto end  () -> bool;
 
     std::mutex                            m_mutex;
 
-    Scene_root*                           m_scene_root{nullptr};
+    Pointer_context*                      m_pointer_context{nullptr};
+    Scene_root*                           m_scene_root     {nullptr};
 
     Frame_controller                      m_camera_controller;
 #ifdef _WIN32

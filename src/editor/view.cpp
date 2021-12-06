@@ -3,12 +3,14 @@
 #include "time.hpp"
 #include "tools.hpp"
 #include "view.hpp"
+#include "window.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/id_renderer.hpp"
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "windows/frame_log_window.hpp"
+#include "windows/viewport_window.hpp"
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/imgui/imgui_impl_erhe.hpp"
@@ -17,6 +19,7 @@
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <backends/imgui_impl_glfw.h>
 
@@ -38,170 +41,38 @@ void Editor_view::connect()
     m_editor_time      = get<Editor_time     >();
     m_editor_tools     = get<Editor_tools    >();
     m_fly_camera_tool  = get<Fly_camera_tool >();
-    m_id_renderer      = get<Id_renderer     >();
+    m_frame_log_window = get<Frame_log_window>();
     m_operation_stack  = get<Operation_stack >();
+    m_pointer_context  = get<Pointer_context >();
     m_scene_manager    = get<Scene_manager   >();
     m_scene_root       = get<Scene_root      >();
+    m_viewport_windows = get<Viewport_windows>();
+    m_window           = get<Window          >();
 }
+
+static constexpr std::string_view c_swap_buffers{"swap buffers"};
 
 void Editor_view::update()
 {
+    ImGui_ImplErhe_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    m_frame_log_window->new_frame();
     m_editor_time->update();
-}
+    m_viewport_windows->update();
+    m_editor_tools->update_tools();
+    m_editor_rendering->render();
 
-void Editor_view::update_pointer()
-{
-    const glm::vec2 pointer = m_editor_rendering->to_scene_content(
-        glm::vec2{
-            pointer_context.mouse_x,
-            pointer_context.mouse_y
-        }
-    );
+    ImGui::EndFrame();
+    ImGui::Render();
+    ImGui_ImplErhe_RenderDrawData(ImGui::GetDrawData());
 
-    auto* camera = m_scene_manager->get_view_camera().get();
-
-    float z{1.0f};
-    pointer_context.camera                 = camera;
-    pointer_context.pointer_x              = static_cast<int>(pointer.x);
-    pointer_context.pointer_y              = static_cast<int>(pointer.y);
-    pointer_context.pointer_z              = z;
-    pointer_context.viewport.x             = 0;
-    pointer_context.viewport.y             = 0;
-    pointer_context.viewport.width         = m_editor_rendering->scene_viewport.width;
-    pointer_context.viewport.height        = m_editor_rendering->scene_viewport.height;
-    pointer_context.viewport.reverse_depth = m_editor_rendering->scene_viewport.reverse_depth;
-    pointer_context.scene_view_focus       = m_editor_rendering->is_content_in_focus();
-    pointer_context.geometry               = nullptr;
-
-    pointer_context.raytrace_hit_position = {};
-    pointer_context.raytrace_hit_normal   = {};
-    if (pointer_context.pointer_in_content_area())
     {
-        auto* frame_log = get<Frame_log_window>();
-        frame_log->new_frame();
+        ERHE_PROFILE_SCOPE(c_swap_buffers.data());
 
-        const glm::vec3 pointer_near  = pointer_context.position_in_world(1.0f);
-        const glm::vec3 pointer_far   = pointer_context.position_in_world(0.0f);
-        const glm::vec3 direction     = glm::normalize(pointer_far - pointer_near);
-        frame_log->log("Camera: {}", glm::vec3{camera->position_in_world()});
-        frame_log->log("Far: {}", pointer_far);
-        frame_log->log("Near: {}", pointer_near);
-        frame_log->log("Direction: {}", direction);
-        frame_log->log("Camera -Z: {}", glm::vec3{-camera->direction_in_world()});
-#if 0
-        const glm::vec3 origin        = pointer_near;
-        erhe::scene::Mesh*         hit_mesh      {nullptr};
-        erhe::geometry::Geometry*  hit_geometry  {nullptr};
-        erhe::geometry::Polygon_id hit_polygon_id{0};
-        float                      hit_t         {std::numeric_limits<float>::max()};
-        float                      hit_u         {0.0f};
-        float                      hit_v         {0.0f};
-        const auto& content_layer = m_scene_root->content_layer();
-        for (auto& mesh : content_layer.meshes)
-        {
-            erhe::geometry::Geometry*  geometry  {nullptr};
-            erhe::geometry::Polygon_id polygon_id{0};
-            float                      t         {std::numeric_limits<float>::max()};
-            float                      u         {0.0f};
-            float                      v         {0.0f};
-            const bool hit = erhe::raytrace::intersect(
-                *mesh.get(),
-                origin,
-                direction,
-                geometry,
-                polygon_id,
-                t,
-                u,
-                v
-            );
-            if (hit)
-            {
-                frame_log->log(
-                    "hit mesh {}, t = {}, polygon id = {}",
-                    mesh->name(),
-                    t,
-                    static_cast<uint32_t>(polygon_id)
-                );
-            }
-            if (hit && (t < hit_t))
-            {
-                hit_mesh       = mesh.get();
-                hit_geometry   = geometry;
-                hit_polygon_id = polygon_id;
-                hit_t          = t;
-                hit_u          = u;
-                hit_v          = v;
-            }
-        }
-        if (hit_t != std::numeric_limits<float>::max())
-        {
-            pointer_context.raytrace_hit_position = origin + hit_t * direction;
-            if (hit_polygon_id < hit_geometry->polygon_count())
-            {
-                auto* polygon_normals = hit_geometry->polygon_attributes().find<glm::vec3>(c_polygon_normals);
-                if ((polygon_normals != nullptr) && polygon_normals->has(hit_polygon_id))
-                {
-                    auto local_normal    = polygon_normals->get(hit_polygon_id);
-                    auto world_from_node = hit_mesh->world_from_node();
-                    pointer_context.raytrace_local_index = static_cast<size_t>(hit_polygon_id);
-                    pointer_context.raytrace_hit_normal = glm::vec3{
-                        world_from_node * glm::vec4{local_normal, 0.0f}
-                    };
-                }
-            }
-        }
-#endif
+        m_window->get_context_window()->swap_buffers();
     }
-
-    if (pointer_context.pointer_in_content_area() && m_id_renderer)
-    {
-        auto mesh_primitive = m_id_renderer->get(
-            pointer_context.pointer_x,
-            pointer_context.pointer_y,
-            pointer_context.pointer_z
-        );
-        pointer_context.hover_valid = mesh_primitive.valid;
-        if (pointer_context.hover_valid)
-        {
-            pointer_context.hover_mesh        = mesh_primitive.mesh;
-            pointer_context.hover_layer       = mesh_primitive.layer;
-            pointer_context.hover_primitive   = mesh_primitive.mesh_primitive_index;
-            pointer_context.hover_local_index = mesh_primitive.local_index;
-            pointer_context.hover_tool        = pointer_context.hover_layer == m_scene_root->tool_layer().get();
-            pointer_context.hover_content     = pointer_context.hover_layer == &m_scene_root->content_layer();
-            if (pointer_context.hover_mesh != nullptr)
-            {
-                const auto& primitive        = pointer_context.hover_mesh->data.primitives[pointer_context.hover_primitive];
-                auto*       geometry         = primitive.primitive_geometry->source_geometry.get();
-                pointer_context.geometry     = geometry;
-                pointer_context.hover_normal = {};
-                if (geometry != nullptr)
-                {
-                    Polygon_id polygon_id = static_cast<Polygon_id>(pointer_context.hover_local_index);
-                    if (polygon_id < geometry->polygon_count())
-                    {
-                        auto* polygon_normals = geometry->polygon_attributes().find<glm::vec3>(c_polygon_normals);
-                        if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id))
-                        {
-                            auto local_normal    = polygon_normals->get(polygon_id);
-                            auto world_from_node = pointer_context.hover_mesh->world_from_node();
-                            pointer_context.hover_normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
-                        }
-                    }
-                }
-            }
-        }
-        // else mesh etc. contain latest valid values
-    }
-    else
-    {
-        pointer_context.hover_valid       = false;
-        pointer_context.hover_mesh        = nullptr;
-        pointer_context.hover_primitive   = 0;
-        pointer_context.hover_local_index = 0;
-    }
-
-    pointer_context.frame_number = m_editor_time->m_frame_number;
 }
 
 void Editor_view::on_enter()
@@ -223,14 +94,23 @@ void Editor_view::on_key(
 {
     ImGuiIO& io = ImGui::GetIO();
 
-    if (io.WantCaptureKeyboard && !m_editor_rendering->is_content_in_focus() && pressed)
+    m_frame_log_window->log(
+        "key pressed = {} code = {}, modifier_mask = {:04x}",
+        pressed,
+        code,
+        modifier_mask
+    );
+
+    if (
+        io.WantCaptureKeyboard &&
+        (m_pointer_context->window() == nullptr) &&
+        pressed
+    )
     {
         return;
     }
 
-    pointer_context.shift   = (modifier_mask & Key_modifier_bit_shift) == Key_modifier_bit_shift;
-    pointer_context.alt     = (modifier_mask & Key_modifier_bit_menu ) == Key_modifier_bit_menu;
-    pointer_context.control = (modifier_mask & Key_modifier_bit_ctrl ) == Key_modifier_bit_ctrl;
+    m_pointer_context->update_keyboard(pressed, code, modifier_mask);
 
     switch (code)
     {
@@ -250,7 +130,10 @@ void Editor_view::on_key(
         {
             case Keycode::Key_z:
             {
-                if (pointer_context.control && m_operation_stack->can_undo())
+                if (
+                    m_pointer_context->control_key_down() &&
+                    m_operation_stack->can_undo()
+                )
                 {
                     m_operation_stack->undo();
                 }
@@ -259,7 +142,10 @@ void Editor_view::on_key(
 
             case Keycode::Key_y:
             {
-                if (pointer_context.control && m_operation_stack->can_redo())
+                if (
+                    m_pointer_context->control_key_down() &&
+                    m_operation_stack->can_redo()
+                )
                 {
                     m_operation_stack->redo();
                 }
@@ -284,31 +170,57 @@ void Editor_view::on_mouse_click(
     const int                         count
 )
 {
+    m_frame_log_window->log(
+        "mouse button = {} count = {}",
+        button,
+        count
+    );
+
+    m_pointer_context->update_mouse(button, count);
+
     ImGuiIO& io = ImGui::GetIO();
-    if (io.WantCaptureMouse && !m_editor_rendering->is_content_in_focus() && (count > 0))
+    auto* frame_log = get<Frame_log_window>();
+
+    const bool want_capture        = io.WantCaptureMouse;
+    const bool pointer_in_viewport = m_pointer_context->window() != nullptr;
+    frame_log->log(
+        "button = {}, count = {}, want capture = {}, pointer in viewport = {}",
+        button,
+        count,
+        want_capture,
+        pointer_in_viewport
+    );
+    if (
+        want_capture &&
+        !pointer_in_viewport &&
+        (count > 0)
+    )
     {
         return;
     }
-
-    pointer_context.mouse_button[button].pressed  = (count > 0);
-    pointer_context.mouse_button[button].released = (count == 0);
-    pointer_context.mouse_moved                   = false;
 
     m_editor_tools->on_pointer();
 }
 
 void Editor_view::on_mouse_move(const double x, const double y)
 {
+    m_frame_log_window->log(
+        "mouse x = {} y = {}",
+        x,
+        y
+    );
+
+    m_pointer_context->update_mouse(x, y);
+
     ImGuiIO& io = ImGui::GetIO();
-    if (io.WantCaptureMouse && !m_editor_rendering->is_content_in_focus())
+    if (
+        io.WantCaptureMouse && 
+        (m_pointer_context->window() == nullptr)
+    )
     {
         return;
     }
 
-    pointer_context.mouse_moved = true;
-    pointer_context.mouse_x     = x;
-    pointer_context.mouse_y     = y;
-    update_pointer();
     m_editor_tools->on_pointer();
 }
 

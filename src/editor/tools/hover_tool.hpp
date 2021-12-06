@@ -19,16 +19,18 @@ namespace erhe::primitive {
 namespace editor
 {
 
+class Line_renderer;
+class Pointer_context;
 class Scene_root;
+class Text_renderer;
 
 class Hover_tool
     : public erhe::components::Component
     , public Tool
-    , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name {"Hover_tool"};
-    static constexpr std::string_view c_title{"Hover"};
+    static constexpr std::string_view c_name       {"Hover_tool"};
+    static constexpr std::string_view c_description{"Hover_tool"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Hover_tool ();
@@ -40,23 +42,23 @@ public:
     void initialize_component() override;
 
     // Implements Tool
-    auto update     (Pointer_context& pointer_context) -> bool override;
-    void render     (const Render_context& render_context)     override;
-    auto state      () const -> State                          override;
-    auto description() -> const char*                          override;
-
-    // Implements Imgui_window
-    void imgui(Pointer_context& pointer_context) override;
+    auto tool_update() -> bool                      override;
+    void tool_render(const Render_context& context) override;
+    auto state      () const -> State               override;
+    auto description() -> const char*               override;
 
 private:
     void deselect();
-    void select  (Pointer_context& pointer_context);
+    void select  ();
 
-    Scene_root*                        m_scene_root{nullptr};
+    Line_renderer*                     m_line_renderer  {nullptr};
+    Pointer_context*                   m_pointer_context{nullptr};
+    Scene_root*                        m_scene_root     {nullptr};
+    Text_renderer*                     m_text_renderer  {nullptr};
 
     std::shared_ptr<erhe::scene::Mesh> m_hover_mesh           {nullptr};
     size_t                             m_hover_primitive_index{0};
-    std::optional<glm::vec3>           m_hover_position;
+    //std::optional<glm::vec2>           m_hover_position;
     std::optional<glm::vec3>           m_hover_position_world;
     std::optional<glm::vec3>           m_hover_normal;
     bool                               m_hover_content        {false};

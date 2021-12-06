@@ -46,8 +46,7 @@ public:
 
     void render(
         const Mesh_layer_collection&    mesh_layers,
-        const erhe::scene::Light_layer& light_layer,
-        const erhe::scene::ICamera&     camera
+        const erhe::scene::Light_layer& light_layer
     );
     auto texture () const -> erhe::graphics::Texture*;
     auto viewport() const -> erhe::scene::Viewport;

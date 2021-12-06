@@ -115,7 +115,7 @@ void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
     }
 }
 
-void Node_tree_window::imgui(Pointer_context&)
+void Node_tree_window::imgui()
 {
     const auto& scene = m_scene_root->scene();
     ImGui::Begin("Node Tree");

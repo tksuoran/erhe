@@ -42,10 +42,10 @@ public:
     void initialize_component() override;
 
     // Implements Imgui_window
-    void imgui(Pointer_context& pointer_context) override;
+    void imgui() override;
 
 private:
-    auto get_icon(const erhe::scene::Light_type type) const -> const ImVec2;
+    //auto get_icon(const erhe::scene::Light_type type) const -> const ImVec2;
 
     Scene_root*     m_scene_root    {nullptr};
     Selection_tool* m_selection_tool{nullptr};

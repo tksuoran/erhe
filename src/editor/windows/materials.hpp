@@ -33,13 +33,13 @@ public:
     void initialize_component() override;
 
     // Implements Imgui_window
-    void imgui(Pointer_context& pointer_context) override;
+    void imgui() override;
 
     auto selected_material() const -> std::shared_ptr<erhe::primitive::Material>;
 
 private:
-    void add_material(const std::shared_ptr<erhe::primitive::Material>& material);
-    void materials();
+    //void add_material(const std::shared_ptr<erhe::primitive::Material>& material);
+    //void materials();
 
     Scene_root*                                             m_scene_root{nullptr};
 

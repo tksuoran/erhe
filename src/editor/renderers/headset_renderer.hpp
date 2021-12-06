@@ -41,11 +41,11 @@ public:
         Editor_rendering&      rendering
     );
 
-    std::shared_ptr<erhe::graphics::Texture>      color_texture;
-    std::shared_ptr<erhe::graphics::Texture>      depth_texture;
-    std::unique_ptr<erhe::graphics::Framebuffer>  framebuffer;
-    std::shared_ptr<erhe::scene::Camera>          camera;
-    bool                                          is_valid{false};
+    std::shared_ptr<erhe::graphics::Texture>     color_texture;
+    std::shared_ptr<erhe::graphics::Texture>     depth_texture;
+    std::unique_ptr<erhe::graphics::Framebuffer> framebuffer;
+    std::shared_ptr<erhe::scene::Camera>         camera;
+    bool                                         is_valid{false};
 };
 
 class Controller_visualization

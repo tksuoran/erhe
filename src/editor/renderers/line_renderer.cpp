@@ -159,6 +159,8 @@ void Line_renderer::Pipeline::initialize(Shader_monitor* shader_monitor)
     }
 }
 
+Line_renderer::Style::Style() = default;
+
 void Line_renderer::Style::create_frame_resources(
     Pipeline*                  pipeline,
     const Configuration* const configuration

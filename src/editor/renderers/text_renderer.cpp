@@ -81,7 +81,13 @@ void Text_renderer::initialize_component()
         storage_mask
     );
 
-    erhe::graphics::Scoped_buffer_mapping<uint16_t> index_buffer_map(*m_index_buffer.get(), 0, index_count, access_mask);
+    erhe::graphics::Scoped_buffer_mapping<uint16_t> index_buffer_map{
+        *m_index_buffer.get(),
+        0,
+        index_count,
+        access_mask
+    };
+
     auto     gpu_index_data = index_buffer_map.span();
     size_t   offset      {0};
     uint16_t vertex_index{0};
@@ -103,19 +109,40 @@ void Text_renderer::initialize_component()
     m_attribute_mappings.add(gl::Attribute_type::float_vec2, "a_texcoord", {erhe::graphics::Vertex_attribute::Usage_type::tex_coord, 0}, 2);
 
     m_vertex_format.make_attribute(
-        {erhe::graphics::Vertex_attribute::Usage_type::position, 0},
+        {
+            erhe::graphics::Vertex_attribute::Usage_type::position,
+            0
+        },
         gl::Attribute_type::float_vec3,
-        {gl::Vertex_attrib_type::float_, false, 3}
+        {
+            gl::Vertex_attrib_type::float_,
+            false,
+            3
+        }
     );
     m_vertex_format.make_attribute(
-        {erhe::graphics::Vertex_attribute::Usage_type::color, 0},
+        {
+            erhe::graphics::Vertex_attribute::Usage_type::color,
+            0
+        },
         gl::Attribute_type::float_vec4,
-        {gl::Vertex_attrib_type::unsigned_byte, true, 4}
+        {
+            gl::Vertex_attrib_type::unsigned_byte,
+            true,
+            4
+        }
     );
     m_vertex_format.make_attribute(
-        {erhe::graphics::Vertex_attribute::Usage_type::tex_coord, 0},
+        {
+            erhe::graphics::Vertex_attribute::Usage_type::tex_coord,
+            0
+        },
         gl::Attribute_type::float_vec2,
-        {gl::Vertex_attrib_type::float_, false, 2}
+        {
+            gl::Vertex_attrib_type::float_,
+            false,
+            2
+        }
     );
 
     m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
@@ -141,7 +168,7 @@ void Text_renderer::initialize_component()
     create_info.add_interface_block(m_projection_block.get());
     create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
     create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
-    Shader_stages::Prototype prototype(create_info);
+    Shader_stages::Prototype prototype{create_info};
     m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
 
     create_frame_resources();
@@ -153,7 +180,7 @@ void Text_renderer::create_frame_resources()
 {
     ERHE_PROFILE_FUNCTION
 
-    constexpr size_t vertex_count = 65536;
+    constexpr size_t vertex_count{65536};
     for (size_t i = 0; i < s_frame_resources_count; ++i)
     {
         m_frame_resources.emplace_back(
@@ -175,8 +202,10 @@ auto Text_renderer::current_frame_resources() -> Text_renderer::Frame_resources&
 void Text_renderer::next_frame()
 {
     m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % s_frame_resources_count;
-    m_vertex_writer.reset();
-    m_quad_count = 0;
+    m_vertex_writer    .reset();
+    m_projection_writer.reset();
+    m_index_range_first = 0;
+    m_index_count       = 0;
 }
 
 void Text_renderer::print(
@@ -186,34 +215,38 @@ void Text_renderer::print(
 {
     ERHE_PROFILE_FUNCTION
 
-    auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+    m_vertex_writer.begin(current_frame_resources().vertex_buffer.target());
 
-    m_vertex_writer.begin();
-
-    std::byte* const    start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
-    const size_t        byte_count = vertex_gpu_data.size_bytes();
-    const size_t        word_count = byte_count / sizeof(float);
-    gsl::span<float>    gpu_float_data(reinterpret_cast<float* const   >(start), word_count);
-    gsl::span<uint32_t> gpu_uint_data (reinterpret_cast<uint32_t* const>(start), word_count);
+    auto                vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+    std::byte* const    start           = vertex_gpu_data.data()       + m_vertex_writer.write_offset;
+    const size_t        byte_count      = vertex_gpu_data.size_bytes() - m_vertex_writer.write_offset;
+    const size_t        word_count      = byte_count / sizeof(float);
+    gsl::span<float>    gpu_float_data{reinterpret_cast<float* const   >(start), word_count};
+    gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t* const>(start), word_count};
 
     erhe::ui::Rectangle bounding_box;
+    const vec3          snapped_position{
+        std::floor(text_position.x + 0.5f),
+        std::floor(text_position.y + 0.5f),
+        text_position.z
+    };
     const size_t quad_count = m_font->print(
         gpu_float_data,
         gpu_uint_data,
         text,
-        text_position,
+        snapped_position,
         text_color,
         bounding_box
     );
     m_vertex_writer.write_offset += quad_count * 4 * m_vertex_format.stride();
-    m_quad_count += quad_count;
     m_vertex_writer.end();
+    m_index_count += quad_count * 5;
 }
 
 static constexpr std::string_view c_text_renderer_render{"Text_renderer::render()"};
 void Text_renderer::render(erhe::scene::Viewport viewport)
 {
-    if (m_quad_count == 0)
+    if (m_index_count == 0)
     {
         return;
     }
@@ -229,15 +262,24 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
         c_text_renderer_render.data()
     );
 
+    m_projection_writer.begin(current_frame_resources().projection_buffer.target());
+
+    auto* const      projection_buffer   = &current_frame_resources().projection_buffer;
+    auto             projection_gpu_data = projection_buffer->map();
+    std::byte* const start               = projection_gpu_data.data()       + m_projection_writer.write_offset;
+    const size_t     byte_count          = projection_gpu_data.size_bytes() - m_projection_writer.write_offset;
+    const size_t     word_count          = byte_count / sizeof(float);
+    gsl::span<float> gpu_float_data{reinterpret_cast<float* const>(start), word_count};
+
     const mat4 clip_from_window = erhe::toolkit::create_orthographic(
         static_cast<float>(viewport.x), static_cast<float>(viewport.width),
         static_cast<float>(viewport.y), static_cast<float>(viewport.height),
         0.0f,
         1.0f
     );
-    auto* const projection_buffer   = &current_frame_resources().projection_buffer;
-    auto        projection_gpu_data = projection_buffer->map();
-    write(projection_gpu_data, 0, as_span(clip_from_window));
+    write(gpu_float_data, 0, as_span(clip_from_window));
+    m_projection_writer.write_offset += 4 * 4 * sizeof(float);
+    m_projection_writer.end();
 
     const auto& pipeline = current_frame_resources().pipeline;
 
@@ -262,20 +304,22 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
         projection_buffer->target(),
         static_cast<GLuint>    (m_projection_block->binding_point()),
         static_cast<GLuint>    (projection_buffer->gl_name()),
-        static_cast<GLintptr>  (0),
+        static_cast<GLintptr>  (m_projection_writer.range.first_byte_offset),
         static_cast<GLsizeiptr>(4 * 4 * sizeof(float))
     );
 
-    const size_t index_count = 5 * m_quad_count;
     gl::draw_elements(
         pipeline.input_assembly->primitive_topology,
-        static_cast<GLsizei>(index_count),
+        static_cast<GLsizei>(m_index_count),
         gl::Draw_elements_type::unsigned_short,
-        nullptr
+        reinterpret_cast<const void*>(m_index_range_first * 2)
     );
     gl::disable(gl::Enable_cap::primitive_restart_fixed_index);
 
     gl::pop_debug_group();
+
+    m_index_range_first += m_index_count;
+    m_index_count = 0;
 }
 
 

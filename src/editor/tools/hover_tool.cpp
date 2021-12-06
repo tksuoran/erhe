@@ -1,5 +1,6 @@
 #include "hover_tool.hpp"
 #include "log.hpp"
+#include "rendering.hpp"
 #include "tools.hpp"
 #include "tools/hover_tool.hpp"
 #include "tools/pointer_context.hpp"
@@ -27,7 +28,6 @@ using namespace erhe::geometry;
 
 Hover_tool::Hover_tool()
     : erhe::components::Component{c_name}
-    , Imgui_window               {c_title}
 {
 }
 
@@ -35,7 +35,7 @@ Hover_tool::~Hover_tool() = default;
 
 auto Hover_tool::description() -> const char*
 {
-    return c_name.data();
+    return c_description.data();
 }
 
 auto Hover_tool::state() const -> State
@@ -45,7 +45,10 @@ auto Hover_tool::state() const -> State
 
 void Hover_tool::connect()
 {
-    m_scene_root = require<Scene_root>();
+    m_line_renderer   = get<Line_renderer>();
+    m_pointer_context = get<Pointer_context>();
+    m_scene_root      = require<Scene_root>();
+    m_text_renderer   = get<Text_renderer>();
     require<Editor_tools>();
 }
 
@@ -56,30 +59,37 @@ void Hover_tool::initialize_component()
     get<Editor_tools>()->register_background_tool(this);
 }
 
-auto Hover_tool::update(Pointer_context& pointer_context) -> bool
+auto Hover_tool::tool_update() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    m_hover_position = glm::vec3{
-        pointer_context.pointer_x,
-        pointer_context.pointer_y,
-        pointer_context.pointer_z
-    };
-    m_hover_content        = pointer_context.hover_content;
-    m_hover_tool           = pointer_context.hover_tool;
-    m_hover_position_world = m_hover_content && pointer_context.hover_valid ? pointer_context.position_in_world() : std::optional<glm::vec3>{};
-    m_hover_normal         = m_hover_content && pointer_context.hover_valid ? pointer_context.hover_normal        : std::optional<glm::vec3>{};
-    if ((pointer_context.hover_mesh      != m_hover_mesh) ||
-        (pointer_context.hover_primitive != m_hover_primitive_index))
+    if (m_pointer_context->window() == nullptr)
+    {
+        m_hover_content = false;
+        m_hover_tool    = false;
+        m_hover_position_world.reset();
+        m_hover_normal.reset();
+        deselect();
+        return false;
+    }
+
+    m_hover_content        = m_pointer_context->hovering_over_content();
+    m_hover_tool           = m_pointer_context->hovering_over_tool();
+    m_hover_position_world = m_hover_content ? m_pointer_context->position_in_world() : std::optional<glm::vec3>{};
+    m_hover_normal         = m_hover_content ? m_pointer_context->hover_normal()      : std::optional<glm::vec3>{};
+    if (
+        (m_pointer_context->hover_mesh()      != m_hover_mesh) ||
+        (m_pointer_context->hover_primitive() != m_hover_primitive_index)
+    )
     {
         deselect();
-        select(pointer_context);
+        select();
         return false;
     }
     return false;
 }
 
-void Hover_tool::render(const Render_context& render_context)
+void Hover_tool::tool_render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -87,6 +97,7 @@ void Hover_tool::render(const Render_context& render_context)
         m_hover_content ? 0xffffffffu :
         m_hover_tool    ? 0xffff0000u :
                           0xff0000ffu; // abgr
+
     if (m_hover_mesh != nullptr)
     {
         if (m_enable_color_highlight)
@@ -96,49 +107,37 @@ void Hover_tool::render(const Render_context& render_context)
             m_hover_material->emissive = m_original_primitive_material->emissive + t * m_hover_emissive;
         }
 
-        if (m_hover_position.has_value())
+        if (
+            (context.window != nullptr) &&
+            m_hover_position_world.has_value()
+        )
         {
-            auto position = m_hover_position.value();
-            position.x += 50.0f;
-            position.z  = -0.5f;
+            const auto position_in_viewport = context.window->project_to_viewport(m_hover_position_world.value());
+            glm::vec3 position_at_fixed_depth{
+                position_in_viewport.x + 50.0f,
+                position_in_viewport.y,
+                -0.5f
+            };
             std::string text = fmt::format(
                 "{}",
                 m_hover_mesh->name()
-                //m_hover_mesh->position_in_world()
             );
-            //std::string text = fmt::format(
-            //    "{} {} {} {}",
-            //    m_hover_mesh->name(),
-            //    render_context.pointer_context->hover_primitive,
-            //    render_context.pointer_context->hover_local_index,
-            //    render_context.pointer_context->pointer_z
-            //);
-
-            //std::string text = fmt::format(
-            //    "I:{} RI:{} HP:{} RP:{}",
-            //    render_context.pointer_context->hover_local_index,
-            //    render_context.pointer_context->raytrace_local_index,
-            //    m_hover_position_world.has_value()
-            //        ? glm::vec3{m_hover_position_world.value()}
-            //        : glm::vec3{0.0},
-            //    render_context.pointer_context->raytrace_hit_position
-            //);
-
-            render_context.text_renderer->print(
-                position,
+            m_text_renderer->print(
+                position_at_fixed_depth,
                 text_color,
                 text
             );
-                //"{}",
-                //m_hover_mesh->name());
-                //static_cast<int>(render_context.pointer_context->hover_primitive));
         }
-        if (m_hover_position_world.has_value() && m_hover_normal.has_value())
+
+        if (
+            m_hover_position_world.has_value() &&
+            m_hover_normal.has_value()
+        )
         {
             const glm::vec3 p0 = m_hover_position_world.value() + 0.1f * m_hover_normal.value();
             const glm::vec3 p1 = m_hover_position_world.value() + 1.1f * m_hover_normal.value();
-            render_context.line_renderer->hidden.set_line_color(0xff0000ffu);
-            render_context.line_renderer->hidden.add_lines(
+            m_line_renderer->hidden.set_line_color(0xff0000ffu);
+            m_line_renderer->hidden.add_lines(
                 {
                     {
                         p0,
@@ -148,6 +147,7 @@ void Hover_tool::render(const Render_context& render_context)
                 10.0f
             );
         }
+#if 0
         const glm::vec3 p0 = render_context.pointer_context->raytrace_hit_position;
         const glm::vec3 p1 = p0 + render_context.pointer_context->raytrace_hit_normal;
         const bool same_polygon = render_context.pointer_context->raytrace_local_index == render_context.pointer_context->hover_local_index;
@@ -162,6 +162,7 @@ void Hover_tool::render(const Render_context& render_context)
             },
             10.0f
         );
+#endif
     }
 }
 
@@ -183,18 +184,18 @@ void Hover_tool::deselect()
     }
 }
      
-void Hover_tool::select(Pointer_context& pointer_context)
+void Hover_tool::select()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (pointer_context.hover_mesh == nullptr)
+    if (m_pointer_context->hover_mesh() == nullptr)
     {
         return;
     }
 
     // Update hover information
-    m_hover_mesh            = pointer_context.hover_mesh;
-    m_hover_primitive_index = pointer_context.hover_primitive;
+    m_hover_mesh            = m_pointer_context->hover_mesh();
+    m_hover_primitive_index = m_pointer_context->hover_primitive();
 
     if (m_enable_color_highlight)
     {
@@ -217,23 +218,6 @@ void Hover_tool::select(Pointer_context& pointer_context)
             m_hover_material->index
         );
     }
-}
-
-void Hover_tool::imgui(Pointer_context&)
-{
-
-    //ImGui::Begin("Hover");
-    //if (m_hover_mesh != nullptr)
-    //{
-    //    ImGui::Text("Mesh: %s", m_hover_mesh->name().c_str());
-    //    const auto* node = m_hover_mesh->node().get();
-    //    if (node != nullptr)
-    //    {
-    //        ImGui::Text("Node: %s", node->name.c_str());
-    //    }
-    //}
-    //ImGui::ColorEdit4("Highlight Color", &m_hover_emissive.x, ImGuiColorEditFlags_Float);
-    //ImGui::End();
 }
 
 }

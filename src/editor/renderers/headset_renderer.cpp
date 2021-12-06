@@ -6,12 +6,15 @@
 #include "window.hpp"
 #include "renderers/line_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "renderers/text_renderer.hpp"
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/fly_camera_tool.hpp"
 
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/graphics/framebuffer.hpp"
+#include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/camera.hpp"
@@ -70,8 +73,8 @@ Headset_view_resources::Headset_view_resources(
     //                                                             render_view.height);
 
     Framebuffer::Create_info create_info;
-    create_info.attach(gl::Framebuffer_attachment::color_attachment0,  color_texture.get());
-    create_info.attach(gl::Framebuffer_attachment::depth_attachment,   depth_texture.get());
+    create_info.attach(gl::Framebuffer_attachment::color_attachment0, color_texture.get());
+    create_info.attach(gl::Framebuffer_attachment::depth_attachment,  depth_texture.get());
     //create_info.attach(gl::Framebuffer_attachment::stencil_attachment, depth_stencil_renderbuffer.get());
     framebuffer = std::make_unique<Framebuffer>(create_info);
     framebuffer->set_debug_label("Headset_view_resources");
@@ -86,14 +89,15 @@ Headset_view_resources::Headset_view_resources(
     gl::named_framebuffer_draw_buffers(framebuffer->gl_name(), 1, &draw_buffers[0]);
     gl::named_framebuffer_read_buffer (framebuffer->gl_name(), gl::Color_buffer::color_attachment0);
 
-    camera = std::make_shared<erhe::scene::Camera>("Camera");
+    camera = std::make_shared<erhe::scene::Camera>("Headset Camera");
 
     auto scene_root = rendering.get<Scene_root>();
     scene_root->scene().cameras.push_back(camera);
 
     scene_root->scene().nodes.emplace_back(camera);
     scene_root->scene().nodes_sorted = false;
-    auto view_camera = rendering.get<Scene_manager>()->get_view_camera().get();
+
+    auto view_camera = rendering.get<Fly_camera_tool>()->camera();
     view_camera->attach(camera);
     //camera->parent = rendering.get<Scene_manager>()->get_view_camera()->get();
     //camera_node->parent = nullptr;
@@ -195,9 +199,26 @@ void Headset_renderer::render()
     auto frame_timing = m_headset->begin_frame();
     if (frame_timing.should_render)
     {
-        if (m_line_renderer)
+        struct Context
         {
-            auto line_renderer = m_line_renderer->hidden;
+            erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker;
+            Configuration*                        configuration;
+            Scene_manager*                        scene_manager;
+            Line_renderer*                        line_renderer;
+            Text_renderer*                        text_renderer;
+        };
+        Context context
+        {
+            get<erhe::graphics::OpenGL_state_tracker>(),
+            get<Configuration>(),
+            get<Scene_manager>(),
+            get<Line_renderer>(),
+            get<Text_renderer>()
+        };
+
+        if (context.line_renderer)
+        {
+            auto& line_renderer = context.line_renderer->hidden;
             constexpr uint32_t red   = 0xff0000ffu;
             constexpr uint32_t green = 0xff00ff00u;
             constexpr uint32_t blue  = 0xffff0000u;
@@ -205,10 +226,10 @@ void Headset_renderer::render()
             auto  controller_position  = controller_node->position_in_world();
             auto  controller_direction = controller_node->direction_in_world();
             auto  end_position         = controller_position - m_headset->trigger_value() * 2.0f * controller_direction;
-            glm::vec3 origo {0.0f, 0.0f, 0.0f};
-            glm::vec3 unit_x{1.0f, 0.0f, 0.0f};
-            glm::vec3 unit_y{0.0f, 1.0f, 0.0f};
-            glm::vec3 unit_z{0.0f, 0.0f, 1.0f};
+            const glm::vec3 origo {0.0f, 0.0f, 0.0f};
+            const glm::vec3 unit_x{1.0f, 0.0f, 0.0f};
+            const glm::vec3 unit_y{0.0f, 1.0f, 0.0f};
+            const glm::vec3 unit_z{0.0f, 0.0f, 1.0f};
             line_renderer.set_line_color(red);
             line_renderer.add_lines({{origo, unit_x}}, 10.0f);
             line_renderer.set_line_color(green);
@@ -219,14 +240,17 @@ void Headset_renderer::render()
             line_renderer.add_lines({{controller_position, end_position }}, 10.0f);
         }
 
-        auto callback = [this](erhe::xr::Render_view& render_view) -> bool {
+        auto callback = [this, &context](
+            erhe::xr::Render_view& render_view
+        ) -> bool
+        {
             auto& view_resources = get_headset_view_resources(render_view);
             if (!view_resources.is_valid)
             {
                 return false;
             }
             view_resources.update(render_view, *m_editor_rendering);
-            auto* framebuffer    = view_resources.framebuffer.get();
+            auto* framebuffer = view_resources.framebuffer.get();
             gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
             auto status = gl::check_named_framebuffer_status(framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
             if (status != gl::Framebuffer_status::framebuffer_complete)
@@ -241,16 +265,35 @@ void Headset_renderer::render()
             viewport.reverse_depth = get<Configuration>()->reverse_depth;
             gl::viewport(0, 0, render_view.width, render_view.height);
 
-            m_editor_rendering->render_clear_primary();
+            context.pipeline_state_tracker->shader_stages.reset();
+            context.pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
+            gl::viewport(
+                viewport.x,
+                viewport.y,
+                viewport.width,
+                viewport.height
+            );
+            gl::enable(gl::Enable_cap::framebuffer_srgb);
+            gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
+            gl::clear_depth_f(*context.configuration->depth_clear_value_pointer());
+            gl::clear(
+                gl::Clear_buffer_mask::color_buffer_bit |
+                gl::Clear_buffer_mask::depth_buffer_bit
+            );
 
             if (!m_headset->squeeze_click())
             {
-                auto* camera = view_resources.camera.get();
-                m_editor_rendering->render_content(camera, viewport);
+                Render_context render_context {
+                    nullptr, // Viewport_window*
+                    nullptr, // Viewport_config*
+                    as_icamera(view_resources.camera.get()), // camera
+                    viewport
+                };
+                m_editor_rendering->render_content(render_context);
 
                 if (m_line_renderer && m_headset->trigger_value() > 0.0f)
                 {
-                    m_line_renderer->render(viewport, *camera);
+                    m_line_renderer->render(viewport, *render_context.camera);
                 }
             }
 
@@ -283,7 +326,7 @@ void Headset_renderer::initialize_component()
     m_headset = std::make_unique<erhe::xr::Headset>(get<Window>()->get_context_window());
 
     auto  mesh_memory = get<Mesh_memory>();
-    auto* view_root   = m_scene_manager->get_view_camera().get();
+    auto* view_root   = get<Fly_camera_tool>()->camera();
 
     m_controller_visualization = std::make_unique<Controller_visualization>(
         *mesh_memory,

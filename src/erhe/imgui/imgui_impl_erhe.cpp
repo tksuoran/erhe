@@ -254,9 +254,9 @@ public:
         uint8_t linear_to_srgb[256];
         for (size_t i = 0; i < 256; ++i)
         {
-            float linear  = static_cast<float>(i) / 255.0f;
-            float srgb    = erhe::toolkit::linear_rgb_to_srgb(linear);
-            float srgb_u8 = std::min(255.0f * srgb, 255.0f);
+            const float linear  = static_cast<float>(i) / 255.0f;
+            const float srgb    = erhe::toolkit::linear_rgb_to_srgb(linear);
+            const float srgb_u8 = std::min(255.0f * srgb, 255.0f);
             linear_to_srgb[i] = static_cast<uint8_t>(srgb_u8);
         }
 
@@ -276,9 +276,16 @@ public:
         font_texture = std::make_unique<erhe::graphics::Texture>(create_info);
         font_texture->set_debug_label("ImGui Font");
         //gsl::span<const std::byte> image_data{reinterpret_cast<const std::byte*>(pixels), byte_count};
-        gsl::span<const std::byte> image_data{reinterpret_cast<const std::byte*>(post_processed_data.data()), byte_count};
-        font_texture->upload(create_info.internal_format, image_data,
-                             create_info.width, create_info.height);
+        gsl::span<const std::byte> image_data{
+            reinterpret_cast<const std::byte*>(post_processed_data.data()),
+            byte_count
+        };
+        font_texture->upload(
+            create_info.internal_format,
+            image_data,
+            create_info.width,
+            create_info.height
+        );
 
         // Store our identifier
         io.Fonts->SetTexID((ImTextureID)(intptr_t)font_texture.get());
@@ -296,14 +303,33 @@ public:
         linear_sampler = make_unique<erhe::graphics::Sampler>(
             gl::Texture_min_filter::linear,
             gl::Texture_mag_filter::linear
-            );
+        );
 
         // Point shader uniforms to texture units.
         // Also apply nearest filter, non-mipmapped sampler.
         const int location = samplers->location();
-        for (int texture_unit = 0;
-             texture_unit < static_cast<int>(samplers->array_size().value());
-             ++texture_unit)
+        int texture_unit = 0;
+        for (
+            texture_unit = 0;
+            texture_unit < static_cast<int>(samplers->array_size().value());
+            ++texture_unit
+        )
+        {
+            gl::program_uniform_1i(
+                shader_stages->gl_name(),
+                location + texture_unit,
+                texture_unit
+            );
+            gl::bind_sampler(
+                texture_unit,
+                nearest_sampler->gl_name()
+            );
+        }
+        for (
+            ;
+            texture_unit < texture_unit_count;
+            ++texture_unit
+        )
         {
             gl::program_uniform_1i(
                 shader_stages->gl_name(),
@@ -365,13 +391,17 @@ public:
 
     erhe::graphics::Color_blend_state           color_blend_state
     {
-        true,                                       // enabled
-        {gl::Blend_equation_mode::func_add,         // rgb.equation_mode
-         gl::Blending_factor::src_alpha,            // rgb.source_factor
-         gl::Blending_factor::one_minus_src_alpha}, // rgb.destination_factor
-        {gl::Blend_equation_mode::func_add,         // alpha.equation_mode
-         gl::Blending_factor::one,                  // alpha.source_factor
-         gl::Blending_factor::one_minus_src_alpha}  // alpha.destination_factor
+        true,                                           // enabled
+        {
+            gl::Blend_equation_mode::func_add,          // rgb.equation_mode
+            gl::Blending_factor::src_alpha,             // rgb.source_factor
+            gl::Blending_factor::one_minus_src_alpha    // rgb.destination_factor
+        },
+        {
+            gl::Blend_equation_mode::func_add,          // alpha.equation_mode
+            gl::Blending_factor::one,                   // alpha.source_factor
+            gl::Blending_factor::one_minus_src_alpha    // alpha.destination_factor
+        }                                               
     };
 
 private:
@@ -383,44 +413,64 @@ private:
 
 Imgui_renderer imgui_renderer;
 
+template <size_t texture_unit_count>
 class Texture_unit_cache
 {
 public:
-    explicit Texture_unit_cache(size_t texture_unit_count)
+    explicit Texture_unit_cache()
     {
-        m_textures.resize(texture_unit_count);
+        create_dummy_texture();
         reset();
+    }
+
+    void create_dummy_texture()
+    {
+        erhe::graphics::Texture::Create_info create_info;
+        m_dummy_texture = std::make_unique<erhe::graphics::Texture>(create_info);
+        m_dummy_texture->set_debug_label("ImGui Dummy");
+        std::array<uint8_t, 4> dummy_pixel{ 0xee, 0x11, 0xdd, 0xff };
+        gsl::span<const std::byte> image_data{
+            reinterpret_cast<const std::byte*>(&dummy_pixel[0]),
+            dummy_pixel.size()
+        };
+
+        m_dummy_texture->upload(
+            create_info.internal_format,
+            image_data,
+            create_info.width,
+            create_info.height
+        );
     }
 
     void reset()
     {
-        for (size_t texture_unit = 0;
-             texture_unit < m_textures.size();
-             ++texture_unit)
-        {
-            m_textures[texture_unit] = nullptr;
-        }
-        m_used_textures.clear();
+        std::fill(
+            m_textures.begin(),
+            m_textures.end(),
+            nullptr
+        );
+        std::fill(
+            m_used_textures.begin(),
+            m_used_textures.end(),
+            m_dummy_texture->gl_name()
+        );
     }
 
     auto allocate_texture_unit(const erhe::graphics::Texture* texture)
     -> std::optional<std::size_t>
     {
-        for (size_t texture_unit = 0;
-             texture_unit < m_textures.size();
-             ++texture_unit)
+        for (size_t texture_unit = 0; texture_unit < texture_unit_count; ++texture_unit)
         {
             if (m_textures[texture_unit] == texture)
             {
                 return texture_unit;
             }
         }
-
-        for (size_t texture_unit = 0; texture_unit < m_textures.size(); ++texture_unit)
+        for (size_t texture_unit = 0; texture_unit < texture_unit_count; ++texture_unit)
         {
             if (m_textures[texture_unit] == nullptr)
             {
-                m_used_textures.push_back(texture->gl_name());
+                m_used_textures[texture_unit] = texture->gl_name();
                 m_textures[texture_unit] = texture;
                 return texture_unit;
             }
@@ -430,32 +480,26 @@ public:
 
     void bind()
     {
-        if (m_used_textures.size() == 0)
-        {
-            return;
-        }
-
         // Assign textures to texture units
-        std::stringstream ss;
-        bool first{true};
-        for (auto texture : m_used_textures)
-        {
-            if (!first)
-            {
-                ss << ", ";
-            }
-            ss << texture;
-        }
         gl::bind_textures(
             0,
-            static_cast<GLsizei>(m_used_textures.size()),
+            GLsizei{texture_unit_count},
             reinterpret_cast<const GLuint *>(m_used_textures.data())
         );
     }
 
 private:
-    std::vector<const erhe::graphics::Texture*> m_textures;
-    std::vector<GLuint>                         m_used_textures;
+    unique_ptr<erhe::graphics::Texture> m_dummy_texture;
+
+    std::array<
+        const erhe::graphics::Texture*,
+        texture_unit_count
+    > m_textures;
+
+    std::array<
+        GLuint,
+        texture_unit_count
+    > m_used_textures;
 };
 
 static constexpr std::string_view c_imgui_render{"ImGui_ImplErhe_RenderDrawData()"};
@@ -590,7 +634,7 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
         2.0f / draw_data->DisplaySize.x,
         2.0f / draw_data->DisplaySize.y
     };
-    float translate[2] = {
+    const float translate[2] = {
         -1.0f - draw_data->DisplayPos.x * scale[0],
         -1.0f - draw_data->DisplayPos.y * scale[1]
     };
@@ -618,7 +662,7 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
     const ImVec2 clip_off   = draw_data->DisplayPos;
     const ImVec2 clip_scale = draw_data->FramebufferScale;
     Expects(imgui_renderer.samplers->array_size().value() <= Imgui_renderer::texture_unit_count);
-    Texture_unit_cache texture_unit_cache{Imgui_renderer::texture_unit_count};
+    Texture_unit_cache<Imgui_renderer::texture_unit_count> texture_unit_cache{};
 
     gl::enable(gl::Enable_cap::clip_distance0);
     gl::enable(gl::Enable_cap::clip_distance1);
@@ -662,7 +706,7 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
             else
             {
                 // Project scissor/clipping rectangles into framebuffer space
-                ImVec4 clip_rect{
+                const ImVec4 clip_rect{
                     (pcmd->ClipRect.x - clip_off.x) * clip_scale.x,
                     (pcmd->ClipRect.y - clip_off.y) * clip_scale.y,
                     (pcmd->ClipRect.z - clip_off.x) * clip_scale.x,
@@ -673,7 +717,8 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
                     (clip_rect.x < fb_width)  &&
                     (clip_rect.y < fb_height) &&
                     (clip_rect.z >= 0.0f)     &&
-                    (clip_rect.w >= 0.0f))
+                    (clip_rect.w >= 0.0f)
+                )
                 {
                     // Write clip rectangle
                     gsl::span<const float> clip_rect_cpu_data{&clip_rect.x, 4};

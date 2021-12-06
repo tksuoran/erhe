@@ -341,8 +341,8 @@ auto Shader_resource::c_str(const Shader_resource::Precision v) -> const char*
 
 // Struct type
 Shader_resource::Shader_resource(
-    std::string_view struct_type_name,
-    Shader_resource* parent /* = nullptr */
+    const std::string_view struct_type_name,
+    Shader_resource*       parent /* = nullptr */
 )
     : m_type            {Type::struct_type}
     , m_name            {struct_type_name}
@@ -354,7 +354,7 @@ Shader_resource::Shader_resource(
 
 // Struct member
 Shader_resource::Shader_resource(
-    std::string_view                struct_member_name,
+    const std::string_view          struct_member_name,
     gsl::not_null<Shader_resource*> struct_type,
     const std::optional<size_t>     array_size /* = {} */,
     Shader_resource*                parent /* = nullptr */
@@ -371,7 +371,7 @@ Shader_resource::Shader_resource(
 
 // Block (uniform block or shader storage block)
 Shader_resource::Shader_resource(
-    std::string_view            block_name,
+    const std::string_view      block_name,
     const int                   binding_point,
     const Type                  block_type,
     const std::optional<size_t> array_size /* = {} */
@@ -388,7 +388,7 @@ Shader_resource::Shader_resource(
 
 // Basic type
 Shader_resource::Shader_resource(
-    std::string_view            basic_name,
+    const std::string_view      basic_name,
     const gl::Uniform_type      basic_type,
     const std::optional<size_t> array_size /* = {} */,
     Shader_resource*            parent /* = nullptr */
@@ -405,7 +405,7 @@ Shader_resource::Shader_resource(
 
 // Sampler
 Shader_resource::Shader_resource(
-    std::string_view                sampler_name,
+    const std::string_view          sampler_name,
     gsl::not_null<Shader_resource*> parent,
     const int                       location,
     const gl::Uniform_type          sampler_type,
@@ -883,13 +883,20 @@ auto Shader_resource::add_vec4(
 }
 
 auto Shader_resource::add_mat4(
-    const std::string_view name,
+    const std::string_view      name,
     const std::optional<size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
     align_offset_to(4 * 4); // align by 4 * 4 bytes
-    auto* const new_member = m_members.emplace_back(std::make_unique<Shader_resource>(name, gl::Uniform_type::float_mat4, array_size, this)).get();
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(
+            name,
+            gl::Uniform_type::float_mat4,
+            array_size,
+            this
+        )
+    ).get();
     m_offset += new_member->size_bytes();
     return new_member;
 }

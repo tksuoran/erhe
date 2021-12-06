@@ -20,7 +20,7 @@ public:
 
     bool gui                    {true};
     bool openxr                 {false};
-    bool parallel_initialization{true};
+    bool parallel_initialization{false};
     bool reverse_depth          {true};
 
     auto depth_clear_value_pointer() const -> const float *; // reverse_depth ? 0.0f : 1.0f;

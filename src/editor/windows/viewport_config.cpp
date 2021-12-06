@@ -11,38 +11,12 @@
 namespace editor
 {
 
-Render_style::Render_style() = default;
-
-Render_style::Render_style(const Configuration& configuration)
-    : polygon_offset_factor{configuration.reverse_depth ? -1.0000f : 1.0000f}
-    , polygon_offset_units {configuration.reverse_depth ? -1.0000f : 1.0000f}
-    , polygon_offset_clamp {configuration.reverse_depth ? -0.0001f : 0.0001f}
-{
-}
-
 Viewport_config::Viewport_config()
-    : erhe::components::Component{c_name}
-    , Imgui_window               {c_title}
 {
-}
-
-Viewport_config::~Viewport_config() = default;
-
-void Viewport_config::connect()
-{
-    require<Configuration>();
-}
-
-void Viewport_config::initialize_component()
-{
-    render_style_not_selected            = Render_style(*get<Configuration>());
     render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
     render_style_not_selected.edge_lines = false;
 
-    render_style_selected            = Render_style(*get<Configuration>());
     render_style_selected.edge_lines = true;
-
-    get<Editor_tools>()->register_imgui_window(this);
 }
 
 void Viewport_config::render_style_ui(Render_style& render_style)
@@ -131,7 +105,7 @@ void Viewport_config::render_style_ui(Render_style& render_style)
 
 }
 
-void Viewport_config::imgui(Pointer_context&)
+void Viewport_config::imgui()
 {
     ImGui::Begin("Viewport");
 

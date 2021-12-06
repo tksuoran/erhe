@@ -19,17 +19,18 @@ namespace erhe::physics {
 namespace editor
 {
 
+class Line_renderer;
 class Node_physics;
+class Pointer_context;
 class Scene_root;
 
 class Physics_tool
     : public erhe::components::Component
     , public Tool
-    , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name {"Physics_tool"};
-    static constexpr std::string_view c_title{"Physics Tool"};
+    static constexpr std::string_view c_name       {"Physics_tool"};
+    static constexpr std::string_view c_description{"Physics Tool"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Physics_tool ();
@@ -41,22 +42,19 @@ public:
     void initialize_component() override;
 
     // Implements Tool
-    auto update         (Pointer_context& pointer_context) -> bool override;
-    void render         (const Render_context& render_context)     override;
-    auto state          () const -> State                          override;
-    void cancel_ready   ()                                         override;
-    auto description    () -> const char*                          override;
-    void tool_properties()                                         override;
-
-    // Implements Imgui_window
-    void imgui(Pointer_context& pointer_context) override;
+    auto tool_update    () -> bool                      override;
+    void tool_render    (const Render_context& context) override;
+    auto state          () const -> State               override;
+    void cancel_ready   ()                              override;
+    auto description    () -> const char*               override;
+    void tool_properties()                              override;
 
 private:
-    void update_internal(Pointer_context& pointer_context);
-
     State                                       m_state{State::Passive};
 
-    Scene_root*                                 m_scene_root{nullptr};
+    Line_renderer*                              m_line_renderer  {nullptr};
+    Pointer_context*                            m_pointer_context{nullptr};
+    Scene_root*                                 m_scene_root     {nullptr};
 
     std::shared_ptr<erhe::scene::Mesh>          m_drag_mesh;
     std::shared_ptr<Node_physics>               m_drag_node_physics;
@@ -65,6 +63,10 @@ private:
     glm::vec3                                   m_drag_position_start  {0.0f, 0.0f, 0.0f};
     glm::vec3                                   m_drag_position_end    {0.0f, 0.0f, 0.0f};
     std::unique_ptr<erhe::physics::IConstraint> m_drag_constraint;
+
+    bool   m_mouse_set{false};
+    double m_mouse_x{0.0};
+    double m_mouse_y{0.0};
 
     float    m_tau                     { 0.001f};
     float    m_damping                 { 1.00f};

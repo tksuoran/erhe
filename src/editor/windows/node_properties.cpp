@@ -260,7 +260,7 @@ void Node_properties::transform_properties(erhe::scene::Node& node) const
     }
 }
 
-void Node_properties::imgui(Pointer_context&)
+void Node_properties::imgui()
 {
     const auto& selection = m_selection_tool->selection();
     ImGui::Begin("Node");

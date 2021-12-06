@@ -65,7 +65,7 @@ void Materials::initialize_component()
 
 }
 
-void Materials::imgui(Pointer_context&)
+void Materials::imgui()
 {
     const auto& materials = m_scene_root->materials();
     using namespace erhe::imgui;

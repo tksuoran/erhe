@@ -43,7 +43,7 @@ void Layers_window::initialize_component()
     get<Editor_tools>()->register_imgui_window(this);
 }
 
-void Layers_window::imgui(Pointer_context&)
+void Layers_window::imgui()
 {
     const ImGuiTreeNodeFlags parent_flags{
         ImGuiTreeNodeFlags_OpenOnArrow       |

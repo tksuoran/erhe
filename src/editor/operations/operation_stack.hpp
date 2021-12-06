@@ -40,7 +40,7 @@ public:
     }
 
     // Implements Window
-    void imgui(Pointer_context& pointer_context) override;
+    void imgui() override;
 
 private:
     void imgui(

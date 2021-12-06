@@ -4,6 +4,7 @@
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
+#include "windows/viewport_window.hpp"
 
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
@@ -56,7 +57,7 @@ void Fly_camera_space_mouse_listener::on_button(const int)
 
 Fly_camera_tool::Fly_camera_tool()
     : erhe::components::Component{c_name}
-    , Imgui_window               {c_title}
+    , Imgui_window               {c_description}
 #ifdef _WIN32
     , m_space_mouse_listener     {*this}
     , m_space_mouse_controller   {m_space_mouse_listener}
@@ -78,29 +79,13 @@ auto Fly_camera_tool::state() const -> State
 
 void Fly_camera_tool::connect()
 {
-    m_scene_root = require<Scene_root>();
+    m_pointer_context = get<Pointer_context>();
+    m_scene_root     = require<Scene_root>();
     require<Scene_manager>();
 }
 
 void Fly_camera_tool::initialize_component()
 {
-    auto scene_manager = get<Scene_manager>();
-    if (!scene_manager)
-    {
-        return;
-    }
-
-    auto camera = scene_manager->get_view_camera();
-    if (!camera)
-    {
-        return;
-    }
-
-    // set_frame() below requires world from node matrix, which
-    // might not be valid due to transform hierarchy.
-    m_scene_root->scene().update_node_transforms();
-
-    m_camera_controller.set_frame(camera.get());
 #ifdef _WIN32
     m_space_mouse_listener.set_active(true);
 #endif
@@ -108,9 +93,23 @@ void Fly_camera_tool::initialize_component()
     get<Editor_tools>()->register_tool(this);
 }
 
+void Fly_camera_tool::set_camera(erhe::scene::ICamera* camera)
+{
+    // set_frame() below requires world from node matrix, which
+    // might not be valid due to transform hierarchy.
+    m_scene_root->scene().update_node_transforms();
+
+    m_camera_controller.set_frame(camera);
+}
+
+auto Fly_camera_tool::camera() const -> erhe::scene::ICamera*
+{
+    return reinterpret_cast<erhe::scene::ICamera*>(m_camera_controller.node());
+}
+
 auto Fly_camera_tool::description() -> const char*
 {
-    return c_name.data();
+    return c_description.data();
 }
 
 void Fly_camera_tool::translation(const int tx, const int ty, const int tz)
@@ -174,94 +173,120 @@ void Fly_camera_tool::z_pos_control(const bool pressed)
     m_camera_controller.translate_z.set_more(pressed);
 }
 
-auto Fly_camera_tool::update(Pointer_context& pointer_context) -> bool
+auto Fly_camera_tool::tool_update() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
 
+    const bool   hovering_over_tool = m_pointer_context->hovering_over_tool();
+    const bool   left_pressed       = m_pointer_context->mouse_button_pressed(Mouse_button_left);
+    const bool   left_released      = m_pointer_context->mouse_button_released(Mouse_button_left);
+    const double x_delta            = m_pointer_context->mouse_x() - m_mouse_x;
+    const double y_delta            = m_pointer_context->mouse_y() - m_mouse_y;
+    const bool   mouse_moved        = (std::abs(x_delta) > 0.5) || (std::abs(y_delta) > 0.5);
     if (
         (m_state == State::Passive) &&
-        pointer_context.mouse_button[Mouse_button_left].pressed &&
-        !pointer_context.hover_tool
+        left_pressed &&
+        !hovering_over_tool
     )
     {
-        return begin(pointer_context);
+        if (!mouse_moved)
+        {
+            return false;
+        }
+        return begin();
     }
-    if ((m_state != State::Passive) && pointer_context.mouse_button[Mouse_button_left].released)
+
+    if (
+        (m_state != State::Passive) &&
+        left_released
+    )
     {
-        return end(pointer_context);
+        return end();
     }
-    if ((m_state == State::Ready) && pointer_context.mouse_moved)
+
+    if (
+        (m_state == State::Ready) &&
+        mouse_moved
+    )
     {
         log_tools.trace("Fly camera state = Active\n");
         m_state = State::Active;
     }
+
     if (m_state != State::Active)
     {
         // We might be ready, but not consuming event yet
         return false;
     }
 
-    double x_delta = pointer_context.mouse_x - m_mouse_x;
-    double y_delta = pointer_context.mouse_y - m_mouse_y;
-
     if (x_delta != 0.0)
     {
         const float value = static_cast<float>(m_sensitivity * x_delta / 1024.0);
         m_camera_controller.rotate_y.adjust(value);
-        m_mouse_x = pointer_context.mouse_x;
+        m_mouse_x = m_pointer_context->mouse_x();
     }
 
     if (y_delta != 0.0)
     {
         const float value = static_cast<float>(m_sensitivity * y_delta / 1024.0);
         m_camera_controller.rotate_x.adjust(value);
-        m_mouse_y = pointer_context.mouse_y;
+        m_mouse_y = m_pointer_context->mouse_y();
     }
 
     return true;
 }
 
-auto Fly_camera_tool::begin(Pointer_context& pointer_context) -> bool
+auto Fly_camera_tool::begin() -> bool
 {
-    if (!pointer_context.pointer_in_content_area())
+    if (!m_pointer_context->pointer_in_content_area())
     {
         return false;
     }
-    if (!pointer_context.scene_view_focus)
+    if (
+        m_pointer_context->window() == nullptr ||
+        !m_pointer_context->position_in_viewport_window().has_value()
+    )
     {
         return false;
     }
 
     // Reject drags near edge of viewport.
     // This avoids window resize being misinterpreted as drag.
-    constexpr float border = 32.0f;
+    constexpr float   border   = 32.0f;
+    const auto        position = m_pointer_context->position_in_viewport_window().value();
+    const auto* const window   = m_pointer_context->window();
+    if (window == nullptr)
+    {
+        return false;
+    }
+
+    const auto viewport = window->viewport();
     if (
-        (pointer_context.pointer_x < border) ||
-        (pointer_context.pointer_y < border) ||
-        (pointer_context.pointer_x >= pointer_context.viewport.width  - border) ||
-        (pointer_context.pointer_y >= pointer_context.viewport.height - border)
+        (position.x <  border) ||
+        (position.y <  border) ||
+        (position.x >= viewport.width  - border) ||
+        (position.y >= viewport.height - border)
     )
     {
         return false;
     }
 
-    log_tools.trace("Fly camera state = Ready\n");
     m_state   = State::Ready;
-    m_mouse_x = pointer_context.mouse_x;
-    m_mouse_y = pointer_context.mouse_y;
+    m_mouse_x = m_pointer_context->mouse_x();
+    m_mouse_y = m_pointer_context->mouse_y();
     return true;
 }
 
-auto Fly_camera_tool::end(Pointer_context&) -> bool
+auto Fly_camera_tool::end() -> bool
 {
     if (m_state == State::Passive)
     {
         return false;
     }
 
-    const bool consume_event = m_state == State::Active;
+    const bool consume_event = (m_state == State::Active);
     cancel_ready();
     return consume_event;
 }
@@ -272,27 +297,31 @@ void Fly_camera_tool::cancel_ready()
     m_state = State::Passive;
 }
 
-void Fly_camera_tool::update_fixed_step(const erhe::components::Time_context& /*time_context*/)
+void Fly_camera_tool::update_fixed_step(
+    const erhe::components::Time_context& /*time_context*/
+)
 {
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
 
     m_camera_controller.update_fixed_step();
 }
 
-void Fly_camera_tool::update_once_per_frame(const erhe::components::Time_context& /*time_context*/)
+void Fly_camera_tool::update_once_per_frame(
+    const erhe::components::Time_context& /*time_context*/
+)
 {
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
 
     m_camera_controller.update();
 }
 
-void Fly_camera_tool::imgui(Pointer_context&)
+void Fly_camera_tool::imgui()
 {
     std::lock_guard<std::mutex> lock_fly_camera(m_mutex);
 
     float speed = m_camera_controller.translate_z.max_delta();
 
-    ImGui::Begin      (c_title.data());
+    ImGui::Begin      (c_description.data());
     ImGui::SliderFloat("Sensitivity", &m_sensitivity, 0.2f,   2.0f);
     ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
     ImGui::End        ();

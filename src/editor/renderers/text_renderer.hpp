@@ -1,5 +1,7 @@
 #pragma once
 
+#include "renderers/buffer_writer.hpp"
+
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/pipeline.hpp"
@@ -105,7 +107,7 @@ private:
             }
             , projection_buffer{
                 gl::Buffer_target::uniform_buffer,
-                256,
+                1024, // TODO
                 storage_mask,
                 access_mask
             }
@@ -126,8 +128,8 @@ private:
                 nullptr
             }
         {
-            vertex_buffer.set_debug_label("Text Renderer Vertex");
-            vertex_buffer.set_debug_label("Projection Vertex");
+            vertex_buffer    .set_debug_label("Text Renderer Vertex");
+            projection_buffer.set_debug_label("Text Renderer Projection");
         }
 
         Frame_resources(const Frame_resources&) = delete;
@@ -161,39 +163,10 @@ private:
     std::deque<Frame_resources> m_frame_resources;
     size_t                      m_current_frame_resource_slot{0};
 
-    class Buffer_range
-    {
-    public:
-        size_t first_byte_offset{0};
-        size_t byte_count       {0};
-    };
-
-    class Buffer_writer
-    {
-    public:
-        Buffer_range range;
-        size_t       write_offset{0};
-
-        void begin()
-        {
-            range.first_byte_offset = write_offset;
-        }
-
-        void end()
-        {
-            range.byte_count = write_offset - range.first_byte_offset;
-        }
-
-        void reset()
-        {
-            range.first_byte_offset = 0;
-            range.byte_count        = 0;
-            write_offset            = 0;
-        }
-    };
-
     Buffer_writer m_vertex_writer;
-    size_t        m_quad_count{0};
+    Buffer_writer m_projection_writer;
+    size_t        m_index_range_first{0};
+    size_t        m_index_count      {0};
 };
 
 }
