@@ -19,8 +19,10 @@ public:
 class Blend_state_component_hash
 {
 public:
-    auto operator()(const Blend_state_component& blend_state_component) const noexcept
-    -> size_t
+    [[nodiscard]]
+    auto operator()(
+        const Blend_state_component& blend_state_component
+    ) const noexcept -> size_t
     {
         return
             (gl::base_zero(blend_state_component.equation_mode     ) << 0u) | // 3 bits
@@ -29,13 +31,17 @@ public:
     }
 };
 
-auto operator==(const Blend_state_component& lhs,
-                const Blend_state_component& rhs) noexcept
--> bool;
+[[nodiscard]]
+auto operator==(
+    const Blend_state_component& lhs,
+    const Blend_state_component& rhs
+) noexcept -> bool;
 
-auto operator!=(const Blend_state_component& lhs,
-                const Blend_state_component& rhs) noexcept
--> bool;
+[[nodiscard]]
+auto operator!=(
+    const Blend_state_component& lhs,
+    const Blend_state_component& rhs
+) noexcept -> bool;
 
 class Color_blend_state
 {
@@ -77,11 +83,15 @@ public:
     auto operator()(const Color_blend_state& state) const noexcept -> size_t;
 };
 
-auto operator==(const Color_blend_state& lhs, const Color_blend_state& rhs) noexcept
--> bool;
+[[nodiscard]] auto operator==(
+    const Color_blend_state& lhs,
+    const Color_blend_state& rhs
+) noexcept -> bool;
 
-auto operator!=(const Color_blend_state& lhs, const Color_blend_state& rhs) noexcept
--> bool;
+[[nodiscard]] auto operator!=(
+    const Color_blend_state& lhs,
+    const Color_blend_state& rhs
+) noexcept -> bool;
 
 class Color_blend_state_tracker
 {

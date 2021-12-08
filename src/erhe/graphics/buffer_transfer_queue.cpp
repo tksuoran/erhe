@@ -20,23 +20,37 @@ Buffer_transfer_queue::~Buffer_transfer_queue()
     flush();
 }
 
-void Buffer_transfer_queue::enqueue(Buffer* buffer, const size_t offset, std::vector<uint8_t>&& data)
+void Buffer_transfer_queue::enqueue(
+    Buffer&                buffer,
+    const size_t           offset,
+    std::vector<uint8_t>&& data
+)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock{m_mutex};
 
-    log_buffer.trace("queued buffer {} transfer offset = {} size = {}\n", buffer->gl_name(), offset, data.size());
+    log_buffer.trace(
+        "queued buffer {} transfer offset = {} size = {}\n",
+        buffer.gl_name(),
+        offset,
+        data.size()
+    );
     m_queued.emplace_back(buffer, offset, std::move(data));
 }
 
 void Buffer_transfer_queue::flush()
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock{m_mutex};
 
     for (const auto& entry : m_queued)
     {
-        log_buffer.trace("buffer upload {} transfer offset = {} size = {}\n", entry.target->gl_name(), entry.target_offset, entry.data.size());
+        log_buffer.trace(
+            "buffer upload {} transfer offset = {} size = {}\n",
+            entry.target.gl_name(),
+            entry.target_offset,
+            entry.data.size()
+        );
         Scoped_buffer_mapping<uint8_t> scoped_mapping{
-            *entry.target,
+            entry.target,
             entry.target_offset,
             entry.data.size(),
             gl::Map_buffer_access_mask::map_invalidate_range_bit |

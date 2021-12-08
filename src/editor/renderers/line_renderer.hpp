@@ -15,6 +15,7 @@
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 
+#include <imgui.h>
 #include <glm/glm.hpp>
 
 #include <cstdint>
@@ -79,6 +80,7 @@ public:
     void connect             () override;
     void initialize_component() override;
 
+    // Public API
     void next_frame();
     void render(
         const erhe::scene::Viewport camera_viewport,
@@ -133,15 +135,15 @@ private:
             true, // enabled
             { // rgb
                 gl::Blend_equation_mode::func_add,
-                gl::Blending_factor::src_alpha,
-                gl::Blending_factor::one_minus_src_alpha
+                gl::Blending_factor::constant_alpha,
+                gl::Blending_factor::one_minus_constant_alpha
             },
             { // alpha
                 gl::Blend_equation_mode::func_add,
-                gl::Blending_factor::src_alpha,
-                gl::Blending_factor::one_minus_src_alpha
+                gl::Blending_factor::constant_alpha,
+                gl::Blending_factor::one_minus_constant_alpha
             },
-            glm::vec4{0.0f, 0.0f, 0.0f, 0.3f}, // constant
+            glm::vec4{0.0f, 0.0f, 0.0f, 0.1f}, // constant
             true,
             true,
             true,
@@ -264,9 +266,10 @@ public:
         Style         (Style&&)      = delete;
         void operator=(Style&&)      = delete;
 
-        void create_frame_resources (Pipeline* pipeline, const Configuration* const configuration);
-        auto current_frame_resources() -> Frame_resources&;
-        void next_frame             ();
+        // Public API
+        [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
+        void create_frame_resources(Pipeline* pipeline, const Configuration* const configuration);
+        void next_frame            ();
 
         void render(
             erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker,
@@ -281,22 +284,32 @@ public:
             m_line_color = color;
         }
 
+        void set_line_color(const float r, const float g, const float b, const float a)
+        {
+            m_line_color = ImGui::ColorConvertFloat4ToU32(ImVec4{r, g, b, a});
+        }
+
+        void set_line_color(const glm::vec3 color)
+        {
+            m_line_color = ImGui::ColorConvertFloat4ToU32(ImVec4{color.r, color.g, color.b, 1.0f});
+        }
+
         void add_lines(
             const std::initializer_list<Line> lines,
-            const float                       thickness = 2.0f
+            const float                       thickness
         );
 
         void add_lines(
             const glm::mat4                   transform,
             const std::initializer_list<Line> lines,
-            const float                       thickness = 2.0f
+            const float                       thickness
         );
 
         void add_lines(
             const glm::mat4                   transform,
             const uint32_t                    color,
             const std::initializer_list<Line> lines,
-            const float                       thickness = 2.0f
+            const float                       thickness
         )
         {
             set_line_color(color);
@@ -310,12 +323,12 @@ public:
         //);
     private:
         void put(
-            const glm::vec3      point,
-            const float          thickness,
-            const uint32_t       color,
-            gsl::span<float>&    gpu_float_data, 
-            gsl::span<uint32_t>& gpu_uint_data,
-            size_t&              word_offset
+            const glm::vec3            point,
+            const float                thickness,
+            const uint32_t             color,
+            const gsl::span<float>&    gpu_float_data, 
+            const gsl::span<uint32_t>& gpu_uint_data,
+            size_t&                    word_offset
         );
 
         std::deque<Frame_resources> m_frame_resources;

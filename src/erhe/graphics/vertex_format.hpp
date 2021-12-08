@@ -24,26 +24,31 @@ public:
         const Vertex_attribute::Data_type data_type
     );
 
+    [[nodiscard]] 
     auto has_attribute(
         const Vertex_attribute::Usage_type usage_type,
         const unsigned int                 index = 0
     ) const -> bool;
 
+    [[nodiscard]] 
     auto find_attribute_maybe(
         const Vertex_attribute::Usage_type usage_type,
         const unsigned int                 index = 0
     ) const -> const Vertex_attribute*;
 
+    [[nodiscard]] 
     auto find_attribute(
         const Vertex_attribute::Usage_type usage_type,
         const unsigned int                 index = 0
     ) const -> gsl::not_null<const Vertex_attribute*>;
 
+    [[nodiscard]] 
     auto stride() const -> size_t
     {
         return m_stride;
     }
 
+    [[nodiscard]] 
     auto match(const Vertex_format& other) const -> bool;
 
 private:

@@ -11,6 +11,8 @@ public:
     Sqrt3_subdivision(Geometry& src, Geometry& destination);
 };
 
-auto sqrt3_subdivision(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto sqrt3_subdivision(
+    erhe::geometry::Geometry& source
+) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

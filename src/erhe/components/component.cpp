@@ -68,7 +68,7 @@ auto Component::depended_by() -> const std::set<Component*>&
 
 void Component::depends_on(Component* dependency)
 {
-    VERIFY(dependency != nullptr);
+    ERHE_VERIFY(dependency != nullptr);
 
     if (!dependency->is_registered())
     {
@@ -77,7 +77,7 @@ void Component::depends_on(Component* dependency)
             name(),
             dependency->name()
         );
-        FATAL("Dependency has not been registered");
+        ERHE_FATAL("Dependency has not been registered");
     }
     m_dependencies.insert(dependency);
     dependency->add_depended_by(this);

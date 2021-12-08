@@ -1,18 +1,21 @@
 #include "windows/brushes.hpp"
+#include "editor_tools.hpp"
+#include "editor_view.hpp"
 #include "log.hpp"
 #include "rendering.hpp"
-#include "tools.hpp"
-#include "tools/pointer_context.hpp"
+
 #include "operations/operation_stack.hpp"
 #include "operations/insert_operation.hpp"
 #include "renderers/line_renderer.hpp"
 #include "scene/brush.hpp"
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/grid_tool.hpp"
-#include "tools/pointer_context.hpp"
+#include "tools/selection_tool.hpp"
 #include "windows/materials.hpp"
+#include "windows/operations.hpp"
 
 #include "erhe/geometry/operation/clone.hpp"
 #include "erhe/geometry/geometry.hpp"
@@ -36,6 +39,40 @@ using namespace erhe::primitive;
 using namespace erhe::scene;
 using namespace erhe::toolkit;
 
+auto Brush_tool_preview_command::try_call(Command_context& context) -> bool
+{
+    static_cast<void>(context);
+
+    if (
+        (state() != State::Ready) ||
+        !m_brushes.is_enabled()
+    )
+    {
+        return false;
+    }
+    m_brushes.on_motion();
+    return true;
+}
+
+void Brush_tool_insert_command::try_ready(Command_context& context)
+{
+    if (m_brushes.try_insert_ready())
+    {
+        set_ready(context);
+    }
+}
+
+auto Brush_tool_insert_command::try_call(Command_context& context) -> bool
+{
+    if (state() != State::Ready)
+    {
+        return false;
+    }
+    const bool consumed = m_brushes.try_insert();
+    set_inactive(context);
+    return consumed;
+}
+
 Brush_create_context::Brush_create_context(
     erhe::primitive::Build_info_set& build_info_set,
     erhe::primitive::Normal_style    normal_style
@@ -48,15 +85,12 @@ Brush_create_context::Brush_create_context(
 Brushes::Brushes()
     : erhe::components::Component{c_name}
     , Imgui_window               {c_title}
+    , m_preview_command          {*this}
+    , m_insert_command           {*this}
 {
 }
 
 Brushes::~Brushes() = default;
-
-auto Brushes::state() const -> State
-{
-    return m_state;
-}
 
 void Brushes::connect()
 {
@@ -73,12 +107,21 @@ void Brushes::initialize_component()
     m_selected_brush_index = 0;
 
     get<Editor_tools>()->register_tool(this);
+
+    auto* view = get<Editor_view>();
+
+    view->register_command(&m_preview_command);
+    view->register_command(&m_insert_command);
+    view->bind_command_to_mouse_motion(&m_preview_command);
+    view->bind_command_to_mouse_click (&m_insert_command, Mouse_button_right);
+
+    get<Operations>()->register_active_tool(this);
 }
 
-auto Brushes::allocate_brush(Build_info_set& build_info_set)
--> std::shared_ptr<Brush>
+auto Brushes::allocate_brush(Build_info_set& build_info_set) -> std::shared_ptr<Brush>
 {
-    std::lock_guard<std::mutex> lock(m_brush_mutex);
+    std::lock_guard<std::mutex> lock{m_brush_mutex};
+
     const auto brush = std::make_shared<Brush>(build_info_set);
     m_brushes.push_back(brush);
     return brush;
@@ -97,7 +140,7 @@ auto Brushes::make_brush(
 }
 
 auto Brushes::make_brush(
-    shared_ptr<erhe::geometry::Geometry>               geometry,
+    const shared_ptr<erhe::geometry::Geometry>&        geometry,
     const Brush_create_context&                        context,
     const shared_ptr<erhe::physics::ICollision_shape>& collision_shape
 ) -> std::shared_ptr<Brush>
@@ -110,21 +153,17 @@ auto Brushes::make_brush(
     geometry->compute_polygon_centroids();
     geometry->compute_point_normals(c_point_normals_smooth);
 
-    const float density = 1.0f;
-
-    const auto mass_properties = geometry->get_mass_properties();
-
-    Brush::Create_info create_info{
-        geometry,
-        context.build_info_set,
-        context.normal_style,
-        density,
-        mass_properties.volume,
-        collision_shape
-    };
-
     const auto brush = allocate_brush(context.build_info_set);
-    brush->initialize(create_info);
+    brush->initialize(
+        Brush::Create_info{
+            .geometry        = geometry,
+            .build_info_set  = context.build_info_set,
+            .normal_style    = context.normal_style,
+            .density         = 1.0f,
+            .volume          = geometry->get_mass_properties().volume,
+            .collision_shape = collision_shape
+        }
+    );
     return brush;
 }
 
@@ -133,8 +172,7 @@ auto Brushes::make_brush(
     const Brush_create_context&          context,
     Collision_volume_calculator          collision_volume_calculator,
     Collision_shape_generator            collision_shape_generator
-)
--> std::shared_ptr<Brush>
+) -> std::shared_ptr<Brush>
 {
     ERHE_PROFILE_FUNCTION
 
@@ -144,12 +182,14 @@ auto Brushes::make_brush(
     geometry->compute_polygon_centroids();
     geometry->compute_point_normals(c_point_normals_smooth);
     const Brush::Create_info create_info{
-        geometry,
-        context.build_info_set,
-        context.normal_style,
-        1.0f, // density
-        collision_volume_calculator,
-        collision_shape_generator
+        .geometry                    = geometry,
+        .build_info_set              = context.build_info_set,
+        .normal_style                = context.normal_style,
+        .density                     = 1.0f,
+        .volume                      = 1.0f,
+        .collision_shape             = {},
+        .collision_volume_calculator = collision_volume_calculator,
+        .collision_shape_generator   = collision_shape_generator
     };
 
     const auto brush = allocate_brush(context.build_info_set);
@@ -157,36 +197,64 @@ auto Brushes::make_brush(
     return brush;
 }
 
-void Brushes::cancel_ready()
-{
-    m_state = State::Passive;
-    if (m_brush_mesh)
-    {
-        remove_brush_mesh();
-    }
-}
-
 void Brushes::remove_brush_mesh()
 {
     if (m_brush_mesh)
     {
         log_brush.trace("removing brush mesh\n");
-        remove_from_scene_layer(m_scene_root->scene(), *m_scene_root->brush_layer().get(), m_brush_mesh);
+        remove_from_scene_layer(
+            m_scene_root->scene(),
+            *m_scene_root->brush_layer().get(),
+            m_brush_mesh
+        );
         m_brush_mesh->unparent();
         m_brush_mesh.reset();
     }
 }
 
-auto Brushes::tool_update() -> bool
+auto Brushes::try_insert_ready() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    return is_enabled() && m_hover_content;
+}
 
-    if (m_pointer_context->priority_action() != Action::add)
+auto Brushes::try_insert() -> bool
+{
+    if (
+        !m_brush_mesh ||
+        !m_hover_position.has_value() ||
+        (m_brush == nullptr)
+    )
     {
-        remove_brush_mesh();
         return false;
     }
 
+    do_insert_operation();
+    remove_brush_mesh();
+    return true;
+}
+
+void Brushes::on_enable_state_changed()
+{
+    if (is_enabled())
+    {
+        on_motion();
+    }
+    else
+    {
+        m_hover_content     = false;
+        m_hover_tool        = false;
+        m_hover_mesh    .reset();
+        m_hover_primitive   = 0;
+        m_hover_local_index = 0;
+        m_hover_geometry    = nullptr;
+        m_hover_position.reset();
+        m_hover_normal  .reset();
+        remove_brush_mesh();
+    }
+}
+
+void Brushes::on_motion()
+{
     m_hover_content     = m_pointer_context->hovering_over_content();
     m_hover_tool        = m_pointer_context->hovering_over_tool();
     m_hover_mesh        = m_pointer_context->hover_mesh();
@@ -206,45 +274,6 @@ auto Brushes::tool_update() -> bool
     {
         m_hover_position = m_hover_mesh->transform_direction_from_world_to_local(m_hover_position.value());
     }
-
-    if (
-        (m_state == State::Passive) &&
-        m_pointer_context->mouse_button_pressed(Mouse_button_left) &&
-        m_brush_mesh
-    )
-    {
-        m_state = State::Ready;
-        return true;
-    }
-
-    if (m_state != State::Ready)
-    {
-        return false;
-    }
-
-    if (
-        m_pointer_context->mouse_button_released(Mouse_button_left) &&
-        m_brush_mesh
-    )
-    {
-        do_insert_operation();
-        remove_brush_mesh();
-        m_state = State::Passive;
-        return true;
-    }
-
-    return false;
-}
-
-void Brushes::begin_frame()
-{
-    if (m_pointer_context->priority_action() != Action::add)
-    {
-        remove_brush_mesh();
-        return;
-    }
-
-    update_mesh();
 }
 
 // Returns transform which places brush in parent (hover) mesh space.
@@ -266,14 +295,14 @@ auto Brushes::get_brush_transform() -> mat4
     hover_frame.N *= -1.0f;
     hover_frame.B *= -1.0f;
 
-    VERIFY(brush_frame.scale() != 0.0f);
+    ERHE_VERIFY(brush_frame.scale() != 0.0f);
 
     float scale = hover_frame.scale() / brush_frame.scale();
 
     m_transform_scale = scale;
     if (scale != 1.0f)
     {
-        mat4 scale_transform = erhe::toolkit::create_scale(scale);
+        const mat4 scale_transform = erhe::toolkit::create_scale(scale);
         brush_frame.transform_by(scale_transform);
     }
 
@@ -305,8 +334,8 @@ void Brushes::update_mesh_node_transform()
         return;
     }
 
-    VERIFY(m_brush_mesh);
-    VERIFY(m_hover_mesh);
+    ERHE_VERIFY(m_brush_mesh);
+    ERHE_VERIFY(m_hover_mesh);
 
     const auto  transform    = get_brush_transform();
     const auto& brush_scaled = m_brush->get_scaled(m_transform_scale);
@@ -344,7 +373,12 @@ void Brushes::update_mesh_node_transform()
         }
     }
     m_brush_mesh->set_parent_from_node(transform);
-    m_brush_mesh->data.primitives.front().primitive_geometry = brush_scaled.primitive_geometry;
+
+    auto& primitive = m_brush_mesh->data.primitives.front();
+    primitive.gl_primitive_geometry = brush_scaled.gl_primitive_geometry;
+    primitive.rt_primitive_geometry = brush_scaled.rt_primitive->primitive_geometry;
+    primitive.rt_vertex_buffer      = brush_scaled.rt_primitive->vertex_buffer;
+    primitive.rt_index_buffer       = brush_scaled.rt_primitive->index_buffer;
 }
 
 void Brushes::do_insert_operation()
@@ -370,17 +404,18 @@ void Brushes::do_insert_operation()
          Node::c_visibility_shadow_cast |
          Node::c_visibility_id);
 
-    const Mesh_insert_remove_operation::Context context{
-        m_selection_tool,
-        m_scene_root->scene(),
-        m_scene_root->content_layer(),
-        m_scene_root->physics_world(),
-        instance.mesh,
-        instance.node_physics,
-        m_hover_mesh,
-        Scene_item_operation::Mode::insert
-    };
-    auto op = make_shared<Mesh_insert_remove_operation>(context);
+    auto op = make_shared<Mesh_insert_remove_operation>(
+        Mesh_insert_remove_operation::Context{
+            .selection_tool = m_selection_tool,
+            .scene          = m_scene_root->scene(),
+            .layer          = m_scene_root->content_layer(),
+            .physics_world  = m_scene_root->physics_world(),
+            .mesh           = instance.mesh,
+            .node_physics   = instance.node_physics,
+            .parent         = m_hover_mesh,
+            .mode           = Scene_item_operation::Mode::insert
+        }
+    );
     m_operation_stack->push(op);
 }
 
@@ -398,12 +433,20 @@ void Brushes::add_brush_mesh()
     }
 
     const auto& brush_scaled = m_brush->get_scaled(m_transform_scale);
-    m_brush_mesh = m_scene_root->make_mesh_node(
-        brush_scaled.primitive_geometry->source_geometry->name,
-        brush_scaled.primitive_geometry,
-        material,
-        *m_scene_root->brush_layer().get()
+    m_brush_mesh = std::make_shared<erhe::scene::Mesh>(
+        m_brush->name(),
+        erhe::primitive::Primitive{
+            .material              = material,
+            .gl_primitive_geometry = brush_scaled.gl_primitive_geometry,
+            .rt_primitive_geometry = brush_scaled.rt_primitive->primitive_geometry,
+            .rt_vertex_buffer      = brush_scaled.rt_primitive->vertex_buffer,
+            .rt_index_buffer       = brush_scaled.rt_primitive->index_buffer,
+            .source_geometry       = brush_scaled.geometry,
+            .normal_style          = m_brush->normal_style
+        }
     );
+    m_scene_root->add(m_brush_mesh, m_scene_root->brush_layer().get());
+
     m_brush_mesh->visibility_mask() &= ~(Node::c_visibility_id);
     m_brush_mesh->visibility_mask() |= Node::c_visibility_brush;
     update_mesh_node_transform();
@@ -447,16 +490,14 @@ void Brushes::imgui()
 {
     using namespace erhe::imgui;
 
-    ImGui::Begin("Brushes");
-
     const size_t brush_count = m_brushes.size();
 
     {
-        auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
+        const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};
         for (int i = 0; i < static_cast<int>(brush_count); ++i)
         {
             auto* brush = m_brushes[i].get();
-            bool button_pressed = make_button(
+            const bool button_pressed = make_button(
                 brush->geometry->name.c_str(),
                 (m_selected_brush_index == i)
                     ? Item_mode::active
@@ -470,7 +511,6 @@ void Brushes::imgui()
             }
         }
     }
-    ImGui::End();
 }
 
 }

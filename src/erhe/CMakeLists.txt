@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_CXX_EXTENSIONS        NO)
 
 add_subdirectory(components)
+add_subdirectory(concurrency)
 add_subdirectory(geometry)
 add_subdirectory(gl)
 add_subdirectory(graphics)

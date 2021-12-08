@@ -5,8 +5,8 @@
 namespace editor
 {
 
-Compound_operation::Compound_operation(const Context& context)
-    : m_context{context}
+Compound_operation::Compound_operation(Context&& context)
+    : m_context{std::move(context)}
 {
 }
 

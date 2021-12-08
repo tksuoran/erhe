@@ -9,7 +9,7 @@ namespace erhe::toolkit
 
 using namespace erhe::log;
 
-Category log(Color::YELLOW, Color::GRAY, Level::LEVEL_INFO);
+Category log{Color::YELLOW, Color::GRAY, Level::LEVEL_INFO};
 
 auto read(const std::filesystem::path& path) -> std::optional<std::string>
 {

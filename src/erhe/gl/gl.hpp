@@ -28,15 +28,11 @@ namespace gl
 
 extern erhe::log::Category log_gl;
 
-void set_error_checking(bool enable);
+[[nodiscard]] auto size_of_type(const gl::Draw_elements_type type) -> size_t;
+[[nodiscard]] auto size_of_type(const gl::Vertex_attrib_type type) -> size_t;
 
-void check_error();
-
-auto size_of_type(gl::Draw_elements_type type)
--> size_t;
-
-auto size_of_type(gl::Vertex_attrib_type type)
--> size_t;
+void set_error_checking(const bool enable);
+void check_error       ();
 
 } // namespace gl
 

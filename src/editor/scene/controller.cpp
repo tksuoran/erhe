@@ -35,7 +35,7 @@ void Controller::set_max_delta(const float value)
 
 void Controller::update()
 {
-    if (m_active && !m_inhibit)
+    if (m_active /*&& m_focus*/)
     {
         adjust(m_current_delta);
     }
@@ -54,6 +54,11 @@ void Controller::adjust(const float delta)
     {
         m_current_value = m_min_value;
     }
+}
+
+void Controller::adjust(const double delta)
+{
+    adjust(static_cast<float>(delta));
 }
 
 void Controller::dampen()
@@ -99,10 +104,10 @@ void Controller::dampen()
     }
 }
 
-void Controller::set_inhibit(const bool value)
-{
-    m_inhibit = value;
-}
+//void Controller::set_focus(const bool focus)
+//{
+//    m_focus = focus;
+//}
 
 auto Controller::more() const -> bool
 {
@@ -161,6 +166,16 @@ void Controller::set_less(const bool value)
 auto Controller::stop() const -> bool
 {
     return m_stop;
+}
+
+void Controller::set(const Controller_item item, const bool value)
+{
+    switch (item)
+    {
+    case Controller_item::less: set_less(value); break;
+    case Controller_item::more: set_more(value); break;
+    case Controller_item::stop: set_stop(value); break;
+    }
 }
 
 void Controller::set_stop(const bool value)

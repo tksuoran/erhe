@@ -21,7 +21,7 @@ auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function
         case gl::Depth_function::notequal: return gl::Depth_function::notequal;
         default:
         {
-            FATAL("bad gl::Depth_function");
+            ERHE_FATAL("bad gl::Depth_function");
         }
     }
 }
@@ -123,22 +123,22 @@ Depth_stencil_state Depth_stencil_state::s_depth_test_enabled_stencil_test_disab
     gl::Depth_function::less,
     false,
     {
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_function::always,
-        0u,
-        0xffffu,
-        0xffffu
+        .stencil_fail_op = gl::Stencil_op::keep,
+        .z_fail_op       = gl::Stencil_op::keep,
+        .z_pass_op       = gl::Stencil_op::keep,
+        .function        = gl::Stencil_function::always,
+        .reference       = 0u,
+        .test_mask       = 0xffffu,
+        .write_mask      = 0xffffu
     },
     {
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_function::always,
-        0u,
-        0xffffu,
-        0xffffu
+        .stencil_fail_op = gl::Stencil_op::keep,
+        .z_fail_op       = gl::Stencil_op::keep,
+        .z_pass_op       = gl::Stencil_op::keep,
+        .function        = gl::Stencil_function::always,
+        .reference       = 0u,
+        .test_mask       = 0xffffu,
+        .write_mask      = 0xffffu
     },
 };
 
@@ -148,22 +148,22 @@ Depth_stencil_state Depth_stencil_state::s_depth_test_enabled_stencil_test_disab
     reverse(gl::Depth_function::less),
     false,
     {
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_function::always,
-        0u,
-        0xffffu,
-        0xffffu
+        .stencil_fail_op = gl::Stencil_op::keep,
+        .z_fail_op       = gl::Stencil_op::keep,
+        .z_pass_op       = gl::Stencil_op::keep,
+        .function        = gl::Stencil_function::always,
+        .reference       = 0u,
+        .test_mask       = 0xffffu,
+        .write_mask      = 0xffffu
     },
     {
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_function::always,
-        0u,
-        0xffffu,
-        0xffffu
+        .stencil_fail_op = gl::Stencil_op::keep,
+        .z_fail_op       = gl::Stencil_op::keep,
+        .z_pass_op       = gl::Stencil_op::keep,
+        .function        = gl::Stencil_function::always,
+        .reference       = 0u,
+        .test_mask       = 0xffffu,
+        .write_mask      = 0xffffu
     },
 };
 
@@ -173,22 +173,22 @@ Depth_stencil_state Depth_stencil_state::s_depth_test_enabled_greater_or_equal_s
     gl::Depth_function::gequal,
     false,
     {
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_function::always,
-        0u,
-        0xffffu,
-        0xffffu
+        .stencil_fail_op = gl::Stencil_op::keep,
+        .z_fail_op       = gl::Stencil_op::keep,
+        .z_pass_op       = gl::Stencil_op::keep,
+        .function        = gl::Stencil_function::always,
+        .reference       = 0u,
+        .test_mask       = 0xffffu,
+        .write_mask      = 0xffffu
     },
     {
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_function::always,
-        0u,
-        0xffffu,
-        0xffffu
+        .stencil_fail_op = gl::Stencil_op::keep,
+        .z_fail_op       = gl::Stencil_op::keep,
+        .z_pass_op       = gl::Stencil_op::keep,
+        .function        = gl::Stencil_function::always,
+        .reference       = 0u,
+        .test_mask       = 0xffffu,
+        .write_mask      = 0xffffu
     },
 };
 
@@ -198,22 +198,22 @@ Depth_stencil_state Depth_stencil_state::s_depth_test_enabled_greater_or_equal_s
     reverse(gl::Depth_function::gequal),
     false,
     {
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_function::always,
-        0u,
-        0xffffu,
-        0xffffu
+        .stencil_fail_op = gl::Stencil_op::keep,
+        .z_fail_op       = gl::Stencil_op::keep,
+        .z_pass_op       = gl::Stencil_op::keep,
+        .function        = gl::Stencil_function::always,
+        .reference       = 0u,
+        .test_mask       = 0xffffu,
+        .write_mask      = 0xffffu
     },
     {
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_function::always,
-        0u,
-        0xffffu,
-        0xffffu
+        .stencil_fail_op = gl::Stencil_op::keep,
+        .z_fail_op       = gl::Stencil_op::keep,
+        .z_pass_op       = gl::Stencil_op::keep,
+        .function        = gl::Stencil_function::always,
+        .reference       = 0u,
+        .test_mask       = 0xffffu,
+        .write_mask      = 0xffffu
     },
 };
 
@@ -239,22 +239,22 @@ Depth_stencil_state Depth_stencil_state::depth_test_always_stencil_test_disabled
     gl::Depth_function::always,
     false,
     {
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_function::always,
-        0u,
-        0xffffu,
-        0xffffu
+        .stencil_fail_op = gl::Stencil_op::keep,
+        .z_fail_op       = gl::Stencil_op::keep,
+        .z_pass_op       = gl::Stencil_op::keep,
+        .function        = gl::Stencil_function::always,
+        .reference       = 0u,
+        .test_mask       = 0xffffu,
+        .write_mask      = 0xffffu
     },
     {
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_op::keep,
-        gl::Stencil_function::always,
-        0u,
-        0xffffu,
-        0xffffu
+        .stencil_fail_op = gl::Stencil_op::keep,
+        .z_fail_op       = gl::Stencil_op::keep,
+        .z_pass_op       = gl::Stencil_op::keep,
+        .function        = gl::Stencil_function::always,
+        .reference       = 0u,
+        .test_mask       = 0xffffu,
+        .write_mask      = 0xffffu
     },
 };
 
@@ -278,9 +278,11 @@ void Depth_stencil_state_tracker::execute_component(
 )
 {
 #if !DISABLE_CACHE
-    if ((cache.stencil_fail_op != state.stencil_fail_op) ||
+    if (
+        (cache.stencil_fail_op != state.stencil_fail_op) ||
         (cache.z_fail_op       != state.z_fail_op) ||
-        (cache.z_pass_op       != state.z_pass_op))
+        (cache.z_pass_op       != state.z_pass_op)
+    )
 #endif
     {
         gl::stencil_op_separate(face, state.stencil_fail_op, state.z_fail_op, state.z_pass_op);
@@ -297,9 +299,11 @@ void Depth_stencil_state_tracker::execute_component(
     }
 
 #if !DISABLE_CACHE
-    if ((cache.function  != state.function) ||
+    if (
+        (cache.function  != state.function) ||
         (cache.reference != state.reference) ||
-        (cache.test_mask != state.test_mask))
+        (cache.test_mask != state.test_mask)
+    )
 #endif
     {
         gl::stencil_func_separate(face, state.function, state.reference, state.test_mask);
@@ -314,12 +318,14 @@ void Depth_stencil_state_tracker::execute_shared(
     Depth_stencil_state&    cache)
 {
 #if !DISABLE_CACHE
-    if ((cache.front.stencil_fail_op != state.stencil_fail_op) ||
-        (cache.front.z_fail_op       != state.z_fail_op) ||
-        (cache.front.z_pass_op       != state.z_pass_op) ||
+    if (
+        (cache.front.stencil_fail_op != state.stencil_fail_op) ||
+        (cache.front.z_fail_op       != state.z_fail_op)       ||
+        (cache.front.z_pass_op       != state.z_pass_op)       ||
         (cache.back.stencil_fail_op  != state.stencil_fail_op) ||
-        (cache.back.z_fail_op        != state.z_fail_op) ||
-        (cache.back.z_pass_op        != state.z_pass_op))
+        (cache.back.z_fail_op        != state.z_fail_op)       ||
+        (cache.back.z_pass_op        != state.z_pass_op)
+    )
 #endif
     {
         gl::stencil_op(state.stencil_fail_op, state.z_fail_op, state.z_pass_op);
@@ -332,8 +338,10 @@ void Depth_stencil_state_tracker::execute_shared(
     }
 
 #if !DISABLE_CACHE
-    if ((cache.front.write_mask != state.write_mask) ||
-        (cache.back.write_mask  != state.write_mask))
+    if (
+        (cache.front.write_mask != state.write_mask) ||
+        (cache.back.write_mask  != state.write_mask)
+    )
 #endif
     {
         gl::stencil_mask(state.write_mask);
@@ -342,12 +350,14 @@ void Depth_stencil_state_tracker::execute_shared(
     }
 
 #if !DISABLE_CACHE
-    if ((cache.front.function  != state.function)  ||
+    if (
+        (cache.front.function  != state.function)  ||
         (cache.front.reference != state.reference) ||
         (cache.front.test_mask != state.test_mask) ||
         (cache.back.function   != state.function)  ||
         (cache.back.reference  != state.reference) ||
-        (cache.back.test_mask  != state.test_mask))
+        (cache.back.test_mask  != state.test_mask)
+    )
 #endif
     {
         gl::stencil_func(state.function, state.reference, state.test_mask);
@@ -362,7 +372,7 @@ void Depth_stencil_state_tracker::execute_shared(
 
 void Depth_stencil_state_tracker::execute(Depth_stencil_state const* state)
 {
-    VERIFY(state != nullptr);
+    ERHE_VERIFY(state != nullptr);
 
 #if !DISABLE_CACHE
     if (m_last == state->serial)

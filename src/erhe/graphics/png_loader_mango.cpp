@@ -11,17 +11,16 @@
 namespace erhe::graphics
 {
 
-using Format = mango::Format;
-
-auto from_mango(const mango::Format& format)
--> Image_format
+[[nodiscard]] auto from_mango(const mango::image::Format& format) -> Image_format
 {
-    if (format == mango::Format(24, mango::Format::UNORM, mango::Format::RGB,  8, 8, 8, 0))
+    using Format = mango::image::Format;
+
+    if (format == Format{24, Format::UNORM, Format::RGB, 8, 8, 8, 0})
     {
         return Image_format::rgb8; // gl::Internal_format::rgb8;
     }
 
-    if (format == mango::Format(32, mango::Format::UNORM, mango::Format::RGBA, 8, 8, 8, 8))
+    if (format == Format{32, Format::UNORM, Format::RGBA, 8, 8, 8, 8})
     {
         return Image_format::rgba8; //gl::Internal_format::rgba8;
     }
@@ -29,26 +28,28 @@ auto from_mango(const mango::Format& format)
     FATAL("unsupported PNG image color type");
 }
 
-auto to_mango(const gl::Internal_format format)
--> mango::Format
+[[nodiscard]] auto to_mango(const gl::Internal_format format) -> mango::image::Format
 {
+    using Format = mango::image::Format;
+
     switch (format)
     {
-        case gl::Internal_format::rgb8:  return mango::Format(24, mango::Format::UNORM, mango::Format::RGB,  8, 8, 8, 0);
-        case gl::Internal_format::rgba8: return mango::Format(32, mango::Format::UNORM, mango::Format::RGBA, 8, 8, 8, 8);
+        case gl::Internal_format::rgb8:  return Format{24, Format::UNORM, Format::RGB,  8, 8, 8, 0};
+        case gl::Internal_format::rgba8: return Format{32, Format::UNORM, Format::RGBA, 8, 8, 8, 8};
         default: break;
     }
 
     FATAL("unsupported PNG image color type");
 }
 
-auto to_mango(const Image_format format)
--> mango::Format
+[[nodiscard]] auto to_mango(const Image_format format) -> mango::image::Format
 {
+    using Format = mango::image::Format;
+
     switch (format)
     {
-        case Image_format::rgb8:  return mango::Format(24, mango::Format::UNORM, mango::Format::RGB,  8, 8, 8, 0);
-        case Image_format::rgba8: return mango::Format(32, mango::Format::UNORM, mango::Format::RGBA, 8, 8, 8, 8);
+        case Image_format::rgb8:  return Format{24, Format::UNORM, Format::RGB,  8, 8, 8, 0};
+        case Image_format::rgba8: return Format{32, Format::UNORM, Format::RGBA, 8, 8, 8, 8};
         default: break;
     }
 
@@ -72,7 +73,7 @@ auto PNG_loader::open(
 {
     m_file = std::make_unique<mango::filesystem::File>(path.string());
     mango::filesystem::File& file = *m_file;
-    m_image_decoder = std::make_unique<mango::ImageDecoder>(file.operator mango::ConstMemory(), ".png");
+    m_image_decoder = std::make_unique<mango::image::ImageDecoder>(file.operator mango::ConstMemory(), ".png");
     if (!m_image_decoder->isDecoder())
     {
         m_file.reset();
@@ -80,7 +81,7 @@ auto PNG_loader::open(
         return false;
     }
 
-    mango::ImageHeader header = m_image_decoder->header();
+    mango::image::ImageHeader header = m_image_decoder->header();
     info.width       = header.width;
     info.height      = header.height;
     info.depth       = header.depth;
@@ -94,9 +95,15 @@ auto PNG_loader::open(
 
 auto PNG_loader::load(gsl::span<std::byte> transfer_buffer) -> bool
 {
-    const mango::ImageHeader header = m_image_decoder->header();
-    const auto stride = header.width * header.format.bytes();
-    mango::Surface surface(header.width, header.height, header.format, stride, transfer_buffer.data());
+    const mango::image::ImageHeader header{m_image_decoder->header()};
+    const size_t stride = static_cast<size_t>(header.width) * static_cast<size_t>(header.format.bytes());
+    mango::image::Surface surface{
+        header.width,
+        header.height,
+        header.format,
+        stride,
+        transfer_buffer.data()
+    };
 
     const auto status = m_image_decoder->decode(surface);
     return status.success;
@@ -112,17 +119,26 @@ auto PNG_writer::write(
     gsl::span<std::byte>         data
 ) -> bool
 {
-    m_image_encoder = std::make_unique<mango::ImageEncoder>(".png");
+    m_image_encoder = std::make_unique<mango::image::ImageEncoder>(".png");
     if (!m_image_encoder->isEncoder())
     {
         m_image_encoder.reset();
         return false;
     }
-    mango::Surface surface(info.width, info.height, to_mango(info.format), info.row_stride, data.data());
-    m_file_stream = std::make_unique<mango::filesystem::FileStream>(path.string(),
-                                                                    mango::filesystem::FileStream::OpenMode::WRITE);
+
+    mango::image::Surface surface{
+        info.width,
+        info.height,
+        to_mango(info.format),
+        static_cast<size_t>(info.row_stride),
+        data.data()
+    };
+    m_file_stream = std::make_unique<mango::filesystem::FileStream>(
+        path.string(),
+        mango::filesystem::FileStream::OpenMode::WRITE
+    );
     mango::filesystem::FileStream& file_stream = *m_file_stream;
-    mango::ImageEncodeOptions encode_options;
+    mango::image::ImageEncodeOptions encode_options;
     const auto status = m_image_encoder->encode(file_stream, surface, encode_options);
     if (!status.success)
     {

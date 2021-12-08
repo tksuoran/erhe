@@ -133,20 +133,24 @@ enum class Keycode : signed int
     Key_last          = Key_menu
 };
 
+extern auto c_str(const Keycode code) -> const char*;
+
 using Key_modifier_mask = uint32_t;
-constexpr uint32_t Key_modifier_bit_ctrl  = 0x0001u;
-constexpr uint32_t Key_modifier_bit_shift = 0x0002u;
-constexpr uint32_t Key_modifier_bit_super = 0x0004u;
-constexpr uint32_t Key_modifier_bit_menu  = 0x0008u;
+constexpr Key_modifier_mask Key_modifier_bit_ctrl  = 0x0001u;
+constexpr Key_modifier_mask Key_modifier_bit_shift = 0x0002u;
+constexpr Key_modifier_mask Key_modifier_bit_super = 0x0004u;
+constexpr Key_modifier_mask Key_modifier_bit_menu  = 0x0008u;
 
 using Mouse_button = uint32_t;
-constexpr uint32_t Mouse_button_left   = 0;
-constexpr uint32_t Mouse_button_right  = 1;
-constexpr uint32_t Mouse_button_middle = 2;
-constexpr uint32_t Mouse_button_wheel  = 3;
-constexpr uint32_t Mouse_button_x1     = 4;
-constexpr uint32_t Mouse_button_x2     = 5;
-constexpr uint32_t Mouse_button_count  = 6;
+constexpr Mouse_button Mouse_button_left   = 0;
+constexpr Mouse_button Mouse_button_right  = 1;
+constexpr Mouse_button Mouse_button_middle = 2;
+constexpr Mouse_button Mouse_button_wheel  = 3;
+constexpr Mouse_button Mouse_button_x1     = 4;
+constexpr Mouse_button Mouse_button_x2     = 5;
+constexpr Mouse_button Mouse_button_count  = 6;
+
+extern auto c_str(const Mouse_button button) -> const char*;
 
 class Event_handler;
 class View;
@@ -207,17 +211,9 @@ class View
 public:
     ~View() override = default;
 
-    virtual void on_enter()
-    {
-    }
-
-    virtual void on_exit()
-    {
-    }
-
-    virtual void update()
-    {
-    }
+    virtual void on_enter() {}
+    virtual void on_exit () {}
+    virtual void update  () {}
 
     void on_resize(int width, int height) override
     {
@@ -225,12 +221,12 @@ public:
         m_height = height;
     }
 
-    auto width() -> int
+    [[nodiscard]] auto width() -> int
     {
         return m_width;
     }
 
-    auto height() -> int
+    [[nodiscard]] auto height() -> int
     {
         return m_height;
     }
@@ -251,22 +247,14 @@ class Root_view
 public:
     explicit Root_view(Context_window* window);
 
-    void set_view(View* view);
-
-    void reset_view(View* view);
-
-    void on_idle() override;
-
-    void on_close() override;
-
-    void on_resize(const int width, const int height) override;
-
-    void on_key_press(const Keycode code, const uint32_t mask) override;
-
-    void on_key_release(const Keycode code, const uint32_t mask) override;
-
-    void on_mouse_move(const double x, const double y) override;
-
+    void set_view      (View* view);
+    void reset_view    (View* view);
+    void on_idle       () override;
+    void on_close      () override;
+    void on_resize     (const int width, const int height) override;
+    void on_key_press  (const Keycode code, const Key_modifier_mask mask) override;
+    void on_key_release(const Keycode code, const Key_modifier_mask mask) override;
+    void on_mouse_move (const double x, const double y) override;
     void on_mouse_click(const Mouse_button button, const int count) override;
 
 private:

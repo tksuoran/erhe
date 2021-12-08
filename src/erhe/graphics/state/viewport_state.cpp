@@ -18,7 +18,7 @@ void Viewport_state_tracker::reset()
 
 void Viewport_state_tracker::execute(Viewport_state const* state)
 {
-    VERIFY(state != nullptr);
+    ERHE_VERIFY(state != nullptr);
 
 #if !DISABLE_CACHE
     if (m_last == state->serial)
@@ -28,10 +28,12 @@ void Viewport_state_tracker::execute(Viewport_state const* state)
 #endif
 
 #if !DISABLE_CACHE
-    if ((m_cache.x      != state->x)      ||
+    if (
+        (m_cache.x      != state->x)      ||
         (m_cache.y      != state->y)      ||
         (m_cache.width  != state->width)  ||
-        (m_cache.height != state->height))
+        (m_cache.height != state->height)
+    )
 #endif
     {
         gl::viewport_indexed_f(0, state->x, state->y, state->width, state->height);
@@ -42,8 +44,10 @@ void Viewport_state_tracker::execute(Viewport_state const* state)
     }
 
 #if !DISABLE_CACHE
-    if ((m_cache.min_depth != state->min_depth) ||
-        (m_cache.max_depth != state->max_depth))
+    if (
+        (m_cache.min_depth != state->min_depth) ||
+        (m_cache.max_depth != state->max_depth)
+    )
 #endif
     {
         gl::depth_range_f(state->min_depth, state->max_depth);
@@ -54,16 +58,20 @@ void Viewport_state_tracker::execute(Viewport_state const* state)
     m_last = state->serial;
 }
 
-auto operator==(const Viewport_state& lhs, const Viewport_state& rhs) noexcept
--> bool
+auto operator==(
+    const Viewport_state& lhs,
+    const Viewport_state& rhs
+) noexcept -> bool
 {
     return
         (lhs.min_depth == rhs.min_depth) &&
         (lhs.max_depth == rhs.max_depth);
 }
 
-auto operator!=(const Viewport_state& lhs, const Viewport_state& rhs) noexcept
--> bool
+auto operator!=(
+    const Viewport_state& lhs,
+    const Viewport_state& rhs
+) noexcept -> bool
 {
     return !(lhs == rhs);
 }

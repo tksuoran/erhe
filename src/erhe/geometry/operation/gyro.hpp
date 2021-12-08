@@ -13,6 +13,8 @@ public:
     Gyro(Geometry& src, Geometry& destination);
 };
 
-auto gyro(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto gyro(
+    erhe::geometry::Geometry& source
+) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

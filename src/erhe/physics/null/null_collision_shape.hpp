@@ -33,7 +33,7 @@ public:
         const Transform
     ) override
     {
-        assert(false);
+        //assert(false);
     }
 
     virtual void calculate_principal_axis_transform(
@@ -42,7 +42,7 @@ public:
         glm::vec3&                /*inertia*/
     ) override
     {
-        assert(false);
+        //assert(false);
     }
 
 };

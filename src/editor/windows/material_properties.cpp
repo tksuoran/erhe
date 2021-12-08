@@ -1,6 +1,7 @@
 #include "windows/material_properties.hpp"
+#include "editor_tools.hpp"
+
 #include "windows/materials.hpp"
-#include "tools.hpp"
 
 #include "erhe/primitive/material.hpp"
 
@@ -34,7 +35,7 @@ void Material_properties::imgui()
     {
         return;
     }
-    ImGui::Begin("Material");
+
     {
         const auto selected_material = m_materials->selected_material();
         if (selected_material)
@@ -46,7 +47,6 @@ void Material_properties::imgui()
             ImGui::ColorEdit4 ("Base Color", &selected_material->base_color.x, ImGuiColorEditFlags_Float);
         }
     }
-    ImGui::End();
 }
 
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe/toolkit/unique_id.hpp"
+
 #include <glm/glm.hpp>
 
 #include <memory>
@@ -19,14 +21,22 @@ class Mesh_layer
 public:
     explicit Mesh_layer(const std::string_view name);
 
-    std::vector<std::shared_ptr<Mesh>>  meshes;
-    std::string                         name;
+    [[nodiscard]] auto get_mesh_by_id(
+        const erhe::toolkit::Unique_id<Node>::id_type id
+    ) const -> std::shared_ptr<Mesh>;
+
+    std::vector<std::shared_ptr<Mesh>> meshes;
+    std::string                        name;
 };
 
 class Light_layer
 {
 public:
     explicit Light_layer(const std::string_view name);
+
+    [[nodiscard]] auto get_light_by_id(
+        const erhe::toolkit::Unique_id<Node>::id_type id
+    ) const -> std::shared_ptr<Light>;
 
     std::vector<std::shared_ptr<Light>> lights;
     glm::vec4                           ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
@@ -40,6 +50,11 @@ public:
     void sort_transform_nodes  ();
     void update_node_transforms();
 
+    [[nodiscard]] auto get_node_by_id  (const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Node>;
+    [[nodiscard]] auto get_mesh_by_id  (const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Mesh>;
+    [[nodiscard]] auto get_light_by_id (const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Light>;
+    [[nodiscard]] auto get_camera_by_id(const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Camera>;
+
     std::vector<std::shared_ptr<Node>>        nodes;
     std::vector<std::shared_ptr<Mesh_layer>>  mesh_layers;
     std::vector<std::shared_ptr<Light_layer>> light_layers;
@@ -47,7 +62,7 @@ public:
 
     bool nodes_sorted{false};
 
-    auto transform_update_serial() -> uint64_t;
+    [[nodiscard]] auto transform_update_serial() -> uint64_t;
 
 private:
     uint64_t m_transform_update_serial{0};

@@ -26,6 +26,7 @@ public:
     ~Shader_monitor() override;
 
     // Implements Component
+    [[nodiscard]]
     auto get_type_hash       () const -> uint32_t override { return hash; }
     void initialize_component() override;
 
@@ -40,26 +41,26 @@ public:
 private:
     void set_run(bool value)
     {
-        const std::lock_guard<std::mutex> lock(m_mutex);
+        const std::lock_guard<std::mutex> lock{m_mutex};
         m_run = value;
     }
 
     void poll_thread();
 
     void add(
-        const std::filesystem::path&                  path,
-        erhe::graphics::Shader_stages::Create_info    create_info,
-        gsl::not_null<erhe::graphics::Shader_stages*> program
+        const std::filesystem::path&                      path,
+        const erhe::graphics::Shader_stages::Create_info& create_info,
+        gsl::not_null<erhe::graphics::Shader_stages*>     program
     );
 
     class Reload_entry
     {
     public:
         Reload_entry(
-            erhe::graphics::Shader_stages::Create_info    create_info,
-            gsl::not_null<erhe::graphics::Shader_stages*> shader_stages
+            const erhe::graphics::Shader_stages::Create_info& create_info,
+            gsl::not_null<erhe::graphics::Shader_stages*>     shader_stages
         )
-            : create_info  {std::move(create_info)}
+            : create_info  {create_info}
             , shader_stages{shader_stages}
         {
         }
@@ -71,8 +72,11 @@ private:
     class Compare_object
     {
     public:
-        auto operator()(const Reload_entry& lhs, const Reload_entry& rhs) const
-        -> bool
+        [[nodiscard]]
+        auto operator()(
+            const Reload_entry& lhs,
+            const Reload_entry& rhs
+        ) const -> bool
         {
             return lhs.shader_stages < rhs.shader_stages;
         }

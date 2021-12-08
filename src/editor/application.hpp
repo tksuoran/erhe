@@ -14,18 +14,25 @@ class Application
 {
 public:
     static constexpr std::string_view c_name{"Application"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr uint32_t hash{
+        compiletime_xxhash::xxh32(
+            c_name.data(),
+            c_name.size(),
+            {}
+        )
+    };
 
     Application ();
     ~Application() override;
 
     // Implements Component
+    [[nodiscard]]
     auto get_type_hash() const -> uint32_t override { return hash; }
 
     auto initialize_components(int argc, char** argv) -> bool;
     void run();
 
-    void component_initialization_complete(bool initialization_succeeded);
+    void component_initialization_complete(const bool initialization_succeeded);
 
 private:
 

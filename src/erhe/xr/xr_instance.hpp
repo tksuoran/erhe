@@ -102,7 +102,19 @@ public:
     PFN_xrGetVisibilityMaskKHR             xrGetVisibilityMaskKHR            {nullptr};
     PFN_xrGetOpenGLGraphicsRequirementsKHR xrGetOpenGLGraphicsRequirementsKHR{nullptr};
 
+    PFN_xrCreateHandTrackerEXT             xrCreateHandTrackerEXT            {nullptr};
+    PFN_xrDestroyHandTrackerEXT            xrDestroyHandTrackerEXT           {nullptr}; 
+    PFN_xrLocateHandJointsEXT              xrLocateHandJointsEXT             {nullptr};
+
 private:
+    auto get_proc_addr(const char* function) const -> PFN_xrVoidFunction;
+
+    template <typename T>
+    auto get_proc_addr(const char* function) const -> T
+    {
+        return reinterpret_cast<T>(get_proc_addr(function));
+    }
+
     auto enumerate_layers               () -> bool;
     auto enumerate_extensions           () -> bool;
     auto create_instance                () -> bool;
@@ -122,7 +134,6 @@ private:
     std::vector<XrApiLayerProperties>    m_xr_api_layer_properties;
     std::vector<XrEnvironmentBlendMode>  m_xr_environment_blend_modes;
     XrDebugUtilsMessengerEXT             m_debug_utils_messenger;
-
     //PFN_xrSetEnvironmentDepthEstimationVARJO m_xrSetEnvironmentDepthEstimationVARJO{nullptr};
 };
 

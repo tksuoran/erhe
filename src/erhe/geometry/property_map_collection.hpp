@@ -35,8 +35,7 @@ private:
         {
         }
 
-        auto operator=(Entry&& other)
-        -> Entry&
+        auto operator=(Entry&& other) -> Entry&
         {
             key = other.key;
             value = std::move(other.value);
@@ -54,41 +53,40 @@ public:
     auto size() const -> size_t;
 
     template <typename Value_type>
-    auto create(const Property_map_descriptor& descriptor)
-    -> Property_map<Key_type, Value_type>*;
+    auto create(
+        const Property_map_descriptor& descriptor
+    ) -> Property_map<Key_type, Value_type>*;
 
     void insert(Property_map_base<Key_type>* map);
 
     void remove(const std::string& name);
 
     template <typename Value_type>
-    auto contains(const std::string& name) const
-    -> bool;
+    auto contains(const std::string& name) const -> bool;
 
-    auto find_base(const Property_map_descriptor& descriptor) const
-    -> Property_map_base<Key_type>*;
-
-    template <typename Value_type>
-    auto find(const Property_map_descriptor& descriptor) const
-    -> Property_map<Key_type, Value_type>*;
+    auto find_base(
+        const Property_map_descriptor& descriptor
+    ) const -> Property_map_base<Key_type>*;
 
     template <typename Value_type>
-    auto find_or_create(const Property_map_descriptor& name)
-    -> Property_map<Key_type, Value_type>*;
+    auto find(
+        const Property_map_descriptor& descriptor
+    ) const -> Property_map<Key_type, Value_type>*;
 
-    void trim(size_t size);
+    template <typename Value_type>
+    auto find_or_create(
+        const Property_map_descriptor& name
+    ) -> Property_map<Key_type, Value_type>*;
 
+    void trim      (size_t size);
     void remap_keys(const std::vector<Key_type>& key_new_to_old);
-
     void interpolate(
         Property_map_collection<Key_type>&                          destination,
         const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds
     );
 
-    void merge_to(Property_map_collection<Key_type>& source, const glm::mat4 transform);
-
-    auto clone() -> Property_map_collection<Key_type>;
-
+    void merge_to            (Property_map_collection<Key_type>& source, const glm::mat4 transform);
+    auto clone               () -> Property_map_collection<Key_type>;
     auto clone_with_transform(const glm::mat4 transform) -> Property_map_collection<Key_type>;
 
 private:

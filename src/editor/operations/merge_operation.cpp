@@ -80,9 +80,10 @@ auto Merge_operation::describe() const -> std::string
     return ss.str();
 }
 
-Merge_operation::Merge_operation(Context& context)
-    : m_context(context)
+Merge_operation::Merge_operation(Context&& context)
+    : m_context{std::move(context)}
 {
+    // TODO count meshes in selection
     if (context.selection_tool->selection().size() < 2)
     {
         return;
@@ -93,16 +94,17 @@ Merge_operation::Merge_operation(Context& context)
     using namespace glm;
 
     erhe::geometry::Geometry combined_geometry;
-    m_state_before.selection = context.selection_tool->selection();
+    m_state_before.selection      = context.selection_tool->selection();
     m_state_after.collision_shape = erhe::physics::ICollision_shape::create_compound_shape_shared();
     m_state_after.mass = 0.0f;
 
     bool first_mesh                = true;
     mat4 reference_node_from_world = mat4{1};
     auto normal_style              = Normal_style::none;
+    std::shared_ptr<erhe::primitive::Material> material;
 
     std::vector<float> child_masses;
-    for (auto item : context.selection_tool->selection())
+    for (const auto& item : context.selection_tool->selection())
     {
         auto mesh = as_mesh(item);
         if (!mesh)
@@ -110,14 +112,12 @@ Merge_operation::Merge_operation(Context& context)
             continue;
         }
         mat4 transform;
-        auto node_physics = get_physics_node(mesh.get());
-        auto rigid_body = node_physics ? node_physics->rigid_body() : nullptr;
+        auto node_physics    = get_physics_node(mesh.get());
+        auto rigid_body      = node_physics ? node_physics->rigid_body() : nullptr;
         auto collision_shape = (rigid_body != nullptr)
             ? rigid_body->get_collision_shape()
             : std::shared_ptr<erhe::physics::ICollision_shape>{};
 
-        //m_hold_nodes.push_back(node_physics); // Otherwise these nodes will get deleted
-        //m_hold_node_attachments.push_back(node_physics);
         if (first_mesh)
         {
             reference_node_from_world = mesh->node_from_world();
@@ -134,7 +134,7 @@ Merge_operation::Merge_operation(Context& context)
             transform = reference_node_from_world * mesh->world_from_node();
         }
 
-        if (node_physics)
+        if (node_physics && (rigid_body != nullptr))
         {
             m_state_after.collision_shape->add_child_shape(
                 collision_shape,
@@ -147,23 +147,23 @@ Merge_operation::Merge_operation(Context& context)
 
         for (auto& primitive : mesh->data.primitives)
         {
-            auto geometry = primitive.primitive_geometry->source_geometry;
-            if (geometry.get() == nullptr)
+            auto geometry = primitive.source_geometry;
+            if (!geometry)
             {
                 continue;
             }
             combined_geometry.merge(*geometry, transform);
             if (normal_style == Normal_style::none)
             {
-                normal_style = primitive.primitive_geometry->source_normal_style;
+                normal_style = primitive.normal_style;
+            }
+            if (!material)
+            {
+                material = primitive.material;
             }
         }
 
         m_source_entries.emplace_back(
-            context.build_info_set,
-            context.scene,
-            context.layer,
-            context.physics_world,
             mesh,
             mesh->data.primitives
         );
@@ -173,7 +173,6 @@ Merge_operation::Merge_operation(Context& context)
     {
         return;
     }
-
 
     m_state_before.rigidbody_from_node = erhe::physics::Transform{};
     erhe::physics::Transform principal_axis_transform;
@@ -189,13 +188,17 @@ Merge_operation::Merge_operation(Context& context)
     combined_geometry.weld(weld_settings);
     combined_geometry.build_edges();
 
-    m_combined_primitive_geometry = make_primitive_shared(
+    m_combined_primitive.material              = material;
+    m_combined_primitive.gl_primitive_geometry = make_primitive(
         combined_geometry,
         context.build_info_set.gl,
         normal_style
     );
-    m_combined_primitive_geometry->source_geometry     = std::make_shared<erhe::geometry::Geometry>(std::move(combined_geometry));
-    m_combined_primitive_geometry->source_normal_style = normal_style;
+    //m_combined_primitive.rt_primitive_geometry
+    m_combined_primitive.rt_index_buffer = {};
+    m_combined_primitive.rt_primitive_geometry = {};
+    m_combined_primitive.source_geometry = std::make_shared<erhe::geometry::Geometry>(std::move(combined_geometry));
+    m_combined_primitive.normal_style    = normal_style;
 }
 
 void Merge_operation::execute() const
@@ -210,7 +213,8 @@ void Merge_operation::execute() const
         {
             // For first mesh: Replace mesh primitives
             mesh->data.primitives.resize(1);
-            mesh->data.primitives.front().primitive_geometry = m_combined_primitive_geometry;
+
+            mesh->data.primitives.front() = m_combined_primitive;
             first_entry = false;
             auto node_physics = get_physics_node(mesh.get());
             if (node_physics)

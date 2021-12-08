@@ -2,6 +2,8 @@
 
 #include <glm/glm.hpp>
 
+#include <optional>
+
 namespace erhe::scene
 {
 
@@ -16,14 +18,16 @@ public:
     }
 
     // TODO
+    [[nodiscard]]
     auto unproject(
         const glm::mat4 world_from_clip,
         const glm::vec3 window,
         const float     depth_range_near,
         const float     depth_range_far
-    ) const -> glm::vec3;
+    ) const -> std::optional<glm::vec3>;
 
     // TODO
+    [[nodiscard]]
     auto project_to_screen_space(
         const glm::mat4 clip_from_world,
         const glm::vec3 position_in_world,

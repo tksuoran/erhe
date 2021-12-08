@@ -28,7 +28,7 @@ void add_to_scene_layer(
     shared_ptr<Mesh> mesh
 )
 {
-    VERIFY(mesh);
+    ERHE_VERIFY(mesh);
 
     log_scene.trace("add_to_scene_layer(mesh = {})\n", mesh->name());
 
@@ -70,7 +70,7 @@ void add_to_scene_layer(
     shared_ptr<Light> light
 )
 {
-    VERIFY(light);
+    ERHE_VERIFY(light);
 
     log_scene.trace("add_to_scene_layer(light = {})\n", light->name());
 
@@ -110,7 +110,7 @@ void add_to_physics_world(
     shared_ptr<Node_physics> node_physics
 )
 {
-    VERIFY(node_physics);
+    ERHE_VERIFY(node_physics);
 
     log_scene.trace("add_to_physics_world()\n");
 
@@ -123,9 +123,9 @@ void add_to_raytrace_scene(
     std::shared_ptr<Node_raytrace> node_raytrace
 )
 {
-    VERIFY(node_raytrace);
+    ERHE_VERIFY(node_raytrace);
 
-    raytrace_scene.attach(node_raytrace->raytrace_geometry());
+    raytrace_scene.attach(node_raytrace->raytrace_instance());
 }
 
 void remove_from_scene_layer(
@@ -134,7 +134,7 @@ void remove_from_scene_layer(
     shared_ptr<Mesh> mesh
 )
 {
-    VERIFY(mesh);
+    ERHE_VERIFY(mesh);
 
     {
         auto& meshes = layer.meshes;
@@ -177,7 +177,7 @@ void remove_from_raytrace_scene(
     std::shared_ptr<Node_raytrace> node_raytrace
 )
 {
-    VERIFY(node_raytrace);
+    ERHE_VERIFY(node_raytrace);
 
     raytrace_scene.detach(node_raytrace->raytrace_geometry());
 }
@@ -188,7 +188,7 @@ void remove_from_scene_layer(
     shared_ptr<Light> light
 )
 {
-    VERIFY(light);
+    ERHE_VERIFY(light);
 
     log_scene.trace("remove_from_scene_layer(light = {})\n", light->name());
 

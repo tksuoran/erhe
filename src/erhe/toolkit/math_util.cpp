@@ -16,93 +16,15 @@ using glm::mat4;
 using glm::vec2;
 using glm::vec3;
 using glm::vec4;
+using glm::dmat4;
+using glm::dvec2;
+using glm::dvec3;
+using glm::dvec4;
 
 namespace
 {
     constexpr float epsilon         {1e-6f};
     constexpr float pi_minus_epsilon{glm::pi<float>() - epsilon};
-}
-
-auto unproject(
-    const mat4  world_from_clip,
-    const vec3  window,
-    const float depth_range_near,
-    const float depth_range_far,
-    const float viewport_x,
-    const float viewport_y,
-    const float viewport_width,
-    const float viewport_height
-) -> vec3
-{
-    const float viewport_center_x = viewport_x + viewport_width  * 0.5f;
-    const float viewport_center_y = viewport_y + viewport_height * 0.5f;
-    const float s                 = depth_range_far - depth_range_near;
-    const float b                 = depth_range_near;
-
-    const vec4 ndc{
-        (window.x - viewport_center_x) / (viewport_width  * 0.5f),
-        (window.y - viewport_center_y) / (viewport_height * 0.5f),
-        (window.z - b) / s,
-        1.0f
-    };
-
-    const vec4 world_homogeneous = world_from_clip * ndc;
-    if (world_homogeneous.w == 0.0f)
-    {
-        FATAL("w singularity");
-    }
-
-    return vec3{
-        world_homogeneous.x / world_homogeneous.w,
-        world_homogeneous.y / world_homogeneous.w,
-        world_homogeneous.z / world_homogeneous.w
-    };
-}
-
-// 13.8 Coordinate Transformations
-//
-// Clip control: Zero to one
-//
-// x_window  =  viewport_width  * 0.5 * x_ndc + viewport_left
-// y_window  =  viewport_height * 0.5 * y_ndc + viewport_height
-// z_window  =  (depth_range_far - depth_range_near) * z_ndc + depth_range_near
-//
-// Clip control negative one to one
-//
-// x_window  =  viewport_width  * 0.5 * x_ndc + viewport_left
-// y_window  =  viewport_height * 0.5 * y_ndc + viewport_height
-// z_window  =  (depth_range_far - depth_range_near) * 0.5 * z_ndc + ((depth_range_near + depth_range_far) * 0.5)
-auto project_to_screen_space(
-    const mat4  clip_from_world,
-    const vec3  position_in_world,
-    const float depth_range_near,
-    const float depth_range_far,
-    const float viewport_x,
-    const float viewport_y,
-    const float viewport_width,
-    const float viewport_height
-) -> vec3
-{
-    const auto viewport_center_x = viewport_x + viewport_width  * 0.5f;
-    const auto viewport_center_y = viewport_y + viewport_height * 0.5f;
-    const auto s                 = depth_range_far - depth_range_near;
-    const auto b                 = depth_range_near;
-    //const auto s = clip_negative_one_to_one ? (depth_range_far - depth_range_near) * 0.5f : (depth_range_far - depth_range_near);
-    //const auto b = clip_negative_one_to_one ? ((depth_range_near + depth_range_far) * 0.5) : depth_range_near;
-
-    const vec4 clip = clip_from_world * vec4{position_in_world, 1.0f};
-
-    const vec3 ndc{
-        clip.x / clip.w,
-        clip.y / clip.w,
-        clip.z / clip.w
-    };
-
-    return vec3{
-        viewport_width  * 0.5f * ndc.x + viewport_center_x,
-        viewport_height * 0.5f * ndc.y + viewport_center_y,
-        s * ndc.z + b
-    };
 }
 
 auto create_frustum(
@@ -336,156 +258,11 @@ auto create_orthographic_centered(
 ) -> mat4
 {
     // TODO Check bottom and top
-    return create_orthographic(-width / 2, width / 2, height / 2, -height / 2, z_near, z_far);
-}
-
-auto create_translation(const vec2 t) -> mat4
-{
-    mat4 result;
-    result[0][0] = 1.0f;
-    result[1][0] = 0.0f;
-    result[2][0] = 0.0f;
-    result[3][0] = t.x;
-    result[0][1] = 0.0f;
-    result[1][1] = 1.0f;
-    result[2][1] = 0.0f;
-    result[3][1] = t.y;
-    result[0][2] = 0.0f;
-    result[1][2] = 0.0f;
-    result[2][2] = 1.0f;
-    result[3][2] = 0.0f;
-    result[0][3] = 0.0f;
-    result[1][3] = 0.0f;
-    result[2][3] = 0.0f;
-    result[3][3] = 1.0f;
-    return result;
-}
-
-auto create_translation(const vec3 t)
--> mat4
-{
-    mat4 result;
-    result[0][0] = 1.0f;
-    result[1][0] = 0.0f;
-    result[2][0] = 0.0f;
-    result[3][0] = t.x;
-    result[0][1] = 0.0f;
-    result[1][1] = 1.0f;
-    result[2][1] = 0.0f;
-    result[3][1] = t.y;
-    result[0][2] = 0.0f;
-    result[1][2] = 0.0f;
-    result[2][2] = 1.0f;
-    result[3][2] = t.z;
-    result[0][3] = 0.0f;
-    result[1][3] = 0.0f;
-    result[2][3] = 0.0f;
-    result[3][3] = 1.0f;
-    return result;
-}
-
-auto create_translation(const float x, const float y, const float z)
--> mat4
-{
-    mat4 result;
-    result[0][0] = 1.0f;
-    result[1][0] = 0.0f;
-    result[2][0] = 0.0f;
-    result[3][0] = x;
-    result[0][1] = 0.0f;
-    result[1][1] = 1.0f;
-    result[2][1] = 0.0f;
-    result[3][1] = y;
-    result[0][2] = 0.0f;
-    result[1][2] = 0.0f;
-    result[2][2] = 1.0f;
-    result[3][2] = z;
-    result[0][3] = 0.0f;
-    result[1][3] = 0.0f;
-    result[2][3] = 0.0f;
-    result[3][3] = 1.0f;
-    return result;
-}
-
-auto create_rotation(const float angle_radians, const vec3 axis) -> mat4
-{
-    const float rsin = std::sin(angle_radians);
-    const float rcos = std::cos(angle_radians);
-
-    const float u = axis.x;
-    const float v = axis.y;
-    const float w = axis.z;
-
-    mat4 result;
-
-    // Set the first row
-    result[0][0] =      rcos + u * u * (1 - rcos);
-    result[1][0] = -w * rsin + v * u * (1 - rcos);
-    result[2][0] =  v * rsin + w * u * (1 - rcos);
-    result[3][0] = 0;
-
-    // Set the second row
-    result[0][1] =  w * rsin + u * v * (1 - rcos);
-    result[1][1] =      rcos + v * v * (1 - rcos);
-    result[2][1] = -u * rsin + w * v * (1 - rcos);
-    result[3][1] = 0;
-
-    // Set the third row
-    result[0][2] = -v * rsin + u * w * (1 - rcos);
-    result[1][2] =  u * rsin + v * w * (1 - rcos);
-    result[2][2] =      rcos + w * w * (1 - rcos);
-    result[3][2] = 0;
-
-    // Set the fourth row
-    result[0][3] = 0.0f;
-    result[1][3] = 0.0f;
-    result[2][3] = 0.0f;
-    result[3][3] = 1.0f;
-    return result;
-}
-
-auto create_scale(const float x, const float y, const float z) -> mat4
-{
-    mat4 result;
-    result[0][0] = x;
-    result[1][0] = 0.0f;
-    result[2][0] = 0.0f;
-    result[3][0] = 0.0f;
-    result[0][1] = 0.0f;
-    result[1][1] = y;
-    result[2][1] = 0.0f;
-    result[3][1] = 0.0f;
-    result[0][2] = 0.0f;
-    result[1][2] = 0.0f;
-    result[2][2] = z;
-    result[3][2] = 0.0f;
-    result[0][3] = 0.0f;
-    result[1][3] = 0.0f;
-    result[2][3] = 0.0f;
-    result[3][3] = 1.0f;
-    return result;
-}
-
-auto create_scale(const float s) -> mat4
-{
-    mat4 result(1);
-    result[0][0] = s;
-    result[1][0] = 0.0f;
-    result[2][0] = 0.0f;
-    result[3][0] = 0.0f;
-    result[0][1] = 0.0f;
-    result[1][1] = s;
-    result[2][1] = 0.0f;
-    result[3][1] = 0.0f;
-    result[0][2] = 0.0f;
-    result[1][2] = 0.0f;
-    result[2][2] = s;
-    result[3][2] = 0.0f;
-    result[0][3] = 0.0f;
-    result[1][3] = 0.0f;
-    result[2][3] = 0.0f;
-    result[3][3] = 1.0f;
-    return result;
+    return create_orthographic(
+        -width  / 2.0f,  width  / 2.0f,
+         height / 2.0f, -height / 2.0f,
+        z_near, z_far
+    );
 }
 
 auto create_look_at(const vec3 eye, const vec3 center, const vec3 up0) -> mat4
@@ -511,11 +288,6 @@ auto create_look_at(const vec3 eye, const vec3 center, const vec3 up0) -> mat4
     result[3] = vec4{eye, 1.0f};
     return result;
 #endif
-}
-
-auto degrees_to_radians(const float degrees) -> float
-{
-    return degrees * glm::pi<float>() / 180.0f;
 }
 
 void hsv_to_rgb(float h, float s, float v, float& r, float& g, float& b)
@@ -690,11 +462,14 @@ void rgb_to_hsv(const float r, const float g, const float b, float& h, float& s,
 
 auto srgb_to_linear(const float cs) -> float
 {
-    float cs_clamped = std::min(std::max(0.0f, cs), 1.0f);
+    const float cs_clamped = std::min(std::max(0.0f, cs), 1.0f);
     return
         (cs_clamped <= 0.04045f)
             ? cs_clamped / 12.92f
-            : std::pow((cs_clamped + 0.055f) / 1.055f, 2.4f);
+            : std::pow(
+                (cs_clamped + 0.055f) / 1.055f,
+                2.4f
+            );
 }
 
 auto linear_rgb_to_srgb(const float cl) -> float
@@ -747,7 +522,7 @@ void cartesian_to_heading_elevation(const vec3 v, float& out_elevation, float& o
 
 void cartesian_to_spherical_iso(const vec3 v, float& out_theta, float& out_phi)
 {
-    out_theta = std::acos(v.z);
+    out_theta = std::acos(glm::clamp(v.z, -1.0f, 1.0f));
     out_phi   = std::atan2(v.y, v.x);
 }
 
@@ -759,177 +534,6 @@ auto spherical_to_cartesian_iso(const float theta, const float phi) -> vec3
             std::sin(theta) * std::sin(phi),
             std::cos(theta)
         };
-}
-
-auto closest_points(
-    const glm::vec3 P0,
-    const glm::vec3 P1,
-    const glm::vec3 Q0,
-    const glm::vec3 Q1,
-    glm::vec3&      out_PC,
-    glm::vec3&      out_QC
-) -> bool
-{
-    const glm::vec3 u  = P1 - P0;
-    const glm::vec3 v  = Q1 - Q0;
-    const glm::vec3 w0 = P0 - Q0;
-    const float     a  = glm::dot(u, u);
-    const float     b  = glm::dot(u, v);
-    const float     c  = glm::dot(v, v);
-    const float     d  = glm::dot(u, w0);
-    const float     e  = glm::dot(v, w0);
-    const float     denominator = (a * c) - (b * b);
-
-    if (denominator < 0.000001f)
-    {
-        return false;
-    }
-
-    const float sC = ((b * e) - (c * d)) / denominator;
-    const float tC = ((a * e) - (b * d)) / denominator;
-    out_PC = P0 + sC * u;
-    out_QC = Q0 + tC * v;
-
-    return true;
-}
-
-auto closest_points(
-    const glm::vec2 P0,
-    const glm::vec2 P1,
-    const glm::vec2 Q0,
-    const glm::vec2 Q1,
-    glm::vec2&      out_PC,
-    glm::vec2&      out_QC
-) -> bool
-{
-    const glm::vec2 u  = P1 - P0;
-    const glm::vec2 v  = Q1 - Q0;
-    const glm::vec2 w0 = P0 - Q0;
-    const float     a  = glm::dot(u, u);
-    const float     b  = glm::dot(u, v);
-    const float     c  = glm::dot(v, v);
-    const float     d  = glm::dot(u, w0);
-    const float     e  = glm::dot(v, w0);
-    const float     denominator = (a * c) - (b * b);
-
-    if (denominator < epsilon)
-    {
-        return false;
-    }
-
-    const float sC = ((b * e) - (c * d)) / denominator;
-    const float tC = ((a * e) - (b * d)) / denominator;
-    out_PC = P0 + sC * u;
-    out_QC = Q0 + tC * v;
-
-    return true;
-}
-
-auto closest_point(
-    const glm::vec2 P0,
-    const glm::vec2 P1,
-    const glm::vec2 Q,
-    glm::vec2&      out_PC
-) -> bool
-{
-    const glm::vec2 u = P1 - P0;
-    if (dot(u, u) < epsilon)
-    {
-        return false;
-    }
-    const float t = glm::dot(u, Q - P0) / dot(u, u);
-    out_PC = P0 + t * u;
-    return true;
-}
-
-auto closest_point(
-    const glm::vec3 P0,
-    const glm::vec3 P1,
-    const glm::vec3 Q,
-    glm::vec3&      out_PC
-) -> bool
-{
-    const glm::vec3 u = P1 - P0;
-    if (dot(u, u) < epsilon)
-    {
-        return false;
-    }
-    const float t = glm::dot(u, Q - P0) / dot(u, u);
-    out_PC = P0 + t * u;
-    return true;
-}
-
-auto line_point_distance(
-    const glm::vec2 P0,
-    const glm::vec2 P1,
-    const glm::vec2 Q,
-    float&          distance
-) -> bool
-{
-    glm::vec2 PC;
-    if (!closest_point(P0, P1, Q, PC))
-    {
-        return false;
-    }
-    distance = glm::distance(Q, PC);
-    return true;
-}
-
-auto line_point_distance(
-    const glm::vec3 P0,
-    const glm::vec3 P1,
-    const glm::vec3 Q,
-    float&          distance
-) -> bool
-{
-    glm::vec3 PC;
-    if (!closest_point(P0, P1, Q, PC))
-    {
-        return false;
-    }
-    distance = glm::distance(Q, PC);
-    return true;
-}
-
-auto intersect_plane(
-    const glm::vec3 n,
-    const glm::vec3 p0,
-    const glm::vec3 l0,
-    const glm::vec3 l,
-    float& t
-) -> bool
-{
-    const float denominator = glm::dot(n, l);
-    if (std::abs(denominator) < epsilon)
-    {
-        return false;
-    }
-    t = glm::dot(p0 - l0, n) / denominator;
-    return true;
-}
-
-auto project_point_to_plane(
-    const glm::vec3 n,
-    const glm::vec3 p, 
-    glm::vec3&      in_out_q
-) -> bool
-{
-    // Q = P - Pn_v
-    // v = P - S
-    // Pn_v = dot(v, n) / dot(n, n)
-    //glm::vec3 v           = q - p;
-    const float     nominator   = dot(n, in_out_q - p);
-    const float     denominator = dot(n, n);
-    if (std::abs(denominator) < epsilon)
-    {
-        return false;
-    }
-    const float     t            = nominator / denominator;
-    const glm::vec3 Pn_v         = t * n;
-    const glm::vec3 projected_q1 = in_out_q - Pn_v;
-
-    in_out_q = projected_q1;
-    return true;
 }
 
 } // namespace erhe::toolkit

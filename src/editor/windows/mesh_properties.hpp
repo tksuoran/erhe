@@ -3,6 +3,8 @@
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
 
+#include "erhe/components/component.hpp"
+
 #include <memory>
 
 namespace erhe::geometry
@@ -37,14 +39,13 @@ public:
     ~Mesh_properties() override;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
     // Implements Tool
-    auto description() -> const char*               override { return c_name.data(); }
+    [[nodiscard]] auto description() -> const char* override { return c_name.data(); }
     void tool_render(const Render_context& context) override;
-    auto state      () const -> State               override;
 
     // Implements Imgui_window
     void imgui() override;

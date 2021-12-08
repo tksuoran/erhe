@@ -10,8 +10,8 @@ class Null_rigid_body
 {
 public:
     Null_rigid_body(
-        IRigid_body_create_info& create_info,
-        IMotion_state*           motion_state
+        const IRigid_body_create_info& create_info,
+        IMotion_state*                 motion_state
     );
     ~Null_rigid_body() override;
 

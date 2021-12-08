@@ -23,16 +23,16 @@
 #include <cstdio>
 #include <cstdlib>
 
-#define FATAL(format, ...) do { printf("%s:%d " format, __FILE__, __LINE__, ##__VA_ARGS__); DebugBreak(); abort(); } while (1)
-#define VERIFY(expression) do { if (!(expression)) { FATAL("assert %s failed in %s", #expression, __func__); } } while (0)
+#define ERHE_FATAL(format, ...) do { printf("%s:%d " format, __FILE__, __LINE__, ##__VA_ARGS__); DebugBreak(); abort(); } while (1)
+#define ERHE_VERIFY(expression) do { if (!(expression)) { ERHE_FATAL("assert %s failed in %s", #expression, __func__); } } while (0)
 
 #else
 
 #include <cstdio>
 #include <cstdlib>
 
-#define FATAL(format, ...) do { printf("%s:%d " format, __FILE__, __LINE__, ##__VA_ARGS__); __builtin_trap(); __builtin_unreachable(); abort(); } while (1)
-#define VERIFY(expression) do { if (!(expression)) { FATAL("assert %s failed in %s", #expression, __func__); } } while (0)
+#define ERHE_FATAL(format, ...) do { printf("%s:%d " format, __FILE__, __LINE__, ##__VA_ARGS__); __builtin_trap(); __builtin_unreachable(); abort(); } while (1)
+#define ERHE_VERIFY(expression) do { if (!(expression)) { ERHE_FATAL("assert %s failed in %s", #expression, __func__); } } while (0)
 
 #endif
 

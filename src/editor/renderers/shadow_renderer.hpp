@@ -44,12 +44,14 @@ public:
     void connect             () override;
     void initialize_component() override;
 
+    // Public API
     void render(
         const Mesh_layer_collection&    mesh_layers,
         const erhe::scene::Light_layer& light_layer
     );
-    auto texture () const -> erhe::graphics::Texture*;
-    auto viewport() const -> erhe::scene::Viewport;
+
+    [[nodiscard]] auto texture () const -> erhe::graphics::Texture*;
+    [[nodiscard]] auto viewport() const -> erhe::scene::Viewport;
 
     static constexpr size_t s_max_light_count    = 2;
     static constexpr size_t s_texture_resolution = 3 * 1024;

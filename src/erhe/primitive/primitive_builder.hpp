@@ -66,9 +66,9 @@ public:
     void allocate_vertex_buffer();
     void allocate_index_buffer ();
     void allocate_index_range(
-        gl::Primitive_type primitive_type,
-        size_t             index_count,
-        Index_range&       range
+        const gl::Primitive_type primitive_type,
+        const size_t             index_count,
+        Index_range&             out_range
     );
 
     const erhe::geometry::Geometry& geometry;
@@ -102,7 +102,8 @@ public:
 
 private:
     void build_polygon_id        ();
-    auto get_polygon_normal() -> glm::vec3;
+
+    [[nodiscard]] auto get_polygon_normal() -> glm::vec3;
 
     void build_vertex_position   ();
     void build_vertex_normal     ();
@@ -121,10 +122,11 @@ private:
     erhe::geometry::Polygon_corner_id polygon_corner_id{0};
     erhe::geometry::Point_id          point_id         {0};
     erhe::geometry::Corner_id         corner_id        {0};
-    uint32_t                          vertex_index     {0};
-    uint32_t                          first_index      {0};
-    uint32_t                          previous_index   {0};
+    uint32_t                          vertex_index     {0}; // primitive vertex index    .
+    uint32_t                          first_index      {0}; // primitive first index      . These make triangle primitive
+    uint32_t                          previous_index   {0}; // primitive previous index  .
     uint32_t                          polygon_index    {0};
+    uint32_t                          primitive_index  {0}; // triangle (TODO quad) index
     Normal_style                      normal_style     {Normal_style::none};
     Vertex_buffer_writer              vertex_writer;
     Index_buffer_writer               index_writer;
@@ -151,7 +153,7 @@ public:
 
     ~Primitive_builder();
 
-    auto build() -> Primitive_geometry;
+    [[nodiscard]] auto build() -> Primitive_geometry;
 
     void build(Primitive_geometry* primitive_geometry);
 
@@ -163,16 +165,10 @@ private:
     Normal_style                    m_normal_style;
 };
 
-auto make_primitive(
+[[nodiscard]] auto make_primitive(
     const erhe::geometry::Geometry& geometry,
     Build_info&                     build_info,
     const Normal_style              normal_style = Normal_style::corner_normals
 ) -> Primitive_geometry;
-
-auto make_primitive_shared(
-    const erhe::geometry::Geometry& geometry,
-    Build_info&                     build_info,
-    const Normal_style              normal_style = Normal_style::corner_normals
-) -> std::shared_ptr<Primitive_geometry>;
 
 } // namespace erhe::primitive

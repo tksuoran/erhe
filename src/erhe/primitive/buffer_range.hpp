@@ -9,7 +9,7 @@ class Buffer_range
 {
 public:
     Buffer_range  ();
-    Buffer_range  (size_t count, size_t element_size, size_t byte_offset);
+    Buffer_range  (const size_t count, const size_t element_size, const size_t byte_offset);
     Buffer_range  (const Buffer_range& other);
     auto operator=(const Buffer_range& other) -> Buffer_range&;
     Buffer_range  (const Buffer_range&& other) noexcept;

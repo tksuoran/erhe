@@ -119,12 +119,12 @@ auto Base_renderer::update_primitive_buffer(
     m_primitive_writer.begin(current_frame_resources().primitive_buffer.target());
     const auto&  shader_resources   = *m_program_interface->shader_resources.get();
     const size_t entry_size         = shader_resources.primitive_struct.size_bytes();
-    auto         primitive_gpu_data = current_frame_resources().primitive_buffer.map();
+    const auto   primitive_gpu_data = current_frame_resources().primitive_buffer.map();
     const auto&  offsets            = shader_resources.primitive_block_offsets;
     size_t       primitive_index    = 0;
     for (auto mesh : mesh_layer.meshes)
     {
-        VERIFY(mesh);
+        ERHE_VERIFY(mesh);
         if (!visibility_filter(mesh->visibility_mask()))
         {
             continue;
@@ -135,10 +135,10 @@ auto Base_renderer::update_primitive_buffer(
         size_t mesh_primitive_index{0};
         for (auto& primitive : mesh_data.primitives)
         {
-            const auto* const primitive_geometry = primitive.primitive_geometry.get();
+            const auto& primitive_geometry = primitive.gl_primitive_geometry;
             //log_render.trace("primitive_index = {}\n", primitive_index);
 
-            const uint32_t count        = static_cast<uint32_t>(primitive_geometry->triangle_fill_indices.index_count);
+            const uint32_t count        = static_cast<uint32_t>(primitive_geometry.triangle_fill_indices.index_count);
             const uint32_t power_of_two = next_power_of_two(count);
             const uint32_t mask         = power_of_two - 1;
             const uint32_t current_bits = m_id_offset & mask;
@@ -177,12 +177,14 @@ auto Base_renderer::update_primitive_buffer(
 
             if (use_id_ranges)
             {
-                Id_range r;
-                r.offset          = m_id_offset;
-                r.length          = count;
-                r.mesh            = mesh;
-                r.primitive_index = mesh_primitive_index++;
-                m_id_ranges.push_back(r);
+                m_id_ranges.push_back(
+                    Id_range{
+                        .offset          = m_id_offset,
+                        .length          = count,
+                        .mesh            = mesh,
+                        .primitive_index = mesh_primitive_index++
+                    }
+                );
 
                 m_id_offset += count;
             }
@@ -197,8 +199,8 @@ auto Base_renderer::update_primitive_buffer(
 }
 
 auto Base_renderer::update_light_buffer(
-    const Light_layer&      light_layer,
-    const Viewport          light_texture_viewport
+    const Light_layer& light_layer,
+    const Viewport     light_texture_viewport
 ) -> Buffer_range
 {
     ERHE_PROFILE_FUNCTION
@@ -208,11 +210,11 @@ auto Base_renderer::update_light_buffer(
     const auto&  shader_resources = *m_program_interface->shader_resources.get();
     const size_t entry_size       = shader_resources.light_struct.size_bytes();
     const auto&  offsets          = shader_resources.light_block_offsets;
-    auto         light_gpu_data   = current_frame_resources().light_buffer.map();
+    const auto   light_gpu_data   = current_frame_resources().light_buffer.map();
     int          light_index      = 0;
     uint32_t     directional_light_count{0};
-    uint32_t     spot_light_count{0};
-    uint32_t     point_light_count{0};
+    uint32_t     spot_light_count       {0};
+    uint32_t     point_light_count      {0};
 
     m_light_writer.begin(current_frame_resources().light_buffer.target());
 
@@ -220,7 +222,7 @@ auto Base_renderer::update_light_buffer(
 
     for (auto light : light_layer.lights)
     {
-        VERIFY(light);
+        ERHE_VERIFY(light);
 
         log_render.trace("light_index = {}\n", light_index);
         switch (light->type)
@@ -231,16 +233,16 @@ auto Base_renderer::update_light_buffer(
             default: break;
         }
 
-        light->update(light_texture_viewport);
-
-        const vec3  direction            = vec3{light->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
-        const vec3  position             = vec3{light->world_from_node() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
-        const vec4  radiance             = vec4{light->intensity * light->color, light->range};
-        const float inner_spot_cos       = std::cos(light->inner_spot_angle * 0.5f);
-        const float outer_spot_cos       = std::cos(light->outer_spot_angle * 0.5f);
-        const vec4  position_inner_spot  = vec4{position, inner_spot_cos};
-        const vec4  direction_outer_spot = vec4{glm::normalize(vec3{direction}), outer_spot_cos};
-        write(light_gpu_data, m_light_writer.write_offset + offsets.light.texture_from_world,           as_span(light->texture_from_world()));
+        const auto projection_transforms = light->projection_transforms(light_texture_viewport);
+        const auto texture_from_world    = light->texture_transform(projection_transforms.clip_from_world);
+        const vec3 direction             = vec3{light->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
+        const vec3 position              = vec3{light->world_from_node() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+        const vec4 radiance              = vec4{light->intensity * light->color, light->range};
+        const auto inner_spot_cos        = std::cos(light->inner_spot_angle * 0.5f);
+        const auto outer_spot_cos        = std::cos(light->outer_spot_angle * 0.5f);
+        const vec4 position_inner_spot   = vec4{position, inner_spot_cos};
+        const vec4 direction_outer_spot  = vec4{glm::normalize(vec3{direction}), outer_spot_cos};
+        write(light_gpu_data, m_light_writer.write_offset + offsets.light.texture_from_world,           as_span(texture_from_world.matrix()));
         write(light_gpu_data, m_light_writer.write_offset + offsets.light.position_and_inner_spot_cos,  as_span(position_inner_spot));
         write(light_gpu_data, m_light_writer.write_offset + offsets.light.direction_and_outer_spot_cos, as_span(direction_outer_spot));
         write(light_gpu_data, m_light_writer.write_offset + offsets.light.radiance_and_range,           as_span(radiance));
@@ -268,7 +270,7 @@ auto Base_renderer::update_material_buffer(
     const auto&  shader_resources  = *m_program_interface->shader_resources.get();
     const size_t entry_size        = shader_resources.material_struct.size_bytes();
     const auto&  offsets           = shader_resources.material_block_offsets;
-    auto         material_gpu_data = current_frame_resources().material_buffer.map();
+    const auto   material_gpu_data = current_frame_resources().material_buffer.map();
     size_t       material_index    = 0;
     m_material_writer.begin(current_frame_resources().material_buffer.target());
     for (auto material : materials)
@@ -296,15 +298,14 @@ auto Base_renderer::update_camera_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
-    camera.update(viewport);
-
-    const auto& shader_resources = *m_program_interface->shader_resources.get();
-    auto        camera_gpu_data  = current_frame_resources().camera_buffer.map();
-    const auto& offsets          = shader_resources.camera_block_offsets;
-    const mat4  world_from_node  = camera.world_from_node();
-    const mat4  world_from_clip  = camera.world_from_clip();
-    const mat4  clip_from_world  = camera.clip_from_world();
-    const float exposure         = 1.0f;
+    const auto  projection_transforms = camera.projection_transforms(viewport);
+    const auto& shader_resources      = *m_program_interface->shader_resources.get();
+    const auto  camera_gpu_data       = current_frame_resources().camera_buffer.map();
+    const auto& offsets               = shader_resources.camera_block_offsets;
+    const mat4  world_from_node       = camera.world_from_node();
+    const mat4  world_from_clip       = projection_transforms.clip_from_world.inverse_matrix();
+    const mat4  clip_from_world       = projection_transforms.clip_from_world.matrix();
+    const float exposure              = 1.0f;
 
     m_camera_writer.begin(current_frame_resources().camera_buffer.target());
     const float viewport_floats[4] {
@@ -313,7 +314,7 @@ auto Base_renderer::update_camera_buffer(
         static_cast<float>(viewport.width),
         static_cast<float>(viewport.height)
     };
-    const auto fov_sides = camera.projection()->get_fov_sides(viewport);
+    const auto  fov_sides = camera.projection()->get_fov_sides(viewport);
     const float fov_floats[4] {
         fov_sides.left,
         fov_sides.right,
@@ -347,10 +348,10 @@ auto Base_renderer::update_draw_indirect_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
-    auto     draw_indirect_gpu_data = current_frame_resources().draw_indirect_buffer.map();
-    uint32_t instance_count     {1};
-    uint32_t base_instance      {0};
-    size_t   draw_indirect_count{0};
+    const auto draw_indirect_gpu_data = current_frame_resources().draw_indirect_buffer.map();
+    uint32_t   instance_count     {1};
+    uint32_t   base_instance      {0};
+    size_t     draw_indirect_count{0};
     m_draw_indirect_writer.begin(current_frame_resources().draw_indirect_buffer.target());
     for (auto mesh : mesh_layer.meshes)
     {
@@ -360,8 +361,8 @@ auto Base_renderer::update_draw_indirect_buffer(
         }
         for (auto& primitive : mesh->data.primitives)
         {
-            const auto* const primitive_geometry = primitive.primitive_geometry.get();
-            const auto index_range = primitive_geometry->index_range(primitive_mode);
+            const auto& primitive_geometry = primitive.gl_primitive_geometry;
+            const auto  index_range        = primitive_geometry.index_range(primitive_mode);
             if (index_range.index_count == 0)
             {
                 continue;
@@ -373,9 +374,9 @@ auto Base_renderer::update_draw_indirect_buffer(
                 index_count = std::min(index_count, static_cast<uint32_t>(m_max_index_count));
             }
 
-            const uint32_t base_index  = primitive_geometry->base_index();
+            const uint32_t base_index  = primitive_geometry.base_index();
             const uint32_t first_index = static_cast<uint32_t>(index_range.first_index + base_index);
-            const uint32_t base_vertex = primitive_geometry->base_vertex();
+            const uint32_t base_vertex = primitive_geometry.base_vertex();
 
             const gl::Draw_elements_indirect_command draw_command{
                 index_count,

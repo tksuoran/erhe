@@ -13,7 +13,11 @@ class Bullet_convex_hull_collision_shape
     : public Bullet_collision_shape
 {
 public:
-    Bullet_convex_hull_collision_shape(const float* points, const int numPoints, const int stride);
+    Bullet_convex_hull_collision_shape(
+        const float* points,
+        const int    num_points,
+        const int    stride
+    );
 
 private:
     btConvexHullShape m_convex_hull_shape;

@@ -1,7 +1,8 @@
 #include "windows/viewport_config.hpp"
 #include "application.hpp"
 #include "configuration.hpp"
-#include "tools.hpp"
+#include "editor_tools.hpp"
+
 #include "scene/scene_manager.hpp"
 
 #include "erhe/imgui/imgui_helpers.hpp"
@@ -14,20 +15,15 @@ namespace editor
 Viewport_config::Viewport_config()
 {
     render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
-    render_style_not_selected.edge_lines = false;
+    render_style_not_selected.edge_lines = true;
 
-    render_style_selected.edge_lines = true;
+    render_style_selected.edge_lines = false;
 }
 
 void Viewport_config::render_style_ui(Render_style& render_style)
 {
     using namespace erhe::imgui;
 
-    //const ImGuiTreeNodeFlags flags{
-    //    ImGuiTreeNodeFlags_SpanFullWidth    |
-    //    ImGuiTreeNodeFlags_NoTreePushOnOpen |
-    //    ImGuiTreeNodeFlags_Leaf
-    //};
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_OpenOnArrow       |
         ImGuiTreeNodeFlags_OpenOnDoubleClick |
@@ -35,7 +31,6 @@ void Viewport_config::render_style_ui(Render_style& render_style)
     };
 
     if (ImGui::TreeNodeEx("Polygon Fill", flags))
-    //if (ImGui::CollapsingHeader("Polygon Fill"))
     {
         ImGui::Checkbox("Visible", &render_style.polygon_fill);
         if (render_style.polygon_fill)
@@ -49,7 +44,6 @@ void Viewport_config::render_style_ui(Render_style& render_style)
         ImGui::TreePop();
     }
 
-    //if (ImGui::CollapsingHeader("Edge Lines"))
     if (ImGui::TreeNodeEx("Edge Lines", flags))
     {
         ImGui::Checkbox("Visible", &render_style.edge_lines);
@@ -67,7 +61,6 @@ void Viewport_config::render_style_ui(Render_style& render_style)
         ImGui::TreePop();
     }
 
-    //if (ImGui::CollapsingHeader("Polygon Centroids"))
     if (ImGui::TreeNodeEx("Polygon Centroids", flags))
     {
         ImGui::Checkbox("Visible", &render_style.polygon_centroids);
@@ -84,7 +77,6 @@ void Viewport_config::render_style_ui(Render_style& render_style)
         ImGui::TreePop();
     }
 
-    //if (ImGui::CollapsingHeader("Corner Points"))
     if (ImGui::TreeNodeEx("Corner Points", flags))
     {
         ImGui::Checkbox  ("Visible",        &render_style.corner_points);
@@ -107,8 +99,6 @@ void Viewport_config::render_style_ui(Render_style& render_style)
 
 void Viewport_config::imgui()
 {
-    ImGui::Begin("Viewport");
-
     ImGui::ColorEdit4("Clear Color", &clear_color.x, ImGuiColorEditFlags_Float);
 
     const ImGuiTreeNodeFlags parent_flags{
@@ -119,21 +109,15 @@ void Viewport_config::imgui()
 
     if (ImGui::TreeNodeEx("Default Style", parent_flags))
     {
-        //ImGui::PushID("default style");
         render_style_ui(render_style_not_selected);
-        //ImGui::PopID();
         ImGui::TreePop();
     }
 
-    //if (ImGui::CollapsingHeader("Selection"))
     if (ImGui::TreeNodeEx("Selection", parent_flags))
     {
-        //ImGui::PushID("selection");
         render_style_ui(render_style_selected);
-        //ImGui::PopID();
         ImGui::TreePop();
     }
-    ImGui::End();
 }
 
 }

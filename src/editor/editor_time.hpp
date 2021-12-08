@@ -12,12 +12,19 @@ class Editor_time
 {
 public:
     static constexpr std::string_view c_name{"Editor_time"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr uint32_t         hash{
+        compiletime_xxhash::xxh32(
+            c_name.data(),
+            c_name.size(),
+            {}
+        )
+    };
 
     Editor_time();
     ~Editor_time() override;
 
     // Implements Component
+    [[nodiscard]]
     auto get_type_hash        () const -> uint32_t override { return hash; }
     void connect              () override;
 
@@ -25,6 +32,8 @@ public:
     void update               ();
     void update_fixed_step    (const erhe::components::Time_context& time_context);
     void update_once_per_frame(const erhe::components::Time_context& time_context);
+
+    [[nodiscard]]
     auto time                 () const -> double;
 
     std::chrono::steady_clock::time_point m_current_time;

@@ -3,6 +3,8 @@
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
 
+#include "erhe/components/component.hpp"
+
 #include <glm/glm.hpp>
 
 namespace editor
@@ -24,26 +26,29 @@ public:
     ~Grid_tool() override;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
-    void connect             ()                   override;
-    void initialize_component()                   override;
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    void connect             () override;
+    void initialize_component() override;
 
     // Implements Tool
-    void tool_render(const Render_context& context) override;
-    auto state      () const -> State               override;
-    auto description() -> const char*               override;
+    [[nodiscard]] auto description() -> const char* override;
+    void tool_render(const Render_context& context)  override;
 
     // Implements Imgui_window
     void imgui() override;
 
-    auto snap(const glm::vec3 v) const -> glm::vec3;
+    // Public API
+    [[nodiscard]] auto snap(const glm::vec3 v) const -> glm::vec3;
 
 private:
     Line_renderer* m_line_renderer{nullptr};
-    bool  m_enable    {false};
-    float m_cell_size {1.0f};
-    int   m_cell_div  {10};
-    int   m_cell_count{20};
+    bool           m_enable       {false};
+    float          m_cell_size    {1.0f};
+    int            m_cell_div     {10};
+    int            m_cell_count   {20};
+    float          m_thickness    {40.0f};
+    glm::vec4      m_major_color  {0.065f, 0.065f, 0.065f, 1.0f};
+    glm::vec4      m_minor_color  {0.035f, 0.035f, 0.035f, 1.0f};
 };
 
 } // namespace editor

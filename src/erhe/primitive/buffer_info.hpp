@@ -43,7 +43,7 @@ public:
     {
     }
 
-    Buffer_info& operator=(const Buffer_info& other)
+    auto operator=(const Buffer_info& other) -> Buffer_info&
     {
         usage         = other.usage;
         normal_style  = other.normal_style;
@@ -53,7 +53,7 @@ public:
         return *this;
     }
 
-    Buffer_info& operator=(Buffer_info&& other) noexcept
+    auto operator=(Buffer_info&& other) noexcept -> Buffer_info&
     {
         usage         = other.usage;
         normal_style  = other.normal_style;

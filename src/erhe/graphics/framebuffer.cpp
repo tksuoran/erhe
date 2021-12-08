@@ -34,6 +34,7 @@ Framebuffer::Framebuffer(const Create_info& create_info)
     : m_attachments{create_info.attachments}
 {
     std::lock_guard lock{s_mutex};
+
     s_all_framebuffers.push_back(this);
 
     create();
@@ -42,6 +43,7 @@ Framebuffer::Framebuffer(const Create_info& create_info)
 Framebuffer::~Framebuffer()
 {
     std::lock_guard lock{s_mutex};
+
     s_all_framebuffers.erase(
         std::remove(
             s_all_framebuffers.begin(),
@@ -62,7 +64,7 @@ void Framebuffer::create()
 {
     if (m_gl_framebuffer.has_value())
     {
-        VERIFY(m_owner_thread == std::this_thread::get_id());
+        ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
         return;
     }
 

@@ -28,6 +28,7 @@ public:
     Xr_session    (Xr_session&&)      = delete;
     void operator=(Xr_session&&)      = delete;
 
+    // TODO [[nodiscard]]
     auto begin_session         () -> bool;
     auto begin_frame           () -> bool;
     auto wait_frame            () -> XrFrameState*;
@@ -36,6 +37,10 @@ public:
     auto get_xr_session        () const -> XrSession;
     auto get_xr_reference_space() const -> XrSpace;
     auto get_xr_frame_state    () const -> const XrFrameState&;
+    void update_hand_tracking  ();
+
+    [[nodiscard]] auto get_hand_tracking_joint (const XrHandEXT hand, const XrHandJointEXT joint) const -> Hand_tracking_joint;
+    [[nodiscard]] auto get_hand_tracking_active(const XrHandEXT hand) const -> bool;
 
 private:
     auto create_session             () -> bool;
@@ -44,6 +49,7 @@ private:
     auto create_swapchains          () -> bool;
     auto create_reference_space     () -> bool;
     auto attach_actions             () -> bool;
+    auto create_hand_tracking       () -> bool;
 
     class Swapchains
     {
@@ -56,6 +62,16 @@ private:
 
         Swapchain color_swapchain;
         Swapchain depth_swapchain;
+    };
+
+    class Hand_tracker
+    {
+    public:
+        XrHandTrackerEXT         hand_tracker    {XR_NULL_HANDLE};
+        XrHandJointLocationEXT   joint_locations [XR_HAND_JOINT_COUNT_EXT];
+        XrHandJointVelocityEXT   joint_velocities[XR_HAND_JOINT_COUNT_EXT];
+        XrHandJointVelocitiesEXT velocities;
+        XrHandJointLocationsEXT  locations;
     };
 
     Xr_instance&                                  m_instance;
@@ -71,6 +87,8 @@ private:
     XrSpace                                       m_xr_reference_space;
     //XrSessionState                                m_xr_session_state;
     XrFrameState                                  m_xr_frame_state;
+    Hand_tracker                                  m_hand_tracker_left;
+    Hand_tracker                                  m_hand_tracker_right;
 };
 
 }

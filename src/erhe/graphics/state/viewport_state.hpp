@@ -48,8 +48,7 @@ public:
 
     // TODO scissors
 
-    static auto get_next_serial()
-    -> size_t
+    static [[nodiscard]] auto get_next_serial() -> size_t
     {
         do
         {
@@ -66,8 +65,8 @@ public:
 class Viewport_state_hash
 {
 public:
-    auto operator()(const Viewport_state& state) const noexcept
-    -> std::size_t
+    [[nodiscard]]
+    auto operator()(const Viewport_state& state) const noexcept -> std::size_t
     {
         return
             (
@@ -79,11 +78,15 @@ public:
     }
 };
 
-auto operator==(const Viewport_state& lhs, const Viewport_state& rhs) noexcept
--> bool;
+[[nodiscard]] auto operator==(
+    const Viewport_state& lhs,
+    const Viewport_state& rhs
+) noexcept -> bool;
 
-auto operator!=(const Viewport_state& lhs, const Viewport_state& rhs) noexcept
--> bool;
+[[nodiscard]] auto operator!=(
+    const Viewport_state& lhs,
+    const Viewport_state& rhs
+) noexcept -> bool;
 
 class Viewport_state_tracker
 {

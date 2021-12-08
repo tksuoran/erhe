@@ -72,7 +72,7 @@ auto glsl_token(const gl::Uniform_type type)
 
         default:
         {
-            FATAL("Bad uniform type");
+            ERHE_FATAL("Bad uniform type");
         }
     }
 }
@@ -113,12 +113,12 @@ public:
     {
     }
 
-    auto is_sampler    () const -> bool { return sampler_mask != 0; }
-    auto is_multisample() const -> bool { return (sampler_mask & sampler_multisample) != 0; }
-    auto is_cube       () const -> bool { return (sampler_mask & sampler_cube       ) != 0; }
-    auto is_array      () const -> bool { return (sampler_mask & sampler_array      ) != 0; }
-    auto is_shadow     () const -> bool { return (sampler_mask & sampler_shadow     ) != 0; }
-    auto is_rectangle  () const -> bool { return (sampler_mask & sampler_rectangle  ) != 0; }
+    [[nodiscard]] auto is_sampler    () const -> bool { return sampler_mask != 0; }
+    [[nodiscard]] auto is_multisample() const -> bool { return (sampler_mask & sampler_multisample) != 0; }
+    [[nodiscard]] auto is_cube       () const -> bool { return (sampler_mask & sampler_cube       ) != 0; }
+    [[nodiscard]] auto is_array      () const -> bool { return (sampler_mask & sampler_array      ) != 0; }
+    [[nodiscard]] auto is_shadow     () const -> bool { return (sampler_mask & sampler_shadow     ) != 0; }
+    [[nodiscard]] auto is_rectangle  () const -> bool { return (sampler_mask & sampler_rectangle  ) != 0; }
 
     gl::Uniform_type   type             {gl::Uniform_type::bool_};
     gl::Uniform_type   basic_type       {gl::Uniform_type::bool_};
@@ -197,7 +197,7 @@ auto get_type_details(const gl::Uniform_type type)
 
         default:
         {
-            FATAL("Bad uniform type");
+            ERHE_FATAL("Bad uniform type");
         }
     }
 }
@@ -247,7 +247,7 @@ auto Shader_resource::is_basic(const Type type) -> bool
         case Type::shader_storage_block : return false;
         default:
         {
-            FATAL("bad Shader_resource::Type");
+            ERHE_FATAL("bad Shader_resource::Type");
         }
     }
 }
@@ -265,7 +265,7 @@ auto Shader_resource::is_aggregate(const Shader_resource::Type type) -> bool
         case Type::shader_storage_block : return true;
         default:
         {
-            FATAL("bad Shader_resource::Type");
+            ERHE_FATAL("bad Shader_resource::Type");
         }
     }
 }
@@ -283,7 +283,7 @@ auto Shader_resource::should_emit_members(const Shader_resource::Type type) -> b
         case Type::shader_storage_block : return true;
         default:
         {
-            FATAL("bad Shader_resource::Type");
+            ERHE_FATAL("bad Shader_resource::Type");
         }
     }
 }
@@ -301,7 +301,7 @@ auto Shader_resource::is_block(const Shader_resource::Type type) -> bool
         case Type::shader_storage_block : return true;
         default:
         {
-            FATAL("bad Shader_resource::Type");
+            ERHE_FATAL("bad Shader_resource::Type");
         }
     }
 }
@@ -319,7 +319,7 @@ auto Shader_resource::uses_binding_points(const Shader_resource::Type type) -> b
         case Type::shader_storage_block : return true;
         default:
         {
-            FATAL("bad Shader_resource::Type");
+            ERHE_FATAL("bad Shader_resource::Type");
         }
     }
 }
@@ -334,7 +334,7 @@ auto Shader_resource::c_str(const Shader_resource::Precision v) -> const char*
         case Precision::superp:  return "superp";
         default:
         {
-            FATAL("Bad uniform precision\n");
+            ERHE_FATAL("Bad uniform precision\n");
         }
     }
 };
@@ -383,7 +383,7 @@ Shader_resource::Shader_resource(
 {
     Expects((int)binding_point < Instance::limits.max_uniform_buffer_bindings);
 
-    VERIFY((block_type == Type::uniform_block) || (block_type == Type::shader_storage_block));
+    ERHE_VERIFY((block_type == Type::uniform_block) || (block_type == Type::shader_storage_block));
 }
 
 // Basic type
@@ -632,12 +632,12 @@ auto Shader_resource::type_string() const -> std::string
 
         case Type::sampler:
         {
-            FATAL("Samplers are only allowed in default uniform block");
+            ERHE_FATAL("Samplers are only allowed in default uniform block");
         }
 
         default:
         {
-            FATAL("Bad Shader_resource::Type");
+            ERHE_FATAL("Bad Shader_resource::Type");
         }
     }
 }

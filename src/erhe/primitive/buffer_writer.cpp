@@ -49,7 +49,7 @@ inline void write_low(
 
         default:
         {
-            FATAL("bad index type");
+            ERHE_FATAL("bad index type");
         }
     }
 }
@@ -86,7 +86,7 @@ inline void write_low(
 
         default:
         {
-            FATAL("bad index type");
+            ERHE_FATAL("bad index type");
         }
     }
 }
@@ -113,7 +113,7 @@ inline void write_low(
     }
     else
     {
-        FATAL("unsupported attribute type");
+        ERHE_FATAL("unsupported attribute type");
     }
 }
 
@@ -138,7 +138,7 @@ inline void write_low(
     }
     else
     {
-        FATAL("unsupported attribute type");
+        ERHE_FATAL("unsupported attribute type");
     }
 }
 
@@ -166,7 +166,7 @@ inline void write_low(
     }
     else
     {
-        FATAL("unsupported attribute type");
+        ERHE_FATAL("unsupported attribute type");
     }
 }
 

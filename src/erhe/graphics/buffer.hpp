@@ -14,7 +14,7 @@ namespace erhe::graphics
 class Buffer final
 {
 public:
-    Buffer () = default;
+    Buffer ();
     ~Buffer();
 
     Buffer(
@@ -35,20 +35,21 @@ public:
     Buffer        (Buffer&& other) noexcept;
     auto operator=(Buffer&& other) noexcept -> Buffer&;
 
-    auto map                  () const          -> gsl::span<std::byte>;
-    auto debug_label          () const noexcept -> const std::string&;
-    auto capacity_byte_count  () const noexcept -> size_t;
-    auto allocate_bytes       (const size_t byte_count, const size_t alignment = 64) noexcept -> size_t;
+    [[nodiscard]] auto map                () const          -> gsl::span<std::byte>;
+    [[nodiscard]] auto debug_label        () const noexcept -> const std::string&;
+    [[nodiscard]] auto capacity_byte_count() const noexcept -> size_t;
+    [[nodiscard]] auto allocate_bytes     (const size_t byte_count, const size_t alignment = 64) noexcept -> size_t;
+    [[nodiscard]] auto free_capacity_bytes() const noexcept -> size_t;
+    [[nodiscard]] auto target             () const noexcept -> gl::Buffer_target;
+    [[nodiscard]] auto gl_name            () const noexcept -> unsigned int;
     void unmap                () noexcept;
     void flush_bytes          (const size_t byte_offset, const size_t byte_count) noexcept;
     void flush_and_unmap_bytes(const size_t byte_count) noexcept;
-    auto free_capacity_bytes  () const noexcept -> size_t;
-    auto target               () const noexcept -> gl::Buffer_target;
     void set_debug_label      (std::string_view label) noexcept;
     void dump                 () const noexcept;
-    auto gl_name              () const noexcept -> unsigned int;
 
     template <typename T>
+    [[nodiscard]]
     auto map_elements(
         const size_t                     element_offset,
         const size_t                     element_count,
@@ -64,8 +65,9 @@ public:
         );
     }
 
-    auto map_all_bytes(const gl::Map_buffer_access_mask access_mask) noexcept
-        -> gsl::span<std::byte>;
+    auto map_all_bytes(
+        const gl::Map_buffer_access_mask access_mask
+    ) noexcept -> gsl::span<std::byte>;
 
     auto map_bytes(
         const size_t                     byte_offset,
@@ -94,14 +96,21 @@ private:
 class Buffer_hash
 {
 public:
-    auto operator()(const Buffer& buffer) const noexcept
-    -> size_t
+    [[nodiscard]]
+    auto operator()(const Buffer& buffer) const noexcept -> size_t
     {
         return static_cast<size_t>(buffer.gl_name());
     }
 };
 
-auto operator==(const Buffer& lhs, const Buffer& rhs) noexcept -> bool;
-auto operator!=(const Buffer& lhs, const Buffer& rhs) noexcept -> bool;
+[[nodiscard]] auto operator==(
+    const Buffer& lhs,
+    const Buffer& rhs
+) noexcept -> bool;
+
+[[nodiscard]] auto operator!=(
+    const Buffer& lhs, 
+    const Buffer& rhs
+) noexcept -> bool;
 
 } // namespace erhe::graphics

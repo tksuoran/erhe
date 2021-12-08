@@ -40,9 +40,9 @@ public:
     );
 
     void apply_to_vertex_input_state(
-        Vertex_input_state&          vertex_input_state,
-        gsl::not_null<const Buffer*> vertex_buffer,
-        const Vertex_format&         vertex_format
+        Vertex_input_state&  vertex_input_state,
+        const Buffer*        vertex_buffer,
+        const Vertex_format& vertex_format
     ) const;
 
     Mapping_collection mappings;

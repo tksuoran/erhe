@@ -16,6 +16,11 @@ using namespace erhe::geometry;
 using namespace erhe::primitive;
 using namespace erhe::scene;
 
+Mesh_operation::Mesh_operation(Context&& context)
+    : m_context{std::move(context)}
+{
+}
+
 auto Mesh_operation::describe() const -> std::string
 {
     std::stringstream ss;
@@ -35,17 +40,15 @@ auto Mesh_operation::describe() const -> std::string
     return ss.str();
 }
 
-Mesh_operation::Mesh_operation() = default;
-
 Mesh_operation::~Mesh_operation() = default;
 
 void Mesh_operation::execute() const
 {
     for (const auto& entry : m_entries)
     {
-        entry.scene.sanity_check();
+        m_context.scene.sanity_check();
         entry.mesh->data = entry.after;
-        entry.scene.sanity_check();
+        m_context.scene.sanity_check();
     }
 }
 
@@ -53,21 +56,20 @@ void Mesh_operation::undo() const
 {
     for (const auto& entry : m_entries)
     {
-        entry.scene.sanity_check();
+        m_context.scene.sanity_check();
         entry.mesh->data = entry.before;
-        entry.scene.sanity_check();
+        m_context.scene.sanity_check();
     }
 }
 
 void Mesh_operation::make_entries(
-    const Context&                                                      context,
     const function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation
 )
 {
-    context.scene.sanity_check();
+    m_context.scene.sanity_check();
 
-    m_selection_tool = context.selection_tool;
-    for (auto item : context.selection_tool->selection())
+    m_selection_tool = m_context.selection_tool;
+    for (auto item : m_context.selection_tool->selection())
     {
         auto mesh = as_mesh(item);
         if (!mesh)
@@ -76,17 +78,14 @@ void Mesh_operation::make_entries(
         }
 
         Entry entry{
-            context.scene,
-            context.layer,
-            context.physics_world,
-            mesh,       // mesh shared ptr
-            mesh->data, // contents before
-            mesh->data  // contents after
+            .mesh   = mesh,
+            .before = mesh->data,
+            .after  = mesh->data
         };
 
         for (auto& primitive : entry.after.primitives)
         {
-            auto geometry = primitive.primitive_geometry->source_geometry;
+            auto geometry = primitive.source_geometry;
             if (geometry.get() == nullptr)
             {
                 continue;
@@ -95,20 +94,17 @@ void Mesh_operation::make_entries(
             auto& gr = *g;
             auto result_geometry = operation(gr);
             result_geometry.sanity_check();
-            auto result_primitive_geometry = make_primitive_shared(
-                result_geometry,
-                context.build_info_set.gl,
-                primitive.primitive_geometry->source_normal_style
-            );
-            primitive.primitive_geometry = result_primitive_geometry;
-            primitive.primitive_geometry->source_geometry = make_shared<erhe::geometry::Geometry>(
-                move(result_geometry)
+            primitive.source_geometry       = make_shared<erhe::geometry::Geometry>(move(result_geometry));
+            primitive.gl_primitive_geometry = make_primitive(
+                *primitive.source_geometry.get(),
+                m_context.build_info_set.gl,
+                primitive.normal_style
             );
         }
         add_entry(std::move(entry));
     }
 
-    context.scene.sanity_check();
+    m_context.scene.sanity_check();
 }
 
 void Mesh_operation::add_entry(Entry&& entry)

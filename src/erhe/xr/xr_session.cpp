@@ -1,5 +1,6 @@
 #include "erhe/xr/xr_session.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/window.hpp"
 #include "erhe/xr/xr_instance.hpp"
@@ -21,6 +22,11 @@
 #   define XR_USE_PLATFORM_WIN32      1
 #endif
 
+//#if defined(_MSC_VER) && !defined(__clang__)
+//#   pragma warning(push)
+//#   pragma warning(disable : 26812) // The enum type is unscoped. Prefer ‘enum class’ over ‘enum’ (Enum.3).
+//#endif
+
 #ifdef linux
 #   define XR_USE_PLATFORM_LINUX      1
 #endif
@@ -29,6 +35,10 @@
 #define XR_USE_GRAPHICS_API_OPENGL 1
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
+
+//#if defined(_MSC_VER) && !defined(__clang__)
+//#   pragma warning(pop)
+//#endif
 
 namespace erhe::xr {
 
@@ -51,6 +61,8 @@ Xr_session::Xr_session(
         XR_FALSE
     }
 {
+    ERHE_PROFILE_FUNCTION
+
     log_xr.trace("{}\n", __func__);
 
     if (instance.get_xr_instance() == XR_NULL_HANDLE)
@@ -89,32 +101,33 @@ Xr_session::Xr_session(
     {
         return;
     }
+    if (!create_hand_tracking())
+    {
+        return;
+    }
 }
 
 auto Xr_session::create_session() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     log_xr.trace("{}\n", __func__);
 
     const auto xr_instance = m_instance.get_xr_instance();
-    VERIFY(xr_instance != XR_NULL_HANDLE);
+    ERHE_VERIFY(xr_instance != XR_NULL_HANDLE);
 
-    XrGraphicsRequirementsOpenGLKHR xr_graphics_requirements_opengl;
-    xr_graphics_requirements_opengl.type = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_KHR;
-    xr_graphics_requirements_opengl.next = nullptr;
+    XrGraphicsRequirementsOpenGLKHR xr_graphics_requirements_opengl{
+        .type = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_KHR,
+        .next = nullptr
+    };
 
-    if (
-        !check(
-            "xrGetOpenGLGraphicsRequirementsKHR",
-            m_instance.xrGetOpenGLGraphicsRequirementsKHR(
-                xr_instance,
-                m_instance.get_xr_system_id(),
-                &xr_graphics_requirements_opengl
-            )
+    ERHE_XR_CHECK(
+        m_instance.xrGetOpenGLGraphicsRequirementsKHR(
+            xr_instance,
+            m_instance.get_xr_system_id(),
+            &xr_graphics_requirements_opengl
         )
-    )
-    {
-        return false;
-    }
+    );
 
     GLFWwindow* const glfw_window = m_context_window.get_glfw_window();
     if (glfw_window == nullptr)
@@ -124,28 +137,22 @@ auto Xr_session::create_session() -> bool
     }
 
 #ifdef _WIN32
-    XrGraphicsBindingOpenGLWin32KHR graphics_binding_opengl_win32;
-    graphics_binding_opengl_win32.type  = XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR;
-    graphics_binding_opengl_win32.next  = nullptr;
-    graphics_binding_opengl_win32.hDC   = GetDC(glfwGetWin32Window(glfw_window));
-    graphics_binding_opengl_win32.hGLRC = glfwGetWGLContext(glfw_window);
+    XrGraphicsBindingOpenGLWin32KHR graphics_binding_opengl_win32{
+        .type  = XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR,
+        .next  = nullptr,
+        .hDC   = GetDC(glfwGetWin32Window(glfw_window)),
+        .hGLRC = glfwGetWGLContext(glfw_window)
+    };
 
-    XrSessionCreateInfo session_create_info;
-    session_create_info.type        = XR_TYPE_SESSION_CREATE_INFO;
-    session_create_info.next        = reinterpret_cast<const XrBaseInStructure*>(&graphics_binding_opengl_win32);
-    session_create_info.createFlags = 0;
-    session_create_info.systemId    = m_instance.get_xr_system_id();
+    XrSessionCreateInfo session_create_info{
+        .type        = XR_TYPE_SESSION_CREATE_INFO,
+        .next        = reinterpret_cast<const XrBaseInStructure*>(&graphics_binding_opengl_win32),
+        .createFlags = 0,
+        .systemId    = m_instance.get_xr_system_id()
+    };
 
     check_gl_context_in_current_in_this_thread();
-    if (
-        !check(
-            "xrCreateSession",
-            xrCreateSession(xr_instance, &session_create_info, &m_xr_session)
-        )
-    )
-    {
-        return false;
-    }
+    ERHE_XR_CHECK(xrCreateSession(xr_instance, &session_create_info, &m_xr_session));
 #endif
 
 #ifdef linux
@@ -166,6 +173,18 @@ Xr_session::~Xr_session()
 {
     log_xr.trace("{}\n", __func__);
 
+    if (m_instance.xrDestroyHandTrackerEXT != nullptr)
+    {
+        if (m_hand_tracker_left.hand_tracker != XR_NULL_HANDLE)
+        {
+            m_instance.xrDestroyHandTrackerEXT(m_hand_tracker_left.hand_tracker);
+        }
+        if (m_hand_tracker_right.hand_tracker != XR_NULL_HANDLE)
+        {
+            m_instance.xrDestroyHandTrackerEXT(m_hand_tracker_right.hand_tracker);
+        }
+    }
+
     m_view_swapchains.clear();
 
     if (m_xr_session == XR_NULL_HANDLE)
@@ -173,10 +192,10 @@ Xr_session::~Xr_session()
         return;
     }
 
-    check("xrEndSession",     xrEndSession    (m_xr_session));
+    check(xrEndSession    (m_xr_session));
 
     check_gl_context_in_current_in_this_thread();
-    check("xrDestroySession", xrDestroySession(m_xr_session));
+    check(xrDestroySession(m_xr_session));
 }
 
 auto Xr_session::get_xr_session() const -> XrSession
@@ -209,6 +228,8 @@ int color_format_score(const gl::Internal_format image_format)
 
 auto Xr_session::enumerate_swapchain_formats() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
@@ -216,32 +237,18 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
 
     uint32_t swapchain_format_count{0};
 
-    if (
-        !check(
-            "xrEnumerateSwapchainFormats",
-            xrEnumerateSwapchainFormats(m_xr_session, 0, &swapchain_format_count, nullptr)
-        )
-    )
-    {
-        return false;
-    }
+    ERHE_XR_CHECK(xrEnumerateSwapchainFormats(m_xr_session, 0, &swapchain_format_count, nullptr));
 
     std::vector<int64_t> swapchain_formats(swapchain_format_count);
 
-    if (
-        !check(
-            "xrEnumerateSwapchainFormats",
-            xrEnumerateSwapchainFormats(
-                m_xr_session,
-                swapchain_format_count,
-                &swapchain_format_count,
-                swapchain_formats.data()
-            )
+    ERHE_XR_CHECK(
+        xrEnumerateSwapchainFormats(
+            m_xr_session,
+            swapchain_format_count,
+            &swapchain_format_count,
+            swapchain_formats.data()
         )
-    )
-    {
-        return false;
-    }
+    );
 
     log_xr.info("Swapchain formats:\n");
     int best_color_format_score{0};
@@ -264,41 +271,32 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
 
 auto Xr_session::enumerate_reference_spaces() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
     }
 
     uint32_t reference_space_type_count{0};
-    if (
-        !check(
-            "xrEnumerateReferenceSpaces",
-            xrEnumerateReferenceSpaces(
-                m_xr_session,
-                0,
-                &reference_space_type_count,
-                nullptr)
+    ERHE_XR_CHECK(
+        xrEnumerateReferenceSpaces(
+            m_xr_session,
+            0,
+            &reference_space_type_count,
+            nullptr
         )
-    )
-    {
-        return false;
-    }
+    );
 
     m_xr_reference_space_types.resize(reference_space_type_count);
-    if (
-        !check(
-            "xrEnumerateReferenceSpaces",
-            xrEnumerateReferenceSpaces(
-                m_xr_session,
-                reference_space_type_count,
-                &reference_space_type_count,
-                m_xr_reference_space_types.data()
-            )
+    ERHE_XR_CHECK(
+        xrEnumerateReferenceSpaces(
+            m_xr_session,
+            reference_space_type_count,
+            &reference_space_type_count,
+            m_xr_reference_space_types.data()
         )
-    )
-    {
-        return false;
-    }
+    );
     log_xr.info("Reference space types:\n");
     for (const auto reference_space_type : m_xr_reference_space_types)
     {
@@ -310,6 +308,8 @@ auto Xr_session::enumerate_reference_spaces() -> bool
 
 auto Xr_session::create_swapchains() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
@@ -319,53 +319,46 @@ auto Xr_session::create_swapchains() -> bool
     m_view_swapchains.clear();
     for (const auto& view : views)
     {
-        XrSwapchainCreateInfo swapchain_create_info;
-        swapchain_create_info.type        = XR_TYPE_SWAPCHAIN_CREATE_INFO;
-        swapchain_create_info.next        = nullptr;
-        swapchain_create_info.createFlags = 0;
-        swapchain_create_info.usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
-        swapchain_create_info.format      = static_cast<int64_t>(m_swapchain_color_format);
-        swapchain_create_info.arraySize   = 1;
-        swapchain_create_info.width       = view.recommendedImageRectWidth;
-        swapchain_create_info.height      = view.recommendedImageRectHeight;
-        swapchain_create_info.mipCount    = 1;
-        swapchain_create_info.faceCount   = 1;
-        swapchain_create_info.sampleCount = view.recommendedSwapchainSampleCount;
+        const XrSwapchainCreateInfo color_swapchain_create_info
+        {
+            .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
+            .next        = nullptr,
+            .createFlags = 0,
+            .usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
+            .format      = static_cast<int64_t>(m_swapchain_color_format),
+            .sampleCount = view.recommendedSwapchainSampleCount,
+            .width       = view.recommendedImageRectWidth,
+            .height      = view.recommendedImageRectHeight,
+            .faceCount   = 1,
+            .arraySize   = 1,
+            .mipCount    = 1
+        };
 
         XrSwapchain color_swapchain{XR_NULL_HANDLE};
 
         check_gl_context_in_current_in_this_thread();
-        if (
-            !check(
-                "xrCreateSwapchain",
-                xrCreateSwapchain(
-                    m_xr_session,
-                    &swapchain_create_info,
-                    &color_swapchain
-                )
-            )
-        )
-        {
-            return false;
-        }
+        ERHE_XR_CHECK(xrCreateSwapchain(m_xr_session, &color_swapchain_create_info, &color_swapchain));
 
-        swapchain_create_info.usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-        swapchain_create_info.format      = static_cast<int64_t>(m_swapchain_depth_format);
+        const XrSwapchainCreateInfo depth_swapchain_create_info
+        {
+            .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
+            .next        = nullptr,
+            .createFlags = 0,
+            //.usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+            .usageFlags  = XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+            .format      = static_cast<int64_t>(m_swapchain_depth_format),
+            .sampleCount = view.recommendedSwapchainSampleCount,
+            .width       = view.recommendedImageRectWidth,
+            .height      = view.recommendedImageRectHeight,
+            .faceCount   = 1,
+            .arraySize   = 1,
+            .mipCount    = 1
+        };
+
         XrSwapchain depth_swapchain{XR_NULL_HANDLE};
 
         check_gl_context_in_current_in_this_thread();
-        if (
-            !check(
-                "xrCreateSwapchain",
-                xrCreateSwapchain(
-                    m_xr_session,
-                    &swapchain_create_info, &depth_swapchain
-                )
-            )
-        )
-        {
-            return false;
-        }
+        ERHE_XR_CHECK(xrCreateSwapchain(m_xr_session, &depth_swapchain_create_info, &depth_swapchain));
         m_view_swapchains.emplace_back(color_swapchain, depth_swapchain);
     }
 
@@ -374,61 +367,53 @@ auto Xr_session::create_swapchains() -> bool
 
 auto Xr_session::create_reference_space() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
     }
 
-    XrReferenceSpaceCreateInfo reference_space_create_info;
-    reference_space_create_info.type                               = XR_TYPE_REFERENCE_SPACE_CREATE_INFO;
-    reference_space_create_info.next                               = nullptr;
-    reference_space_create_info.referenceSpaceType                 = XR_REFERENCE_SPACE_TYPE_LOCAL;
-    reference_space_create_info.poseInReferenceSpace.orientation.x = 0.0f;
-    reference_space_create_info.poseInReferenceSpace.orientation.y = 0.0f;
-    reference_space_create_info.poseInReferenceSpace.orientation.z = 0.0f;
-    reference_space_create_info.poseInReferenceSpace.orientation.w = 1.0f;
-    reference_space_create_info.poseInReferenceSpace.position.x    = 0.0f;
-    reference_space_create_info.poseInReferenceSpace.position.y    = 0.0f;
-    reference_space_create_info.poseInReferenceSpace.position.z    = 0.0f;
+    XrReferenceSpaceCreateInfo reference_space_create_info{
+        .type                 = XR_TYPE_REFERENCE_SPACE_CREATE_INFO,
+        .next                 = nullptr,
+        .referenceSpaceType   = XR_REFERENCE_SPACE_TYPE_LOCAL,
+        .poseInReferenceSpace = {
+            .orientation = {
+                .x = 0.0f,
+                .y = 0.0f,
+                .z = 0.0f,
+                .w = 1.0f
+            },
+            .position = {
+                .x = 0.0f,
+                .y = 0.0f,
+                .z = 0.0f
+            }
+        }
+    };
 
-    if (
-        !check(
-            "xrCreateReferenceSpace",
-            xrCreateReferenceSpace(
-                m_xr_session,
-                &reference_space_create_info,
-                &m_xr_reference_space
-            )
-        )
-    )
-    {
-        return false;
-    }
+    ERHE_XR_CHECK(xrCreateReferenceSpace(m_xr_session, &reference_space_create_info, &m_xr_reference_space));
 
     return true;
 }
 
 auto Xr_session::begin_session() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
     }
 
-    XrSessionBeginInfo session_begin_info;
-    session_begin_info.type                         = XR_TYPE_SESSION_BEGIN_INFO;
-    session_begin_info.next                         = nullptr;
-    session_begin_info.primaryViewConfigurationType = m_instance.get_xr_view_configuration_type();
+    XrSessionBeginInfo session_begin_info {
+        .type                         = XR_TYPE_SESSION_BEGIN_INFO,
+        .next                         = nullptr,
+        .primaryViewConfigurationType = m_instance.get_xr_view_configuration_type()
+    };
 
-    if (
-        !check(
-            "xrBeginSession",
-            xrBeginSession(m_xr_session, &session_begin_info)
-        )
-    )
-    {
-        return false;
-    }
+    ERHE_XR_CHECK(xrBeginSession(m_xr_session, &session_begin_info));
 
     // m_instance.set_environment_depth_estimation(m_session, true);
 
@@ -437,65 +422,223 @@ auto Xr_session::begin_session() -> bool
 
 auto Xr_session::attach_actions() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
     }
 
-    XrSessionActionSetsAttachInfo session_action_sets_attach_info;
-    session_action_sets_attach_info.type            = XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO;
-    session_action_sets_attach_info.next            = nullptr;
-    session_action_sets_attach_info.countActionSets = 1;
-    session_action_sets_attach_info.actionSets      = &m_instance.actions.action_set;
-    if (
-        !check(
-            "xrAttachSessionActionSets",
-            xrAttachSessionActionSets(m_xr_session, &session_action_sets_attach_info)
-        )
-    )
-    {
-        return false;
-    }
+    const XrSessionActionSetsAttachInfo session_action_sets_attach_info{
+        .type            = XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO,
+        .next            = nullptr,
+        .countActionSets = 1,
+        .actionSets      = &m_instance.actions.action_set
+    };
+    ERHE_XR_CHECK(xrAttachSessionActionSets(m_xr_session, &session_action_sets_attach_info));
 
-    XrActionSpaceCreateInfo action_space_create_info;
-    action_space_create_info.type                            = XR_TYPE_ACTION_SPACE_CREATE_INFO;
-    action_space_create_info.next                            = nullptr;
-    action_space_create_info.action                          = m_instance.actions.aim_pose;
-    action_space_create_info.subactionPath                   = XR_NULL_PATH;
-    action_space_create_info.poseInActionSpace.position.x    = 0.0f;
-    action_space_create_info.poseInActionSpace.position.y    = 0.0f;
-    action_space_create_info.poseInActionSpace.position.z    = 0.0f;
-    action_space_create_info.poseInActionSpace.orientation.x = 0.0f;
-    action_space_create_info.poseInActionSpace.orientation.y = 0.0f;
-    action_space_create_info.poseInActionSpace.orientation.z = 0.0f;
-    action_space_create_info.poseInActionSpace.orientation.w = 1.0f;
-    if (
-        !check(
-            "xrCreateActionSpace",
-            xrCreateActionSpace(
-                m_xr_session,
-                &action_space_create_info,
-                &m_instance.actions.aim_pose_space
-            )
-        )
-    )
+    const XrActionSpaceCreateInfo action_space_create_info
     {
-        return false;
-    }
+        .type              = XR_TYPE_ACTION_SPACE_CREATE_INFO,
+        .next              = nullptr,
+        .action            = m_instance.actions.aim_pose,
+        .subactionPath     = XR_NULL_PATH,
+        .poseInActionSpace = {
+            .orientation = {
+                .x = 0.0f,
+                .y = 0.0f,
+                .z = 0.0f,
+                .w = 1.0f
+            },
+            .position = {
+                .x    = 0.0f,
+                .y    = 0.0f,
+                .z    = 0.0f,
+            }
+        }
+    };
+    ERHE_XR_CHECK(xrCreateActionSpace(m_xr_session, &action_space_create_info, &m_instance.actions.aim_pose_space));
 
     return true;
 }
 
-auto Xr_session::begin_frame() -> bool
+auto Xr_session::create_hand_tracking() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
     }
 
-    XrFrameBeginInfo frame_begin_info;
-    frame_begin_info.type = XR_TYPE_FRAME_BEGIN_INFO;
-    frame_begin_info.next = nullptr;
+    if (m_instance.xrCreateHandTrackerEXT == nullptr)
+    {
+        return false;
+    }
+
+    const XrHandTrackerCreateInfoEXT left_hand{
+        .type         = XR_TYPE_HAND_TRACKER_CREATE_INFO_EXT,
+        .next         = nullptr,
+        .hand         = XR_HAND_LEFT_EXT,
+        .handJointSet = XR_HAND_JOINT_SET_DEFAULT_EXT
+    };
+    const XrHandTrackerCreateInfoEXT right_hand{
+        .type         = XR_TYPE_HAND_TRACKER_CREATE_INFO_EXT,
+        .next         = nullptr,
+        .hand         = XR_HAND_RIGHT_EXT,
+        .handJointSet = XR_HAND_JOINT_SET_DEFAULT_EXT
+    };
+
+    ERHE_XR_CHECK(m_instance.xrCreateHandTrackerEXT(m_xr_session, &left_hand,  &m_hand_tracker_left.hand_tracker));
+    ERHE_XR_CHECK(m_instance.xrCreateHandTrackerEXT(m_xr_session, &right_hand, &m_hand_tracker_right.hand_tracker));
+
+    m_hand_tracker_left.velocities = {
+        .type            = XR_TYPE_HAND_JOINT_VELOCITIES_EXT,
+        .next            = nullptr,
+        .jointCount      = XR_HAND_JOINT_COUNT_EXT,
+        .jointVelocities = &m_hand_tracker_left.joint_velocities[0]
+    };
+    m_hand_tracker_left.locations = {
+        .type           = XR_TYPE_HAND_JOINT_LOCATIONS_EXT,
+        .next           = &m_hand_tracker_left.velocities,
+        .isActive       = XR_FALSE,
+        .jointCount     = XR_HAND_JOINT_COUNT_EXT,
+        .jointLocations = &m_hand_tracker_left.joint_locations[0]
+    };
+
+    m_hand_tracker_right.velocities = {
+        .type            = XR_TYPE_HAND_JOINT_VELOCITIES_EXT,
+        .next            = nullptr,
+        .jointCount      = XR_HAND_JOINT_COUNT_EXT,
+        .jointVelocities = &m_hand_tracker_right.joint_velocities[0]
+    };
+    m_hand_tracker_right.locations = {
+        .type           = XR_TYPE_HAND_JOINT_LOCATIONS_EXT,
+        .next           = &m_hand_tracker_right.velocities,
+        .isActive       = XR_FALSE,
+        .jointCount     = XR_HAND_JOINT_COUNT_EXT,
+        .jointLocations = &m_hand_tracker_right.joint_locations[0]
+    };
+
+    update_hand_tracking();
+    return true;
+}
+
+void Xr_session::update_hand_tracking()
+{
+    ERHE_PROFILE_FUNCTION
+
+    if (m_instance.xrLocateHandJointsEXT == nullptr)
+    {
+        return;
+    }
+
+#if 0
+    XrHandJointsLocateInfoEXT leftHandJointsLocateInfo{XR_TYPE_HAND_JOINTS_LOCATE_INFO_EXT};
+    XrHandJointLocationsEXT   leftHandLocations       {XR_TYPE_HAND_JOINT_LOCATIONS_EXT};
+    XrHandJointLocationsEXT   rightHandLocations      {XR_TYPE_HAND_JOINT_LOCATIONS_EXT};
+    XrHandJointVelocitiesEXT  leftHandVelocities      {XR_TYPE_HAND_JOINT_VELOCITIES_EXT};
+    XrHandJointVelocitiesEXT  rightHandVelocities     {XR_TYPE_HAND_JOINT_VELOCITIES_EXT};
+    XrHandJointLocationEXT    leftHandLocation [XR_HAND_JOINT_COUNT_EXT];
+    XrHandJointLocationEXT    rightHandLocation[XR_HAND_JOINT_COUNT_EXT];
+    XrHandJointVelocityEXT    leftHandVelocity [XR_HAND_JOINT_COUNT_EXT];
+    XrHandJointVelocityEXT    rightHandVelocity[XR_HAND_JOINT_COUNT_EXT];
+
+    leftHandLocations.jointLocations = leftHandLocation;
+    leftHandLocations.jointCount     = XR_HAND_JOINT_COUNT_EXT;
+    leftHandLocations.isActive       = XR_FALSE;
+    leftHandLocations.next           = &leftHandVelocities;
+    leftHandVelocities.jointVelocities = leftHandVelocity;
+    leftHandVelocities.jointCount      = XR_HAND_JOINT_COUNT_EXT;
+    rightHandLocations.jointLocations  = rightHandLocation;
+    rightHandLocations.jointCount      = XR_HAND_JOINT_COUNT_EXT;
+    rightHandLocations.isActive        = XR_FALSE;
+    rightHandLocations.next            = &rightHandVelocities;
+    rightHandVelocities.jointVelocities = rightHandVelocity;
+    rightHandVelocities.jointCount      = XR_HAND_JOINT_COUNT_EXT;
+
+    leftHandJointsLocateInfo.baseSpace = m_xr_reference_space;
+    leftHandJointsLocateInfo.time      = m_xr_frame_state.predictedDisplayTime;
+
+    m_instance.xrLocateHandJointsEXT(m_hand_tracker_left.hand_tracker, &leftHandJointsLocateInfo, &leftHandLocations);
+    m_instance.xrLocateHandJointsEXT(m_hand_tracker_right.hand_tracker, &leftHandJointsLocateInfo/*rightHandJointsLocateInfo*/, &rightHandLocations);
+
+    if (leftHandLocations.isActive) {
+        printf("Left hand is active\n");
+        printf("Left hand wrist position tracked=%s, rotation tracked=%s\n",
+            (leftHandLocation[XR_HAND_JOINT_WRIST_EXT].locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT ? "true" : "false"),
+            (leftHandLocation[XR_HAND_JOINT_WRIST_EXT].locationFlags & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT ? "true" : "false"));
+        printf(
+            "Left hand wrist position = %f, %f, %f\n",
+            leftHandLocation[XR_HAND_JOINT_WRIST_EXT].pose.position.x,
+            leftHandLocation[XR_HAND_JOINT_WRIST_EXT].pose.position.y,
+            leftHandLocation[XR_HAND_JOINT_WRIST_EXT].pose.position.z
+        );
+    } else {
+        printf("Left hand *Not* tracked\n");
+    }
+
+#endif
+
+    const XrHandJointsLocateInfoEXT hand_joints_locate_info{
+        .type      = XR_TYPE_HAND_JOINTS_LOCATE_INFO_EXT,
+        .next      = nullptr,
+        .baseSpace = m_xr_reference_space,
+        .time      = m_xr_frame_state.predictedDisplayTime
+    };
+
+    if (m_hand_tracker_left.hand_tracker != XR_NULL_HANDLE)
+    {
+        check(
+            m_instance.xrLocateHandJointsEXT(
+                m_hand_tracker_left.hand_tracker,
+                &hand_joints_locate_info,
+                &m_hand_tracker_left.locations
+            )
+        );
+    }
+    if (m_hand_tracker_right.hand_tracker != XR_NULL_HANDLE)
+    {
+        check(
+            m_instance.xrLocateHandJointsEXT(
+                m_hand_tracker_right.hand_tracker,
+                &hand_joints_locate_info,
+                &m_hand_tracker_right.locations
+            )
+        );
+    }
+}
+
+auto Xr_session::get_hand_tracking_joint(const XrHandEXT hand, const XrHandJointEXT joint) const -> Hand_tracking_joint
+{
+    const auto& tracker = (hand == XR_HAND_LEFT_EXT) ? m_hand_tracker_left : m_hand_tracker_right;
+    return {
+        tracker.joint_locations[joint],
+        tracker.joint_velocities[joint]
+    };
+}
+
+auto Xr_session::get_hand_tracking_active(const XrHandEXT hand) const -> bool
+{
+    const auto& tracker = (hand == XR_HAND_LEFT_EXT) ? m_hand_tracker_left : m_hand_tracker_right;
+    return tracker.locations.isActive;
+}
+
+auto Xr_session::begin_frame() -> bool
+{
+    ERHE_PROFILE_FUNCTION
+
+    if (m_xr_session == XR_NULL_HANDLE)
+    {
+        return false;
+    }
+
+    const XrFrameBeginInfo frame_begin_info
+    {
+        .type = XR_TYPE_FRAME_BEGIN_INFO,
+        .next = nullptr
+    };
+
     {
         check_gl_context_in_current_in_this_thread();
         const auto result = xrBeginFrame(m_xr_session, &frame_begin_info);
@@ -520,20 +663,25 @@ auto Xr_session::begin_frame() -> bool
 
 auto Xr_session::wait_frame() -> XrFrameState*
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return nullptr;
     }
 
-    XrFrameWaitInfo frame_wait_info;
-    frame_wait_info.type = XR_TYPE_FRAME_WAIT_INFO;
-    frame_wait_info.next = nullptr;
+    const XrFrameWaitInfo frame_wait_info{
+        .type = XR_TYPE_FRAME_WAIT_INFO,
+        .next = nullptr
+    };
 
-    m_xr_frame_state.type                   = XR_TYPE_FRAME_STATE;
-    m_xr_frame_state.next                   = nullptr;
-    m_xr_frame_state.predictedDisplayTime   = 0;
-    m_xr_frame_state.predictedDisplayPeriod = 0;
-    m_xr_frame_state.shouldRender           = XR_FALSE;
+    m_xr_frame_state = XrFrameState{
+        .type                   = XR_TYPE_FRAME_STATE,
+        .next                   = nullptr,
+        .predictedDisplayTime   = 0,
+        .predictedDisplayPeriod = 0,
+        .shouldRender           = XR_FALSE
+    };
     {
         const auto result = xrWaitFrame(m_xr_session, &frame_wait_info, &m_xr_frame_state);
         if (result == XR_SUCCESS)
@@ -555,27 +703,32 @@ auto Xr_session::wait_frame() -> XrFrameState*
 
 auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_callback) -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
     }
 
-    XrViewState view_state;
-    view_state.type           = XR_TYPE_VIEW_STATE;
-    view_state.next           = nullptr;
-    view_state.viewStateFlags = 0;
+    XrViewState view_state{
+        .type           = XR_TYPE_VIEW_STATE,
+        .next           = nullptr,
+        .viewStateFlags = 0
+    };
     uint32_t view_capacity_input{static_cast<uint32_t>(m_xr_views.size())};
     uint32_t view_count_output  {0};
 
-    XrViewLocateInfo view_locate_info;
-    view_locate_info.type        = XR_TYPE_VIEW_LOCATE_INFO;
-    view_locate_info.next        = nullptr;
-    view_locate_info.displayTime = m_xr_frame_state.predictedDisplayTime;
-    view_locate_info.space       = m_xr_reference_space;
+    {
+        ERHE_PROFILE_SCOPE("xrLocateViews");
 
-    if (
-        !check(
-            "xrLocateViews",
+        const XrViewLocateInfo view_locate_info{
+            .type        = XR_TYPE_VIEW_LOCATE_INFO,
+            .next        = nullptr,
+            .displayTime = m_xr_frame_state.predictedDisplayTime,
+            .space       = m_xr_reference_space
+        };
+
+        ERHE_XR_CHECK(
             xrLocateViews(
                 m_xr_session,
                 &view_locate_info,
@@ -584,12 +737,9 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
                 &view_count_output,
                 m_xr_views.data()
             )
-        )
-    )
-    {
-        return false;
+        );
+        ERHE_VERIFY(view_count_output == view_capacity_input);
     }
-    VERIFY(view_count_output == view_capacity_input);
 
     const auto& view_configuration_views = m_instance.get_xr_view_configuration_views();
 
@@ -597,42 +747,16 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
     m_xr_composition_layer_depth_infos     .resize(view_count_output);
     for (uint32_t i = 0; i < view_count_output; ++i)
     {
-        if (m_instance.xrGetVisibilityMaskKHR != nullptr)
-        {
-            XrVisibilityMaskKHR visibility_mask;
-            visibility_mask.type                = XR_TYPE_VISIBILITY_MASK_KHR;
-            visibility_mask.next                = nullptr;
-            visibility_mask.vertexCapacityInput = 0; // uint32_t
-            visibility_mask.vertexCountOutput   = 0; // uint32_t
-            visibility_mask.vertices            = 0; // XrVector2f*
-            visibility_mask.indexCapacityInput  = 0; // uint32_t
-            visibility_mask.indexCountOutput    = 0; // uint32_t
-            visibility_mask.indices             = 0; // uint32_t*
-
-            if (
-                !check(
-                    "xrGetVisibilityMaskKHR",
-                    m_instance.xrGetVisibilityMaskKHR(
-                        m_xr_session,
-                        m_instance.get_xr_view_configuration_type(),
-                        i,
-                        XR_VISIBILITY_MASK_TYPE_HIDDEN_TRIANGLE_MESH_KHR,
-                        &visibility_mask
-                    )
-                )
-            )
-            {
-                return false;
-            }
-        }
+        ERHE_PROFILE_SCOPE("view render");
 
         auto& swapchain = m_view_swapchains[i];
         auto acquired_color_swapchain_image_opt = swapchain.color_swapchain.acquire();
-        auto acquired_depth_swapchain_image_opt = swapchain.depth_swapchain.acquire();
         if (!acquired_color_swapchain_image_opt.has_value() || !swapchain.color_swapchain.wait())
         {
             return false;
         }
+
+        auto acquired_depth_swapchain_image_opt = swapchain.depth_swapchain.acquire();
         if (!acquired_depth_swapchain_image_opt.has_value() || !swapchain.depth_swapchain.wait())
         {
             return false;
@@ -648,20 +772,22 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             return false;
         }
 
-        Render_view render_view;
-        render_view.view_pose.orientation = to_glm(m_xr_views[i].pose.orientation);
-        render_view.view_pose.position    = to_glm(m_xr_views[i].pose.position);
-        render_view.fov_left              = m_xr_views[i].fov.angleLeft;
-        render_view.fov_right             = m_xr_views[i].fov.angleRight;
-        render_view.fov_up                = m_xr_views[i].fov.angleUp;
-        render_view.fov_down              = m_xr_views[i].fov.angleDown;
-        render_view.color_texture         = color_texture;
-        render_view.color_format          = m_swapchain_color_format;
-        render_view.depth_texture         = depth_texture;
-        render_view.depth_format          = m_swapchain_depth_format;
-        render_view.width                 = view_configuration_views[i].recommendedImageRectWidth;
-        render_view.height                = view_configuration_views[i].recommendedImageRectHeight;
-
+        Render_view render_view{
+            .view_pose = {
+                .orientation = to_glm(m_xr_views[i].pose.orientation),
+                .position    = to_glm(m_xr_views[i].pose.position),
+            },
+            .fov_left      = m_xr_views[i].fov.angleLeft,
+            .fov_right     = m_xr_views[i].fov.angleRight,
+            .fov_up        = m_xr_views[i].fov.angleUp,
+            .fov_down      = m_xr_views[i].fov.angleDown,
+            .color_texture = color_texture,
+            .depth_texture = depth_texture,
+            .color_format  = m_swapchain_color_format,
+            .depth_format  = m_swapchain_depth_format,
+            .width         = view_configuration_views[i].recommendedImageRectWidth,
+            .height        = view_configuration_views[i].recommendedImageRectHeight
+        };
         {
             const auto result = render_view_callback(render_view);
             if (result == false)
@@ -670,30 +796,40 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             }
         }
 
-        auto& composition_layer_depth_info = m_xr_composition_layer_depth_infos[i];
-        composition_layer_depth_info.type                      = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR;
-        composition_layer_depth_info.next                      = nullptr;
-        composition_layer_depth_info.subImage.swapchain        = swapchain.depth_swapchain.get_xr_swapchain();
-        composition_layer_depth_info.subImage.imageRect.offset = { 0, 0 };
-        composition_layer_depth_info.subImage.imageRect.extent = {
-            static_cast<int32_t>(view_configuration_views[i].recommendedImageRectWidth),
-            static_cast<int32_t>(view_configuration_views[i].recommendedImageRectHeight)
+        m_xr_composition_layer_depth_infos[i] = {
+            .type     = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR,
+            .next     = nullptr,
+            .subImage = {
+                .swapchain = swapchain.depth_swapchain.get_xr_swapchain(),
+                .imageRect = {
+                    .offset = { 0, 0 },
+                    .extent = {
+                        static_cast<int32_t>(view_configuration_views[i].recommendedImageRectWidth),
+                        static_cast<int32_t>(view_configuration_views[i].recommendedImageRectHeight)
+                    }
+                }
+            },
+            .minDepth = 0.0f,
+            .maxDepth = 1.0f,
+            .nearZ    = render_view.far_depth,
+            .farZ     = render_view.near_depth
         };
-        composition_layer_depth_info.minDepth                  = 0.0f;
-        composition_layer_depth_info.maxDepth                  = 1.0f;
-        composition_layer_depth_info.nearZ                     = render_view.far_depth;
-        composition_layer_depth_info.farZ                      = render_view.near_depth;
 
-        auto& composition_layer_projection_view = m_xr_composition_layer_projection_views[i];
-        composition_layer_projection_view.type                      = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-        composition_layer_projection_view.next                      = &composition_layer_depth_info;
-        composition_layer_projection_view.pose                      = m_xr_views[i].pose;
-        composition_layer_projection_view.fov                       = m_xr_views[i].fov;
-        composition_layer_projection_view.subImage.swapchain        = swapchain.color_swapchain.get_xr_swapchain();
-        composition_layer_projection_view.subImage.imageRect.offset = { 0, 0 };
-        composition_layer_projection_view.subImage.imageRect.extent = {
-            static_cast<int32_t>(view_configuration_views[i].recommendedImageRectWidth),
-            static_cast<int32_t>(view_configuration_views[i].recommendedImageRectHeight)
+        m_xr_composition_layer_projection_views[i] = {
+            .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
+            .next = &m_xr_composition_layer_depth_infos[i],
+            .pose = m_xr_views[i].pose,
+            .fov  = m_xr_views[i].fov,
+            .subImage = {
+                .swapchain = swapchain.color_swapchain.get_xr_swapchain(),
+                .imageRect = {
+                    .offset = { 0, 0 },
+                    .extent = {
+                        static_cast<int32_t>(view_configuration_views[i].recommendedImageRectWidth),
+                        static_cast<int32_t>(view_configuration_views[i].recommendedImageRectHeight)
+                    }
+                }
+            }
         };
     }
 
@@ -702,6 +838,8 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
 
 auto Xr_session::end_frame() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
@@ -713,31 +851,30 @@ auto Xr_session::end_frame() -> bool
     //layer_depth.depthTestRangeNearZ = 0.1f;
     //layer_depth.depthTestRangeFarZ  = 0.5f;
 
-    XrCompositionLayerProjection layer;
-    layer.type       = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
-    layer.next       = nullptr;
-    layer.space      = m_xr_reference_space;
-    layer.viewCount  = static_cast<uint32_t>(m_xr_views.size());
-    layer.views      = m_xr_composition_layer_projection_views.data();
-    layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+    XrCompositionLayerProjection layer{
+        .type       = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
+        .next       = nullptr,
+        .layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
+        .space      = m_xr_reference_space,
+        .viewCount  = static_cast<uint32_t>(m_xr_views.size()),
+        .views      = m_xr_composition_layer_projection_views.data()
+    };
 
     XrCompositionLayerBaseHeader* layers[] = {
         reinterpret_cast<XrCompositionLayerBaseHeader*>(&layer)
     };
 
-    XrFrameEndInfo frame_end_info;
-    frame_end_info.type                 = XR_TYPE_FRAME_END_INFO;
-    frame_end_info.next                 = nullptr;
-    frame_end_info.displayTime          = m_xr_frame_state.predictedDisplayTime;
-    frame_end_info.environmentBlendMode = m_instance.get_xr_environment_blend_mode();
-    frame_end_info.layerCount           = 1;
-    frame_end_info.layers               = layers;
+    XrFrameEndInfo frame_end_info{
+        .type                 = XR_TYPE_FRAME_END_INFO,
+        .next                 = nullptr,
+        .displayTime          = m_xr_frame_state.predictedDisplayTime,
+        .environmentBlendMode = m_instance.get_xr_environment_blend_mode(),
+        .layerCount           = 1,
+        .layers               = layers
+    };
 
     check_gl_context_in_current_in_this_thread();
-    if (!check("xrEndFrame", xrEndFrame(m_xr_session, &frame_end_info)))
-    {
-        return false;
-    }
+    ERHE_XR_CHECK(xrEndFrame(m_xr_session, &frame_end_info));
 
     return true;
 }

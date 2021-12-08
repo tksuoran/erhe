@@ -21,27 +21,26 @@ class Node_physics
 {
 public:
     explicit Node_physics(
-        erhe::physics::IRigid_body_create_info& create_info
+        const erhe::physics::IRigid_body_create_info& create_info
     );
     ~Node_physics() override;
 
 	// Implements INode_attachment
-    void on_attached_to           (erhe::scene::Node& node) override;
-    void on_detached_from         (erhe::scene::Node& node) override;
-    void on_node_transform_changed()                        override;
-    auto node_attachment_type     () const -> const char*   override;
+    [[nodiscard]] auto node_attachment_type() const -> const char* override;
+    void on_node_transform_changed() override;
 
     // Implements IMotion_state
-    auto get_world_from_rigidbody() const -> erhe::physics::Transform                  override;
+    [[nodiscard]] auto get_world_from_rigidbody() const -> erhe::physics::Transform override;
     void set_world_from_rigidbody(const erhe::physics::Transform world_from_rigidbody) override;
 
-    void on_attached_to         (erhe::physics::IWorld* world);
-    void on_detached_from       (erhe::physics::IWorld* world);
-    auto get_world_from_node    () const -> erhe::physics::Transform;
-    void set_world_from_node    (const erhe::physics::Transform world_from_node);
-    void set_rigidbody_from_node(const erhe::physics::Transform rigidbody_from_node);
-    auto rigid_body             ()       ->       erhe::physics::IRigid_body*;
-    auto rigid_body             () const -> const erhe::physics::IRigid_body*;
+    // Public API
+    [[nodiscard]] auto rigid_body         ()       ->       erhe::physics::IRigid_body*;
+    [[nodiscard]] auto rigid_body         () const -> const erhe::physics::IRigid_body*;
+    [[nodiscard]] auto get_world_from_node() const -> erhe::physics::Transform;
+    void on_attached_to          (erhe::physics::IWorld* world);
+    void on_detached_from        (erhe::physics::IWorld* world);
+    void set_world_from_node     (const erhe::physics::Transform world_from_node);
+    void set_rigidbody_from_node (const erhe::physics::Transform rigidbody_from_node);
 
 private:
     erhe::physics::IWorld*                           m_physics_world{nullptr};

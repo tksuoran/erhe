@@ -12,6 +12,8 @@ public:
     Catmull_clark_subdivision(Geometry& src, Geometry& destination);
 };
 
-auto catmull_clark_subdivision(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto catmull_clark_subdivision(
+    erhe::geometry::Geometry& source
+) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

@@ -2,6 +2,7 @@
 #include "scene/controller.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/toolkit/math_util.hpp"
+#include "erhe/toolkit/verify.hpp"
 #include "log.hpp"
 
 #include <glm/glm.hpp>
@@ -13,6 +14,21 @@ namespace editor
 using namespace glm;
 
 using namespace erhe::toolkit;
+
+auto Frame_controller::get_controller(const Control control) -> Controller&
+{
+    switch (control)
+    {
+        case Control::translate_x: return translate_x;
+        case Control::translate_y: return translate_y;
+        case Control::translate_z: return translate_z;
+        case Control::rotate_x   : return rotate_x;
+        case Control::rotate_y   : return rotate_y;
+        case Control::rotate_z   : return rotate_z;
+        default:
+            ERHE_FATAL("bad control");
+    }
+}
 
 void Frame_controller::set_position(const vec3 position)
 {
@@ -156,17 +172,17 @@ void Frame_controller::update()
 
 auto Frame_controller::right() const -> vec3
 {
-    return vec3{m_heading_matrix[0].x, m_heading_matrix[0].y, m_heading_matrix[0].z};
+    return vec3{m_heading_matrix[0]};
 }
 
 auto Frame_controller::up() const -> vec3
 {
-    return vec3{m_heading_matrix[1].x, m_heading_matrix[1].y, m_heading_matrix[1].z};
+    return vec3{m_heading_matrix[1]};
 }
 
 auto Frame_controller::back() const -> vec3
 {
-    return vec3{m_heading_matrix[2].x, m_heading_matrix[2].y, m_heading_matrix[2].z};
+    return vec3{m_heading_matrix[2]};
 }
 
 void Frame_controller::update_fixed_step()

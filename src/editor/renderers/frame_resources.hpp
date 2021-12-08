@@ -65,8 +65,7 @@ public:
     {
     }
 
-    auto operator=(Frame_resources&& other) noexcept
-    -> Frame_resources&
+    auto operator=(Frame_resources&& other) noexcept -> Frame_resources&
     {
         material_buffer      = std::move(other.material_buffer);
         light_buffer         = std::move(other.light_buffer);

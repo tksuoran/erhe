@@ -14,25 +14,40 @@ namespace erhe::scene
 namespace editor
 {
 
+enum class Control : unsigned int
+{
+    translate_x = 0,
+    translate_y = 1,
+    translate_z = 2,
+    rotate_x    = 3,
+    rotate_y    = 4,
+    rotate_z    = 5
+};
+
 class Frame_controller
 {
 public:
     Frame_controller();
 
     void set_frame        (erhe::scene::Node* node);
+
+    [[nodiscard]]
     auto node             () const -> erhe::scene::Node*;
+
     void clear            ();
     void update           ();
     void update_fixed_step();
     void set_position     (const glm::vec3 position);
     void set_elevation    (const float value);
     void set_heading      (const float value);
-    auto position         () const -> glm::vec3;
-    auto elevation        () const -> float;
-    auto heading          () const -> float;
-    auto right            () const -> glm::vec3;
-    auto up               () const -> glm::vec3;
-    auto back             () const -> glm::vec3;
+
+    [[nodiscard]] auto position      () const -> glm::vec3;
+    [[nodiscard]] auto elevation     () const -> float;
+    [[nodiscard]] auto heading       () const -> float;
+    [[nodiscard]] auto right         () const -> glm::vec3;
+    [[nodiscard]] auto up            () const -> glm::vec3;
+    [[nodiscard]] auto back          () const -> glm::vec3;
+    [[nodiscard]] auto get_controller(const Control control) -> Controller&;
 
     Controller rotate_x;
     Controller rotate_y;

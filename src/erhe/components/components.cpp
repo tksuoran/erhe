@@ -1,11 +1,11 @@
 #include "erhe/components/components.hpp"
 #include "erhe/components/component.hpp"
+#include "erhe/concurrency/concurrent_queue.hpp"
 #include "erhe/components/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <fmt/ostream.h>
-#include <mango/core/thread.hpp>
 
 #include <algorithm>
 #include <sstream>
@@ -41,7 +41,7 @@ Components::~Components() = default;
 auto Components::add(const shared_ptr<Component>& component)
 -> Component&
 {
-    VERIFY(component);
+    ERHE_VERIFY(component);
 
     component->register_as_component(this);
     components.insert(component);
@@ -63,6 +63,8 @@ auto Components::add(const shared_ptr<Component>& component)
 
 void Components::deitialize_component(Component* component)
 {
+    ERHE_VERIFY(component != nullptr);
+
     {
         auto* fixed_step_update = dynamic_cast<IUpdate_fixed_step*>(component);
         if (fixed_step_update != nullptr)
@@ -159,7 +161,7 @@ public:
     void wait   () override;
 
 private:
-    mango::ConcurrentQueue m_concurrent_queue;
+    erhe::concurrency::Concurrent_queue m_concurrent_queue;
 };
 
 void Concurrent_execution_queue::enqueue(std::function<void()> task)
@@ -172,7 +174,7 @@ void Concurrent_execution_queue::wait()
     m_concurrent_queue.wait();
 }
 
-// Reference queue which executes taska as they are queued
+// Reference queue which executes tasks as they are queued
 class Serial_execution_queue
     : public IExecution_queue
 {
@@ -258,7 +260,8 @@ void Components::initialize_component(const bool in_worker_thread)
     {
         ERHE_PROFILE_DATA("init component", component->name().data(), component->name().length())
 
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> lock{m_mutex};
+
         component->set_ready();
         m_components_to_process.erase(component);
         for (auto component_ : m_components_to_process)
@@ -338,18 +341,19 @@ void Components::launch_component_initialization()
 auto Components::get_component_to_initialize(const bool in_worker_thread) -> Component*
 {
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> lock{m_mutex};
 
         if (m_components_to_process.empty())
         {
-            FATAL("No uninitialized component found\n");
+            ERHE_FATAL("No uninitialized component found\n");
         }
     }
 
     for (;;)
     {
         {
-            std::lock_guard<std::mutex> lock(m_mutex);
+            std::lock_guard<std::mutex> lock{m_mutex};
+
             const auto i = std::find_if(
                 m_components_to_process.begin(),
                 m_components_to_process.end(),
@@ -406,15 +410,15 @@ auto Components::is_component_initialization_complete() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    std::lock_guard<std::mutex> lock(m_mutex);
-    return m_is_ready;
+    std::lock_guard<std::mutex> lock{m_mutex};
+    return m_is_ready; // TODO atomic bool
 }
 
 void Components::wait_component_initialization_complete()
 {
     ERHE_PROFILE_FUNCTION
 
-    VERIFY(m_execution_queue);
+    ERHE_VERIFY(m_execution_queue);
 
     // Initialize main thread components
     constexpr bool in_worker_thread{false};
@@ -424,7 +428,7 @@ void Components::wait_component_initialization_complete()
     }
 
     m_execution_queue->wait();
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock{m_mutex};
     m_is_ready = true;
 }
 

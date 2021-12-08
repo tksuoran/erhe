@@ -5,17 +5,14 @@
 #include "renderers/program_interface.hpp"
 #include "renderers/mesh_memory.hpp"
 
-#include "erhe/components/component.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
-#include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/gl/gl.hpp"
@@ -67,9 +64,7 @@ void Id_renderer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    ERHE_PROFILE_MESSAGE_LITERAL("ID: Waiting for GL context");
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
-    ERHE_PROFILE_MESSAGE_LITERAL("ID: Got GL context");
+    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     create_frame_resources(1, 1, 1, 1000, 1000);
 
@@ -83,21 +78,23 @@ void Id_renderer::initialize_component()
         m_mesh_memory->gl_index_buffer.get()
     );
 
-    m_pipeline.shader_stages  = m_programs->id.get();
-    m_pipeline.vertex_input   = m_vertex_input.get();
-    m_pipeline.input_assembly = &erhe::graphics::Input_assembly_state::triangles;
-    m_pipeline.rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw(reverse_depth);
-    m_pipeline.depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth);
-    m_pipeline.color_blend    = &erhe::graphics::Color_blend_state::color_blend_disabled;
-    m_pipeline.viewport       = nullptr;
+    m_pipeline = {
+        .shader_stages  = m_programs->id.get(),
+        .vertex_input   = m_vertex_input.get(),
+        .input_assembly = &erhe::graphics::Input_assembly_state::triangles,
+        .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw(reverse_depth),
+        .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+        .color_blend    = &erhe::graphics::Color_blend_state::color_blend_disabled
+    };
 
-    m_selective_depth_clear_pipeline.shader_stages  = m_programs->id.get();
-    m_selective_depth_clear_pipeline.vertex_input   = m_vertex_input.get();
-    m_selective_depth_clear_pipeline.input_assembly = &erhe::graphics::Input_assembly_state::triangles;
-    m_selective_depth_clear_pipeline.rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw(reverse_depth);
-    m_selective_depth_clear_pipeline.depth_stencil  = &erhe::graphics::Depth_stencil_state::depth_test_always_stencil_test_disabled;
-    m_selective_depth_clear_pipeline.color_blend    = &erhe::graphics::Color_blend_state::color_writes_disabled;
-    m_selective_depth_clear_pipeline.viewport       = nullptr;
+    m_selective_depth_clear_pipeline = {
+        .shader_stages  = m_programs->id.get(),
+        .vertex_input   = m_vertex_input.get(),
+        .input_assembly = &erhe::graphics::Input_assembly_state::triangles,
+        .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw(reverse_depth),
+        .depth_stencil  = &erhe::graphics::Depth_stencil_state::depth_test_always_stencil_test_disabled,
+        .color_blend    = &erhe::graphics::Color_blend_state::color_writes_disabled,
+    };
 
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
@@ -135,13 +132,15 @@ void Id_renderer::next_frame()
 
 void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
 {
-    VERIFY(m_use_renderbuffers != m_use_textures);
+    ERHE_VERIFY(m_use_renderbuffers != m_use_textures);
 
     if (m_use_renderbuffers)
     {
-        if (!m_color_renderbuffer ||
+        if (
+            !m_color_renderbuffer ||
             (m_color_renderbuffer->width()  != static_cast<unsigned int>(viewport.width)) ||
-            (m_color_renderbuffer->height() != static_cast<unsigned int>(viewport.height)))
+            (m_color_renderbuffer->height() != static_cast<unsigned int>(viewport.height))
+        )
         {
             m_color_renderbuffer = std::make_unique<Renderbuffer>(
                 gl::Internal_format::rgba8,
@@ -165,26 +164,28 @@ void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
 
     if (m_use_textures)
     {
-        if (!m_color_texture ||
+        if (
+            !m_color_texture ||
             (m_color_texture->width()  != viewport.width) ||
-            (m_color_texture->height() != viewport.height))
+            (m_color_texture->height() != viewport.height)
+        )
         {
             m_color_texture = std::make_unique<Texture>(
                 Texture::Create_info{
-                    gl::Texture_target::texture_2d,
-                    gl::Internal_format::rgba8,
-                    true,
-                    viewport.width,
-                    viewport.height
+                    .target          = gl::Texture_target::texture_2d,
+                    .internal_format = gl::Internal_format::rgba8,
+                    .use_mipmaps     = false,
+                    .width           = viewport.width,
+                    .height          = viewport.height
                 }
             );
             m_depth_texture = std::make_unique<Texture>(
                 Texture::Create_info{
-                    gl::Texture_target::texture_2d,
-                    gl::Internal_format::depth_component32f,
-                    true,
-                    viewport.width,
-                    viewport.height
+                    .target          = gl::Texture_target::texture_2d,
+                    .internal_format = gl::Internal_format::depth_component32f,
+                    .use_mipmaps     = false,
+                    .width           = viewport.width,
+                    .height          = viewport.height
                 }
             );
             m_color_texture->set_debug_label("ID Renderer Color Texture");
@@ -210,15 +211,16 @@ void Id_renderer::render_layer(const erhe::scene::Mesh_layer& mesh_layer)
 {
     ERHE_PROFILE_FUNCTION
 
-    Layer_range layer_range;
-    layer_range.offset = id_offset();
-    layer_range.layer  = &mesh_layer;
+    Layer_range layer_range{
+        .offset = id_offset(),
+        .layer  = &mesh_layer
+    };
 
-    erhe::scene::Visibility_filter id_filter{
-        erhe::scene::Node::c_visibility_id,
-        0u,
-        0u,
-        0u
+    const erhe::scene::Visibility_filter id_filter{
+        .require_all_bits_set           = erhe::scene::Node::c_visibility_id,
+        .require_at_least_one_bit_set   = 0u,
+        .require_all_bits_clear         = 0u,
+        .require_at_least_one_bit_clear = 0u
     };
     update_primitive_buffer(mesh_layer, id_filter, true);
     auto draw_indirect_buffer_range = update_draw_indirect_buffer(
@@ -226,6 +228,10 @@ void Id_renderer::render_layer(const erhe::scene::Mesh_layer& mesh_layer)
         Primitive_mode::polygon_fill,
         id_filter
     );
+    if (draw_indirect_buffer_range.draw_indirect_count == 0)
+    {
+        return;
+    }
 
     bind_primitive_buffer();
     bind_draw_indirect_buffer();
@@ -274,11 +280,14 @@ void Id_renderer::render(
 
     update_framebuffer(viewport);
 
+    const auto projection_transforms = camera.projection_transforms(viewport);
+    const mat4 clip_from_world       = projection_transforms.clip_from_world.matrix();
+
     auto& idr = current_id_frame_resources();
     idr.time            = time;
     idr.x_offset        = std::max(x - (static_cast<int>(s_extent / 2)), 0);
     idr.y_offset        = std::max(y - (static_cast<int>(s_extent / 2)), 0);
-    idr.clip_from_world = camera.clip_from_world();
+    idr.clip_from_world = clip_from_world;
 
     primitive_color_source = Primitive_color_source::id_offset;
 
@@ -297,7 +306,7 @@ void Id_renderer::render(
             {
                 log_framebuffer.error("draw framebuffer status = {}\n", c_str(status));
             }
-            VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
+            ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
         }
 
         {
@@ -307,7 +316,7 @@ void Id_renderer::render(
             {
                 log_framebuffer.error("read framebuffer status = {}\n", c_str(status));
             }
-            VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
+            ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
         }
         gl::disable    (gl::Enable_cap::framebuffer_srgb);
         gl::viewport   (viewport.x, viewport.y, viewport.width, viewport.height);
@@ -388,6 +397,7 @@ void Id_renderer::render(
         idr.state = Id_frame_resources::State::Waiting_for_read;
     }
 
+    gl::enable(gl::Enable_cap::framebuffer_srgb);
     gl::pop_debug_group();
 }
 
@@ -434,26 +444,22 @@ bool Id_renderer::get(const int x, const int y, uint32_t& id, float& depth)
         {
             if ((x >= idr.x_offset) && (y >= idr.y_offset))
             {
-                const size_t x_ = x - idr.x_offset;
-                const size_t y_ = y - idr.y_offset;
+                const int x_ = x - idr.x_offset;
+                const int y_ = y - idr.y_offset;
                 if ((x_ < s_extent) && (y_ < s_extent))
                 {
-                    const uint32_t       stride      = s_extent * 4;
-                    const uint8_t        r           = idr.data[x_ * 4 + y_ * stride + 0];
-                    const uint8_t        g           = idr.data[x_ * 4 + y_ * stride + 1];
-                    const uint8_t        b           = idr.data[x_ * 4 + y_ * stride + 2];
-                    const uint8_t* const depth_ptr   = &idr.data[s_extent * s_extent * 4 + x_ * 4 + y_ * stride];
-                    id                               = (r << 16) | (g << 8) | b;
-                    //const float* const   depth_f_ptr = reinterpret_cast<const float*>(depth_ptr);
-                    //float*   depth_f_ptr = reinterpret_cast<float*>(depth_ptr);
-                    //depth                = *depth_f_ptr;
-                    depth                = read_as<float>(depth_ptr);
+                    const uint32_t       stride    = s_extent * 4;
+                    const uint8_t        r         = idr.data[x_ * 4 + y_ * stride + 0];
+                    const uint8_t        g         = idr.data[x_ * 4 + y_ * stride + 1];
+                    const uint8_t        b         = idr.data[x_ * 4 + y_ * stride + 2];
+                    const uint8_t* const depth_ptr = &idr.data[s_extent * s_extent * 4 + x_ * 4 + y_ * stride];
+                    id                             = (r << 16) | (g << 8) | b;
+                    depth                          = read_as<float>(depth_ptr);
                     return true;
                 }
             }
         }
     }
-    //log_id_render.trace("Id_renderer::get(x = {}, y = {}): Warning: No data\n", x, y);
     return false;
 }
 

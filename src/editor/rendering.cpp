@@ -2,9 +2,9 @@
 #include "application.hpp"
 #include "configuration.hpp"
 #include "log.hpp"
-#include "time.hpp"
-#include "tools.hpp"
-#include "view.hpp"
+#include "editor_time.hpp"
+#include "editor_tools.hpp"
+#include "editor_view.hpp"
 #include "window.hpp"
 #include "renderers/forward_renderer.hpp"
 #include "renderers/headset_renderer.hpp"
@@ -14,23 +14,14 @@
 #include "renderers/text_renderer.hpp"
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
-#include "tools/fly_camera_tool.hpp"
-#include "windows/frame_log_window.hpp"
+#include "windows/log_window.hpp"
 #include "windows/viewport_config.hpp"
 #include "windows/viewport_window.hpp"
 
-#include "erhe/geometry/shapes/cone.hpp"
-#include "erhe/geometry/shapes/torus.hpp"
-#include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/log/log_glm.hpp"
-#include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
-
-#include <glm/trigonometric.hpp>
 
 namespace editor {
 
@@ -53,7 +44,7 @@ void Editor_rendering::connect()
     m_editor_time            = get<Editor_time      >();
     m_editor_tools           = get<Editor_tools     >();
     m_forward_renderer       = get<Forward_renderer >();
-    m_frame_log_window       = get<Frame_log_window >();
+    m_log_window             = get<Log_window       >();
     m_headset_renderer       = get<Headset_renderer >();
     m_id_renderer            = get<Id_renderer      >();
     m_line_renderer          = get<Line_renderer    >();
@@ -95,65 +86,35 @@ void Editor_rendering::begin_frame()
 
     if (m_headset_renderer)
     {
-        m_frame_log_window->log("headset rendering");
         m_headset_renderer->begin_frame();
     }
 
     m_editor_tools->begin_frame();
 }
 
-///// auto Editor_rendering::is_primary_scene_output_framebuffer_ready() -> bool
-///// {
-/////     if (m_configuration->gui)
-/////     {
-/////         return m_viewport_window->is_framebuffer_ready();
-/////     }
-/////     else
-/////     {
-/////         return true;
-/////     }
-///// }
+void Editor_rendering::render_viewports()
+{
+    ERHE_PROFILE_FUNCTION
 
-void Editor_rendering::gui_render()
+    m_viewport_windows->render();
+}
+
+void Editor_rendering::clear()
 {
     ERHE_PROFILE_FUNCTION
 
     Expects(m_pipeline_state_tracker != nullptr);
-
-    m_viewport_windows->render();
 
     // Pipeline state required for NVIDIA driver not to complain about texture
     // unit state when doing the clear.
     m_pipeline_state_tracker->shader_stages.reset();
     m_pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
-    gl::disable         (gl::Enable_cap::framebuffer_srgb);
     gl::viewport        (0, 0, width(), height());
     gl::clear_color     (0.0f, 0.0f, 0.2f, 0.1f);
-    gl::clear           (gl::Clear_buffer_mask::color_buffer_bit);
+    gl::clear_depth_f   (*m_configuration->depth_clear_value_pointer());
+    gl::clear           (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 }
-
-//auto Editor_rendering::is_content_in_focus() const -> bool
-//{
-//    return m_configuration->gui 
-//        ? m_viewport_windows->is_content_in_focus()
-//        : true;
-//}
-//
-//auto Editor_rendering::to_scene_content(const glm::vec2 position_in_root) const -> glm::vec2
-//{
-//    if (m_configuration->gui)
-//    {
-//        return m_viewport_windows->to_scene_content(position_in_root);
-//    }
-//    else
-//    {
-//        return {
-//            position_in_root.x,
-//            height() - position_in_root.y
-//        };
-//    }
-//}
 
 void Editor_rendering::render()
 {
@@ -162,14 +123,6 @@ void Editor_rendering::render()
     Expects(m_application);
     Expects(m_scene_manager);
     Expects(m_editor_view);
-
-    const int w = width();
-    const int h = height();
-    if ((w == 0) || (h == 0))
-    {
-        m_frame_log_window->log("width and/or height is zero, skipping rendering");
-        return;
-    }
 
     if (m_trigger_capture)
     {
@@ -184,7 +137,6 @@ void Editor_rendering::render()
         (m_shadow_renderer != nullptr)
     )
     {
-        m_frame_log_window->log("rendering shadowmaps");
         m_scene_manager->sort_lights();
         m_shadow_renderer->render(
             m_scene_root->content_layers(),
@@ -194,37 +146,14 @@ void Editor_rendering::render()
 
     if (m_configuration->gui)
     {
-        m_frame_log_window->log("rendering gui");
-        m_pointer_context->set_priority_action(m_editor_tools->get_priority_action());
-        gui_render();
+        render_viewports();
         m_editor_tools->imgui_windows();
     }
-    else
+    else if (m_configuration->show_window)
     {
-        m_frame_log_window->log("rendering scene directly to window");
         gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
-        gl::viewport(0, 0, width(), height());
-        m_pipeline_state_tracker->shader_stages.reset();
-        m_pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
-        gl::clear_color(0.0f, 0.0f, 0.0f, 1.0f);
-        gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
-        gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
-
-        const Render_context render_context{
-            nullptr,                          // TODO viewport_window
-            nullptr,                          // viewport config
-            get<Fly_camera_tool>()->camera(), // camera for non-gui
-            {                                 // viewport for non-gui
-                0,
-                0,
-                width(),
-                height(),
-                m_configuration->reverse_depth
-            }
-        };
-
-        m_pointer_context->update(nullptr); // TODO
-        render_viewport(render_context);
+        clear();
+        render_viewports();
     }
 
     if (m_headset_renderer)
@@ -239,23 +168,27 @@ void Editor_rendering::render()
     if (m_line_renderer)    m_line_renderer   ->next_frame();
 }
 
-void Editor_rendering::render_viewport(const Render_context& context)
+void Editor_rendering::render_viewport(const Render_context& context, const bool has_pointer)
 {
-    m_frame_log_window->log("rendering viewport");
+    ERHE_PROFILE_FUNCTION
 
     gl::enable(gl::Enable_cap::framebuffer_srgb);
 
     if (m_scene_manager && m_forward_renderer)
     {
-        render_content    (context);
-        render_selection  (context);
-        render_brush      (context);
-        render_tool_meshes(context);
+        render_content  (context);
+        render_selection(context);
+        render_brush    (context);
+        if (has_pointer)
+        {
+            render_tool_meshes(context);
+        }
     }
 
-    gl::disable(gl::Enable_cap::framebuffer_srgb);
-
-    m_editor_tools->render_tools(context);
+    //if (has_pointer)
+    {
+        m_editor_tools->render_tools(context);
+    }
 
     if (m_line_renderer)
     {
@@ -274,7 +207,7 @@ void Editor_rendering::render_id(const Render_context& context)
 
     if (
         (m_id_renderer == nullptr) ||
-        (m_pointer_context->window() == nullptr) ||
+        (m_pointer_context->window() != context.window) ||
         !m_pointer_context->pointer_in_content_area() ||
         (context.camera == nullptr) ||
         !m_pointer_context->position_in_viewport_window().has_value()
@@ -283,13 +216,7 @@ void Editor_rendering::render_id(const Render_context& context)
         return;
     }
 
-    if (m_pointer_context->window() != context.window)
-    {
-        return;
-    }
-
     auto pointer = m_pointer_context->position_in_viewport_window().value();
-    m_frame_log_window->log("rendering id @ {}", pointer);
 
     m_id_renderer->render(
         context.viewport,
@@ -318,10 +245,8 @@ void Editor_rendering::render_content(const Render_context& context)
     auto& render_style = context.viewport_config->render_style_not_selected;
 
     constexpr erhe::scene::Visibility_filter content_not_selected_filter{
-        erhe::scene::Node::c_visibility_content,    // all set
-        0u,                                         // at least one set
-        erhe::scene::Node::c_visibility_selected,   // all clear
-        0u                                          // at least one clear
+        .require_all_bits_set   = erhe::scene::Node::c_visibility_content,
+        .require_all_bits_clear = erhe::scene::Node::c_visibility_selected
     };                                        
 
     if (render_style.polygon_fill)
@@ -346,6 +271,7 @@ void Editor_rendering::render_content(const Render_context& context)
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
     }
+
     if (render_style.edge_lines)
     {
         gl::enable(gl::Enable_cap::sample_alpha_to_coverage);
@@ -366,6 +292,7 @@ void Editor_rendering::render_content(const Render_context& context)
         );
         gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
     }
+
     if (render_style.polygon_centroids)
     {
         m_forward_renderer->primitive_color_source   = render_style.polygon_centroids_color_source; // Base_renderer::Primitive_color_source::constant_color;
@@ -384,6 +311,7 @@ void Editor_rendering::render_content(const Render_context& context)
             content_not_selected_filter
         );
     }
+
     if (render_style.corner_points)
     {
         m_forward_renderer->primitive_color_source   = render_style.corner_points_color_source; // Base_renderer::Primitive_color_source::constant_color;
@@ -418,13 +346,9 @@ void Editor_rendering::render_selection(const Render_context& context)
     const auto& render_style = context.viewport_config->render_style_selected;
 
     constexpr erhe::scene::Visibility_filter content_selected_filter{
-        (
-            erhe::scene::Node::c_visibility_content |  // all set
+        .require_all_bits_set =
+            erhe::scene::Node::c_visibility_content |
             erhe::scene::Node::c_visibility_selected
-        ), 
-        0u,                                         // at least one set
-        0u,                                         // all clear
-        0u                                          // at least one cler
     };                                        
 
     if (render_style.polygon_fill)
@@ -527,13 +451,6 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
         return;
     }
 
-    constexpr erhe::scene::Visibility_filter tool_filter{
-        erhe::scene::Node::c_visibility_tool,   // all set
-        0u,                                     // at least one set
-        0u,                                     // all clear
-        0u                                      // at least one cler
-    };                                    
-
     m_forward_renderer->render(
         context.viewport,
         *context.camera,
@@ -548,7 +465,9 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
             Forward_renderer::Pass::require_stencil_tag_depth_visible,
             Forward_renderer::Pass::require_stencil_tag_depth_hidden_and_blend,
         },
-        tool_filter
+        erhe::scene::Visibility_filter{
+            .require_all_bits_set = erhe::scene::Node::c_visibility_tool
+        }
     );
 }
 
@@ -561,12 +480,6 @@ void Editor_rendering::render_brush(const Render_context& context)
         return;
     }
 
-    constexpr erhe::scene::Visibility_filter brush_filter{
-        erhe::scene::Node::c_visibility_brush,  // all set
-        0u,                                     // at least one set
-        0u,                                     // all clear
-        0u                                      // at least one cler
-    };                                    
 
     m_forward_renderer->render(
         context.viewport,
@@ -578,7 +491,9 @@ void Editor_rendering::render_brush(const Render_context& context)
             Forward_renderer::Pass::brush_back,
             Forward_renderer::Pass::brush_front
         },
-        brush_filter
+        erhe::scene::Visibility_filter{
+            .require_all_bits_set = erhe::scene::Node::c_visibility_brush
+        }
     );
 }
 

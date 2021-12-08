@@ -39,8 +39,10 @@ gl::Program_interface program_interfaces[]
     gl::Program_interface::vertex_subroutine_uniform           // GL 4.3
 };
 
-auto member_interface(const gl::Program_interface interface)
--> std::optional<gl::Program_interface>
+[[nodiscard]]
+auto member_interface(
+    const gl::Program_interface interface
+) -> std::optional<gl::Program_interface>
 {
     switch (interface)
     {
@@ -96,9 +98,11 @@ gl::Program_resource_property program_resource_properties[]
     //gl::Program_resource_property::uniform
 };
 
-template <typename T> auto
-is_in_list(const T& item, std::initializer_list<T> items)
-    -> bool
+template <typename T>
+[[nodiscard]] auto is_in_list(
+    const T&                 item,
+    std::initializer_list<T> items
+) -> bool
 {
     return std::find(
         items.begin(),
@@ -108,7 +112,7 @@ is_in_list(const T& item, std::initializer_list<T> items)
 }
 
 // [OpenGL 4.6 (Core Profile)] Table 7.2 GetProgramResourceiv properties and supported interfaces
-auto is_program_interface_allowed(
+[[nodiscard]] auto is_program_interface_allowed(
     const gl::Program_resource_property property,
     const gl::Program_interface         interface
 ) -> bool
@@ -342,27 +346,31 @@ auto is_program_interface_allowed(
 
         default:
         {
-            FATAL("Bad program property");
+            ERHE_FATAL("Bad program property");
         }
     }
 }
 
 }
 
+[[nodiscard]]
 auto Shader_stages::Prototype::try_compile_shader(
     const Shader_stages::Create_info&               create_info,
     const Shader_stages::Create_info::Shader_stage& shader
 ) -> std::optional<Gl_shader>
 {
-    Gl_shader gl_shader(shader.type);
+    Gl_shader gl_shader{shader.type};
     const auto gl_name = gl_shader.gl_name();
 
     string source = create_info.final_source(shader);
-    VERIFY(source.length() > 0);
-    const char* c_source = source.c_str();
-    std::array<const char* , 1> sources { c_source};
+    ERHE_VERIFY(source.length() > 0);
+    const char* const c_source = source.c_str();
+    std::array<const char* , 1> sources{ c_source };
 
-    log_glsl.trace("Shader_stage source:\n{}\n", format(create_info.final_source(shader)));
+    log_glsl.trace(
+        "Shader_stage source:\n{}\n",
+        format(create_info.final_source(shader))
+    );
 
     gl::shader_source(gl_name, static_cast<GLsizei>(sources.size()), sources.data(), nullptr);
     gl::compile_shader(gl_name);
@@ -388,7 +396,9 @@ auto Shader_stages::Prototype::try_compile_shader(
     return {std::move(gl_shader)};
 }
 
-Shader_stages::Prototype::Prototype(const Shader_stages::Create_info& create_info)
+Shader_stages::Prototype::Prototype(
+    const Shader_stages::Create_info& create_info
+)
     : m_name{create_info.name}
 {
     Expects(m_handle.gl_name() != 0);
@@ -407,7 +417,7 @@ Shader_stages::Prototype::Prototype(const Shader_stages::Create_info& create_inf
 
     if (!create_info.transform_feedback_varyings.empty())
     {
-        std::vector<char const *> c_array(create_info.transform_feedback_varyings.size());
+        std::vector<char const *> c_array{create_info.transform_feedback_varyings.size()};
         for (size_t i = 0; i < create_info.transform_feedback_varyings.size(); ++i)
         {
             c_array[i] = create_info.transform_feedback_varyings[i].c_str();
@@ -464,7 +474,7 @@ Shader_stages::Prototype::Prototype(const Shader_stages::Create_info& create_inf
         log_program.error("\n");
         for (const auto& s : create_info.shaders)
         {
-            string f_source = format(create_info.final_source(s));
+            const string f_source = format(create_info.final_source(s));
             log_glsl.error("\n{}\n", f_source);
         }
         log_program.error("Shader_stages linking failed: \n");
@@ -477,7 +487,7 @@ Shader_stages::Prototype::Prototype(const Shader_stages::Create_info& create_inf
         log_program.trace("Shader_stages linking succeeded: \n");
         for (const auto& s : create_info.shaders)
         {
-            string f_source = format(create_info.final_source(s));
+            const string f_source = format(create_info.final_source(s));
             log_glsl.trace("\n{}\n", f_source);
         }
         m_link_succeeded = true;
@@ -520,11 +530,14 @@ void Shader_stages::Prototype::dump_reflection() const
     int max_name_length{0};
     for (auto interface : program_interfaces)
     {
-        if ((interface == gl::Program_interface::atomic_counter_buffer    ) ||
-            (interface == gl::Program_interface::transform_feedback_buffer))
+        if (
+            (interface == gl::Program_interface::atomic_counter_buffer    ) ||
+            (interface == gl::Program_interface::transform_feedback_buffer)
+        )
         {
             continue;
         }
+
         int interface_max_name_length{0};
         gl::get_program_interface_iv(
             gl_name,
@@ -682,10 +695,10 @@ void Shader_stages::Prototype::dump_reflection() const
 
     if (transform_feedback_varyings > 0)
     {
-        VERIFY(transform_feedback_varying_max_length > 0);
+        ERHE_VERIFY(transform_feedback_varying_max_length > 0);
         string             buffer_(static_cast<size_t>(transform_feedback_varying_max_length) + 1, 0);
-        GLsizei            length{0};
-        GLsizei            size2{0};
+        GLsizei            length {0};
+        GLsizei            size2  {0};
         gl::Attribute_type type2;
         for (unsigned int i = 0; i < static_cast<unsigned int>(transform_feedback_varyings); ++i)
         {

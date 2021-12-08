@@ -106,18 +106,16 @@ Camera::Camera(const std::string_view name)
 
 Camera::~Camera() = default;
 
-void Camera::update(const Viewport viewport)
+auto Camera::projection_transforms(Viewport viewport) const -> Projection_transforms
 {
-    //log.trace("{} Camera::update()\n", name());
-
-    // Update clip from view transform / view from clip
-    m_projection.update(m_camera_transforms.clip_from_node, viewport);
-
-    // Update clip from world / world from clip
-    m_camera_transforms.clip_from_world.set(
-        clip_from_node() * node_from_world(),
-        world_from_node() * node_from_clip()
-    );
+    const auto clip_from_node = m_projection.clip_from_node_transform(viewport);
+    return Projection_transforms{
+        clip_from_node,
+        Transform{
+            clip_from_node.matrix() * node_from_world(),
+            world_from_node() * clip_from_node.inverse_matrix()
+        }
+    };
 }
 
 auto Camera::projection() -> Projection*
@@ -130,24 +128,24 @@ auto Camera::projection() const -> const Projection*
     return &m_projection;
 }
 
-auto Camera::clip_from_node() const -> glm::mat4
-{
-    return m_camera_transforms.clip_from_node.matrix();
-}
-
-auto Camera::clip_from_world() const -> glm::mat4
-{
-    return m_camera_transforms.clip_from_world.matrix();
-}
-
-auto Camera::node_from_clip() const -> glm::mat4
-{
-    return m_camera_transforms.clip_from_node.inverse_matrix();
-}
-
-auto Camera::world_from_clip() const -> glm::mat4
-{
-    return m_camera_transforms.clip_from_world.inverse_matrix();
-}
+//auto Camera::clip_from_node() const -> glm::mat4
+//{
+//    return m_camera_transforms.clip_from_node.matrix();
+//}
+//
+//auto Camera::clip_from_world() const -> glm::mat4
+//{
+//    return m_camera_transforms.clip_from_world.matrix();
+//}
+//
+//auto Camera::node_from_clip() const -> glm::mat4
+//{
+//    return m_camera_transforms.clip_from_node.inverse_matrix();
+//}
+//
+//auto Camera::world_from_clip() const -> glm::mat4
+//{
+//    return m_camera_transforms.clip_from_world.inverse_matrix();
+//}
 
 } // namespace erhe::scene

@@ -53,12 +53,12 @@ void Shader_monitor::add(
 }
 
 void Shader_monitor::add(
-    const std::filesystem::path&                  path,
-    erhe::graphics::Shader_stages::Create_info    create_info,
-    gsl::not_null<erhe::graphics::Shader_stages*> shader_stages
+    const std::filesystem::path&                      path,
+    const erhe::graphics::Shader_stages::Create_info& create_info,
+    gsl::not_null<erhe::graphics::Shader_stages*>     shader_stages
 )
 {
-    const std::lock_guard<std::mutex> lock(m_mutex);
+    const std::lock_guard<std::mutex> lock{m_mutex};
 
     auto i = m_files.find(path);
     if (i == m_files.end())
@@ -69,7 +69,7 @@ void Shader_monitor::add(
 
     auto& f = m_files[path];
 
-    VERIFY(std::filesystem::exists(path));
+    ERHE_VERIFY(std::filesystem::exists(path));
 
     f.path = path;
 
@@ -80,7 +80,7 @@ void Shader_monitor::add(
     else
     {
         f.last_time = std::filesystem::last_write_time(f.path);
-        f.reload_entries.emplace(std::move(create_info), shader_stages);
+        f.reload_entries.emplace(create_info, shader_stages);
     }
 }
 
@@ -92,7 +92,8 @@ void Shader_monitor::poll_thread()
         {
             ERHE_PROFILE_SCOPE("Shader_monitor::poll_thread");
 
-            const std::lock_guard<std::mutex> lock(m_mutex);
+            const std::lock_guard<std::mutex> lock{m_mutex};
+
             for (auto& i : m_files)
             {
                 auto& f = i.second;
@@ -101,13 +102,13 @@ void Shader_monitor::poll_thread()
                 // like file being externally modified at the same time.
                 try
                 {
-                    bool ok =
+                    const bool ok =
                         std::filesystem::exists(f.path)    &&
                         !std::filesystem::is_empty(f.path) &&
                         std::filesystem::is_regular_file(f.path);
                     if (ok)
                     {
-                        auto time = std::filesystem::last_write_time(f.path);
+                        const auto time = std::filesystem::last_write_time(f.path);
                         if (f.last_time != time)
                         {
                             m_reload_list.emplace_back(&f);
@@ -133,13 +134,14 @@ void Shader_monitor::update_once_per_frame(const erhe::components::Time_context&
     static_cast<void>(time_context);
     ERHE_PROFILE_FUNCTION
 
-    const std::lock_guard<std::mutex> lock(m_mutex);
+    const std::lock_guard<std::mutex> lock{m_mutex};
+
     for (auto* f : m_reload_list)
     {
         for (const auto& entry : f->reload_entries)
         {
             const auto& create_info = entry.create_info;
-            auto prototype = erhe::graphics::Shader_stages::Prototype(create_info);
+            erhe::graphics::Shader_stages::Prototype prototype{create_info};
             if (prototype.is_valid())
             {
                 entry.shader_stages->reload(std::move(prototype));

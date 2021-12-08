@@ -45,12 +45,12 @@ public:
         bool                     attach{true};
     };
 
-    explicit Attach_detach_operation(Context& context);
+    explicit Attach_detach_operation(Context&& context);
 
     // Implements IOperation
+    [[nodiscard]] auto describe() const -> std::string override;
     void execute () const override;
     void undo    () const override;
-    auto describe() const -> std::string override;
 
 private:
     void execute(bool attach) const;

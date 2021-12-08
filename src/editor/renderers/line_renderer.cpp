@@ -2,6 +2,7 @@
 #include "configuration.hpp"
 #include "graphics/gl_context_provider.hpp"
 #include "graphics/shader_monitor.hpp"
+#include "windows/log_window.hpp"
 #include "log.hpp"
 
 #include "erhe/graphics/buffer.hpp"
@@ -39,7 +40,7 @@ using glm::vec3;
 using glm::vec4;
 
 Line_renderer::Line_renderer()
-    : Component(c_name)
+    : Component{c_name}
 {
 }
 
@@ -60,7 +61,7 @@ void Line_renderer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
@@ -141,15 +142,19 @@ void Line_renderer::Pipeline::initialize(Shader_monitor* shader_monitor)
     const std::filesystem::path gs_path = shader_path / std::filesystem::path("line.geom");
     const std::filesystem::path fs_path = shader_path / std::filesystem::path("line.frag");
     Shader_stages::Create_info create_info{
-        "line",
-        &default_uniform_block,
-        &attribute_mappings,
-        &fragment_outputs
+        .name                      = "line",
+        .vertex_attribute_mappings = &attribute_mappings,
+        .fragment_outputs          = &fragment_outputs,
+        .default_uniform_block     = &default_uniform_block
     };
+    create_info.defines.push_back({"ERHE_LINE_SHADER_SHOW_DEBUG_LINES",        "0"});
+    create_info.defines.push_back({"ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES", "1"});
+    create_info.defines.push_back({"ERHE_LINE_SHADER_STRIP",                   "1"});
     create_info.add_interface_block(view_block.get());
     create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
     create_info.shaders.emplace_back(gl::Shader_type::geometry_shader, gs_path);
     create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
+
     Shader_stages::Prototype prototype(create_info);
     shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
 
@@ -207,12 +212,12 @@ void Line_renderer::Style::next_frame()
 }
 
 void Line_renderer::Style::put(
-    const glm::vec3      point,
-    const float          thickness,
-    const uint32_t       color,
-    gsl::span<float>&    gpu_float_data, 
-    gsl::span<uint32_t>& gpu_uint_data,
-    size_t&              word_offset
+    const glm::vec3            point,
+    const float                thickness,
+    const uint32_t             color,
+    const gsl::span<float>&    gpu_float_data, 
+    const gsl::span<uint32_t>& gpu_uint_data,
+    size_t&                    word_offset
 )
 {
     gpu_float_data[word_offset++] = point.x;
@@ -232,11 +237,11 @@ void Line_renderer::Style::add_lines(
 
     m_vertex_writer.begin();
 
-    std::byte* const    start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
-    const size_t        byte_count = vertex_gpu_data.size_bytes();
-    const size_t        word_count = byte_count / sizeof(float);
-    gsl::span<float>    gpu_float_data(reinterpret_cast<float*   >(start), word_count);
-    gsl::span<uint32_t> gpu_uint_data (reinterpret_cast<uint32_t*>(start), word_count);
+    std::byte* const          start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
+    const size_t              byte_count = vertex_gpu_data.size_bytes();
+    const size_t              word_count = byte_count / sizeof(float);
+    const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
+    const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
     size_t word_offset = 0;
     for (const Line& line : lines)
@@ -261,11 +266,11 @@ void Line_renderer::Style::add_lines(
 
     m_vertex_writer.begin();
 
-    std::byte* const    start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
-    const size_t        byte_count = vertex_gpu_data.size_bytes();
-    const size_t        word_count = byte_count / sizeof(float);
-    gsl::span<float>    gpu_float_data(reinterpret_cast<float*   >(start), word_count);
-    gsl::span<uint32_t> gpu_uint_data (reinterpret_cast<uint32_t*>(start), word_count);
+    std::byte* const          start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
+    const size_t              byte_count = vertex_gpu_data.size_bytes();
+    const size_t              word_count = byte_count / sizeof(float);
+    const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
+    const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
     size_t word_offset = 0;
     for (const Line& line : lines)
@@ -315,11 +320,12 @@ void Line_renderer::Style::render(
 
     m_view_writer.begin();
 
-    const mat4  clip_from_world        = camera.clip_from_world();
+    const auto  projection_transforms  = camera.projection_transforms(viewport);
+    const mat4  clip_from_world        = projection_transforms.clip_from_world.matrix();
     const vec4  view_position_in_world = camera.position_in_world();
     const auto  fov_sides              = camera.projection()->get_fov_sides(viewport);
     auto* const view_buffer            = &current_frame_resources().view_buffer;
-    auto        view_gpu_data          = view_buffer->map();
+    const auto  view_gpu_data          = view_buffer->map();
     const float viewport_floats[4] {
         static_cast<float>(viewport.x),
         static_cast<float>(viewport.y),
@@ -341,8 +347,11 @@ void Line_renderer::Style::render(
     m_view_writer.write_offset += m_pipeline->view_block->size_bytes();
     m_view_writer.end();
 
-    gl::disable          (gl::Enable_cap::framebuffer_srgb);
+    //gl::disable          (gl::Enable_cap::framebuffer_srgb);
+    gl::enable           (gl::Enable_cap::framebuffer_srgb);
     gl::disable          (gl::Enable_cap::primitive_restart_fixed_index);
+    gl::enable           (gl::Enable_cap::sample_alpha_to_coverage);
+    gl::enable           (gl::Enable_cap::sample_alpha_to_one);
     gl::viewport         (viewport.x, viewport.y, viewport.width, viewport.height);
     gl::bind_buffer_range(
         view_buffer->target(),
@@ -376,6 +385,8 @@ void Line_renderer::Style::render(
         );
     }
 
+    gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
+    gl::disable(gl::Enable_cap::sample_alpha_to_one);
     gl::pop_debug_group();
 }
 

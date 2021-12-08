@@ -303,7 +303,7 @@ Context_window::Context_window(const int width, const int height, const int msaa
     );
     bool ok = open(width, height, msaa_sample_count, title, 4, 6, nullptr);
 
-    VERIFY(ok);
+    ERHE_VERIFY(ok);
 }
 
 Context_window::Context_window(Context_window* share)
@@ -313,7 +313,7 @@ Context_window::Context_window(Context_window* share)
 
     bool ok = open(64, 64, 0, "erhe share context", share->get_opengl_major_version(), share->get_opengl_minor_version(), share);
 
-    VERIFY(ok);
+    ERHE_VERIFY(ok);
 }
 
 // Currently this is not thread safe.
@@ -529,7 +529,7 @@ auto Context_window::is_mouse_captured() const -> bool
         {
             return false;
         }
-        FATAL("unexpected GLFW_CURSOR_MODE");
+        ERHE_FATAL("unexpected GLFW_CURSOR_MODE");
     }
     return false;
 }

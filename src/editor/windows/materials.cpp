@@ -1,5 +1,6 @@
 #include "windows/materials.hpp"
-#include "tools.hpp"
+#include "editor_tools.hpp"
+
 #include "scene/scene_root.hpp"
 
 #include "erhe/imgui/imgui_helpers.hpp"
@@ -71,7 +72,7 @@ void Materials::imgui()
     using namespace erhe::imgui;
 
     ImGui::Begin(c_title.data());
-    const auto button_size = ImVec2{ImGui::GetContentRegionAvailWidth(), 0.0f};
+    const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
     for (const auto& material : materials)
     {
         if (material->visible == false)

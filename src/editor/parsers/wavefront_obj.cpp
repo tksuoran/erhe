@@ -188,7 +188,8 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                 line_pos      = text.find_first_of(end_of_line, line_last_pos);
                 continue;
             }
-            erhe::log::Indenter scope_indent;
+
+            const erhe::log::Indenter scope_indent;
 
             // process line
             std::string::size_type token_last_pos = line.find_first_not_of(delimiters, 0);
@@ -315,7 +316,7 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                                         case 2: face_vertex_normal_indices  .push_back(value); break;
                                         default:
                                         {
-                                            //FATAL("bad subtoken slot for wavefront obj parser face command\n");
+                                            //ERHE_FATAL("bad subtoken slot for wavefront obj parser face command\n");
                                             break;
                                         }
                                     }
@@ -360,7 +361,7 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                     }
                     //else
                     //{
-                    //    FATAL("unsupported vertex dimension\n");
+                    //    ERHE_FATAL("unsupported vertex dimension\n");
                     //}
                     break;
                 }
@@ -374,7 +375,7 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                     }
                     //else
                     //{
-                    //    FATAL("unsupported normal dimension\n");
+                    //    ERHE_FATAL("unsupported normal dimension\n");
                     //}
                     break;
                 }
@@ -388,7 +389,7 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                     }
                     //else
                     //{
-                    //    FATAL("unsupported texcoord dimension\n");
+                    //    ERHE_FATAL("unsupported texcoord dimension\n");
                     //}
                     break;
                 }
@@ -422,8 +423,8 @@ auto parse_obj_geometry(const std::filesystem::path& path)
 
                         const Point_id  point_id  = obj_point_to_geometry_point[position_index];
                         const Corner_id corner_id = geometry->make_polygon_corner(polygon_id, point_id);
-                        VERIFY(position_index >= 0);
-                        VERIFY(position_index < static_cast<int>(positions.size()));
+                        ERHE_VERIFY(position_index >= 0);
+                        ERHE_VERIFY(position_index < static_cast<int>(positions.size()));
 
                         point_positions->put(point_id, positions[position_index]);
 
@@ -439,7 +440,7 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                                 (obj_texcoord_index > 0)
                                     ? obj_texcoord_index - 1
                                     : obj_texcoord_index + static_cast<int>(texcoords.size());
-                            VERIFY(texcoord_index < static_cast<int>(texcoords.size()));
+                            ERHE_VERIFY(texcoord_index < static_cast<int>(texcoords.size()));
                             corner_texcoords->put(corner_id, texcoords[texcoord_index]);
                         }
 
@@ -450,7 +451,7 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                                 (obj_normal_index > 0)
                                     ? obj_normal_index - 1
                                     : obj_normal_index + static_cast<int>(normals.size());
-                            VERIFY(normal_index < static_cast<int>(normals.size()));
+                            ERHE_VERIFY(normal_index < static_cast<int>(normals.size()));
                             corner_normals->put(corner_id, normals[normal_index]);
                         }
                     }

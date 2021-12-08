@@ -7,42 +7,18 @@
 namespace erhe::primitive
 {
 
-Primitive_geometry::Primitive_geometry() = default;
-
-Primitive_geometry::~Primitive_geometry() = default;
-
-Primitive_geometry::Primitive_geometry(Primitive_geometry&& other) noexcept
-    : bounding_box_min        {other.bounding_box_min          }
-    , bounding_box_max        {other.bounding_box_max          }
-    , triangle_fill_indices   {other.triangle_fill_indices     }
-    , edge_line_indices       {other.edge_line_indices         }
-    , corner_point_indices    {other.corner_point_indices      }
-    , polygon_centroid_indices{other.polygon_centroid_indices  }
-    , vertex_buffer_range     {other.vertex_buffer_range       }
-    , index_buffer_range      {other.index_buffer_range        }
-    , source_geometry         {std::move(other.source_geometry)}
-    , source_normal_style     {other.source_normal_style       }
+auto Primitive_geometry::base_vertex() const -> uint32_t
 {
+    return static_cast<uint32_t>(vertex_buffer_range.byte_offset / vertex_buffer_range.element_size);
 }
 
-auto Primitive_geometry::operator=(Primitive_geometry&& other) noexcept
--> Primitive_geometry&
+// Value that should be added in index range first index
+auto Primitive_geometry::base_index() const -> uint32_t
 {
-    bounding_box_min         = other.bounding_box_min          ;
-    bounding_box_max         = other.bounding_box_max          ;
-    triangle_fill_indices    = other.triangle_fill_indices     ;
-    edge_line_indices        = other.edge_line_indices         ;
-    corner_point_indices     = other.corner_point_indices      ;
-    polygon_centroid_indices = other.polygon_centroid_indices  ;
-    vertex_buffer_range      = other.vertex_buffer_range       ;
-    index_buffer_range       = other.index_buffer_range        ;
-    source_geometry          = std::move(other.source_geometry);
-    source_normal_style      = other.source_normal_style       ;
-    return *this;
+    return static_cast<uint32_t>(index_buffer_range.byte_offset / index_buffer_range.element_size);
 }
 
-
-auto Primitive_geometry::index_range(Primitive_mode primitive_mode) const -> Index_range
+auto Primitive_geometry::index_range(const Primitive_mode primitive_mode) const -> Index_range
 {
     switch (primitive_mode)
     {

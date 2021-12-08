@@ -23,7 +23,7 @@ auto Geometry::make_corner(const Point_id point_id, const Polygon_id polygon_id)
         corners.resize(static_cast<size_t>(corner_id) + s_grow);
     }
 
-    VERIFY(corner_id < corners.size());
+    ERHE_VERIFY(corner_id < corners.size());
     Corner& corner = corners[corner_id];
     corner.point_id   = point_id;
     corner.polygon_id = polygon_id;
@@ -46,7 +46,7 @@ auto Geometry::make_point() -> Point_id
         points.resize(static_cast<size_t>(point_id) + s_grow);
     }
 
-    VERIFY(point_id < points.size());
+    ERHE_VERIFY(point_id < points.size());
     //points[point_id].first_point_corner_id = m_next_point_corner;
     points[point_id].corner_count = 0;
     //log.trace("\tmake_point() point_id = {}\n", point_id);
@@ -68,7 +68,7 @@ auto Geometry::make_polygon() -> Polygon_id
         polygons.resize(static_cast<size_t>(polygon_id) + s_grow);
     }
 
-    VERIFY(polygon_id < polygons.size());
+    ERHE_VERIFY(polygon_id < polygons.size());
     polygons[polygon_id].corner_count = 0;
     //log.trace("\tmake_polygon() polygon_id = {}\n", polygon_id);
     return polygon_id;
@@ -83,7 +83,7 @@ auto Geometry::make_edge(const Point_id a, const Point_id b) -> Edge_id
 
     ++m_serial;
 
-    VERIFY(a < b);
+    ERHE_VERIFY(a < b);
     //Expects(a < b);
     Expects(b < points.size());
     const Edge_id edge_id = m_next_edge_id++;
@@ -93,7 +93,7 @@ auto Geometry::make_edge(const Point_id a, const Point_id b) -> Edge_id
         edges.resize(static_cast<size_t>(edge_id) + s_grow);
     }
 
-    VERIFY(edge_id < edges.size());
+    ERHE_VERIFY(edge_id < edges.size());
     Edge& edge = edges[edge_id];
     edge.a = a;
     edge.b = b;
@@ -139,14 +139,14 @@ void Geometry::make_point_corners()
     {
         i.polygon.for_each_corner(*this, [&](auto& j)
         {
-            VERIFY(j.corner_id != std::numeric_limits<Corner_id>::max());
-            VERIFY(j.corner_id < m_next_corner_id);
+            ERHE_VERIFY(j.corner_id != std::numeric_limits<Corner_id>::max());
+            ERHE_VERIFY(j.corner_id < m_next_corner_id);
             const Point_id  point_id        = j.corner.point_id;
-            VERIFY(point_id != std::numeric_limits<Point_id>::max());
-            VERIFY(point_id < m_next_point_id);
+            ERHE_VERIFY(point_id != std::numeric_limits<Point_id>::max());
+            ERHE_VERIFY(point_id < m_next_point_id);
             Point&          point           = j.geometry.points[point_id];
             Point_corner_id point_corner_id = point.first_point_corner_id + point.corner_count++;
-            VERIFY(point_corner_id < point_corners.size());
+            ERHE_VERIFY(point_corner_id < point_corners.size());
             point_corners[point_corner_id] = j.corner_id;
         });
     });
@@ -161,9 +161,9 @@ void Geometry::sort_point_corners()
     {
     public:
         Point_corner_id point_corner_id{0};
-        Corner_id       corner_id{0};
-        Point_id        point_ids[3];
-        bool            used{false};
+        Corner_id       corner_id      {0};
+        Point_id        point_ids      [3] = { 0, 0, 0 };
+        bool            used           {false};
     };
 
     for_each_point([&](auto& i)
@@ -260,7 +260,7 @@ auto Geometry::make_edge_polygon(const Edge_id edge_id, const Polygon_id polygon
     }
     else
     {
-        VERIFY(m_edge_polygon_edge == edge_id);
+        ERHE_VERIFY(m_edge_polygon_edge == edge_id);
     }
     ++m_next_edge_polygon_id;
     const Edge_polygon_id edge_polygon_id = edge.first_edge_polygon_id + edge.polygon_count;
@@ -300,7 +300,7 @@ auto Geometry::make_polygon_corner_(
     }
     else
     {
-        VERIFY(m_polygon_corner_polygon == polygon_id);
+        ERHE_VERIFY(m_polygon_corner_polygon == polygon_id);
     }
     ++m_next_polygon_corner_id;
     const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + polygon.corner_count;

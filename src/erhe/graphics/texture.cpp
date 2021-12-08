@@ -48,7 +48,7 @@ auto component_count(const gl::Pixel_format pixel_format) -> size_t
 
         default:
         {
-            FATAL("Bad pixel format");
+            ERHE_FATAL("Bad pixel format");
         }
     }
 }
@@ -78,7 +78,7 @@ auto byte_count(const gl::Pixel_type pixel_type) -> size_t
 
         default:
         {
-            FATAL("Bad pixel type");
+            ERHE_FATAL("Bad pixel type");
         }
     }
 };
@@ -143,7 +143,7 @@ auto get_upload_pixel_byte_count(
             return component_count(entry.format) * byte_count(entry.type);
         }
     }
-    FATAL("Bad internal format");
+    ERHE_FATAL("Bad internal format");
 }
 
 auto get_format_and_type(
@@ -197,7 +197,7 @@ auto Texture::storage_dimensions(const gl::Texture_target target) -> int
 
         default:
         {
-            FATAL("Bad texture target");
+            ERHE_FATAL("Bad texture target");
         }
     }
 }
@@ -235,7 +235,7 @@ auto Texture::mipmap_dimensions(const gl::Texture_target target) -> int
 
         default:
         {
-            FATAL("Bad texture target");
+            ERHE_FATAL("Bad texture target");
         }
     }
 }
@@ -289,7 +289,15 @@ auto Texture::size_level_count(int size) -> int
     return level_count;
 }
 
-void Texture_create_info::calculate_level_count()
+auto Texture_create_info::calculate_level_count(const int width, const int height, const int depth) -> int
+{
+    const auto x_level_count = Texture::size_level_count(width);
+    const auto y_level_count = Texture::size_level_count(height);
+    const auto z_level_count = Texture::size_level_count(depth);
+    return std::max(std::max(x_level_count, y_level_count), z_level_count);
+}
+
+auto Texture_create_info::calculate_level_count() const -> int
 {
     const auto dimensions = Texture::mipmap_dimensions(target);
 
@@ -297,7 +305,7 @@ void Texture_create_info::calculate_level_count()
     {
         if (width == 0)
         {
-            FATAL("zero texture width");
+            ERHE_FATAL("zero texture width");
         }
     }
 
@@ -305,7 +313,7 @@ void Texture_create_info::calculate_level_count()
     {
         if (height == 0)
         {
-            FATAL("zero texture height");
+            ERHE_FATAL("zero texture height");
         }
     }
 
@@ -313,50 +321,17 @@ void Texture_create_info::calculate_level_count()
     {
         if (depth == 0)
         {
-            FATAL("zero texture depth");
+            ERHE_FATAL("zero texture depth");
         }
     }
-
-    // TODO(tksuoran@gmail.com) should we throw error instead?
-    if (dimensions < 3)
-    {
-        depth = 0;
-    }
-
-    if (dimensions < 2)
-    {
-        height = 0;
-    }
-
-    if (use_mipmaps)
-    {
-        const auto x_level_count = Texture::size_level_count(width);
-        const auto y_level_count = Texture::size_level_count(height);
-        const auto z_level_count = Texture::size_level_count(depth);
-        level_count = std::max(std::max(x_level_count, y_level_count), z_level_count);
-    }
-    else
-    {
-        level_count = 1;
-    }
-}
-
-Texture_create_info::Texture_create_info(
-    const gl::Texture_target  target,
-    const gl::Internal_format internal_format,
-    const bool                use_mipmaps,
-    const int                 width,
-    const int                 height,
-    const int                 depth
-)
-    : target         {target}
-    , internal_format{internal_format}
-    , use_mipmaps    {use_mipmaps}
-    , width          {width}
-    , height         {height}
-    , depth          {depth}
-{
-    calculate_level_count();
+    
+    return use_mipmaps
+        ? calculate_level_count(
+            width,
+            (dimensions >= 2) ? height : 0,
+            (dimensions >= 3) ? depth : 0
+        )
+        : 1;
 }
 
 Texture::Texture(const Create_info& create_info)
@@ -365,7 +340,11 @@ Texture::Texture(const Create_info& create_info)
     , m_internal_format       {create_info.internal_format}
     , m_fixed_sample_locations{create_info.fixed_sample_locations}
     , m_sample_count          {create_info.sample_count}
-    , m_level_count           {create_info.level_count}
+    , m_level_count           {
+        (create_info.level_count != 0)
+            ? create_info.level_count
+            : create_info.calculate_level_count()
+    }
     , m_width                 {create_info.width}
     , m_height                {create_info.height}
     , m_depth                 {create_info.depth}
@@ -376,19 +355,19 @@ Texture::Texture(const Create_info& create_info)
     if (create_info.wrap_texture_name != 0)
     {
         // Current limitation
-        VERIFY(create_info.target == gl::Texture_target::texture_2d);
+        ERHE_VERIFY(create_info.target == gl::Texture_target::texture_2d);
 
         //// Store original texture 2d binding
         //GLint original_texture_2d_binding{0};
         //gl::get_integer_v(gl::Get_p_name::texture_binding_2d, &original_texture_2d_binding);
         //gl::bind_texture(gl::Texture_target::texture_2d, gl_name());
-        VERIFY(gl::is_texture(gl_name()));
+        ERHE_VERIFY(gl::is_texture(gl_name()));
         GLint max_framebuffer_width {0};
         GLint max_framebuffer_height{0};
         gl::get_integer_v(gl::Get_p_name::max_framebuffer_width, &max_framebuffer_width);
         gl::get_integer_v(gl::Get_p_name::max_framebuffer_width, &max_framebuffer_height);
-        VERIFY(create_info.width  <= max_framebuffer_width);
-        VERIFY(create_info.height <= max_framebuffer_height);
+        ERHE_VERIFY(create_info.width  <= max_framebuffer_width);
+        ERHE_VERIFY(create_info.height <= max_framebuffer_height);
         GLint width   {0};
         GLint height  {0};
         GLint depth   {0};
@@ -402,8 +381,8 @@ Texture::Texture(const Create_info& create_info)
         gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_FIXED_SAMPLE_LOCATIONS), &fixed_sample_locations);
         gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_INTERNAL_FORMAT),        &internal_format_i);
         gl::Internal_format internal_format = static_cast<gl::Internal_format>(internal_format_i);
-        VERIFY(width == create_info.width);
-        VERIFY(height == create_info.height);
+        ERHE_VERIFY(width == create_info.width);
+        ERHE_VERIFY(height == create_info.height);
         m_width           = width;
         m_height          = height;
         m_depth           = depth;
@@ -430,15 +409,15 @@ Texture::Texture(const Create_info& create_info)
     {
         case 0:
         {
-            VERIFY(m_buffer != nullptr);
-            VERIFY(m_sample_count == 0);
+            ERHE_VERIFY(m_buffer != nullptr);
+            ERHE_VERIFY(m_sample_count == 0);
             gl::texture_buffer(gl_name(), m_internal_format, m_buffer->gl_name());
             break;
         }
 
         case 1:
         {
-            VERIFY(m_sample_count == 0);
+            ERHE_VERIFY(m_sample_count == 0);
             gl::texture_storage_1d(gl_name(), m_level_count, m_internal_format, m_width);
             break;
         }
@@ -486,7 +465,7 @@ Texture::Texture(const Create_info& create_info)
 
         default:
         {
-            FATAL("Bad texture target");
+            ERHE_FATAL("Bad texture target");
         }
     }
 }
@@ -506,7 +485,7 @@ void Texture::upload(
 
     gl::Pixel_format format;
     gl::Pixel_type   type;
-    VERIFY(get_format_and_type(m_internal_format, format, type));
+    ERHE_VERIFY(get_format_and_type(m_internal_format, format, type));
     switch (storage_dimensions(m_target))
     {
         case 1:
@@ -529,7 +508,7 @@ void Texture::upload(
 
         default:
         {
-            FATAL("Bad texture target");
+            ERHE_FATAL("Bad texture target");
         }
     }
 }
@@ -554,7 +533,7 @@ void Texture::upload(
 
     gl::Pixel_format format;
     gl::Pixel_type   type;
-    VERIFY(get_format_and_type(m_internal_format, format, type));
+    ERHE_VERIFY(get_format_and_type(m_internal_format, format, type));
 
     const auto row_stride = width * get_upload_pixel_byte_count(internal_format);
     const auto byte_count = row_stride * height;
@@ -583,7 +562,7 @@ void Texture::upload(
 
         default:
         {
-            FATAL("Bad texture target");
+            ERHE_FATAL("Bad texture target");
         }
     }
 }
@@ -634,7 +613,7 @@ auto Texture::is_layered() const -> bool
 
         default:
         {
-            FATAL("Bad texture target");
+            ERHE_FATAL("Bad texture target");
         }
     }
 }

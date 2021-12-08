@@ -27,24 +27,24 @@ void Motion_state_adapter::setWorldTransform(const btTransform& worldTrans)
 }
 
 auto IRigid_body::create(
-    IRigid_body_create_info& create_info,
-    IMotion_state*           motion_state
+    const IRigid_body_create_info& create_info,
+    IMotion_state*                 motion_state
 ) -> IRigid_body*
 {
     return new Bullet_rigid_body(create_info, motion_state);
 }
 
 auto IRigid_body::create_shared(
-    IRigid_body_create_info& create_info,
-    IMotion_state*           motion_state
+    const IRigid_body_create_info& create_info,
+    IMotion_state*                 motion_state
 ) -> std::shared_ptr<IRigid_body>
 {
     return std::make_shared<Bullet_rigid_body>(create_info, motion_state);
 }
 
 Bullet_rigid_body::Bullet_rigid_body(
-    IRigid_body_create_info& create_info,
-    IMotion_state*           motion_state
+    const IRigid_body_create_info& create_info,
+    IMotion_state*                 motion_state
 )
     : m_motion_state_adapter{motion_state}
     , m_collision_shape{create_info.collision_shape}
@@ -64,8 +64,8 @@ Bullet_rigid_body::Bullet_rigid_body(
 {
     m_bullet_rigid_body.setDamping(0.02f, 0.02f);
 
-    m_bullet_rigid_body.setFriction(0.5);
-    m_bullet_rigid_body.setRollingFriction(0.1);
+    m_bullet_rigid_body.setFriction(0.5f);
+    m_bullet_rigid_body.setRollingFriction(0.1f);
 }
 
 Bullet_rigid_body::~Bullet_rigid_body()

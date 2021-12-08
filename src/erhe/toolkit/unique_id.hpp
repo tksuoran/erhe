@@ -19,15 +19,15 @@ public:
     {
     }
 
-    explicit Unique_id(const Unique_id&)
-        : m_id{allocate_id()}
-    {
-    }
+    /*explicit*/ Unique_id(const Unique_id&) = delete;
+    //    : m_id{allocate_id()}
+    //{
+    //}
 
-    auto operator=(const Unique_id&) -> Unique_id&
-    {
-        return *this;
-    }
+    //auto operator=(const Unique_id&) -> Unique_id&
+    //{
+    //    return *this;
+    //}
 
     explicit Unique_id(Unique_id&& other)
         : m_id{other.get_id()}
@@ -49,13 +49,13 @@ public:
         m_id = null_id;
     }
 
-    auto get_id() const -> id_type
+    [[nodiscard]] auto get_id() const -> id_type
     {
         return m_id;
     }
 
 private:
-    static auto allocate_id() -> id_type
+    static [[nodiscard]] auto allocate_id() -> id_type
     {
         static std::atomic<id_type> counter{1};
 

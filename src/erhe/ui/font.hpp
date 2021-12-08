@@ -33,8 +33,7 @@ public:
 
     void save() const;
 
-    auto line_height() const
-    -> float
+    [[nodiscard]] auto line_height() const -> float
     {
         return m_line_height;
     }
@@ -50,49 +49,49 @@ public:
 
     void measure(const std::string& text, Rectangle& bounds) const;
 
-    auto texture() const -> gsl::not_null<erhe::graphics::Texture*>
+    [[nodiscard]] auto texture() const -> gsl::not_null<erhe::graphics::Texture*>
     {
         Expects(m_texture);
 
         return m_texture.get();
     }
 
-    auto hinting() const -> bool
+    [[nodiscard]] auto hinting() const -> bool
     {
         return m_hinting;
     }
 
-    auto dpi() const -> unsigned int
+    [[nodiscard]] auto dpi() const -> unsigned int
     {
         return m_dpi;
     }
 
-    auto gamma() const -> float
+    [[nodiscard]] auto gamma() const -> float
     {
         return m_gamma;
     }
 
-    auto saturation() const -> float
+    [[nodiscard]] auto saturation() const -> float
     {
         return m_saturation;
     }
 
-    auto chars() const -> const std::string&
+    [[nodiscard]] auto chars() const -> const std::string&
     {
         return m_chars;
     }
 
-    auto pixel_size() const -> unsigned int
+    [[nodiscard]] auto pixel_size() const -> unsigned int
     {
         return m_pixel_size;
     }
 
-    auto bolding() const -> float
+    [[nodiscard]] auto bolding() const -> float
     {
         return m_bolding;
     }
 
-    auto outline_thickness() const -> float
+    [[nodiscard]] auto outline_thickness() const -> float
     {
         return m_outline_thickness;
     }
@@ -183,9 +182,13 @@ private:
 
     std::unique_ptr<erhe::graphics::Texture> m_texture;
     std::unique_ptr<Bitmap>                  m_bitmap;
+#if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE)
     struct FT_LibraryRec_*                   m_freetype_library{nullptr};
     struct FT_FaceRec_*                      m_freetype_face{nullptr};
+#endif
+#if defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
     hb_font_t*                               m_harfbuzz_font{nullptr};
+#endif
 };
 
 } // namespace erhe::ui

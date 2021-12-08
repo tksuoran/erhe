@@ -12,6 +12,8 @@ public:
     Triangulate(Geometry& src, Geometry& destination);
 };
 
-auto triangulate(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto triangulate(
+    erhe::geometry::Geometry& source
+) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

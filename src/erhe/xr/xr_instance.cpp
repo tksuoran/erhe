@@ -1,6 +1,7 @@
 #include "erhe/xr/xr_instance.hpp"
 #include "erhe/xr/xr_session.hpp"
 #include "erhe/xr/xr.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #ifdef _WIN32
 #   include <unknwn.h>
@@ -22,6 +23,8 @@ namespace erhe::xr {
 
 Xr_instance::Xr_instance()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!enumerate_layers())
     {
         return;
@@ -96,7 +99,7 @@ auto Xr_instance::debug_utils_messenger_callback(
     if (callbackData->objectCount > 0)
     {
         log_xr.info("Objects:\n");
-        erhe::log::Indenter scope_indent;
+        const erhe::log::Indenter scope_indent;
         for (uint32_t i = 0; i < callbackData->objectCount; ++i)
         {
             log_xr.info(
@@ -111,7 +114,7 @@ auto Xr_instance::debug_utils_messenger_callback(
     if (callbackData->sessionLabelCount > 0)
     {
         log_xr.info("Session labels:\n");
-        erhe::log::Indenter scope_indent;
+        const erhe::log::Indenter scope_indent;
         for (uint32_t i = 0; i < callbackData->sessionLabelCount; ++i)
         {
             log_xr.info("{}\n", callbackData->sessionLabels[i].labelName);
@@ -123,58 +126,40 @@ auto Xr_instance::debug_utils_messenger_callback(
 
 auto Xr_instance::create_instance() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     log_xr.trace("{}\n", __func__);
 
-    const char* required_extensions[] = {
+    const char* const required_extensions[] = {
         XR_EXT_DEBUG_UTILS_EXTENSION_NAME,
         XR_KHR_OPENGL_ENABLE_EXTENSION_NAME,
         XR_VARJO_QUAD_VIEWS_EXTENSION_NAME,
         XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
         XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME,
-        XR_KHR_VISIBILITY_MASK_EXTENSION_NAME
+        XR_KHR_VISIBILITY_MASK_EXTENSION_NAME,
+        XR_EXT_HAND_TRACKING_EXTENSION_NAME,
         //XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME,
     };
 
-    XrInstanceCreateInfo create_info;
-    create_info.type                               = XR_TYPE_INSTANCE_CREATE_INFO;
-    create_info.next                               = nullptr;
-    create_info.createFlags                        = 0;
-    create_info.applicationInfo.applicationName[0] = 'e';
-    create_info.applicationInfo.applicationName[1] = 'r';
-    create_info.applicationInfo.applicationName[2] = 'h';
-    create_info.applicationInfo.applicationName[3] = 'e';
-    create_info.applicationInfo.applicationName[4] = '\0';
-    create_info.applicationInfo.applicationVersion = 1;
-    create_info.applicationInfo.engineName[0]      = 'e';
-    create_info.applicationInfo.engineName[1]      = 'r';
-    create_info.applicationInfo.engineName[2]      = 'h';
-    create_info.applicationInfo.engineName[3]      = 'e';
-    create_info.applicationInfo.engineName[4]      = '\0';
-    create_info.applicationInfo.engineVersion      = 1;
-    create_info.applicationInfo.apiVersion         = XR_CURRENT_API_VERSION;
-    create_info.enabledApiLayerCount               = 0;
-    create_info.enabledApiLayerNames               = nullptr;
-    create_info.enabledExtensionCount              = 6;
-    create_info.enabledExtensionNames              = required_extensions;
+    const XrInstanceCreateInfo create_info
+    {
+        .type                   = XR_TYPE_INSTANCE_CREATE_INFO,
+        .next                   = nullptr,
+        .createFlags            = 0,
+        .applicationInfo = {
+            .applicationName    = { 'e', 'r', 'h', 'e', '\0' },
+            .applicationVersion = 1,
+            .engineName         = { 'e', 'r', 'h', 'e', '\0' },
+            .engineVersion      = 1,
+            .apiVersion         = XR_CURRENT_API_VERSION
+        },
+        .enabledApiLayerCount   = 0,
+        .enabledApiLayerNames   = nullptr,
+        .enabledExtensionCount  = 7,
+        .enabledExtensionNames  = required_extensions,
+    };
 
-    //for (;;)
-    //{
-        if (
-            !check(
-                "xrCreateInstance",
-                xrCreateInstance(
-                    &create_info,
-                    &m_xr_instance
-                )
-            )
-        )
-        {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            //continue;
-            return false;
-        }
-    //    break;
-    //}
+    ERHE_XR_CHECK(xrCreateInstance(&create_info, &m_xr_instance));
 
     // m_xrSetEnvironmentDepthEstimationVARJO = nullptr;
     // if (!check("xrGetInstanceProcAddr",
@@ -185,77 +170,26 @@ auto Xr_instance::create_instance() -> bool
     //     return false;
     // }
 
-    XrDebugUtilsMessengerCreateInfoEXT debug_utils_messenger_create_info;
-    debug_utils_messenger_create_info.type              = XR_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    debug_utils_messenger_create_info.next              = nullptr;
-    debug_utils_messenger_create_info.messageSeverities =
-        XR_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-        XR_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT    |
-        XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-        XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    debug_utils_messenger_create_info.messageTypes      =
-        XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT     |
-        XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT  |
-        XR_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-        XR_DEBUG_UTILS_MESSAGE_TYPE_CONFORMANCE_BIT_EXT;
-    debug_utils_messenger_create_info.userCallback      = xr_debug_utils_messenger_callback;
-    debug_utils_messenger_create_info.userData          = this;
+    const XrDebugUtilsMessengerCreateInfoEXT debug_utils_messenger_create_info{
+        .type              = XR_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+        .next              = nullptr,
+        .messageSeverities =
+            XR_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+            XR_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT    |
+            XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+            XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+        .messageTypes      =
+            XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT     |
+            XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT  |
+            XR_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+            XR_DEBUG_UTILS_MESSAGE_TYPE_CONFORMANCE_BIT_EXT,
+        .userCallback      = xr_debug_utils_messenger_callback,
+        .userData          = this
+    };
 
-    if (
-        !check(
-            "xrGetInstanceProcAddr",
-            xrGetInstanceProcAddr(
-                m_xr_instance,
-                "xrCreateDebugUtilsMessengerEXT",
-                reinterpret_cast<PFN_xrVoidFunction*>(&xrCreateDebugUtilsMessengerEXT)
-            )
-        )
-    )
-    {
-        return false;
-    }
-
-    if (
-        !check(
-            "xrGetInstanceProcAddr",
-            xrGetInstanceProcAddr(
-                m_xr_instance,
-                "xrGetOpenGLGraphicsRequirementsKHR",
-                reinterpret_cast<PFN_xrVoidFunction*>(&xrGetOpenGLGraphicsRequirementsKHR)
-            )
-        )
-    )
-    {
-        return false;
-    }
-
-    if (
-        !check(
-            "xrGetInstanceProcAddr",
-            xrGetInstanceProcAddr(
-                m_xr_instance,
-                "xrGetVisibilityMaskKHR",
-                reinterpret_cast<PFN_xrVoidFunction*>(&xrGetVisibilityMaskKHR)
-            )
-        )
-    )
-    {
-        return false;
-    }
-
-    if (
-        !check(
-            "xrCreateDebugUtilsMessengerEXT",
-            xrCreateDebugUtilsMessengerEXT(
-                m_xr_instance,
-                &debug_utils_messenger_create_info,
-                &m_debug_utils_messenger
-            )
-        )
-    )
-    {
-        return false;
-    }
+    xrCreateDebugUtilsMessengerEXT     = get_proc_addr<PFN_xrCreateDebugUtilsMessengerEXT    >("xrCreateDebugUtilsMessengerEXT");
+    xrGetVisibilityMaskKHR             = get_proc_addr<PFN_xrGetVisibilityMaskKHR            >("xrGetVisibilityMaskKHR");
+    xrGetOpenGLGraphicsRequirementsKHR = get_proc_addr<PFN_xrGetOpenGLGraphicsRequirementsKHR>("xrGetOpenGLGraphicsRequirementsKHR");
 
     return true;
 }
@@ -269,8 +203,28 @@ auto Xr_instance::create_instance() -> bool
 //    m_xrSetEnvironmentDepthEstimationVARJO(xr_session, enabled ? XR_TRUE : XR_FALSE);
 //}
 
+auto Xr_instance::get_proc_addr(const char* function) const -> PFN_xrVoidFunction
+{
+    PFN_xrVoidFunction function_pointer;
+    if (
+        !check(
+            xrGetInstanceProcAddr(
+                m_xr_instance,
+                function,
+                &function_pointer
+            )
+        )
+    )
+    {
+        return nullptr;
+    }
+    return function_pointer;
+}
+
 Xr_instance::~Xr_instance()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_xr_instance != nullptr)
     {
         xrDestroyInstance(m_xr_instance);
@@ -305,18 +259,12 @@ auto Xr_instance::get_xr_environment_blend_mode() const -> XrEnvironmentBlendMod
 
 auto Xr_instance::enumerate_layers() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     log_xr.trace("{}\n", __func__);
 
     uint32_t count{0};
-    if (
-        !check(
-            "xrEnumerateApiLayerProperties",
-            xrEnumerateApiLayerProperties(0, &count, nullptr)
-        )
-    )
-    {
-        return false;
-    }
+    ERHE_XR_CHECK(xrEnumerateApiLayerProperties(0, &count, nullptr));
 
     if (count == 0)
     {
@@ -329,15 +277,7 @@ auto Xr_instance::enumerate_layers() -> bool
         api_layer.type = XR_TYPE_API_LAYER_PROPERTIES;
         api_layer.next = nullptr;
     }
-    if (
-        !check(
-            "xrEnumerateApiLayerProperties",
-            xrEnumerateApiLayerProperties(count, &count, m_xr_api_layer_properties.data())
-        )
-    )
-    {
-        return false;
-    }
+    ERHE_XR_CHECK(xrEnumerateApiLayerProperties(count, &count, m_xr_api_layer_properties.data()));
 
     log_xr.info("OpenXR API Layer Properties:\n");
     for (const auto& api_layer : m_xr_api_layer_properties)
@@ -354,6 +294,8 @@ auto Xr_instance::enumerate_layers() -> bool
 
 auto Xr_instance::enumerate_extensions() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     log_xr.trace("{}\n", __func__);
 
     uint32_t instance_extension_count{0};
@@ -365,20 +307,14 @@ auto Xr_instance::enumerate_extensions() -> bool
     //{
     //    return false;
     //}
-    if (
-        !check(
-            "xrEnumerateInstanceExtensionProperties",
-            xrEnumerateInstanceExtensionProperties(
-                nullptr,
-                0,
-                &instance_extension_count,
-                nullptr
-            )
+    ERHE_XR_CHECK(
+        xrEnumerateInstanceExtensionProperties(
+            nullptr,
+            0,
+            &instance_extension_count,
+            nullptr
         )
-    )
-    {
-        return false;
-    }
+    );
     if (instance_extension_count == 0)
     {
         return true; // Consider no extensions to be okay. TODO consider this be an error.
@@ -390,20 +326,14 @@ auto Xr_instance::enumerate_extensions() -> bool
         extension.type = XR_TYPE_EXTENSION_PROPERTIES;
     }
 
-    if (
-        !check(
-            "xrEnumerateInstanceExtensionProperties",
-            xrEnumerateInstanceExtensionProperties(
-                nullptr,
-                instance_extension_count,
-                &instance_extension_count,
-                m_xr_extensions.data()
-            )
+    ERHE_XR_CHECK(
+        xrEnumerateInstanceExtensionProperties(
+            nullptr,
+            instance_extension_count,
+            &instance_extension_count,
+            m_xr_extensions.data()
         )
-    )
-    {
-        return false;
-    }
+    );
 
     log_xr.info("Supported extensions:\n");
     for (const auto& extension : m_xr_extensions)
@@ -416,26 +346,45 @@ auto Xr_instance::enumerate_extensions() -> bool
 
 auto Xr_instance::get_system_info() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     log_xr.trace("{}\n", __func__);
 
     m_xr_system_info.type       = XR_TYPE_SYSTEM_GET_INFO;
     m_xr_system_info.next       = nullptr;
     m_xr_system_info.formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
 
-    if (
-        !check(
-            "xrGetSystem",
-            xrGetSystem(m_xr_instance, &m_xr_system_info, &m_xr_system_id)
-        )
-    )
+    ERHE_XR_CHECK(xrGetSystem(m_xr_instance, &m_xr_system_info, &m_xr_system_id));
+
+    XrSystemHandTrackingPropertiesEXT system_hand_tracking_properties
     {
-        return false;
+        .type                 = XR_TYPE_SYSTEM_HAND_TRACKING_PROPERTIES_EXT,
+        .next                 = nullptr,
+        .supportsHandTracking = false
+    };
+    XrSystemProperties system_properties
+    {
+        .type = XR_TYPE_SYSTEM_PROPERTIES,
+        .next = &system_hand_tracking_properties
+    };
+    ERHE_XR_CHECK(xrGetSystemProperties(m_xr_instance, m_xr_system_id, &system_properties));
+
+    if (system_hand_tracking_properties.supportsHandTracking)
+    {
+        log_xr.info("Hand tracking is supported\n");
+        xrCreateHandTrackerEXT  = reinterpret_cast<PFN_xrCreateHandTrackerEXT >(get_proc_addr("xrCreateHandTrackerEXT" ));
+        xrDestroyHandTrackerEXT = reinterpret_cast<PFN_xrDestroyHandTrackerEXT>(get_proc_addr("xrDestroyHandTrackerEXT"));
+        xrLocateHandJointsEXT   = reinterpret_cast<PFN_xrLocateHandJointsEXT  >(get_proc_addr("xrLocateHandJointsEXT"  ));
+    }
+    else
+    {
+        log_xr.info("Hand tracking is not supported\n");
     }
 
     return true;
 }
 
-auto score(XrViewConfigurationType view_configuration_type) -> int
+auto score(const XrViewConfigurationType view_configuration_type) -> int
 {
     switch (view_configuration_type)
     {
@@ -447,7 +396,7 @@ auto score(XrViewConfigurationType view_configuration_type) -> int
     }
 }
 
-auto score(XrEnvironmentBlendMode environment_blend_mode) -> int
+auto score(const XrEnvironmentBlendMode environment_blend_mode) -> int
 {
     switch (environment_blend_mode)
     {
@@ -460,24 +409,20 @@ auto score(XrEnvironmentBlendMode environment_blend_mode) -> int
 
 auto Xr_instance::enumerate_blend_modes() -> bool
 {
-    uint32_t environment_blend_mode_count{0};
-    if (
-        !check(
-            "xrEnumerateEnvironmentBlendModes",
-            xrEnumerateEnvironmentBlendModes(
-                m_xr_instance,
-                m_xr_system_id,
-                m_xr_view_configuration_type,
-                0,
-                &environment_blend_mode_count,
-                nullptr
-            )
-        )
-    )
-    {
-        return false;
-    }
+    ERHE_PROFILE_FUNCTION
 
+    uint32_t environment_blend_mode_count{0};
+
+    ERHE_XR_CHECK(
+        xrEnumerateEnvironmentBlendModes(
+            m_xr_instance,
+            m_xr_system_id,
+            m_xr_view_configuration_type,
+            0,
+            &environment_blend_mode_count,
+            nullptr
+        )
+    );
     if (environment_blend_mode_count == 0)
     {
         log_xr.error("xrEnumerateEnvironmentBlendModes() returned 0 environment blend modes\n");
@@ -485,22 +430,16 @@ auto Xr_instance::enumerate_blend_modes() -> bool
     }
 
     m_xr_environment_blend_modes.resize(environment_blend_mode_count);
-    if (
-        !check(
-            "xrEnumerateEnvironmentBlendModes",
-            xrEnumerateEnvironmentBlendModes(
-                m_xr_instance,
-                m_xr_system_id,
-                m_xr_view_configuration_type,
-                environment_blend_mode_count,
-                &environment_blend_mode_count,
-                m_xr_environment_blend_modes.data()
-            )
+    ERHE_XR_CHECK(
+        xrEnumerateEnvironmentBlendModes(
+            m_xr_instance,
+            m_xr_system_id,
+            m_xr_view_configuration_type,
+            environment_blend_mode_count,
+            &environment_blend_mode_count,
+            m_xr_environment_blend_modes.data()
         )
-    )
-    {
-        return false;
-    }
+    );
 
     int best_score = 0;
     m_xr_environment_blend_mode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
@@ -520,24 +459,20 @@ auto Xr_instance::enumerate_blend_modes() -> bool
 
 auto Xr_instance::enumerate_view_configurations() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     log_xr.trace("{}\n", __func__);
 
     uint32_t view_configuration_type_count;
-    if (
-        !check(
-            "xrEnumerateViewConfigurations",
-            xrEnumerateViewConfigurations(
-                m_xr_instance,
-                m_xr_system_id,
-                0,
-                &view_configuration_type_count,
-                nullptr
-            )
+    ERHE_XR_CHECK(
+        xrEnumerateViewConfigurations(
+            m_xr_instance,
+            m_xr_system_id,
+            0,
+            &view_configuration_type_count,
+            nullptr
         )
-    )
-    {
-        return false;
-    }
+    );
     if (view_configuration_type_count == 0)
     {
         return false; // Consider no views to be an error.
@@ -545,27 +480,40 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 
     std::vector<XrViewConfigurationType> view_configuration_types{view_configuration_type_count};
 
-    if (
-        !check(
-            "xrEnumerateViewConfigurations",
-            xrEnumerateViewConfigurations(
-                m_xr_instance,
-                m_xr_system_id,
-                view_configuration_type_count,
-                &view_configuration_type_count,
-                view_configuration_types.data()
-            )
+    ERHE_XR_CHECK(
+        xrEnumerateViewConfigurations(
+            m_xr_instance,
+            m_xr_system_id,
+            view_configuration_type_count,
+            &view_configuration_type_count,
+            view_configuration_types.data()
         )
-    )
-    {
-        return false;
-    }
+    );
 
     log_xr.info("View configuration types:\n");
     int best_score{0};
     m_xr_view_configuration_type = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO;
+    bool primary_stereo_supported{false};
+    bool primary_quad_supported{false};
+
     for (const auto view_configuration_type : view_configuration_types)
     {
+        uint32_t dummy{0};
+        XrViewConfigurationView views[4];
+        auto result = xrEnumerateViewConfigurationViews(
+            m_xr_instance,
+            m_xr_system_id,
+            view_configuration_type,
+            4,
+            &dummy,
+            &views[0]
+        );
+        if (result != XR_SUCCESS)
+        {
+            log_xr.info("    {} is not ok\n", c_str(view_configuration_type));
+            continue;
+        }
+
         log_xr.info("    {}\n", c_str(view_configuration_type));
         const int type_score = score(view_configuration_type);
         if (type_score > best_score)
@@ -573,27 +521,38 @@ auto Xr_instance::enumerate_view_configurations() -> bool
             best_score = type_score;
             m_xr_view_configuration_type = view_configuration_type;
         }
+        if (view_configuration_type == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO)
+        {
+            primary_stereo_supported = true;
+        }
+        if (view_configuration_type == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO)
+        {
+            primary_quad_supported = true;
+        }
     }
+    if (best_score == 0)
+    {
+        log_xr.error("No working view configuration types found\n");
+        return false;
+    }
+    //if (primary_stereo_supported)
+    //{
+    //    m_xr_view_configuration_type = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;   
+    //}
     log_xr.info("Selected view configuration type: {}\n", c_str(m_xr_view_configuration_type));
 
     uint32_t view_count{0};
 
-    if (
-        !check(
-            "xrEnumerateViewConfigurationViews",
-            xrEnumerateViewConfigurationViews(
-                m_xr_instance,
-                m_xr_system_id,
-                m_xr_view_configuration_type,
-                0,
-                &view_count,
-                nullptr
-            )
+    ERHE_XR_CHECK(
+        xrEnumerateViewConfigurationViews(
+            m_xr_instance,
+            m_xr_system_id,
+            m_xr_view_configuration_type,
+            0,
+            &view_count,
+            nullptr
         )
-    )
-    {
-        return false;
-    }
+    );
     if (view_count == 0)
     {
         log_xr.error("xrEnumerateViewConfigurationViews() returned 0 views\n");
@@ -614,22 +573,16 @@ auto Xr_instance::enumerate_view_configurations() -> bool
         }
     );
 
-    if (
-        !check(
-            "xrEnumerateViewConfigurationViews",
-            xrEnumerateViewConfigurationViews(
-                m_xr_instance,
-                m_xr_system_id,
-                m_xr_view_configuration_type,
-                view_count,
-                &view_count,
-                m_xr_view_configuration_views.data()
-            )
+    ERHE_XR_CHECK(
+        xrEnumerateViewConfigurationViews(
+            m_xr_instance,
+            m_xr_system_id,
+            m_xr_view_configuration_type,
+            view_count,
+            &view_count,
+            m_xr_view_configuration_views.data()
         )
-    )
-    {
-        return false;
-    }
+    );
 
     log_xr.info("View configuration views:\n");
     size_t index = 0;
@@ -907,7 +860,6 @@ Xr_path::Xr_path() = default;
 Xr_path::Xr_path(XrInstance instance, const char* path)
 {
     check(
-        "xrStringToPath",
         xrStringToPath(
             instance,
             path,
@@ -923,133 +875,74 @@ auto Xr_instance::path(const char* path) -> Xr_path
 
 auto Xr_instance::initialize_actions() -> bool
 {
-    XrActionSetCreateInfo action_set_info;
-    action_set_info.type                      = XR_TYPE_ACTION_SET_CREATE_INFO;
-    action_set_info.next                      = nullptr;
-    action_set_info.actionSetName[0]          = 'e';
-    action_set_info.actionSetName[1]          = 'r';
-    action_set_info.actionSetName[2]          = 'h';
-    action_set_info.actionSetName[3]          = 'e';
-    action_set_info.actionSetName[4]          = '\0';
-    action_set_info.localizedActionSetName[0] = 'e';
-    action_set_info.localizedActionSetName[1] = 'r';
-    action_set_info.localizedActionSetName[2] = 'h';
-    action_set_info.localizedActionSetName[3] = 'e';
-    action_set_info.localizedActionSetName[4] = '\0';
-    action_set_info.priority                  = 0;
-    if (
-        !check(
-            "xrCreateActionSet",
-            xrCreateActionSet(
-                m_xr_instance,
-                &action_set_info,
-                &actions.action_set
-            )
-        )
-    )
-    {
-        return false;
-    }
+    ERHE_PROFILE_FUNCTION
 
-    XrActionCreateInfo trigger_value_action_create_info;
-    trigger_value_action_create_info.type                   = XR_TYPE_ACTION_CREATE_INFO;
-    trigger_value_action_create_info.next                   = nullptr;
-    trigger_value_action_create_info.actionName[0]          = 't';
-    trigger_value_action_create_info.actionName[1]          = 'r';
-    trigger_value_action_create_info.actionName[2]          = 'i';
-    trigger_value_action_create_info.actionName[3]          = 'g';
-    trigger_value_action_create_info.actionName[4]          = 'g';
-    trigger_value_action_create_info.actionName[5]          = 'e';
-    trigger_value_action_create_info.actionName[6]          = 'r';
-    trigger_value_action_create_info.actionName[7]          = '\0';
-    trigger_value_action_create_info.actionType             = XR_ACTION_TYPE_FLOAT_INPUT;
-    trigger_value_action_create_info.countSubactionPaths    = 0;
-    trigger_value_action_create_info.subactionPaths         = nullptr;
-    trigger_value_action_create_info.localizedActionName[0] = 't';
-    trigger_value_action_create_info.localizedActionName[1] = 'r';
-    trigger_value_action_create_info.localizedActionName[2] = 'i';
-    trigger_value_action_create_info.localizedActionName[3] = 'g';
-    trigger_value_action_create_info.localizedActionName[4] = 'g';
-    trigger_value_action_create_info.localizedActionName[5] = 'e';
-    trigger_value_action_create_info.localizedActionName[6] = 'r';
-    trigger_value_action_create_info.localizedActionName[7] = '\0';
-    if (
-        !check(
-            "xrCreateAction",
-            xrCreateAction(
-                actions.action_set,
-                &trigger_value_action_create_info,
-                &actions.trigger_value
-            )
-        )
-    )
+    const XrActionSetCreateInfo action_set_info
     {
-        return false;
-    }
+        .type                   = XR_TYPE_ACTION_SET_CREATE_INFO,
+        .next                   = nullptr,
+        .actionSetName          = { 'e', 'r', 'h', 'e', '\0' },
+        .localizedActionSetName = { 'e', 'r', 'h', 'e', '\0' },
+        .priority               = 0,
+    };
+    ERHE_XR_CHECK(
+        xrCreateActionSet(
+            m_xr_instance,
+            &action_set_info,
+            &actions.action_set
+        )
+    );
 
-    XrActionCreateInfo squeeze_click_action_create_info;
-    squeeze_click_action_create_info.type                   = XR_TYPE_ACTION_CREATE_INFO;
-    squeeze_click_action_create_info.next                   = nullptr;
-    squeeze_click_action_create_info.actionName[0]          = 's';
-    squeeze_click_action_create_info.actionName[1]          = 'q';
-    squeeze_click_action_create_info.actionName[2]          = 'u';
-    squeeze_click_action_create_info.actionName[3]          = 'e';
-    squeeze_click_action_create_info.actionName[4]          = 'e';
-    squeeze_click_action_create_info.actionName[5]          = 'z';
-    squeeze_click_action_create_info.actionName[6]          = 'e';
-    squeeze_click_action_create_info.actionName[7]          = '\0';
-    squeeze_click_action_create_info.actionType             = XR_ACTION_TYPE_BOOLEAN_INPUT;
-    squeeze_click_action_create_info.countSubactionPaths    = 0;
-    squeeze_click_action_create_info.subactionPaths         = nullptr;
-    squeeze_click_action_create_info.localizedActionName[0] = 's';
-    squeeze_click_action_create_info.localizedActionName[1] = 'q';
-    squeeze_click_action_create_info.localizedActionName[2] = 'u';
-    squeeze_click_action_create_info.localizedActionName[3] = 'e';
-    squeeze_click_action_create_info.localizedActionName[4] = 'e';
-    squeeze_click_action_create_info.localizedActionName[5] = 'z';
-    squeeze_click_action_create_info.localizedActionName[6] = 'e';
-    squeeze_click_action_create_info.localizedActionName[7] = '\0';
-    if (
-        !check(
-            "xrCreateAction",
-            xrCreateAction(
-                actions.action_set,
-                &squeeze_click_action_create_info,
-                &actions.squeeze_click
-            )
+    const XrActionCreateInfo trigger_value_action_create_info{
+        .type                = XR_TYPE_ACTION_CREATE_INFO,
+        .next                = nullptr,
+        .actionName          = { 't', 'r', 'i', 'g', 'g', 'e', 'r', '\0' },
+        .actionType          = XR_ACTION_TYPE_FLOAT_INPUT,
+        .countSubactionPaths = 0,
+        .subactionPaths      = nullptr,
+        .localizedActionName = { 't', 'r', 'i', 'g', 'g', 'e', 'r', '\0' }
+    };
+    ERHE_XR_CHECK(
+        xrCreateAction(
+            actions.action_set,
+            &trigger_value_action_create_info,
+            &actions.trigger_value
         )
-    )
-    {
-        return false;
-    }
+    );
 
-    XrActionCreateInfo aim_pose_action_create_info;
-    aim_pose_action_create_info.type                   = XR_TYPE_ACTION_CREATE_INFO;
-    aim_pose_action_create_info.next                   = nullptr;
-    aim_pose_action_create_info.actionName[0]          = 'a';
-    aim_pose_action_create_info.actionName[1]          = 'i';
-    aim_pose_action_create_info.actionName[2]          = 'm';
-    aim_pose_action_create_info.actionName[3]          = '\0';
-    aim_pose_action_create_info.actionType             = XR_ACTION_TYPE_POSE_INPUT;
-    aim_pose_action_create_info.countSubactionPaths    = 0;
-    aim_pose_action_create_info.subactionPaths         = nullptr;
-    aim_pose_action_create_info.localizedActionName[0] = 'a';
-    aim_pose_action_create_info.localizedActionName[1] = 'i';
-    aim_pose_action_create_info.localizedActionName[2] = 'm';
-    aim_pose_action_create_info.localizedActionName[7] = '\0';
-    if (
-        !check(
-            "xrCreateAction",
-            xrCreateAction(
-                actions.action_set,
-                &aim_pose_action_create_info,
-                &actions.aim_pose
-            )
+    const XrActionCreateInfo squeeze_click_action_create_info{
+        .type                = XR_TYPE_ACTION_CREATE_INFO,
+        .next                = nullptr,
+        .actionName          = { 's', 'q', 'u', 'e', 'e', 'z', 'e', '\0' },
+        .actionType          = XR_ACTION_TYPE_BOOLEAN_INPUT,
+        .countSubactionPaths = 0,
+        .subactionPaths      = nullptr,
+        .localizedActionName = { 's', 'q', 'u', 'e', 'e', 'z', 'e', '\0' }
+    };
+    ERHE_XR_CHECK(
+        xrCreateAction(
+            actions.action_set,
+            &squeeze_click_action_create_info,
+            &actions.squeeze_click
         )
-    )
-    {
-        return false;
-    }
+    );
+
+    const XrActionCreateInfo aim_pose_action_create_info{
+        .type                = XR_TYPE_ACTION_CREATE_INFO,
+        .next                = nullptr,
+        .actionName          = { 'a', 'i', 'm', '\0' },
+        .actionType          = XR_ACTION_TYPE_POSE_INPUT,
+        .countSubactionPaths = 0,
+        .subactionPaths      = nullptr,
+        .localizedActionName = { 'a', 'i', 'm', '\0' }
+    };
+    ERHE_XR_CHECK(
+        xrCreateAction(
+            actions.action_set,
+            &aim_pose_action_create_info,
+            &actions.aim_pose
+        )
+    );
 
     paths.user_hand_left                      = path(c_user_hand_left);
     paths.user_hand_right                     = path(c_user_hand_right);
@@ -1058,72 +951,90 @@ auto Xr_instance::initialize_actions() -> bool
     paths.aim_pose                            = path(c_aim_pose);
     paths.interaction_profile_vive_controller = path(c_interaction_profile_vive_controller);
 
-    std::array<XrActionSuggestedBinding, 3> vive_controller_trigger_value_suggested_bindings;
-    vive_controller_trigger_value_suggested_bindings[0].action  = actions.trigger_value;
-    vive_controller_trigger_value_suggested_bindings[0].binding = paths.trigger_value.xr_path;
-    vive_controller_trigger_value_suggested_bindings[1].action  = actions.squeeze_click;
-    vive_controller_trigger_value_suggested_bindings[1].binding = paths.squeeze_click.xr_path;
-    vive_controller_trigger_value_suggested_bindings[2].action  = actions.aim_pose;
-    vive_controller_trigger_value_suggested_bindings[2].binding = paths.aim_pose.xr_path;
+    const std::array<XrActionSuggestedBinding, 3> vive_controller_trigger_value_suggested_bindings{
+        {
+            {
+                .action  = actions.trigger_value,
+                .binding = paths.trigger_value.xr_path
+            },
+            {
+                .action  = actions.squeeze_click,
+                .binding = paths.squeeze_click.xr_path
+            },
+            {
+                .action  = actions.aim_pose,
+                .binding = paths.aim_pose.xr_path
+            }
+        }
+    };
 
-    XrInteractionProfileSuggestedBinding interaction_profile_suggested_binding;
-    interaction_profile_suggested_binding.type                   = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING;
-    interaction_profile_suggested_binding.next                   = nullptr;
-    interaction_profile_suggested_binding.interactionProfile     = paths.interaction_profile_vive_controller.xr_path;
-    interaction_profile_suggested_binding.countSuggestedBindings = static_cast<uint32_t>(vive_controller_trigger_value_suggested_bindings.size());
-    interaction_profile_suggested_binding.suggestedBindings      = vive_controller_trigger_value_suggested_bindings.data();
-
-    if (
-        !check(
-            "xrSuggestInteractionProfileBindings",
-            xrSuggestInteractionProfileBindings(
-                m_xr_instance,
-                &interaction_profile_suggested_binding
-            )
-        )
-    )
+    const XrInteractionProfileSuggestedBinding interaction_profile_suggested_binding
     {
-        return false;
-    }
+        .type                   = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
+        .next                   = nullptr,
+        .interactionProfile     = paths.interaction_profile_vive_controller.xr_path,
+        .countSuggestedBindings = static_cast<uint32_t>(vive_controller_trigger_value_suggested_bindings.size()),
+        .suggestedBindings      = vive_controller_trigger_value_suggested_bindings.data()
+    };
 
-    XrSessionActionSetsAttachInfo session_action_sets_attach_info;
-    session_action_sets_attach_info.type            = XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO;
-    session_action_sets_attach_info.next            = nullptr;
-    session_action_sets_attach_info.countActionSets = 1;
-    session_action_sets_attach_info.actionSets      = &actions.action_set;
+    ERHE_XR_CHECK(
+        xrSuggestInteractionProfileBindings(
+            m_xr_instance,
+            &interaction_profile_suggested_binding
+        )
+    );
 
-    actions.trigger_value_state.type                 = XR_TYPE_ACTION_STATE_FLOAT;
-    actions.trigger_value_state.next                 = nullptr;
-    actions.trigger_value_state.currentState         = 0.0f;
-    actions.trigger_value_state.changedSinceLastSync = false;
-    actions.trigger_value_state.lastChangeTime       = {};
-    actions.trigger_value_state.isActive             = XR_FALSE;
+    const XrSessionActionSetsAttachInfo session_action_sets_attach_info{
+        .type            = XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO,
+        .next            = nullptr,
+        .countActionSets = 1,
+        .actionSets      = &actions.action_set
+    };
 
-    actions.squeeze_click_state.type                 = XR_TYPE_ACTION_STATE_BOOLEAN;
-    actions.squeeze_click_state.next                 = nullptr;
-    actions.squeeze_click_state.currentState         = XR_FALSE;
-    actions.squeeze_click_state.changedSinceLastSync = false;
-    actions.squeeze_click_state.lastChangeTime       = {};
-    actions.squeeze_click_state.isActive             = XR_FALSE;
+    actions.trigger_value_state = {
+        .type                 = XR_TYPE_ACTION_STATE_FLOAT,
+        .next                 = nullptr,
+        .currentState         = 0.0f,
+        .changedSinceLastSync = false,
+        .lastChangeTime       = {},
+        .isActive             = XR_FALSE
+    };
+
+    actions.squeeze_click_state = {
+        .type                 = XR_TYPE_ACTION_STATE_BOOLEAN,
+        .next                 = nullptr,
+        .currentState         = XR_FALSE,
+        .changedSinceLastSync = false,
+        .lastChangeTime       = {},
+        .isActive             = XR_FALSE
+    };
 
     return true;
 }
 
 auto Xr_instance::update_actions(Xr_session& session) -> bool
 {
-    XrActiveActionSet active_action_set;
-    active_action_set.actionSet     = actions.action_set;
-    active_action_set.subactionPath = XR_NULL_PATH;
+    ERHE_PROFILE_FUNCTION
 
-    XrActionsSyncInfo actions_sync_info;
-    actions_sync_info.type                  = XR_TYPE_ACTIONS_SYNC_INFO;
-    actions_sync_info.next                  = nullptr;
-    actions_sync_info.countActiveActionSets = 1;
-    actions_sync_info.activeActionSets      = &active_action_set;
+    const XrActiveActionSet active_action_set
+    {
+        .actionSet     = actions.action_set,
+        .subactionPath = XR_NULL_PATH
+    };
+
+    const XrActionsSyncInfo actions_sync_info
+    {
+        .type                  = XR_TYPE_ACTIONS_SYNC_INFO,
+        .next                  = nullptr,
+        .countActiveActionSets = 1,
+        .activeActionSets      = &active_action_set
+    };
 
     {
-        const auto result = xrSyncActions(session.get_xr_session(),
-                                          &actions_sync_info);
+        const auto result = xrSyncActions(
+            session.get_xr_session(),
+            &actions_sync_info
+        );
         switch (result)
         {
         case XR_SUCCESS:
@@ -1143,100 +1054,86 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
     }
 
     {
-        XrActionStateGetInfo action_state_get_info;
-        action_state_get_info.type          = XR_TYPE_ACTION_STATE_GET_INFO;
-        action_state_get_info.next          = nullptr;
-        action_state_get_info.action        = actions.trigger_value;
-        action_state_get_info.subactionPath = XR_NULL_PATH;
+        const XrActionStateGetInfo action_state_get_info{
+            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
+            .next          = nullptr,
+            .action        = actions.trigger_value,
+            .subactionPath = XR_NULL_PATH
+        };
 
-        if (
-            !check(
-                "xrGetActionStateFloat",
-                xrGetActionStateFloat(
-                    session.get_xr_session(),
-                    &action_state_get_info,
-                    &actions.trigger_value_state
-                )
+        ERHE_XR_CHECK(
+            xrGetActionStateFloat(
+                session.get_xr_session(),
+                &action_state_get_info,
+                &actions.trigger_value_state
             )
-        )
-        {
-            return false;
-        }
+        );
     }
 
     {
-        XrActionStateGetInfo action_state_get_info;
-        action_state_get_info.type          = XR_TYPE_ACTION_STATE_GET_INFO;
-        action_state_get_info.next          = nullptr;
-        action_state_get_info.action        = actions.squeeze_click;
-        action_state_get_info.subactionPath = XR_NULL_PATH;
+        const XrActionStateGetInfo action_state_get_info{
+            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
+            .next          = nullptr,
+            .action        = actions.squeeze_click,
+            .subactionPath = XR_NULL_PATH
+        };
 
-        if (
-            !check(
-                "xrGetActionStateBoolean",
-                xrGetActionStateBoolean(
-                    session.get_xr_session(),
-                    &action_state_get_info,
-                    &actions.squeeze_click_state
-                )
+        ERHE_XR_CHECK(
+            xrGetActionStateBoolean(
+                session.get_xr_session(),
+                &action_state_get_info,
+                &actions.squeeze_click_state
             )
-        )
-        {
-            return false;
-        }
+        );
     }
 
     {
-        XrActionStateGetInfo action_state_get_info;
-        action_state_get_info.type          = XR_TYPE_ACTION_STATE_GET_INFO;
-        action_state_get_info.next          = nullptr;
-        action_state_get_info.action        = actions.aim_pose;
-        action_state_get_info.subactionPath = XR_NULL_PATH;
+        const XrActionStateGetInfo action_state_get_info{
+            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
+            .next          = nullptr,
+            .action        = actions.aim_pose,
+            .subactionPath = XR_NULL_PATH
+        };
 
-        if (
-            !check(
-                "xrGetActionStatePose",
-                xrGetActionStatePose(
-                    session.get_xr_session(),
-                    &action_state_get_info,
-                    &actions.aim_pose_state
-                )
+        ERHE_XR_CHECK(
+            xrGetActionStatePose(
+                session.get_xr_session(),
+                &action_state_get_info,
+                &actions.aim_pose_state
             )
-        )
-        {
-            return false;
-        }
+        );
     }
 
     XrSpace         space     = actions.aim_pose_space;
     XrSpace         baseSpace = session.get_xr_reference_space();
     XrTime          time      = session.get_xr_frame_state().predictedDisplayTime;
-    XrSpaceLocation location;
-    location.type               = XR_TYPE_SPACE_LOCATION;
-    location.next               = nullptr;
-    location.locationFlags      = 0;
-    location.pose.position.x    = 0.0f;
-    location.pose.position.y    = 0.0f;
-    location.pose.position.z    = 0.0f;
-    location.pose.orientation.x = 0.0f;
-    location.pose.orientation.y = 0.0f;
-    location.pose.orientation.z = 0.0f;
-    location.pose.orientation.w = 1.0f;
+    XrSpaceLocation location{
+        .type          = XR_TYPE_SPACE_LOCATION,
+        .next          = nullptr,
+        .locationFlags = 0,
+        .pose = {
+            .orientation = {
+                .x = 0.0f,
+                .y = 0.0f,
+                .z = 0.0f,
+                .w = 1.0f
+            },
+            .position = {
+                .x = 0.0f,
+                .y = 0.0f,
+                .z = 0.0f
+            }
+        }
+    };
 
-    if (
-        !check(
-            "xrLocateSpace",
-            xrLocateSpace(
-                space,
-                baseSpace,
-                time,
-                &location
-            )
+    ERHE_XR_CHECK(
+        xrLocateSpace(
+            space,
+            baseSpace,
+            time,
+            &location
         )
-    )
-    {
-        return false;
-    }
+    );
 
     actions.aim_pose_space_location = location;
 
@@ -1245,24 +1142,21 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
 
 auto Xr_instance::get_current_interaction_profile(Xr_session& session) -> bool
 {
-    XrInteractionProfileState interation_profile_state;
-    interation_profile_state.type               = XR_TYPE_INTERACTION_PROFILE_STATE;
-    interation_profile_state.next               = nullptr;
-    interation_profile_state.interactionProfile = XR_NULL_PATH;
+    ERHE_PROFILE_FUNCTION
 
-    if (
-        !check(
-            "xrGetCurrentInteractionProfile",
-            xrGetCurrentInteractionProfile(
-                session.get_xr_session(),
-                paths.user_hand_left.xr_path,
-                &interation_profile_state
-            )
+    XrInteractionProfileState interation_profile_state{
+        .type               = XR_TYPE_INTERACTION_PROFILE_STATE,
+        .next               = nullptr,
+        .interactionProfile = XR_NULL_PATH
+    };
+
+    ERHE_XR_CHECK(
+        xrGetCurrentInteractionProfile(
+            session.get_xr_session(),
+            paths.user_hand_left.xr_path,
+            &interation_profile_state
         )
-    )
-    {
-        return false;
-    }
+    );
 
     if (interation_profile_state.interactionProfile == XR_NULL_PATH)
     {
@@ -1272,21 +1166,15 @@ auto Xr_instance::get_current_interaction_profile(Xr_session& session) -> bool
 
     std::array<char, 256> profile_name{};
     uint32_t profile_name_length = 0;
-    if (
-        !check(
-            "xrPathToString",
-            xrPathToString(
-                m_xr_instance,
-                interation_profile_state.interactionProfile,
-                static_cast<uint32_t>(profile_name.size()),
-                &profile_name_length,
-                profile_name.data()
-            )
+    ERHE_XR_CHECK(
+        xrPathToString(
+            m_xr_instance,
+            interation_profile_state.interactionProfile,
+            static_cast<uint32_t>(profile_name.size()),
+            &profile_name_length,
+            profile_name.data()
         )
-    )
-    {
-        return false;
-    }
+    );
 
     log_xr.info("Current interaction profile: {}", profile_name.data());
     return true;
@@ -1294,6 +1182,8 @@ auto Xr_instance::get_current_interaction_profile(Xr_session& session) -> bool
 
 auto Xr_instance::poll_xr_events(Xr_session& session) -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     for (;;)
     {
         XrEventDataBuffer buffer{};

@@ -15,7 +15,7 @@ void Geometry::smooth_normalize(
 {
     ERHE_PROFILE_FUNCTION
 
-    const float cos_max_smoothing_angle = cos(max_smoothing_angle_radians);
+    const float cos_max_smoothing_angle = std::cos(max_smoothing_angle_radians);
 
     corner_attribute.clear();
     for_each_polygon_const(

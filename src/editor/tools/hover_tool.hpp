@@ -1,7 +1,10 @@
 #pragma once
 
+#include "command.hpp"
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
+
+#include "erhe/components/component.hpp"
 
 #include <glm/glm.hpp>
 
@@ -19,10 +22,28 @@ namespace erhe::primitive {
 namespace editor
 {
 
+class Hover_tool;
 class Line_renderer;
 class Pointer_context;
 class Scene_root;
 class Text_renderer;
+
+class Hover_tool_hover_command
+    : public Command
+{
+public:
+    Hover_tool_hover_command(Hover_tool& hover_tool)
+        : Command     {"Hover_tool.hover"}
+        , m_hover_tool{hover_tool}
+    {
+    }
+
+    auto try_call   (Command_context& context) -> bool override;
+    void on_inactive(Command_context& context) override;
+
+private:
+    Hover_tool& m_hover_tool;
+};
 
 class Hover_tool
     : public erhe::components::Component
@@ -30,22 +51,32 @@ class Hover_tool
 {
 public:
     static constexpr std::string_view c_name       {"Hover_tool"};
-    static constexpr std::string_view c_description{"Hover_tool"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_description{"Hover tool"};
+    static constexpr uint32_t hash{
+        compiletime_xxhash::xxh32(
+            c_name.data(),
+            c_name.size(),
+            {}
+        )
+    };
 
     Hover_tool ();
     ~Hover_tool() override;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
     // Implements Tool
-    auto tool_update() -> bool                      override;
+    [[nodiscard]] auto description() -> const char* override;
     void tool_render(const Render_context& context) override;
-    auto state      () const -> State               override;
-    auto description() -> const char*               override;
+
+    // Public API
+
+    // Command
+    void on_inactive();
+    auto try_call() -> bool;
 
 private:
     void deselect();
@@ -58,7 +89,6 @@ private:
 
     std::shared_ptr<erhe::scene::Mesh> m_hover_mesh           {nullptr};
     size_t                             m_hover_primitive_index{0};
-    //std::optional<glm::vec2>           m_hover_position;
     std::optional<glm::vec3>           m_hover_position_world;
     std::optional<glm::vec3>           m_hover_normal;
     bool                               m_hover_content        {false};

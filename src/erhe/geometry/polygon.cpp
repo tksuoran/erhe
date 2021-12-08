@@ -89,12 +89,13 @@ auto Polygon::compute_edge_midpoint(
 {
     if (corner_count >= 2)
     {
-        const Corner_id corner0_id = geometry.polygon_corners[first_polygon_corner_id];
-        const Corner_id corner1_id = geometry.polygon_corners[first_polygon_corner_id + 1];
-        const Corner&   corner0    = geometry.corners[corner0_id];
-        const Corner&   corner1    = geometry.corners[corner1_id];
-        const Point_id  a          = corner0.point_id;
-        const Point_id  b          = corner1.point_id;
+        const auto      second_polygon_corner_id = first_polygon_corner_id + 1;
+        const Corner_id corner0_id               = geometry.polygon_corners[first_polygon_corner_id];
+        const Corner_id corner1_id               = geometry.polygon_corners[second_polygon_corner_id];
+        const Corner&   corner0                  = geometry.corners[corner0_id];
+        const Corner&   corner1                  = geometry.corners[corner1_id];
+        const Point_id  a                        = corner0.point_id;
+        const Point_id  b                        = corner1.point_id;
         if (point_locations.has(a) && point_locations.has(b))
         {
             const glm::vec3 pos_a    = point_locations.get(a);
@@ -138,7 +139,7 @@ auto Polygon::corner(const Geometry& geometry, const Point_id point) const -> Co
     {
         return result.value();
     }
-    FATAL("corner not found");
+    ERHE_FATAL("corner not found");
     // unreachable return {};
 }
 
@@ -155,7 +156,7 @@ auto Polygon::next_corner(const Geometry& geometry, const Corner_id anchor_corne
             return next_corner_id;
         }
     }
-    FATAL("corner not found");
+    ERHE_FATAL("corner not found");
     // unreachable return {};
 }
 
@@ -172,15 +173,16 @@ auto Polygon::prev_corner(const Geometry& geometry, const Corner_id anchor_corne
             return prev_corner_id;
         }
     }
-    FATAL("corner not found");
+    ERHE_FATAL("corner not found");
     // unreachable return {};
 }
 
 void Polygon::reverse(Geometry& geometry)
 {
+    const auto last_polygon_corner_id = first_polygon_corner_id + corner_count;
     std::reverse(
         &geometry.polygon_corners[first_polygon_corner_id],
-        &geometry.polygon_corners[first_polygon_corner_id + corner_count]
+        &geometry.polygon_corners[last_polygon_corner_id]
     );
 }
 

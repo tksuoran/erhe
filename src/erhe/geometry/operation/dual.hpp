@@ -13,6 +13,8 @@ public:
     Dual(Geometry& source, Geometry& destination, bool post_process = true);
 };
 
-auto dual(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto dual(
+    erhe::geometry::Geometry& source
+) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

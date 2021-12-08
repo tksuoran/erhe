@@ -11,13 +11,11 @@ class Reverse
     : public Geometry_operation
 {
 public:
-    explicit Reverse(
-        Geometry& source,
-        Geometry& destination
-    );
+    explicit Reverse(Geometry& source, Geometry& destination);
 };
 
-auto reverse(erhe::geometry::Geometry& source)
--> erhe::geometry::Geometry;
+[[nodiscard]] auto reverse(
+    erhe::geometry::Geometry& source
+) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

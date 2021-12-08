@@ -9,8 +9,11 @@ namespace mango {
         class File;
         class FileStream;
     }
-    class ImageEncoder;
-    class ImageDecoder;
+    namespace image
+    {
+        class ImageEncoder;
+        class ImageDecoder;
+    }
 }
 
 namespace erhe::graphics
@@ -43,15 +46,20 @@ public:
     PNG_loader    (PNG_loader&&)      = delete;
     void operator=(PNG_loader&&)      = delete;
 
-    auto open(const std::filesystem::path& path, Image_info& image_info) -> bool;
+    [[nodiscard]] auto open(
+        const std::filesystem::path& path,
+        Image_info&                  image_info
+    ) -> bool;
 
-    auto load(gsl::span<std::byte> transfer_buffer) -> bool;
+    [[nodiscard]] auto load(
+        gsl::span<std::byte> transfer_buffer
+    ) -> bool;
 
     void close();
 
 private:
-    std::unique_ptr<mango::filesystem::File> m_file;
-    std::unique_ptr<mango::ImageDecoder>     m_image_decoder;
+    std::unique_ptr<mango::filesystem::File>    m_file;
+    std::unique_ptr<mango::image::ImageDecoder> m_image_decoder;
 };
 
 class PNG_writer final
@@ -64,7 +72,7 @@ public:
     auto operator=(const PNG_writer&) = delete;
     auto operator=(PNG_writer&&)      = delete;
 
-    auto write(
+    [[nodiscard]] auto write(
         const std::filesystem::path& path,
         const Image_info&            info,
         gsl::span<std::byte>         data
@@ -72,7 +80,7 @@ public:
 
 private:
     std::unique_ptr<mango::filesystem::FileStream> m_file_stream;
-    std::unique_ptr<mango::ImageEncoder>           m_image_encoder;
+    std::unique_ptr<mango::image::ImageEncoder>    m_image_encoder;
 };
 
 } // namespace erhe::graphics

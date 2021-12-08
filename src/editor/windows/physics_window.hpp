@@ -3,6 +3,7 @@
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
 
+#include "erhe/components/component.hpp"
 #include "erhe/physics/idebug_draw.hpp"
 
 #include <memory>
@@ -27,14 +28,15 @@ public:
     ~Physics_window() override;
 
     // Implements Component
+    [[nodiscard]]
     auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
     // Implements Tool
-    void tool_render(const Render_context& context) override;
-    auto state      () const -> State               override;
-    auto description() -> const char*               override;
+                  void tool_render(const Render_context& context) override;
+    //[[nodiscard]] auto state      () const -> State               override;
+    [[nodiscard]] auto description() -> const char*               override;
 
     // Implements Window
     void imgui() override;
@@ -55,6 +57,7 @@ public:
         erhe::physics::IDebug_draw::Colors colors;
     };
 
+    [[nodiscard]]
     auto get_debug_draw_parameters() -> Debug_draw_parameters;
 
 private:

@@ -40,22 +40,7 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-private:
-    auto make_program(
-        std::string_view                                            name,
-        const std::vector<std::string>&                             defines,
-        const std::vector<std::pair<gl::Shader_type, std::string>>& extensions = {}
-    ) -> std::unique_ptr<erhe::graphics::Shader_stages>;
-
-    auto make_program(
-        std::string_view name,
-        std::string_view define
-    ) -> std::unique_ptr<erhe::graphics::Shader_stages>;
-
-    auto make_program(std::string_view name)
-        -> std::unique_ptr<erhe::graphics::Shader_stages>;
-
-public:
+    // Public members
     std::unique_ptr<erhe::graphics::Shader_resource> default_uniform_block; // containing sampler uniforms
     int                                              shadow_sampler_location{0};
     std::unique_ptr<erhe::graphics::Sampler>         nearest_sampler;
@@ -70,8 +55,22 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages> depth;
     std::unique_ptr<erhe::graphics::Shader_stages> id;
     std::unique_ptr<erhe::graphics::Shader_stages> tool;
+    std::unique_ptr<erhe::graphics::Shader_stages> visualize_depth;
 
 private:
+    [[nodiscard]] auto make_program(
+        std::string_view                                            name,
+        const std::vector<std::string>&                             defines,
+        const std::vector<std::pair<gl::Shader_type, std::string>>& extensions = {}
+    ) -> std::unique_ptr<erhe::graphics::Shader_stages>;
+
+    [[nodiscard]] auto make_program(
+        const std::string_view name,
+        const std::string_view define
+    ) -> std::unique_ptr<erhe::graphics::Shader_stages>;
+
+    [[nodiscard]] auto make_program(const std::string_view name) -> std::unique_ptr<erhe::graphics::Shader_stages>;
+
     Program_interface*    m_program_interface{nullptr};
     Shader_monitor*       m_shader_monitor   {nullptr};
     std::filesystem::path m_shader_path;

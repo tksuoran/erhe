@@ -2,11 +2,10 @@
 
 #include "erhe/geometry/geometry.hpp"
 
-
 namespace erhe::geometry::shapes
 {
 
-auto make_disc(
+[[nodiscard]] auto make_disc(
     const double outer_radius,
     const double inner_radius,
     const int    slice_count,

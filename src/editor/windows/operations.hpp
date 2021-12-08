@@ -2,6 +2,8 @@
 
 #include "windows/imgui_window.hpp"
 
+#include "erhe/components/component.hpp"
+
 #include <memory>
 
 namespace editor
@@ -12,6 +14,7 @@ class Operation_stack;
 class Pointer_context;
 class Selection_tool;
 class Scene_root;
+class Tool;
 
 class Operations
     : public erhe::components::Component
@@ -26,6 +29,7 @@ public:
     ~Operations() override;
 
     // Implements Component
+    [[nodiscard]]
     auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
@@ -33,14 +37,20 @@ public:
     // Implements Window
     void imgui() override;
 
-private:
-    auto count_selected_meshes() const -> size_t;
+    // Public API
+    void register_active_tool(Tool* tool);
 
-    Mesh_memory*     m_mesh_memory    {nullptr};
-    Operation_stack* m_operation_stack{nullptr};
-    Pointer_context* m_pointer_context{nullptr};
-    Scene_root*      m_scene_root     {nullptr};
-    Selection_tool*  m_selection_tool {nullptr};
+private:
+    [[nodiscard]]auto count_selected_meshes() const -> size_t;
+
+    Mesh_memory*       m_mesh_memory    {nullptr};
+    Operation_stack*   m_operation_stack{nullptr};
+    Pointer_context*   m_pointer_context{nullptr};
+    Scene_root*        m_scene_root     {nullptr};
+    Selection_tool*    m_selection_tool {nullptr};
+
+    Tool*              m_current_active_tool{nullptr};
+    std::vector<Tool*> m_active_tools;
 };
 
 } // namespace editor

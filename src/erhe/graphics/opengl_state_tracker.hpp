@@ -35,6 +35,7 @@ public:
     void operator=       (const OpenGL_state_tracker&) = delete;
 
     // Implements Component
+    [[nodiscard]]
     auto get_type_hash() const -> uint32_t override { return hash; }
 
     void on_thread_exit () override;

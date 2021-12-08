@@ -1,12 +1,15 @@
 #include "hover_tool.hpp"
+#include "editor_tools.hpp"
 #include "log.hpp"
 #include "rendering.hpp"
-#include "tools.hpp"
+
 #include "tools/hover_tool.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
+
 #include "renderers/line_renderer.hpp"
 #include "renderers/text_renderer.hpp"
+
 #include "scene/scene_root.hpp"
 
 #include "erhe/scene/mesh.hpp"
@@ -26,6 +29,24 @@ namespace editor
 using namespace erhe::primitive;
 using namespace erhe::geometry;
 
+void Hover_tool_hover_command::on_inactive(Command_context& context)
+{
+    static_cast<void>(context);
+
+    m_hover_tool.on_inactive();
+}
+
+auto Hover_tool_hover_command::try_call(Command_context& context) -> bool
+{
+    if (context.viewport_window() == nullptr)
+    {
+        set_inactive(context);
+        return false;
+    }
+
+    return m_hover_tool.try_call();
+}
+
 Hover_tool::Hover_tool()
     : erhe::components::Component{c_name}
 {
@@ -36,11 +57,6 @@ Hover_tool::~Hover_tool() = default;
 auto Hover_tool::description() -> const char*
 {
     return c_description.data();
-}
-
-auto Hover_tool::state() const -> State
-{
-    return State::Passive;
 }
 
 void Hover_tool::connect()
@@ -59,20 +75,17 @@ void Hover_tool::initialize_component()
     get<Editor_tools>()->register_background_tool(this);
 }
 
-auto Hover_tool::tool_update() -> bool
+void Hover_tool::on_inactive()
 {
-    ERHE_PROFILE_FUNCTION
+    m_hover_content = false;
+    m_hover_tool    = false;
+    m_hover_position_world.reset();
+    m_hover_normal.reset();
+    deselect();
+}
 
-    if (m_pointer_context->window() == nullptr)
-    {
-        m_hover_content = false;
-        m_hover_tool    = false;
-        m_hover_position_world.reset();
-        m_hover_normal.reset();
-        deselect();
-        return false;
-    }
-
+auto Hover_tool::try_call() -> bool
+{
     m_hover_content        = m_pointer_context->hovering_over_content();
     m_hover_tool           = m_pointer_context->hovering_over_tool();
     m_hover_position_world = m_hover_content ? m_pointer_context->position_in_world() : std::optional<glm::vec3>{};
@@ -84,8 +97,8 @@ auto Hover_tool::tool_update() -> bool
     {
         deselect();
         select();
-        return false;
     }
+
     return false;
 }
 
@@ -93,10 +106,17 @@ void Hover_tool::tool_render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
+    constexpr uint32_t red   = 0xff0000ffu;
+    constexpr uint32_t green = 0xff00ff00u;
+    constexpr uint32_t blue  = 0xffff0000u;
+    constexpr uint32_t white = 0xffffffffu;
+
     const uint32_t text_color =
-        m_hover_content ? 0xffffffffu :
-        m_hover_tool    ? 0xffff0000u :
-                          0xff0000ffu; // abgr
+        m_hover_content 
+            ? white 
+            : m_hover_tool
+                ? blue
+                : red;
 
     if (m_hover_mesh != nullptr)
     {
@@ -112,13 +132,13 @@ void Hover_tool::tool_render(const Render_context& context)
             m_hover_position_world.has_value()
         )
         {
-            const auto position_in_viewport = context.window->project_to_viewport(m_hover_position_world.value());
-            glm::vec3 position_at_fixed_depth{
+            const auto      position_in_viewport = context.window->project_to_viewport(m_hover_position_world.value());
+            const glm::vec3 position_at_fixed_depth{
                 position_in_viewport.x + 50.0f,
                 position_in_viewport.y,
                 -0.5f
             };
-            std::string text = fmt::format(
+            const std::string text = fmt::format(
                 "{}",
                 m_hover_mesh->name()
             );
@@ -134,8 +154,8 @@ void Hover_tool::tool_render(const Render_context& context)
             m_hover_normal.has_value()
         )
         {
-            const glm::vec3 p0 = m_hover_position_world.value() + 0.1f * m_hover_normal.value();
-            const glm::vec3 p1 = m_hover_position_world.value() + 1.1f * m_hover_normal.value();
+            const glm::vec3 p0 = m_hover_position_world.value() + 0.0f * m_hover_normal.value();
+            const glm::vec3 p1 = m_hover_position_world.value() + 1.0f * m_hover_normal.value();
             m_line_renderer->hidden.set_line_color(0xff0000ffu);
             m_line_renderer->hidden.add_lines(
                 {
@@ -147,21 +167,47 @@ void Hover_tool::tool_render(const Render_context& context)
                 10.0f
             );
         }
-#if 0
-        const glm::vec3 p0 = render_context.pointer_context->raytrace_hit_position;
-        const glm::vec3 p1 = p0 + render_context.pointer_context->raytrace_hit_normal;
-        const bool same_polygon = render_context.pointer_context->raytrace_local_index == render_context.pointer_context->hover_local_index;
-        const uint32_t color = same_polygon ? 0xffff0000u : 0xff00ff00u;
-        render_context.line_renderer->hidden.set_line_color(color);
-        render_context.line_renderer->hidden.add_lines(
-            {
+#if 1
+        if (m_pointer_context->raytrace_hit_position().has_value())
+        {
+            const glm::vec3 p0 = m_pointer_context->raytrace_hit_position().value();
+            const glm::vec3 neg_x = p0 - glm::vec3{1.0f, 0.0f, 0.0f};
+            const glm::vec3 pos_x = p0 + glm::vec3{1.0f, 0.0f, 0.0f};
+            const glm::vec3 neg_y = p0 - glm::vec3{0.0f, 1.0f, 0.0f};
+            const glm::vec3 pos_y = p0 + glm::vec3{0.0f, 1.0f, 0.0f};
+            const glm::vec3 neg_z = p0 - glm::vec3{0.0f, 0.0f, 1.0f};
+            const glm::vec3 pos_z = p0 + glm::vec3{0.0f, 0.0f, 1.0f};
+            m_line_renderer->hidden.set_line_color(red);
+            m_line_renderer->hidden.add_lines(
                 {
-                    p0,
-                    p1
-                }
-            },
-            10.0f
-        );
+                    {
+                        neg_x,
+                        pos_x
+                    }
+                },
+                10.0f
+            );
+            m_line_renderer->hidden.set_line_color(green);
+            m_line_renderer->hidden.add_lines(
+                {
+                    {
+                        neg_y,
+                        pos_y
+                    }
+                },
+                10.0f
+            );
+            m_line_renderer->hidden.set_line_color(blue);
+            m_line_renderer->hidden.add_lines(
+                {
+                    {
+                        neg_z,
+                        pos_z
+                    }
+                },
+                10.0f
+            );
+        }
 #endif
     }
 }

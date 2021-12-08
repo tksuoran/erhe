@@ -13,10 +13,10 @@
 namespace editor
 {
 
-Attach_detach_operation::Attach_detach_operation(Context& context)
-    : m_context(context)
+Attach_detach_operation::Attach_detach_operation(Context&& context)
+    : m_context{std::move(context)}
 {
-    auto& selection = context.selection_tool->selection();
+    const auto& selection = context.selection_tool->selection();
     if (selection.size() < 2)
     {
         return;
@@ -77,7 +77,7 @@ auto Attach_detach_operation::describe() const -> std::string
     bool first = true;
     for (const auto& entry : m_entries)
     {
-        VERIFY(entry.node);
+        ERHE_VERIFY(entry.node);
         if (first)
         {
             first = false;
@@ -89,7 +89,7 @@ auto Attach_detach_operation::describe() const -> std::string
         ss << entry.node->name();
     }
     ss << (m_context.attach ? "to " : "from ");
-    VERIFY(m_parent_node);
+    ERHE_VERIFY(m_parent_node);
     ss << m_parent_node->name();
     return ss.str();
 }
@@ -108,7 +108,7 @@ void Attach_detach_operation::execute(bool attach) const
 {
     m_context.scene.sanity_check();
 
-    VERIFY(m_parent_node);
+    ERHE_VERIFY(m_parent_node);
 
     for (auto& entry : m_entries)
     {

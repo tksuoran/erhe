@@ -41,7 +41,7 @@ public:
         "Generic Frustum"
     };
 
-    void update(Transform& transform, const Viewport viewport);
+    [[nodiscard]] auto clip_from_node_transform(const Viewport viewport) const -> Transform;
 
     auto get_projection_matrix(
         const float viewport_aspect_ration,
@@ -65,7 +65,7 @@ public:
         float down;
     };
 
-    auto get_fov_sides(const Viewport viewport) const -> Fov_sides;
+    [[nodiscard]] auto get_fov_sides(const Viewport viewport) const -> Fov_sides;
 
     Type  projection_type  {Type::perspective_vertical};
     float z_near           {  1.0f};
@@ -84,7 +84,7 @@ public:
     float frustum_right    { 0.5f};
     float frustum_bottom   {-0.05f};
     float frustum_top      { 0.5f};
-    float last_aspect_ratio{1.0f};
+    //float last_aspect_ratio{1.0f};
 };
 
 } // namespace erhe::scene

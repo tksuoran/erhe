@@ -38,7 +38,7 @@ using namespace glm;
 using namespace std;
 
 Shadow_renderer::Shadow_renderer()
-    : Component(c_name)
+    : Component{c_name}
 {
 }
 
@@ -63,7 +63,7 @@ void Shadow_renderer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
@@ -82,24 +82,28 @@ void Shadow_renderer::initialize_component()
         m_mesh_memory->gl_index_buffer.get()
     );
 
-    m_pipeline.shader_stages  = get<Programs>()->depth.get();
-    m_pipeline.vertex_input   = m_vertex_input.get();
-    m_pipeline.input_assembly = &Input_assembly_state::triangles;
-    m_pipeline.rasterization  = &Rasterization_state::cull_mode_none; //cull_mode_back_ccw;
-    m_pipeline.depth_stencil  =  Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
-    m_pipeline.color_blend    = &Color_blend_state::color_writes_disabled;
-    m_pipeline.viewport       = nullptr;
+    m_pipeline = {
+        .shader_stages  = get<Programs>()->depth.get(),
+        .vertex_input   = m_vertex_input.get(),
+        .input_assembly = &Input_assembly_state::triangles,
+        .rasterization  = &Rasterization_state::cull_mode_none,
+        .depth_stencil  =  Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+        .color_blend    = &Color_blend_state::color_writes_disabled
+    };
 
     {
         ERHE_PROFILE_SCOPE("allocating shadow map array texture");
 
-        Texture::Create_info create_info;
-        create_info.target          = gl::Texture_target::texture_2d_array;
-        create_info.internal_format = gl::Internal_format::depth_component32f;
-        create_info.width           = s_enable ? s_texture_resolution : 1;
-        create_info.height          = s_enable ? s_texture_resolution : 1;
-        create_info.depth           = s_max_light_count;
-        m_texture = std::make_unique<Texture>(create_info);
+        m_texture = std::make_unique<Texture>(
+            Texture::Create_info
+            {
+                .target          = gl::Texture_target::texture_2d_array,
+                .internal_format = gl::Internal_format::depth_component32f,
+                .width           = s_enable ? s_texture_resolution : 1,
+                .height          = s_enable ? s_texture_resolution : 1,
+                .depth           = s_max_light_count,
+            }
+        );
         m_texture->set_debug_label("Shadow texture");
         //float depth_clear_value = erhe::graphics::Instance::depth_clear_value;
         //gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
@@ -114,11 +118,13 @@ void Shadow_renderer::initialize_component()
         m_framebuffers.emplace_back(std::make_unique<Framebuffer>(create_info));
     }
 
-    m_viewport.x             = 0;
-    m_viewport.y             = 0;
-    m_viewport.width         = m_texture->width();
-    m_viewport.height        = m_texture->height();
-    m_viewport.reverse_depth = m_configuration->reverse_depth;
+    m_viewport = {
+        .x             = 0,
+        .y             = 0,
+        .width         = m_texture->width(),
+        .height        = m_texture->height(),
+        .reverse_depth = m_configuration->reverse_depth
+    };
 
     gl::pop_debug_group();
 }
@@ -150,10 +156,10 @@ void Shadow_renderer::render(
     gl::viewport(m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
 
     erhe::scene::Visibility_filter shadow_filter{
-        erhe::scene::Node::c_visibility_shadow_cast,
-        0u,
-        0u,
-        0u
+        .require_all_bits_set           = erhe::scene::Node::c_visibility_shadow_cast,
+        .require_at_least_one_bit_set   = 0u,
+        .require_all_bits_clear         = 0u,
+        .require_at_least_one_bit_clear = 0u
     };
 
     update_light_buffer(light_layer, m_viewport);
@@ -165,6 +171,10 @@ void Shadow_renderer::render(
             Primitive_mode::polygon_fill,
             shadow_filter
         );
+        if (draw_indirect_buffer_range.draw_indirect_count == 0)
+        {
+            continue;
+        }
 
         bind_light_buffer();
         bind_primitive_buffer();
@@ -177,7 +187,7 @@ void Shadow_renderer::render(
             {
                 break; // TODO
             }
-            light->update(m_viewport);
+            //light->update(m_viewport);
             if (!light->cast_shadow)
             {
                 continue;

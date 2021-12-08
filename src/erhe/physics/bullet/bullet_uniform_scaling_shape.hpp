@@ -13,7 +13,10 @@ class Bullet_uniform_scaling_shape
     : public Bullet_collision_shape
 {
 public:
-    Bullet_uniform_scaling_shape(ICollision_shape* shape, const float scale);
+    Bullet_uniform_scaling_shape(
+        ICollision_shape* shape,
+        const float       scale
+    );
 
 private:
     btUniformScalingShape m_uniform_scaling_shape;

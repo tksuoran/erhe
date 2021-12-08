@@ -8,23 +8,29 @@
 namespace erhe::raytrace
 {
 
-auto IBuffer::create(const size_t capacity_bytes_count) -> IBuffer*
+auto IBuffer::create(const std::string_view debug_label, const size_t capacity_bytes_count) -> IBuffer*
 {
-    return new Null_buffer(capacity_bytes_count);
+    return new Null_buffer(debug_label, capacity_bytes_count);
 }
 
-auto IBuffer::create_shared(const size_t capacity_bytes_count) -> std::shared_ptr<IBuffer>
+auto IBuffer::create_shared(const std::string_view debug_label, const size_t capacity_bytes_count) -> std::shared_ptr<IBuffer>
 {
-    return std::make_shared<Null_buffer>(capacity_bytes_count);
+    return std::make_shared<Null_buffer>(debug_label, capacity_bytes_count);
 }
 
-Null_buffer::Null_buffer(const size_t capacity_bytes_count)
+auto IBuffer::create_unique(const std::string_view debug_label, const size_t capacity_bytes_count) -> std::unique_ptr<IBuffer>
+{
+    return std::make_unique<Null_buffer>(debug_label, capacity_bytes_count);
+}
+
+Null_buffer::Null_buffer(const std::string_view debug_label, const size_t capacity_bytes_count)
+    : m_capacity_byte_count{capacity_bytes_count}
+    , m_next_free_byte     {0}
+    , m_debug_label        {debug_label}
 {
     Expects(capacity_bytes_count > 0);
     m_buffer.resize(capacity_bytes_count);
     m_span = gsl::span<std::byte>(m_buffer.data(), m_buffer.size());
-    //rtcNewBuffer(device.get_rtc_device(), capacity_bytes_count);
-    //rtcNewSharedBuffer(device.get_rtc_device(), data, byte_count);
 }
 
 Null_buffer::Null_buffer(Null_buffer&& other) noexcept
@@ -57,7 +63,7 @@ auto Null_buffer::allocate_bytes(
     const size_t alignment
 ) noexcept -> size_t
 {
-    std::lock_guard<std::mutex> lock(m_allocate_mutex);
+    std::lock_guard<std::mutex> lock{m_allocate_mutex};
 
     while ((m_next_free_byte % alignment) != 0)
     {
@@ -65,7 +71,7 @@ auto Null_buffer::allocate_bytes(
     }
     const auto offset = m_next_free_byte;
     m_next_free_byte += byte_count;
-    VERIFY(m_next_free_byte <= m_capacity_byte_count);
+    ERHE_VERIFY(m_next_free_byte <= m_capacity_byte_count);
 
     return offset;
 }
@@ -73,6 +79,11 @@ auto Null_buffer::allocate_bytes(
 auto Null_buffer::span() noexcept -> gsl::span<std::byte>
 {
     return m_span;
+}
+
+auto Null_buffer::debug_label() const -> std::string_view
+{
+    return m_debug_label;
 }
 
 } // namespace

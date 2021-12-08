@@ -34,18 +34,18 @@ public:
     Mesh         (const std::string_view name, const erhe::primitive::Primitive primitive);
     ~Mesh        () override;
 
-    auto node_type() const -> const char* override;
+    [[nodiscard]] auto node_type() const -> const char* override;
 
     Mesh_data data;
 
     erhe::toolkit::Unique_id<Mesh> m_id;
 };
 
-auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool;
+[[nodiscard]] auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool;
 
-auto is_mesh(const Node* const node) -> bool;
-auto is_mesh(const std::shared_ptr<Node>& node) -> bool;
-auto as_mesh(Node* const node) -> Mesh*;
-auto as_mesh(const std::shared_ptr<Node>& node) -> std::shared_ptr<Mesh>;
+[[nodiscard]] auto is_mesh(const Node* const node) -> bool;
+[[nodiscard]] auto is_mesh(const std::shared_ptr<Node>& node) -> bool;
+[[nodiscard]] auto as_mesh(Node* const node) -> Mesh*;
+[[nodiscard]] auto as_mesh(const std::shared_ptr<Node>& node) -> std::shared_ptr<Mesh>;
 
 }

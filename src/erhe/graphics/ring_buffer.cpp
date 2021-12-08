@@ -57,7 +57,7 @@ auto Ring_buffer::size_available_for_read() const -> size_t
 
 auto Ring_buffer::write(const uint8_t* src, const size_t byte_count) -> size_t
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock{m_mutex};
 
     const size_t can_write_count = std::min(size_available_for_write(), byte_count);
     if (can_write_count == 0)
@@ -80,7 +80,7 @@ auto Ring_buffer::write(const uint8_t* src, const size_t byte_count) -> size_t
 
 auto Ring_buffer::read(uint8_t* dst, const size_t byte_count) -> size_t
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock{m_mutex};
 
     const size_t can_read_count = std::min(size_available_for_read(), byte_count);
     if (can_read_count == 0)
@@ -103,7 +103,7 @@ auto Ring_buffer::read(uint8_t* dst, const size_t byte_count) -> size_t
 
 auto Ring_buffer::discard(const size_t byte_count) -> size_t
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock{m_mutex};
 
     const size_t can_discard_count = std::min(size_available_for_read(), byte_count);
     if (can_discard_count == 0)

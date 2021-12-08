@@ -28,8 +28,7 @@ void Input_assembly_state::touch()
 
 size_t Input_assembly_state::s_serial{0};
 
-auto Input_assembly_state::get_next_serial()
--> size_t
+auto Input_assembly_state::get_next_serial() -> size_t
 {
     do
     {

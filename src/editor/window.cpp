@@ -14,6 +14,8 @@
 
 #include <openxr/openxr.h>
 
+#include <filesystem>
+
 namespace editor {
 
 using std::shared_ptr;
@@ -31,38 +33,50 @@ auto Window::create_gl_window() -> bool
 
     const auto& configuration = *get<Configuration>();
 
-    int msaa_sample_count = configuration.gui ? 0 : 16;
+    const int msaa_sample_count = configuration.gui ? 0 : 16;
 
-    m_context_window = std::make_unique<erhe::toolkit::Context_window>(1920, 1080, msaa_sample_count); // 1080p
-    //m_context_window = std::make_unique<erhe::toolkit::Context_window>(1280,  720, msaa_sample_count); // 720p
+    m_context_window = std::make_unique<erhe::toolkit::Context_window>(
+        1920,
+        1080,
+        msaa_sample_count
+    );
 
 #if defined(ERHE_WINDOW_LIBRARY_GLFW)
     erhe::graphics::PNG_loader loader;
     erhe::graphics::Image_info image_info;
-    std::filesystem::path current_path = std::filesystem::current_path();
+    const std::filesystem::path current_path = std::filesystem::current_path();
+    const std::filesystem::path path         = current_path / "res" / "images" / "gl32w.png";
     log_startup.trace("current directory is {}\n", current_path.string());
-    std::filesystem::path path = current_path / "res" / "images" / "gl32w.png";
-    bool exists          = std::filesystem::exists(path);
-    bool is_regular_file = std::filesystem::is_regular_file(path);
+    const bool exists          = std::filesystem::exists(path);
+    const bool is_regular_file = std::filesystem::is_regular_file(path);
     if (exists && is_regular_file)
     {
         ERHE_PROFILE_SCOPE("icon");
 
-        bool ok = loader.open(path, image_info);
-        if (ok)
+        const bool open_ok = loader.open(path, image_info);
+        if (open_ok)
         {
             std::vector<std::byte> data;
             data.resize(static_cast<size_t>(image_info.width) * static_cast<size_t>(image_info.height) * 4);
-            auto span = gsl::span<std::byte>(data.data(), data.size());
-            ok = loader.load(span);
+            const auto span = gsl::span<std::byte>(data.data(), data.size());
+            const bool load_ok = loader.load(span);
             loader.close();
-            if (ok)
+            if (load_ok)
             {
-                GLFWimage icons[1];
-                icons[0].width  = image_info.width;
-                icons[0].height = image_info.height;
-                icons[0].pixels = reinterpret_cast<unsigned char*>(span.data());
-                glfwSetWindowIcon(reinterpret_cast<GLFWwindow*>(m_context_window->get_glfw_window()), 1, &icons[0]);
+                GLFWimage icons[1] = {
+                    {
+                        .width  = image_info.width,
+                        .height = image_info.height,
+                        .pixels = reinterpret_cast<unsigned char*>(span.data())
+                    }
+                };
+                glfwSetWindowIcon(
+                    reinterpret_cast<GLFWwindow*>(
+                        m_context_window->get_glfw_window()
+                    ), 
+                    1,
+                    &icons[0]
+                );
             }
         }
     }

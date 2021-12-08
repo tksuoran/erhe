@@ -1,8 +1,9 @@
 #include "windows/node_tree_window.hpp"
+#include "editor_tools.hpp"
 #include "graphics/icon_set.hpp"
 #include "log.hpp"
+
 #include "tools/selection_tool.hpp"
-#include "tools.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
@@ -45,8 +46,6 @@ void Node_tree_window::initialize_component()
 
 void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
 {
-    //erhe::log::Indenter log_indent;
-
     using namespace erhe::scene;
 
     if (is_empty(node))
@@ -94,7 +93,7 @@ void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
             ? ImGuiTreeNodeFlags_Selected
             : ImGuiTreeNodeFlags_None)};
 
-    std::string label = fmt::format("{}", node->name());
+    const std::string label = fmt::format("{}", node->name());
     const auto node_open = ImGui::TreeNodeEx(label.c_str(), node_flags);
     if (ImGui::IsItemClicked())
     {
@@ -115,10 +114,20 @@ void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
     }
 }
 
+void Node_tree_window::on_begin()
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,      ImVec2{0.0f, 0.0f});
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2{3.0f, 3.0f});
+}
+
+void Node_tree_window::on_end()
+{
+    ImGui::PopStyleVar(2);
+}
+
 void Node_tree_window::imgui()
 {
     const auto& scene = m_scene_root->scene();
-    ImGui::Begin("Node Tree");
     for (const auto& node : scene.nodes)
     {
         if (node->parent() == nullptr)
@@ -126,9 +135,8 @@ void Node_tree_window::imgui()
             imgui_tree_node(node.get());
         }
     }
-    ImGui::End();
 
-    ImGuiIO& io = ImGui::GetIO();
+    const ImGuiIO& io = ImGui::GetIO();
     if (m_node_clicked)
     {
         if (io.KeyShift) // ctrl?
@@ -144,7 +152,7 @@ void Node_tree_window::imgui()
         }
         else
         {
-            bool was_selected = m_node_clicked->is_selected();
+            const bool was_selected = m_node_clicked->is_selected();
             m_selection_tool->clear_selection();
             if (!was_selected)
             {

@@ -20,7 +20,7 @@ Property_maps::Property_maps(
     ERHE_PROFILE_FUNCTION
 
     log_primitive_builder.trace("Property_maps::Property_maps() for geometry = {}\n", geometry.name);
-    erhe::log::Indenter indenter;
+    const erhe::log::Indenter indenter;
 
     polygon_normals      = geometry.polygon_attributes().find<vec3>(erhe::geometry::c_polygon_normals     );
     polygon_centroids    = geometry.polygon_attributes().find<vec3>(erhe::geometry::c_polygon_centroids   );

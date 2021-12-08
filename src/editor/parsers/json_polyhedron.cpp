@@ -63,9 +63,9 @@ auto Json_library::make_geometry(const std::string& key_name) const
     auto& points = mesh["vertex"];
     for (auto& point : points)
     {
-        float x = point[0].get<float>();
-        float y = point[1].get<float>();
-        float z = point[2].get<float>();
+        const float x = point[0].get<float>();
+        const float y = point[1].get<float>();
+        const float z = point[2].get<float>();
         geometry.make_point(-x, -y, -z);
     }
     auto& polygons = mesh["face"];
@@ -74,8 +74,8 @@ auto Json_library::make_geometry(const std::string& key_name) const
         auto g_polygon = geometry.make_polygon();
         for (auto& corner : polygon)
         {
-            int index = corner.get<int>();
-            if (index < (int)geometry.point_count())
+            const int index = corner.get<int>();
+            if (index < (int)geometry.get_point_count())
             {
                 geometry.make_polygon_corner(g_polygon, index);
             }

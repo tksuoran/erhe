@@ -2,6 +2,8 @@
 
 #include "windows/imgui_window.hpp"
 
+#include "erhe/components/component.hpp"
+
 #include <memory>
 
 namespace editor
@@ -20,7 +22,7 @@ public:
     ~Imgui_demo_window() override;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void initialize_component() override;
 
     // Implements Imgui_window

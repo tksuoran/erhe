@@ -26,7 +26,7 @@ void Corner::smooth_normalize(
     T          corner_value   = polygon_value;
 
     size_t point_corner_count{0};
-    size_t participant_count{0};
+    size_t participant_count {0};
 
     const Point& point = geometry.points[point_id];
     point.for_each_corner_const(geometry, [&](const auto& i)
@@ -76,7 +76,8 @@ void Corner::smooth_average(
     Property_map<Corner_id, T>&               new_corner_attribute,
     const Property_map<Corner_id, T>&         old_corner_attribute,
     const Property_map<Corner_id, glm::vec3>& corner_normals,
-    const Property_map<Point_id, glm::vec3>&  point_normals) const
+    const Property_map<Point_id, glm::vec3>&  point_normals
+) const
 {
     ERHE_PROFILE_FUNCTION
 
@@ -86,8 +87,10 @@ void Corner::smooth_average(
         return;
     }
 
-    const auto corner_normal = has_corner_normal ? corner_normals.get(this_corner_id)
-                                                 : point_normals.get(point_id);
+    const auto corner_normal = has_corner_normal
+        ? corner_normals.get(this_corner_id)
+        : point_normals.get(point_id);
+
     T corner_value{};
 
     size_t participant_count{0};
@@ -103,7 +106,7 @@ void Corner::smooth_average(
             }
         }
     });
-    VERIFY(participant_count >= 1);
+    ERHE_VERIFY(participant_count >= 1);
 
     corner_value = corner_value / static_cast<float>(participant_count);
     new_corner_attribute.put(this_corner_id, corner_value);

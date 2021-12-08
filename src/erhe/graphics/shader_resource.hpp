@@ -59,7 +59,7 @@ public:
 
     using Member_collection = std::vector<std::unique_ptr<Shader_resource>>;
 
-    static auto c_str(Precision v) -> const char*;
+    static [[nodiscard]] auto c_str(Precision v) -> const char*;
 
     // Struct definition
     explicit Shader_resource(
@@ -110,32 +110,32 @@ public:
 
     Shader_resource(Shader_resource&& other) = default;
 
-    auto is_array                    () const -> bool;
-    auto dedicated_texture_unit_index() const -> std::optional<int>;
-    auto type                        () const -> Type;
-    auto name                        () const -> const std::string&;
-    auto array_size                  () const -> std::optional<size_t>;
-    auto basic_type                  () const -> gl::Uniform_type;
+    [[nodiscard]] auto is_array                    () const -> bool;
+    [[nodiscard]] auto dedicated_texture_unit_index() const -> std::optional<int>;
+    [[nodiscard]] auto type                        () const -> Type;
+    [[nodiscard]] auto name                        () const -> const std::string&;
+    [[nodiscard]] auto array_size                  () const -> std::optional<size_t>;
+    [[nodiscard]] auto basic_type                  () const -> gl::Uniform_type;
 
     // Only? for uniforms in default uniform block
     // For default uniform block, this is the next available location.
-    auto location        () const -> int;
-    auto index_in_parent () const -> size_t;
-    auto offset_in_parent() const -> size_t;
-    auto parent          () const -> Shader_resource*;
-    auto member_count    () const -> size_t;
-    auto member          (const std::string_view name) const -> Shader_resource*;
-    auto binding_point   () const -> unsigned int;
+    [[nodiscard]] auto location        () const -> int;
+    [[nodiscard]] auto index_in_parent () const -> size_t;
+    [[nodiscard]] auto offset_in_parent() const -> size_t;
+    [[nodiscard]] auto parent          () const -> Shader_resource*;
+    [[nodiscard]] auto member_count    () const -> size_t;
+    [[nodiscard]] auto member          (const std::string_view name) const -> Shader_resource*;
+    [[nodiscard]] auto binding_point   () const -> unsigned int;
 
     // Returns size of block.
     // For arrays, size of one element is returned.
-    auto size_bytes        () const -> size_t;
-    auto offset            () const -> size_t;
-    auto next_member_offset() const -> size_t;
-    auto type_string       () const -> std::string;
-    auto layout_string     () const -> std::string;
+    [[nodiscard]] auto size_bytes        () const -> size_t;
+    [[nodiscard]] auto offset            () const -> size_t;
+    [[nodiscard]] auto next_member_offset() const -> size_t;
+    [[nodiscard]] auto type_string       () const -> std::string;
+    [[nodiscard]] auto layout_string     () const -> std::string;
 
-    auto source(int indent_level = 0) const -> std::string;
+    [[nodiscard]] auto source(int indent_level = 0) const -> std::string;
 
     auto add_struct(
         const std::string_view          name,

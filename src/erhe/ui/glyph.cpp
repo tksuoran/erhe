@@ -1,10 +1,10 @@
+#if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE)
 #include <fmt/printf.h>
 
-#include <ft2build.h> // NOLINT
-#include FT_FREETYPE_H
-#include FT_STROKER_H
-#include FT_GLYPH_H
-#include FT_BITMAP_H
+#include <freetype/freetype.h>
+#include <freetype/ftbitmap.h>
+#include <freetype/ftglyph.h>
+#include <freetype/ftstroke.h>
 
 #include "erhe/ui/bitmap.hpp"
 #include "erhe/ui/glyph.hpp"
@@ -154,3 +154,5 @@ void Glyph::dump() const
 }
 
 } // namespace erhe::ui
+
+#endif // defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE)

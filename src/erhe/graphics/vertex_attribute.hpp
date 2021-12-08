@@ -35,15 +35,15 @@ public:
         {
         }
 
-        auto operator==(const Usage& other) const
-        -> bool
+        [[nodiscard]]
+        auto operator==(const Usage& other) const -> bool
         {
             // TODO index is not compared. Is this a bug or design?
             return (type == other.type);
         }
 
-        auto operator!=(const Usage& other) const
-        -> bool
+        [[nodiscard]] 
+        auto operator!=(const Usage& other) const -> bool
         {
             return !(*this == other);
         }
@@ -66,6 +66,7 @@ public:
         {
         }
 
+        [[nodiscard]] 
         auto operator==(const Data_type& other) const -> bool
         {
             return
@@ -74,6 +75,7 @@ public:
                 (dimension == other.dimension);
         }
 
+        [[nodiscard]] 
         auto operator!=(const Data_type& other) const -> bool
         {
             return !(*this == other);
@@ -84,8 +86,7 @@ public:
         size_t                 dimension {0};
     };
 
-    static auto desc(const Usage_type usage)
-    -> const char*;
+    static [[nodiscard]] auto desc(const Usage_type usage) -> const char*;
 
     Vertex_attribute(
         const Usage              usage,
@@ -102,11 +103,13 @@ public:
     {
     }
 
+    [[nodiscard]]
     auto stride() const -> size_t
     {
         return data_type.dimension * gl::size_of_type(data_type.type);
     }
 
+    [[nodiscard]] 
     auto operator==(const Vertex_attribute& other) const -> bool
     {
         return
@@ -117,6 +120,7 @@ public:
             (divisor     == other.divisor);
     }
 
+    [[nodiscard]] 
     auto operator!=(const Vertex_attribute& other) const -> bool
     {
         return !(*this == other);

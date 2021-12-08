@@ -13,9 +13,9 @@ namespace erhe::primitive
 Buffer_sink::~Buffer_sink() = default;
 
 Gl_buffer_sink::Gl_buffer_sink(
-    erhe::graphics::Buffer_transfer_queue&         buffer_transfer_queue,
-    const std::shared_ptr<erhe::graphics::Buffer>& vertex_buffer,
-    const std::shared_ptr<erhe::graphics::Buffer>& index_buffer
+    erhe::graphics::Buffer_transfer_queue& buffer_transfer_queue,
+    erhe::graphics::Buffer&                vertex_buffer,
+    erhe::graphics::Buffer&                index_buffer
 )
     : m_buffer_transfer_queue{buffer_transfer_queue}
     , m_vertex_buffer        {vertex_buffer}
@@ -23,25 +23,12 @@ Gl_buffer_sink::Gl_buffer_sink(
 {
 }
 
-Gl_buffer_sink::~Gl_buffer_sink() = default;
-
 auto Gl_buffer_sink::allocate_vertex_buffer(
     const size_t vertex_count,
     const size_t vertex_element_size
 ) -> Buffer_range
 {
-    VERIFY(m_vertex_buffer);
-    //if (!m_vertex_buffer)
-    //{
-    //    constexpr gl::Buffer_storage_mask storage_mask = gl::Buffer_storage_mask::map_write_bit;
-    //    m_vertex_buffer = std::make_shared<erhe::graphics::Buffer>(
-    //        gl::Buffer_target::array_buffer,
-    //        vertex_count * vertex_element_size,
-    //        storage_mask
-    //    );
-    //}
-
-    const auto byte_offset = m_vertex_buffer->allocate_bytes(
+    const auto byte_offset = m_vertex_buffer.allocate_bytes(
         vertex_count * vertex_element_size,
         vertex_element_size
     );
@@ -58,18 +45,7 @@ auto Gl_buffer_sink::allocate_index_buffer(
     const size_t index_element_size
 ) -> Buffer_range
 {
-    VERIFY(m_index_buffer);
-    //if (!m_index_buffer)
-    //{
-    //    constexpr gl::Buffer_storage_mask storage_mask = gl::Buffer_storage_mask::map_write_bit;
-    //    m_index_buffer = std::make_shared<erhe::graphics::Buffer>(
-    //        gl::Buffer_target::element_array_buffer,
-    //        m_index_count * m_index_element_size,
-    //        storage_mask
-    //    );
-    //}
-
-    const auto index_byte_offset = m_index_buffer->allocate_bytes(index_count * index_element_size);
+    const auto index_byte_offset = m_index_buffer.allocate_bytes(index_count * index_element_size);
 
     return Buffer_range{
         index_count,
@@ -81,43 +57,36 @@ auto Gl_buffer_sink::allocate_index_buffer(
 void Gl_buffer_sink::buffer_ready(Vertex_buffer_writer& writer) const
 {
     m_buffer_transfer_queue.enqueue(
-        m_vertex_buffer.get(),
+        m_vertex_buffer,
         writer.start_offset(),
         std::move(writer.vertex_data)
     );
 }
 
-void Gl_buffer_sink::buffer_ready(Index_buffer_writer&  writer) const
+void Gl_buffer_sink::buffer_ready(Index_buffer_writer& writer) const
 {
     m_buffer_transfer_queue.enqueue(
-        m_index_buffer.get(),
+        m_index_buffer,
         writer.start_offset(),
         std::move(writer.index_data)
     );
 }
 
 Raytrace_buffer_sink::Raytrace_buffer_sink(
-    const std::shared_ptr<erhe::raytrace::IBuffer>& vertex_buffer,
-    const std::shared_ptr<erhe::raytrace::IBuffer>& index_buffer
+    erhe::raytrace::IBuffer& vertex_buffer,
+    erhe::raytrace::IBuffer& index_buffer
 )
     : m_vertex_buffer{vertex_buffer}
     , m_index_buffer {index_buffer}
 {
 }
 
-Raytrace_buffer_sink::~Raytrace_buffer_sink() = default;
-
 auto Raytrace_buffer_sink::allocate_vertex_buffer(
     const size_t vertex_count,
     const size_t vertex_element_size
 ) -> Buffer_range
 {
-    VERIFY(m_vertex_buffer != nullptr);
-    //if (!m_vertex_buffer)
-    //{
-    //    m_vertex_buffer = std::make_shared<erhe::raytrace::Buffer>(vertex_count * vertex_element_size);
-    //}    return m_vertex_byte_offset;
-    const auto vertex_byte_offset = m_vertex_buffer->allocate_bytes(
+    const auto vertex_byte_offset = m_vertex_buffer.allocate_bytes(
         vertex_count * vertex_element_size,
         vertex_element_size
     );
@@ -129,26 +98,21 @@ auto Raytrace_buffer_sink::allocate_index_buffer(
     const size_t index_element_size
 ) -> Buffer_range
 {
-    VERIFY(m_index_buffer != nullptr);
-    //if (!m_index_buffer)
-    //{
-    //    m_index_buffer = std::make_shared<erhe::raytrace::Buffer>(m_index_count * m_index_element_size);
-    //}
-    const auto index_byte_offset = m_index_buffer->allocate_bytes(index_count * index_element_size);
+    const auto index_byte_offset = m_index_buffer.allocate_bytes(index_count * index_element_size);
     return Buffer_range{index_count, index_element_size, index_byte_offset};
 }
 
 void Raytrace_buffer_sink::buffer_ready(Vertex_buffer_writer& writer) const
 {
-    auto        buffer_span = m_vertex_buffer->span();
+    auto        buffer_span = m_vertex_buffer.span();
     const auto& data        = writer.vertex_data;
     auto        offset_span = buffer_span.subspan(writer.start_offset(), data.size());
     memcpy(offset_span.data(), data.data(), data.size());
 }
 
-void Raytrace_buffer_sink::buffer_ready(Index_buffer_writer&  writer) const
+void Raytrace_buffer_sink::buffer_ready(Index_buffer_writer& writer) const
 {
-    auto        buffer_span = m_index_buffer->span();
+    auto        buffer_span = m_index_buffer.span();
     const auto& data        = writer.index_data;
     auto        offset_span = buffer_span.subspan(writer.start_offset(), data.size());
     memcpy(offset_span.data(), data.data(), data.size());

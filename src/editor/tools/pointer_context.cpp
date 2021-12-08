@@ -1,11 +1,16 @@
 #include "tools/pointer_context.hpp"
+#include "editor_time.hpp"
 #include "log.hpp"
 #include "rendering.hpp"
-#include "time.hpp"
+
+#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "renderers/id_renderer.hpp"
-#include "windows/frame_log_window.hpp"
+#include "windows/log_window.hpp"
 
+#include "erhe/raytrace/iscene.hpp"
+#include "erhe/raytrace/igeometry.hpp"
+#include "erhe/raytrace/iinstance.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
@@ -24,7 +29,8 @@ Pointer_context::~Pointer_context() = default;
 void Pointer_context::connect()
 {
     m_editor_rendering = get<Editor_rendering>();
-    m_frame_log_window = get<Frame_log_window>();
+    m_log_window       = get<Log_window>();
+    m_scene_root       = get<Scene_root>();
     m_viewport_windows = get<Viewport_windows>();
 }
 
@@ -63,7 +69,154 @@ void Pointer_context::update_mouse(
     m_mouse_y = y;
 }
 
-void Pointer_context::begin_frame()
+
+void Pointer_context::raytrace()
+{
+    if (m_window == nullptr)
+    {
+        return;
+    }
+
+    auto* const log = get<Log_window>();
+
+
+    const auto pointer_near = position_in_world(1.0);
+    //if (pointer_near.has_value())
+    //{
+    //    log->frame_log("Near: {}", glm::vec3{pointer_near.value()});
+    //}
+    const auto pointer_far  = position_in_world(0.0);
+    //if (pointer_far.has_value())
+    //{
+    //    log->frame_log("Far: {}", glm::vec3{pointer_far.value()});
+    //}
+
+    if (!pointer_near.has_value() || !pointer_far.has_value())
+    {
+        return;
+    }
+
+    const auto direction = glm::normalize(pointer_far.value() - pointer_near.value());
+    //log->frame_log("Direction: {}", glm::vec3{direction});
+
+    const glm::vec3 origin{pointer_near.value()};
+
+    erhe::raytrace::Ray ray{
+        .origin    = glm::vec3{pointer_near.value()},
+        .t_near    = 0.0f,
+        .direction = glm::vec3{glm::normalize(pointer_far.value() - pointer_near.value())},
+        .time      = 0.0f,
+        .t_far     = 9999.0f,
+        .mask      = 0,
+        .id        = 0,
+        .flags     = 0
+    };
+    erhe::raytrace::Hit hit{};
+
+    auto& scene = m_scene_root->raytrace_scene();
+    scene.commit();
+    scene.intersect(ray, hit);
+    //log->frame_log("Ray near t: {}",    ray.t_near);
+    //log->frame_log("Ray near: {}",      ray.origin + ray.t_near * ray.direction);
+    //log->frame_log("Ray far t: {}",     ray.t_far);
+    //log->frame_log("Ray far: {}",       ray.origin + ray.t_far * ray.direction);
+    //log->frame_log("Hit UV: {}",        hit.uv);
+    //log->frame_log("Hit primitive: {}", hit.primitive_id);
+    //if (hit.geometry != nullptr)
+    //{
+    //    log->frame_log("Hit geometry: {}", hit.geometry->debug_label());
+    //}
+    if (hit.instance != nullptr)
+    {
+        //log->frame_log("Hit instance: {}", hit.instance->debug_label());
+        void* user_data     = hit.instance->get_user_data();
+        auto* node_raytrace = reinterpret_cast<Node_raytrace*>(user_data);
+        if (node_raytrace != nullptr)
+        {
+            auto* primitive = node_raytrace->raytrace_primitive();
+            if (primitive != nullptr)
+            {
+                auto* geometry = primitive->geometry.get();
+                if (geometry != nullptr)
+                {
+                    log->frame_log("Hit geometry: {}", geometry->name);
+                }
+                if (hit.primitive_id < primitive->primitive_geometry.primitive_id_to_polygon_id.size()) 
+                {
+                    const auto polygon_id = primitive->primitive_geometry.primitive_id_to_polygon_id[hit.primitive_id];
+                    log->frame_log("Hit polygon: {}", polygon_id);
+                }
+            }
+        }
+    }
+
+    m_raytrace_hit_position = ray.origin + ray.t_far * ray.direction;
+
+#if 0
+    erhe::scene::Mesh*         hit_mesh      {nullptr};
+    erhe::geometry::Geometry*  hit_geometry  {nullptr};
+    erhe::geometry::Polygon_id hit_polygon_id{0};
+    float                      hit_t         {std::numeric_limits<float>::max()};
+    float                      hit_u         {0.0f};
+    float                      hit_v         {0.0f};
+    const auto& content_layer = m_scene_root->content_layer();
+    for (auto& mesh : content_layer.meshes)
+    {
+        erhe::geometry::Geometry*  geometry  {nullptr};
+        erhe::geometry::Polygon_id polygon_id{0};
+        float                      t         {std::numeric_limits<float>::max()};
+        float                      u         {0.0f};
+        float                      v         {0.0f};
+        const bool hit = erhe::raytrace::intersect(
+            *mesh.get(),
+            origin,
+            direction,
+            geometry,
+            polygon_id,
+            t,
+            u,
+            v
+        );
+        if (hit)
+        {
+            log->frame_log(
+                "hit mesh {}, t = {}, polygon id = {}",
+                mesh->name(),
+                t,
+                static_cast<uint32_t>(polygon_id)
+            );
+        }
+        if (hit && (t < hit_t))
+        {
+            hit_mesh       = mesh.get();
+            hit_geometry   = geometry;
+            hit_polygon_id = polygon_id;
+            hit_t          = t;
+            hit_u          = u;
+            hit_v          = v;
+        }
+    }
+    if (hit_t != std::numeric_limits<float>::max())
+    {
+        pointer_context.raytrace_hit_position = origin + hit_t * direction;
+        if (hit_polygon_id < hit_geometry->polygon_count())
+        {
+            auto* polygon_normals = hit_geometry->polygon_attributes().find<glm::vec3>(c_polygon_normals);
+            if ((polygon_normals != nullptr) && polygon_normals->has(hit_polygon_id))
+            {
+                auto local_normal    = polygon_normals->get(hit_polygon_id);
+                auto world_from_node = hit_mesh->world_from_node();
+                pointer_context.raytrace_local_index = static_cast<size_t>(hit_polygon_id);
+                pointer_context.raytrace_hit_normal = glm::vec3{
+                    world_from_node * glm::vec4{local_normal, 0.0f}
+                };
+            }
+        }
+    }
+#endif
+}
+
+void Pointer_context::update_viewport(Viewport_window* viewport_window)
 {
     m_hover_mesh.reset();
     m_hover_geometry    = nullptr;
@@ -77,22 +230,17 @@ void Pointer_context::begin_frame()
     m_hover_tool        = false;
     m_hover_content     = false;
     m_hover_valid       = false;
-}
+    m_update_window     = nullptr;
+    m_raytrace_hit_position.reset();
 
-void Pointer_context::update(Viewport_window* viewport_window)
-{
-    const bool mouse_in_window = viewport_window->hit_test(
-        static_cast<int>(m_mouse_x),
-        static_cast<int>(m_mouse_y)
-    );
-    if (!mouse_in_window)
+    m_window = viewport_window;
+
+    if (m_window == nullptr)
     {
         return;
     }
 
-    m_window = viewport_window;
-
-    const glm::vec2 position_in_window = viewport_window->to_scene_content(
+    const glm::vec2 position_in_window = m_window->to_scene_content(
         glm::vec2{
             m_mouse_x,
             m_mouse_y
@@ -100,104 +248,24 @@ void Pointer_context::update(Viewport_window* viewport_window)
     );
 
     m_position_in_window = glm::vec3{position_in_window, 1.0f};
-    
-    auto* camera = viewport_window->camera();
+
+    auto* camera = m_window->camera();
     if (camera == nullptr)
     {
-        m_frame_log_window->log("pointer context has no camera");
         return;
     }
 
-    m_raytrace_hit_position = {};
-    m_raytrace_hit_normal   = {};
-#if 0
+#if 1
     if (pointer_in_content_area())
     {
-        auto* const frame_log = get<Frame_log_window>();
-        frame_log->new_frame();
-
-        const glm::vec3 pointer_near = position_in_world(1.0f);
-        const glm::vec3 pointer_far  = position_in_world(0.0f);
-        const glm::vec3 direction    = glm::normalize(pointer_far - pointer_near);
-        frame_log->log("Camera: {}",    glm::vec3{camera->position_in_world()});
-        frame_log->log("Far: {}",       pointer_far);
-        frame_log->log("Near: {}",      pointer_near);
-        frame_log->log("Direction: {}", direction);
-        frame_log->log("Camera -Z: {}", glm::vec3{-camera->direction_in_world()});
-#if 0
-        const glm::vec3 origin        = pointer_near;
-        erhe::scene::Mesh*         hit_mesh      {nullptr};
-        erhe::geometry::Geometry*  hit_geometry  {nullptr};
-        erhe::geometry::Polygon_id hit_polygon_id{0};
-        float                      hit_t         {std::numeric_limits<float>::max()};
-        float                      hit_u         {0.0f};
-        float                      hit_v         {0.0f};
-        const auto& content_layer = m_scene_root->content_layer();
-        for (auto& mesh : content_layer.meshes)
-        {
-            erhe::geometry::Geometry*  geometry  {nullptr};
-            erhe::geometry::Polygon_id polygon_id{0};
-            float                      t         {std::numeric_limits<float>::max()};
-            float                      u         {0.0f};
-            float                      v         {0.0f};
-            const bool hit = erhe::raytrace::intersect(
-                *mesh.get(),
-                origin,
-                direction,
-                geometry,
-                polygon_id,
-                t,
-                u,
-                v
-            );
-            if (hit)
-            {
-                frame_log->log(
-                    "hit mesh {}, t = {}, polygon id = {}",
-                    mesh->name(),
-                    t,
-                    static_cast<uint32_t>(polygon_id)
-                );
-            }
-            if (hit && (t < hit_t))
-            {
-                hit_mesh       = mesh.get();
-                hit_geometry   = geometry;
-                hit_polygon_id = polygon_id;
-                hit_t          = t;
-                hit_u          = u;
-                hit_v          = v;
-            }
-        }
-        if (hit_t != std::numeric_limits<float>::max())
-        {
-            pointer_context.raytrace_hit_position = origin + hit_t * direction;
-            if (hit_polygon_id < hit_geometry->polygon_count())
-            {
-                auto* polygon_normals = hit_geometry->polygon_attributes().find<glm::vec3>(c_polygon_normals);
-                if ((polygon_normals != nullptr) && polygon_normals->has(hit_polygon_id))
-                {
-                    auto local_normal    = polygon_normals->get(hit_polygon_id);
-                    auto world_from_node = hit_mesh->world_from_node();
-                    pointer_context.raytrace_local_index = static_cast<size_t>(hit_polygon_id);
-                    pointer_context.raytrace_hit_normal = glm::vec3{
-                        world_from_node * glm::vec4{local_normal, 0.0f}
-                    };
-                }
-            }
-        }
-#endif
-    }
-    else
-    {
-        m_frame_log_window->log("pointer context not in content area");
+        raytrace();
     }
 #endif
 
     auto* const id_renderer     = get<Id_renderer>();
     auto* const scene_root      = get<Scene_root>();
     const bool  in_content_area = pointer_in_content_area();
-    m_frame_log_window->log("in_content_area = {}", in_content_area);
+    //m_log_window->frame_log("in_content_area = {}", in_content_area);
     if (in_content_area && (id_renderer != nullptr))
     {
         const auto mesh_primitive = id_renderer->get(
@@ -209,7 +277,7 @@ void Pointer_context::update(Viewport_window* viewport_window)
         m_near_position_in_world = position_in_world(0.0f);
         m_far_position_in_world  = position_in_world(1.0f);
         m_hover_valid = mesh_primitive.valid;
-        m_frame_log_window->log("position in world = {}", m_position_in_world.value());
+        //m_log_window->frame_log("position in world = {}", m_position_in_world.value());
         if (m_hover_valid)
         {
             m_hover_mesh        = mesh_primitive.mesh;
@@ -218,7 +286,7 @@ void Pointer_context::update(Viewport_window* viewport_window)
             m_hover_local_index = mesh_primitive.local_index;
             m_hover_tool        = m_hover_layer == scene_root->tool_layer().get();
             m_hover_content     = m_hover_layer == &scene_root->content_layer();
-            m_frame_log_window->log(
+            m_log_window->frame_log(
                 "hover mesh = {} primitive = {} local index {} tool = {} content = {}",
                 m_hover_mesh ? m_hover_mesh->name() : "()",
                 m_hover_primitive,
@@ -229,15 +297,17 @@ void Pointer_context::update(Viewport_window* viewport_window)
             if (m_hover_mesh)
             {
                 const auto& primitive = m_hover_mesh->data.primitives[m_hover_primitive];
-                m_hover_geometry = primitive.primitive_geometry->source_geometry.get();
+                m_hover_geometry = primitive.source_geometry.get();
                 m_hover_normal   = {};
                 if (m_hover_geometry != nullptr)
                 {
                     using namespace erhe::geometry;
                     const auto polygon_id = static_cast<Polygon_id>(m_hover_local_index);
-                    if (polygon_id < m_hover_geometry->polygon_count())
+                    if (
+                        polygon_id < m_hover_geometry->get_polygon_count()
+                    )
                     {
-                        m_frame_log_window->log("hover polygon = {}", polygon_id);
+                        m_log_window->frame_log("hover polygon = {}", polygon_id);
                         auto* const polygon_normals = m_hover_geometry->polygon_attributes().find<glm::vec3>(c_polygon_normals);
                         if (
                             (polygon_normals != nullptr) &&
@@ -247,21 +317,21 @@ void Pointer_context::update(Viewport_window* viewport_window)
                             const auto local_normal    = polygon_normals->get(polygon_id);
                             const auto world_from_node = m_hover_mesh->world_from_node();
                             m_hover_normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
-                            m_frame_log_window->log("hover normal = {}", m_hover_normal.value());
+                            //m_log_window->frame_log("hover normal = {}", m_hover_normal.value());
                         }
                     }
                 }
             }
         }
-        else
-        {
-            m_frame_log_window->log("pointer context hover not valid");
-        }
+        //else
+        //{
+        //    m_log_window->tail_log("pointer context hover not valid");
+        //}
         // else mesh etc. contain latest valid values
     }
     else
     {
-        m_frame_log_window->log("hover not content area or no id renderer");
+        //m_log_window->frame_log("hover not content area or no id renderer");
         m_hover_valid       = false;
         m_hover_mesh        = nullptr;
         m_hover_primitive   = 0;
@@ -287,31 +357,39 @@ auto Pointer_context::far_position_in_world() const -> std::optional<glm::vec3>
     return m_far_position_in_world;
 }
 
-auto Pointer_context::position_in_world(const float viewport_depth) const -> std::optional<glm::vec3>
+auto Pointer_context::raytrace_hit_position() const -> std::optional<glm::vec3>
+{
+    return m_raytrace_hit_position;
+}
+
+auto Pointer_context::position_in_world(const double viewport_depth) const -> std::optional<glm::dvec3>
 {
     if (!m_position_in_window.has_value())
     {
         return {};
     }
 
-    const float depth_range_near  = 0.0f;
-    const float depth_range_far   = 1.0f;
-    const auto  position_in_window = glm::vec3{
+    const double depth_range_near   = 0.0;
+    const double depth_range_far    = 1.0;
+    const auto   position_in_window = glm::dvec3{
         m_position_in_window.value().x,
         m_position_in_window.value().y,
         viewport_depth
     };
-    const auto* const camera = m_window->camera();
-    const auto vp = m_window->viewport();
+    const auto* const camera                = m_window->camera();
+    const auto        vp                    = m_window->viewport();
+    const auto        projection_transforms = camera->projection_transforms(vp);
+    const glm::mat4   world_from_clip       = projection_transforms.clip_from_world.inverse_matrix();
+
     return erhe::toolkit::unproject(
-        camera->world_from_clip(),
+        glm::dmat4{world_from_clip},
         position_in_window,
         depth_range_near,
         depth_range_far,
-        static_cast<float>(vp.x),
-        static_cast<float>(vp.y),
-        static_cast<float>(vp.width),
-        static_cast<float>(vp.height)
+        static_cast<double>(vp.x),
+        static_cast<double>(vp.y),
+        static_cast<double>(vp.width),
+        static_cast<double>(vp.height)
     );
 }
 
@@ -402,19 +480,14 @@ auto Pointer_context::window() const -> Viewport_window*
     return m_window;
 }
 
+auto Pointer_context::last_window() const -> Viewport_window*
+{
+    return m_last_window;
+}
+
 auto Pointer_context::position_in_viewport_window() const -> std::optional<glm::vec3>
 {
     return m_position_in_window;
-}
-
-void Pointer_context::set_priority_action(const Action action)
-{
-    m_priority_action = action;
-}
-
-auto Pointer_context::priority_action() const -> Action
-{
-    return m_priority_action;
 }
 
 auto Pointer_context::frame_number() const -> uint64_t

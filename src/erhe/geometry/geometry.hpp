@@ -50,7 +50,7 @@ class Edge;
 class Corner
 {
 public:
-    Point_id   point_id{0};
+    Point_id   point_id  {0};
     Polygon_id polygon_id{0};
 
     template<typename T>
@@ -246,11 +246,23 @@ public:
         const bool                                 overwrite = false
     ) const;
 
-    auto corner(const Geometry& geometry, const Point_id point_id) const -> Corner_id;
+    [[nodiscard]]
+    auto corner(
+        const Geometry& geometry,
+        const Point_id  point_id
+    ) const -> Corner_id;
 
-    auto next_corner(const Geometry& geometry, const Corner_id anchor_corner_id) const -> Corner_id;
+    [[nodiscard]]
+    auto next_corner(
+        const Geometry& geometry,
+        const Corner_id anchor_corner_id
+    ) const -> Corner_id;
 
-    auto prev_corner(const Geometry& geometry, const Corner_id corner_id) const -> Corner_id;
+    [[nodiscard]]
+    auto prev_corner(
+        const Geometry& geometry,
+        const Corner_id corner_id
+    ) const -> Corner_id;
 
     void reverse(Geometry& geometry);
 
@@ -410,9 +422,6 @@ public:
     size_t index_count_corner_points  {0};
     size_t index_count_centroid_points{0};
 
-    auto operator+=(const Mesh_info& o)
-    -> Mesh_info&;
-
     void trace(erhe::log::Category& log) const;
 };
 
@@ -485,15 +494,14 @@ public:
         m_serial_corner_texture_coordinates = m_serial;
     }
 
-    uint32_t corner_count        () const { return m_next_corner_id; }
-    uint32_t point_count         () const { return m_next_point_id; }
-    uint32_t point_corner_count  () const { return m_next_point_corner_reserve; }
-    uint32_t polygon_count       () const { return m_next_polygon_id; }
-    uint32_t polygon_corner_count() const { return m_next_polygon_corner_id; }
-    uint32_t edge_count          () const { return m_next_edge_id; }
+    auto get_corner_count        () const -> uint32_t { return m_next_corner_id; }
+    auto get_point_count         () const -> uint32_t { return m_next_point_id; }
+    auto get_point_corner_count  () const -> uint32_t { return m_next_point_corner_reserve; }
+    auto get_polygon_count       () const -> uint32_t { return m_next_polygon_id; }
+    auto get_polygon_corner_count() const -> uint32_t { return m_next_polygon_corner_id; }
+    auto get_edge_count          () const -> uint32_t { return m_next_edge_id; }
 
-    auto find_edge(Point_id a, Point_id b)
-    -> std::optional<Edge>
+    [[nodiscard]] auto find_edge(Point_id a, Point_id b) -> std::optional<Edge>
     {
         if (b < a)
         {
@@ -547,46 +555,46 @@ public:
     auto make_polygon_corner(const Polygon_id polygon_id, const Point_id point_id) -> Corner_id;
 
     // Calculates the number of triangles as if all faces were triangulated
-    auto count_polygon_triangles() const -> size_t;
+    [[nodiscard]] auto count_polygon_triangles() const -> size_t;
 
-    void info(Mesh_info& info) const;
+    [[nodiscard]] auto get_mesh_info() const -> Mesh_info;
 
-    auto point_attributes() -> Point_property_map_collection&
+    [[nodiscard]] auto point_attributes() -> Point_property_map_collection&
     {
         return m_point_property_map_collection;
     }
 
-    auto corner_attributes() -> Corner_property_map_collection&
+    [[nodiscard]] auto corner_attributes() -> Corner_property_map_collection&
     {
         return m_corner_property_map_collection;
     }
 
-    auto polygon_attributes() -> Polygon_property_map_collection&
+    [[nodiscard]] auto polygon_attributes() -> Polygon_property_map_collection&
     {
         return m_polygon_property_map_collection;
     }
 
-    auto edge_attributes() -> Edge_property_map_collection&
+    [[nodiscard]] auto edge_attributes() -> Edge_property_map_collection&
     {
         return m_edge_property_map_collection;
     }
 
-    auto point_attributes() const -> const Point_property_map_collection&
+    [[nodiscard]] auto point_attributes() const -> const Point_property_map_collection&
     {
         return m_point_property_map_collection;
     }
 
-    auto corner_attributes() const -> const Corner_property_map_collection&
+    [[nodiscard]] auto corner_attributes() const -> const Corner_property_map_collection&
     {
         return m_corner_property_map_collection;
     }
 
-    auto polygon_attributes() const -> const Polygon_property_map_collection&
+    [[nodiscard]] auto polygon_attributes() const -> const Polygon_property_map_collection&
     {
         return m_polygon_property_map_collection;
     }
 
-    auto edge_attributes() const -> const Edge_property_map_collection&
+    [[nodiscard]] auto edge_attributes() const -> const Edge_property_map_collection&
     {
         return m_edge_property_map_collection;
     }
@@ -612,6 +620,7 @@ public:
     // Returns true on success.
     auto compute_polygon_normals() -> bool;
 
+    [[nodiscard]]
     auto has_polygon_normals() const -> bool;
 
     // Requires point locations.
@@ -619,12 +628,14 @@ public:
     // Returns true on success.
     auto compute_polygon_centroids() -> bool;
 
+    [[nodiscard]]
     auto has_polygon_centroids() const -> bool;
 
     // Calculates point normal from polygon normals
     // Returns incorrect data if there are missing polygon normals.
     auto compute_point_normal(Point_id point_id) -> glm::vec3;
 
+    [[nodiscard]]
     auto has_point_normals() const -> bool;
 
     // Calculates point normals from polygon normals.
@@ -634,10 +645,10 @@ public:
     // (due to missing point locations).
     auto compute_point_normals(const Property_map_descriptor& descriptor) -> bool;
 
-    auto has_polygon_tangents() const -> bool;
-    auto has_polygon_bitangents() const -> bool;
-    auto has_corner_tangents() const -> bool;
-    auto has_corner_bitangents() const -> bool;
+    [[nodiscard]] auto has_polygon_tangents  () const -> bool;
+    [[nodiscard]] auto has_polygon_bitangents() const -> bool;
+    [[nodiscard]] auto has_corner_tangents   () const -> bool;
+    [[nodiscard]] auto has_corner_bitangents () const -> bool;
 
     auto compute_tangents(
         const bool corner_tangents    = true,
@@ -650,7 +661,7 @@ public:
 
     auto generate_polygon_texture_coordinates(const bool overwrite_existing_texture_coordinates = false) -> bool;
 
-    auto has_polygon_texture_coordinates() const -> bool;
+    [[nodiscard]] auto has_polygon_texture_coordinates() const -> bool;
 
     // Experimental
     void generate_texture_coordinates_spherical();
@@ -677,8 +688,9 @@ public:
 
     void build_edges();
 
-    auto has_edges() const -> bool;
+    [[nodiscard]] auto has_edges() const -> bool;
 
+    // returns *this, discard ok
     auto transform(const glm::mat4& m) -> Geometry&;
 
     void reverse_polygons();
@@ -702,6 +714,7 @@ public:
 
     void sanity_check() const;
 
+    [[nodiscard]]
     auto get_mass_properties() -> Mass_properties;
 
     class Corner_context

@@ -22,7 +22,7 @@ void Image_transfer::connect()
 
 void Image_transfer::initialize_component()
 {
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     m_slots = std::make_unique<std::array<Slot, 4>>();
 }
@@ -58,7 +58,7 @@ Image_transfer::Slot::Slot()
         gl::Map_buffer_access_mask::map_write_bit
     );
 
-    VERIFY(map_pointer != nullptr);
+    ERHE_VERIFY(map_pointer != nullptr);
 
     span = gsl::span(
         reinterpret_cast<std::byte*>(map_pointer),

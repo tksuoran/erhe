@@ -21,12 +21,14 @@ public:
     public:
         Slot();
 
+        [[nodiscard]]
         auto span_for(
             const int                 width,
             const int                 height,
             const gl::Internal_format internal_format
         ) -> gsl::span<std::byte>;
 
+        [[nodiscard]]
         auto gl_name() -> unsigned int
         {
             return pbo.gl_name();
@@ -38,17 +40,18 @@ public:
     };
 
     static constexpr std::string_view c_name{"erhe::graphics::ImageTransfer"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Image_transfer();
     ~Image_transfer() override;
 
     // Implements Component
-    // Implements Component
+    [[nodiscard]]
     auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
+    [[nodiscard]]
     auto get_slot() -> Slot&;
 
 private:

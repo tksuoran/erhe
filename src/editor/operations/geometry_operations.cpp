@@ -27,9 +27,10 @@ auto Catmull_clark_subdivision_operation::describe() const -> std::string
 
 Catmull_clark_subdivision_operation::~Catmull_clark_subdivision_operation() = default;
 
-Catmull_clark_subdivision_operation::Catmull_clark_subdivision_operation(const Context& context)
+Catmull_clark_subdivision_operation::Catmull_clark_subdivision_operation(Context&& context)
+    : Mesh_operation{std::move(context)}
 {
-    make_entries(context, erhe::geometry::operation::catmull_clark_subdivision);
+    make_entries(erhe::geometry::operation::catmull_clark_subdivision);
 }
 
 auto Sqrt3_subdivision_operation::describe() const -> std::string
@@ -41,9 +42,10 @@ auto Sqrt3_subdivision_operation::describe() const -> std::string
 
 Sqrt3_subdivision_operation::~Sqrt3_subdivision_operation() = default;
 
-Sqrt3_subdivision_operation::Sqrt3_subdivision_operation(const Context& context)
+Sqrt3_subdivision_operation::Sqrt3_subdivision_operation(Context&& context)
+    : Mesh_operation{std::move(context)}
 {
-    make_entries(context, erhe::geometry::operation::sqrt3_subdivision);
+    make_entries(erhe::geometry::operation::sqrt3_subdivision);
 }
 
 auto Triangulate_operation::describe() const -> std::string
@@ -55,9 +57,10 @@ auto Triangulate_operation::describe() const -> std::string
 
 Triangulate_operation::~Triangulate_operation() = default;
 
-Triangulate_operation::Triangulate_operation(const Context& context)
+Triangulate_operation::Triangulate_operation(Context&& context)
+    : Mesh_operation{std::move(context)}
 {
-    make_entries(context, erhe::geometry::operation::triangulate);
+    make_entries(erhe::geometry::operation::triangulate);
 }
 
 auto Subdivide_operation::describe() const -> std::string
@@ -67,9 +70,10 @@ auto Subdivide_operation::describe() const -> std::string
     return ss.str();
 }
 
-Subdivide_operation::Subdivide_operation(const Context& context)
+Subdivide_operation::Subdivide_operation(Context&& context)
+    : Mesh_operation{std::move(context)}
 {
-    make_entries(context, erhe::geometry::operation::subdivide);
+    make_entries(erhe::geometry::operation::subdivide);
 }
 
 auto Gyro_operation::describe() const -> std::string
@@ -79,9 +83,10 @@ auto Gyro_operation::describe() const -> std::string
     return ss.str();
 }
 
-Gyro_operation::Gyro_operation(const Context& context)
+Gyro_operation::Gyro_operation(Context&& context)
+    : Mesh_operation{std::move(context)}
 {
-    make_entries(context, erhe::geometry::operation::gyro);
+    make_entries(erhe::geometry::operation::gyro);
 }
 
 auto Dual_operator::describe() const -> std::string
@@ -93,9 +98,10 @@ auto Dual_operator::describe() const -> std::string
 
 Dual_operator::~Dual_operator() = default;
 
-Dual_operator::Dual_operator(const Context& context)
+Dual_operator::Dual_operator(Context&& context)
+    : Mesh_operation{std::move(context)}
 {
-    make_entries(context, erhe::geometry::operation::dual);
+    make_entries(erhe::geometry::operation::dual);
 }
 
 auto Ambo_operator::describe() const -> std::string
@@ -107,9 +113,10 @@ auto Ambo_operator::describe() const -> std::string
 
 Ambo_operator::~Ambo_operator() = default;
 
-Ambo_operator::Ambo_operator(const Context& context)
+Ambo_operator::Ambo_operator(Context&& context)
+    : Mesh_operation{std::move(context)}
 {
-    make_entries(context, erhe::geometry::operation::ambo);
+    make_entries(erhe::geometry::operation::ambo);
 }
 
 auto Truncate_operator::describe() const -> std::string
@@ -121,9 +128,10 @@ auto Truncate_operator::describe() const -> std::string
 
 Truncate_operator::~Truncate_operator() = default;
 
-Truncate_operator::Truncate_operator(const Context& context)
+Truncate_operator::Truncate_operator(Context&& context)
+    : Mesh_operation{std::move(context)}
 {
-    make_entries(context, erhe::geometry::operation::truncate);
+    make_entries(erhe::geometry::operation::truncate);
 }
 
 auto Reverse_operation::describe() const -> std::string
@@ -135,9 +143,10 @@ auto Reverse_operation::describe() const -> std::string
 
 Reverse_operation::~Reverse_operation() = default;
 
-Reverse_operation::Reverse_operation(const Context& context)
+Reverse_operation::Reverse_operation(Context&& context)
+    : Mesh_operation{std::move(context)}
 {
-    make_entries(context, erhe::geometry::operation::reverse);
+    make_entries(erhe::geometry::operation::reverse);
 }
 
 } // namespace editor

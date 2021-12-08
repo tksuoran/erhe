@@ -12,6 +12,8 @@ public:
     Truncate(Geometry& source, Geometry& destination);
 };
 
-auto truncate(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto truncate(
+    erhe::geometry::Geometry& source
+) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

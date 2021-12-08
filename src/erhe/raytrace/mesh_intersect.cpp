@@ -86,12 +86,8 @@ auto intersect(
 
     for (auto& primitive : mesh.data.primitives)
     {
-        auto* primitive_geometry = primitive.primitive_geometry.get();
-        if (primitive_geometry == nullptr)
-        {
-            continue;
-        }
-        auto* geometry = primitive_geometry->source_geometry.get();
+        //const auto& primitive_geometry = primitive.gl_primitive_geometry;
+        auto* geometry = primitive.source_geometry.get();
         if (geometry == nullptr)
         {
             continue;
@@ -117,14 +113,16 @@ auto intersect(
                 ++j
             )
             {
-                const Corner_id corner_id      = geometry->polygon_corners[i.polygon.first_polygon_corner_id + j];
-                const Corner_id next_corner_id = geometry->polygon_corners[i.polygon.first_polygon_corner_id + (j + 1) % i.polygon.corner_count];
-                const Corner&   corner         = geometry->corners[corner_id];
-                const Corner&   next_corner    = geometry->corners[next_corner_id];
-                const Point_id  point_id       = corner.point_id;
-                const Point_id  next_point_id  = next_corner.point_id;
-                const vec3      v1             = point_locations->get(point_id);
-                const vec3      v2             = point_locations->get(next_point_id);
+                const size_t    corner_index      = static_cast<size_t>(i.polygon.first_polygon_corner_id) + static_cast<size_t>(j);
+                const size_t    next_corner_index = static_cast<size_t>(i.polygon.first_polygon_corner_id) + (static_cast<size_t>(j) + 1) % static_cast<size_t>(i.polygon.corner_count);
+                const Corner_id corner_id         = geometry->polygon_corners[corner_index];
+                const Corner_id next_corner_id    = geometry->polygon_corners[next_corner_index];
+                const Corner&   corner            = geometry->corners[corner_id];
+                const Corner&   next_corner       = geometry->corners[next_corner_id];
+                const Point_id  point_id          = corner.point_id;
+                const Point_id  next_point_id     = next_corner.point_id;
+                const vec3      v1                = point_locations->get(point_id);
+                const vec3      v2                = point_locations->get(next_point_id);
 
                 float hit_t;
                 float hit_u;

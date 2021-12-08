@@ -20,7 +20,7 @@ public:
         const unsigned int                    location
     );
 
-    auto source() const -> std::string;
+    [[nodiscard]] auto source() const -> std::string;
 
 private:
     std::vector<Fragment_output> m_outputs;

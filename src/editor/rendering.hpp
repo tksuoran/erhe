@@ -30,7 +30,7 @@ class Editor_rendering;
 class Editor_time;
 class Editor_tools;
 class Forward_renderer;
-class Frame_log_window;
+class Log_window;
 class Headset_renderer;
 class Id_renderer;
 class Line_renderer;
@@ -56,32 +56,42 @@ class Editor_rendering
 {
 public:
     static constexpr std::string_view c_name{"Editor_rendering"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr uint32_t hash {
+        compiletime_xxhash::xxh32(
+            c_name.data(),
+            c_name.size(),
+            {}
+        )
+    };
 
     Editor_rendering ();
     ~Editor_rendering() override;
 
     // Implements Component
+    [[nodiscard]]
     auto get_type_hash() const -> uint32_t override { return hash; }
     void connect      () override;
 
     void init_state         ();
     void render             ();
+
+    [[nodiscard]]
     auto to_scene_content   (const glm::vec2 position_in_root) const -> glm::vec2;
     //auto is_content_in_focus() const -> bool;
 
-    void render_viewport   (const Render_context& context);
+    void render_viewport   (const Render_context& context, const bool has_pointer);
     void render_content    (const Render_context& context);
     void render_selection  (const Render_context& context);
     void render_tool_meshes(const Render_context& context);
     void render_brush      (const Render_context& context);
     void render_id         (const Render_context& context);
+    void clear             ();
 
 private:
-    void begin_frame();
-    void gui_render ();
-    auto width      () const -> int;
-    auto height     () const -> int;
+    void begin_frame     ();
+    void render_viewports();
+    [[nodiscard]] auto width () const -> int;
+    [[nodiscard]] auto height() const -> int;
 
     Application*                          m_application           {nullptr};
     Configuration*                        m_configuration         {nullptr};
@@ -89,7 +99,7 @@ private:
     Editor_time*                          m_editor_time           {nullptr};
     Editor_tools*                         m_editor_tools          {nullptr};
     Forward_renderer*                     m_forward_renderer      {nullptr};
-    Frame_log_window*                     m_frame_log_window      {nullptr};
+    Log_window*                           m_log_window            {nullptr};
     Headset_renderer*                     m_headset_renderer      {nullptr};
     Id_renderer*                          m_id_renderer           {nullptr};
     Line_renderer*                        m_line_renderer         {nullptr};

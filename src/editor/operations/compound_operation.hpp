@@ -17,13 +17,13 @@ public:
         std::vector<std::shared_ptr<IOperation>> operations;
     };
 
-    explicit Compound_operation(const Context& context);
+    explicit Compound_operation(Context&& context);
     ~Compound_operation        () override;
 
     // Implements IOperation
+    [[nodiscard]] auto describe() const -> std::string override;
     void execute () const override;
     void undo    () const override;
-    auto describe() const -> std::string override;
 
 private:
     Context m_context;

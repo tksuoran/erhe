@@ -6,14 +6,14 @@
 namespace erhe::scene
 {
 
-void Projection::update(
-    Transform&     transform,
-    const Viewport viewport
-)
+auto Projection::clip_from_node_transform(const Viewport viewport) const -> Transform
 {
-    last_aspect_ratio = viewport.aspect_ratio();
-    const auto m = get_projection_matrix(last_aspect_ratio, viewport.reverse_depth);
-    transform.set(m, glm::inverse(m));
+    const auto aspect_ratio = viewport.aspect_ratio();
+    const auto m = get_projection_matrix(aspect_ratio, viewport.reverse_depth);
+    return Transform{
+        m,
+        glm::inverse(m)
+    };
 }
 
 auto Projection::get_projection_matrix(

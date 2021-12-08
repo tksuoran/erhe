@@ -7,12 +7,19 @@
 #include "erhe/ui/log.hpp"
 
 #include <fmt/printf.h>
-#include <freetype/freetype.h>
-#include <freetype/ftbitmap.h>
-#include <freetype/ftglyph.h>
-#include <freetype/ftstroke.h>
-#include <hb.h>
-#include <hb-ft.h>
+
+#if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE)
+#   include <freetype/freetype.h>
+#   include <freetype/ftbitmap.h>
+#   include <freetype/ftglyph.h>
+#   include <freetype/ftstroke.h>
+#endif
+
+#if defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
+#   include <hb.h>
+#   include <hb-ft.h>
+#endif
+
 #include <SkylineBinPack.h> // RectangleBinPack
 
 #include <stdexcept>
@@ -32,11 +39,17 @@ Font::~Font()
 {
     ERHE_PROFILE_FUNCTION
 
+#if defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
     hb_font_destroy(m_harfbuzz_font);
+#endif
+
+#if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE)
     validate(FT_Done_Face(m_freetype_face));
     validate(FT_Done_FreeType(m_freetype_library));
+#endif
 }
 
+#if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE)
 Font::Font(
     const std::filesystem::path& path,
     const unsigned int           size,
@@ -51,8 +64,12 @@ Font::Font(
     const auto current_path = std::filesystem::current_path();
     log_font.info("current path = {}\n", current_path.string());
 
-
-    log_font.info("Font::Font(path = {}, size = {}, outline_thickness = {})\n", path.string(), size, outline_thickness);
+    log_font.info(
+        "Font::Font(path = {}, size = {}, outline_thickness = {})\n",
+        path.string(),
+        size,
+        outline_thickness
+    );
 
     if (m_hinting)
     {
@@ -65,11 +82,12 @@ Font::Font(
         m_hint_mode = FT_LOAD_NO_HINTING; // NOLINT(hicpp-signed-bitwise)
     }
 
-    m_chars = " \"\\@#$%&/" // latin
-              "0123456789"
-              "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-              "abcdefghijklmnopqrstuvwxyz"
-              "<>*+-.,:;=!?'`^~_|()[]{}";
+    m_chars = 
+        " \"\\@#$%&/" // latin
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz"
+        "<>*+-.,:;=!?'`^~_|()[]{}";
 
     m_pixel_size = size;
 
@@ -78,7 +96,7 @@ Font::Font(
 
 void Font::validate(const int /*FT_Error*/ error)
 {
-    VERIFY(error == FT_Err_Ok);
+    ERHE_VERIFY(error == FT_Err_Ok);
 }
 
 void Font::render()
@@ -200,7 +218,7 @@ void Font::render()
             m_texture_height *= 2;
         }
 
-        VERIFY(m_texture_width <= 16384);
+        ERHE_VERIFY(m_texture_width <= 16384);
     }
 
     log_font.trace("packing glyps to {} x {} succeeded\n", m_texture_width, m_texture_height);
@@ -420,26 +438,36 @@ void Font::trace_info() const
     FT_Bool res = FT_Face_CheckTrueTypePatents(face);
     log_font.trace((res == 1) ? "yes\n" : "no\n");
 }
+#else
+Font::Font(const std::filesystem::path&, const unsigned int, const float) {}
+void Font::validate(const int) {}
+void Font::render(){}
+void Font::trace_info() const {}
+#endif
 
 void Font::post_process()
 {
     ERHE_PROFILE_FUNCTION
 
-    Bitmap bm(m_bitmap->width(), m_bitmap->height(), m_bitmap->components());
+    Bitmap bm{
+        m_bitmap->width(),
+        m_bitmap->height(),
+        m_bitmap->components()
+    };
     m_bitmap->post_process(bm, m_gamma);
 
     auto internal_format = gl::Internal_format::rg8;
 
-    const Texture::Create_info create_info{gl::Texture_target::texture_2d,
-                                           internal_format,
-                                           false,
-                                           m_texture_width,
-                                           m_texture_height};
+    const Texture::Create_info create_info{
+        .target          = gl::Texture_target::texture_2d,
+        .internal_format = internal_format,
+        .use_mipmaps     = false,
+        .width           = m_texture_width,
+        .height          = m_texture_height
+    };
 
     m_texture = std::make_unique<Texture>(create_info);
-
     m_texture->upload(create_info.internal_format, bm.as_span(), create_info.width, create_info.height);
-
     m_texture->set_debug_label(m_path.filename().generic_string());
 }
 
@@ -467,6 +495,7 @@ void Font::post_process()
 // Vertical default
 // vert Vertical Alternates             A subset of vrt2: prefer the latter feature
 
+#if defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
 auto Font::print(
     gsl::span<float>    float_data,
     gsl::span<uint32_t> uint_data,
@@ -624,6 +653,20 @@ void Font::measure(const std::string& text, Rectangle& bounds) const
     }
     hb_buffer_destroy(buf);
 }
+#else
+auto Font::print(
+    gsl::span<float>    ,
+    gsl::span<uint32_t> ,
+    std::string_view    ,
+    glm::vec3           ,
+    const uint32_t      ,
+    Rectangle&
+) const -> size_t
+{
+    return 0;
+}
+void Font::measure(const std::string&, Rectangle&) const {}
+#endif
 
 } // namespace erhe::ui
 

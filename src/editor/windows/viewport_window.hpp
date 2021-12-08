@@ -3,6 +3,8 @@
 #include "windows/imgui_window.hpp"
 #include "windows/viewport_config.hpp"
 
+#include "erhe/components/component.hpp"
+#include "erhe/scene/camera.hpp"
 #include "erhe/scene/viewport.hpp"
 
 #include <glm/glm.hpp>
@@ -17,18 +19,15 @@ namespace erhe::graphics
     class OpenGL_state_tracker;
 }
 
-namespace erhe::scene
-{
-    class ICamera;
-}
-
 namespace editor
 {
 
 class Configuration;
 class Editor_rendering;
+class Editor_view;
 class Pointer_context;
 class Render_context;
+class Scene_root;
 
 class Viewport_window
     : public Imgui_window
@@ -36,45 +35,53 @@ class Viewport_window
 public:
     Viewport_window(
         const std::string_view name,
+        Configuration*         configuration,
+        Scene_root*            scene_root,
         erhe::scene::ICamera*  camera
     );
     ~Viewport_window();
 
     // Implements Imgui_window
-    void imgui() override;
+    void imgui()    override;
+    void on_begin() override;
+    void on_end  () override;
 
-    auto to_scene_content            (const glm::vec2 position_in_root) -> glm::vec2;
-    auto project_to_viewport         (const glm::vec3 position_in_world) const -> glm::vec3;
-    auto unproject_to_world          (const glm::vec3 position_in_window) const -> glm::vec3;
+    // Public API
+    void update                      ();
     void bind_multisample_framebuffer();
-    auto is_framebuffer_ready        () const -> bool;
     void multisample_resolve         ();
-    auto content_region_size         () const -> glm::ivec2;
-    auto is_focused                  () const -> bool;
-    auto viewport                    () const -> erhe::scene::Viewport;
-    auto camera                      () const -> erhe::scene::ICamera*;
-    auto hit_test                    (int x, int y) const -> bool;
-
+    void set_viewport                (const int x, const int y, const int width, const int height);
     void render(
-        const Configuration*                  configuration,
         Editor_rendering*                     editor_rendering,
         erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker
     );
 
+    [[nodiscard]] auto to_scene_content    (const glm::vec2 position_in_root) const -> glm::vec2;
+    [[nodiscard]] auto project_to_viewport (const glm::dvec3 position_in_world) const -> glm::dvec3;
+    [[nodiscard]] auto unproject_to_world  (const glm::dvec3 position_in_window) const -> std::optional<glm::dvec3>;
+    [[nodiscard]] auto is_framebuffer_ready() const -> bool;
+    [[nodiscard]] auto content_region_size () const -> glm::ivec2;
+    [[nodiscard]] auto is_hovered          () const -> bool;
+    [[nodiscard]] auto viewport            () const -> erhe::scene::Viewport;
+    [[nodiscard]] auto camera              () const -> erhe::scene::ICamera*;
+    [[nodiscard]] auto hit_test            (int x, int y) const -> bool;
+
 private:
+    [[nodiscard]] auto should_render() const -> bool;
+
     void update_framebuffer();
-    auto should_render     () const -> bool;
-    void clear(
-        const Configuration*                  configuration,
-        erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker
-    ) const;
+
+    void clear(erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker) const;
 
     static constexpr int                          s_sample_count{16};
 
     std::string                                   m_name;
+    Configuration*                                m_configuration      {nullptr};
+    Scene_root*                                   m_scene_root         {nullptr};
     erhe::scene::Viewport                         m_viewport           {0, 0, 0, 0, true};
     erhe::scene::ICamera*                         m_camera             {nullptr};
-    bool                                          m_is_focused         {false};
+    erhe::scene::Projection_transforms            m_projection_transforms;
+    bool                                          m_is_hovered         {false};
     bool                                          m_can_present        {false};
     glm::ivec2                                    m_content_region_min {0.0f, 0.0f};
     glm::ivec2                                    m_content_region_max {0.0f, 0.0f};
@@ -94,32 +101,41 @@ class Viewport_windows
 public:
     static constexpr std::string_view c_name {"Viewport_windows"};
     static constexpr std::string_view c_title{"View"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr uint32_t hash{
+        compiletime_xxhash::xxh32(
+            c_name.data(),
+            c_name.size(),
+            {}
+        )
+    };
 
     Viewport_windows ();
     ~Viewport_windows() override;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
+    // Public API
+    auto hover_window() const -> Viewport_window*;
     auto create_window(
         const std::string_view name,
         erhe::scene::ICamera*  camera
     ) -> Viewport_window*;
 
-    //auto to_scene_content   (const glm::vec2 position_in_root) const -> glm::vec2;
-    //auto is_content_in_focus() const -> bool;
     void update();
     void render();
 
 private:
     Configuration*                                m_configuration         {nullptr};
     Editor_rendering*                             m_editor_rendering      {nullptr};
+    Editor_view*                                  m_editor_view           {nullptr};
     erhe::graphics::OpenGL_state_tracker*         m_pipeline_state_tracker{nullptr};
     Pointer_context*                              m_pointer_context       {nullptr};
+    Scene_root*                                   m_scene_root            {nullptr};
     std::vector<std::shared_ptr<Viewport_window>> m_windows;
+    Viewport_window*                              m_hover_window          {nullptr};
 };
 
 } // namespace editor

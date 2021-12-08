@@ -16,7 +16,7 @@ public:
     Gl_texture         (Gl_texture&& other) noexcept;
     auto operator=     (Gl_texture&& other) noexcept -> Gl_texture&;
 
-    auto gl_name       () const -> GLuint;
+    [[nodiscard]] auto gl_name() const -> GLuint;
 
 private:
     GLuint m_gl_name{0};
@@ -33,7 +33,7 @@ public:
     Gl_program    (Gl_program&& other) noexcept;
     auto operator=(Gl_program&& other) noexcept -> Gl_program&;
 
-    auto gl_name() const -> GLuint;
+    [[nodiscard]] auto gl_name() const -> GLuint;
 
 private:
     GLuint m_gl_name{0};
@@ -49,7 +49,7 @@ public:
     Gl_shader         (Gl_shader&& other) noexcept;
     auto operator=    (Gl_shader&& other) noexcept -> Gl_shader&;
 
-    auto gl_name      () const -> unsigned int;
+    [[nodiscard]] auto gl_name() const -> unsigned int;
 
 private:
     GLuint m_gl_name{0};
@@ -65,7 +65,7 @@ public:
     Gl_sampler    (Gl_sampler&& other) noexcept;
     auto operator=(Gl_sampler&& other) noexcept -> Gl_sampler&;
 
-    auto gl_name  () const -> unsigned int;
+    [[nodiscard]] auto gl_name() const -> unsigned int;
 
 private:
     GLuint m_gl_name{0};
@@ -81,8 +81,7 @@ public:
     Gl_framebuffer (Gl_framebuffer&& other) noexcept;
     auto operator= (Gl_framebuffer&& other) noexcept -> Gl_framebuffer&;
 
-
-    auto gl_name   () const -> GLuint;
+    [[nodiscard]] auto gl_name() const -> GLuint;
 
 private:
     GLuint m_gl_name{0};
@@ -98,7 +97,7 @@ public:
     Gl_renderbuffer (Gl_renderbuffer&& other) noexcept;
     auto operator=  (Gl_renderbuffer&& other) noexcept -> Gl_renderbuffer&;
 
-    auto gl_name    () const -> GLuint;
+    [[nodiscard]] auto gl_name() const -> GLuint;
 
 private:
     GLuint m_gl_name{0};
@@ -114,7 +113,7 @@ public:
     Gl_buffer     (Gl_buffer&& other) noexcept;
     auto operator=(Gl_buffer&& other) noexcept -> Gl_buffer&;
 
-    auto gl_name  () const -> GLuint;
+    [[nodiscard]] auto gl_name() const -> GLuint;
 
 private:
     GLuint m_gl_name{0};
@@ -130,7 +129,7 @@ public:
     Gl_transform_feedback (Gl_transform_feedback&& other) noexcept;
     auto operator=        (Gl_transform_feedback&& other) noexcept -> Gl_transform_feedback&;
 
-    auto gl_name          () const -> GLuint;
+    [[nodiscard]] auto gl_name() const -> GLuint;
 
 private:
     GLuint m_gl_name{0};
@@ -146,7 +145,7 @@ public:
     Gl_query         (Gl_query&& other) noexcept;
     auto operator=   (Gl_query&& other) noexcept -> Gl_query&;
 
-    auto gl_name     () const -> GLuint;
+    [[nodiscard]] auto gl_name() const -> GLuint;
 
 private:
     GLuint m_gl_name{0};
@@ -162,7 +161,7 @@ public:
     Gl_vertex_array (Gl_vertex_array&& other) noexcept;
     auto operator=  (Gl_vertex_array&& other) noexcept -> Gl_vertex_array&;
 
-    auto gl_name    () const -> GLuint;
+    [[nodiscard]] auto gl_name() const -> GLuint;
 
 private:
     GLuint m_gl_name{0};

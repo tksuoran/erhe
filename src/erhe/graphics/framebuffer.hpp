@@ -104,7 +104,8 @@ public:
         }
     }
 
-    auto gl_name     () const -> unsigned int;
+    [[nodiscard]] auto gl_name     () const -> unsigned int;
+
     void create      ();
     void reset       ();
     auto check_status() const -> bool;

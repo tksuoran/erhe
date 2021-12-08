@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe/primitive/index_range.hpp"
+#include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/primitive/enums.hpp"
 
 #include <memory>
@@ -11,24 +12,27 @@ namespace erhe::geometry
     class Geometry;
 }
 
+namespace erhe::raytrace
+{
+    class IBuffer;
+}
+
 namespace erhe::primitive
 {
 
-class Primitive_geometry;
 class Material;
 
 
 class Primitive
 {
 public:
-    Primitive();
-    Primitive(
-        std::shared_ptr<Primitive_geometry> primitive_geometry,
-        std::shared_ptr<Material>           material
-    );
-
-    std::shared_ptr<Primitive_geometry> primitive_geometry;
-    std::shared_ptr<Material>           material;
+    std::shared_ptr<Material>                 material;
+    Primitive_geometry                        gl_primitive_geometry;
+    Primitive_geometry                        rt_primitive_geometry;
+    std::shared_ptr<erhe::raytrace::IBuffer>  rt_vertex_buffer;
+    std::shared_ptr<erhe::raytrace::IBuffer>  rt_index_buffer;
+    std::shared_ptr<erhe::geometry::Geometry> source_geometry;
+    Normal_style                              normal_style{Normal_style::none};
 };
 
 std::optional<gl::Primitive_type> primitive_type(Primitive_mode primitive_mode);

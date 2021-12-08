@@ -27,29 +27,24 @@ namespace erhe::scene
 namespace editor
 {
 
-enum class Action : unsigned int
-{
-    select = 0,
-    translate,
-    rotate,
-    add,
-    remove,
-    drag,
-    count
-};
-
-static constexpr std::array<std::string_view, 6> c_action_strings =
-{
-    "Select",
-    "Translate",
-    "Rotate",
-    "Add",
-    "Remove",
-    "Drag"
-};
+//enum class Action : unsigned int
+//{
+//    drag = 0,
+//    add,
+//    remove,
+//    count
+//};
+//
+//static constexpr std::array<std::string_view, 3> c_action_strings =
+//{
+//    "Drag",
+//    "Add",
+//    "Remove"
+//};
 
 class Editor_rendering;
-class Frame_log_window;
+class Log_window;
+class Scene_root;
 class Viewport_window;
 class Viewport_windows;
 
@@ -64,54 +59,46 @@ public:
     ~Pointer_context() override;
 
     // Implements Component
-    auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect      () override;
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    void connect() override;
 
-    void begin_frame();
+    // Public API
+    void update_viewport(Viewport_window* viewport_window);
 
     void update_keyboard(
         const bool                   pressed,
         const erhe::toolkit::Keycode code,
         const uint32_t               modifier_mask
     );
-    void update_mouse(
-        const erhe::toolkit::Mouse_button button,
-        const int                         count
-    );
-    void update_mouse(
-        const double x,
-        const double y
-    );
+    void update_mouse       (const erhe::toolkit::Mouse_button button, const int count);
+    void update_mouse       (const double x, const double y);
 
-    void update                     (Viewport_window* viewport_window);
+    void raytrace();
 
-    auto position_in_viewport_window() const -> std::optional<glm::vec3>;
-    auto position_in_world          () const -> std::optional<glm::vec3>;
-    auto position_in_world          (const float viewport_depth) const -> std::optional<glm::vec3>;
-    auto near_position_in_world     () const -> std::optional<glm::vec3>;
-    auto far_position_in_world      () const -> std::optional<glm::vec3>;
-    auto pointer_in_content_area    () const -> bool;
-    auto shift_key_down             () const -> bool;
-    auto control_key_down           () const -> bool;
-    auto alt_key_down               () const -> bool;
-    auto mouse_button_pressed       (const erhe::toolkit::Mouse_button button) const -> bool;
-    auto mouse_button_released      (const erhe::toolkit::Mouse_button button) const -> bool;
-    auto mouse_moved                () const -> bool;
-    auto mouse_x                    () const -> double;
-    auto mouse_y                    () const -> double;
-    auto hovering_over_tool         () const -> bool;
-    auto hovering_over_content      () const -> bool;
-    auto hover_normal               () const -> std::optional<glm::vec3>;
-    auto hover_mesh                 () const -> std::shared_ptr<erhe::scene::Mesh>;
-    auto hover_primitive            () const -> size_t;
-    auto hover_local_index          () const -> size_t;
-    auto hover_geometry             () const -> erhe::geometry::Geometry*;
-
-    auto window             () const -> Viewport_window*;
-
-    void set_priority_action(const Action action);
-    auto priority_action    () const -> Action;
-    auto frame_number       () const -> uint64_t;
+    [[nodiscard]] auto position_in_viewport_window() const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto position_in_world          () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto position_in_world          (const double viewport_depth) const -> std::optional<glm::dvec3>;
+    [[nodiscard]] auto near_position_in_world     () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto far_position_in_world      () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto raytrace_hit_position      () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto pointer_in_content_area    () const -> bool;
+    [[nodiscard]] auto shift_key_down             () const -> bool;
+    [[nodiscard]] auto control_key_down           () const -> bool;
+    [[nodiscard]] auto alt_key_down               () const -> bool;
+    [[nodiscard]] auto mouse_button_pressed       (const erhe::toolkit::Mouse_button button) const -> bool;
+    [[nodiscard]] auto mouse_button_released      (const erhe::toolkit::Mouse_button button) const -> bool;
+    [[nodiscard]] auto mouse_x                    () const -> double;
+    [[nodiscard]] auto mouse_y                    () const -> double;
+    [[nodiscard]] auto hovering_over_tool         () const -> bool;
+    [[nodiscard]] auto hovering_over_content      () const -> bool;
+    [[nodiscard]] auto hover_normal               () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto hover_mesh                 () const -> std::shared_ptr<erhe::scene::Mesh>;
+    [[nodiscard]] auto hover_primitive            () const -> size_t;
+    [[nodiscard]] auto hover_local_index          () const -> size_t;
+    [[nodiscard]] auto hover_geometry             () const -> erhe::geometry::Geometry*;
+    [[nodiscard]] auto window                     () const -> Viewport_window*;
+    [[nodiscard]] auto last_window                () const -> Viewport_window*;
+    [[nodiscard]] auto frame_number               () const -> uint64_t;
 
 private:
     class Mouse_button
@@ -122,7 +109,8 @@ private:
     };
 
     Editor_rendering*                  m_editor_rendering{nullptr};
-    Frame_log_window*                  m_frame_log_window{nullptr};
+    Log_window*                        m_log_window      {nullptr};
+    Scene_root*                        m_scene_root      {nullptr};
     Viewport_windows*                  m_viewport_windows{nullptr};
 
     std::optional<glm::vec3>           m_position_in_window;
@@ -138,6 +126,8 @@ private:
     double                             m_mouse_x             {0.0f};
     double                             m_mouse_y             {0.0f};
     Viewport_window*                   m_window              {nullptr};
+    Viewport_window*                   m_update_window       {nullptr};
+    Viewport_window*                   m_last_window         {nullptr};
 
     bool                               m_hover_valid         {false};
     std::shared_ptr<erhe::scene::Mesh> m_hover_mesh;
@@ -149,10 +139,9 @@ private:
     bool                               m_hover_content        {false};
     erhe::geometry::Geometry*          m_hover_geometry       {nullptr};
 
-    Action                             m_priority_action      {Action::select};
     uint64_t                           m_frame_number         {0};
 
-    glm::vec3                          m_raytrace_hit_position{0.0f};
+    std::optional<glm::vec3>           m_raytrace_hit_position;
     glm::vec3                          m_raytrace_hit_normal  {0.0f};
     size_t                             m_raytrace_primitive   {0};
     size_t                             m_raytrace_local_index {0};

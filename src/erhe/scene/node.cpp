@@ -47,7 +47,7 @@ Node::~Node()
     }
     for (auto& attachment : m_attachments)
     {
-        attachment->on_detached_from(*this);
+        attachment->on_detached_from(this);
     }
     unparent();
 
@@ -84,7 +84,7 @@ void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
 {
     ERHE_PROFILE_FUNCTION
 
-    VERIFY(attachment);
+    ERHE_VERIFY(attachment);
 
     log.info(
         "{} ({}).attach({})\n",
@@ -103,7 +103,10 @@ void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
 #endif
 
     m_attachments.push_back(attachment);
-    attachment->on_attached_to(*this);
+    attachment->on_attached_to(this);
+    sanity_check();
+    attachment->on_node_transform_changed();
+    sanity_check();
 }
 
 auto Node::detach(INode_attachment* attachment) -> bool
@@ -146,13 +149,23 @@ auto Node::detach(INode_attachment* attachment) -> bool
     );
     if (i != m_attachments.end())
     {
-        log.trace("Removing {} attachment from node\n", attachment->node_attachment_type(), name());
+        log.trace(
+            "Removing {} attachment from node\n",
+            attachment->node_attachment_type(),
+            name()
+        );
         m_attachments.erase(i, m_attachments.end());
-        attachment->on_detached_from(*this);
+        attachment->on_detached_from(this);
+        sanity_check();
         return true;
     }
 
-    log.warn("Detaching {} from node {} failed - was not attached\n", attachment->node_attachment_type(), name());
+    log.warn(
+        "Detaching {} from node {} failed - was not attached\n",
+        attachment->node_attachment_type(),
+        name()
+    );
+
     return false;
 }
 
@@ -161,11 +174,16 @@ auto Node::child_count() const -> size_t
     return m_children.size();
 }
 
+auto Node::get_id() const -> erhe::toolkit::Unique_id<Node>::id_type
+{
+    return m_id.get_id();
+}
+
 void Node::attach(const std::shared_ptr<Node>& child_node)
 {
     ERHE_PROFILE_FUNCTION
 
-    VERIFY(child_node);
+    ERHE_VERIFY(child_node);
 
     log.info(
         "{} ({}).attach({} ({}))\n",
@@ -186,6 +204,7 @@ void Node::attach(const std::shared_ptr<Node>& child_node)
 
     m_children.push_back(child_node);
     child_node->on_attached_to(*this);
+    sanity_check();
 }
 
 auto Node::detach(Node* child_node) -> bool
@@ -232,6 +251,7 @@ auto Node::detach(Node* child_node) -> bool
         log.trace("Removing attachment {} from node\n", child_node->name());
         m_children.erase(i, m_children.end());
         child_node->on_detached_from(*this);
+        sanity_check();
         return true;
     }
 
@@ -246,7 +266,7 @@ void Node::on_attached_to(Node& parent_node)
         return;
     }
 
-    const auto world_from_node = world_from_node_transform();
+    const auto& world_from_node = world_from_node_transform();
     //m_parent_node->attach(attachment.node);
 
     if (m_parent != nullptr)
@@ -259,9 +279,10 @@ void Node::on_attached_to(Node& parent_node)
     const auto parent_from_node = parent_node.node_from_world_transform() * world_from_node;
     set_parent_from_node(parent_from_node);
     update_transform_recursive();
+    sanity_check();
 }
 
-void Node::set_depth_recursive(size_t depth)
+void Node::set_depth_recursive(const size_t depth)
 {
     if (m_depth == depth)
     {
@@ -289,9 +310,9 @@ void Node::on_detached_from(Node& node)
     m_parent = nullptr;
     set_depth_recursive(0);
 
-    auto world_from_node = world_from_node_transform();
+    const auto& world_from_node = world_from_node_transform();
     set_parent_from_node(world_from_node);
-
+    sanity_check();
 }
 
 void Node::on_transform_changed()
@@ -420,6 +441,21 @@ void Node::sanity_check() const
             );
         }
         child->sanity_check();
+    }
+
+    for (const auto& attachment : m_attachments)
+    {
+        if (attachment->node() != this)
+        {
+            log.error(
+                "Node {} attachment {} node == {}\n",
+                name(),
+                attachment->node_attachment_type(),
+                (attachment->node() != nullptr)
+                    ? attachment->node()->name()
+                    : "(none)"
+            );
+        }
     }
 }
 

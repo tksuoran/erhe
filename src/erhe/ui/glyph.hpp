@@ -1,5 +1,6 @@
 #pragma once
 
+#if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE)
 #include "erhe/ui/rectangle.hpp"
 #include "erhe/ui/bitmap.hpp"
 #include "erhe/ui/glyph.hpp"
@@ -9,6 +10,7 @@
 #include <freetype/ftstroke.h>
 #include <freetype/ftglyph.h>
 #include <freetype/ftbitmap.h>
+
 #include <Rect.h>
 
 #include <cstdio>
@@ -32,15 +34,14 @@ public:
         const int           hint_mode
     );
 
-    auto buffer() const
-    -> const std::vector<unsigned char>&
+    [[nodiscard]] auto buffer() const -> const std::vector<unsigned char>&
     {
         return m_buffer;
     }
 
     void dump() const;
 
-    rbp::Rect    atlas_rect;     // atlas space
+    rbp::Rect    atlas_rect       {0, 0, 0, 0};     // atlas space
     Rectangle    font_rect;      // font metric space
     FT_ULong     char_code        {0};
     unsigned int glyph_index      {0};
@@ -81,7 +82,7 @@ private:
     {
         if (error != FT_Err_Ok)
         {
-            FATAL("freetype error");
+            ERHE_FATAL("freetype error");
         }
     }
 
@@ -89,3 +90,6 @@ private:
 };
 
 } // namespace erhe::ui
+
+#endif // defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE)
+

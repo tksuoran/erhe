@@ -9,6 +9,8 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <cstdarg>
+
 namespace erhe::xr {
 
 class Pose
@@ -57,9 +59,18 @@ inline auto to_glm(const XrPosef& p) -> glm::mat4
 auto to_string_message_severity(XrDebugUtilsMessageSeverityFlagsEXT severity_flags) -> std::string;
 auto to_string_message_type    (XrDebugUtilsMessageTypeFlagsEXT     type_flags)     -> std::string;
 
-auto check(const char* function_name, XrResult result, bool error_is_handled = false) -> bool;
+auto check(XrResult result, const int log_level = erhe::log::Level::LEVEL_ERROR) -> bool;
+
+#define ERHE_XR_CHECK(xr_result) if (!check(xr_result)) { return false; }
 
 void check_gl_context_in_current_in_this_thread();
+
+class Hand_tracking_joint
+{
+public:
+    XrHandJointLocationEXT location;
+    XrHandJointVelocityEXT velocity;
+};
 
 extern erhe::log::Category log_xr;
 
@@ -73,5 +84,6 @@ extern const char* c_str(::XrReferenceSpaceType    e) noexcept;
 extern const char* c_str(::XrSessionState          e) noexcept;
 extern const char* c_str(::XrStructureType         e) noexcept;
 extern const char* c_str(::XrViewConfigurationType e) noexcept;
+extern const char* c_str(::XrHandJointEXT          e) noexcept;
 
 }

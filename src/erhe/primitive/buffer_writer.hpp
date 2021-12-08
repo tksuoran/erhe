@@ -26,7 +26,7 @@ class Primitive_geometry;
 class Vertex_buffer_writer
 {
 public:
-    explicit Vertex_buffer_writer(
+    Vertex_buffer_writer(
         Build_context&              build_context,
         gsl::not_null<Buffer_sink*> buffer_sink
     );
@@ -38,7 +38,7 @@ public:
     void write(const Vertex_attribute_info& attribute, const uint32_t value);
     void move (const size_t relative_offset);
 
-    auto start_offset() -> size_t;
+    [[nodiscard]] auto start_offset() -> size_t;
 
     Build_context&              build_context;
     gsl::not_null<Buffer_sink*> buffer_sink;
@@ -66,7 +66,7 @@ public:
     void write_edge    (const uint32_t v0, const uint32_t v1);
     void write_centroid(const uint32_t v0);
 
-    auto start_offset  () -> size_t;
+    [[nodiscard]] auto start_offset  () -> size_t;
 
     Build_context&               build_context;
     gsl::not_null<Buffer_sink*>  buffer_sink;

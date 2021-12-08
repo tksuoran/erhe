@@ -49,9 +49,9 @@ public:
     ~Node_transform_operation        () override;
 
     // Implements IOperation
+    [[nodiscard]] auto describe() const -> std::string override;
     void execute () const override;
     void undo    () const override;
-    auto describe() const -> std::string override;
 
 private:
     Context m_context;
@@ -74,7 +74,7 @@ public:
         case Mode::insert: return Mode::remove;
         case Mode::remove: return Mode::insert;
         default:
-            FATAL("Bad Context::Mode");
+            ERHE_FATAL("Bad Context::Mode");
             // unreachable return Mode::insert;
         }
     }
@@ -101,9 +101,9 @@ public:
     ~Mesh_insert_remove_operation        () override;
 
     // Implements IOperation
+    [[nodiscard]] auto describe() const -> std::string override;
     void execute () const override;
     void undo    () const override;
-    auto describe() const -> std::string override;
 
 private:
     void execute(const Mode mode) const;
@@ -131,9 +131,10 @@ public:
     explicit Light_insert_remove_operation(const Context& context);
     ~Light_insert_remove_operation        () override;
 
+    // Public API
+    [[nodiscard]] auto describe() const -> std::string override;
     void execute () const override;
     void undo    () const override;
-    auto describe() const -> std::string override;
 
 private:
     void execute(const Mode mode) const;

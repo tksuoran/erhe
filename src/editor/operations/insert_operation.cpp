@@ -77,8 +77,8 @@ void Mesh_insert_remove_operation::undo() const
 
 void Mesh_insert_remove_operation::execute(const Mode mode) const
 {
-    VERIFY(m_context.mesh);
-    VERIFY(m_context.mesh);
+    ERHE_VERIFY(m_context.mesh);
+    ERHE_VERIFY(m_context.mesh);
 
     m_context.scene.sanity_check();
 
@@ -156,7 +156,7 @@ void Light_insert_remove_operation::undo() const
 
 void Light_insert_remove_operation::execute(const Mode mode) const
 {
-    VERIFY(m_context.light);
+    ERHE_VERIFY(m_context.light);
     if (mode == Mode::insert)
     {
         add_to_scene_layer(m_context.scene, m_context.layer, m_context.light);

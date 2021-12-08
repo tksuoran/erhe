@@ -36,17 +36,21 @@ public:
     auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
+
+    [[nodiscard]]
     auto get_light_transform (const erhe::scene::Light& light) -> glm::mat4;
+
+    [[nodiscard]]
     auto point_in_light      (const glm::vec3 point_in_world, const erhe::scene::Light& light) -> bool;
+
+    [[nodiscard]]
     auto get_light_mesh      (const erhe::scene::Light& light) -> erhe::primitive::Primitive_geometry*;
 
 private:
-    void update_light_model(const erhe::scene::Light& light);
-
     Program_interface*                  m_program_interface{nullptr};
     erhe::primitive::Primitive_geometry m_quad_mesh;
     erhe::primitive::Primitive_geometry m_cone_mesh;
-    int                                 m_light_cone_sides;
+    int                                 m_light_cone_sides{0};
 };
 
 } // namespace editor

@@ -124,7 +124,7 @@ void main(void)
     EndPrimitive();
 
     gl_Position = b; v_color = vs_color[1]; v_line_width = vs_line_width[1]; EmitVertex();
-    gl_Position = c; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();
+    gl_Position = c; v_color = vs_color[1]; v_line_width = vs_line_width[1]; EmitVertex();
     EndPrimitive();
 
     gl_Position = c; v_color = vs_color[1]; v_line_width = vs_line_width[1]; EmitVertex();

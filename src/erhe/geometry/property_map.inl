@@ -25,16 +25,14 @@ Property_map<Key_type, Value_type>::clear()
 
 template <typename Key_type, typename Value_type>
 inline auto
-Property_map<Key_type, Value_type>::empty() const
-    -> bool
+Property_map<Key_type, Value_type>::empty() const -> bool
 {
     return values.empty();
 }
 
 template <typename Key_type, typename Value_type>
 inline auto
-Property_map<Key_type, Value_type>::size() const
-    -> size_t
+Property_map<Key_type, Value_type>::size() const -> size_t
 {
     return values.size();
 }
@@ -79,15 +77,14 @@ Property_map<Key_type, Value_type>::put(Key_type key, Value_type value)
 
 template <typename Key_type, typename Value_type>
 inline auto
-Property_map<Key_type, Value_type>::get(Key_type key) const
-    -> Value_type
+Property_map<Key_type, Value_type>::get(Key_type key) const -> Value_type
 {
     ERHE_PROFILE_FUNCTION
 
     const size_t i = static_cast<size_t>(key);
     if ((values.size() <= i) || !present[i])
     {
-        FATAL("Value not found");
+        ERHE_FATAL("Value not found");
     }
     return values[i];
 }
@@ -109,8 +106,7 @@ Property_map<Key_type, Value_type>::erase(Key_type key)
 
 template <typename Key_type, typename Value_type>
 inline auto
-Property_map<Key_type, Value_type>::maybe_get(Key_type key, Value_type& out_value) const
-    -> bool
+Property_map<Key_type, Value_type>::maybe_get(Key_type key, Value_type& out_value) const -> bool
 {
     ERHE_PROFILE_FUNCTION
 
@@ -126,8 +122,7 @@ Property_map<Key_type, Value_type>::maybe_get(Key_type key, Value_type& out_valu
 
 template <typename Key_type, typename Value_type>
 inline auto
-Property_map<Key_type, Value_type>::has(Key_type key) const
-    -> bool
+Property_map<Key_type, Value_type>::has(Key_type key) const -> bool
 {
     ERHE_PROFILE_FUNCTION
 
@@ -141,8 +136,9 @@ Property_map<Key_type, Value_type>::has(Key_type key) const
 
 template <typename Key_type, typename Value_type>
 inline auto
-Property_map<Key_type, Value_type>::constructor(const Property_map_descriptor& descriptor) const
-    -> Property_map_base<Key_type>*
+Property_map<Key_type, Value_type>::constructor(
+    const Property_map_descriptor& descriptor
+) const -> Property_map_base<Key_type>*
 {
     ERHE_PROFILE_FUNCTION
 
@@ -161,7 +157,7 @@ Property_map<Key_type, Value_type>::interpolate(
     ERHE_PROFILE_FUNCTION
 
     auto* destination = dynamic_cast<Property_map<Key_type, Value_type>*>(destination_base);
-    VERIFY(destination != nullptr);
+    ERHE_VERIFY(destination != nullptr);
 
     if (m_descriptor.interpolation_mode == Interpolation_mode::none)
     {
@@ -194,8 +190,8 @@ Property_map<Key_type, Value_type>::interpolate(
         Value_type new_value(0);
         for (auto j : old_keys)
         {
-            const float      weight  = j.first;
-            const Key_type   old_key = j.second;
+            const float    weight  = j.first;
+            const Key_type old_key = j.second;
 
             if (has(old_key))
             {
@@ -210,7 +206,7 @@ Property_map<Key_type, Value_type>::interpolate(
         }
 
         // Special treatment for normal and other direction vectors
-        if constexpr(std::is_same_v<Value_type, glm::vec3>)
+        if constexpr (std::is_same_v<Value_type, glm::vec3>)
         {
             if (m_descriptor.interpolation_mode == Interpolation_mode::normalized)
             {
@@ -220,7 +216,7 @@ Property_map<Key_type, Value_type>::interpolate(
         }
 
         // Special treatment for tangent vectors (and other vec3 direction + float vec4s).
-        if constexpr(std::is_same_v<Value_type, glm::vec4>)
+        if constexpr (std::is_same_v<Value_type, glm::vec4>)
         {
             if (m_descriptor.interpolation_mode == Interpolation_mode::normalized_vec3_float)
             {
@@ -240,22 +236,22 @@ Property_map<Key_type, Value_type>::interpolate(
     }
 }
 
-static inline float apply_transform(float value, glm::mat4 transform, float w)
+static inline float apply_transform(const float value, const glm::mat4 transform, const float w)
 {
     return (transform * glm::vec4{value, 0.0f, 0.0f, w})[0];
 }
 
-static inline glm::vec2 apply_transform(glm::vec2 value, glm::mat4 transform, float w)
+static inline auto apply_transform(const glm::vec2 value, const glm::mat4 transform, const float w) -> glm::vec2
 {
     return glm::vec2{transform * glm::vec4{value, 0.0f, w}};
 }
 
-static inline glm::vec3 apply_transform(glm::vec3 value, glm::mat4 transform, float w)
+static inline auto apply_transform(const glm::vec3 value, const glm::mat4 transform, const float w) -> glm::vec3
 {
     return glm::vec3{transform * glm::vec4{value, w}};
 }
 
-static inline glm::vec4 apply_transform(glm::vec4 value, glm::mat4 transform, float w)
+static inline auto apply_transform(const glm::vec4 value, const glm::mat4 transform, const float w) -> glm::vec4
 {
     static_cast<void>(w);
     return transform * glm::vec4{value};
@@ -277,10 +273,10 @@ Property_map<Key_type, Value_type>::import_from(
     ERHE_PROFILE_FUNCTION
 
     const auto* const source = dynamic_cast<Property_map<Key_type, Value_type>*>(source_base);
-    VERIFY(source != nullptr);
+    ERHE_VERIFY(source != nullptr);
 
-    VERIFY(values.size() == present.size());
-    VERIFY(source->values.size() == source->present.size());
+    ERHE_VERIFY(values.size() == present.size());
+    ERHE_VERIFY(source->values.size() == source->present.size());
 
     values .reserve(values.size()  + source->values.size());
     present.reserve(present.size() + source->present.size());
@@ -298,10 +294,10 @@ Property_map<Key_type, Value_type>::import_from(
     ERHE_PROFILE_FUNCTION
 
     auto* source = dynamic_cast<Property_map<Key_type, Value_type>*>(source_base);
-    VERIFY(source != nullptr);
+    ERHE_VERIFY(source != nullptr);
 
-    VERIFY(values.size() == present.size());
-    VERIFY(source->values.size() == source->present.size());
+    ERHE_VERIFY(values.size() == present.size());
+    ERHE_VERIFY(source->values.size() == source->present.size());
 
     const auto combined_values_size = values.size()  + source->values.size();
     const auto combined_present_size = present.size() + source->present.size();

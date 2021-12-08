@@ -63,8 +63,8 @@ public:
 
     std::map<std::pair<int, int>, Point_id> points;
 
-    Point_id top_point_id;
-    Point_id bottom_point_id;
+    Point_id top_point_id   {0};
+    Point_id bottom_point_id{0};
 
     Property_map<Point_id  , vec3>* point_locations  {nullptr};
     Property_map<Point_id  , vec3>* point_normals    {nullptr};
@@ -85,7 +85,7 @@ public:
 
     // relStackIn is in range -1..1
     // relStack is in range 0..1
-    auto cone_point(
+    [[nodiscard]] auto cone_point(
         const double rel_slice,
         const double rel_stack_minus_one_to_one
     ) -> Point_id
@@ -117,8 +117,8 @@ public:
         const vec3 B = glm::normalize(top - bottom); // generatrix
         const vec3 T{
             0.0f,
-            static_cast<float>(std::sin(phi + (glm::pi<double>() * 0.5))),
-            static_cast<float>(std::cos(phi + (glm::pi<double>() * 0.5)))
+            static_cast<float>(std::sin(phi + glm::half_pi<double>())),
+            static_cast<float>(std::cos(phi + glm::half_pi<double>()))
         };
         const vec3 N0 = glm::cross(B, T);
         const vec3 N  = glm::normalize(N0);

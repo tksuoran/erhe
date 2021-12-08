@@ -2,6 +2,8 @@
 
 #include "windows/imgui_window.hpp"
 
+#include "erhe/components/component.hpp"
+
 #include <memory>
 
 namespace erhe::scene
@@ -29,12 +31,14 @@ public:
     ~Node_tree_window() override;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
     // Implements Imgui_window
-    void imgui() override;
+    void imgui   () override;
+    void on_begin() override;
+    void on_end  () override;
 
 private:
     void imgui_tree_node(erhe::scene::Node* node);

@@ -7,11 +7,11 @@ namespace erhe::primitive
 Vertex_attribute_info::Vertex_attribute_info() = default;
 
 Vertex_attribute_info::Vertex_attribute_info(
-    erhe::graphics::Vertex_format*               vertex_format,
-    gl::Vertex_attrib_type                       default_data_type,
-    size_t                                       dimension,
-    erhe::graphics::Vertex_attribute::Usage_type semantic,
-    unsigned int                                 semantic_index
+    erhe::graphics::Vertex_format* const               vertex_format,
+    const gl::Vertex_attrib_type                       default_data_type,
+    const size_t                                       dimension,
+    const erhe::graphics::Vertex_attribute::Usage_type semantic,
+    const unsigned int                                 semantic_index
 )
     : attribute{vertex_format->find_attribute_maybe(semantic, semantic_index)}
     , data_type{(attribute != nullptr) ? attribute->data_type.type : default_data_type}

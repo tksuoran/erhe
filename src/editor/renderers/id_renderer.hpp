@@ -1,12 +1,9 @@
 #pragma once
 
 #include "renderers/base_renderer.hpp"
-#include "renderers/programs.hpp"
 
 #include "erhe/components/component.hpp"
-#include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/pipeline.hpp"
-#include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/scene/viewport.hpp"
 
 #include <glm/glm.hpp>
@@ -16,7 +13,10 @@
 
 namespace erhe::graphics
 {
+    class Framebuffer;
     class OpenGL_state_tracker;
+    class Renderbuffer;
+    class Texture;
 }
 
 namespace erhe::scene
@@ -30,6 +30,7 @@ namespace editor
 {
 
 class Mesh_memory;
+class Programs;
 
 class Id_renderer
     : public erhe::components::Component,
@@ -67,8 +68,10 @@ public:
         const int                    y
     );
 
+    [[nodiscard]]
     auto get(const int x, const int y, uint32_t& id, float& depth) -> bool;
 
+    [[nodiscard]]
     auto get(const int x, const int y, float& depth) -> Mesh_primitive;
 
     void next_frame();
@@ -140,18 +143,18 @@ private:
 
         erhe::graphics::Buffer                pixel_pack_buffer;
         std::array<uint8_t, s_id_buffer_size> data;
-        double                                time{0.0};
-        GLsync                                sync{0};
+        double                                time           {0.0};
+        GLsync                                sync           {0};
         glm::mat4                             clip_from_world{1.0f};
-        int                                   x_offset{0};
-        int                                   y_offset{0};
-        State                                 state{State::Unused};
+        int                                   x_offset       {0};
+        int                                   y_offset       {0};
+        State                                 state          {State::Unused};
     };
 
-    void create_id_frame_resources ();
-    auto current_id_frame_resources() -> Id_frame_resources&;
-    void update_framebuffer        (const erhe::scene::Viewport viewport);
-    void render_layer              (const erhe::scene::Mesh_layer& layer);
+    [[nodiscard]] auto current_id_frame_resources() -> Id_frame_resources&;
+    void create_id_frame_resources();
+    void update_framebuffer       (const erhe::scene::Viewport viewport);
+    void render_layer             (const erhe::scene::Mesh_layer& layer);
 
     erhe::scene::Viewport                 m_viewport{0, 0, 0, 0, true};
 

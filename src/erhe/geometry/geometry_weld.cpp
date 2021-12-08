@@ -133,7 +133,7 @@ public:
     void dump()
     {
         bool error = false;
-        erhe::log::Indenter scoped_indent;
+        const erhe::log::Indenter scoped_indent;
         for (T old_id = 0; old_id < old_size; ++old_id)
         {
             const T new_id = new_from_old[old_id];
@@ -197,7 +197,7 @@ public:
 
     void swap(const T secondary_new_id, const T keep_new_id)
     {
-        VERIFY(secondary_new_id != keep_new_id);
+        ERHE_VERIFY(secondary_new_id != keep_new_id);
         const T secondary_old_id = old_from_new[secondary_new_id];
         const T keep_old_id      = old_from_new[keep_new_id];
         //log_weld.trace("New {:2} old {:2} is being removed - swapping with new {:2} old {:2}\n",
@@ -233,7 +233,7 @@ public:
     {
         for (;;)
         {
-            VERIFY(new_end > 0);
+            ERHE_VERIFY(new_end > 0);
             --new_end;
             if (check_used && !old_used[old_from_new[new_end]])
             {
@@ -359,7 +359,7 @@ public:
                 continue;
             }
             //const T primary_new_id   = entry.primary;
-            VERIFY(primary_new_id == entry.primary);
+            ERHE_VERIFY(primary_new_id == entry.primary);
             const T primary_old_id   = old_from_new[primary_new_id];
             const T secondary_new_id = entry.secondary;
             const T secondary_old_id = old_from_new[secondary_new_id];
@@ -416,7 +416,7 @@ public:
                 //log_weld.trace("Removing new {} old {}\n", new_id, old_id(new_id));
                 //for (T keep_id : new_from_old) // old may may not be mapped to new which is being deleted
                 //{
-                //    VERIFY(new_id != keep_id);
+                //    ERHE_VERIFY(new_id != keep_id);
                 //}
                 remove_callback(new_id, old_id(new_id));
             }
@@ -431,7 +431,7 @@ public:
         //    log_weld.trace("Removing new {} old {}\n", new_id, old_id(new_id));
         //    for (T keep_id : new_from_old) // old may may not be mapped to new which is being deleted
         //    {
-        //        VERIFY(new_id != keep_id);
+        //        ERHE_VERIFY(new_id != keep_id);
         //    }
         //}
         is_bijection = false;
@@ -469,12 +469,14 @@ void Geometry::weld(const Weld_settings& weld_settings)
         Property_map<Point_id, glm::vec3>* bitangents{nullptr};
         Property_map<Point_id, glm::vec2>* texcoords {nullptr};
     };
-    Point_attribute_maps point_attribute_maps;
-    point_attribute_maps.locations  = point_attributes().find<vec3>(c_point_locations);
-    point_attribute_maps.normals    = point_attributes().find<vec3>(c_point_normals);
-    point_attribute_maps.tangents   = point_attributes().find<vec3>(c_point_tangents);
-    point_attribute_maps.bitangents = point_attributes().find<vec3>(c_point_bitangents);
-    point_attribute_maps.texcoords  = point_attributes().find<vec2>(c_point_texcoords);
+    const Point_attribute_maps point_attribute_maps
+    {
+        .locations  = point_attributes().find<vec3>(c_point_locations),
+        .normals    = point_attributes().find<vec3>(c_point_normals),
+        .tangents   = point_attributes().find<vec3>(c_point_tangents),
+        .bitangents = point_attributes().find<vec3>(c_point_bitangents),
+        .texcoords  = point_attributes().find<vec2>(c_point_texcoords)
+    };
 
     class Polygon_attribute_maps
     {
@@ -482,9 +484,11 @@ void Geometry::weld(const Weld_settings& weld_settings)
         Property_map<Polygon_id, glm::vec3>* centroids{nullptr};
         Property_map<Polygon_id, glm::vec3>* normals  {nullptr};
     };
-    Polygon_attribute_maps polygon_attribute_maps;
-    polygon_attribute_maps.centroids  = polygon_attributes().find<vec3>(c_polygon_centroids);
-    polygon_attribute_maps.normals    = polygon_attributes().find<vec3>(c_polygon_normals);
+
+    const Polygon_attribute_maps polygon_attribute_maps{
+        .centroids  = polygon_attributes().find<vec3>(c_polygon_centroids),
+        .normals    = polygon_attributes().find<vec3>(c_polygon_normals)
+    };
 
     glm::vec3 min_corner(std::numeric_limits<float>::max(),    std::numeric_limits<float>::max(),    std::numeric_limits<float>::max());
     glm::vec3 max_corner(std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest());
@@ -519,9 +523,9 @@ void Geometry::weld(const Weld_settings& weld_settings)
 
     log_weld.trace("Polygon processing:\n");
     {
-        erhe::log::Indenter scope_indent;
+        const erhe::log::Indenter scope_indent;
 
-        Remapper<Polygon_id> polygon_remapper(m_next_polygon_id);
+        Remapper<Polygon_id> polygon_remapper{m_next_polygon_id};
 
         std::sort(
             polygon_remapper.old_from_new.begin(),
@@ -575,8 +579,8 @@ void Geometry::weld(const Weld_settings& weld_settings)
         public:
             Polygon_data(Polygon_id old_id, const Polygon_attribute_maps& attribute_maps)
             {
-                VERIFY((attribute_maps.centroids != nullptr) && attribute_maps.centroids->has(old_id));
-                VERIFY((attribute_maps.normals   != nullptr) && attribute_maps.normals  ->has(old_id));
+                ERHE_VERIFY((attribute_maps.centroids != nullptr) && attribute_maps.centroids->has(old_id));
+                ERHE_VERIFY((attribute_maps.normals   != nullptr) && attribute_maps.normals  ->has(old_id));
                 centroid = attribute_maps.centroids->get(old_id);
                 normal   = attribute_maps.normals  ->get(old_id);
             }
@@ -673,7 +677,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
                     polygon_remapper.eliminate.push_back(primary_new_id);
                     polygon_remapper.eliminate.push_back(secondary_new_id);
                     //{
-                    //    erhe::log::Indenter scoped_indent;
+                    //    const erhe::log::Indenter scoped_indent;
                     //    log_weld.trace("centroid {} vs {}\n", primary_attributes.centroid, current.centroid);
                     //    log_weld.trace("normal {} vs {}\n", primary_attributes.normal, current.normal);
                     //}
@@ -720,7 +724,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
         auto old_polygon_corners = polygon_corners;
         uint32_t next_polygon_corner = 0;
         for (
-            Polygon_id new_polygon_id = 0, new_polygon_id_end = polygon_count();
+            Polygon_id new_polygon_id = 0, new_polygon_id_end = get_polygon_count();
             new_polygon_id < new_polygon_id_end;
             ++new_polygon_id
         )
@@ -751,15 +755,15 @@ void Geometry::weld(const Weld_settings& weld_settings)
                     Polygon_id secondary_old_id
                 )
                 {
-                    VERIFY(new_polygon_id == primary_new_id);
+                    ERHE_VERIFY(new_polygon_id == primary_new_id);
                     Polygon& primary_new   = polygons    [primary_new_id];
                     Polygon& secondary_old = old_polygons[secondary_old_id];
-                    VERIFY(secondary_old.corner_count > 0);
+                    ERHE_VERIFY(secondary_old.corner_count > 0);
                     for (uint32_t i = 0, end = secondary_old.corner_count; i < end; ++i)
                     {
                         Polygon_corner_id old_polygon_corner_id = secondary_old.first_polygon_corner_id + i;
                         Polygon_corner_id new_polygon_corner_id = primary_new.first_polygon_corner_id + primary_new.corner_count;
-                        VERIFY(new_polygon_corner_id == next_polygon_corner);
+                        ERHE_VERIFY(new_polygon_corner_id == next_polygon_corner);
                         Corner_id corner_id = old_polygon_corners[old_polygon_corner_id];
                         polygon_corners[new_polygon_corner_id] = corner_id;
                         ++primary_new.corner_count;
@@ -773,18 +777,22 @@ void Geometry::weld(const Weld_settings& weld_settings)
         polygon_corners.resize(m_next_polygon_corner_id);
 
         // Remap corner polygons
-        for (Corner_id corner_id = 0, corner_id_end = corner_count(); corner_id < corner_id_end; ++corner_id)
+        for (
+            Corner_id corner_id = 0, corner_id_end = get_corner_count();
+            corner_id < corner_id_end;
+            ++corner_id
+        )
         {
             Corner& corner = corners[corner_id];
             Polygon_id old_polygon_id = corner.polygon_id;
-            VERIFY(old_polygon_id != std::numeric_limits<Polygon_id>::max());
+            ERHE_VERIFY(old_polygon_id != std::numeric_limits<Polygon_id>::max());
             Polygon_id new_polygon_id = polygon_remapper.new_id(old_polygon_id);
             corner.polygon_id = new_polygon_id;
             //log_weld.trace("Corner {:2} polygon {:2} -> {:2}\n", corner_id, old_polygon_id, new_polygon_id);
         }
 
         polygon_attributes().remap_keys(polygon_remapper.old_from_new);
-        polygon_attributes().trim(polygon_count());
+        polygon_attributes().trim(get_polygon_count());
     }
 
     //debug_trace();
@@ -792,9 +800,9 @@ void Geometry::weld(const Weld_settings& weld_settings)
 
     //log_weld.trace("Point processing:\n");
     {
-        erhe::log::Indenter scope_indent;
+        const erhe::log::Indenter scope_indent;
 
-        Remapper<Point_id> point_remapper(m_next_point_id);
+        Remapper<Point_id> point_remapper{m_next_point_id};
         std::sort(
             point_remapper.old_from_new.begin(),
             point_remapper.old_from_new.end(),
@@ -1004,7 +1012,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
         auto old_point_corners = point_corners;
         uint32_t next_point_corner = 0;
         for (
-            Point_id new_point_id = 0, new_point_end = point_count();
+            Point_id new_point_id = 0, new_point_end = get_point_count();
             new_point_id < new_point_end;
             ++new_point_id
         )
@@ -1019,7 +1027,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
             {
                 const Point_corner_id old_point_corner_id = old_point.first_point_corner_id + i;
                 const Point_corner_id new_point_corner_id = new_point.first_point_corner_id + new_point.corner_count;
-                VERIFY(new_point_corner_id == next_point_corner);
+                ERHE_VERIFY(new_point_corner_id == next_point_corner);
                 Corner_id corner_id = old_point_corners[old_point_corner_id];
                 Corner&   corner    = corners[corner_id];
                 if (corner.polygon_id >= m_next_polygon_id)
@@ -1043,10 +1051,10 @@ void Geometry::weld(const Weld_settings& weld_settings)
                     const Polygon_id secondary_old_id
                 )
                 {
-                    VERIFY(new_point_id == primary_new_id);
+                    ERHE_VERIFY(new_point_id == primary_new_id);
                     Point& primary_new         = points    [primary_new_id];
                     const Point& secondary_old = old_points[secondary_old_id];
-                    VERIFY(secondary_old.corner_count > 0);
+                    ERHE_VERIFY(secondary_old.corner_count > 0);
                     for (uint32_t i = 0, end = secondary_old.corner_count; i < end; ++i)
                     {
                         const Point_corner_id old_point_corner_id = secondary_old.first_point_corner_id + i;
@@ -1071,18 +1079,18 @@ void Geometry::weld(const Weld_settings& weld_settings)
         point_corners.resize(m_next_point_corner_reserve);
 
         // Remap corner points
-        for (Corner_id corner_id = 0, end = corner_count(); corner_id < end; ++corner_id)
+        for (Corner_id corner_id = 0, end = get_corner_count(); corner_id < end; ++corner_id)
         {
             Corner& corner = corners[corner_id];
             const Point_id old_point_id = corner.point_id;
-            VERIFY(old_point_id != std::numeric_limits<Point_id>::max());
+            ERHE_VERIFY(old_point_id != std::numeric_limits<Point_id>::max());
             const Point_id new_point_id = point_remapper.new_id(old_point_id);
             corner.point_id = new_point_id;
             //log_weld.trace("Corner {:2} point {:2} -> {:2}\n", corner_id, old_point_id, new_point_id);
         }
 
         point_attributes().remap_keys(point_remapper.old_from_new);
-        point_attributes().trim(point_count());
+        point_attributes().trim(get_point_count());
     }
 
     //debug_trace();
@@ -1091,11 +1099,11 @@ void Geometry::weld(const Weld_settings& weld_settings)
     // Remove unused corners
     //log_weld.trace("Corner processing:\n");
     {
-        log::Indenter scope_indent;
+        const log::Indenter scope_indent;
 
-        Remapper<Corner_id> corner_remapper(corner_count());
+        Remapper<Corner_id> corner_remapper{get_corner_count()};
         for (
-            Point_id point_id = 0, point_id_end = point_count();
+            Point_id point_id = 0, point_id_end = get_point_count();
             point_id < point_id_end;
             ++point_id
         )
@@ -1109,13 +1117,13 @@ void Geometry::weld(const Weld_settings& weld_settings)
             )
             {
                 const Corner_id corner_id = point_corners[point_corner_id];
-                VERIFY(corner_id != std::numeric_limits<Corner_id>::max());
+                ERHE_VERIFY(corner_id != std::numeric_limits<Corner_id>::max());
                 corner_remapper.use_old(corner_id);
             }
         }
 
         for (
-            Polygon_id polygon_id = 0, polygon_id_end = polygon_count();
+            Polygon_id polygon_id = 0, polygon_id_end = get_polygon_count();
             polygon_id < polygon_id_end;
             ++polygon_id
         )
@@ -1129,7 +1137,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
             )
             {
                 const Corner_id corner_id = polygon_corners[polygon_corner_id];
-                VERIFY(corner_id != std::numeric_limits<Corner_id>::max());
+                ERHE_VERIFY(corner_id != std::numeric_limits<Corner_id>::max());
                 corner_remapper.use_old(corner_id);
             }
         }
@@ -1143,7 +1151,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 // Drop corners pointing to removed polygons
                 if (corner_remapper.old_used[lhs] && !corner_remapper.old_used[rhs])
                 {
-                    VERIFY(corners[lhs].polygon_id < m_next_polygon_id);
+                    ERHE_VERIFY(corners[lhs].polygon_id < m_next_polygon_id);
                     return true;
                 }
                 return false;
@@ -1164,10 +1172,14 @@ void Geometry::weld(const Weld_settings& weld_settings)
         // Remap corners
         //log_weld.trace("Corner renaming:\n");
         {
-            log::Indenter scope_indent_inner;
+            const log::Indenter scope_indent_inner;
 
             auto old_corners = corners;
-            for (Corner_id new_corner_id = 0, end = m_next_corner_id; new_corner_id < end; ++new_corner_id)
+            for (
+                Corner_id new_corner_id = 0, end = m_next_corner_id;
+                new_corner_id < end;
+                ++new_corner_id
+            )
             {
                 const Corner_id old_corner_id = corner_remapper.old_id(new_corner_id);
                 //log_weld.trace("Corner new {:2} from old {:2}\n", new_corner_id, old_corner_id);
@@ -1175,13 +1187,17 @@ void Geometry::weld(const Weld_settings& weld_settings)
             }
 
             corner_attributes().remap_keys(corner_remapper.old_from_new);
-            corner_attributes().trim(corner_count());
+            corner_attributes().trim(get_corner_count());
 
-            for (Point_id point_id = 0, point_id_end = point_count(); point_id < point_id_end; ++point_id)
+            for (
+                Point_id point_id = 0, point_id_end = get_point_count();
+                point_id < point_id_end;
+                ++point_id
+            )
             {
                 const Point& point = points[point_id];
                 //log_weld.trace("Point {:2} corners:", point_id);
-                log::Indenter point_scope_indent;
+                const log::Indenter point_scope_indent;
                 for (
                     Point_corner_id point_corner_id = point.first_point_corner_id,
                     end = point.first_point_corner_id + point.corner_count;
@@ -1197,11 +1213,15 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 //log_weld.trace("\n");
             }
 
-            for (Polygon_id polygon_id = 0, polygon_id_end = polygon_count(); polygon_id < polygon_id_end; ++polygon_id)
+            for (
+                Polygon_id polygon_id = 0, polygon_id_end = get_polygon_count();
+                polygon_id < polygon_id_end;
+                ++polygon_id
+            )
             {
                 const Polygon& polygon = polygons[polygon_id];
                 //log_weld.trace("Polygon {:2} corners:", polygon_id);
-                log::Indenter polygon_scope_indent;
+                const log::Indenter polygon_scope_indent;
                 for (
                     Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id,
                     end = polygon.first_polygon_corner_id + polygon.corner_count;

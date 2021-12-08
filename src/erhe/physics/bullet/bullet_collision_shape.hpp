@@ -23,8 +23,8 @@ public:
     ~Bullet_collision_shape() override;
 
     // Implements ICollision_shape
+    [[nodiscard]] auto is_convex() const -> bool                       override;
     void calculate_local_inertia(float mass, glm::vec3& inertia) const override;
-    auto is_convex              () const -> bool                       override;
 
     void add_child_shape(
         const std::shared_ptr<ICollision_shape>& shape,
@@ -37,18 +37,18 @@ public:
         glm::vec3&                inertia
     ) override;
 
-    auto get_bullet_collision_shape() -> btCollisionShape*
+    [[nodiscard]] auto get_bullet_collision_shape() -> btCollisionShape*
     {
         return m_bullet_collision_shape;
     }
 
-    auto get_bullet_collision_shape() const -> const btCollisionShape*
+    [[nodiscard]] auto get_bullet_collision_shape() const -> const btCollisionShape*
     {
         return m_bullet_collision_shape;
     }
 
 protected:
-    btCollisionShape* m_bullet_collision_shape;
+    btCollisionShape* m_bullet_collision_shape{nullptr};
 };
 
 class Bullet_box_shape

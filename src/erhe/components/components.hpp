@@ -49,17 +49,17 @@ public:
     Components    (Components&&)      = delete;
     void operator=(Components&&)      = delete;
 
+    [[nodiscard]] auto is_component_initialization_complete() -> bool;
+    [[nodiscard]] auto get_component_to_deinitialize       () -> Component*;
+
     auto add                                   (const std::shared_ptr<Component>& component) -> Component&;
     void show_dependencies                     () const;
     void show_depended_by                      () const;
     void cleanup_components                    ();
     void launch_component_initialization       ();
-    auto get_component_to_initialize           (const bool in_worker_thread) -> Component*;
-    auto is_component_initialization_complete  () -> bool;
     void wait_component_initialization_complete();
     void on_thread_exit                        ();
     void on_thread_enter                       ();
-    auto get_component_to_deinitialize         () -> Component*;
 
     std::set<std::shared_ptr<Component>> components;
     std::set<IUpdate_fixed_step    *>    fixed_step_updates;
@@ -69,6 +69,7 @@ public:
     static auto serial_component_initialization  () -> bool;
 
 private:
+    [[nodiscard]] auto get_component_to_initialize(const bool in_worker_thread) -> Component*;
     void queue_all_components_to_be_processed();
     void initialize_component                (const bool in_worker_thread);
     void deitialize_component                (Component* component);

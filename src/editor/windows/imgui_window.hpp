@@ -1,8 +1,6 @@
 #pragma once
 
-#include "erhe/components/component.hpp"
-
-#include <imgui.h>
+//#include <imgui.h>
 
 #include <memory>
 #include <string_view>
@@ -24,13 +22,17 @@ class Imgui_window
 public:
     Imgui_window(const std::string_view title);
 
+    [[nodiscard]] auto is_visibile() const -> bool;
+    [[nodiscard]] auto title      () const -> const std::string_view;
+    auto begin            () -> bool;
+    void end              ();
     void show             ();
     void hide             ();
     void toggle_visibility();
-    auto is_visibile      () const -> bool;
-    auto title            () const -> const std::string_view;
 
-    virtual void imgui() = 0;
+    virtual void imgui   () = 0;
+    virtual void on_begin();
+    virtual void on_end  ();
 
 protected:
     bool              m_is_visible{true};

@@ -70,7 +70,7 @@ public:
     Vertex_input_state(
         const Vertex_attribute_mappings& attribute_mappings,
         const Vertex_format&             vertex_format,
-        gsl::not_null<const Buffer*>     vertex_buffer,
+        const Buffer*                    vertex_buffer,
         const Buffer*                    index_buffer
     );
 
@@ -83,25 +83,11 @@ public:
 
     Vertex_input_state(const Vertex_input_state&) = delete;
 
-    auto operator=(const Vertex_input_state&)
-    -> Vertex_input_state& = delete;
+    auto operator=(const Vertex_input_state&) -> Vertex_input_state& = delete;
 
     Vertex_input_state(Vertex_input_state&& other) = delete; //noexcept
-    //{
-    //    m_bindings        = std::move(other.m_bindings);
-    //    m_index_buffer    = other.m_index_buffer;
-    //    m_gl_vertex_array = std::move(other.m_gl_vertex_array);
-    //}
 
     auto operator=(Vertex_input_state&& other) = delete; //noexcept
-    //-> Vertex_input_state&
-    //{
-    //    m_bindings        = std::move(other. m_bindings);
-    //    m_index_buffer    = other.m_index_buffer;
-    //    m_gl_vertex_array = std::move(other.m_gl_vertex_array);
-    //    return *this;
-    //}
-
 
     void emplace_back(
         gsl::not_null<const Buffer*>                     vertex_buffer,
@@ -109,12 +95,12 @@ public:
         const Vertex_attribute*                          attribute,
         const size_t                                     stride
     );
-    //-> Binding&;
 
     void use() const;
 
     void set_index_buffer(const Buffer* buffer);
 
+    [[nodiscard]]
     auto index_buffer() -> const Buffer*
     {
         return m_index_buffer;
@@ -128,8 +114,8 @@ public:
 
     void update();
 
-    auto bindings() const
-    -> const Binding_collection&
+    [[nodiscard]]
+    auto bindings() const -> const Binding_collection&
     {
         return m_bindings;
     }
@@ -137,6 +123,7 @@ public:
     static void on_thread_enter()
     {
         std::lock_guard lock{s_mutex};
+
         for (auto* vertex_input_state : s_all_vertex_input_states)
         {
             log_threads.trace(
@@ -155,6 +142,7 @@ public:
     static void on_thread_exit()
     {
         std::lock_guard lock{s_mutex};
+
         gl::bind_vertex_array(0);
         auto this_thread_id = std::this_thread::get_id();
         for (auto* vertex_input_state : s_all_vertex_input_states)
@@ -172,14 +160,13 @@ public:
         }
     }
 
-    auto serial() const
-    -> size_t
+    [[nodiscard]]
+    auto serial() const -> size_t
     {
         return m_serial;
     }
 
-    static auto get_next_serial()
-    -> size_t
+    static [[nodiscard]] auto get_next_serial() -> size_t
     {
         std::lock_guard lock{s_mutex};
 
@@ -215,13 +202,18 @@ public:
 
     void execute(const Vertex_input_state* state)
     {
-        if ((state != nullptr) && (m_last == state->serial()))
+        if (
+            (state != nullptr) &&
+            (m_last == state->serial())
+        )
         {
             return;
         }
-        unsigned int name = (state != nullptr) ? state->gl_name() : 0;
+        const unsigned int name = (state != nullptr) ? state->gl_name() : 0;
         gl::bind_vertex_array(name);
-        m_last = (state != nullptr) ? state->serial() : 0;
+        m_last = (state != nullptr)
+            ? state->serial()
+            : 0;
     }
 
 private:

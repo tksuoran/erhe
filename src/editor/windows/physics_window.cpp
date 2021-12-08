@@ -1,6 +1,7 @@
 #include "windows/physics_window.hpp"
+#include "editor_tools.hpp"
 #include "log.hpp"
-#include "tools.hpp"
+
 #include "scene/debug_draw.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
@@ -36,20 +37,10 @@ void Physics_window::initialize_component()
     get<Editor_tools>()->register_tool(this);
 }
 
-auto Physics_window::state() const -> State
-{
-    return State::Passive;
-}
-
 auto Physics_window::description() -> const char*
 {
     return c_name.data();
 }
-
-//auto to_bullet(glm::vec3 glm_vec3) -> btVector3
-//{
-//    return btVector3{btScalar{glm_vec3.x}, btScalar{glm_vec3.y}, btScalar{glm_vec3.z}};
-//}
 
 void Physics_window::imgui()
 {
@@ -58,9 +49,6 @@ void Physics_window::imgui()
         return;
     }
 
-    ImGui::Begin("Physics");
-
-    //const auto button_size = ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f);
     auto& physics_world = m_scene_root->physics_world();
     const bool physics_enabled = physics_world.is_physics_updates_enabled();
     bool updated_physics_enabled = physics_enabled;
@@ -77,8 +65,8 @@ void Physics_window::imgui()
         }
     }
 
-    auto debug_drawer = get<Debug_draw>();
-    if (debug_drawer)
+    auto* debug_drawer = get<Debug_draw>();
+    if (debug_drawer != nullptr)
     {
         if (ImGui::CollapsingHeader("Visualizations"))
         {
@@ -173,7 +161,6 @@ void Physics_window::imgui()
         ImGui::SliderFloat("Angular Damping", &angular_damping, 0.0f, 1.0f);
         rigid_body->set_damping(linear_damping, angular_damping);
     }
-    ImGui::End();
 }
 
 auto Physics_window::get_debug_draw_parameters() -> Debug_draw_parameters
@@ -185,7 +172,7 @@ void Physics_window::tool_render(const Render_context& /*context*/)
 {
     ERHE_PROFILE_FUNCTION
 
-    auto debug_drawer = get<Debug_draw>();
+    auto* const debug_drawer = get<Debug_draw>();
     if (!debug_drawer || !m_debug_draw.enable || !m_scene_root)
     {
         return;

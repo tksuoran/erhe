@@ -24,7 +24,7 @@ using namespace glm;
 using namespace std;
 
 Light_mesh::Light_mesh()
-    : Component(c_name)
+    : Component{c_name}
 {
 }
 
@@ -37,6 +37,7 @@ void Light_mesh::connect()
 
 void Light_mesh::initialize_component()
 {
+#if 0
     erhe::graphics::Buffer_transfer_queue queue;
 
     Gl_buffer_sink buffer_sink{queue, {}, {}};
@@ -78,6 +79,7 @@ void Light_mesh::initialize_component()
         cone_geometry.build_edges();
         m_cone_mesh = make_primitive(cone_geometry, build_info);
     }
+#endif
 }
 
 auto Light_mesh::get_light_transform(const Light& light) -> glm::mat4

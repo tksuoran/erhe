@@ -54,31 +54,27 @@ protected:
     class Entry
     {
     public:
-        erhe::scene::Scene&                scene;
-        erhe::scene::Mesh_layer&           layer;
-        erhe::physics::IWorld&             physics_world;
         std::shared_ptr<erhe::scene::Mesh> mesh;
         erhe::scene::Mesh_data             before;
         erhe::scene::Mesh_data             after;
     };
 
-    Mesh_operation ();
+    Mesh_operation (Context&& context);
     ~Mesh_operation() override;
 
+    // Implements IOperation
+    [[nodiscard]] auto describe() const -> std::string override;
+    void execute () const override;
+    void undo    () const override;
+
+    // Public API
+    void add_entry(Entry&& entry);
     void make_entries(
-        const Context&                                                           context,
         const std::function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation
     );
 
-    // Implements IOperation
-    void execute () const override;
-    void undo    () const override;
-    auto describe() const -> std::string override;
-
-    void add_entry(Entry&& entry);
-
-
 private:
+    Context            m_context;
     std::vector<Entry> m_entries;
     Selection_tool*    m_selection_tool{nullptr};
 };

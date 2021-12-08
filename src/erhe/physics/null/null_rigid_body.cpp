@@ -10,24 +10,24 @@ namespace erhe::physics
 {
 
 auto IRigid_body::create(
-    IRigid_body_create_info& create_info,
-    IMotion_state*           motion_state
+    const IRigid_body_create_info& create_info,
+    IMotion_state*                 motion_state
 ) -> IRigid_body*
 {
     return new Null_rigid_body(create_info, motion_state);
 }
 
 auto IRigid_body::create_shared(
-    IRigid_body_create_info& create_info,
-    IMotion_state*           motion_state
+    const IRigid_body_create_info& create_info,
+    IMotion_state*                 motion_state
 ) -> std::shared_ptr<IRigid_body>
 {
     return std::make_shared<Null_rigid_body>(create_info, motion_state);
 }
 
 Null_rigid_body::Null_rigid_body(
-    IRigid_body_create_info& create_info,
-    IMotion_state*           /*motion_state*/
+    const IRigid_body_create_info& create_info,
+    IMotion_state*                 /*motion_state*/
 )
     : m_collision_shape{create_info.collision_shape}
     , m_mass           {create_info.mass}

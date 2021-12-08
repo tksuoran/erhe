@@ -1,6 +1,7 @@
 #include "windows/mesh_properties.hpp"
+#include "editor_tools.hpp"
 #include "rendering.hpp"
-#include "tools.hpp"
+
 #include "renderers/text_renderer.hpp"
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
@@ -38,22 +39,16 @@ void Mesh_properties::initialize_component()
 {
     //get<Editor_tools>()->register_imgui_window(this);
     get<Editor_tools>()->register_tool(this);
-}
 
-auto Mesh_properties::state() const -> State
-{
-    return State::Passive;
+    hide();
 }
 
 void Mesh_properties::imgui()
 {
-    ImGui::Begin(c_title.data());
-
-    ImGui::SliderInt("Max Labels", &m_max_labels, 0, 2000);
-    ImGui::Checkbox("Show Points",   &m_show_points);
-    ImGui::Checkbox("Show Polygons", &m_show_polygons);
-    ImGui::Checkbox("Show Edges",    &m_show_edges);
-    ImGui::End();
+    ImGui::SliderInt("Max Labels",    &m_max_labels, 0, 2000);
+    ImGui::Checkbox ("Show Points",   &m_show_points);
+    ImGui::Checkbox ("Show Polygons", &m_show_polygons);
+    ImGui::Checkbox ("Show Edges",    &m_show_edges);
 }
 
 void Mesh_properties::tool_render(const Render_context& context)
@@ -65,9 +60,10 @@ void Mesh_properties::tool_render(const Render_context& context)
         return;
     }
 
-    const auto*     camera          = context.camera;
-    const glm::mat4 clip_from_world = camera->clip_from_world();
-    const auto& selection = m_selection_tool->selection();
+    const auto*     camera                = context.camera;
+    const auto      projection_transforms = camera->projection_transforms(context.viewport);
+    const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.matrix();
+    const auto&     selection             = m_selection_tool->selection();
     for (auto node : selection)
     {
         const auto* mesh = as_mesh(node.get());
@@ -75,10 +71,10 @@ void Mesh_properties::tool_render(const Render_context& context)
         {
             continue;
         }
-        const glm::mat4 world_from_node = mesh->world_from_node() ;
+        const glm::mat4 world_from_node = mesh->world_from_node();
         for (auto& primitive : mesh->data.primitives)
         {
-            const auto geometry = primitive.primitive_geometry->source_geometry;
+            const auto geometry = primitive.source_geometry;
             if (!geometry)
             {
                 continue;
@@ -88,7 +84,10 @@ void Mesh_properties::tool_render(const Render_context& context)
             const auto point_locations   = geometry->point_attributes  ().find<glm::vec3>(c_point_locations  );
             if ((point_locations != nullptr) && m_show_points)
             {
-                const uint32_t end = (std::min)(static_cast<uint32_t>(m_max_labels), geometry->point_count());
+                const uint32_t end = (std::min)(
+                    static_cast<uint32_t>(m_max_labels),
+                    geometry->get_point_count()
+                );
                 for (Point_id point_id = 0; point_id < end; ++point_id)
                 {
                     if (!point_locations->has(point_id))
@@ -120,7 +119,7 @@ void Mesh_properties::tool_render(const Render_context& context)
 
             if ((point_locations != nullptr) && m_show_edges)
             {
-                for (Edge_id edge_id = 0; edge_id < geometry->edge_count(); ++edge_id)
+                for (Edge_id edge_id = 0; edge_id < geometry->get_edge_count(); ++edge_id)
                 {
                     const auto& edge = geometry->edges[edge_id];
 
@@ -153,7 +152,7 @@ void Mesh_properties::tool_render(const Render_context& context)
 
             if ((polygon_centroids != nullptr) && m_show_polygons)
             {
-                for (Polygon_id polygon_id = 0; polygon_id < geometry->polygon_count(); ++polygon_id)
+                for (Polygon_id polygon_id = 0; polygon_id < geometry->get_polygon_count(); ++polygon_id)
                 {
                     if (!polygon_centroids->has(polygon_id))
                     {

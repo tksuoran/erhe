@@ -44,20 +44,14 @@ public:
     virtual ~Property_map_base() = default;
 
     virtual auto constructor(const Property_map_descriptor& descriptor) const
-        -> Property_map_base* = 0;
+    -> Property_map_base* = 0;
 
     virtual auto descriptor() const -> Property_map_descriptor = 0;
-
-    virtual void clear() = 0;
-
-    virtual auto empty() const -> bool = 0;
-
-    virtual auto size() const -> size_t = 0;
-
-    virtual auto has(Key_type key) const -> bool = 0;
-
-    virtual void trim(size_t size) = 0;
-
+    virtual void clear     () = 0;
+    virtual auto empty     () const -> bool = 0;
+    virtual auto size      () const -> size_t = 0;
+    virtual auto has       (Key_type key) const -> bool = 0;
+    virtual void trim      (size_t size) = 0;
     virtual void remap_keys(const std::vector<Key_type>& key_old_to_new) = 0;
 
     virtual void interpolate(
@@ -66,7 +60,6 @@ public:
     ) const = 0;
 
     virtual void import_from(Property_map_base<Key_type>* source) = 0;
-
     virtual void import_from(Property_map_base<Key_type>* source, const glm::mat4 transform) = 0;
 
 protected:
@@ -79,7 +72,7 @@ class Property_map
 {
 public:
     explicit Property_map(const Property_map_descriptor& descriptor)
-        : m_descriptor(descriptor)
+        : m_descriptor{descriptor}
     {
     };
 
@@ -88,24 +81,15 @@ public:
         return m_descriptor;
     }
 
-    void put(Key_type key, Value_type value);
-
-    void erase(Key_type key);
-
-    auto get(Key_type key) const -> Value_type;
-
-    auto maybe_get(Key_type key, Value_type& out_value) const -> bool;
-
-    auto has(Key_type key) const -> bool final;
-
-    void clear() final;
-
-    auto empty() const -> bool final;
-
-    auto size() const -> size_t final;
-
-    void trim(size_t size) final;
-
+    void put       (Key_type key, Value_type value);
+    void erase     (Key_type key);
+    auto get       (Key_type key) const -> Value_type;
+    auto maybe_get (Key_type key, Value_type& out_value) const -> bool;
+    auto has       (Key_type key) const -> bool final;
+    void clear     () final;
+    auto empty     () const -> bool final;
+    auto size      () const -> size_t final;
+    void trim      (size_t size) final;
     void remap_keys(const std::vector<Key_type>& key_new_to_old) final;
 
     void interpolate(
@@ -114,11 +98,8 @@ public:
     ) const final;
 
     void import_from(Property_map_base<Key_type>* source) final;
-
     void import_from(Property_map_base<Key_type>* source, const glm::mat4 transform) final;
-
-    auto constructor(const Property_map_descriptor& descriptor) const
-        -> Property_map_base<Key_type>* final;
+    auto constructor(const Property_map_descriptor& descriptor) const -> Property_map_base<Key_type>* final;
 
     static constexpr size_t s_grow_size = 4096;
 

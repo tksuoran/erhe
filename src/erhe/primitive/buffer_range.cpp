@@ -5,7 +5,7 @@ namespace erhe::primitive
 
 Buffer_range::Buffer_range() = default;
 
-Buffer_range::Buffer_range(size_t count, size_t element_size, size_t byte_offset)
+Buffer_range::Buffer_range(const size_t count, const size_t element_size, const size_t byte_offset)
     : count       {count}
     , element_size{element_size}
     , byte_offset {byte_offset}

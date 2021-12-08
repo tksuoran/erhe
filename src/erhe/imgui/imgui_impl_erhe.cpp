@@ -18,7 +18,7 @@ using std::make_unique;
 
 namespace {
 
-erhe::log::Category log_imgui(erhe::log::Color::CYAN, erhe::log::Color::GRAY, erhe::log::Level::LEVEL_INFO);
+erhe::log::Category log_imgui{erhe::log::Color::CYAN, erhe::log::Color::GRAY, erhe::log::Level::LEVEL_INFO};
 
 constexpr std::string_view c_vertex_shader_source =
     "\n"
@@ -30,6 +30,27 @@ constexpr std::string_view c_vertex_shader_source =
     "    vec4  gl_Position;\n"
     "    float gl_ClipDistance[4];\n"
     "};\n"
+    "\n"
+    "float srgb_to_linear(float x)\n"
+    "{\n"
+    "    if (x <= 0.04045)\n"
+    "    {\n"
+    "        return x / 12.92;\n"
+    "    }\n"
+    "    else\n"
+    "    {\n"
+    "        return pow((x + 0.055) / 1.055, 2.4);\n"
+    "    }\n"
+    "}\n"
+    "\n"
+    "vec3 srgb_to_linear(vec3 v)\n"
+    "{\n"
+    "    return vec3(\n"
+    "        srgb_to_linear(v.r),\n"
+    "        srgb_to_linear(v.g),\n"
+    "        srgb_to_linear(v.b)\n"
+    "    );\n"
+    "}\n"
     "\n"
     "void main()\n"
     "{\n"
@@ -44,7 +65,7 @@ constexpr std::string_view c_vertex_shader_source =
     "    gl_ClipDistance[3] = clip_rect[3] - a_position.y;\n"
     "    v_texture_id       = draw.draw_parameters[gl_DrawID].u_texture_indices[0];\n"
     "    v_texcoord         = a_texcoord;\n"
-    "    v_color            = a_color;\n"
+    "    v_color            = vec4(srgb_to_linear(a_color.rgb), a_color.a);\n"
     "}\n";
 
 const std::string_view c_fragment_shader_source =
@@ -55,7 +76,7 @@ const std::string_view c_fragment_shader_source =
     "void main()\n"
     "{\n"
     "    vec4 texture_sample = texture(s_textures[v_texture_id], v_texcoord.st);\n"
-    "    out_color.rgb       = v_color.rgb * texture_sample.rgb;\n"
+    "    out_color.rgb       = v_color.rgb * texture_sample.rgb * v_color.a;\n"
     "    out_color.a         = texture_sample.a * v_color.a;\n"
     "}\n";
 
@@ -73,9 +94,7 @@ public:
     static constexpr size_t max_vertex_count           = 800'000;
     static constexpr size_t texture_unit_count         = 16;
 
-    Imgui_renderer()
-    {
-    }
+    Imgui_renderer() = default;
 
     void create_device_resources()
     {
@@ -207,7 +226,7 @@ public:
             "draw", // block name
             0,      // binding point
             erhe::graphics::Shader_resource::Type::shader_storage_block
-            );
+        );
 
         draw_parameter_block->add_struct(
             "draw_parameters",
@@ -224,10 +243,10 @@ public:
         samplers = default_uniform_block.add_sampler("s_textures", gl::Uniform_type::sampler_2d, texture_unit_count);
 
         erhe::graphics::Shader_stages::Create_info create_info{
-            "ImGui Renderer",
-            &default_uniform_block,
-            &attribute_mappings,
-            &fragment_outputs
+            .name                      = "ImGui Renderer",
+            .vertex_attribute_mappings = &attribute_mappings,
+            .fragment_outputs          = &fragment_outputs,
+            .default_uniform_block     = &default_uniform_block
         };
         create_info.add_interface_block(projection_block.get());
         create_info.add_interface_block(draw_parameter_block.get());
@@ -235,8 +254,8 @@ public:
         create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   c_vertex_shader_source);
         create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, c_fragment_shader_source);
 
-        erhe::graphics::Shader_stages::Prototype prototype(create_info);
-        VERIFY(prototype.is_valid());
+        erhe::graphics::Shader_stages::Prototype prototype{create_info};
+        ERHE_VERIFY(prototype.is_valid());
         shader_stages = make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
     }
 
@@ -244,21 +263,12 @@ public:
     {
         // Build texture atlas
         ImGuiIO& io = ImGui::GetIO();
-        erhe::graphics::Texture::Create_info create_info;
+        erhe::graphics::Texture::Create_info create_info{};
         unsigned char* pixels = nullptr;
         //create_info.internal_format = gl::Internal_format::r8;
         //io.Fonts->GetTexDataAsAlpha8(&pixels, &create_info.width, &create_info.height);
         create_info.internal_format = gl::Internal_format::rgba8;
         io.Fonts->GetTexDataAsRGBA32(&pixels, &create_info.width, &create_info.height);
-
-        uint8_t linear_to_srgb[256];
-        for (size_t i = 0; i < 256; ++i)
-        {
-            const float linear  = static_cast<float>(i) / 255.0f;
-            const float srgb    = erhe::toolkit::linear_rgb_to_srgb(linear);
-            const float srgb_u8 = std::min(255.0f * srgb, 255.0f);
-            linear_to_srgb[i] = static_cast<uint8_t>(srgb_u8);
-        }
 
         const size_t pixel_count = static_cast<size_t>(create_info.width) * static_cast<size_t>(create_info.height);
         const size_t byte_count  = 4 * pixel_count;
@@ -267,16 +277,22 @@ public:
         const uint8_t* src = reinterpret_cast<const uint8_t*>(pixels);
         for (size_t i = 0; i < pixel_count; ++i)
         {
-            post_processed_data[i * 4 + 0] = linear_to_srgb[*src++];
-            post_processed_data[i * 4 + 1] = linear_to_srgb[*src++];
-            post_processed_data[i * 4 + 2] = linear_to_srgb[*src++];
-            post_processed_data[i * 4 + 3] = *src++;
+            const float r = static_cast<float>(*src++) / 255.0f;
+            const float g = static_cast<float>(*src++) / 255.0f;
+            const float b = static_cast<float>(*src++) / 255.0f;
+            const float a = static_cast<float>(*src++) / 255.0f;
+            const float premultiplied_r = r * a;
+            const float premultiplied_g = g * a;
+            const float premultiplied_b = b * a;
+            post_processed_data[i * 4 + 0] = static_cast<uint8_t>(std::min(255.0f * premultiplied_r, 255.0f));
+            post_processed_data[i * 4 + 1] = static_cast<uint8_t>(std::min(255.0f * premultiplied_g, 255.0f));
+            post_processed_data[i * 4 + 2] = static_cast<uint8_t>(std::min(255.0f * premultiplied_b, 255.0f));
+            post_processed_data[i * 4 + 3] = static_cast<uint8_t>(std::min(255.0f * a, 255.0f));;
         }
 
         font_texture = std::make_unique<erhe::graphics::Texture>(create_info);
         font_texture->set_debug_label("ImGui Font");
-        //gsl::span<const std::byte> image_data{reinterpret_cast<const std::byte*>(pixels), byte_count};
-        gsl::span<const std::byte> image_data{
+        const gsl::span<const std::byte> image_data{
             reinterpret_cast<const std::byte*>(post_processed_data.data()),
             byte_count
         };
@@ -394,7 +410,7 @@ public:
         true,                                           // enabled
         {
             gl::Blend_equation_mode::func_add,          // rgb.equation_mode
-            gl::Blending_factor::src_alpha,             // rgb.source_factor
+            gl::Blending_factor::one,                   // rgb.source_factor
             gl::Blending_factor::one_minus_src_alpha    // rgb.destination_factor
         },
         {
@@ -425,11 +441,11 @@ public:
 
     void create_dummy_texture()
     {
-        erhe::graphics::Texture::Create_info create_info;
+        const erhe::graphics::Texture::Create_info create_info{};
         m_dummy_texture = std::make_unique<erhe::graphics::Texture>(create_info);
         m_dummy_texture->set_debug_label("ImGui Dummy");
-        std::array<uint8_t, 4> dummy_pixel{ 0xee, 0x11, 0xdd, 0xff };
-        gsl::span<const std::byte> image_data{
+        const std::array<uint8_t, 4> dummy_pixel{ 0xee, 0x11, 0xdd, 0xff };
+        const gsl::span<const std::byte> image_data{
             reinterpret_cast<const std::byte*>(&dummy_pixel[0]),
             dummy_pixel.size()
         };
@@ -504,6 +520,22 @@ private:
 
 static constexpr std::string_view c_imgui_render{"ImGui_ImplErhe_RenderDrawData()"};
 
+auto imgui_color(const float r, const float g, const float b, const float a)
+{
+    //return ImVec4{
+    //    erhe::toolkit::srgb_to_linear(r * a),
+    //    erhe::toolkit::srgb_to_linear(g * a),
+    //    erhe::toolkit::srgb_to_linear(b * a),
+    //    a
+    //};
+    return ImVec4{
+        r,
+        g,
+        b,
+        a
+    };
+}
+
 } // anonymous namespace
 
 // Functions
@@ -515,50 +547,73 @@ bool ImGui_ImplErhe_Init(erhe::graphics::OpenGL_state_tracker* pipeline_state_tr
     ImGuiIO& io = ImGui::GetIO();
     io.BackendRendererName = "imgui_impl_erhe";
     io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+    io.ConfigFlags |= ImGuiConfigFlags_NavNoCaptureKeyboard;
     //io.Fonts->AddFontFromFileTTF("res\\fonts\\Ubuntu-R.ttf", 20);
+    // 
+
+    auto& style = ImGui::GetStyle();
+    style.WindowPadding    = ImVec2{3.0f, 3.0f};
+    style.FramePadding     = ImVec2{3.0f, 3.0f};
+    style.CellPadding      = ImVec2{3.0f, 3.0f};
+    style.ItemSpacing      = ImVec2{3.0f, 3.0f};
+    style.ItemInnerSpacing = ImVec2{3.0f, 3.0f};
+
+    style.WindowBorderSize = 0.0f;
+    style.ChildBorderSize  = 0.0f;
+    style.PopupBorderSize  = 0.0f;
+    style.FrameBorderSize  = 0.0f;
+    style.TabBorderSize    = 0.0f;
+
+    style.WindowRounding    = 3.0f;
+    style.ChildRounding     = 3.0f;
+    style.FrameRounding     = 3.0f;
+    style.PopupRounding     = 3.0f;
+    style.ScrollbarRounding = 3.0f;
+    style.GrabRounding      = 3.0f;
+    style.TabRounding       = 3.0f;
 
     ImVec4* colors = ImGui::GetStyle().Colors;
-    colors[ImGuiCol_Text]                   = ImVec4(1.00f, 1.00f, 1.00f, 0.89f);
+    colors[ImGuiCol_Text]                   = ImVec4(1.00f, 1.00f, 1.00f, 0.61f);
     colors[ImGuiCol_TextDisabled]           = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
-    colors[ImGuiCol_WindowBg]               = ImVec4(0.10f, 0.14f, 0.13f, 0.94f);
-    colors[ImGuiCol_ChildBg]                = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-    colors[ImGuiCol_PopupBg]                = ImVec4(0.08f, 0.08f, 0.08f, 0.94f);
-    colors[ImGuiCol_Border]                 = ImVec4(0.21f, 0.35f, 0.36f, 0.51f);
-    colors[ImGuiCol_BorderShadow]           = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    colors[ImGuiCol_WindowBg]               = ImVec4(0.10f, 0.14f, 0.13f, 0.99f);
+    colors[ImGuiCol_ChildBg]                = ImVec4(0.04f, 0.17f, 0.22f, 1.00f);
+    colors[ImGuiCol_PopupBg]                = ImVec4(0.04f, 0.17f, 0.22f, 1.00f);
+    colors[ImGuiCol_Border]                 = ImVec4(0.50f, 0.50f, 0.50f, 0.00f);
+    colors[ImGuiCol_BorderShadow]           = ImVec4(0.50f, 0.50f, 0.50f, 0.00f);
     colors[ImGuiCol_FrameBg]                = ImVec4(0.20f, 0.26f, 0.25f, 0.54f);
     colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.25f, 0.34f, 0.33f, 0.54f);
     colors[ImGuiCol_FrameBgActive]          = ImVec4(0.29f, 0.40f, 0.39f, 0.54f);
-    colors[ImGuiCol_TitleBg]                = ImVec4(0.17f, 0.27f, 0.28f, 1.00f);
-    colors[ImGuiCol_TitleBgActive]          = ImVec4(0.14f, 0.36f, 0.49f, 1.00f);
-    colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.00f, 0.00f, 0.00f, 0.51f);
-    colors[ImGuiCol_MenuBarBg]              = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
-    colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.02f, 0.02f, 0.02f, 0.53f);
-    colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.31f, 0.31f, 0.31f, 1.00f);
-    colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.41f, 0.41f, 0.41f, 1.00f);
-    colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.51f, 0.51f, 0.51f, 1.00f);
+    colors[ImGuiCol_TitleBg]                = ImVec4(0.07f, 0.21f, 0.24f, 1.00f);
+    colors[ImGuiCol_TitleBgActive]          = ImVec4(0.07f, 0.29f, 0.33f, 1.00f);
+    colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.04f, 0.15f, 0.17f, 1.00f);
+    colors[ImGuiCol_MenuBarBg]              = ImVec4(0.04f, 0.17f, 0.22f, 1.00f);
+    colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.02f, 0.02f, 0.02f, 0.30f);
+    colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.31f, 0.31f, 0.31f, 0.67f);
+    colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.31f, 0.31f, 0.31f, 0.82f);
+    colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.31f, 0.31f, 0.31f, 1.00f);
     colors[ImGuiCol_CheckMark]              = ImVec4(0.64f, 0.83f, 0.31f, 1.00f);
     colors[ImGuiCol_SliderGrab]             = ImVec4(0.33f, 0.78f, 0.67f, 0.51f);
     colors[ImGuiCol_SliderGrabActive]       = ImVec4(0.34f, 0.90f, 0.76f, 0.51f);
     colors[ImGuiCol_Button]                 = ImVec4(0.28f, 0.30f, 0.31f, 1.00f);
     colors[ImGuiCol_ButtonHovered]          = ImVec4(0.30f, 0.36f, 0.37f, 1.00f);
     colors[ImGuiCol_ButtonActive]           = ImVec4(0.42f, 0.45f, 0.48f, 1.00f);
-    colors[ImGuiCol_Header]                 = ImVec4(0.65f, 0.47f, 0.33f, 0.31f);
-    colors[ImGuiCol_HeaderHovered]          = ImVec4(0.65f, 0.47f, 0.33f, 0.42f);
-    colors[ImGuiCol_HeaderActive]           = ImVec4(0.65f, 0.47f, 0.33f, 0.57f);
-    colors[ImGuiCol_Separator]              = ImVec4(0.50f, 0.50f, 0.50f, 0.50f);
-    colors[ImGuiCol_SeparatorHovered]       = ImVec4(0.75f, 0.75f, 0.75f, 0.78f);
-    colors[ImGuiCol_SeparatorActive]        = ImVec4(0.75f, 0.75f, 0.75f, 1.00f);
+    colors[ImGuiCol_Header]                 = ImVec4(0.12f, 0.37f, 0.61f, 0.48f);
+    colors[ImGuiCol_HeaderHovered]          = ImVec4(0.10f, 0.38f, 0.65f, 0.56f);
+    colors[ImGuiCol_HeaderActive]           = ImVec4(0.10f, 0.41f, 0.71f, 0.63f);
+    colors[ImGuiCol_Separator]              = ImVec4(0.07f, 0.21f, 0.24f, 1.00f);
+    colors[ImGuiCol_SeparatorHovered]       = ImVec4(0.11f, 0.34f, 0.38f, 1.00f);
+    colors[ImGuiCol_SeparatorActive]        = ImVec4(0.16f, 0.59f, 0.68f, 1.00f);
     colors[ImGuiCol_ResizeGrip]             = ImVec4(0.98f, 0.98f, 0.98f, 0.20f);
     colors[ImGuiCol_ResizeGripHovered]      = ImVec4(0.98f, 0.98f, 0.98f, 0.67f);
     colors[ImGuiCol_ResizeGripActive]       = ImVec4(1.00f, 0.98f, 0.98f, 0.95f);
-    colors[ImGuiCol_Tab]                    = ImVec4(1.00f, 1.00f, 1.00f, 0.04f);
-    colors[ImGuiCol_TabHovered]             = ImVec4(1.00f, 1.00f, 1.00f, 0.14f);
-    colors[ImGuiCol_TabActive]              = ImVec4(1.00f, 1.00f, 1.00f, 0.18f);
-    colors[ImGuiCol_TabUnfocused]           = ImVec4(0.15f, 0.15f, 0.15f, 0.00f);
-    colors[ImGuiCol_TabUnfocusedActive]     = ImVec4(0.15f, 0.15f, 0.15f, 0.00f);
+    colors[ImGuiCol_Tab]                    = ImVec4(0.09f, 0.28f, 0.32f, 1.00f);
+    colors[ImGuiCol_TabHovered]             = ImVec4(0.10f, 0.38f, 0.44f, 1.00f);
+    colors[ImGuiCol_TabActive]              = ImVec4(0.09f, 0.32f, 0.37f, 1.00f);
+    colors[ImGuiCol_TabUnfocused]           = ImVec4(0.09f, 0.28f, 0.32f, 1.00f);
+    colors[ImGuiCol_TabUnfocusedActive]     = ImVec4(0.09f, 0.28f, 0.32f, 1.00f);
     colors[ImGuiCol_DockingPreview]         = ImVec4(0.20f, 0.59f, 0.97f, 0.70f);
     colors[ImGuiCol_DockingEmptyBg]         = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
-    colors[ImGuiCol_PlotLines]              = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
+    colors[ImGuiCol_PlotLines]              = ImVec4(0.86f, 1.00f, 0.06f, 0.62f);
     colors[ImGuiCol_PlotLinesHovered]       = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
     colors[ImGuiCol_PlotHistogram]          = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
     colors[ImGuiCol_PlotHistogramHovered]   = ImVec4(1.00f, 0.60f, 0.00f, 1.00f);
@@ -643,12 +698,12 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
     const size_t start_of_projection_block = draw_parameter_byte_offset;
 
     // Write scale
-    gsl::span<const float> scale_cpu_data{&scale[0], 2};
+    const gsl::span<const float> scale_cpu_data{&scale[0], 2};
     erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, scale_cpu_data);
     draw_parameter_byte_offset += scale_cpu_data.size_bytes();
 
     // Write translate
-    gsl::span<const float> translate_cpu_data{&translate[0], 2};
+    const gsl::span<const float> translate_cpu_data{&translate[0], 2};
     erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, translate_cpu_data);
     draw_parameter_byte_offset += translate_cpu_data.size_bytes();
 
@@ -674,7 +729,7 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
 
         // Upload vertex buffer
-        gsl::span<const uint8_t> vertex_cpu_data{
+        const gsl::span<const uint8_t> vertex_cpu_data{
             reinterpret_cast<const uint8_t*>(cmd_list->VtxBuffer.begin()),
             static_cast<size_t>(cmd_list->VtxBuffer.size_in_bytes())
         };
@@ -683,7 +738,7 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
 
         // Upload index buffer
         static_assert(sizeof(uint16_t) == sizeof(ImDrawIdx));
-        gsl::span<const uint16_t> index_cpu_data{
+        const gsl::span<const uint16_t> index_cpu_data{
             cmd_list->IdxBuffer.begin(),
             static_cast<size_t>(cmd_list->IdxBuffer.size())
         };
@@ -696,7 +751,7 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
             {
                 if (pcmd->UserCallback == ImDrawCallback_ResetRenderState)
                 {
-                    FATAL("not implemented");
+                    ERHE_FATAL("not implemented");
                 }
                 else
                 {
@@ -721,16 +776,16 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
                 )
                 {
                     // Write clip rectangle
-                    gsl::span<const float> clip_rect_cpu_data{&clip_rect.x, 4};
+                    const gsl::span<const float> clip_rect_cpu_data{&clip_rect.x, 4};
                     erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, clip_rect_cpu_data);
                     draw_parameter_byte_offset += Imgui_renderer::vec4_size;
 
                     // Write texture indices
                     const auto* texture = reinterpret_cast<erhe::graphics::Texture*>(pcmd->TextureId);
-                    auto texture_unit = texture_unit_cache.allocate_texture_unit(texture);
-                    VERIFY(texture_unit.has_value());
+                    const auto texture_unit = texture_unit_cache.allocate_texture_unit(texture);
+                    ERHE_VERIFY(texture_unit.has_value());
                     const uint32_t texture_indices[4] = { static_cast<uint32_t>(texture_unit.value()), 0, 0, 0 };
-                    gsl::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
+                    const gsl::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
                     erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, texture_indices_cpu_data);
                     draw_parameter_byte_offset += Imgui_renderer::uivec4_size;
 
@@ -774,7 +829,7 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
 
     texture_unit_cache.bind();
 
-    VERIFY(draw_parameter_byte_offset > 0);
+    ERHE_VERIFY(draw_parameter_byte_offset > 0);
 
     gl::bind_buffer_range(
         gl::Buffer_target::uniform_buffer,
@@ -804,7 +859,6 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
         static_cast<GLsizei>(draw_indirect_count),
         static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
     );
-
 
     imgui_renderer.next_frame();
 

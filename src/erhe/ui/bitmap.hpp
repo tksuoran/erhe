@@ -19,14 +19,18 @@ public:
     using value_t     = uint8_t;
     using component_t = int;
 
-    Bitmap(int width, int height, component_t components)
+    Bitmap(
+        const int         width,
+        const int         height,
+        const component_t components
+    )
         : m_width     {width}
         , m_height    {height}
         , m_components{components}
     {
         if ((width < 0) || (height < 0) || (components < 1) || (components > 4))
         {
-            FATAL("bad dimension");
+            ERHE_FATAL("bad dimension");
         }
 
         m_stride = m_width * m_components;
@@ -38,20 +42,17 @@ public:
 
     ~Bitmap() = default;
 
-    auto width() const noexcept
-    -> int
+    [[nodiscard]] auto width() const noexcept -> int
     {
         return m_width;
     }
 
-    auto height() const noexcept
-    -> int
+    [[nodiscard]] auto height() const noexcept -> int
     {
         return m_height;
     }
 
-    auto components() const noexcept
-    -> component_t
+    [[nodiscard]] auto components() const noexcept -> component_t
     {
         return m_components;
     }
@@ -72,7 +73,7 @@ public:
 
     // Applies premultiplication
     // TODO(tksuoran@gmail.com): Gamma
-    void post_process(Bitmap& destination, float gamma)
+    void post_process(Bitmap& destination, const float gamma)
     {
         static_cast<void>(gamma);
         for (int y = 0; y < height(); ++y)
@@ -94,55 +95,64 @@ public:
         }
     }
 
-    void put(int x, int y, component_t c, value_t value)
+    void put(const int x, const int y, const component_t c, const value_t value)
     {
-        if ((x < 0) ||
+        if (
+            (x < 0) ||
             (y < 0) ||
             (c < 0) ||
             (x >= m_width) ||
             (y >= m_height) ||
-            (c >= m_components))
+            (c >= m_components)
+        )
         {
-            FATAL("invalid index");
+            ERHE_FATAL("invalid index");
         }
 
-        const size_t offset = static_cast<size_t>(x) * static_cast<size_t>(m_components) +
-                              static_cast<size_t>(y) * static_cast<size_t>(m_stride) +
-                              static_cast<size_t>(c);
+        const size_t offset =
+            static_cast<size_t>(x) * static_cast<size_t>(m_components) +
+            static_cast<size_t>(y) * static_cast<size_t>(m_stride) +
+            static_cast<size_t>(c);
         m_data[offset] = value;
     }
 
-    auto get(int x, int y, component_t c) const
-    -> value_t
+    [[nodiscard]] auto get(const int x, const int y, const component_t c) const -> value_t
     {
-        if ((x < 0) ||
+        if (
+            (x < 0) ||
             (y < 0) ||
             (c < 0) ||
             (x >= m_width) ||
             (y >= m_height) ||
-            (c >= m_components))
+            (c >= m_components)
+        )
         {
-            FATAL("invalid index");
+            ERHE_FATAL("invalid index");
         }
 
-        const size_t offset = static_cast<size_t>((x * m_components) + (y * m_stride) + c);
+        const size_t offset = static_cast<size_t>(
+            (static_cast<size_t>(x) * static_cast<size_t>(m_components)) + 
+            (static_cast<size_t>(y) * static_cast<size_t>(m_stride)) +
+            static_cast<size_t>(c)
+        );
         return m_data[offset];
     }
 
     template <bool Max>
     void blit(
-        Bitmap*     src,
-        int         src_x,
-        int         src_y,
-        int         width,
-        int         height,
-        int         dst_x,
-        int         dst_y,
-        component_t src_components,
-        component_t dst_component_offset
+        Bitmap* const     src,
+        const int         src_x,
+        const int         src_y,
+        const int         width,
+        const int         height,
+        const int         dst_x,
+        const int         dst_y,
+        const component_t src_components,
+        const component_t dst_component_offset
     )
     {
-        if ((src == nullptr)                 ||
+        if (
+            (src == nullptr)                 ||
             (width  < 0)                     ||
             (height < 0)                     ||
             (src_x >= src->width())          ||
@@ -152,9 +162,10 @@ public:
             (dst_x >= this->width())         ||
             (dst_y >= this->height())        ||
             (dst_x + width  > this->width()) ||
-            (dst_y + height > this->height()))
+            (dst_y + height > this->height())
+        )
         {
-            FATAL("invalid input");
+            ERHE_FATAL("invalid input");
         }
 
         for (int iy = 0; iy < height; ++iy)
@@ -197,16 +208,16 @@ public:
 
     template <bool Max>
     void blit(
-        int                         width,
-        int                         height,
-        int                         dst_x,
-        int                         dst_y,
+        const int                   width,
+        const int                   height,
+        const int                   dst_x,
+        const int                   dst_y,
         const std::vector<value_t>& src_buffer,
-        int                         src_pitch,
-        int                         src_byte_width,
-        int                         src_components,
-        int                         dst_component_offset,
-        bool                        rotated
+        const int                   src_pitch,
+        const int                   src_byte_width,
+        const int                   src_components,
+        const int                   dst_component_offset,
+        const bool                  rotated
     )
     {
         if (rotated)
@@ -311,27 +322,31 @@ public:
 
     template <bool Max>
     void blit(
-        int                         width,
-        int                         height,
-        int                         dst_x,
-        int                         dst_y,
+        const int                   width,
+        const int                   height,
+        const int                   dst_x,
+        const int                   dst_y,
         const std::vector<value_t>& src_buffer,
-        int                         src_pitch,
-        int                         src_byte_width,
-        component_t                 src_components,
-        component_t                 dst_component_offset
+        const int                   src_pitch,
+        const int                   src_byte_width,
+        const component_t           src_components,
+        const component_t           dst_component_offset
     )
     {
-        if ((width < 0) ||
+        if (
+            (width < 0) ||
             (height < 0) ||
-            (src_components < 0))
+            (src_components < 0)
+        )
         {
-            FATAL("invalid index");
+            ERHE_FATAL("invalid index");
         }
 
-        // fmt::print("blit: w:{} h:{} dx:{} dy:{} sp: {} sbw: {} sc:{} dco: {}\n",
-        //            width, height, dst_x, dst_y, src_pitch, src_byte_width,
-        //            src_components, dst_component_offset);
+        // fmt::print(
+        //     "blit: w:{} h:{} dx:{} dy:{} sp: {} sbw: {} sc:{} dco: {}\n",
+        //     width, height, dst_x, dst_y, src_pitch, src_byte_width,
+        //     src_components, dst_component_offset
+        // );
 
         const int dst_height{height};
         const int dst_width{width};
@@ -396,30 +411,34 @@ public:
 
     template <bool Max>
     void blit_rotated(
-        int                         width,
-        int                         height,
-        int                         dst_x,
-        int                         dst_y,
+        const int                   width,
+        const int                   height,
+        const int                   dst_x,
+        const int                   dst_y,
         const std::vector<value_t>& src_buffer,
-        int                         src_pitch,
-        int                         src_byte_width,
-        component_t                 src_components,
-        component_t                 dst_component_offset
+        const int                   src_pitch,
+        const int                   src_byte_width,
+        const component_t           src_components,
+        const component_t           dst_component_offset
     )
     {
-        if ((width < 0) ||
+        if (
+            (width < 0) ||
             (height < 0) ||
-            (src_components < 0))
+            (src_components < 0)
+        )
         {
-            FATAL("invalid index");
+            ERHE_FATAL("invalid index");
         }
 
         const int dst_width {height};
         const int dst_height{width};
 
-        // fmt::print("blit_rotated: w:{} h:{} dx:{} dy:{} sp: {} sbw: {} sc:{} dco: {}\n",
-        //            width, height, dst_x, dst_y, src_pitch, src_byte_width,
-        //            src_components, dst_component_offset );
+        // fmt::print(
+        //     "blit_rotated: w:{} h:{} dx:{} dy:{} sp: {} sbw: {} sc:{} dco: {}\n",
+        //     width, height, dst_x, dst_y, src_pitch, src_byte_width,
+        //     src_components, dst_component_offset
+        // );
 
         // char* shades = " -+#";
 
@@ -478,8 +497,7 @@ public:
         // fmt::print("\nend of blit\n");
     }
 
-    auto as_span()
-    -> gsl::span<std::byte>
+    [[nodiscard]] auto as_span() -> gsl::span<std::byte>
     {
         return gsl::span<std::byte>(
             reinterpret_cast<std::byte*>(&m_data[0]),

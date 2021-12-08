@@ -91,6 +91,8 @@ set(source_list
     tools/physics_tool.hpp
     tools/selection_tool.cpp
     tools/selection_tool.hpp
+    tools/theremin_tool.cpp
+    tools/theremin_tool.hpp
     tools/trs_tool.cpp
     tools/trs_tool.hpp
     tools/tool.cpp
@@ -98,8 +100,10 @@ set(source_list
 
     windows/brushes.cpp
     windows/brushes.hpp
-    windows/frame_log_window.cpp
-    windows/frame_log_window.hpp
+    windows/debug_view_window.cpp
+    windows/debug_view_window.hpp
+    windows/log_window.cpp
+    windows/log_window.hpp
     windows/imgui_demo_window.cpp
     windows/imgui_demo_window.hpp
     windows/layers_window.cpp
@@ -127,10 +131,10 @@ set(source_list
 
     application.cpp
     application.hpp
-    concurrentqueue.h
+    command.cpp
+    command.hpp
     configuration.cpp
     configuration.hpp
-    editor.hpp
     log.cpp
     log.hpp
     main.cpp
@@ -139,15 +143,14 @@ set(source_list
     renderdoc_capture_support.hpp
     rendering.cpp
     rendering.hpp
-    time.cpp
-    time.hpp
-    tools.cpp
-    tools.hpp
-    view.cpp
-    view.hpp
+    editor_time.cpp
+    editor_time.hpp
+    editor_tools.cpp
+    editor_tools.hpp
+    editor_view.cpp
+    editor_view.hpp
     window.cpp
     window.hpp
-    #TracyClient.cpp
 
     res/icons/camera.svg
     res/icons/directional_light.svg
@@ -181,6 +184,8 @@ set(source_list
     res/shaders/text.frag
     res/shaders/tool.vert
     res/shaders/tool.frag
+    res/shaders/visualize_depth.vert
+    res/shaders/visualize_depth.frag
     res/shaders/wide_lines.vert
     res/shaders/wide_lines.geom
     res/shaders/wide_lines.frag
@@ -193,6 +198,7 @@ target_link_libraries(
     PRIVATE
     cxxopts
     erhe_components
+    erhe_concurrency
     erhe_geometry
     erhe_gl
     erhe_graphics
@@ -205,7 +211,7 @@ target_link_libraries(
     erhe_ui
     erhe_xr
     lunasvg
-    mango
+    miniaudio
     nlohmann_json::nlohmann_json
     openxr_loader
 )

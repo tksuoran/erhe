@@ -21,7 +21,7 @@ public:
     {
     public:
         Transfer_entry(
-            Buffer*                target,
+            Buffer&                target,
             const size_t           target_offset,
             std::vector<uint8_t>&& data
         )
@@ -41,21 +41,20 @@ public:
         {
         }
 
-        Transfer_entry& operator=(Transfer_entry&& other) noexcept
-        {
-            target        = other.target;
-            target_offset = other.target_offset;
-            data          = std::move(other.data);
-            return *this;
-        }
+        auto operator=(Transfer_entry&& other) = delete;
 
-        Buffer*              target{nullptr};
+        Buffer&              target;
         size_t               target_offset{0};
         std::vector<uint8_t> data;
     };
 
     void flush();
-    void enqueue(Buffer* buffer, const size_t offset, std::vector<uint8_t>&& data);
+
+    void enqueue(
+        Buffer&                buffer,
+        const size_t           offset,
+        std::vector<uint8_t>&& data
+    );
 
 private:
     std::mutex                  m_mutex;

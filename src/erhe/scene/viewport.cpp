@@ -10,7 +10,7 @@ auto Viewport::unproject(
     const glm::vec3 window,
     const float     depth_range_near,
     const float     depth_range_far
-) const -> glm::vec3
+) const -> std::optional<glm::vec3>
 {
     return erhe::toolkit::unproject(
         world_from_clip,

@@ -56,7 +56,7 @@ void initialize_renderdoc_capture_support()
 
         int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&renderdoc_api);
         log_renderdoc.trace("Loaded RenderDoc DLL, RENDERDOC_GetAPI() return value = {}\n", ret);
-        VERIFY(ret == 1);
+        ERHE_VERIFY(ret == 1);
 
         if (renderdoc_api->MaskOverlayBits == nullptr)
         {
@@ -76,7 +76,7 @@ void initialize_renderdoc_capture_support()
         pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(renderdoc_so, "RENDERDOC_GetAPI");
         int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&renderdoc_api);
         log_renderdoc.trace("Loaded RenderDoc DLL, RENDERDOC_GetAPI() return value = {}\n", ret);
-        VERIFY(ret == 1);
+        ERHE_VERIFY(ret == 1);
     }
 #endif
     if (renderdoc_api != nullptr)

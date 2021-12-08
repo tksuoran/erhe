@@ -15,18 +15,24 @@ class Buffer;
 class Texture_create_info
 {
 public:
-    Texture_create_info() = default;
+    //Texture_create_info();
+    //
+    //Texture_create_info(
+    //    const gl::Texture_target  target,
+    //    const gl::Internal_format internal_format,
+    //    const bool                use_mipmaps,
+    //    const int                 width,
+    //    const int                 height = 1,
+    //    const int                 depth  = 1
+    //);
 
-    Texture_create_info(
-        const gl::Texture_target  target,
-        const gl::Internal_format internal_format,
-        const bool                use_mipmaps,
-        const int                 width,
-        const int                 height = 1,
-        const int                 depth  = 1
-    );
+    static [[nodiscard]] auto calculate_level_count(
+        const int width,
+        const int height = 0,
+        const int depth = 0
+    ) -> int;
 
-    void calculate_level_count();
+    [[nodiscard]] auto calculate_level_count() const -> int;
 
     gl::Texture_target  target                {gl::Texture_target::texture_2d};
     gl::Internal_format internal_format       {gl::Internal_format::rgba8};
@@ -36,7 +42,7 @@ public:
     int                 width                 {1};
     int                 height                {1};
     int                 depth                 {1};
-    int                 level_count           {1};
+    int                 level_count           {0};
     int                 row_stride            {0};
     Buffer*             buffer                {nullptr};
     GLuint              wrap_texture_name     {0};
@@ -78,14 +84,15 @@ public:
     );
 
     void set_debug_label(const std::string_view value);
-    auto debug_label    () const -> const std::string&;
-    auto width          () const -> int;
-    auto height         () const -> int;
-    auto depth          () const -> int;
-    auto sample_count   () const -> int;
-    auto target         () const -> gl::Texture_target;
-    auto is_layered     () const -> bool;
-    auto gl_name        () const -> GLuint;
+
+    [[nodiscard]] auto debug_label    () const -> const std::string&;
+    [[nodiscard]] auto width          () const -> int;
+    [[nodiscard]] auto height         () const -> int;
+    [[nodiscard]] auto depth          () const -> int;
+    [[nodiscard]] auto sample_count   () const -> int;
+    [[nodiscard]] auto target         () const -> gl::Texture_target;
+    [[nodiscard]] auto is_layered     () const -> bool;
+    [[nodiscard]] auto gl_name        () const -> GLuint;
 
 private:
     Gl_texture          m_handle;
@@ -112,17 +119,17 @@ public:
     }
 };
 
-auto operator==(const Texture& lhs, const Texture& rhs) noexcept -> bool;
+[[nodiscard]] auto operator==(const Texture& lhs, const Texture& rhs) noexcept -> bool;
 
-auto operator!=(const Texture& lhs, const Texture& rhs) noexcept -> bool;
+[[nodiscard]] auto operator!=(const Texture& lhs, const Texture& rhs) noexcept -> bool;
 
-auto component_count(gl::Pixel_format pixel_format) -> size_t;
+[[nodiscard]] auto component_count(gl::Pixel_format pixel_format) -> size_t;
 
-auto byte_count(gl::Pixel_type pixel_type) -> size_t;
+[[nodiscard]] auto byte_count(gl::Pixel_type pixel_type) -> size_t;
 
-auto get_upload_pixel_byte_count(gl::Internal_format internalformat) -> size_t;
+[[nodiscard]] auto get_upload_pixel_byte_count(gl::Internal_format internalformat) -> size_t;
 
-auto get_format_and_type(
+[[nodiscard]] auto get_format_and_type(
     gl::Internal_format internalformat,
     gl::Pixel_format&   format,
     gl::Pixel_type&     type

@@ -5,9 +5,10 @@
 namespace erhe::geometry::shapes
 {
 
-auto make_sphere(const double       radius,
-                 const unsigned int slice_count,
-                 const unsigned int stack_division)
--> Geometry;
+[[nodiscard]] auto make_sphere(
+    const double       radius,
+    const unsigned int slice_count,
+    const unsigned int stack_division
+) -> Geometry;
 
 } // namespace erhe::geometry::shapes

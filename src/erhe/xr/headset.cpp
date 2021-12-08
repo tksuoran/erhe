@@ -2,12 +2,13 @@
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/xr/xr_instance.hpp"
 #include "erhe/xr/xr_session.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace erhe::xr {
 
 Headset::Headset(erhe::toolkit::Context_window* context_window)
 {
-    VERIFY(context_window != nullptr);
+    ERHE_VERIFY(context_window != nullptr);
 
     m_xr_instance = std::make_unique<Xr_instance>();
     if (!m_xr_instance->is_available())
@@ -28,6 +29,16 @@ Headset::~Headset()
 auto Headset::controller_pose() const -> Pose
 {
     return m_controller_pose;
+}
+
+auto Headset::get_hand_tracking_joint(const XrHandEXT hand, const XrHandJointEXT joint) const -> Hand_tracking_joint
+{
+    return m_xr_session->get_hand_tracking_joint(hand, joint);
+}
+
+auto Headset::get_hand_tracking_active(const XrHandEXT hand) const -> bool
+{
+    return m_xr_session->get_hand_tracking_active(hand);
 }
 
 auto Headset::trigger_value() const -> float
@@ -52,6 +63,8 @@ auto Headset::squeeze_click() const -> bool
 
 auto Headset::begin_frame() -> Frame_timing
 {
+    ERHE_PROFILE_FUNCTION
+
     Frame_timing result{0, 0, false};
     if (!m_xr_instance)
     {
@@ -66,6 +79,9 @@ auto Headset::begin_frame() -> Frame_timing
     {
         return result;
     }
+
+    m_xr_session->update_hand_tracking();
+
     m_controller_pose.orientation = to_glm(m_xr_instance->actions.aim_pose_space_location.pose.orientation);
     m_controller_pose.position    = to_glm(m_xr_instance->actions.aim_pose_space_location.pose.position);
 
@@ -80,7 +96,6 @@ auto Headset::begin_frame() -> Frame_timing
         return result;
     }
 
-
     result.predicted_display_time   = xr_frame_state->predictedDisplayTime;
     result.predicted_display_pediod = xr_frame_state->predictedDisplayPeriod;
     result.should_render            = xr_frame_state->shouldRender;
@@ -90,6 +105,8 @@ auto Headset::begin_frame() -> Frame_timing
 
 auto Headset::render(std::function<bool(Render_view&)> render_view_callback) -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!m_xr_session)
     {
         return false;
@@ -103,6 +120,8 @@ auto Headset::render(std::function<bool(Render_view&)> render_view_callback) -> 
 
 auto Headset::end_frame() -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!m_xr_instance)
     {
         return false;

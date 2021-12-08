@@ -100,8 +100,11 @@ public:
     );
 
 private:
-    auto select_pipeline      (Pass pass) const -> const erhe::graphics::Pipeline*;
-    auto select_primitive_mode(Pass pass) const -> erhe::primitive::Primitive_mode;
+    [[nodiscard]]
+    auto select_pipeline      (const Pass pass) const -> const erhe::graphics::Pipeline*;
+
+    [[nodiscard]]
+    auto select_primitive_mode(const Pass pass) const -> erhe::primitive::Primitive_mode;
 
     Configuration*                        m_configuration         {nullptr};
     erhe::graphics::OpenGL_state_tracker* m_pipeline_state_tracker{nullptr};

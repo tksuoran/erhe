@@ -33,7 +33,7 @@ void Mesh_memory::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 
@@ -64,48 +64,33 @@ void Mesh_memory::initialize_component()
     gl_vertex_buffer->set_debug_label("Scene Manager Vertex");
     gl_index_buffer ->set_debug_label("Scene Manager Index");
 
-    gl_buffer_sink = make_unique<erhe::primitive::Gl_buffer_sink>(
+    gl_buffer_sink = std::make_unique<erhe::primitive::Gl_buffer_sink>(
         *gl_buffer_transfer_queue.get(),
-        gl_vertex_buffer,
-        gl_index_buffer
+        *gl_vertex_buffer.get(),
+        *gl_index_buffer.get()
     );
 
-    {
-        ERHE_PROFILE_SCOPE("RT VBO");
-
-        raytrace_vertex_buffer = erhe::raytrace::IBuffer::create_shared(vertex_byte_count);
-    }
-    {
-        ERHE_PROFILE_SCOPE("RT IBO");
-
-        raytrace_index_buffer  = erhe::raytrace::IBuffer::create_shared(index_byte_count);
-    }
-
-    raytrace_buffer_sink   = make_unique<erhe::primitive::Raytrace_buffer_sink>(
-        raytrace_vertex_buffer,
-        raytrace_index_buffer
-    );
-
-    build_info_set.gl      .buffer.buffer_sink = gl_buffer_sink.get();
-    build_info_set.raytrace.buffer.buffer_sink = raytrace_buffer_sink.get();
+    build_info_set.gl.buffer.buffer_sink = gl_buffer_sink.get();
 
     auto& gl_format_info = build_info_set.gl.format;
     auto& gl_buffer_info = build_info_set.gl.buffer;
 
-    gl_buffer_info.index_type         = gl::Draw_elements_type::unsigned_int;
+    gl_buffer_info.index_type = gl::Draw_elements_type::unsigned_int;
 
-    gl_format_info.features.fill_triangles   = true;
-    gl_format_info.features.edge_lines       = true;
-    gl_format_info.features.centroid_points  = true;
-    gl_format_info.features.corner_points    = true;
-    gl_format_info.features.position         = true;
-    gl_format_info.features.normal           = true;
-    gl_format_info.features.normal_smooth    = true;
-    gl_format_info.features.tangent          = true;
-    gl_format_info.features.bitangent        = true;
-    gl_format_info.features.texcoord         = true;
-    gl_format_info.features.color            = true;
-    gl_format_info.features.id               = true;
+    gl_format_info.features = {
+        .fill_triangles   = true,
+        .edge_lines       = true,
+        .corner_points    = true,
+        .centroid_points  = true,
+        .position         = true,
+        .normal           = true,
+        .normal_smooth    = true,
+        .tangent          = true,
+        .bitangent        = true,
+        .color            = true,
+        .texcoord         = true,
+        .id               = true
+    };
     gl_format_info.normal_style              = Normal_style::corner_normals;
     gl_format_info.vertex_attribute_mappings = &Component::get<Program_interface>()->shader_resources->attribute_mappings;
 

@@ -19,21 +19,24 @@ auto Light::node_type() const -> const char*
     return "Light";
 }
 
-void Light::update(const Viewport viewport)
+auto Light::projection_transforms(Viewport viewport) const -> Projection_transforms
 {
-    // Update clip from view transform / view from clip
-    m_projection.update(m_light_transforms.clip_from_node, viewport);
+    const auto clip_from_node = m_projection.clip_from_node_transform(viewport);
+    return Projection_transforms{
+        clip_from_node,
+        Transform{
+            clip_from_node.matrix() * node_from_world(),
+            world_from_node() * clip_from_node.inverse_matrix()
+        }
+    };
+}
 
-    // Update clip from world / world from clip
-    m_light_transforms.clip_from_world.set(
-        clip_from_node() * node_from_world(),
-        world_from_node() * node_from_clip()
-    );
-
-    m_light_transforms.texture_from_world.set(
-        texture_from_clip * clip_from_world(),
-        world_from_clip() * clip_from_texture
-    );
+auto Light::texture_transform(const Transform& clip_from_world) const -> Transform
+{
+    return Transform{
+        texture_from_clip * clip_from_world.matrix(),
+        clip_from_world.inverse_matrix() * clip_from_texture
+    };
 }
 
 auto Light::projection() -> Projection*
@@ -46,35 +49,35 @@ auto Light::projection() const -> const Projection*
     return &m_projection;
 }
 
-auto Light::clip_from_node() const -> glm::mat4
-{
-    return m_light_transforms.clip_from_node.matrix();
-}
-
-auto Light::clip_from_world() const -> glm::mat4
-{
-    return m_light_transforms.clip_from_world.matrix();
-}
-
-auto Light::node_from_clip() const -> glm::mat4
-{
-    return m_light_transforms.clip_from_node.inverse_matrix();
-}
-
-auto Light::world_from_clip() const -> glm::mat4
-{
-    return m_light_transforms.clip_from_world.inverse_matrix();
-}
-
-auto Light::texture_from_world() const -> glm::mat4
-{
-    return m_light_transforms.texture_from_world.matrix();
-}
-
-auto Light::world_from_texture() const -> glm::mat4
-{
-    return m_light_transforms.texture_from_world.inverse_matrix();
-}
+// auto Light::clip_from_node() const -> glm::mat4
+// {
+//     return m_light_transforms.clip_from_node.matrix();
+// }
+// 
+// auto Light::clip_from_world() const -> glm::mat4
+// {
+//     return m_light_transforms.clip_from_world.matrix();
+// }
+// 
+// auto Light::node_from_clip() const -> glm::mat4
+// {
+//     return m_light_transforms.clip_from_node.inverse_matrix();
+// }
+// 
+// auto Light::world_from_clip() const -> glm::mat4
+// {
+//     return m_light_transforms.clip_from_world.inverse_matrix();
+// }
+// 
+// auto Light::texture_from_world() const -> glm::mat4
+// {
+//     return m_light_transforms.texture_from_world.matrix();
+// }
+// 
+// auto Light::world_from_texture() const -> glm::mat4
+// {
+//     return m_light_transforms.texture_from_world.inverse_matrix();
+// }
 
 auto is_light(const Node* const node) -> bool
 {

@@ -25,11 +25,12 @@ public:
 
     ~Renderbuffer();
 
-    auto internal_format() const -> gl::Internal_format;
-    auto sample_count   () const -> unsigned int;
-    auto width          () const -> unsigned int;
-    auto height         () const -> unsigned int;
-    auto gl_name        () const -> unsigned int;
+    [[nodiscard]] auto internal_format() const -> gl::Internal_format;
+    [[nodiscard]] auto sample_count   () const -> unsigned int;
+    [[nodiscard]] auto width          () const -> unsigned int;
+    [[nodiscard]] auto height         () const -> unsigned int;
+    [[nodiscard]] auto gl_name        () const -> unsigned int;
+
     void set_debug_label(std::string_view label);
 
 private:
@@ -46,8 +47,14 @@ public:
     auto operator()(const Renderbuffer& renderbuffer) const noexcept -> size_t;
 };
 
-auto operator==(const Renderbuffer& lhs, const Renderbuffer& rhs) noexcept -> bool;
+[[nodiscard]] auto operator==(
+    const Renderbuffer& lhs,
+    const Renderbuffer& rhs
+) noexcept -> bool;
 
-auto operator!=(const Renderbuffer& lhs, const Renderbuffer& rhs) noexcept -> bool;
+[[nodiscard]] auto operator!=(
+    const Renderbuffer& lhs,
+    const Renderbuffer& rhs
+) noexcept -> bool;
 
 } // namespace erhe::graphics

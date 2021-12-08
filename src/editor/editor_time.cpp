@@ -1,22 +1,16 @@
-#include "time.hpp"
+#include "editor_time.hpp"
 #include "application.hpp"
-#include "log.hpp"
-#include "rendering.hpp"
 #include "scene/scene_root.hpp"
 #include "window.hpp"
 
-#include "erhe/imgui/imgui_impl_erhe.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/profile.hpp"
-
-#include <backends/imgui_impl_glfw.h>
 
 
 namespace editor {
 
 using namespace std;
 
-//static thread_local erhe::toolkit::Context_window* s_worker_thread_context = nullptr;
 
 Editor_time::Editor_time()
     : erhe::components::Component{c_name}
@@ -38,6 +32,8 @@ void Editor_time::start_time()
 
 void Editor_time::update()
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto new_time   = chrono::steady_clock::now();
     const auto duration   = new_time - m_current_time;
     double     frame_time = chrono::duration<double, ratio<1>>(duration).count();
@@ -59,12 +55,6 @@ void Editor_time::update()
 
     update_once_per_frame(erhe::components::Time_context{dt, m_time, m_frame_number});
     m_scene_root->scene().update_node_transforms();
-
-    //if (m_trigger_capture)
-    //{
-    //    m_application->end_renderdoc_capture();
-    //    m_trigger_capture = false;
-    //}
 
     ERHE_PROFILE_FRAME_END
 }

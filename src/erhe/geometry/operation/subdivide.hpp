@@ -13,6 +13,8 @@ public:
     Subdivide(Geometry& src, Geometry& destination);
 };
 
-auto subdivide(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto subdivide(
+    erhe::geometry::Geometry& source
+) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

@@ -23,14 +23,20 @@ target_link_libraries(
     erhe_gl
     erhe_graphics
     erhe_primitive
-    freetype
     fmt::fmt
     glm::glm
     glfw
-    harfbuzz
     Microsoft.GSL::GSL
     RectangleBinPack::RectangleBinPack
 )
+
+if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
+    target_link_libraries(${_target} PRIVATE freetype)
+endif ()
+
+if (${ERHE_TEXT_LAYOUT_LIBRARY} STREQUAL "harfbuzz")
+    target_link_libraries(${_target} PRIVATE harfbuzz)
+endif ()
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
     target_link_libraries(${_target} PRIVATE TracyClient)

@@ -2,6 +2,8 @@
 
 #include "windows/imgui_window.hpp"
 
+#include "erhe/components/component.hpp"
+
 #include <memory>
 
 namespace erhe::primitive
@@ -28,6 +30,7 @@ public:
     ~Materials() override;
 
     // Implements Component
+    [[nodiscard]]
     auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
@@ -35,12 +38,10 @@ public:
     // Implements Imgui_window
     void imgui() override;
 
+    [[nodiscard]]
     auto selected_material() const -> std::shared_ptr<erhe::primitive::Material>;
 
 private:
-    //void add_material(const std::shared_ptr<erhe::primitive::Material>& material);
-    //void materials();
-
     Scene_root*                                             m_scene_root{nullptr};
 
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;

@@ -1,6 +1,7 @@
 #include "windows/layers_window.hpp"
 #include "log.hpp"
-#include "tools.hpp"
+#include "editor_tools.hpp"
+
 #include "graphics/icon_set.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/node_physics.hpp"
@@ -57,7 +58,6 @@ void Layers_window::imgui()
     };
 
     const auto& scene = m_scene_root->scene();
-    ImGui::Begin("Layers");
     for (const auto& layer : scene.mesh_layers)
     {
         if (ImGui::TreeNodeEx(layer->name.c_str(), parent_flags))
@@ -83,34 +83,8 @@ void Layers_window::imgui()
             ImGui::TreePop();
         }
     }
-    ImGui::End();
 
-    //ImGui::Begin("Light layers");
-    //for (const auto& layer : scene.light_layers)
-    //{
-    //    if (ImGui::TreeNodeEx(layer->name.c_str(), parent_flags))
-    //    {
-    //        const auto& lights = layer->lights;
-    //        for (const auto& light : lights)
-    //        {
-    //            m_icon_set->icon(*light.get());
-    //            ImGui::TreeNodeEx(
-    //                light->name().c_str(),
-    //                leaf_flags | (light->is_selected()
-    //                    ? ImGuiTreeNodeFlags_Selected
-    //                    : ImGuiTreeNodeFlags_None)
-    //            );
-    //            if (ImGui::IsItemClicked())
-    //            {
-    //                m_node_clicked = light->shared_from_this();
-    //            }
-    //        }
-    //        ImGui::TreePop();
-    //    }
-    //}
-    //ImGui::End();
-
-    ImGuiIO& io = ImGui::GetIO();
+    const ImGuiIO& io = ImGui::GetIO();
     if (m_node_clicked)
     {
         if (io.KeyShift) // ctrl?

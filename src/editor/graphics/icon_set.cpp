@@ -8,7 +8,12 @@
 
 namespace editor {
 
-Icon_set::Icon_set(int icon_width, int icon_height, int row_count, int column_count)
+Icon_set::Icon_set(
+    const int icon_width,
+    const int icon_height,
+    const int row_count,
+    const int column_count
+)
     : erhe::components::Component{c_name}
     , m_icon_width               {icon_width}
     , m_icon_height              {icon_height}
@@ -28,16 +33,17 @@ void Icon_set::connect()
 
 void Icon_set::initialize_component()
 {
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
-    const erhe::graphics::Texture_create_info create_info{
-        gl::Texture_target::texture_2d,
-        gl::Internal_format::rgba8,
-        true,
-        m_column_count * m_icon_width,
-        m_row_count * m_icon_height
-    };
-    texture = std::make_shared<erhe::graphics::Texture>(create_info);
+    texture = std::make_shared<erhe::graphics::Texture>(
+        erhe::graphics::Texture_create_info{
+            .target          = gl::Texture_target::texture_2d,
+            .internal_format = gl::Internal_format::rgba8,
+            .use_mipmaps     = true,
+            .width           = m_column_count * m_icon_width,
+            .height          = m_row_count * m_icon_height
+        }
+    );
     texture->set_debug_label("Icon_set");
 
     m_icon_uv_width  = static_cast<float>(m_icon_width ) / static_cast<float>(texture->width());
@@ -66,9 +72,9 @@ auto Icon_set::load(const std::filesystem::path& path)
     const float u            = static_cast<float>(x_offset) / static_cast<float>(texture->width());
     const float v            = static_cast<float>(y_offset) / static_cast<float>(texture->height());
 
-    const auto  span     = gsl::span<std::byte>{
+    const auto span = gsl::span<std::byte>{
         reinterpret_cast<std::byte*>(bitmap.data()),
-        bitmap.stride() * bitmap.height()
+        static_cast<size_t>(bitmap.stride()) * static_cast<size_t>(bitmap.height())
     };
 
     texture->upload(gl::Internal_format::rgba8, span, bitmap.width(), bitmap.height(), 1, 0, x_offset, y_offset, 0);

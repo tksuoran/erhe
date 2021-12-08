@@ -6,9 +6,10 @@ namespace erhe::raytrace
 
 using namespace erhe::log;
 
-Category log_buffer  (Color::RED,    Color::GRAY, Level::LEVEL_WARN);
-Category log_device  (Color::YELLOW, Color::GRAY, Level::LEVEL_WARN);
-Category log_geometry(Color::GREEN,  Color::GRAY, Level::LEVEL_TRACE);
-Category log_scene   (Color::BLUE,   Color::GRAY, Level::LEVEL_WARN);
+Category log_buffer  {Color::RED,    Color::GRAY, Level::LEVEL_WARN};
+Category log_device  {Color::YELLOW, Color::GRAY, Level::LEVEL_WARN};
+Category log_geometry{Color::GREEN,  Color::GRAY, Level::LEVEL_WARN};
+Category log_scene   {Color::BLUE,   Color::GRAY, Level::LEVEL_WARN};
+Category log_embree  {Color::GREEN,  Color::GRAY, Level::LEVEL_INFO};
 
 } // namespace erhe::raytrace

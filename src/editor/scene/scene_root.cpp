@@ -1,6 +1,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_raytrace.hpp"
 #include "log.hpp"
 
 #include "erhe/graphics/buffer.hpp"
@@ -15,7 +16,6 @@
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <mango/core/thread.hpp>
 #include <glm/gtx/color_space.hpp>
 
 #include <algorithm>
@@ -57,7 +57,7 @@ Camera_rig::Camera_rig(
 
 
 Scene_root::Scene_root()
-    : Component(c_name)
+    : Component{c_name}
 {
 }
 
@@ -98,7 +98,7 @@ void Scene_root::initialize_component()
 
     m_physics_world = erhe::physics::IWorld::create_unique();
 
-    m_raytrace_scene = erhe::raytrace::IScene::create_unique();
+    m_raytrace_scene = erhe::raytrace::IScene::create_unique("root");
 }
 
 auto Scene_root::materials() -> vector<shared_ptr<Material>>&
@@ -113,44 +113,40 @@ auto Scene_root::materials() const -> const vector<shared_ptr<Material>>&
 
 auto Scene_root::physics_world() -> erhe::physics::IWorld&
 {
-    VERIFY(m_physics_world);
+    ERHE_VERIFY(m_physics_world);
     return *m_physics_world.get();
+}
+
+auto Scene_root::raytrace_scene() -> erhe::raytrace::IScene&
+{
+    ERHE_VERIFY(m_raytrace_scene);
+    return *m_raytrace_scene.get();
 }
 
 auto Scene_root::scene() -> erhe::scene::Scene&
 {
-    VERIFY(m_scene);
+    ERHE_VERIFY(m_scene);
     return *m_scene.get();
 }
 
 auto Scene_root::content_layer() -> erhe::scene::Mesh_layer&
 {
-    VERIFY(m_content_layer);
+    ERHE_VERIFY(m_content_layer);
     return *m_content_layer.get();
 }
 
-auto Scene_root::add(const shared_ptr<Material>& material)
--> shared_ptr<Material>
+void Scene_root::add(
+    const std::shared_ptr<erhe::scene::Mesh>& mesh,
+    Mesh_layer*                               layer
+)
 {
-    VERIFY(material);
-    material->index = m_materials.size();
-    m_materials.push_back(material);
-    log_materials.trace("material {} is {}\n", material->index, material->name);
-    return material;
-}
+    std::lock_guard<std::mutex> lock{m_scene_mutex};
 
-auto Scene_root::add(const shared_ptr<Mesh>& mesh)
--> shared_ptr<Mesh>
-{
-    m_content_layer->meshes.push_back(mesh);
-    return mesh;
-}
-
-auto Scene_root::add(const shared_ptr<Light>& light)
--> shared_ptr<Light>
-{
-    m_light_layer->lights.push_back(light);
-    return light;
+    if (layer == nullptr)
+    {
+        layer = m_content_layer.get();
+    }
+    add_to_scene_layer(scene(), *layer, mesh);
 }
 
 auto Scene_root::brush_layer() const -> std::shared_ptr<erhe::scene::Mesh_layer>
@@ -176,42 +172,6 @@ auto Scene_root::tool_layer() const -> std::shared_ptr<erhe::scene::Mesh_layer>
 auto Scene_root::light_layer() const -> std::shared_ptr<erhe::scene::Light_layer>
 {
     return m_light_layer;
-}
-
-auto Scene_root::make_mesh_node(
-    const string_view                     name,
-    const shared_ptr<Primitive_geometry>& primitive_geometry,
-    const shared_ptr<Material>&           material,
-    Node*                                 parent,
-    const glm::vec3                       position
-) -> shared_ptr<Mesh>
-{
-    return make_mesh_node(name, primitive_geometry, material, content_layer(), parent, position);
-}
-
-auto Scene_root::make_mesh_node(
-    const string_view                     name,
-    const shared_ptr<Primitive_geometry>& primitive_geometry,
-    const shared_ptr<Material>&           material,
-    Mesh_layer&                           layer,
-    Node*                                 parent,
-    const glm::vec3                       position
-) -> shared_ptr<Mesh>
-{
-    auto mesh = make_shared<Mesh>(name);
-    mesh->data.primitives.emplace_back(primitive_geometry, material);
-
-    mesh->set_parent_from_node(Transform::create_translation(position));
-
-    std::lock_guard<std::mutex> lock{m_scene_mutex};
-
-    add_to_scene_layer(scene(), layer, mesh);
-    if (parent != nullptr)
-    {
-        parent->attach(mesh);
-    }
-
-    return mesh;
 }
 
 } // namespace editor

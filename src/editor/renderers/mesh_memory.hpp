@@ -59,25 +59,21 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-    auto gl_vertex_format() const -> erhe::graphics::Vertex_format&
+    [[nodiscard]] auto gl_vertex_format() const -> erhe::graphics::Vertex_format&
     {
         return *build_info_set.gl.buffer.vertex_format.get();
     }
 
-    auto gl_index_type() const -> gl::Draw_elements_type
+    [[nodiscard]] auto gl_index_type() const -> gl::Draw_elements_type
     {
         return build_info_set.gl.buffer.index_type;
     }
 
     std::unique_ptr<erhe::graphics::Buffer_transfer_queue> gl_buffer_transfer_queue;
     std::unique_ptr<erhe::primitive::Gl_buffer_sink>       gl_buffer_sink;
-    std::unique_ptr<erhe::primitive::Raytrace_buffer_sink> raytrace_buffer_sink;
     std::shared_ptr<erhe::graphics::Buffer>                gl_vertex_buffer;
     std::shared_ptr<erhe::graphics::Buffer>                gl_index_buffer;
     erhe::primitive::Build_info_set                        build_info_set;
-
-    std::shared_ptr<erhe::raytrace::IBuffer> raytrace_vertex_buffer;
-    std::shared_ptr<erhe::raytrace::IBuffer> raytrace_index_buffer;
 };
 
 } // namespace editor

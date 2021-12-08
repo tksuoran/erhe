@@ -29,12 +29,12 @@ class Buffer_sink
 public:
     virtual ~Buffer_sink();
 
-    virtual auto allocate_vertex_buffer(
+    virtual [[nodiscard]] auto allocate_vertex_buffer(
         const size_t vertex_count,
         const size_t vertex_element_size
     ) -> Buffer_range = 0;
 
-    virtual auto allocate_index_buffer(
+    virtual [[nodiscard]] auto allocate_index_buffer(
         const size_t index_count,
         const size_t index_element_size
     ) -> Buffer_range = 0;
@@ -48,18 +48,17 @@ class Gl_buffer_sink
 {
 public:
     Gl_buffer_sink(
-        erhe::graphics::Buffer_transfer_queue&         buffer_transfer_queue,
-        const std::shared_ptr<erhe::graphics::Buffer>& vertex_buffer,
-        const std::shared_ptr<erhe::graphics::Buffer>& index_buffer
+        erhe::graphics::Buffer_transfer_queue& buffer_transfer_queue,
+        erhe::graphics::Buffer&                vertex_buffer,
+        erhe::graphics::Buffer&                index_buffer
     );
-    ~Gl_buffer_sink() override;
 
-    auto allocate_vertex_buffer(
+    [[nodiscard]] auto allocate_vertex_buffer(
         const size_t vertex_count,
         const size_t vertex_element_size
     ) -> Buffer_range override;
 
-    auto allocate_index_buffer(
+    [[nodiscard]] auto allocate_index_buffer(
         const size_t index_count,
         const size_t index_element_size
     ) -> Buffer_range override;
@@ -68,9 +67,9 @@ public:
     void buffer_ready(Index_buffer_writer&  writer) const override;
 
 private:
-    erhe::graphics::Buffer_transfer_queue&  m_buffer_transfer_queue;
-    std::shared_ptr<erhe::graphics::Buffer> m_vertex_buffer;
-    std::shared_ptr<erhe::graphics::Buffer> m_index_buffer;
+    erhe::graphics::Buffer_transfer_queue& m_buffer_transfer_queue;
+    erhe::graphics::Buffer&                m_vertex_buffer;
+    erhe::graphics::Buffer&                m_index_buffer;
 };
 
 class Raytrace_buffer_sink
@@ -78,17 +77,16 @@ class Raytrace_buffer_sink
 {
 public:
     Raytrace_buffer_sink(
-        const std::shared_ptr<erhe::raytrace::IBuffer>& vertex_buffer,
-        const std::shared_ptr<erhe::raytrace::IBuffer>& index_buffer
+        erhe::raytrace::IBuffer& vertex_buffer,
+        erhe::raytrace::IBuffer& index_buffer
     );
-    ~Raytrace_buffer_sink() override;
 
-    auto allocate_vertex_buffer(
+    [[nodiscard]] auto allocate_vertex_buffer(
         const size_t vertex_count,
         const size_t vertex_element_size
     ) -> Buffer_range override;
 
-    auto allocate_index_buffer(
+    [[nodiscard]] auto allocate_index_buffer(
         const size_t index_count,
         const size_t index_element_size
     ) -> Buffer_range override;
@@ -97,8 +95,8 @@ public:
     void buffer_ready(Index_buffer_writer&  writer) const override;
 
 private:
-    std::shared_ptr<erhe::raytrace::IBuffer> m_vertex_buffer;
-    std::shared_ptr<erhe::raytrace::IBuffer> m_index_buffer;
+    erhe::raytrace::IBuffer& m_vertex_buffer;
+    erhe::raytrace::IBuffer& m_index_buffer;
 };
 
 } // namespace erhe::primitive

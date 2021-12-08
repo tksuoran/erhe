@@ -12,6 +12,7 @@ set(source_list
 
 if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
     add_definitions(-DIMGUI_ENABLE_FREETYPE)
+    add_definitions(-DIMGUI_DISABLE_OBSOLETE_FUNCTIONS)
     list(APPEND source_list
         misc/freetype/imgui_freetype.cpp
         misc/freetype/imgui_freetype.h

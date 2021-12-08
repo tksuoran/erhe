@@ -25,16 +25,19 @@ public:
 
     ~Sampler() = default;
 
-    auto gl_name() const -> unsigned int
+    [[nodiscard]] auto gl_name() const -> unsigned int
     {
         return m_handle.gl_name();
     }
 
     gl::Texture_min_filter               min_filter    {gl::Texture_min_filter::nearest};
     gl::Texture_mag_filter               mag_filter    {gl::Texture_mag_filter::nearest};
-    std::array<gl::Texture_wrap_mode, 3> wrap_mode     {gl::Texture_wrap_mode::clamp_to_edge,
-                                                        gl::Texture_wrap_mode::clamp_to_edge,
-                                                        gl::Texture_wrap_mode::clamp_to_edge};
+
+    std::array<gl::Texture_wrap_mode, 3> wrap_mode{
+        gl::Texture_wrap_mode::clamp_to_edge,
+        gl::Texture_wrap_mode::clamp_to_edge,
+        gl::Texture_wrap_mode::clamp_to_edge
+    };
     gl::Texture_compare_mode             compare_mode  {gl::Texture_compare_mode::none};
     gl::Texture_compare_func             compare_func  {gl::Texture_compare_func::lequal};
     float                                lod_bias      {-1000.0f};
@@ -52,6 +55,7 @@ private:
 class Sampler_hash
 {
 public:
+    [[nodiscard]]
     auto operator()(const Sampler& sampler) const noexcept -> size_t
     {
         Expects(sampler.gl_name() != 0);
@@ -60,8 +64,14 @@ public:
     }
 };
 
-auto operator==(const Sampler& lhs, const Sampler& rhs) noexcept -> bool;
+[[nodiscard]] auto operator==(
+    const Sampler& lhs,
+    const Sampler& rhs
+) noexcept -> bool;
 
-auto operator!=(const Sampler& lhs, const Sampler& rhs) noexcept -> bool;
+[[nodiscard]] auto operator!=(
+    const Sampler& lhs,
+    const Sampler& rhs
+) noexcept -> bool;
 
 } // namespace erhe::graphics

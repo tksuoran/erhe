@@ -4,34 +4,54 @@
 
 #include <embree3/rtcore.h>
 
+#include <vector>
+
 namespace erhe::raytrace
 {
 
+class Embree_geometry;
 class IGeometry;
+class IInstance;
 
 class Embree_scene
     : public IScene
 {
 public:
-    Embree_scene();
-    ~Embree_scene() override;
+    Embree_scene(const std::string_view debug_label); // rtcNewScene()
+    ~Embree_scene() override; // rtcReleaseScene()
+
+    // rtcGetSceneDevice()
+    // rtcRetainScene()
 
     // Implements IScene
-    void attach(IGeometry* geometry) override;
-    void detach(IGeometry* geometry) override;
+    [[nodiscard]] auto debug_label() const -> std::string_view override;
+    void attach(IGeometry* geometry) override; // rtcAttachGeometry()
+    void attach(IInstance* scene) override; // rtcAttachGeometry()
 
-    void check_device_error();
-    void rtc_error_function(
-        RTCError    error_code,
-        const char* message
-    );
+    // rtcAttachGeometryByID()
+    // rtcGetGeometry()
+    // rtcGetGeometryThreadSafe()
 
-    auto get_rtc_device() -> RTCDevice;
-    auto get_rtc_scene () -> RTCScene;
+    void detach(IGeometry* geometry) override; // rtcDetachGeometry()
+    void detach(IInstance* instance) override; // rtcDetachGeometry()
+    void commit()                    override; // rtcCommitScene()
+
+    // rtcJoinCommitScene()
+    // rtcSetSceneProgressMonitorFunction()
+    // rtcSetSceneBuildQuality()
+    // rtcSetSceneFlags()
+    // rtcGetSceneFlags()
+    // rtcGetSceneBounds()
+    // rtcGetSceneLinearBounds()
+
+    void intersect(Ray& ray, Hit& out_hit) override;
+
+    auto get_rtc_scene() -> RTCScene;
+    auto get_geometry_from_id(const unsigned int id) -> Embree_geometry*;
 
 private:
-    RTCDevice m_device{nullptr};
-    RTCScene  m_scene {nullptr};
+    RTCScene    m_scene{nullptr};
+    std::string m_debug_label;
 };
 
 }

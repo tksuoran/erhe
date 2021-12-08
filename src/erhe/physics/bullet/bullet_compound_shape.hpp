@@ -19,7 +19,7 @@ public:
     ~Bullet_compound_shape() override;
 
     // Implements ICollision_shape
-    auto is_convex() const -> bool override;
+    [[nodiscard]] auto is_convex() const -> bool override;
 
     // Implements ICompound_shape
     void add_child_shape(

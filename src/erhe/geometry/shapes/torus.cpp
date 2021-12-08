@@ -228,15 +228,23 @@ auto make_torus(
         "torus",
         [=](auto& geometry)
         {
-        Torus_builder builder{geometry, major_radius, minor_radius, major_axis_steps, minor_axis_steps};
+            Torus_builder builder{geometry, major_radius, minor_radius, major_axis_steps, minor_axis_steps};
             builder.build();
         }
     };
 }
 
-auto torus_volume(const float major_radius, const float minor_radius) -> float
+auto torus_volume(
+    const float major_radius,
+    const float minor_radius
+) -> float
 {
-    return glm::pi<float>() * minor_radius * minor_radius * 2.0f * glm::pi<float>() * major_radius;
+    return
+        glm::pi<float>() *
+        minor_radius *
+        minor_radius *
+        glm::two_pi<float>() * 
+        major_radius;
 }
 
 } // namespace erhe::geometry::shapes

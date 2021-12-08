@@ -45,9 +45,10 @@ public:
     void operator=      (Gl_context_provider&&)      = delete;
 
     // Implements Component
-    auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
 
-    auto acquire_gl_context     () -> Gl_worker_context;
+    // Public API
+    [[nodiscard]] auto acquire_gl_context() -> Gl_worker_context;
     void release_gl_context     (Gl_worker_context context);
     void provide_worker_contexts(
         const std::shared_ptr<erhe::graphics::OpenGL_state_tracker>& opengl_state_tracker,

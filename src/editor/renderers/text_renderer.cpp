@@ -39,7 +39,7 @@ using glm::vec3;
 using glm::vec4;
 
 Text_renderer::Text_renderer()
-    : Component(c_name)
+    : Component{c_name}
 {
     ERHE_PROFILE_FUNCTION
 }
@@ -58,7 +58,7 @@ void Text_renderer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
@@ -88,9 +88,9 @@ void Text_renderer::initialize_component()
         access_mask
     };
 
-    auto     gpu_index_data = index_buffer_map.span();
-    size_t   offset      {0};
-    uint16_t vertex_index{0};
+    const auto gpu_index_data = index_buffer_map.span();
+    size_t     offset      {0};
+    uint16_t   vertex_index{0};
     for (unsigned int i = 0; i < max_quad_count; ++i)
     {
         gpu_index_data[offset + 0] = vertex_index;
@@ -160,10 +160,10 @@ void Text_renderer::initialize_component()
     const std::filesystem::path vs_path = shader_path / std::filesystem::path("text.vert");
     const std::filesystem::path fs_path = shader_path / std::filesystem::path("text.frag");
     Shader_stages::Create_info create_info{
-        "stream",
-        &m_default_uniform_block,
-        &m_attribute_mappings,
-        &m_fragment_outputs
+        .name                      = "stream",
+        .vertex_attribute_mappings = &m_attribute_mappings,
+        .fragment_outputs          = &m_fragment_outputs,
+        .default_uniform_block     = &m_default_uniform_block
     };
     create_info.add_interface_block(m_projection_block.get());
     create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
@@ -217,12 +217,12 @@ void Text_renderer::print(
 
     m_vertex_writer.begin(current_frame_resources().vertex_buffer.target());
 
-    auto                vertex_gpu_data = current_frame_resources().vertex_buffer.map();
-    std::byte* const    start           = vertex_gpu_data.data()       + m_vertex_writer.write_offset;
-    const size_t        byte_count      = vertex_gpu_data.size_bytes() - m_vertex_writer.write_offset;
-    const size_t        word_count      = byte_count / sizeof(float);
-    gsl::span<float>    gpu_float_data{reinterpret_cast<float* const   >(start), word_count};
-    gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t* const>(start), word_count};
+    const auto                vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+    std::byte* const          start           = vertex_gpu_data.data()       + m_vertex_writer.write_offset;
+    const size_t              byte_count      = vertex_gpu_data.size_bytes() - m_vertex_writer.write_offset;
+    const size_t              word_count      = byte_count / sizeof(float);
+    const gsl::span<float>    gpu_float_data{reinterpret_cast<float* const   >(start), word_count};
+    const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t* const>(start), word_count};
 
     erhe::ui::Rectangle bounding_box;
     const vec3          snapped_position{
@@ -264,12 +264,12 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
 
     m_projection_writer.begin(current_frame_resources().projection_buffer.target());
 
-    auto* const      projection_buffer   = &current_frame_resources().projection_buffer;
-    auto             projection_gpu_data = projection_buffer->map();
-    std::byte* const start               = projection_gpu_data.data()       + m_projection_writer.write_offset;
-    const size_t     byte_count          = projection_gpu_data.size_bytes() - m_projection_writer.write_offset;
-    const size_t     word_count          = byte_count / sizeof(float);
-    gsl::span<float> gpu_float_data{reinterpret_cast<float* const>(start), word_count};
+    auto* const            projection_buffer   = &current_frame_resources().projection_buffer;
+    const auto             projection_gpu_data = projection_buffer->map();
+    std::byte* const       start               = projection_gpu_data.data()       + m_projection_writer.write_offset;
+    const size_t           byte_count          = projection_gpu_data.size_bytes() - m_projection_writer.write_offset;
+    const size_t           word_count          = byte_count / sizeof(float);
+    const gsl::span<float> gpu_float_data{reinterpret_cast<float* const>(start), word_count};
 
     const mat4 clip_from_window = erhe::toolkit::create_orthographic(
         static_cast<float>(viewport.x), static_cast<float>(viewport.width),
@@ -285,7 +285,8 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
 
     m_pipeline_state_tracker->shader_stages.reset();
     m_pipeline_state_tracker->color_blend.execute(&erhe::graphics::Color_blend_state::color_blend_disabled);
-    gl::disable (gl::Enable_cap::framebuffer_srgb);
+    //gl::disable (gl::Enable_cap::framebuffer_srgb);
+    gl::enable  (gl::Enable_cap::framebuffer_srgb);
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     m_pipeline_state_tracker->execute(&pipeline);

@@ -16,9 +16,9 @@ public:
         const unsigned int                    location
     );
 
-    auto name    () const -> const std::string&;
-    auto type    () const -> gl::Fragment_shader_output_type;
-    auto location() const -> unsigned int;
+    [[nodiscard]] auto name    () const -> const std::string&;
+    [[nodiscard]] auto type    () const -> gl::Fragment_shader_output_type;
+    [[nodiscard]] auto location() const -> unsigned int;
 
 private:
     std::string                     m_name;

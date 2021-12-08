@@ -95,7 +95,11 @@ auto Geometry::count_polygon_triangles() const
     ERHE_PROFILE_FUNCTION
 
     size_t triangle_count{0};
-    for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
+    for (
+        Polygon_id polygon_id = 0;
+        polygon_id < m_next_polygon_id;
+        ++polygon_id
+    )
     {
         if (polygons[polygon_id].corner_count < 2)
         {
@@ -107,38 +111,27 @@ auto Geometry::count_polygon_triangles() const
     return triangle_count;
 }
 
-void Geometry::info(Mesh_info& info) const
+auto Geometry::get_mesh_info() const -> Mesh_info
 {
-    info.polygon_count  = polygon_count();
-    info.corner_count   = corner_count();
-    info.triangle_count = count_polygon_triangles();
-    info.edge_count     = edge_count();
+    const auto polygon_count  = get_polygon_count();
+    const auto corner_count   = get_corner_count();
+    const auto triangle_count = count_polygon_triangles();
+    const auto edge_count     = get_edge_count();
+    return Mesh_info{
+        .polygon_count  = polygon_count,
+        .corner_count   = corner_count,
+        .triangle_count = count_polygon_triangles(),
+        .edge_count     = edge_count,
 
-    // Additional vertices needed for centroids
-    // 3 indices per triangle after triangulation, 2 indices per edge, 1 per corner, 1 index per centroid
-    info.vertex_count_corners        = info.corner_count;
-    info.vertex_count_centroids      = info.polygon_count;
-    info.index_count_fill_triangles  = 3 * info.triangle_count;
-    info.index_count_edge_lines      = 2 * info.edge_count;
-    info.index_count_corner_points   = info.corner_count;
-    info.index_count_centroid_points = info.polygon_count;
-    info.index_count_centroid_points = info.polygon_count;
-}
-
-auto Mesh_info::operator+=(const Mesh_info& o)
--> Mesh_info&
-{
-    polygon_count               += o.polygon_count;
-    corner_count                += o.corner_count;
-    triangle_count              += o.triangle_count;
-    edge_count                  += o.edge_count;
-    vertex_count_corners        += o.vertex_count_corners;
-    vertex_count_centroids      += o.vertex_count_centroids;
-    index_count_fill_triangles  += o.index_count_fill_triangles;
-    index_count_edge_lines      += o.index_count_edge_lines;
-    index_count_corner_points   += o.index_count_corner_points;
-    index_count_centroid_points += o.index_count_centroid_points;
-    return *this;
+        // Additional vertices needed for centroids
+        // 3 indices per triangle after triangulation, 2 indices per edge, 1 per corner, 1 index per centroid
+        .vertex_count_corners        = corner_count,
+        .vertex_count_centroids      = polygon_count,
+        .index_count_fill_triangles  = 3 * triangle_count,
+        .index_count_edge_lines      = 2 * edge_count,
+        .index_count_corner_points   = corner_count,
+        .index_count_centroid_points = polygon_count
+    };
 }
 
 void Geometry::reserve_points(const size_t point_count)
@@ -280,13 +273,14 @@ void Geometry::build_edges()
     m_next_edge_id = 0;
 
     log_build_edges.trace("build_edges() : {} polygons\n", m_next_polygon_id);
-    erhe::log::Indenter scope_indent;
+
+    const erhe::log::Indenter scope_indent;
 
     // First pass - shared edges 
     size_t polygon_index{0};
     for_each_polygon([&](auto& i)
     {
-        erhe::log::Indenter scope_indent;
+        const erhe::log::Indenter scope_indent;
 
         i.polygon.for_each_corner_neighborhood(*this, [&](auto& j)
         {
@@ -302,7 +296,7 @@ void Geometry::build_edges()
                 const Edge_id edge_id = make_edge(a, b);
                 const Point&  pa      = points[a];
                 make_edge_polygon(edge_id, i.polygon_id);
-                VERIFY(pa.corner_count > 0);
+                ERHE_VERIFY(pa.corner_count > 0);
                 pa.for_each_corner_const(*this, [&](auto& k)
                 {
                      const Polygon_id polygon_id_in_point = k.corner.polygon_id;
@@ -323,7 +317,7 @@ void Geometry::build_edges()
     // Second pass - non-shared edges wrong direction or non-manifold wornd direction
     for_each_polygon([&](auto& i)
     {
-        erhe::log::Indenter scope_indent;
+        const erhe::log::Indenter scope_indent;
 
         i.polygon.for_each_corner_neighborhood(*this, [&](auto& j)
         {
@@ -337,14 +331,14 @@ void Geometry::build_edges()
             auto edge = find_edge(a_, b_);
             if (!edge)
             {
-                // VERIFY(b < a); This does not hold for non-manifold objects
+                // ERHE_VERIFY(b < a); This does not hold for non-manifold objects
                 {
                     const Point_id a = std::max(a_, b_);
                     const Point_id b = std::min(a_, b_);
                     const Edge_id edge_id = make_edge(b, a); // Swapped a, b because b < a
                     const Point&  pb      = points[b];
                     make_edge_polygon(edge_id, i.polygon_id);
-                    VERIFY(pb.corner_count > 0);
+                    ERHE_VERIFY(pb.corner_count > 0);
                     pb.for_each_corner_const(*this, [&](auto& k)
                     {
                          const Polygon_id polygon_id_in_point = k.corner.polygon_id;
@@ -511,8 +505,16 @@ auto Geometry::transform(const mat4& m) -> Geometry&
 {
     ERHE_PROFILE_FUNCTION
 
+    if (m == mat4{1.0f})
+    {
+        return *this;
+    }
+
+    ++m_serial;
+
     const mat4 it = glm::transpose(glm::inverse(m));
 
+    // TODO Use Transform_mode
     // Check.. Did I forget something?
     auto* const polygon_centroids = polygon_attributes().find<vec3>(c_polygon_centroids);
     auto* const polygon_normals   = polygon_attributes().find<vec3>(c_polygon_normals  );
@@ -669,7 +671,7 @@ void Geometry::generate_texture_coordinates_spherical()
             }
             else
             {
-                FATAL("No normal sources\n");
+                ERHE_FATAL("No normal sources\n");
             }
 
             float u;
@@ -838,7 +840,8 @@ void Geometry::sanity_check() const
         else
         {
             //log_weld.trace("Corner {} point {} polygon {}\n", corner_id, corner.point_id, corner.polygon_id);
-            erhe::log::Indenter scope_indent;
+            const erhe::log::Indenter scope_indent;
+
             const Point& point = points[i.corner.point_id];
             point.for_each_corner_const(*this, [&](auto& j)
             {
@@ -988,7 +991,7 @@ auto Geometry::get_mass_properties() -> Mass_properties
         });
     });
 
-    VERIFY(triangles.size() == triangle_count * 3);
+    ERHE_VERIFY(triangles.size() == triangle_count * 3);
 
     //auto vertex_data = reinterpret_cast<gte::Vector3<float> const*>(point_locations->values.data());
     float mass{0.0f};

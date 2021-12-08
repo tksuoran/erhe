@@ -54,14 +54,13 @@ protected:
     void operator=(Component&&)      = delete;
 
     explicit Component(const std::string_view name);
-
     virtual ~Component();
 
 public:
     virtual void connect() {};
 
     template<typename T>
-    auto get() const -> T*
+    [[nodiscard]] auto get() const -> T*
     {
         if (m_components == nullptr)
         {
@@ -82,35 +81,37 @@ public:
     auto require() -> T*
     {
         const auto component = get<T>();
-        VERIFY(component);
+        ERHE_VERIFY(component != nullptr);
         depends_on(component);
         return component;
     }
 
-    virtual auto get_type_hash                  () const -> uint32_t = 0;
-    virtual void initialize_component           () {}
-    virtual void on_thread_exit                 () {}
-    virtual void on_thread_enter                () {}
-    virtual auto processing_requires_main_thread() const -> bool;
+    // Public interface
+    virtual [[nodiscard]] auto get_type_hash                  () const -> uint32_t = 0;
+    virtual [[nodiscard]] auto processing_requires_main_thread() const -> bool;
+    virtual void initialize_component() {}
+    virtual void on_thread_exit      () {}
+    virtual void on_thread_enter     () {}
 
-    auto name                    () const -> std::string_view;
-    auto get_state               () const -> Component_state;
-    auto is_registered           () const -> bool;
+    // Public non-virtual API
+    [[nodiscard]] auto name                    () const -> std::string_view;
+    [[nodiscard]] auto get_state               () const -> Component_state;
+    [[nodiscard]] auto is_registered           () const -> bool;
+    [[nodiscard]] auto is_ready_to_initialize  (const bool in_worker_thread) const -> bool;
+    [[nodiscard]] auto is_ready_to_deinitialize() const -> bool;
+    [[nodiscard]] auto dependencies            () -> const std::set<Component*>&;
+    [[nodiscard]] auto depended_by             () -> const std::set<Component*>&;
     void register_as_component   (Components* components);
-    auto is_ready_to_initialize  (const bool in_worker_thread) const -> bool;
-    auto is_ready_to_deinitialize() const -> bool;
     void component_initialized   (Component* component);
     void component_deinitialized (Component* component);
     void depends_on              (Component* dependency);
-    auto dependencies            () -> const std::set<Component*>&;
-    auto depended_by             () -> const std::set<Component*>&;
     void set_connected           ();
     void set_initializing        ();
     void set_ready               ();
     void set_deinitializing      ();
 
 protected:
-    Components*          m_components{nullptr};
+    Components* m_components{nullptr};
 
 private:
     void add_depended_by(Component* component);

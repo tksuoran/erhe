@@ -20,14 +20,14 @@ class Vertex_attribute_info
 public:
     Vertex_attribute_info();
     Vertex_attribute_info(
-        erhe::graphics::Vertex_format*               vertex_format,
-        gl::Vertex_attrib_type                       default_data_type,
-        size_t                                       dimension,
-        erhe::graphics::Vertex_attribute::Usage_type semantic,
-        unsigned int                                 semantic_index
+        erhe::graphics::Vertex_format* const               vertex_format,
+        const gl::Vertex_attrib_type                       default_data_type,
+        const size_t                                       dimension,
+        const erhe::graphics::Vertex_attribute::Usage_type semantic,
+        const unsigned int                                 semantic_index
     );
 
-    auto is_valid() -> bool;
+    [[nodiscard]] auto is_valid() -> bool;
 
     const erhe::graphics::Vertex_attribute* attribute{nullptr};
     gl::Vertex_attrib_type                  data_type{gl::Vertex_attrib_type::float_};

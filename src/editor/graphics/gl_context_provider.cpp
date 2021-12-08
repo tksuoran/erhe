@@ -33,7 +33,7 @@ void Gl_context_provider::provide_worker_contexts(
 
     log_startup.info("Starting to provide worked GL contexts\n");
 
-    VERIFY(m_main_thread_id == this_thread::get_id());
+    ERHE_VERIFY(m_main_thread_id == this_thread::get_id());
     m_opengl_state_tracker = opengl_state_tracker;
     m_main_window = main_window;
 
@@ -97,7 +97,7 @@ auto Gl_context_provider::acquire_gl_context() -> Gl_worker_context
     string text = fmt::format("Got GL context {}", context.id);
     ERHE_PROFILE_MESSAGE(text.c_str(), text.length());
     //ZoneValue(context.id);
-    VERIFY(context.context != nullptr);
+    ERHE_VERIFY(context.context != nullptr);
     context.context->make_current();
     return context;
 }
@@ -108,12 +108,12 @@ void Gl_context_provider::release_gl_context(Gl_worker_context context)
 
     if (this_thread::get_id() == m_main_thread_id)
     {
-        VERIFY(context.id == 0);
-        VERIFY(context.context == nullptr);
+        ERHE_VERIFY(context.id == 0);
+        ERHE_VERIFY(context.context == nullptr);
         return;
     }
 
-    VERIFY(context.context != nullptr);
+    ERHE_VERIFY(context.context != nullptr);
     string text = fmt::format("Releasing GL context {}", context.id);
     ERHE_PROFILE_MESSAGE(text.c_str(), text.length());
     //ZoneValue(context.id);

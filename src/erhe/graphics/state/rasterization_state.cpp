@@ -93,9 +93,9 @@ auto Rasterization_state::cull_mode_back_ccw(bool reverse_depth) -> Rasterizatio
 
 void Rasterization_state_tracker::reset()
 {
-    gl::disable(gl::Enable_cap::cull_face);
-    gl::cull_face(gl::Cull_face_mode::back);
-    gl::front_face(gl::Front_face_direction::ccw);
+    gl::disable     (gl::Enable_cap::cull_face);
+    gl::cull_face   (gl::Cull_face_mode::back);
+    gl::front_face  (gl::Front_face_direction::ccw);
     gl::polygon_mode(gl::Material_face::front_and_back, gl::Polygon_mode::fill);
     m_cache = Rasterization_state{};
     m_last = 0;
@@ -103,7 +103,7 @@ void Rasterization_state_tracker::reset()
 
 void Rasterization_state_tracker::execute(Rasterization_state const* state)
 {
-    VERIFY(state != nullptr);
+    ERHE_VERIFY(state != nullptr);
 
 #if !DISABLE_CACHE
     if (m_last == state->serial)

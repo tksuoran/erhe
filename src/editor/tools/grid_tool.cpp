@@ -1,7 +1,8 @@
 #include "tools/grid_tool.hpp"
+#include "editor_tools.hpp"
 #include "rendering.hpp"
+
 #include "renderers/line_renderer.hpp"
-#include "tools.hpp"
 
 #include "erhe/toolkit/profile.hpp"
 
@@ -33,11 +34,6 @@ auto Grid_tool::description() -> const char*
    return c_description.data();
 }
 
-auto Grid_tool::state() const -> State
-{
-    return State::Passive;
-}
-
 void Grid_tool::tool_render(const Render_context& /*context*/)
 {
     ERHE_PROFILE_FUNCTION
@@ -52,8 +48,10 @@ void Grid_tool::tool_render(const Render_context& /*context*/)
         return;
     }
 
-    constexpr uint32_t cell_major_color = 0xff000000u;
-    constexpr uint32_t cell_minor_color = 0xff333333u;
+    const ImVec4 im_major_color{m_major_color.x, m_major_color.y, m_major_color.z, m_major_color.w};
+    const ImVec4 im_minor_color{m_minor_color.x, m_minor_color.y, m_minor_color.z, m_minor_color.w};
+    const uint32_t cell_major_color = ImGui::ColorConvertFloat4ToU32(im_major_color);
+    const uint32_t cell_minor_color = ImGui::ColorConvertFloat4ToU32(im_minor_color);
 
     const float extent     = static_cast<float>(m_cell_count) * m_cell_size;
     const float minor_step = m_cell_size / static_cast<float>(m_cell_div);
@@ -73,7 +71,8 @@ void Grid_tool::tool_render(const Render_context& /*context*/)
                     glm::vec3{-extent, 0.0f,      xz},
                     glm::vec3{ extent, 0.0f,      xz}
                 }
-            }
+            },
+            m_thickness
         );
         line_renderer.set_line_color(cell_minor_color);
         for (int i = 0; i < (m_cell_div - 1); ++i)
@@ -89,7 +88,8 @@ void Grid_tool::tool_render(const Render_context& /*context*/)
                         glm::vec3{-extent, 0.0f,      xz},
                         glm::vec3{ extent, 0.0f,      xz}
                     }
-                }
+                },
+                m_thickness
             );
         }
     }
@@ -105,7 +105,8 @@ void Grid_tool::tool_render(const Render_context& /*context*/)
                 glm::vec3{-extent, 0.0f,     xz},
                 glm::vec3{ extent, 0.0f,     xz}
             }
-        }
+        },
+        m_thickness
     );
 }
 
@@ -113,12 +114,13 @@ void Grid_tool::imgui()
 {
     ERHE_PROFILE_FUNCTION
 
-    ImGui::Begin      (c_description.data());
-    ImGui::Checkbox   ("Enable",     &m_enable);
-    ImGui::SliderFloat("Cell Size",  &m_cell_size,  0.0f, 10.0f);
-    ImGui::SliderInt  ("Cell Div",   &m_cell_div,   0,    10);
-    ImGui::SliderInt  ("Cell Count", &m_cell_count, 1,    100);
-    ImGui::End        ();
+    ImGui::Checkbox   ("Enable",      &m_enable);
+    ImGui::SliderFloat("Cell Size",   &m_cell_size,  0.0f,    10.0f);
+    ImGui::SliderInt  ("Cell Div",    &m_cell_div,   0,       10);
+    ImGui::SliderInt  ("Cell Count",  &m_cell_count, 1,       100);
+    ImGui::SliderFloat("Thickness",   &m_thickness,  -100.0f, 100.0f);
+    ImGui::ColorEdit4 ("Major Color", &m_major_color.x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Minor Color", &m_minor_color.x, ImGuiColorEditFlags_Float);
 }
 
 auto Grid_tool::snap(const glm::vec3 v) const -> glm::vec3

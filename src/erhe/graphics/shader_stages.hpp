@@ -27,15 +27,21 @@ public:
         class Shader_stage
         {
         public:
-            Shader_stage(const gl::Shader_type type, std::string_view source)
+            Shader_stage(
+                const gl::Shader_type  type,
+                const std::string_view source
+            )
                 : type  {type}
                 , source{source}
             {
             }
 
-            Shader_stage(const gl::Shader_type type, std::filesystem::path path)
+            Shader_stage(
+                const gl::Shader_type type,
+                const std::filesystem::path path
+            )
                 : type{type}
-                , path{std::move(path)}
+                , path{path}
             {
             }
 
@@ -44,15 +50,9 @@ public:
             std::filesystem::path path;
         };
 
-        Create_info(
-            const std::string_view           name,
-            const Shader_resource*           default_uniform_block, // containing sampler uniforms
-            const Vertex_attribute_mappings* vertex_attribute_mappings,
-            const Fragment_outputs*          fragment_outputs
-        );
-
         // Adds #version, #extensions, #defines, fragment outputs, uniform blocks, samplers,
         // and source (possibly read from file).
+        [[nodiscard]]
         auto final_source(const Shader_stage& shader) const -> std::string;
 
         void add_interface_block(gsl::not_null<const Shader_resource*> uniform_block);
@@ -81,6 +81,7 @@ public:
         Prototype         (const Prototype&) = delete;
         void operator=    (const Prototype&) = delete;
 
+        [[nodiscard]]
         auto is_valid() const -> bool
         {
             return m_link_succeeded;
@@ -89,7 +90,7 @@ public:
         void dump_reflection() const;
 
     private:
-        static auto try_compile_shader(
+        static [[nodiscard]] auto try_compile_shader(
             const Shader_stages::Create_info&               create_info,
             const Shader_stages::Create_info::Shader_stage& shader
         ) -> std::optional<Gl_shader>;
@@ -111,18 +112,15 @@ public:
     // Reloads program by consuming prototype
     void reload(Prototype&& prototype);
 
-    auto name() const
-    -> const std::string&
+    [[nodiscard]] auto name() const -> const std::string&
     {
         return m_name;
     }
 
-    auto gl_name() const
-    -> unsigned int;
+    [[nodiscard]] auto gl_name() const -> unsigned int;
 
 private:
-    static auto format(const std::string& source)
-    -> std::string;
+    static [[nodiscard]] auto format(const std::string& source) -> std::string;
 
     std::string            m_name;
     Gl_program             m_handle;
@@ -132,18 +130,21 @@ private:
 class Shader_stages_hash
 {
 public:
-    auto operator()(const Shader_stages& program) const noexcept
-    -> size_t
+    auto [[nodiscard]] operator()(const Shader_stages& program) const noexcept -> size_t
     {
         return static_cast<size_t>(program.gl_name());
     }
 };
 
-auto operator==(const Shader_stages& lhs, const Shader_stages& rhs) noexcept
--> bool;
+[[nodiscard]] auto operator==(
+    const Shader_stages& lhs,
+    const Shader_stages& rhs
+) noexcept -> bool;
 
-auto operator!=(const Shader_stages& lhs, const Shader_stages& rhs) noexcept
--> bool;
+[[nodiscard]] auto operator!=(
+    const Shader_stages& lhs,
+    const Shader_stages& rhs
+) noexcept -> bool;
 
 
 class Shader_stages_tracker

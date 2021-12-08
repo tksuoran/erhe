@@ -49,15 +49,15 @@ void Vertex_attribute_mappings::add(
 }
 
 void Vertex_attribute_mappings::apply_to_vertex_input_state(
-    Vertex_input_state&          vertex_input_state,
-    gsl::not_null<const Buffer*> vertex_buffer,
-    const Vertex_format&         vertex_format
+    Vertex_input_state&  vertex_input_state,
+    const Buffer*        vertex_buffer,
+    const Vertex_format& vertex_format
 ) const
 {
     Expects(vertex_input_state.bindings().empty());
 
     log_vertex_attribute_mappings.trace("Vertex_attribute_mappings::apply_to_vertex_input_state()\n");
-    log::Indenter log_indent;
+    const log::Indenter log_indent;
 
     for (auto mapping : mappings)
     {

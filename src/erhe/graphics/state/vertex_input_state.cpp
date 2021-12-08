@@ -25,13 +25,14 @@ Vertex_input_state::Vertex_input_state()
     : m_serial{get_next_serial()}
 {
     std::lock_guard lock{s_mutex};
+
     s_all_vertex_input_states.push_back(this);
 }
 
 Vertex_input_state::Vertex_input_state(
     const Vertex_attribute_mappings& attribute_mappings,
     const Vertex_format&             vertex_format,
-    gsl::not_null<const Buffer*>     vertex_buffer,
+    const Buffer*                    vertex_buffer,
     const Buffer*                    index_buffer
 )
     : m_index_buffer{index_buffer}
@@ -39,6 +40,7 @@ Vertex_input_state::Vertex_input_state(
 {
     {
         std::lock_guard lock{s_mutex};
+
         s_all_vertex_input_states.push_back(this);
     }
 
@@ -49,6 +51,7 @@ Vertex_input_state::Vertex_input_state(
 Vertex_input_state::~Vertex_input_state()
 {
     std::lock_guard lock{s_mutex};
+
     s_all_vertex_input_states.erase(
         std::remove(
             s_all_vertex_input_states.begin(),
@@ -93,7 +96,7 @@ void Vertex_input_state::create()
     log_threads.trace("{}: create @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
     if (m_gl_vertex_array.has_value())
     {
-        VERIFY(m_owner_thread == std::this_thread::get_id());
+        ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
         return;
     }
 
@@ -107,7 +110,7 @@ void Vertex_input_state::create()
 
 void Vertex_input_state::update()
 {
-    VERIFY(m_owner_thread == std::this_thread::get_id());
+    ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
     Expects(m_gl_vertex_array.has_value());
     Expects(gl_name() > 0);
 
@@ -131,9 +134,9 @@ void Vertex_input_state::update()
         const auto* const attribute = binding->vertex_attribute;
         const auto        mapping   = binding->vertex_attribute_mapping;
 
-        VERIFY(vbo != nullptr);
-        VERIFY(attribute != nullptr);
-        VERIFY(mapping->layout_location < max_attribute_count);
+        ERHE_VERIFY(vbo != nullptr);
+        ERHE_VERIFY(attribute != nullptr);
+        ERHE_VERIFY(mapping->layout_location < max_attribute_count);
 
         gl::vertex_array_vertex_buffer(
             gl_name(),
@@ -219,7 +222,7 @@ void Vertex_input_state::update()
 
             default:
             {
-                FATAL("Bad vertex attrib pointer type");
+                ERHE_FATAL("Bad vertex attrib pointer type");
             }
         }
 
@@ -243,7 +246,7 @@ void Vertex_input_state::update()
 auto Vertex_input_state::gl_name() const
 -> unsigned int
 {
-    VERIFY(m_owner_thread == std::this_thread::get_id());
+    ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
     return m_gl_vertex_array.has_value()
         ? m_gl_vertex_array.value().gl_name()
         : 0;

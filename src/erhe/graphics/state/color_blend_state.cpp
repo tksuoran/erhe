@@ -39,8 +39,7 @@ void Color_blend_state::touch()
     serial = get_next_serial();
 }
 
-auto Color_blend_state::get_next_serial()
--> size_t
+auto Color_blend_state::get_next_serial() -> size_t
 {
     do
     {
@@ -50,8 +49,9 @@ auto Color_blend_state::get_next_serial()
     return s_serial;
 }
 
-auto Blend_state_hash::operator()(const Color_blend_state& state) const noexcept
--> size_t
+auto Blend_state_hash::operator()(
+    const Color_blend_state& state
+) const noexcept -> size_t
 {
     return
         (
@@ -77,14 +77,14 @@ Color_blend_state Color_blend_state::color_blend_disabled;
 Color_blend_state Color_blend_state::color_blend_premultiplied {
     true,
     {
-        gl::Blend_equation_mode::func_add,
-        gl::Blending_factor::one,
-        gl::Blending_factor::one_minus_src_alpha
+        .equation_mode      = gl::Blend_equation_mode::func_add,
+        .source_factor      = gl::Blending_factor::one,
+        .destination_factor = gl::Blending_factor::one_minus_src_alpha
     },
     {
-        gl::Blend_equation_mode::func_add,
-        gl::Blending_factor::one,
-        gl::Blending_factor::one_minus_src_alpha
+        .equation_mode      = gl::Blend_equation_mode::func_add,
+        .source_factor      = gl::Blending_factor::one,
+        .destination_factor = gl::Blending_factor::one_minus_src_alpha
     },
     glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
     true,
@@ -96,14 +96,14 @@ Color_blend_state Color_blend_state::color_blend_premultiplied {
 Color_blend_state Color_blend_state::color_writes_disabled {
     false,
     {
-        gl::Blend_equation_mode::func_add,
-        gl::Blending_factor::one,
-        gl::Blending_factor::one_minus_src_alpha
+        .equation_mode      = gl::Blend_equation_mode::func_add,
+        .source_factor      = gl::Blending_factor::one,
+        .destination_factor = gl::Blending_factor::one_minus_src_alpha
     },
     {
-        gl::Blend_equation_mode::func_add,
-        gl::Blending_factor::one,
-        gl::Blending_factor::one_minus_src_alpha
+        .equation_mode      = gl::Blend_equation_mode::func_add,
+        .source_factor      = gl::Blending_factor::one,
+        .destination_factor = gl::Blending_factor::one_minus_src_alpha
     },
     glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
     false,
@@ -133,7 +133,7 @@ void Color_blend_state_tracker::reset()
 
 void Color_blend_state_tracker::execute(Color_blend_state const* state) noexcept
 {
-    VERIFY(state != nullptr);
+    ERHE_VERIFY(state != nullptr);
 
 #if !DISABLE_CACHE
     if (m_last == state->serial)
@@ -160,8 +160,10 @@ void Color_blend_state_tracker::execute(Color_blend_state const* state) noexcept
             m_cache.color = color;
         }
 #if !DISABLE_CACHE
-        if ((m_cache.rgb.equation_mode   != state->rgb.equation_mode) ||
-            (m_cache.alpha.equation_mode != state->alpha.equation_mode))
+        if (
+            (m_cache.rgb.equation_mode   != state->rgb.equation_mode) ||
+            (m_cache.alpha.equation_mode != state->alpha.equation_mode)
+        )
 #endif
         {
             gl::blend_equation_separate(state->rgb.equation_mode, state->alpha.equation_mode);
@@ -200,10 +202,12 @@ void Color_blend_state_tracker::execute(Color_blend_state const* state) noexcept
     }
 
 #if !DISABLE_CACHE
-    if ((m_cache.color_write_mask_red   != state->color_write_mask_red  ) ||
+    if (
+        (m_cache.color_write_mask_red   != state->color_write_mask_red  ) ||
         (m_cache.color_write_mask_green != state->color_write_mask_green) ||
         (m_cache.color_write_mask_blue  != state->color_write_mask_blue ) ||
-        (m_cache.color_write_mask_alpha != state->color_write_mask_alpha))
+        (m_cache.color_write_mask_alpha != state->color_write_mask_alpha)
+    )
 #endif
     {
         gl::color_mask(

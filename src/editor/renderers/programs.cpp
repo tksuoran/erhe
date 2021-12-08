@@ -32,9 +32,9 @@ void Programs::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    erhe::log::Indenter indenter;
+    const erhe::log::Indenter indenter;
 
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
         gl::Texture_min_filter::nearest,
@@ -54,17 +54,18 @@ void Programs::initialize_component()
 
     m_shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
 
-    basic      = make_program("basic");
-    brush      = make_program("brush");
+    basic           = make_program("basic");
+    brush           = make_program("brush");
     // Not available on Dell laptop.
-    //standard   = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
-    standard   = make_program("standard");
-    edge_lines = make_program("edge_lines");
-    wide_lines = make_program("wide_lines");
-    points     = make_program("points");
-    depth      = make_program("depth");
-    id         = make_program("id");
-    tool       = make_program("tool");
+    //standard      = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
+    standard        = make_program("standard");
+    edge_lines      = make_program("edge_lines");
+    wide_lines      = make_program("wide_lines");
+    points          = make_program("points");
+    depth           = make_program("depth");
+    id              = make_program("id");
+    tool            = make_program("tool");
+    visualize_depth = make_program("visualize_depth");
 }
 
 auto Programs::make_program(std::string_view name)
@@ -75,10 +76,9 @@ auto Programs::make_program(std::string_view name)
 }
 
 auto Programs::make_program(
-    std::string_view name,
-    std::string_view define
-)
--> std::unique_ptr<erhe::graphics::Shader_stages>
+    const std::string_view name,
+    const std::string_view define
+) -> std::unique_ptr<erhe::graphics::Shader_stages>
 {
     std::vector<std::string> defines;
     defines.push_back(std::string(define));
@@ -86,7 +86,7 @@ auto Programs::make_program(
 }
 
 auto Programs::make_program(
-    std::string_view                                            name,
+    const std::string_view                                      name,
     const std::vector<std::string>&                             defines,
     const std::vector<std::pair<gl::Shader_type, std::string>>& extensions
 )
@@ -108,10 +108,10 @@ auto Programs::make_program(
     const auto& shader_resources = *m_program_interface->shader_resources.get();
 
     Shader_stages::Create_info create_info{
-        name,
-        default_uniform_block.get(),
-        &shader_resources.attribute_mappings,
-        &shader_resources.fragment_outputs
+        .name                      = std::string{name},
+        .vertex_attribute_mappings = &shader_resources.attribute_mappings,
+        .fragment_outputs          = &shader_resources.fragment_outputs,
+        .default_uniform_block     = default_uniform_block.get()
     };
     create_info.add_interface_block(&shader_resources.material_block);
     create_info.add_interface_block(&shader_resources.light_block);
@@ -140,7 +140,7 @@ auto Programs::make_program(
     create_info.extensions = extensions;
 
     Shader_stages::Prototype prototype(create_info);
-    VERIFY(prototype.is_valid());
+    ERHE_VERIFY(prototype.is_valid());
     auto p = std::make_unique<Shader_stages>(std::move(prototype));
 
     if (m_shader_monitor)

@@ -66,10 +66,10 @@ namespace editor
 class Debug_draw;
 class Mesh_memory;
 class Node_physics;
+class Raytrace_primitive;
 class Scene_manager;
 class Scene_root;
 class Brush;
-
 
 class Camera_rig
 {
@@ -96,58 +96,49 @@ public:
     ~Scene_root() override;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
+    // Public API
     template <typename ...Args>
-    auto make_material(std::string_view name, Args&& ...args)
-    -> std::shared_ptr<erhe::primitive::Material>
+    auto make_material(
+        const std::string_view name,
+        Args&& ...args
+    ) -> std::shared_ptr<erhe::primitive::Material>
     {
-        auto material = std::make_shared<erhe::primitive::Material>(name, std::forward<Args>(args)...);
-        std::lock_guard<std::mutex> lock(m_materials_mutex);
+        auto material = std::make_shared<erhe::primitive::Material>(
+            name,
+            std::forward<Args>(args)...
+        );
+        const std::lock_guard<std::mutex> lock{m_materials_mutex};
+
         material->index = m_materials.size();
         m_materials.push_back(material);
         return material;
     }
 
+    void add(
+        const std::shared_ptr<erhe::scene::Mesh>& mesh,
+        erhe::scene::Mesh_layer*                  layer = nullptr
+    );
 
-    auto brush_layer        () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
-    auto content_layer      () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
-    auto controller_layer   () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
-    auto tool_layer         () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
-    auto light_layer        () const -> std::shared_ptr<erhe::scene::Light_layer>;
-    auto all_layers         () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_all_layers; }
-    auto content_fill_layers() -> std::vector<const erhe::scene::Mesh_layer*>& { return m_content_fill_layers; }
-    auto content_layers     () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_content_layers; }
-    auto tool_layers        () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_tool_layers; }
-    auto brush_layers       () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_brush_layers; }
-
-    auto make_mesh_node(
-        const std::string_view                                      name,
-        const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry,
-        const std::shared_ptr<erhe::primitive::Material>&           material,
-        erhe::scene::Node*                                          parent   = nullptr,
-        const glm::vec3                                             position = glm::vec3{0.0f}
-    ) -> std::shared_ptr<erhe::scene::Mesh>;
-
-    auto make_mesh_node(
-        const std::string_view                                      name,
-        const std::shared_ptr<erhe::primitive::Primitive_geometry>& primitive_geometry,
-        const std::shared_ptr<erhe::primitive::Material>&           material,
-        erhe::scene::Mesh_layer&                                    mesh_layer,
-        erhe::scene::Node*                                          parent   = nullptr,
-        const glm::vec3                                             position = glm::vec3{0.0f}
-    ) -> std::shared_ptr<erhe::scene::Mesh>;
-
-    auto add          (const std::shared_ptr<erhe::primitive::Material>& material) -> std::shared_ptr<erhe::primitive::Material>;
-    auto add          (const std::shared_ptr<erhe::scene::Mesh>&         mesh)     -> std::shared_ptr<erhe::scene::Mesh>;
-    auto add          (const std::shared_ptr<erhe::scene::Light>&        light)    -> std::shared_ptr<erhe::scene::Light>;
-    auto materials    () -> std::vector<std::shared_ptr<erhe::primitive::Material>>&;
-    auto materials    () const -> const std::vector<std::shared_ptr<erhe::primitive::Material>>&;
-    auto physics_world() -> erhe::physics::IWorld&;
-    auto scene        () -> erhe::scene::Scene&;
-    auto content_layer() -> erhe::scene::Mesh_layer&;
+    [[nodiscard]] auto brush_layer        () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
+    [[nodiscard]] auto content_layer      () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
+    [[nodiscard]] auto controller_layer   () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
+    [[nodiscard]] auto tool_layer         () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
+    [[nodiscard]] auto light_layer        () const -> std::shared_ptr<erhe::scene::Light_layer>;
+    [[nodiscard]] auto all_layers         () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_all_layers; }
+    [[nodiscard]] auto content_fill_layers() -> std::vector<const erhe::scene::Mesh_layer*>& { return m_content_fill_layers; }
+    [[nodiscard]] auto content_layers     () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_content_layers; }
+    [[nodiscard]] auto tool_layers        () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_tool_layers; }
+    [[nodiscard]] auto brush_layers       () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_brush_layers; }
+    [[nodiscard]] auto materials          () -> std::vector<std::shared_ptr<erhe::primitive::Material>>&;
+    [[nodiscard]] auto materials          () const -> const std::vector<std::shared_ptr<erhe::primitive::Material>>&;
+    [[nodiscard]] auto physics_world      () -> erhe::physics::IWorld&;
+    [[nodiscard]] auto raytrace_scene     () -> erhe::raytrace::IScene&;
+    [[nodiscard]] auto scene              () -> erhe::scene::Scene&;
+    [[nodiscard]] auto content_layer      () -> erhe::scene::Mesh_layer&;
 
 private:
     std::mutex                                              m_materials_mutex;

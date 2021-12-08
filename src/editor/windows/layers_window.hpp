@@ -1,6 +1,7 @@
 #pragma once
 
 #include "windows/imgui_window.hpp"
+#include "erhe/components/component.hpp"
 
 #include <glm/glm.hpp>
 
@@ -37,7 +38,7 @@ public:
     ~Layers_window() override;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -45,8 +46,6 @@ public:
     void imgui() override;
 
 private:
-    //auto get_icon(const erhe::scene::Light_type type) const -> const ImVec2;
-
     Scene_root*     m_scene_root    {nullptr};
     Selection_tool* m_selection_tool{nullptr};
     Icon_set*       m_icon_set      {nullptr};

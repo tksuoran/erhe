@@ -26,7 +26,7 @@ void Geometry_operation::make_points_from_points()
 {
     ERHE_PROFILE_FUNCTION
 
-    point_old_to_new.reserve(source.point_count());
+    point_old_to_new.reserve(source.get_point_count());
     source.for_each_point_const([&](auto& i)
     {
         make_new_point_from_point(i.point_id);
@@ -37,7 +37,7 @@ void Geometry_operation::make_polygon_centroids()
 {
     ERHE_PROFILE_FUNCTION
 
-    old_polygon_centroid_to_new_points.reserve(source.polygon_count());
+    old_polygon_centroid_to_new_points.reserve(source.get_polygon_count());
     source.for_each_polygon_const([&](auto& i)
     {
         make_new_point_from_polygon_centroid(i.polygon_id);
@@ -46,7 +46,7 @@ void Geometry_operation::make_polygon_centroids()
 
 void Geometry_operation::reserve_edge_to_new_points()
 {
-    const uint32_t point_count = source.point_count();
+    const uint32_t point_count = source.get_point_count();
     m_old_edge_to_new_points.resize(static_cast<size_t>(point_count) * s_max_edge_point_slots);
     std::fill(
         begin(m_old_edge_to_new_points),
@@ -76,7 +76,7 @@ auto Geometry_operation::find_or_make_point_from_edge(
         {
             edge_b       = b;
             new_point_id = destination.make_point();
-            //log_geometry.trace("created edge {} - {} point {}\n", a, b, new_point_id);
+            // log_geometry.trace("created edge {} - {} point {}\n", a, b, new_point_id);
             for (size_t i = 1; i < count; ++i)
             {
                 destination.make_point();
@@ -88,7 +88,7 @@ auto Geometry_operation::find_or_make_point_from_edge(
             return new_point_id;
         }
     }
-    FATAL("s_max_edge_point_slots too low");
+    ERHE_FATAL("s_max_edge_point_slots too low");
 }
 
 void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> relative_positions)
@@ -96,7 +96,6 @@ void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> 
     ERHE_PROFILE_FUNCTION
 
     const size_t split_count = relative_positions.size();
-    //uint32_t point_count = source.point_count();
     reserve_edge_to_new_points();
 
     source.for_each_polygon_const([&](auto& i)
@@ -136,8 +135,8 @@ void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> 
                 //    new_point_id, point_a, weight_a,
                 //    new_point_id, point_b, weight_b
                 //);
-                add_point_source(new_point_id, weight_a, point_a); // TODO only add these once per edge?
-                add_point_source(new_point_id, weight_b, point_b); // TODO only add these once per edge?
+                add_point_source       (new_point_id, weight_a, point_a); // TODO only add these once per edge?
+                add_point_source       (new_point_id, weight_b, point_b); // TODO only add these once per edge?
                 add_point_corner_source(new_point_id, weight_a, corner_a);
                 add_point_corner_source(new_point_id, weight_b, corner_b);
                 if (in_order)
@@ -191,7 +190,8 @@ auto Geometry_operation::get_edge_new_point(
 
     log_catmull_clark.error("edge point {}-{} not found", point_a, point_b);
     // log_catmull_clark.error("point {} edge end points: ", a);
-    // for (uint32_t slot = a * s_max_edge_point_slots,
+    // for (
+    //     uint32_t slot = a * s_max_edge_point_slots,
     //     end = slot + s_max_edge_point_slots;
     //     slot < end;
     // )
@@ -215,9 +215,11 @@ auto Geometry_operation::make_new_point_from_point(
 ) -> Point_id
 {
     const auto new_point = destination.make_point();
-    //log_operation.trace("make_new_point_from_point (weight = {}, old_point = {}) new_point = {}\n",
-    //                    weight, old_point, new_point);
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace(
+    //     "make_new_point_from_point (weight = {}, old_point = {}) new_point = {}\n",
+    //     weight, old_point, new_point
+    // );
+    // const erhe::log::Indenter scope_indent;
     add_point_source(new_point, point_weight, old_point);
     const size_t i = static_cast<size_t>(old_point);
     if (point_old_to_new.size() <= i)
@@ -232,9 +234,11 @@ auto Geometry_operation::make_new_point_from_point(const Point_id old_point)
 -> Point_id
 {
     const auto new_point = destination.make_point();
-    //log_operation.trace("make_new_point_from_point (old_point = {}) new_point = {})\n",
-    //                    old_point, new_point);
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace(
+    //     "make_new_point_from_point (old_point = {}) new_point = {})\n",
+    //     old_point, new_point
+    // );
+    // const erhe::log::Indenter scope_indent;
     add_point_source(new_point, 1.0f, old_point);
     const size_t i = static_cast<size_t>(old_point);
     if (point_old_to_new.size() <= i)
@@ -249,10 +253,12 @@ auto Geometry_operation::make_new_point_from_polygon_centroid(const Polygon_id o
 -> Point_id
 {
     const auto new_point = destination.make_point();
-    //log_operation.trace("make_new_point_from_polygon_centroid (old_polygon = {}) new_point = {}\n",
-    //                    old_polygon, new_point);
-    //erhe::log::Indenter scope_indent;
-    size_t i = static_cast<size_t>(old_polygon);
+    // log_operation.trace(
+    //     "make_new_point_from_polygon_centroid (old_polygon = {}) new_point = {}\n",
+    //     old_polygon, new_point
+    // );
+    // const erhe::log::Indenter scope_indent;
+    const size_t i = static_cast<size_t>(old_polygon);
     if (old_polygon_centroid_to_new_points.size() <= i)
     {
         old_polygon_centroid_to_new_points.resize(i + s_grow_size);
@@ -269,9 +275,11 @@ void Geometry_operation::add_polygon_centroid(
 )
 {
     const Polygon& old_polygon = source.polygons[old_polygon_id];
-    //log_operation.trace("add_polygon_centroid (new_point_id = {}, weight = {}, old_polygon_id = {})\n",
-    //                    new_point_id, weight, old_polygon_id );
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace(
+    //     "add_polygon_centroid (new_point_id = {}, weight = {}, old_polygon_id = {})\n",
+    //     new_point_id, weight, old_polygon_id
+    // );
+    // const erhe::log::Indenter scope_indent;
     old_polygon.for_each_corner_const(source, [&](auto& i)
     {
         add_point_corner_source(new_point_id, polygon_weight, i.corner_id);
@@ -285,9 +293,11 @@ void Geometry_operation::add_point_ring(
     const Point_id old_point_id
 )
 {
-    //log_operation.trace("add_point_ring (new_point_id = {}, weight = {}, old_point_id = {})\n",
-    //                    new_point_id, weight, old_point_id);
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace(
+    //     "add_point_ring (new_point_id = {}, weight = {}, old_point_id = {})\n",
+    //     new_point_id, weight, old_point_id
+    // );
+    // const erhe::log::Indenter scope_indent;
     const Point& old_point = source.points[old_point_id];
     old_point.for_each_corner_const(source, [&](auto& i)
     {
@@ -304,9 +314,11 @@ auto Geometry_operation::make_new_polygon_from_polygon(const Polygon_id old_poly
 -> Polygon_id
 {
     const auto new_polygon_id = destination.make_polygon();
-    //log_operation.trace("make_new_polygon_from_polygon (old_polygon_id = {}) new_polygon_id = {}\n",
-    //                    old_polygon_id, new_polygon_id);
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace(
+    //     "make_new_polygon_from_polygon (old_polygon_id = {}) new_polygon_id = {}\n",
+    //     old_polygon_id, new_polygon_id
+    // );
+    // const erhe::log::Indenter scope_indent;
     add_polygon_source(new_polygon_id, 1.0f, old_polygon_id);
     const size_t i = static_cast<size_t>(old_polygon_id);
     if (polygon_old_to_new.size() <= i)
@@ -322,13 +334,17 @@ auto Geometry_operation::make_new_corner_from_polygon_centroid(
     const Polygon_id old_polygon_id
 ) -> Corner_id
 {
-    //log_operation.trace("make_new_corner_from_polygon_centroid (new_polygon_id = {}, old_polygon_id = {})\n",
-    //                    new_polygon_id, old_polygon_id);
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace(
+    //     "make_new_corner_from_polygon_centroid (new_polygon_id = {}, old_polygon_id = {})\n",
+    //     new_polygon_id, old_polygon_id
+    // );
+    // const erhe::log::Indenter scope_indent;
     const auto new_point_id  = old_polygon_centroid_to_new_points[old_polygon_id];
     const auto new_corner_id = destination.make_polygon_corner(new_polygon_id, new_point_id);
-    //log_operation.trace("new_point_id = {}, new_corner_id = {}\n",
-    //                    new_point_id, new_corner_id);
+    // log_operation.trace(
+    //     "new_point_id = {}, new_corner_id = {}\n",
+    //     new_point_id, new_corner_id
+    // );
     distribute_corner_sources(new_corner_id, 1.0f, new_point_id);
     return new_corner_id;
 }
@@ -338,9 +354,11 @@ auto Geometry_operation::make_new_corner_from_point(
     const Point_id   new_point_id
 ) -> Corner_id
 {
-    //log_operation.trace("make_new_corner_from_point (new_polygon_id = {}, new_point_id = {})\n",
-    //                    new_polygon_id, new_point_id);
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace(
+    //     "make_new_corner_from_point (new_polygon_id = {}, new_point_id = {})\n",
+    //     new_polygon_id, new_point_id
+    // );
+    // const erhe::log::Indenter scope_indent;
     const auto new_corner_id = destination.make_polygon_corner(new_polygon_id, new_point_id);
     distribute_corner_sources(new_corner_id, 1.0f, new_point_id);
     return new_corner_id;
@@ -351,15 +369,19 @@ auto Geometry_operation::make_new_corner_from_corner(
     const Corner_id  old_corner_id
 ) -> Corner_id
 {
-    //log_operation.trace("make_new_corner_from_corner (new_polygon_id = {}, old_corner_id = {})\n",
-    //                    new_polygon_id, old_corner_id);
-    //erhe::log::Indenter scope_indent;
+    // const log_operation.trace(
+    //     "make_new_corner_from_corner (new_polygon_id = {}, old_corner_id = {})\n",
+    //     new_polygon_id, old_corner_id
+    // );
+    // const erhe::log::Indenter scope_indent;
     const Corner old_corner    = source.corners[old_corner_id];
     const auto   old_point_id  = old_corner.point_id;
     const auto   new_point_id  = point_old_to_new[old_point_id];
     const auto   new_corner_id = destination.make_polygon_corner(new_polygon_id, new_point_id);
-    //log_operation.trace("old_point_id = {}, new_point_id = {}, new_corner_id = {}\n",
-    //                    old_point_id, new_point_id, new_corner_id);
+    // log_operation.trace(
+    //     "old_point_id = {}, new_point_id = {}, new_corner_id = {}\n",
+    //     old_point_id, new_point_id, new_corner_id
+    // );
     add_corner_source(new_corner_id, 1.0f, old_corner_id);
     return new_corner_id;
 }
@@ -369,9 +391,11 @@ void Geometry_operation::add_polygon_corners(
     const Polygon_id old_polygon_id
 )
 {
-    //log_operation.trace("add_polygon_corners (new_polygon_id = {}, old_polygon_id = {})\n",
-    //                    new_polygon_id, old_polygon_id);
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace(
+    //     "add_polygon_corners (new_polygon_id = {}, old_polygon_id = {})\n",
+    //     new_polygon_id, old_polygon_id
+    // );
+    // const erhe::log::Indenter scope_indent;
     const Polygon& old_polygon = source.polygons[old_polygon_id];
     old_polygon.for_each_corner_const(source, [&](auto& i)
     {
@@ -388,9 +412,11 @@ void Geometry_operation::add_point_source(
     const Point_id old_point_id
 )
 {
-    //log_operation.trace("add_point_source        (new_point_id = {}, weight = {}, old_point_id = {})\n",
-    //                    new_point_id, weight, old_point_id);
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace(
+    //     "add_point_source (new_point_id = {}, weight = {}, old_point_id = {})\n",
+    //     new_point_id, weight, old_point_id
+    // );
+    // const erhe::log::Indenter scope_indent;
     const size_t i = static_cast<size_t>(new_point_id);
     if (new_point_sources.size() <= i)
     {
@@ -405,9 +431,11 @@ void Geometry_operation::add_point_corner_source(
     const Corner_id old_corner_id
 )
 {
-    //log_operation.trace("add_point_corner_source (new_point_id = {}, weight = {}, old_corner_id = {})\n",
-    //                    new_point_id, weight, old_corner_id);
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace(
+    //     "add_point_corner_source (new_point_id = {}, weight = {}, old_corner_id = {})\n",
+    //     new_point_id, weight, old_corner_id
+    // );
+    // const erhe::log::Indenter scope_indent;
     const size_t i = static_cast<size_t>(new_point_id);
     if (new_point_corner_sources.size() <= i)
     {
@@ -422,9 +450,11 @@ void Geometry_operation::add_corner_source(
     const Corner_id old_corner_id
 )
 {
-    //log_operation.trace("add_corner_source (new_corner_id = {}, weight = {}, old_corner_id = {})\n",
-    //                    new_corner_id, weight, old_corner_id);
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace(
+    //     "add_corner_source (new_corner_id = {}, weight = {}, old_corner_id = {})\n",
+    //     new_corner_id, weight, old_corner_id
+    // );
+    // const erhe::log::Indenter scope_indent;
     const size_t i = static_cast<size_t>(new_corner_id);
     if (new_corner_sources.size() <= i)
     {
@@ -439,9 +469,11 @@ void Geometry_operation::distribute_corner_sources(
     const Point_id  new_point_id
 )
 {
-    //log_operation.trace("distribute_corner_sources (new_corner_id = {}, weight = {}, new_point_id = {})\n",
-    //                    new_corner_id, weight, new_point_id);
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace(
+    //     "distribute_corner_sources (new_corner_id = {}, weight = {}, new_point_id = {})\n",
+    //     new_corner_id, weight, new_point_id
+    // );
+    // const erhe::log::Indenter scope_indent;
     const auto point_corner_sources = new_point_corner_sources[new_point_id];
     for (const auto& point_corner_source : point_corner_sources)
     {
@@ -457,9 +489,11 @@ void Geometry_operation::add_polygon_source(
     const Polygon_id old_polygon_id
 )
 {
-    //log_operation.trace("add_polygon_source (new_polygon_id = {}, weight = {}, old_polygon_id = {})\n",
-    //                    new_polygon_id, weight, old_polygon_id);
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace(
+    //     "add_polygon_source (new_polygon_id = {}, weight = {}, old_polygon_id = {})\n",
+    //     new_polygon_id, weight, old_polygon_id
+    // );
+    // const erhe::log::Indenter scope_indent;
     const size_t i = static_cast<size_t>(new_polygon_id);
     if (new_polygon_sources.size() <= i)
     {
@@ -474,9 +508,11 @@ void Geometry_operation::add_edge_source(
     const Edge_id old_edge_id
 )
 {
-    //log_operation.trace("add_edge_source (new_edge_id = {}, weight = {}, old_edge_id = {})\n",
-    //                    new_edge_id, weight, old_edge_id);
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace(
+    //     "add_edge_source (new_edge_id = {}, weight = {}, old_edge_id = {})\n",
+    //     new_edge_id, weight, old_edge_id
+    // );
+    // const erhe::log::Indenter scope_indent;
     const size_t i = static_cast<size_t>(new_edge_id);
     if (new_edge_sources.size() <= i)
     {
@@ -487,8 +523,8 @@ void Geometry_operation::add_edge_source(
 
 void Geometry_operation::build_destination_edges_with_sourcing()
 {
-    //log_operation.trace("build_destination_edges_with_sourcing()\n");
-    //erhe::log::Indenter scope_indent;
+    // log_operation.trace("build_destination_edges_with_sourcing()\n");
+    // const erhe::log::Indenter scope_indent;
 
     destination.build_edges();
 
@@ -511,10 +547,10 @@ void Geometry_operation::build_destination_edges_with_sourcing()
 
 void Geometry_operation::interpolate_all_property_maps()
 {
-    new_point_sources  .resize(destination.point_count());
-    new_polygon_sources.resize(destination.polygon_count());
-    new_corner_sources .resize(destination.corner_count());
-    new_edge_sources   .resize(destination.edge_count());
+    new_point_sources  .resize(destination.get_point_count());
+    new_polygon_sources.resize(destination.get_polygon_count());
+    new_corner_sources .resize(destination.get_corner_count());
+    new_edge_sources   .resize(destination.get_edge_count());
     source.point_attributes()  .interpolate(destination.point_attributes(),   new_point_sources);
     source.polygon_attributes().interpolate(destination.polygon_attributes(), new_polygon_sources);
     source.corner_attributes() .interpolate(destination.corner_attributes(),  new_corner_sources);

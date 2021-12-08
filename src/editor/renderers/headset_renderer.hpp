@@ -57,8 +57,9 @@ public:
         erhe::scene::Node* view_root
     );
 
-    void update  (const erhe::xr::Pose& pose);
-    auto get_node() const -> erhe::scene::Node*;
+    [[nodiscard]] auto get_node() const -> erhe::scene::Node*;
+
+    void update(const erhe::xr::Pose& pose);
 
 private:
     std::shared_ptr<erhe::scene::Mesh> m_controller_mesh;
@@ -75,16 +76,17 @@ public:
     ~Headset_renderer() override;
 
     // Implements Component
-    auto get_type_hash                  () const -> uint32_t override { return hash; }
-    void connect                        () override;
-    void initialize_component           () override;
-    auto processing_requires_main_thread() const -> bool override { return true; }
+    [[nodiscard]] auto get_type_hash                  () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto processing_requires_main_thread() const -> bool override { return true; }
+    void connect             () override;
+    void initialize_component() override;
 
+    // Public API
     void begin_frame();
     void render     ();
 
 private:
-    auto get_headset_view_resources(erhe::xr::Render_view& render_view) -> Headset_view_resources&;
+    [[nodiscard]] auto get_headset_view_resources(erhe::xr::Render_view& render_view) -> Headset_view_resources&;
 
     std::unique_ptr<erhe::xr::Headset>        m_headset;
     std::vector<Headset_view_resources>       m_view_resources;

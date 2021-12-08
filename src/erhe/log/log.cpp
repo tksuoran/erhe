@@ -17,8 +17,7 @@ namespace erhe::log
 
 
 #if defined _WIN32
-auto Log::print_color()
--> bool
+auto Log::print_color() -> bool
 {
     return true;
 }
@@ -325,7 +324,7 @@ void Category::write(bool indent, const std::string& text)
 
             default:
             {
-                FATAL("Bad log colorizer");
+                ERHE_FATAL("Bad log colorizer");
             }
         }
         Log::set_text_color(Color::GRAY);

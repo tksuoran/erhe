@@ -1,5 +1,7 @@
 #include "windows/imgui_window.hpp"
 
+#include <imgui.h>
+
 namespace editor {
 
 Imgui_window::Imgui_window(const std::string_view title)
@@ -30,6 +32,33 @@ auto Imgui_window::is_visibile() const -> bool
 auto Imgui_window::title() const -> const std::string_view
 {
     return m_title;
+}
+
+auto Imgui_window::begin() -> bool
+{
+    on_begin();
+
+    bool keep_visible{true};
+    const bool not_collapsed = ImGui::Begin(title().data(), &keep_visible);
+    if (!keep_visible)
+    {
+        hide();
+    }
+    return not_collapsed;
+}
+
+void Imgui_window::end()
+{
+    on_end();
+    ImGui::End();
+}
+
+void Imgui_window::on_begin()
+{
+}
+
+void Imgui_window::on_end()
+{
 }
 
 }

@@ -65,13 +65,14 @@ public:
     void connect             () override;
     void initialize_component() override;
 
+    // Public API
     void print(
         const glm::vec3        text_position,
         const uint32_t         text_color,
         const std::string_view text
     );
 
-    void render(erhe::scene::Viewport viewport);
+    void render    (erhe::scene::Viewport viewport);
     void next_frame();
 
 private:
@@ -118,14 +119,12 @@ private:
                 index_buffer
             }
             , pipeline{
-                shader_stages,
-                &vertex_input_state,
-                &erhe::graphics::Input_assembly_state::triangle_fan,
-                &erhe::graphics::Rasterization_state::cull_mode_none,
-                //&erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled,
-                &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                &erhe::graphics::Color_blend_state::color_blend_premultiplied,
-                nullptr
+                .shader_stages  = shader_stages,
+                .vertex_input   = &vertex_input_state,
+                .input_assembly = &erhe::graphics::Input_assembly_state::triangle_fan,
+                .rasterization  = &erhe::graphics::Rasterization_state::cull_mode_none,
+                .depth_stencil  = &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+                .color_blend    = &erhe::graphics::Color_blend_state::color_blend_premultiplied,
             }
         {
             vertex_buffer    .set_debug_label("Text Renderer Vertex");
@@ -143,9 +142,8 @@ private:
         erhe::graphics::Pipeline           pipeline;
     };
 
+    [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
     void create_frame_resources();
-
-    auto current_frame_resources() -> Frame_resources&;
 
     erhe::graphics::OpenGL_state_tracker*            m_pipeline_state_tracker{nullptr};
 

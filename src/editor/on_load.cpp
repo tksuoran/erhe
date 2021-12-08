@@ -1,17 +1,17 @@
 #include "application.hpp"
+#include "configuration.hpp"
+#include "log.hpp"
+#include "rendering.hpp"
+#include "editor_time.hpp"
+#include "editor_tools.hpp"
+#include "editor_view.hpp"
+#include "window.hpp"
+
 #include "graphics/gl_context_provider.hpp"
 #include "graphics/icon_set.hpp"
 #include "graphics/image_transfer.hpp"
 #include "graphics/shader_monitor.hpp"
 #include "graphics/textures.hpp"
-
-#include "configuration.hpp"
-#include "log.hpp"
-#include "rendering.hpp"
-#include "time.hpp"
-#include "tools.hpp"
-#include "view.hpp"
-#include "window.hpp"
 
 #include "operations/operation_stack.hpp"
 
@@ -31,11 +31,13 @@
 #include "tools/physics_tool.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
+#include "tools/theremin_tool.hpp"
 #include "tools/trs_tool.hpp"
 
 #include "windows/brushes.hpp"
 #include "windows/camera_properties.hpp"
-#include "windows/frame_log_window.hpp"
+#include "windows/debug_view_window.hpp"
+#include "windows/log_window.hpp"
 #include "windows/imgui_demo_window.hpp"
 #include "windows/layers_window.hpp"
 #include "windows/material_properties.hpp"
@@ -72,8 +74,7 @@ void Application::run()
     m_components.cleanup_components();
 }
 
-auto Application::initialize_components(int argc, char** argv)
--> bool
+auto Application::initialize_components(int argc, char** argv) -> bool
 {
     ERHE_PROFILE_FUNCTION
 
@@ -91,13 +92,14 @@ auto Application::initialize_components(int argc, char** argv)
         m_components.add(gl_context_provider);
         m_components.add(make_shared<Brushes             >());
         m_components.add(make_shared<Debug_draw          >());
+        m_components.add(make_shared<Debug_view_window   >());
         m_components.add(make_shared<Editor_rendering    >());
         m_components.add(make_shared<Editor_time         >());
         m_components.add(make_shared<Editor_tools        >());
         m_components.add(make_shared<Editor_view         >());
         m_components.add(make_shared<Fly_camera_tool     >());
         m_components.add(make_shared<Forward_renderer    >());
-        m_components.add(make_shared<Frame_log_window    >());
+        m_components.add(make_shared<Log_window    >());
         m_components.add(make_shared<Grid_tool           >());
         m_components.add(make_shared<Headset_renderer    >());
         m_components.add(make_shared<Hover_tool          >());
@@ -128,6 +130,7 @@ auto Application::initialize_components(int argc, char** argv)
         m_components.add(make_shared<Shadow_renderer     >());
         m_components.add(make_shared<Text_renderer       >());
         m_components.add(make_shared<Textures            >());
+        m_components.add(make_shared<Theremin_tool       >());
         m_components.add(make_shared<Trs_tool            >());
         m_components.add(make_shared<Viewport_windows    >());
     }
@@ -157,20 +160,20 @@ auto Application::initialize_components(int argc, char** argv)
     return true;
 }
 
-void Application::component_initialization_complete(bool initialization_succeeded)
+void Application::component_initialization_complete(const bool initialization_succeeded)
 {
     if (initialization_succeeded)
     {
         gl::enable(gl::Enable_cap::primitive_restart);
         gl::primitive_restart_index(0xffffu);
 
-        auto window = get<Window>();
+        auto* const window = get<Window>();
         if (!window)
         {
             return;
         }
 
-        auto* context_window = window->get_context_window();
+        auto* const context_window = window->get_context_window();
         if (context_window == nullptr)
         {
             return;

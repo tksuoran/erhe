@@ -39,11 +39,11 @@ public:
 
     void enter_event_loop();
 
-    auto get_width() const -> int;
+    [[nodiscard]] auto get_width() const -> int;
 
-    auto get_height() const -> int;
+    [[nodiscard]] auto get_height() const -> int;
 
-    auto get_root_view() -> Root_view&
+    [[nodiscard]] auto get_root_view() -> Root_view&
     {
         return m_root_view;
     }
@@ -56,16 +56,16 @@ public:
 
     void capture_mouse(const bool capture);
 
-    auto is_mouse_captured() const -> bool;
+    [[nodiscard]] auto is_mouse_captured() const -> bool;
 
-    auto get_glfw_window() const -> GLFWwindow*;
+    [[nodiscard]] auto get_glfw_window() const -> GLFWwindow*;
 
-    auto get_opengl_major_version() const -> int
+    [[nodiscard]] auto get_opengl_major_version() const -> int
     {
         return m_opengl_major_version;
     }
 
-    auto get_opengl_minor_version() const -> int
+    [[nodiscard]] auto get_opengl_minor_version() const -> int
     {
         return m_opengl_minor_version;
     }

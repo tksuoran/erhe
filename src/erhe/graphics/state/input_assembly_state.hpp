@@ -20,7 +20,7 @@ public:
     gl::Primitive_type primitive_topology{gl::Primitive_type::points};
     bool               primitive_restart {false};
 
-    static auto get_next_serial() -> size_t;
+    static [[nodiscard]] auto get_next_serial() -> size_t;
 
     static size_t               s_serial;
     static Input_assembly_state points;
@@ -31,11 +31,15 @@ public:
     static Input_assembly_state triangle_strip;
 };
 
-auto operator==(const Input_assembly_state& lhs, const Input_assembly_state& rhs) noexcept
--> bool;
+[[nodiscard]] auto operator==(
+    const Input_assembly_state& lhs,
+    const Input_assembly_state& rhs
+) noexcept -> bool;
 
-auto operator!=(const Input_assembly_state& lhs, const Input_assembly_state& rhs) noexcept
--> bool;
+[[nodiscard]] auto operator!=(
+    const Input_assembly_state& lhs,
+    const Input_assembly_state& rhs
+) noexcept -> bool;
 
 class Input_assembly_state_tracker
 {

@@ -17,7 +17,7 @@ class Geometry_operation
 {
 public:
     explicit Geometry_operation(Geometry& source, Geometry& destination)
-        : source{source}
+        : source     {source}
         , destination{destination}
     {
     }
@@ -41,23 +41,22 @@ private:
     std::vector<Point_id> m_old_edge_to_new_points;
 
 public:
-    void post_processing();
-
-    void make_points_from_points();
-
-    void make_polygon_centroids();
-
+    void post_processing           ();
+    void make_points_from_points   ();
+    void make_polygon_centroids    ();
     void reserve_edge_to_new_points();
 
-    auto find_or_make_point_from_edge(
+    [[nodiscard]] auto find_or_make_point_from_edge(
         const Point_id a,
         const Point_id b,
         const size_t   count = 1
     ) -> Point_id;
 
-    void make_edge_midpoints(const std::initializer_list<float> relative_positions = { 0.5f } );
+    void make_edge_midpoints(
+        const std::initializer_list<float> relative_positions = { 0.5f }
+    );
 
-    auto get_edge_new_point(
+    [[nodiscard]] auto get_edge_new_point(
         const Point_id a,
         const Point_id b,
         const Point_id split_position = 0,
@@ -71,8 +70,10 @@ public:
     // weight      Weight for old point as source
     // old_point   Old point used as source for the new point
     // return      The new point.
-    auto make_new_point_from_point(const float point_weight, const Point_id old_point)
-    -> Point_id;
+    auto make_new_point_from_point(
+        const float    point_weight,
+        const Point_id old_point
+    ) -> Point_id;
 
     // Creates a new point to Destination from old point.
     // The new point is linked to the old point in Source.
@@ -99,8 +100,7 @@ public:
         const Point_id old_point
     );
 
-    auto make_new_polygon_from_polygon(const Polygon_id old_polygon)
-    -> Polygon_id;
+    auto make_new_polygon_from_polygon(const Polygon_id old_polygon) -> Polygon_id;
 
     auto make_new_corner_from_polygon_centroid(
         const Polygon_id new_polygon,

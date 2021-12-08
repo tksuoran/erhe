@@ -1,13 +1,15 @@
 #include "windows/viewport_window.hpp"
 #include "configuration.hpp"
+#include "editor_tools.hpp"
+#include "editor_view.hpp"
 #include "log.hpp"
 #include "rendering.hpp"
-#include "tools.hpp"
+
 #include "scene/scene_manager.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "tools/pointer_context.hpp"
-#include "windows/frame_log_window.hpp"
+#include "windows/log_window.hpp"
 
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
@@ -124,20 +126,18 @@ Viewport_windows::~Viewport_windows() = default;
 void Viewport_windows::connect()
 {
     //require<Fly_camera_tool>();
-    m_configuration          = get<Configuration>();
-    m_editor_rendering       = get<Editor_rendering>();
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-    m_pointer_context        = get<Pointer_context>();
-    require<Scene_root>();
+    m_configuration          = get    <Configuration>();
+    m_editor_rendering       = get    <Editor_rendering>();
+    m_editor_view            = require<Editor_view>();
+    m_pipeline_state_tracker = get    <erhe::graphics::OpenGL_state_tracker>();
+    m_pointer_context        = get    <Pointer_context>();
+    m_scene_root             = require<Scene_root>();
     require<Scene_manager>();
 }
 
 void Viewport_windows::initialize_component()
 {
-    //auto* fly_camera_tool = get<Fly_camera_tool>();
-    auto* scene_root = get<Scene_root>();
-
-    for (auto camera : scene_root->scene().cameras)
+    for (auto camera : m_scene_root->scene().cameras)
     {
         auto* icamera = as_icamera(camera.get());
         std::string name = fmt::format("Scene for Camera {}", icamera->name());
@@ -150,8 +150,10 @@ auto Viewport_windows::create_window(
     erhe::scene::ICamera*  camera
 ) -> Viewport_window*
 {
-    auto new_window = std::make_shared<Viewport_window>(
+    const auto new_window = std::make_shared<Viewport_window>(
         name,
+        m_configuration,
+        m_scene_root,
         camera
     );
 
@@ -162,29 +164,75 @@ auto Viewport_windows::create_window(
 
 void Viewport_windows::update()
 {
-    m_pointer_context->begin_frame();
+    ERHE_PROFILE_FUNCTION
+
     for (auto window : m_windows)
     {
-        m_pointer_context->update(window.get());
+        window->update();
+        if (window->is_hovered())
+        {
+            m_hover_window = window.get();
+        }
     }
+    m_pointer_context->update_viewport(m_hover_window);
 }
 
 void Viewport_windows::render()
 {
-    m_pointer_context->begin_frame();
-    for (auto window : m_windows)
+    if (!m_configuration->gui)
     {
-        m_pointer_context->update(window.get());
+        const int total_width  = m_editor_view->width();
+        const int total_height = m_editor_view->height();
+        size_t i = 0;
+        float count = static_cast<float>(m_windows.size());
+        for (auto window : m_windows)
+        {
+            const float start_rel = static_cast<float>(i) / count;
+            const float width     = static_cast<float>(total_width) / count;
+            const int   x         = static_cast<int>(start_rel * total_width);
+            window->set_viewport(
+                x,
+                0,
+                static_cast<int>(width),
+                total_height
+            );
+            ++i;
+        }
     }
 
     for (auto window : m_windows)
     {
-        window->render(m_configuration, m_editor_rendering, m_pipeline_state_tracker);
+        window->render(
+            m_editor_rendering,
+            m_pipeline_state_tracker
+        );
+    }
+}
+
+Viewport_window::Viewport_window(
+    const std::string_view name,
+    Configuration*         configuration,
+    Scene_root*            scene_root,
+    erhe::scene::ICamera*  camera
+)
+    : Imgui_window   {name}
+    , m_configuration{configuration}
+    , m_scene_root   {scene_root}
+    , m_camera       {camera}
+{
+}
+
+Viewport_window::~Viewport_window() = default;
+
+void Viewport_window::update()
+{
+    if (m_camera != nullptr)
+    {
+        m_projection_transforms = m_camera->projection_transforms(m_viewport);
     }
 }
 
 void Viewport_window::render(
-    const Configuration*                  configuration,
     Editor_rendering*                     editor_rendering,
     erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker
 )
@@ -194,24 +242,43 @@ void Viewport_window::render(
         return;
     }
 
-    Render_context context
+    const Render_context context
     {
-        this,
-        &m_viewport_config,
-        m_camera,
-        m_viewport
+        .window          = this,
+        .viewport_config = &m_viewport_config,
+        .camera          = m_camera,
+        .viewport        = m_viewport
     };
 
-    editor_rendering->render_id(context);
-    bind_multisample_framebuffer();
+    if (m_is_hovered)
+    {
+        editor_rendering->render_id(context);
+    }
+
+    if (m_configuration->gui)
+    {
+        bind_multisample_framebuffer();
+    }
+    else
+    {
+        gl::bind_framebuffer(
+            gl::Framebuffer_target::draw_framebuffer,
+            0
+        );
+    }
     gl::enable(gl::Enable_cap::framebuffer_srgb);
-    clear(configuration, pipeline_state_tracker);
-    editor_rendering->render_viewport(context);
-    multisample_resolve();
+    if (m_configuration->gui)
+    {
+        clear(pipeline_state_tracker);
+    }
+    editor_rendering->render_viewport(context, m_is_hovered);
+    if (m_configuration->gui)
+    {
+        multisample_resolve();
+    }
 }
 
 void Viewport_window::clear(
-    const Configuration*                  configuration,
     erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker
 ) const
 {
@@ -219,40 +286,52 @@ void Viewport_window::clear(
 
     pipeline_state_tracker->shader_stages.reset();
     pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
-    gl::viewport(
-        m_viewport.x,
-        m_viewport.y,
-        m_viewport.width,
-        m_viewport.height
-    );
     gl::clear_color(
         m_viewport_config.clear_color[0],
         m_viewport_config.clear_color[1],
         m_viewport_config.clear_color[2],
         m_viewport_config.clear_color[3]
     );
-    gl::clear_depth_f(*configuration->depth_clear_value_pointer());
+    gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
     gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 }
 
-Viewport_window::Viewport_window(
-    const std::string_view name,
-    erhe::scene::ICamera*  camera
-)
-    : Imgui_window{name}
-    , m_camera    {camera}
+void Viewport_window::on_begin()
 {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
 }
 
-Viewport_window::~Viewport_window() = default;
+void Viewport_window::on_end()
+{
+    ImGui::PopStyleVar();
+}
 
 void Viewport_window::imgui()
 {
     ERHE_PROFILE_FUNCTION
 
-    ImGui::Begin(title().data());
-
     const auto size = ImGui::GetContentRegionAvail();
+
+    int selected_camera_index = 0;
+    int index = 0;
+    std::vector<const char*>          names;
+    std::vector<erhe::scene::Camera*> cameras;
+    for (auto camera : m_scene_root->scene().cameras)
+    {
+        names.push_back(camera->name().c_str());
+        cameras.push_back(camera.get());
+        if (m_camera == camera.get())
+        {
+            selected_camera_index = index;
+        }
+        ++index;
+    }
+
+    const bool camera_changed = ImGui::Combo("Camera", &selected_camera_index, names.data(), static_cast<int>(names.size()));
+    if (camera_changed)
+    {
+        m_camera = cameras[selected_camera_index];
+    }
 
     if (
         m_can_present &&
@@ -271,22 +350,33 @@ void Viewport_window::imgui()
         );
         m_content_region_min  = to_glm(ImGui::GetItemRectMin());
         m_content_region_max  = to_glm(ImGui::GetItemRectMax());
-        m_content_region_size = m_content_region_max - m_content_region_min;
-        m_is_focused          = ImGui::IsItemHovered(ImGuiHoveredFlags_None);
+        m_content_region_size = to_glm(ImGui::GetItemRectSize());
+        m_is_hovered          = ImGui::IsItemHovered(ImGuiHoveredFlags_None);
     }
     else
     {
         m_content_region_size = to_glm(size);
-        m_is_focused = false;
+        m_is_hovered = false;
     }
-    ImGui::End();
 
     m_viewport.width  = m_content_region_size.x;
     m_viewport.height = m_content_region_size.y;
 
-    m_viewport_config.imgui();
+    //m_viewport_config.imgui();
 
     update_framebuffer();
+}
+
+void Viewport_window::set_viewport(const int x, const int y, const int width, const int height)
+{
+    m_content_region_min.x = x;
+    m_content_region_min.y = y;
+    m_content_region_max.x = x + width;
+    m_content_region_max.y = y + height;
+    m_viewport.x           = x;
+    m_viewport.y           = y;
+    m_viewport.width       = width;
+    m_viewport.height      = height;
 }
 
 auto Viewport_window::hit_test(int x, int y) const -> bool
@@ -303,9 +393,9 @@ auto Viewport_window::content_region_size() const -> glm::ivec2
     return m_content_region_size;
 }
 
-auto Viewport_window::is_focused() const -> bool
+auto Viewport_window::is_hovered() const -> bool
 {
-    return m_is_focused;
+    return m_is_hovered;
 }
 
 auto Viewport_window::viewport() const -> erhe::scene::Viewport
@@ -342,7 +432,7 @@ void Viewport_window::bind_multisample_framebuffer()
     {
         log_framebuffer.error("draw framebuffer status = {}\n", c_str(status));
     }
-    VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
+    ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
 }
 
 static constexpr std::string_view c_multisample_resolve{"Viewport_window::multisample_resolve()"};
@@ -375,7 +465,7 @@ void Viewport_window::multisample_resolve()
         {
             log_framebuffer.error("read framebuffer status = {}\n", c_str(status));
         }
-        VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
+        ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
     }
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer_resolved->gl_name());
@@ -389,7 +479,7 @@ void Viewport_window::multisample_resolve()
         {
             log_framebuffer.error("draw framebuffer status = {}\n", c_str(status));
         }
-        VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
+        ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
     }
 
     if constexpr (false)
@@ -402,12 +492,13 @@ void Viewport_window::multisample_resolve()
     }
 
     gl::disable(gl::Enable_cap::scissor_test);
-    gl::disable(gl::Enable_cap::framebuffer_srgb);
+    gl::enable(gl::Enable_cap::framebuffer_srgb);
     gl::blit_framebuffer(
         0, 0, m_color_texture_multisample->width(), m_color_texture_multisample->height(),
         0, 0, m_color_texture_resolved   ->width(), m_color_texture_resolved   ->height(),
         gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
     );
+    gl::enable(gl::Enable_cap::framebuffer_srgb);
 
     gl::pop_debug_group();
 
@@ -440,15 +531,17 @@ void Viewport_window::update_framebuffer()
     gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
 
     {
-        Texture::Create_info create_info;
-        create_info.target          = (s_sample_count > 0)
-            ? gl::Texture_target::texture_2d_multisample
-            : gl::Texture_target::texture_2d;
-        create_info.internal_format = gl::Internal_format::srgb8_alpha8;
-        create_info.sample_count    = s_sample_count;
-        create_info.width           = m_content_region_size.x;
-        create_info.height          = m_content_region_size.y;
-        m_color_texture_multisample = make_unique<Texture>(create_info);
+        m_color_texture_multisample = make_unique<Texture>(
+            Texture::Create_info{
+                .target = (s_sample_count > 0)
+                    ? gl::Texture_target::texture_2d_multisample
+                    : gl::Texture_target::texture_2d,
+                .internal_format = gl::Internal_format::srgb8_alpha8,
+                .sample_count    = s_sample_count,
+                .width           = m_content_region_size.x,
+                .height          = m_content_region_size.y
+            }
+        );
         m_color_texture_multisample->set_debug_label("Viewport Window Multisample Color");
         const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
         gl::clear_tex_image(
@@ -461,14 +554,15 @@ void Viewport_window::update_framebuffer()
     }
 
     {
-        Texture::Create_info create_info;
-        create_info.target          = gl::Texture_target::texture_2d;
-        create_info.internal_format = gl::Internal_format::rgba8;
-        create_info.sample_count    = 0;
-        create_info.width           = m_content_region_size.x;
-        create_info.height          = m_content_region_size.y;
-        m_color_texture_resolved = make_shared<Texture>(create_info);
-        m_color_texture_multisample->set_debug_label("Viewport Window Multisample Resolved");
+        m_color_texture_resolved = make_shared<Texture>(
+            Texture::Create_info{
+                .target          = gl::Texture_target::texture_2d,
+                .internal_format = gl::Internal_format::rgba8,
+                .width           = m_content_region_size.x,
+                .height          = m_content_region_size.y
+            }
+        );
+        m_color_texture_resolved->set_debug_label("Viewport Window Multisample Resolved");
         if (!m_can_present)
         {
             constexpr float clear_value[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
@@ -520,7 +614,7 @@ void Viewport_window::update_framebuffer()
     }
 }
 
-glm::vec2 Viewport_window::to_scene_content(const glm::vec2 position_in_root)
+auto Viewport_window::to_scene_content(const glm::vec2 position_in_root) const -> glm::vec2
 {
     const float content_x      = static_cast<float>(position_in_root.x) - m_content_region_min.x;
     const float content_y      = static_cast<float>(position_in_root.y) - m_content_region_min.y;
@@ -531,35 +625,35 @@ glm::vec2 Viewport_window::to_scene_content(const glm::vec2 position_in_root)
     };
 }
 
-auto Viewport_window::project_to_viewport(const glm::vec3 position_in_world) const -> glm::vec3
+auto Viewport_window::project_to_viewport(const glm::dvec3 position_in_world) const -> glm::dvec3
 {
-    constexpr float depth_range_near = 0.0f;
-    constexpr float depth_range_far  = 1.0f;
-    return erhe::toolkit::project_to_screen_space(
-        m_camera->clip_from_world(),
+    constexpr double depth_range_near = 0.0;
+    constexpr double depth_range_far  = 1.0;
+    return erhe::toolkit::project_to_screen_space<double>(
+        m_projection_transforms.clip_from_world.matrix(),
         position_in_world,
         depth_range_near,
         depth_range_far,
-        static_cast<float>(m_viewport.x),
-        static_cast<float>(m_viewport.y),
-        static_cast<float>(m_viewport.width),
-        static_cast<float>(m_viewport.height)
+        static_cast<double>(m_viewport.x),
+        static_cast<double>(m_viewport.y),
+        static_cast<double>(m_viewport.width),
+        static_cast<double>(m_viewport.height)
     );
 }
 
-auto Viewport_window::unproject_to_world(const glm::vec3 position_in_window) const -> glm::vec3
+auto Viewport_window::unproject_to_world(const glm::dvec3 position_in_window) const -> std::optional<glm::dvec3>
 {
-    constexpr float depth_range_near = 0.0f;
-    constexpr float depth_range_far  = 1.0f;
-    return erhe::toolkit::unproject(
-        m_camera->world_from_clip(),
+    constexpr double depth_range_near = 0.0;
+    constexpr double depth_range_far  = 1.0;
+    return erhe::toolkit::unproject<double>(
+        m_projection_transforms.clip_from_world.inverse_matrix(),
         position_in_window,
         depth_range_near,
         depth_range_far,
-        static_cast<float>(m_viewport.x),
-        static_cast<float>(m_viewport.y),
-        static_cast<float>(m_viewport.width),
-        static_cast<float>(m_viewport.height)
+        static_cast<double>(m_viewport.x),
+        static_cast<double>(m_viewport.y),
+        static_cast<double>(m_viewport.width),
+        static_cast<double>(m_viewport.height)
     );
 }
 
@@ -568,7 +662,7 @@ auto Viewport_window::should_render() const -> bool
     return
         (m_viewport.width  > 0) &&
         (m_viewport.height > 0) &&
-        is_framebuffer_ready() &&
+        (!m_configuration->gui || is_framebuffer_ready()) &&
         (m_camera != nullptr);
 }
 

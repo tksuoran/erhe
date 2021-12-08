@@ -33,8 +33,7 @@ public:
     );
 
     template <typename Key_type, typename Value_type>
-    auto
-    find_or_create(
+    [[nodiscard]] auto find_or_create(
         const erhe::geometry::Property_map_collection<Key_type>& geometry_attributes,
         erhe::geometry::Property_map_collection<Key_type>&       attributes,
         const std::string&                                       name

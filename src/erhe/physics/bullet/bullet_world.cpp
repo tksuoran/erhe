@@ -182,35 +182,35 @@ void Bullet_world::update_fixed_step(const double dt)
 
 void Bullet_world::add_rigid_body(IRigid_body* rigid_body)
 {
-    VERIFY(rigid_body != nullptr);
+    ERHE_VERIFY(rigid_body != nullptr);
     auto* bullet_rigid_body = dynamic_cast<Bullet_rigid_body*>(rigid_body);
-    VERIFY(bullet_rigid_body != nullptr);
+    ERHE_VERIFY(bullet_rigid_body != nullptr);
     m_bullet_dynamics_world.addRigidBody(bullet_rigid_body->get_bullet_rigid_body());
 }
 
 void Bullet_world::remove_rigid_body(IRigid_body* rigid_body)
 {
-    VERIFY(rigid_body != nullptr);
+    ERHE_VERIFY(rigid_body != nullptr);
     auto* bullet_rigid_body = dynamic_cast<Bullet_rigid_body*>(rigid_body);
-    VERIFY(bullet_rigid_body != nullptr);
+    ERHE_VERIFY(bullet_rigid_body != nullptr);
     m_bullet_dynamics_world.removeRigidBody(bullet_rigid_body->get_bullet_rigid_body());
 }
 
 void Bullet_world::add_constraint(IConstraint* constraint)
 {
-    log_physics.info("add_constraint()\n");
-    VERIFY(constraint != nullptr);
+    // log_physics.info("add_constraint()\n");
+    ERHE_VERIFY(constraint != nullptr);
     auto* bullet_constraint = dynamic_cast<Bullet_constraint*>(constraint);
-    VERIFY(bullet_constraint != nullptr);
+    ERHE_VERIFY(bullet_constraint != nullptr);
     m_bullet_dynamics_world.addConstraint(bullet_constraint->get_bullet_constraint());
 }
 
 void Bullet_world::remove_constraint(IConstraint* constraint)
 {
-    log_physics.info("remove_constraint()\n");
-    VERIFY(constraint != nullptr);
+    // log_physics.info("remove_constraint()\n");
+    ERHE_VERIFY(constraint != nullptr);
     auto* bullet_constraint = dynamic_cast<Bullet_constraint*>(constraint);
-    VERIFY(bullet_constraint != nullptr);
+    ERHE_VERIFY(bullet_constraint != nullptr);
     m_bullet_dynamics_world.removeConstraint(bullet_constraint->get_bullet_constraint());
 }
 

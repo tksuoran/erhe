@@ -217,14 +217,17 @@ void Viewport_window::update_framebuffer()
     gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
 
     {
-        Texture::Create_info create_info;
-        create_info.target          = s_sample_count > 0 ? gl::Texture_target::texture_2d_multisample
-                                                         : gl::Texture_target::texture_2d;
-        create_info.internal_format = gl::Internal_format::srgb8_alpha8;
-        create_info.sample_count    = s_sample_count;
-        create_info.width           = m_content_region_size.x;
-        create_info.height          = m_content_region_size.y;
-        m_color_texture_multisample = make_unique<Texture>(create_info);
+        m_color_texture_multisample = make_unique<Texture>(
+            Texture::Create_info{
+                .target = (s_sample_count > 0)
+                    ? gl::Texture_target::texture_2d_multisample
+                    : gl::Texture_target::texture_2d,
+                .internal_format = gl::Internal_format::srgb8_alpha8,
+                .sample_count    = s_sample_count,
+                .width           = m_content_region_size.x,
+                .height          = m_content_region_size.y,
+            }
+        );
         m_color_texture_multisample->set_debug_label("Viewport Window Multisample Color");
         float clear_value[4] = {1.0f, 0.0f, 1.0f, 1.0f };
         gl::clear_tex_image(m_color_texture_multisample->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
@@ -233,13 +236,15 @@ void Viewport_window::update_framebuffer()
     }
 
     {
-        Texture::Create_info create_info;
-        create_info.target          = gl::Texture_target::texture_2d;
-        create_info.internal_format = gl::Internal_format::rgba8;
-        create_info.sample_count    = 0;
-        create_info.width           = m_content_region_size.x;
-        create_info.height          = m_content_region_size.y;
-        m_color_texture_resolved = make_shared<Texture>(create_info);
+        m_color_texture_resolved = make_shared<Texture>(
+            Texture::Create_info{
+                .target          = gl::Texture_target::texture_2d,
+                .internal_format = gl::Internal_format::rgba8,
+                .sample_count    = 0,
+                .width           = m_content_region_size.x,
+                .height          = m_content_region_size.y
+            }
+        );
         m_color_texture_multisample->set_debug_label("Viewport Window Multisample Resolved");
         //float clear_value[4] = {1.0f, 0.0f, 0.0f, 1.0f };
         //gl::clear_tex_image(m_color_texture_resolved_for_draw->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);

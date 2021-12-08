@@ -25,14 +25,21 @@ public:
 class Stencil_state_component_hash
 {
 public:
-    auto operator()(const Stencil_op_state& stencil_state_component) const noexcept -> size_t;
+    [[nodiscard]]
+    auto operator()(
+        const Stencil_op_state& stencil_state_component
+    ) const noexcept -> size_t;
 };
 
-auto operator==(const Stencil_op_state& lhs, const Stencil_op_state& rhs) noexcept
--> bool;
+[[nodiscard]] auto operator==(
+    const Stencil_op_state& lhs,
+    const Stencil_op_state& rhs
+) noexcept -> bool;
 
-auto operator!=(const Stencil_op_state& lhs, const Stencil_op_state& rhs) noexcept
--> bool;
+[[nodiscard]] auto operator!=(
+    const Stencil_op_state& lhs,
+    const Stencil_op_state& rhs
+) noexcept -> bool;
 
 class Depth_stencil_state
 {

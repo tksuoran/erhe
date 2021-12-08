@@ -32,7 +32,7 @@ public:
 
 private:
     bool                      m_physics_enabled{false};
-    glm::vec3                 m_gravity;
+    glm::vec3                 m_gravity        {0.0f};
 
     std::vector<IRigid_body*> m_rigid_bodies;
     std::vector<IConstraint*> m_constraints;

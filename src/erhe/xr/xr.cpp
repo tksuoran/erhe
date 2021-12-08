@@ -21,7 +21,7 @@ namespace erhe::xr {
 
 using namespace erhe::log;
 
-Category log_xr(Color::YELLOW, Color::GRAY, Level::LEVEL_INFO);
+Category log_xr{Color::YELLOW, Color::GRAY, Level::LEVEL_INFO};
 
 GEN_C_STR(XrActionType           )
 GEN_C_STR(XrEnvironmentBlendMode )
@@ -33,6 +33,7 @@ GEN_C_STR(XrReferenceSpaceType   )
 GEN_C_STR(XrSessionState         )
 GEN_C_STR(XrStructureType        )
 GEN_C_STR(XrViewConfigurationType)
+GEN_C_STR(XrHandJointEXT         )
 
 auto to_string_message_severity(XrDebugUtilsMessageSeverityFlagsEXT severity) -> std::string
 {
@@ -114,20 +115,16 @@ auto to_string_message_type(XrDebugUtilsMessageTypeFlagsEXT type_flags) -> std::
     return ss.str();
 }
 
-auto check(const char* function_name, XrResult result, bool error_is_allowed) -> bool
+auto check(XrResult result, const int log_level) -> bool
 {
     if (result != XR_SUCCESS)
     {
         log_xr.write(
             true,
-            error_is_allowed ? Level::LEVEL_INFO : Level::LEVEL_ERROR,
-            "{} returned error {}\n",
-            fmt::make_format_args(function_name, c_str(result))
+            log_level,
+            "OpenXR returned error {}\n",
+            fmt::make_format_args(c_str(result))
         );
-        //log_xr.log(
-        //if (error_is_allowed)
-        //{
-        //    log_xr.error("{} returned error {}\n", function_name, c_str(result));
         return false;
     }
     return true;

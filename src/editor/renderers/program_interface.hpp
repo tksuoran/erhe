@@ -59,8 +59,8 @@ public:
     size_t       point_light_count;
     size_t       reserved;
     size_t       ambient_light;
-    size_t       light_struct;
     Light_struct light;
+    size_t       light_struct;
 };
 
 class Material_struct

@@ -32,7 +32,7 @@ void Textures::initialize_component()
 {
     Expects(m_image_transfer);
 
-    Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     background = load(std::filesystem::path("res") / "images" / "background.png");
 }
@@ -45,7 +45,7 @@ gl::Internal_format to_gl(erhe::graphics::Image_format format)
         case erhe::graphics::Image_format::rgba8: return gl::Internal_format::rgba8;
         default:
         {
-            FATAL("Bad image format\n");
+            ERHE_FATAL("Bad image format\n");
         }
     }
     // unreachable return gl::Internal_format::rgba8;
@@ -72,14 +72,15 @@ auto Textures::load(const std::filesystem::path& path)
 
     auto& slot = m_image_transfer->get_slot();
 
-    Texture::Create_info texture_create_info;
-    texture_create_info.width           = image_info.width;
-    texture_create_info.height          = image_info.height;
-    texture_create_info.depth           = image_info.depth;
-    texture_create_info.level_count     = image_info.level_count;
-    texture_create_info.row_stride      = image_info.row_stride;
-    texture_create_info.use_mipmaps     = texture_create_info.level_count > 1;
-    texture_create_info.internal_format = to_gl(image_info.format);
+    erhe::graphics::Texture_create_info texture_create_info{
+        .internal_format = to_gl(image_info.format),
+        .use_mipmaps     = (image_info.level_count > 1),
+        .width           = image_info.width,
+        .height          = image_info.height,
+        .depth           = image_info.depth,
+        .level_count     = image_info.level_count,
+        .row_stride      = image_info.row_stride,
+    };
     gsl::span<std::byte> span = slot.span_for(
         image_info.width,
         image_info.height,

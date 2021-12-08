@@ -29,7 +29,7 @@ Property_map_collection<Key_type>::insert(Property_map_base<Key_type>* map)
 
     for (const auto& entry : m_entries)
     {
-        VERIFY(entry.key != map->descriptor().name);
+        ERHE_VERIFY(entry.key != map->descriptor().name);
     }
     m_entries.emplace_back(map->descriptor().name, map);
     //log_attribute_maps.trace("Added attribute map {}\n", map->descriptor().name);
@@ -91,14 +91,15 @@ Property_map_collection<Key_type>::find_base(const Property_map_descriptor& desc
 template <typename Key_type>
 template <typename Value_type>
 inline auto
-Property_map_collection<Key_type>::create(const Property_map_descriptor& descriptor)
-    -> Property_map<Key_type, Value_type>*
+Property_map_collection<Key_type>::create(
+    const Property_map_descriptor& descriptor
+) -> Property_map<Key_type, Value_type>*
 {
     ERHE_PROFILE_FUNCTION
 
     for (const auto& entry : m_entries)
     {
-        VERIFY(entry.key != descriptor.name);
+        ERHE_VERIFY(entry.key != descriptor.name);
     }
 
     const auto p = new Property_map<Key_type, Value_type>(descriptor);
@@ -135,8 +136,9 @@ Property_map_collection<Key_type>::find(
 template <typename Key_type>
 template <typename Value_type>
 inline auto
-Property_map_collection<Key_type>::find_or_create(const Property_map_descriptor& descriptor)
-    -> Property_map<Key_type, Value_type>*
+Property_map_collection<Key_type>::find_or_create(
+    const Property_map_descriptor& descriptor
+) -> Property_map<Key_type, Value_type>*
 {
     ERHE_PROFILE_FUNCTION
 
@@ -213,7 +215,8 @@ template <typename Key_type>
 inline void
 Property_map_collection<Key_type>::merge_to(
     Property_map_collection<Key_type>& destination,
-    const glm::mat4                    transform)
+    const glm::mat4                    transform
+)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -250,8 +253,9 @@ Property_map_collection<Key_type>::clone()
 
 template <typename Key_type>
 inline auto
-Property_map_collection<Key_type>::clone_with_transform(const glm::mat4 transform)
--> Property_map_collection<Key_type>
+Property_map_collection<Key_type>::clone_with_transform(
+    const glm::mat4 transform
+) -> Property_map_collection<Key_type>
 {
     Property_map_collection<Key_type> result;
     for (auto& entry : m_entries)

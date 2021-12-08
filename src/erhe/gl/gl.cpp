@@ -21,11 +21,11 @@ namespace gl
 
 using namespace erhe::log;
 
-Category log_gl(Color::YELLOW, Color::GRAY, Level::LEVEL_INFO);
+Category log_gl{Color::YELLOW, Color::GRAY, Level::LEVEL_INFO};
 
 static bool enable_error_checking = true;
 
-void set_error_checking(bool enable)
+void set_error_checking(const bool enable)
 {
     enable_error_checking = enable;
 }
@@ -54,8 +54,7 @@ void check_error()
     }
 }
 
-auto size_of_type(gl::Draw_elements_type type)
--> size_t
+auto size_of_type(const gl::Draw_elements_type type) -> size_t
 {
     switch (type)
     {
@@ -63,12 +62,11 @@ auto size_of_type(gl::Draw_elements_type type)
         case gl::Draw_elements_type::unsigned_short: return 2;
         case gl::Draw_elements_type::unsigned_int:   return 4;
         default:
-            FATAL("Bad draw elements index type");
+            ERHE_FATAL("Bad draw elements index type");
     }
 }
 
-auto size_of_type(gl::Vertex_attrib_type type)
--> size_t
+auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
 {
     switch (type)
     {
@@ -103,7 +101,7 @@ auto size_of_type(gl::Vertex_attrib_type type)
 
         default:
         {
-            FATAL("Bad vertex attribute type");
+            ERHE_FATAL("Bad vertex attribute type");
         }
     }
 }

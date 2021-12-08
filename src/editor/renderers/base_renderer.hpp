@@ -113,31 +113,36 @@ public:
         const size_t draw_count
     );
 
+    [[nodiscard]]
     auto current_frame_resources() -> Frame_resources&;
 
     void next_frame();
 
     void base_connect(const erhe::components::Component* component);
 
+    // Can discard return value
     auto update_primitive_buffer(
         const erhe::scene::Mesh_layer&        mesh_layer,
         const erhe::scene::Visibility_filter& visibility_filter,
         const bool                            use_id_ranges = false
     ) -> Buffer_range;
 
+    // Can discard return value
     auto update_light_buffer(
         const erhe::scene::Light_layer& light_layer,
         const erhe::scene::Viewport     light_texture_viewport
     ) -> Buffer_range;
 
-    auto update_material_buffer(const Material_collection& materials)
-        -> Buffer_range;
+    // Can discard return value
+    auto update_material_buffer(const Material_collection& materials) -> Buffer_range;
 
+    // Can discard return value
     auto update_camera_buffer(
         erhe::scene::ICamera&       camera,
         const erhe::scene::Viewport viewport
     ) -> Buffer_range;
 
+    // Can discard return value
     auto update_draw_indirect_buffer(
         const erhe::scene::Mesh_layer&        mesh_layer,
         const erhe::primitive::Primitive_mode primitive_mode,

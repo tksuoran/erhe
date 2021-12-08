@@ -18,7 +18,8 @@ public:
     );
 };
 
-auto clone(erhe::geometry::Geometry& source, glm::mat4 transform)
--> erhe::geometry::Geometry;
+[[nodiscard]] auto clone(
+    erhe::geometry::Geometry& source, glm::mat4 transform
+) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

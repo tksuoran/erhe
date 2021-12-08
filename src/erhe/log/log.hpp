@@ -55,6 +55,8 @@ public:
     virtual void write(std::string_view text) = 0;
 };
 
+extern auto timestamp() -> std::string;
+
 class Category
 {
 public:

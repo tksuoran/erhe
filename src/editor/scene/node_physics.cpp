@@ -13,7 +13,7 @@ using namespace erhe::scene;
 using namespace erhe::physics;
 using namespace std;
 
-Node_physics::Node_physics(IRigid_body_create_info& create_info)
+Node_physics::Node_physics(const IRigid_body_create_info& create_info)
     : m_rigidbody_from_node{}
     , m_node_from_rigidbody{}
     , m_rigid_body         {IRigid_body::create_shared(create_info, this)}
@@ -33,20 +33,6 @@ Node_physics::~Node_physics()
 auto Node_physics::node_attachment_type() const -> const char*
 {
     return "Node_physics";
-}
-
-void Node_physics::on_attached_to(Node& node)
-{
-    ERHE_PROFILE_FUNCTION
-
-    m_node = &node;
-    on_node_transform_changed();
-}
-
-void Node_physics::on_detached_from(Node& node)
-{
-    static_cast<void>(node);
-    m_node = nullptr;
 }
 
 void Node_physics::on_attached_to(erhe::physics::IWorld* world)
@@ -69,7 +55,7 @@ void Node_physics::on_node_transform_changed()
 
     node()->update_transform();
     const erhe::physics::Transform world_from_node = get_world_from_node();
-    VERIFY(m_rigid_body);
+    ERHE_VERIFY(m_rigid_body);
     if (m_rigid_body->get_motion_mode() == Motion_mode::e_static)
     {
         log_physics.warn("Attempt to move static rigid body - promoting to kinematic.\n");
@@ -93,12 +79,12 @@ auto Node_physics::get_world_from_node() const -> erhe::physics::Transform
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_node == nullptr)
+    if (node() == nullptr)
     {
         return erhe::physics::Transform{};
     }
 
-    const glm::mat4 m = m_node->world_from_node();
+    const glm::mat4 m = node()->world_from_node();
     const glm::vec3 p = glm::vec3{m[3]};
 
     return erhe::physics::Transform{
@@ -116,7 +102,7 @@ void Node_physics::set_world_from_node(const erhe::physics::Transform world_from
 {
     ERHE_PROFILE_FUNCTION
 
-    VERIFY(m_node != nullptr);
+    ERHE_VERIFY(m_node != nullptr);
 
     // TODO Take center of mass into account
 
@@ -139,8 +125,8 @@ void Node_physics::set_world_from_node(const erhe::physics::Transform world_from
         1.0f
     };
     // TODO don't unparent, call set_world_from_node() instead
-    m_node->unparent();
-    m_node->set_parent_from_node(matrix);
+    node()->unparent();
+    node()->set_parent_from_node(matrix);
 
     m_transform_change_from_physics = false;
 }
