@@ -119,7 +119,7 @@ void Log_window::imgui()
             if (entry.repeat_count > 0)
             {
                 ImGui::TextColored(
-                    ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
+                    ImVec4{0.55f, 0.55f, 0.55f, 1.0f},
                     "Message repeated %u times",
                     entry.repeat_count
                 );

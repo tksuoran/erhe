@@ -28,7 +28,7 @@ class ICamera
     : public Node
 {
 public:
-    ICamera(const std::string_view name);
+    explicit ICamera(const std::string_view name);
     virtual ~ICamera() {}
 
     virtual [[nodiscard]] auto projection           () -> Projection* = 0;

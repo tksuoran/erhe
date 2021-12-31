@@ -62,7 +62,7 @@ protected:
 
 public:
     Serial_queue();
-    Serial_queue(const std::string_view name);
+    explicit Serial_queue(const std::string_view name);
     ~Serial_queue();
 
     template <class F, class... Args>

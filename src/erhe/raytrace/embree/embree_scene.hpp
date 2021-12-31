@@ -17,7 +17,7 @@ class Embree_scene
     : public IScene
 {
 public:
-    Embree_scene(const std::string_view debug_label); // rtcNewScene()
+    explicit Embree_scene(const std::string_view debug_label); // rtcNewScene()
     ~Embree_scene() override; // rtcReleaseScene()
 
     // rtcGetSceneDevice()

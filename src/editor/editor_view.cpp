@@ -188,7 +188,6 @@ void Editor_view::on_key(
         erhe::toolkit::c_str(code),
         pressed ? "press" : "release"
     );
-    DebugBreak();
     // Keycode::Key_f2:     m_trigger_capture = true; break;
     // Keycode::Key_delete: m_editor_tools->delete_selected_meshes();
 }

@@ -13,7 +13,7 @@ class Embree_geometry
     : public IGeometry
 {
 public:
-    Embree_geometry(const std::string_view debug_label); // rtcNewGeometry()
+    explicit Embree_geometry(const std::string_view debug_label); // rtcNewGeometry()
     ~Embree_geometry() override; // rtcReleaseGeometry()
 
     // rtcRetainGeometry()

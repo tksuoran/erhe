@@ -13,7 +13,7 @@ class Null_instance
     : public IInstance
 {
 public:
-    Null_instance (const std::string_view debug_label);
+    explicit Null_instance(const std::string_view debug_label);
     ~Null_instance() override;
 
     // Implements IInstance

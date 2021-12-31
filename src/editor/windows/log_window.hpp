@@ -65,7 +65,7 @@ private:
 
     std::vector<std::string> m_frame_entries;
     std::deque<Tail_entry>   m_tail_entries;
-    int                      m_tail_buffer_show_size{20};
+    int                      m_tail_buffer_show_size{7};
     int                      m_tail_buffer_trim_size{1000};
 };
 

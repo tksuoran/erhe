@@ -96,7 +96,6 @@ void Pointer_context::raytrace()
         return;
     }
 
-    const auto direction = glm::normalize(pointer_far.value() - pointer_near.value());
     //log->frame_log("Direction: {}", glm::vec3{direction});
 
     const glm::vec3 origin{pointer_near.value()};

@@ -49,7 +49,7 @@ private:
     };
 
 public:
-    Thread_pool(size_t size);
+    explicit Thread_pool(size_t size);
     ~Thread_pool();
 
     static Thread_pool& get_instance();

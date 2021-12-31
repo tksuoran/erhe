@@ -13,7 +13,7 @@ class Null_geometry
     : public IGeometry
 {
 public:
-    Null_geometry (const std::string_view debug_label);
+    explicit Null_geometry(const std::string_view debug_label);
     ~Null_geometry() override;
 
     // Implements IGeometry

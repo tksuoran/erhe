@@ -61,15 +61,14 @@ void Debug_view_window::initialize_component()
 
 void Debug_view_window::update_framebuffer()
 {
-    const auto win_min              = ImGui::GetWindowContentRegionMin();
-    const auto win_max              = ImGui::GetWindowContentRegionMax();
+    const auto win_min = ImGui::GetWindowContentRegionMin();
+    const auto win_max = ImGui::GetWindowContentRegionMax();
 
     const ImVec2 win_size{
         win_max.x - win_min.x,
         win_max.y - win_min.y
     };
 
-    const auto imgui_available_size_ = ImGui::GetWindowSize(); ImGui::GetContentRegionAvail();
     const auto imgui_available_size = win_size;
 
     if (

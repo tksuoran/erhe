@@ -119,7 +119,7 @@ void Scene_manager::setup_cameras()
         glm::vec3{0.0f, 1.40f, 1.0f},
         glm::vec3{0.0f, 1.40f, 0.0f}
     );
-    auto camera_b = make_camera(
+    make_camera(
         "Camera B",
         glm::vec3{-1.0f, 1.65f,  4.0f}
     );

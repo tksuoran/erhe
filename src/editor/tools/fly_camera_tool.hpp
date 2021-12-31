@@ -56,7 +56,7 @@ class Fly_camera_turn_command
     : public Command
 {
 public:
-    Fly_camera_turn_command(Fly_camera_tool& fly_camera_tool)
+    explicit Fly_camera_turn_command(Fly_camera_tool& fly_camera_tool)
         : Command          {"Fly_camera.turn_camera"}
         , m_fly_camera_tool{fly_camera_tool}
     {

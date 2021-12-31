@@ -25,9 +25,7 @@ class Build_info_set
 public:
     Build_info_set() = default;
 
-    Build_info_set(
-        Buffer_sink* gl_buffer_sink
-    )
+    explicit Build_info_set(Buffer_sink* gl_buffer_sink)
         : gl{gl_buffer_sink}
     {
     }

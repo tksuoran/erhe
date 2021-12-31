@@ -15,7 +15,7 @@ class Embree_instance
     : public IInstance
 {
 public:
-    Embree_instance(const std::string_view debug_label); // rtcNewGeometry()
+    explicit Embree_instance(const std::string_view debug_label); // rtcNewGeometry()
     ~Embree_instance() override; // rtcReleaseGeometry()
 
     // Implements IGeometry

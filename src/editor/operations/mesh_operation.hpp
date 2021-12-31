@@ -59,7 +59,7 @@ protected:
         erhe::scene::Mesh_data             after;
     };
 
-    Mesh_operation (Context&& context);
+    explicit Mesh_operation(Context&& context);
     ~Mesh_operation() override;
 
     // Implements IOperation

@@ -13,7 +13,7 @@ class Null_scene
     : public IScene
 {
 public:
-    Null_scene(const std::string_view debug_label);
+    explicit Null_scene(const std::string_view debug_label);
     ~Null_scene() override;
 
     // Implements IScene

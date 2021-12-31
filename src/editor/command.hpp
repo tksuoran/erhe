@@ -44,7 +44,7 @@ private:
 class Command
 {
 public:
-    Command(const char* name)
+    explicit Command(const char* name)
         : m_name{name}
     {
     }
@@ -104,7 +104,7 @@ private:
 class Command_binding
 {
 public:
-    Command_binding(Command* command)
+    explicit Command_binding(Command* command)
         : m_command{command}
     {
     }
@@ -159,7 +159,7 @@ class Mouse_binding
     : public Command_binding
 {
 public:
-    Mouse_binding(Command* command)
+    explicit Mouse_binding(Command* command)
         : Command_binding{command}
     {
     }

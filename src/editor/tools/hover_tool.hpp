@@ -32,7 +32,7 @@ class Hover_tool_hover_command
     : public Command
 {
 public:
-    Hover_tool_hover_command(Hover_tool& hover_tool)
+    explicit Hover_tool_hover_command(Hover_tool& hover_tool)
         : Command     {"Hover_tool.hover"}
         , m_hover_tool{hover_tool}
     {

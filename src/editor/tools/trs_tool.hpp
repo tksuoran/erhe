@@ -54,7 +54,7 @@ class Trs_tool_drag_command
     : public Command
 {
 public:
-    Trs_tool_drag_command(Trs_tool& trs_tool)
+    explicit Trs_tool_drag_command(Trs_tool& trs_tool)
         : Command   {"Trs_tool.drag"}
         , m_trs_tool{trs_tool}
     {

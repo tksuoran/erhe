@@ -25,7 +25,7 @@ class Selection_tool_delete_command
     : public Command
 {
 public:
-    Selection_tool_delete_command(Selection_tool& selection_tool)
+    explicit Selection_tool_delete_command(Selection_tool& selection_tool)
         : Command         {"Selection_tool.delete"}
         , m_selection_tool{selection_tool}
     {
@@ -41,7 +41,7 @@ class Selection_tool_select_command
     : public Command
 {
 public:
-    Selection_tool_select_command(Selection_tool& selection_tool)
+    explicit Selection_tool_select_command(Selection_tool& selection_tool)
         : Command         {"Selection_tool.select"}
         , m_selection_tool{selection_tool}
     {
