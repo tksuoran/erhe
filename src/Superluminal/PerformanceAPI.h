@@ -51,11 +51,11 @@ namespace PerformanceAPI
         static void initialize(const wchar_t* inPathToDLL);
         static void deinitialize();
 
-        InstrumentationScope(const char* inID);
+        explicit InstrumentationScope(const char* inID);
         InstrumentationScope(const char* inID, const char* inData);
         InstrumentationScope(const char* inID, uint16_t inIDLength, const char* inData, uint16_t inDataLength);
         InstrumentationScope(const char* inID, const char* inData, uint32_t inColor);
-        InstrumentationScope(const wchar_t* inID);
+        explicit InstrumentationScope(const wchar_t* inID);
         InstrumentationScope(const wchar_t* inID, const wchar_t* inData);
         InstrumentationScope(const wchar_t* inID, const wchar_t* inData, uint32_t inColor);
         ~InstrumentationScope();

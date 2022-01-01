@@ -137,7 +137,7 @@ class Mouse_motion_binding
     : public Mouse_binding
 {
 public:
-    Mouse_motion_binding(Command* command);
+    explicit Mouse_motion_binding(Command* command);
 
     auto on_motion(Command_context& context) -> bool override;
 };

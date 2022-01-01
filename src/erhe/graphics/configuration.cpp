@@ -72,8 +72,8 @@ void opengl_callback(
 }
 
 auto split(
-    const std::string text,
-    const char        separator
+    const std::string& text,
+    const char         separator
 ) -> std::vector<std::string>
 {
     std::vector<std::string> result;

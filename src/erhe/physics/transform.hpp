@@ -8,7 +8,7 @@ namespace erhe::physics
 class Transform
 {
 public:
-    Transform(const glm::mat4 transform)
+    explicit Transform(const glm::mat4 transform)
         : basis {glm::mat3{transform}}
         , origin{glm::vec3{transform[3]}}
     {

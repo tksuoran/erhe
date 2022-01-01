@@ -32,7 +32,7 @@ class Physics_tool_drag_command
     : public Command
 {
 public:
-    Physics_tool_drag_command(Physics_tool& physics_tool)
+    explicit Physics_tool_drag_command(Physics_tool& physics_tool)
         : Command       {"Physics_tool.drag"}
         , m_physics_tool{physics_tool}
     {
