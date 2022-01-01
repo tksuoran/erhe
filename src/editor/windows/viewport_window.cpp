@@ -38,82 +38,6 @@ auto to_glm(ImVec2 v) -> glm::vec2
     };
 }
 
-void dump_fbo_attachment(int fbo_name, gl::Framebuffer_attachment attachment)
-{
-    int type{0};
-    gl::get_named_framebuffer_attachment_parameter_iv(
-        fbo_name,
-        attachment,
-        gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_type,
-        &type
-    );
-    if (type != GL_NONE)
-    {
-        int name{0};
-        gl::get_named_framebuffer_attachment_parameter_iv(
-            fbo_name,
-            attachment,
-            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_name,
-            &name
-        );
-        int samples        {0};
-        int width          {0};
-        int height         {0};
-        int internal_format{0};
-        if (type == GL_RENDERBUFFER)
-        {
-            gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_samples,         &samples);
-            gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_width,           &width);
-            gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_height,          &height);
-            gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_internal_format, &internal_format);
-        }
-        if (type == GL_TEXTURE)
-        {
-            int level{0};
-            gl::get_named_framebuffer_attachment_parameter_iv(
-                fbo_name, attachment,
-                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_texture_level,
-                &level
-            );
-            gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_width,           &width);
-            gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_height,          &height);
-            gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_internal_format, &internal_format);
-            gl::get_texture_level_parameter_iv(
-                name,
-                level,
-//              gl::Get_texture_parameter::texture_samples,  Missing from gl.xml :/
-                static_cast<gl::Get_texture_parameter>(GL_TEXTURE_SAMPLES),
-                &samples
-            );
-        }
-
-        log_framebuffer.trace(
-            "\t{} {} attachment {} samples = {} size = {} x {} format = {}\n",
-            c_str(attachment),
-            gl::enum_string(type),
-            name,
-            samples,
-            width,
-            height,
-            gl::enum_string(internal_format)
-        );
-    }
-}
-
-void dump_fbo(int fbo_name)
-{
-    int samples       {0};
-    int sample_buffers{0};
-    gl::get_named_framebuffer_parameter_iv(fbo_name, gl::Get_framebuffer_parameter::samples, &samples);
-    gl::get_named_framebuffer_parameter_iv(fbo_name, gl::Get_framebuffer_parameter::sample_buffers, &sample_buffers);
-
-    log_framebuffer.trace("FBO {} uses {} samples {} sample buffers\n", fbo_name, samples, sample_buffers);
-
-    dump_fbo_attachment(fbo_name, gl::Framebuffer_attachment::color_attachment0);
-    dump_fbo_attachment(fbo_name, gl::Framebuffer_attachment::depth_attachment);
-    dump_fbo_attachment(fbo_name, gl::Framebuffer_attachment::stencil_attachment);
-}
-
 }
 
 Viewport_windows::Viewport_windows()
@@ -310,8 +234,6 @@ void Viewport_window::imgui()
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto size = ImGui::GetContentRegionAvail();
-
     int selected_camera_index = 0;
     int index = 0;
     std::vector<const char*>          names;
@@ -332,6 +254,8 @@ void Viewport_window::imgui()
     {
         m_camera = cameras[selected_camera_index];
     }
+
+    const auto size = ImGui::GetContentRegionAvail();
 
     if (
         m_can_present &&
@@ -482,15 +406,6 @@ void Viewport_window::multisample_resolve()
         ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
     }
 
-    if constexpr (false)
-    {
-        log_framebuffer.trace("Read framebuffer:\n");
-        dump_fbo(m_framebuffer_multisample->gl_name());
-
-        log_framebuffer.trace("Draw framebuffer:\n");
-        dump_fbo(m_framebuffer_resolved->gl_name());
-    }
-
     gl::disable(gl::Enable_cap::scissor_test);
     gl::enable(gl::Enable_cap::framebuffer_srgb);
     gl::blit_framebuffer(
@@ -597,7 +512,11 @@ void Viewport_window::update_framebuffer()
         gl::named_framebuffer_read_buffer (m_framebuffer_multisample->gl_name(), gl::Color_buffer::color_attachment0);
 
         log_framebuffer.trace("Multisample framebuffer:\n");
-        dump_fbo(m_framebuffer_multisample->gl_name());
+        if (!m_framebuffer_multisample->check_status())
+        {
+            log_framebuffer.error("Multisample framebuffer not complete");
+            m_framebuffer_multisample.reset();
+        }
     }
 
     {
@@ -610,7 +529,11 @@ void Viewport_window::update_framebuffer()
         gl::named_framebuffer_draw_buffers(m_framebuffer_resolved->gl_name(), 1, &draw_buffers[0]);
 
         log_framebuffer.trace("Multisample resolved framebuffer:\n");
-        dump_fbo(m_framebuffer_resolved->gl_name());
+        if (!m_framebuffer_resolved->check_status())
+        {
+            log_framebuffer.error("Multisample resolved framebuffer not complete");
+            m_framebuffer_resolved.reset();
+        }
     }
 }
 

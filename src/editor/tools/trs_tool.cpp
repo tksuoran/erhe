@@ -79,7 +79,7 @@ void Trs_tool_drag_command::on_inactive(Command_context& context)
 {
     static_cast<void>(context);
 
-    if (state() == State::Active)
+    if (state() != State::Inactive)
     {
         m_trs_tool.end_drag();
     }
@@ -1028,6 +1028,7 @@ void Trs_tool::tool_render(const Render_context& context)
 
 void Trs_tool::end_drag()
 {
+    m_log_window->tail_log("Trs_tool::end_drag()");
     hide();
     update_visibility();
 

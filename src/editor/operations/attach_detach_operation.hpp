@@ -57,7 +57,7 @@ private:
 
     struct Entry
     {
-        Entry(const std::shared_ptr<erhe::scene::Node>& node)
+        explicit Entry(const std::shared_ptr<erhe::scene::Node>& node)
             : node            {node}
             , before_transform{node->parent_from_node_transform()}
         {

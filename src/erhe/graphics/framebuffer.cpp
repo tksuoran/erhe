@@ -10,6 +10,86 @@
 namespace erhe::graphics
 {
 
+namespace {
+
+void dump_fbo_attachment(int fbo_name, gl::Framebuffer_attachment attachment)
+{
+    int type{0};
+    gl::get_named_framebuffer_attachment_parameter_iv(
+        fbo_name,
+        attachment,
+        gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_type,
+        &type
+    );
+    if (type != GL_NONE)
+    {
+        int name{0};
+        gl::get_named_framebuffer_attachment_parameter_iv(
+            fbo_name,
+            attachment,
+            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_name,
+            &name
+        );
+        int samples        {0};
+        int width          {0};
+        int height         {0};
+        int internal_format{0};
+        if (type == GL_RENDERBUFFER)
+        {
+            gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_samples,         &samples);
+            gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_width,           &width);
+            gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_height,          &height);
+            gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_internal_format, &internal_format);
+        }
+        if (type == GL_TEXTURE)
+        {
+            int level{0};
+            gl::get_named_framebuffer_attachment_parameter_iv(
+                fbo_name, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_texture_level,
+                &level
+            );
+            gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_width,           &width);
+            gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_height,          &height);
+            gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_internal_format, &internal_format);
+            gl::get_texture_level_parameter_iv(
+                name,
+                level,
+//              gl::Get_texture_parameter::texture_samples,  Missing from gl.xml :/
+                static_cast<gl::Get_texture_parameter>(GL_TEXTURE_SAMPLES),
+                &samples
+            );
+        }
+
+        log_framebuffer.trace(
+            "\t{} {} attachment {} samples = {} size = {} x {} format = {}\n",
+            c_str(attachment),
+            gl::enum_string(type),
+            name,
+            samples,
+            width,
+            height,
+            gl::enum_string(internal_format)
+        );
+    }
+}
+
+void dump_fbo(int fbo_name)
+{
+    int samples       {0};
+    int sample_buffers{0};
+    gl::get_named_framebuffer_parameter_iv(fbo_name, gl::Get_framebuffer_parameter::samples, &samples);
+    gl::get_named_framebuffer_parameter_iv(fbo_name, gl::Get_framebuffer_parameter::sample_buffers, &sample_buffers);
+
+    log_framebuffer.trace("FBO {} uses {} samples {} sample buffers\n", fbo_name, samples, sample_buffers);
+
+    dump_fbo_attachment(fbo_name, gl::Framebuffer_attachment::color_attachment0);
+    dump_fbo_attachment(fbo_name, gl::Framebuffer_attachment::depth_attachment);
+    dump_fbo_attachment(fbo_name, gl::Framebuffer_attachment::stencil_attachment);
+}
+
+}
+
 std::mutex                Framebuffer::s_mutex;
 std::vector<Framebuffer*> Framebuffer::s_all_framebuffers;
 
@@ -52,6 +132,35 @@ Framebuffer::~Framebuffer()
         ),
         s_all_framebuffers.end()
     );
+}
+
+void Framebuffer::on_thread_enter()
+{
+    std::lock_guard lock{s_mutex};
+
+    for (auto* framebuffer : s_all_framebuffers)
+    {
+        if (framebuffer->m_owner_thread == std::thread::id{})
+        {
+            framebuffer->create();
+        }
+    }
+}
+
+void Framebuffer::on_thread_exit()
+{
+    std::lock_guard lock{s_mutex};
+
+    gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, 0);
+    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+    auto this_thread_id = std::this_thread::get_id();
+    for (auto* framebuffer : s_all_framebuffers)
+    {
+        if (framebuffer->m_owner_thread == this_thread_id)
+        {
+            framebuffer->reset();
+        }
+    }
 }
 
 void Framebuffer::reset()
@@ -108,8 +217,7 @@ void Framebuffer::create()
     Ensures(check_status());
 }
 
-auto Framebuffer::check_status() const
--> bool
+auto Framebuffer::check_status() const -> bool
 {
     const auto status = gl::check_named_framebuffer_status(
         gl_name(),
@@ -118,17 +226,27 @@ auto Framebuffer::check_status() const
     if (status != gl::Framebuffer_status::framebuffer_complete)
     {
         log_framebuffer.warn("Framebuffer {} not complete: {}\n", gl_name(), gl::c_str(status));
+        dump_fbo(gl_name());
         return false;
     }
     return status == gl::Framebuffer_status::framebuffer_complete;
 }
 
-auto Framebuffer::gl_name() const
--> unsigned int
+auto Framebuffer::gl_name() const -> unsigned int
 {
     return m_gl_framebuffer.has_value()
         ? m_gl_framebuffer.value().gl_name()
         : 0;
+}
+
+void Framebuffer::set_debug_label(const std::string& label)
+{
+    gl::object_label(
+        gl::Object_identifier::framebuffer,
+        gl_name(),
+        static_cast<GLsizei>(label.length()),
+        label.c_str()
+    );
 }
 
 } // namespace erhe::graphics

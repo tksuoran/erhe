@@ -75,50 +75,15 @@ public:
     Framebuffer         (Framebuffer&&)      = delete;
     void operator=      (Framebuffer&&)      = delete;
 
-    static void on_thread_enter()
-    {
-        std::lock_guard lock{s_mutex};
+    static void on_thread_enter();
+    static void on_thread_exit ();
 
-        for (auto* framebuffer : s_all_framebuffers)
-        {
-            if (framebuffer->m_owner_thread == std::thread::id{})
-            {
-                framebuffer->create();
-            }
-        }
-    }
+    [[nodiscard]] auto gl_name() const -> unsigned int;
 
-    static void on_thread_exit()
-    {
-        std::lock_guard lock{s_mutex};
-
-        gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, 0);
-        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
-        auto this_thread_id = std::this_thread::get_id();
-        for (auto* framebuffer : s_all_framebuffers)
-        {
-            if (framebuffer->m_owner_thread == this_thread_id)
-            {
-                framebuffer->reset();
-            }
-        }
-    }
-
-    [[nodiscard]] auto gl_name     () const -> unsigned int;
-
-    void create      ();
-    void reset       ();
-    auto check_status() const -> bool;
-
-    void set_debug_label(const std::string& label)
-    {
-        gl::object_label(
-            gl::Object_identifier::framebuffer,
-            gl_name(),
-            static_cast<GLsizei>(label.length()),
-            label.c_str()
-        );
-    }
+    void create         ();
+    void reset          ();
+    auto check_status   () const -> bool;
+    void set_debug_label(const std::string& label);
 
 private:
     std::optional<Gl_framebuffer> m_gl_framebuffer;

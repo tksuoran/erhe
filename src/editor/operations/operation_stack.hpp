@@ -16,8 +16,14 @@ class Operation_stack;
 class Undo_command : public Command
 {
 public:
-    Undo_command(Operation_stack& operation_stack) : Command{"undo"}, m_operation_stack{operation_stack} {}
+    explicit Undo_command(Operation_stack& operation_stack)
+        : Command          {"undo"}
+        , m_operation_stack{operation_stack}
+    {
+    }
+
     auto try_call(Command_context& context) -> bool override;
+
 private:
     Operation_stack& m_operation_stack;
 };
@@ -25,7 +31,9 @@ private:
 class Redo_command : public Command
 {
 public:
-    Redo_command(Operation_stack& operation_stack) : Command{"redo"}, m_operation_stack{operation_stack} {}
+    explicit Redo_command(Operation_stack& operation_stack)
+        : Command{"redo"}
+        , m_operation_stack{operation_stack} {}
     auto try_call(Command_context& context) -> bool override;
 private:
     Operation_stack& m_operation_stack;
