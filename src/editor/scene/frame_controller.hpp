@@ -29,10 +29,9 @@ class Frame_controller
 public:
     Frame_controller();
 
-    void set_frame        (erhe::scene::Node* node);
+    void set_node(erhe::scene::Node* node);
 
-    [[nodiscard]]
-    auto node             () const -> erhe::scene::Node*;
+    [[nodiscard]] auto get_node() const -> erhe::scene::Node*;
 
     void clear            ();
     void update           ();

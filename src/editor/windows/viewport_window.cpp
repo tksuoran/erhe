@@ -232,28 +232,8 @@ void Viewport_window::on_end()
 
 void Viewport_window::imgui()
 {
-    ERHE_PROFILE_FUNCTION
-
-    int selected_camera_index = 0;
-    int index = 0;
-    std::vector<const char*>          names;
-    std::vector<erhe::scene::Camera*> cameras;
-    for (auto camera : m_scene_root->scene().cameras)
-    {
-        names.push_back(camera->name().c_str());
-        cameras.push_back(camera.get());
-        if (m_camera == camera.get())
-        {
-            selected_camera_index = index;
-        }
-        ++index;
-    }
-
-    const bool camera_changed = ImGui::Combo("Camera", &selected_camera_index, names.data(), static_cast<int>(names.size()));
-    if (camera_changed)
-    {
-        m_camera = cameras[selected_camera_index];
-    }
+    ImGui::SetNextItemWidth(150.0f);
+    m_scene_root->camera_combo("Camera", m_camera);
 
     const auto size = ImGui::GetContentRegionAvail();
 

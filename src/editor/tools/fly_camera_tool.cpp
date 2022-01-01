@@ -193,12 +193,12 @@ void Fly_camera_tool::set_camera(erhe::scene::ICamera* camera)
     // might not be valid due to transform hierarchy.
     m_scene_root->scene().update_node_transforms();
 
-    m_camera_controller.set_frame(camera);
+    m_camera_controller.set_node(camera);
 }
 
-auto Fly_camera_tool::camera() const -> erhe::scene::ICamera*
+auto Fly_camera_tool::get_camera() const -> erhe::scene::ICamera*
 {
-    return reinterpret_cast<erhe::scene::ICamera*>(m_camera_controller.node());
+    return as_icamera(m_camera_controller.get_node());
 }
 
 auto Fly_camera_tool::description() -> const char*
@@ -243,8 +243,6 @@ void Fly_camera_tool::turn_relative(const double dx, const double dy)
 {
     std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
-    //get<Log_window>()->tail_log("delta x = {}, delta y = {}", dx, dy);
-
     if (dx != 0.0f)
     {
         const float value = static_cast<float>(m_sensitivity * dx / 1024.0);
@@ -282,6 +280,11 @@ void Fly_camera_tool::imgui()
 
     float speed = m_camera_controller.translate_z.max_delta();
 
+    auto* camera = get_camera();
+    if (m_scene_root->camera_combo("Camera", camera))
+    {
+        set_camera(camera);
+    }
     ImGui::SliderFloat("Sensitivity", &m_sensitivity, 0.2f,   2.0f);
     ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
 

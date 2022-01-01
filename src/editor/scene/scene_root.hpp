@@ -138,7 +138,14 @@ public:
     [[nodiscard]] auto physics_world      () -> erhe::physics::IWorld&;
     [[nodiscard]] auto raytrace_scene     () -> erhe::raytrace::IScene&;
     [[nodiscard]] auto scene              () -> erhe::scene::Scene&;
+    [[nodiscard]] auto scene              () const -> const erhe::scene::Scene&;
     [[nodiscard]] auto content_layer      () -> erhe::scene::Mesh_layer&;
+
+    auto camera_combo(
+        const char*            label,
+        erhe::scene::ICamera*& camera,
+        const bool             nullptr_option = false
+    ) const -> bool;
 
 private:
     std::mutex                                              m_materials_mutex;

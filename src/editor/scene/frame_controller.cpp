@@ -87,7 +87,7 @@ Frame_controller::Frame_controller()
     update();
 }
 
-void Frame_controller::set_frame(erhe::scene::Node* node)
+void Frame_controller::set_node(erhe::scene::Node* node)
 {
     m_node = node;
 
@@ -114,7 +114,7 @@ void Frame_controller::set_frame(erhe::scene::Node* node)
     update();
 }
 
-auto Frame_controller::node() const -> erhe::scene::Node*
+auto Frame_controller::get_node() const -> erhe::scene::Node*
 {
     return m_node;
 }

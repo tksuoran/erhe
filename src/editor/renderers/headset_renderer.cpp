@@ -105,7 +105,7 @@ Headset_view_resources::Headset_view_resources(
     scene_root->scene().nodes.emplace_back(camera);
     scene_root->scene().nodes_sorted = false;
 
-    auto* view_camera = rendering.get<Fly_camera_tool>()->camera();
+    auto* view_camera = rendering.get<Fly_camera_tool>()->get_camera();
     view_camera->attach(camera);
     //camera->parent = rendering.get<Scene_manager>()->get_view_camera()->get();
     //camera_node->parent = nullptr;
@@ -690,7 +690,7 @@ void Headset_renderer::initialize_component()
     m_headset = std::make_unique<erhe::xr::Headset>(get<Window>()->get_context_window());
 
     auto* mesh_memory = get<Mesh_memory>();
-    auto* view_root   = get<Fly_camera_tool>()->camera();
+    auto* view_root   = get<Fly_camera_tool>()->get_camera();
 
     m_controller_visualization = std::make_unique<Controller_visualization>(
         *mesh_memory,

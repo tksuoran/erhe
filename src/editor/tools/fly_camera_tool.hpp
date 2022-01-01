@@ -132,7 +132,7 @@ public:
 
     // Public API
 
-    [[nodiscard]] auto camera() const -> erhe::scene::ICamera*;
+    [[nodiscard]] auto get_camera() const -> erhe::scene::ICamera*;
     void set_camera (erhe::scene::ICamera* camera);
     void translation(const int tx, const int ty, const int tz);
     void rotation   (const int rx, const int ry, const int rz);
@@ -147,8 +147,6 @@ public:
 
 private:
     auto can_use_keyboard() const -> bool;
-
-    std::mutex                            m_mutex;
 
     Fly_camera_turn_command               m_turn_command;
     Fly_camera_move_command               m_move_up_active_command;
@@ -169,6 +167,8 @@ private:
     Pointer_context*                      m_pointer_context {nullptr};
     Scene_root*                           m_scene_root      {nullptr};
     Trs_tool*                             m_trs_tool        {nullptr};
+
+    std::mutex                            m_mutex;
 
 #ifdef _WIN32
     Fly_camera_space_mouse_listener       m_space_mouse_listener;

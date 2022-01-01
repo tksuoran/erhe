@@ -127,15 +127,6 @@ public:
     void end_drag     ();
 
 private:
-    [[nodiscard]] auto snap_translate       (const glm::dvec3 translation) const -> glm::dvec3;
-    [[nodiscard]] auto snap_rotate          (const double angle_radians) const -> double;
-    [[nodiscard]] auto is_x_translate_active() const -> bool;
-    [[nodiscard]] auto is_y_translate_active() const -> bool;
-    [[nodiscard]] auto is_z_translate_active() const -> bool;
-    [[nodiscard]] auto is_rotate_active     () const -> bool;
-
-    void set_node(const std::shared_ptr<erhe::scene::Node>& node);
-
     enum class Handle : unsigned int
     {
         e_handle_none         = 0,
@@ -158,62 +149,6 @@ private:
         e_handle_type_rotate          = 3
     };
 
-    void hide();
-
-    void update_axis_translate      ();
-    void update_axis_translate_final(const glm::dvec3 drag_position);
-    void update_plane_translate     ();
-    void update_rotate              ();
-    auto update_rotate_circle_around() -> bool;
-    auto update_rotate_parallel     () -> bool;
-    void update_rotate_final        ();
-
-    [[nodiscard]] auto get_handle               (erhe::scene::Mesh* mesh) const -> Trs_tool::Handle;
-    [[nodiscard]] auto get_handle_type          (const Handle handle) const -> Handle_type;
-    [[nodiscard]] auto offset_plane_origo       (const Handle handle, const glm::dvec3 p) const -> glm::dvec3;
-    [[nodiscard]] auto project_to_offset_plane  (const Handle handle, const glm::dvec3 p, const glm::dvec3 q) const -> glm::dvec3;
-    [[nodiscard]] auto get_axis_direction       () const -> glm::dvec3;
-    [[nodiscard]] auto get_plane_normal         (const bool world) const -> glm::dvec3;
-    [[nodiscard]] auto get_plane_side           (const bool world) const -> glm::dvec3;
-    [[nodiscard]] auto get_axis_color           (Handle handle) const -> uint32_t;
-
-    // Casts ray from current pointer context position
-    // and intersects it to plane of current handle;
-    [[nodiscard]] auto project_pointer_to_plane (const glm::dvec3 n, const glm::dvec3 p) -> std::optional<glm::dvec3>;
-    [[nodiscard]] auto root                     () -> erhe::scene::Node*;
-    void set_node_world_transform (const glm::dmat4 world_from_node);
-    void update_transforms        ();
-    void update_visibility        ();
-
-    Trs_tool_drag_command m_drag_command;
-
-    Log_window*      m_log_window     {nullptr};
-    Line_renderer*   m_line_renderer  {nullptr};
-    Mesh_memory*     m_mesh_memory    {nullptr};
-    Operation_stack* m_operation_stack{nullptr};
-    Pointer_context* m_pointer_context{nullptr};
-    Scene_root*      m_scene_root     {nullptr};
-    Selection_tool*  m_selection_tool {nullptr};
-    Text_renderer*   m_text_renderer  {nullptr};
-
-    bool                                       m_local        {true};
-    bool                                       m_touched      {false};
-    Handle                                     m_active_handle{Handle::e_handle_none};
-    std::optional<Selection_tool::Subcription> m_selection_subscription;
-    std::map<erhe::scene::Mesh*, Handle>       m_handles;
-    std::shared_ptr<erhe::scene::Node>         m_target_node;
-    std::shared_ptr<Node_physics>              m_node_physics;
-    std::shared_ptr<erhe::scene::Node>         m_tool_node;
-    std::optional<erhe::physics::Motion_mode>  m_original_motion_mode;
-    bool                                       m_translate_snap_enable{false};
-    bool                                       m_rotate_snap_enable   {false};
-    int                                        m_translate_snap_index {2};
-    float                                      m_translate_snap       {0.1f};
-    int                                        m_rotate_snap_index    {2};
-    float                                      m_rotate_snap          {15.0f};
-    erhe::scene::Transform                     m_parent_from_node_before;
-
-    // These are for debug rendering
     class Debug_rendering
     {
     public:
@@ -230,7 +165,6 @@ private:
         glm::vec3 m_q0{};
         glm::vec3 m_q{} ;
     };
-    Debug_rendering m_debug_rendering;
 
     class Drag
     {
@@ -241,7 +175,6 @@ private:
         double                 initial_window_depth     {0.0};
         erhe::scene::Transform initial_parent_from_node_transform;
     };
-    Drag m_drag;
 
     class Rotation_context
     {
@@ -254,7 +187,6 @@ private:
         double                    current_angle       {0.0};
         erhe::scene::Transform    world_from_node;
     };
-    Rotation_context m_rotation;
 
     class Visualization
     {
@@ -299,7 +231,67 @@ private:
         std::shared_ptr<erhe::scene::Mesh>         y_rotate_ring_mesh;
         std::shared_ptr<erhe::scene::Mesh>         z_rotate_ring_mesh;
     };
-    Visualization m_visualization;
+
+    [[nodiscard]] auto project_pointer_to_plane (const glm::dvec3 n, const glm::dvec3 p) -> std::optional<glm::dvec3>;
+    [[nodiscard]] auto root                     () -> erhe::scene::Node*;
+    [[nodiscard]] auto snap_translate           (const glm::dvec3 translation) const -> glm::dvec3;
+    [[nodiscard]] auto snap_rotate              (const double angle_radians) const -> double;
+    [[nodiscard]] auto is_x_translate_active    () const -> bool;
+    [[nodiscard]] auto is_y_translate_active    () const -> bool;
+    [[nodiscard]] auto is_z_translate_active    () const -> bool;
+    [[nodiscard]] auto is_rotate_active         () const -> bool;
+    [[nodiscard]] auto get_handle               (erhe::scene::Mesh* mesh) const -> Trs_tool::Handle;
+    [[nodiscard]] auto get_handle_type          (const Handle handle) const -> Handle_type;
+    [[nodiscard]] auto offset_plane_origo       (const Handle handle, const glm::dvec3 p) const -> glm::dvec3;
+    [[nodiscard]] auto project_to_offset_plane  (const Handle handle, const glm::dvec3 p, const glm::dvec3 q) const -> glm::dvec3;
+    [[nodiscard]] auto get_axis_direction       () const -> glm::dvec3;
+    [[nodiscard]] auto get_plane_normal         (const bool world) const -> glm::dvec3;
+    [[nodiscard]] auto get_plane_side           (const bool world) const -> glm::dvec3;
+    [[nodiscard]] auto get_axis_color           (Handle handle) const -> uint32_t;
+
+    void set_node                   (const std::shared_ptr<erhe::scene::Node>& node);
+    void hide                       ();
+    void update_axis_translate      ();
+    void update_axis_translate_final(const glm::dvec3 drag_position);
+    void update_plane_translate     ();
+    void update_rotate              ();
+    auto update_rotate_circle_around() -> bool;
+    auto update_rotate_parallel     () -> bool;
+    void update_rotate_final        ();
+    void set_node_world_transform   (const glm::dmat4 world_from_node);
+    void update_transforms          ();
+    void update_visibility          ();
+
+    Trs_tool_drag_command                      m_drag_command;
+    Log_window*                                m_log_window     {nullptr};
+    Line_renderer*                             m_line_renderer  {nullptr};
+    Mesh_memory*                               m_mesh_memory    {nullptr};
+    Operation_stack*                           m_operation_stack{nullptr};
+    Pointer_context*                           m_pointer_context{nullptr};
+    Scene_root*                                m_scene_root     {nullptr};
+    Selection_tool*                            m_selection_tool {nullptr};
+    Text_renderer*                             m_text_renderer  {nullptr};
+    bool                                       m_local          {true};
+    bool                                       m_touched        {false};
+    Handle                                     m_active_handle  {Handle::e_handle_none};
+    std::optional<Selection_tool::Subcription> m_selection_subscription;
+    std::map<erhe::scene::Mesh*, Handle>       m_handles;
+    std::shared_ptr<erhe::scene::Node>         m_target_node;
+    std::shared_ptr<Node_physics>              m_node_physics;
+    std::shared_ptr<erhe::scene::Node>         m_tool_node;
+    std::optional<erhe::physics::Motion_mode>  m_original_motion_mode;
+    bool                                       m_translate_snap_enable{false};
+    bool                                       m_rotate_snap_enable   {false};
+    int                                        m_translate_snap_index {2};
+    float                                      m_translate_snap       {0.1f};
+    int                                        m_rotate_snap_index    {2};
+    float                                      m_rotate_snap          {15.0f};
+    erhe::scene::Transform                     m_parent_from_node_before;
+
+    Debug_rendering  m_debug_rendering;
+    Drag             m_drag;
+    Rotation_context m_rotation;
+    Visualization    m_visualization;
 };
 
 } // namespace editor

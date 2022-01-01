@@ -18,6 +18,8 @@
 
 #include <glm/gtx/color_space.hpp>
 
+#include <imgui.h>
+
 #include <algorithm>
 
 namespace editor
@@ -129,6 +131,12 @@ auto Scene_root::scene() -> erhe::scene::Scene&
     return *m_scene.get();
 }
 
+auto Scene_root::scene() const -> const erhe::scene::Scene&
+{
+    ERHE_VERIFY(m_scene);
+    return *m_scene.get();
+}
+
 auto Scene_root::content_layer() -> erhe::scene::Mesh_layer&
 {
     ERHE_VERIFY(m_content_layer);
@@ -173,5 +181,47 @@ auto Scene_root::light_layer() const -> std::shared_ptr<erhe::scene::Light_layer
 {
     return m_light_layer;
 }
+
+auto Scene_root::camera_combo(
+    const char*            label,
+    erhe::scene::ICamera*& selected_camera,
+    const bool             nullptr_option
+) const -> bool
+{
+    int selected_camera_index = 0;
+    int index = 0;
+    std::vector<const char*>           names;
+    std::vector<erhe::scene::ICamera*> cameras;
+    if (nullptr_option || (selected_camera == nullptr))
+    {
+        names.push_back("(none)");
+        cameras.push_back(nullptr);
+    }
+    for (auto camera : scene().cameras)
+    {
+        names.push_back(camera->name().c_str());
+        cameras.push_back(camera.get());
+        if (selected_camera == camera.get())
+        {
+            selected_camera_index = index;
+        }
+        ++index;
+    }
+
+    const bool camera_changed =
+        ImGui::Combo(
+            label,
+            &selected_camera_index,
+            names.data(),
+            static_cast<int>(names.size())
+        ) &&
+        (selected_camera != cameras[selected_camera_index]);
+    if (camera_changed)
+    {
+        selected_camera = cameras[selected_camera_index];
+    }
+    return camera_changed;
+}
+
 
 } // namespace editor
