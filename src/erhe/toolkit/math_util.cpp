@@ -203,22 +203,30 @@ auto create_orthographic(
 ) -> mat4
 {
     return mat4{
-        2.0f / (right - left),
-        0.0f,
-        0.0f,
-        0.0f,
-        0.0f,
-        2.0f / (top - bottom),
-        0.0f,
-        0.0f,
-        0.0f,
-        -1.0f / (z_far - z_near),
-        0.0f,
-        0.0f,
-        -(right + left) / (right - left),
-        -(top + bottom) / (top - bottom),
-        -z_near / (z_far - z_near),
-        1.0f
+        {
+            2.0f / (right - left),
+            0.0f,
+            0.0f,
+            0.0f
+        },
+        {
+            0.0f,
+            2.0f / (top - bottom),
+            0.0f,
+            0.0f
+        },
+        {
+            0.0f,
+            0.0f,
+            -1.0f / (z_far - z_near),
+            0.0f
+        },
+        {
+            -(right + left) / (right - left),
+            -(top + bottom) / (top - bottom),
+            -z_near / (z_far - z_near),
+            1.0f
+        }
     };
 }
 
