@@ -1,7 +1,9 @@
 #include "windows/log_window.hpp"
-#include "log.hpp"
-#include "erhe/raytrace/log.hpp"
 #include "editor_tools.hpp"
+#include "editor_view.hpp"
+#include "log.hpp"
+
+#include "erhe/raytrace/log.hpp"
 
 #include <imgui.h>
 
@@ -10,9 +12,18 @@
 namespace editor
 {
 
+auto Log_window_toggle_pause_command::try_call(Command_context& context) -> bool
+{
+    static_cast<void>(context);
+
+    m_log_window.toggle_pause();
+    return true;
+}
+
 Log_window::Log_window()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_name }
     , Imgui_window               {c_title}
+    , m_toggle_pause_command     {*this  }
 {
 }
 
@@ -45,9 +56,17 @@ void Log_window::initialize_component()
 
     erhe::raytrace::log_geometry.set_sink(this);
 
+    auto* view = get<Editor_view>();
+    view->register_command   (&m_toggle_pause_command);
+    view->bind_command_to_key(&m_toggle_pause_command, erhe::toolkit::Keycode::Key_escape);
+
     //hide();
 }
 
+void Log_window::toggle_pause()
+{
+    m_paused = !m_paused;
+}
 
 void Log_window::write(std::string_view text) 
 {
@@ -56,11 +75,21 @@ void Log_window::write(std::string_view text)
 
 void Log_window::frame_write(const char* format, fmt::format_args args)
 {
+    if (m_paused)
+    {
+        return;
+    }
+
     m_frame_entries.emplace_back(fmt::vformat(format, args));
 }
 
 void Log_window::tail_write(const char* format, fmt::format_args args)
 {
+    if (m_paused)
+    {
+        return;
+    }
+
     std::string message = fmt::vformat(format, args);
     if (!m_tail_entries.empty())
     {
@@ -72,7 +101,31 @@ void Log_window::tail_write(const char* format, fmt::format_args args)
         }
     }
 
-    m_tail_entries.emplace_back(fmt::vformat(format, args));
+    m_tail_entries.emplace_back(
+        ImGui::GetStyle().Colors[ImGuiCol_Text],
+        fmt::vformat(format, args)
+    );
+}
+
+void Log_window::tail_write(const ImVec4 color, const char* format, fmt::format_args args)
+{
+    if (m_paused)
+    {
+        return;
+    }
+
+    std::string message = fmt::vformat(format, args);
+    if (!m_tail_entries.empty())
+    {
+        auto& back = m_tail_entries.back();
+        if (back.message == message)
+        {
+            ++back.repeat_count;
+            return;
+        }
+    }
+
+    m_tail_entries.emplace_back(color, fmt::vformat(format, args));
 }
 
 void Log_window::imgui()
@@ -90,6 +143,9 @@ void Log_window::imgui()
         {
             m_tail_entries.clear();
         }
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(100.0f);
+        ImGui::Checkbox("Paused", &m_paused);
 
         const auto trim_size = static_cast<size_t>(m_tail_buffer_trim_size);
         if (m_tail_entries.size() > trim_size)
@@ -115,7 +171,7 @@ void Log_window::imgui()
         )
         {
             auto& entry = *i;
-            ImGui::TextUnformatted(entry.message.c_str());
+            ImGui::TextColored(entry.color, "%s", entry.message.c_str());
             if (entry.repeat_count > 0)
             {
                 ImGui::TextColored(

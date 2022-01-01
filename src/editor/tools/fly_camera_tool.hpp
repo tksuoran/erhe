@@ -138,6 +138,7 @@ public:
     void rotation   (const int rx, const int ry, const int rz);
 
     // Commands
+    auto try_ready() -> bool;
     void turn_relative(const double dx, const double dy);
     void move(
         const Control         control,

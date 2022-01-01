@@ -1,7 +1,6 @@
 #pragma once
 
 #include "state.hpp"
-#include "windows/log_window.hpp"
 
 #include "erhe/toolkit/unique_id.hpp"
 #include "erhe/toolkit/view.hpp"
@@ -23,12 +22,7 @@ public:
         Editor_view&     editor_view,
         Pointer_context& pointer_context,
         Log_window*      log_window
-    )
-        : m_editor_view    {editor_view}
-        , m_pointer_context{pointer_context}
-        , m_log_window     {log_window}
-    {
-    }
+    );
 
     [[nodiscard]] auto viewport_window     () -> Viewport_window*;
     [[nodiscard]] auto hovering_over_tool  () -> bool;
@@ -44,57 +38,19 @@ private:
 class Command
 {
 public:
-    explicit Command(const char* name)
-        : m_name{name}
-    {
-    }
+    explicit Command(const char* name);
 
-    virtual [[nodiscard]] auto try_call(Command_context& context) -> bool
-    {
-        static_cast<void>(context);
-        return false;
-    }
+    // Virtual interface
+    virtual [[nodiscard]] auto try_call   (Command_context& context) -> bool;
+    virtual [[nodiscard]] void try_ready  (Command_context& context);
+    virtual [[nodiscard]] void on_inactive(Command_context& context);
 
-    virtual [[nodiscard]] void try_ready(Command_context& context)
-    {
-        static_cast<void>(context);
-    }
-
-    virtual [[nodiscard]] void on_inactive(Command_context& context)
-    {
-        static_cast<void>(context);
-    }
-
-    [[nodiscard]] auto state() const -> State
-    {
-        return m_state;
-    }
-
-    void set_inactive(Command_context& context)
-    {
-        context.log_window()->tail_log("{} -> inactive", name());
-        on_inactive(context);
-        m_state = State::Inactive;
-    };
-
-    void set_ready(Command_context& context)
-    {
-        context.log_window()->tail_log("{} -> ready", name());
-        //static_cast<void>(context);
-        m_state = State::Ready;
-    }
-
-    void set_active(Command_context& context)
-    {
-        context.log_window()->tail_log("{} -> active", name());
-        //static_cast<void>(context);
-        m_state = State::Active;
-    }
-
-    auto name() const -> const char*
-    {
-        return m_name;
-    }
+    // Non-virtual public API
+    [[nodiscard]] auto state() const -> State;
+    [[nodiscard]] auto name () const -> const char*;
+    void set_inactive(Command_context& context);
+    void set_ready   (Command_context& context);
+    void set_active  (Command_context& context);
 
 private:
     State       m_state{State::Inactive};
@@ -104,20 +60,10 @@ private:
 class Command_binding
 {
 public:
-    explicit Command_binding(Command* command)
-        : m_command{command}
-    {
-    }
+    explicit Command_binding(Command* command);
 
-    auto get_id() const -> erhe::toolkit::Unique_id<Command_binding>::id_type
-    {
-        return m_id.get_id();
-    }
-
-    auto get_command() const -> Command*
-    {
-        return m_command;
-    }
+    [[nodiscard]] auto get_id     () const -> erhe::toolkit::Unique_id<Command_binding>::id_type;
+    [[nodiscard]] auto get_command() const -> Command*;
 
 private:
     Command*                                  m_command{nullptr};
@@ -134,13 +80,7 @@ public:
         const erhe::toolkit::Keycode code,
         const bool                   pressed,
         const uint32_t               modifier_mask
-    )
-        : Command_binding{command      }
-        , m_code         {code         }
-        , m_pressed      {pressed      }
-        , m_modifier_mask{modifier_mask}
-    {
-    }
+    );
 
     auto on_key(
         Command_context&             context,
@@ -159,28 +99,15 @@ class Mouse_binding
     : public Command_binding
 {
 public:
-    explicit Mouse_binding(Command* command)
-        : Command_binding{command}
-    {
-    }
+    explicit Mouse_binding(Command* command);
 
     virtual auto on_button(
         Command_context&                  context,
         const erhe::toolkit::Mouse_button button,
         const int                         count
-    ) -> bool
-    {
-        static_cast<void>(context);
-        static_cast<void>(button);
-        static_cast<void>(count);
-        return false;
-    }
+    ) -> bool;
 
-    virtual auto on_motion(Command_context& context) -> bool
-    {
-        static_cast<void>(context);
-        return false;
-    }
+    virtual auto on_motion(Command_context& context) -> bool;
 };
 
 // Mouse pressed and released while not being moved
@@ -191,11 +118,7 @@ public:
     Mouse_click_binding(
         Command*                          command,
         const erhe::toolkit::Mouse_button button
-    )
-        : Mouse_binding{command}
-        , m_button     {button }
-    {
-    }
+    );
 
     auto on_button(
         Command_context&                  context,
@@ -214,10 +137,7 @@ class Mouse_motion_binding
     : public Mouse_binding
 {
 public:
-    Mouse_motion_binding(Command* command)
-        : Mouse_binding{command}
-    {
-    }
+    Mouse_motion_binding(Command* command);
 
     auto on_motion(Command_context& context) -> bool override;
 };
@@ -230,11 +150,7 @@ public:
     Mouse_drag_binding(
         Command*                          command,
         const erhe::toolkit::Mouse_button button
-    )
-        : Mouse_binding{command}
-        , m_button     {button }
-    {
-    }
+    );
 
     auto on_button(
         Command_context&                  context,

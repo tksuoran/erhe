@@ -914,20 +914,19 @@ void Trs_tool::begin_frame()
     m_visualization.update_scale(view_position_in_world);
     update_transforms();
 
-    if (root() == nullptr)
-    {
-        return;
-    }
-
-    const dvec3  V0      = dvec3{root()->position_in_world()} - dvec3{camera->position_in_world()};
-    const dvec3  V       = normalize(m_drag.initial_local_from_world * vec4{V0, 0.0});
-    const double v_dot_n = dot(V, m_rotation.normal);
-    m_log_window->tail_log("R: {} @ {}", root()->name(), root()->position_in_world());
-    m_log_window->tail_log("C: {} @ {}", camera->name(), camera->position_in_world());
-    m_log_window->tail_log("V: {}", vec3{V});
-    m_log_window->tail_log("N: {}", vec3{m_rotation.normal});
-    m_log_window->tail_log("V.N = {}", v_dot_n);
-
+    //if (root() == nullptr)
+    //{
+    //    return;
+    //}
+    //
+    //const dvec3  V0      = dvec3{root()->position_in_world()} - dvec3{camera->position_in_world()};
+    //const dvec3  V       = normalize(m_drag.initial_local_from_world * vec4{V0, 0.0});
+    //const double v_dot_n = dot(V, m_rotation.normal);
+    //m_log_window->tail_log("R: {} @ {}", root()->name(), root()->position_in_world());
+    //m_log_window->tail_log("C: {} @ {}", camera->name(), camera->position_in_world());
+    //m_log_window->tail_log("V: {}", vec3{V});
+    //m_log_window->tail_log("N: {}", vec3{m_rotation.normal});
+    //m_log_window->tail_log("V.N = {}", v_dot_n);
 }
 
 void Trs_tool::tool_render(const Render_context& context)

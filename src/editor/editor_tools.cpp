@@ -64,7 +64,7 @@ void Editor_tools::initialize_component()
     builder.BuildRanges(&m_glyph_ranges);
     //io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 18.0f, nullptr, m_glyph_ranges.Data);
 
-    ImGui::StyleColorsDark();
+    //ImGui::StyleColorsDark();
     auto* const glfw_window = reinterpret_cast<GLFWwindow*>(get<Window>()->get_context_window()->get_glfw_window());
     ImGui_ImplGlfw_InitForOther(glfw_window, true);
     ImGui_ImplErhe_Init(get<erhe::graphics::OpenGL_state_tracker>());

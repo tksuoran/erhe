@@ -347,8 +347,6 @@ void Line_renderer::Style::render(
     m_view_writer.write_offset += m_pipeline->view_block->size_bytes();
     m_view_writer.end();
 
-    //gl::disable          (gl::Enable_cap::framebuffer_srgb);
-    gl::enable           (gl::Enable_cap::framebuffer_srgb);
     gl::disable          (gl::Enable_cap::primitive_restart_fixed_index);
     gl::enable           (gl::Enable_cap::sample_alpha_to_coverage);
     gl::enable           (gl::Enable_cap::sample_alpha_to_one);

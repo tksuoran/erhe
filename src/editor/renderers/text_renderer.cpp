@@ -285,8 +285,6 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
 
     m_pipeline_state_tracker->shader_stages.reset();
     m_pipeline_state_tracker->color_blend.execute(&erhe::graphics::Color_blend_state::color_blend_disabled);
-    //gl::disable (gl::Enable_cap::framebuffer_srgb);
-    gl::enable  (gl::Enable_cap::framebuffer_srgb);
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     m_pipeline_state_tracker->execute(&pipeline);

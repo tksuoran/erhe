@@ -723,7 +723,6 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
     gl::enable(gl::Enable_cap::clip_distance1);
     gl::enable(gl::Enable_cap::clip_distance2);
     gl::enable(gl::Enable_cap::clip_distance3);
-    // gl::enable(gl::Enable_cap::framebuffer_srgb);
     for (int n = 0; n < draw_data->CmdListsCount; n++)
     {
         const ImDrawList* cmd_list = draw_data->CmdLists[n];

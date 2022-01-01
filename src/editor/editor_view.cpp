@@ -31,6 +31,10 @@ namespace editor {
 using namespace erhe::geometry;
 using namespace erhe::toolkit;
 
+const ImVec4 log_color          {0.8f, 0.8f, 1.0f, 0.7f};
+const ImVec4 consume_event_color{1.0f, 1.0f, 8.0f, 0.6f};
+const ImVec4 filter_event_color {1.0f, 0.8f, 7.0f, 0.6f};
+
 Editor_view::Editor_view()
     : erhe::components::Component{c_name}
     , Imgui_window               {c_description}
@@ -139,6 +143,7 @@ void Editor_view::update()
         ImGui_ImplErhe_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+        ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
     }
 
     m_editor_time     ->update();
@@ -184,6 +189,7 @@ void Editor_view::on_key(
     }
 
     context.log_window()->tail_log(
+        filter_event_color,
         "key {} {} not consumed",
         erhe::toolkit::c_str(code),
         pressed ? "press" : "release"
@@ -250,12 +256,12 @@ void Editor_view::inactivate_ready_commands()
 
 void Editor_view::update_active_mouse_command(Command* command)
 {
+    inactivate_ready_commands();
     if (
         (command->state() == State::Active) &&
         (m_active_mouse_command != command)
     )
     {
-        inactivate_ready_commands();
         ERHE_VERIFY(m_active_mouse_command == nullptr);
         m_active_mouse_command = command;
     }
@@ -286,6 +292,13 @@ void Editor_view::on_mouse_click(
         return;
     }
 
+    m_log_window->tail_log(
+        log_color,
+        "mouse button {} {}",
+        erhe::toolkit::c_str(button),
+        count
+    );
+
     m_pointer_context->update_mouse(button, count);
 
     Command_context context{*this, *m_pointer_context, get<Log_window>()};
@@ -311,9 +324,11 @@ void Editor_view::on_mouse_move(const double x, const double y)
         (m_active_mouse_command == nullptr)
     )
     {
-        m_log_window->tail_log("ImGui WantCaptureMouse");
+        m_log_window->tail_log(filter_event_color, "ImGui WantCaptureMouse");
         return;
     }
+
+    m_log_window->tail_log(log_color, "mouse move");
 
     m_pointer_context->update_mouse(x, y);
 
@@ -335,6 +350,8 @@ void Editor_view::on_key_press(
     const uint32_t               modifier_mask
 )
 {
+    m_log_window->tail_log(log_color, "key press {}", erhe::toolkit::c_str(code));
+
     on_key(true, code, modifier_mask);
 }
 
@@ -343,6 +360,8 @@ void Editor_view::on_key_release(
     const uint32_t               modifier_mask
 )
 {
+    m_log_window->tail_log(log_color, "key release {}", erhe::toolkit::c_str(code));
+
     on_key(false, code, modifier_mask);
 }
 

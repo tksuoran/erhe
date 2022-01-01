@@ -1,9 +1,12 @@
 #pragma once
 
+#include "command.hpp"
 #include "windows/imgui_window.hpp"
 
 #include "erhe/components/component.hpp"
 #include "erhe/log/log.hpp"
+
+#include <imgui.h>
 
 #include <fmt/core.h>
 #include <fmt/format.h>
@@ -14,6 +17,24 @@
 
 namespace editor
 {
+
+class Log_window;
+
+class Log_window_toggle_pause_command
+    : public Command
+{
+public:
+    explicit Log_window_toggle_pause_command(Log_window& log_window)
+        : Command     {"Log_window.toggle_pause"}
+        , m_log_window{log_window}
+    {
+    }
+
+    auto try_call(Command_context& context) -> bool override;
+
+private:
+    Log_window& m_log_window;
+};
 
 class Log_window
     : public erhe::components::Component
@@ -40,6 +61,10 @@ public:
     void write(std::string_view text) override;
 
     // Public API
+
+    // Commands
+    void toggle_pause();
+
     template <typename... Args>
     void frame_log(const char* format, const Args& ... args)
     {
@@ -52,21 +77,31 @@ public:
         tail_write(format, fmt::make_format_args(args...));
     }
 
+    template <typename... Args>
+    void tail_log(const ImVec4 color, const char* format, const Args& ... args)
+    {
+        tail_write(color, format, fmt::make_format_args(args...));
+    }
+
 private:
     void frame_write(const char* format, fmt::format_args args);
     void tail_write (const char* format, fmt::format_args args);
+    void tail_write (const ImVec4 color, const char* format, fmt::format_args args);
 
     class Tail_entry
     {
     public:
+        ImVec4       color;
         std::string  message;
         unsigned int repeat_count{0};
     };
 
-    std::vector<std::string> m_frame_entries;
-    std::deque<Tail_entry>   m_tail_entries;
-    int                      m_tail_buffer_show_size{7};
-    int                      m_tail_buffer_trim_size{1000};
+    Log_window_toggle_pause_command m_toggle_pause_command;
+    std::vector<std::string>        m_frame_entries;
+    std::deque<Tail_entry>          m_tail_entries;
+    int                             m_tail_buffer_show_size{7};
+    int                             m_tail_buffer_trim_size{1000};
+    bool                            m_paused{false};
 };
 
 } // namespace editor

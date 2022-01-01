@@ -13,7 +13,8 @@ namespace editor
 class IOperation;
 class Operation_stack;
 
-class Undo_command : public Command
+class Undo_command
+    : public Command
 {
 public:
     explicit Undo_command(Operation_stack& operation_stack)
@@ -28,7 +29,8 @@ private:
     Operation_stack& m_operation_stack;
 };
 
-class Redo_command : public Command
+class Redo_command
+    : public Command
 {
 public:
     explicit Redo_command(Operation_stack& operation_stack)

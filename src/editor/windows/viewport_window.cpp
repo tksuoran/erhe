@@ -190,7 +190,6 @@ void Viewport_window::render(
             0
         );
     }
-    gl::enable(gl::Enable_cap::framebuffer_srgb);
     if (m_configuration->gui)
     {
         clear(pipeline_state_tracker);
@@ -255,7 +254,7 @@ void Viewport_window::imgui()
         m_content_region_min  = to_glm(ImGui::GetItemRectMin());
         m_content_region_max  = to_glm(ImGui::GetItemRectMax());
         m_content_region_size = to_glm(ImGui::GetItemRectSize());
-        m_is_hovered          = ImGui::IsItemHovered(ImGuiHoveredFlags_None);
+        m_is_hovered          = ImGui::IsItemHovered();
     }
     else
     {
@@ -387,13 +386,11 @@ void Viewport_window::multisample_resolve()
     }
 
     gl::disable(gl::Enable_cap::scissor_test);
-    gl::enable(gl::Enable_cap::framebuffer_srgb);
     gl::blit_framebuffer(
         0, 0, m_color_texture_multisample->width(), m_color_texture_multisample->height(),
         0, 0, m_color_texture_resolved   ->width(), m_color_texture_resolved   ->height(),
         gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
     );
-    gl::enable(gl::Enable_cap::framebuffer_srgb);
 
     gl::pop_debug_group();
 

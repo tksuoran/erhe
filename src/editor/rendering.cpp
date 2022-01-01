@@ -63,6 +63,7 @@ void Editor_rendering::init_state()
     gl::disable     (gl::Enable_cap::primitive_restart);
     gl::enable      (gl::Enable_cap::primitive_restart_fixed_index);
     gl::enable      (gl::Enable_cap::texture_cube_map_seamless);
+    gl::enable      (gl::Enable_cap::framebuffer_srgb);
 }
 
 auto Editor_rendering::width() const -> int
@@ -171,8 +172,6 @@ void Editor_rendering::render()
 void Editor_rendering::render_viewport(const Render_context& context, const bool has_pointer)
 {
     ERHE_PROFILE_FUNCTION
-
-    gl::enable(gl::Enable_cap::framebuffer_srgb);
 
     if (m_scene_manager && m_forward_renderer)
     {

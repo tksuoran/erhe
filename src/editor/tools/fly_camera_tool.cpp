@@ -71,23 +71,31 @@ void Fly_camera_turn_command::try_ready(Command_context& context)
         return;
     }
 
-    // Try to transition to ready but do not consume event
-    // This avoids window resize being misinterpreted as drag.
-    //constexpr float   border   = 32.0f;
-    //const auto        position = m_pointer_context->position_in_viewport_window().value();
-    //const auto* const window   = m_pointer_context->window();
-    //const auto        viewport = window->viewport();
-    //if (
-    //    (position.x <  border) ||
-    //    (position.y <  border) ||
-    //    (position.x >= viewport.width  - border) ||
-    //    (position.y >= viewport.height - border)
-    //)
-    //{
-    //    return false;
-    //}
+    if (m_fly_camera_tool.try_ready())
+    {
+        set_ready(context);
+    }
+}
 
-    set_ready(context);
+auto Fly_camera_tool::try_ready() -> bool
+{
+    // Exclude safe border near viewport edges from mouse interaction
+    // to filter out viewport window resizing for example.
+    constexpr float   border   = 32.0f;
+    const auto        position = m_pointer_context->position_in_viewport_window().value();
+    const auto* const window   = m_pointer_context->window();
+    const auto        viewport = window->viewport();
+    if (
+        (position.x <  border) ||
+        (position.y <  border) ||
+        (position.x >= viewport.width  - border) ||
+        (position.y >= viewport.height - border)
+    )
+    {
+        return false;
+    }
+
+    return true;
 }
 
 auto Fly_camera_turn_command::try_call(Command_context& context) -> bool
