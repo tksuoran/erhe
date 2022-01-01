@@ -411,8 +411,6 @@ template <typename T>
     const typename vector_types<T>::vec3 axis
 ) -> typename vector_types<T>::mat4
 {
-    using mat4 = typename vector_types<T>::mat4;
-
     const T rsin = std::sin(angle_radians);
     const T rcos = std::cos(angle_radians);
 
@@ -420,32 +418,27 @@ template <typename T>
     const T v = axis.y;
     const T w = axis.z;
 
-    mat4 result;
+    return typename vector_types<T>::mat4{
+             rcos + u * u * (T{1} - rcos), // column 0
+         w * rsin + u * v * (T{1} - rcos),
+        -v * rsin + u * w * (T{1} - rcos),
+        T{0},
 
-    // Set the first row
-    result[0][0] =      rcos + u * u * (T{1} - rcos);
-    result[1][0] = -w * rsin + v * u * (T{1} - rcos);
-    result[2][0] =  v * rsin + w * u * (T{1} - rcos);
-    result[3][0] = T{0};
+        -w * rsin + v * u * (T{1} - rcos), // column 1
+             rcos + v * v * (T{1} - rcos),
+         u * rsin + v * w * (T{1} - rcos),
+        T{0},
 
-    // Set the second row
-    result[0][1] =  w * rsin + u * v * (T{1} - rcos);
-    result[1][1] =      rcos + v * v * (T{1} - rcos);
-    result[2][1] = -u * rsin + w * v * (T{1} - rcos);
-    result[3][1] = T{0};
+         v * rsin + w * u * (T{1} - rcos), // column 2
+        -u * rsin + w * v * (T{1} - rcos),
+             rcos + w * w * (T{1} - rcos),
+        T{0},
 
-    // Set the third row
-    result[0][2] = -v * rsin + u * w * (T{1} - rcos);
-    result[1][2] =  u * rsin + v * w * (T{1} - rcos);
-    result[2][2] =      rcos + w * w * (T{1} - rcos);
-    result[3][2] = T{0};
-
-    // Set the fourth row
-    result[0][3] = T{0};
-    result[1][3] = T{0};
-    result[2][3] = T{0};
-    result[3][3] = T{1};
-    return result;
+        T{0}, // column 3
+        T{0},
+        T{0},
+        T{1}
+    };
 }
 
 template <typename T>

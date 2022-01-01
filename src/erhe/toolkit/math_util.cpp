@@ -45,24 +45,12 @@ auto create_frustum(
   //const float d = -(2.0f  * z_far * z_near) / (z_far  - z_near); -- negative one to one
     const float d = -(z_far * z_near        ) / (z_far  - z_near); // zero to one
 
-    mat4 result;
-    result[0][0] = x;
-    result[1][0] = 0;
-    result[2][0] = a;
-    result[3][0] = 0;
-    result[0][1] = 0;
-    result[1][1] = y;
-    result[2][1] = b;
-    result[3][1] = 0;
-    result[0][2] = 0;
-    result[1][2] = 0;
-    result[2][2] = c; // inf far: zero to one = -1.0         minus one to one = -1.0
-    result[3][2] = d; // inf far: zero to one = -1.0 * near  minus one to one = -2.0 * near
-    result[0][3] = 0;
-    result[1][3] = 0;
-    result[2][3] = -1.0f;
-    result[3][3] = 0;
-    return result;
+    return mat4{
+        x, 0, 0, 0,
+        0, y, 0, 0,
+        a, b, c, -1.0f,
+        0, 0, d, 0,
+    };
 }
 
 auto create_frustum_infinite_far(
@@ -74,33 +62,21 @@ auto create_frustum_infinite_far(
 ) -> mat4
 {
     assert(z_near >= -0.0f);
-    const float x =  (2.0f  * z_near        ) / (right  - left  );
-    const float y =  (2.0f  * z_near        ) / (top    - bottom);
-    const float a =  (right + left          ) / (right  - left  );
-    const float b =  (top   + bottom        ) / (top    - bottom);
+    const float x =  (2.0f  * z_near) / (right - left  );
+    const float y =  (2.0f  * z_near) / (top   - bottom);
+    const float a =  (right + left  ) / (right - left  );
+    const float b =  (top   + bottom) / (top   - bottom);
   //const float c = -1.0f;           -- negative one to one
     const float c = -1.0f;           // zero to one
   //const float d = -2.0f * z_near;  -- negative one to one
     const float d = -z_near;         // zero to one
 
-    mat4 result;
-    result[0][0] = x;
-    result[1][0] = 0;
-    result[2][0] = a;
-    result[3][0] = 0;
-    result[0][1] = 0;
-    result[1][1] = y;
-    result[2][1] = b;
-    result[3][1] = 0;
-    result[0][2] = 0;
-    result[1][2] = 0;
-    result[2][2] = c;
-    result[3][2] = d;
-    result[0][3] = 0;
-    result[1][3] = 0;
-    result[2][3] = -1.0f;
-    result[3][3] = 0;
-    return result;
+    return mat4{
+        x, 0, 0, 0,
+        0, y, 0, 0,
+        a, b, c, -1.0f,
+        0, 0, d, 0
+    };
 }
 
 auto create_frustum_simple(
@@ -188,37 +164,33 @@ auto create_projection(
     const float p,                // Perspective (0 == parallel, 1 == perspective)
     const float n, const float f, // Near and z_far z clip depths
     const float w, const float h, // Width and height of viewport (at depth vz)
-    const vec3  v,                // Center of viewport
+    const vec3  c,                // Center of viewport
     const vec3  e                 // Center of projection (eye position) 
 ) -> mat4
 {
-    mat4 result;
-    result[0][0] =  2.0f / w;
-    result[0][1] =  0.0f;
-    result[0][2] = (2.0f * (e.x - v.x) + s) / (w * (v.z - e.z));
-    result[0][3] = (2.0f * ((v.x * e.z) - (e.x * v.z)) - s * v.z) / (w * (v.z - e.z));
+    const float flip_handed = -1.0f;
+    return mat4{
+          2.0f / w,
+          0.0f,
+        ((2.0f * (e.x - c.x) + s) / (w * (c.z - e.z))) * flip_handed,
+         (2.0f * ((c.x * e.z) - (e.x * c.z)) - s * c.z) / (w * (c.z - e.z)),
 
-    result[1][0] = 0.0f;
-    result[1][1] = 2.0f / h;
-    result[1][2] = 2.0f * (e.y - v.y) / (h * (v.z - e.z));
-    result[1][3] = 2.0f * ((v.y * e.z) - (e.y * v.z)) / (h * (v.z - e.z));
+         0.0f,
+         2.0f / h,
+        (2.0f * (e.y - c.y) / (h * (c.z - e.z))) * flip_handed,
+         2.0f * ((c.y * e.z) - (e.y * c.z)) / (h * (c.z - e.z)),
 
-    result[2][0] =  0.0f;
-    result[2][1] =  0.0f;
-    result[2][2] = (2.0f * (v.z * (1.0f - p) - e.z) + p * (f + n)) / ((f - n) * (v.z - e.z));
-    result[2][3] = -((v.z * (1.0f - p) - e.z) * (f + n) + 2.0f * f * n * p) / ((f - n) * (v.z - e.z));
+         0.0f,
+         0.0f,
+        ((2.0f * (c.z * (1.0f - p) - e.z) + p * (f + n)) / ((f - n) * (c.z - e.z))) * flip_handed,
+        -((c.z * (1.0f - p) - e.z) * (f + n) + 2.0f * f * n * p) / ((f - n) * (c.z - e.z)),
 
-    result[3][0] = 0.0f;
-    result[3][1] = 0.0f;
-    result[3][2] = p / (v.z - e.z);
-    result[3][3] = (v.z * (1.0f - p) - e.z) / (v.z - e.z);
+        0.0f,
+        0.0f,
+        (p / (c.z - e.z)) * flip_handed,
+        (c.z * (1.0f - p) - e.z) / (c.z - e.z)
 
-    // Changes handedness
-    result[0][2] = -result[0][2];
-    result[1][2] = -result[1][2];
-    result[2][2] = -result[2][2];
-    result[3][2] = -result[3][2];
-    return result;
+    };
 }
 
 auto create_orthographic(
@@ -230,24 +202,24 @@ auto create_orthographic(
     const float z_far
 ) -> mat4
 {
-    mat4 result;
-    result[0][0] = 2.0f / (right - left);
-    result[1][0] = 0.0f;
-    result[2][0] = 0.0f;
-    result[3][0] = -(right + left) / (right - left);
-    result[0][1] = 0.0f;
-    result[1][1] = 2.0f / (top - bottom);
-    result[2][1] = 0.0f;
-    result[3][1] = -(top + bottom) / (top - bottom);
-    result[0][2] = 0.0f;
-    result[1][2] = 0.0f;
-    result[2][2] = -1.0f / (z_far - z_near);
-    result[3][2] = -z_near / (z_far - z_near);
-    result[0][3] = 0.0f;
-    result[1][3] = 0.0f;
-    result[2][3] = 0.0f;
-    result[3][3] = 1.0f;
-    return result;
+    return mat4{
+        2.0f / (right - left),
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        2.0f / (top - bottom),
+        0.0f,
+        0.0f,
+        0.0f,
+        -1.0f / (z_far - z_near),
+        0.0f,
+        0.0f,
+        -(right + left) / (right - left),
+        -(top + bottom) / (top - bottom),
+        -z_near / (z_far - z_near),
+        1.0f
+    };
 }
 
 auto create_orthographic_centered(
@@ -281,12 +253,12 @@ auto create_look_at(const vec3 eye, const vec3 center, const vec3 up0) -> mat4
     const vec3 right = glm::normalize(glm::cross(up1, back));
     const vec3 up    = glm::cross(back, right);
 
-    mat4 result;
-    result[0] = vec4{right, 0.0f};
-    result[1] = vec4{up,    0.0f};
-    result[2] = vec4{back,  0.0f};
-    result[3] = vec4{eye, 1.0f};
-    return result;
+    return mat4{
+        vec4{right, 0.0f},
+        vec4{up,    0.0f},
+        vec4{back,  0.0f},
+        vec4{eye,   1.0f}
+    };
 #endif
 }
 
