@@ -140,7 +140,7 @@ auto Key_binding::on_key(
     }
 
     auto* command = get_command();
-    ERHE_VERIFY(command != nullptr);
+    //ERHE_VERIFY(command != nullptr);
 
     if (command->state() == State::Disabled)
     {
@@ -205,7 +205,7 @@ auto Mouse_click_binding::on_button(
     }
 
     auto* command = get_command();
-    ERHE_VERIFY(command != nullptr);
+    //ERHE_VERIFY(command != nullptr);
 
     if (command->state() == State::Disabled)
     {

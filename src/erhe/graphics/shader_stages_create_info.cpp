@@ -167,6 +167,9 @@ void Shader_stages::Create_info::add_interface_block(
     gsl::not_null<const Shader_resource*> interface_block
 )
 {
+    // No idea why cppcheck this interface_blocks is not used
+
+    // cppcheck-suppress unreadVariable
     interface_blocks.emplace(interface_block->name() + "_block", interface_block);
 }
 

@@ -104,6 +104,7 @@ public:
         Args&& ...args
     ) -> std::shared_ptr<Brush>
     {
+        // cppcheck-suppress redundantAssignment
         const auto brush = m_brushes->make_brush(std::forward<Args>(args)...);
         if (instantiate_to_scene)
         {

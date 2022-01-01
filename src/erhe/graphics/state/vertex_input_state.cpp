@@ -67,11 +67,16 @@ void Vertex_input_state::emplace_back(
     const std::shared_ptr<Vertex_attribute_mapping>& mapping,
     const Vertex_attribute*                          attribute,
     const size_t                                     stride
-) //-> Vertex_input_state::Binding&
+)
 {
-    //return
-    auto binding = std::make_shared<Vertex_input_state::Binding>(vertex_buffer, mapping, attribute, stride);
-    m_bindings.push_back(binding);
+    m_bindings.push_back(
+        std::make_shared<Vertex_input_state::Binding>(
+            vertex_buffer,
+            mapping,
+            attribute,
+            stride
+        )
+    );
 }
 
 void Vertex_input_state::reset()
@@ -114,7 +119,7 @@ void Vertex_input_state::update()
     Expects(m_gl_vertex_array.has_value());
     Expects(gl_name() > 0);
 
-    unsigned int max_attribute_count = std::min(
+    const unsigned int max_attribute_count = std::min(
         MAX_ATTRIBUTE_COUNT,
         erhe::graphics::Instance::limits.max_vertex_attribs
     );
@@ -132,7 +137,7 @@ void Vertex_input_state::update()
     {
         const auto*       vbo       = binding->vertex_buffer;
         const auto* const attribute = binding->vertex_attribute;
-        const auto        mapping   = binding->vertex_attribute_mapping;
+        const auto&       mapping   = binding->vertex_attribute_mapping;
 
         ERHE_VERIFY(vbo != nullptr);
         ERHE_VERIFY(attribute != nullptr);
@@ -230,27 +235,14 @@ void Vertex_input_state::update()
         gl::enable_vertex_array_attrib(gl_name(), static_cast<GLuint>(mapping->layout_location));
         gl::vertex_array_binding_divisor(gl_name(), static_cast<GLuint>(mapping->layout_location), attribute->divisor);
     }
-
-#if 0
-    // Avoid leaking previously enabled attributes
-    for (size_t i = 0; i < max_attribute_count; ++i)
-    {
-        if (!enabled_attributes.test(i))
-        {
-            gl::disable_vertex_array_attrib(gl_name(), i);
-        }
-    }
-#endif
 }
 
-auto Vertex_input_state::gl_name() const
--> unsigned int
+auto Vertex_input_state::gl_name() const -> unsigned int
 {
     ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
     return m_gl_vertex_array.has_value()
         ? m_gl_vertex_array.value().gl_name()
         : 0;
-
 }
 
 } // namespace erhe::graphics

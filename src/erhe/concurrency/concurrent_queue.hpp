@@ -37,7 +37,10 @@ protected:
 
 public:
     Concurrent_queue();
-    Concurrent_queue(const std::string_view name, Priority priority = Priority::NORMAL);
+    explicit Concurrent_queue(
+        const std::string_view name,
+        Priority               priority = Priority::NORMAL
+    );
     ~Concurrent_queue();
 
     Concurrent_queue(const Concurrent_queue&) = delete;
