@@ -90,7 +90,7 @@ void Physics_tool::initialize_component()
 
     auto* view = get<Editor_view>();
     view->register_command(&m_drag_command);
-    view->bind_command_to_mouse_motion(&m_drag_command);
+    view->bind_command_to_mouse_drag(&m_drag_command, Mouse_button_right);
 
     get<Operations>()->register_active_tool(this);
 }
