@@ -21,7 +21,7 @@ class Log_window;
 class Id_renderer;
 class Pointer_context;
 class Operation_stack;
-class Scene_manager;
+class Scene_builder;
 class Scene_root;
 class Viewport_window;
 class Viewport_windows;
@@ -113,7 +113,7 @@ private:
     Log_window*       m_log_window      {nullptr};
     Operation_stack*  m_operation_stack {nullptr};
     Pointer_context*  m_pointer_context {nullptr};
-    Scene_manager*    m_scene_manager   {nullptr};
+    Scene_builder*    m_scene_builder   {nullptr};
     Scene_root*       m_scene_root      {nullptr};
     Viewport_windows* m_viewport_windows{nullptr};
     Window*           m_window          {nullptr};

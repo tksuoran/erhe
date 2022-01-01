@@ -27,7 +27,7 @@ namespace editor
 class Editor_tools;
 class Fly_camera_tool;
 class Pointer_context;
-class Scene_manager;
+class Scene_builder;
 class Scene_root;
 class Trs_tool;
 

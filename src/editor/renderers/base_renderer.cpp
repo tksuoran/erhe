@@ -1,6 +1,6 @@
 #include "renderers/base_renderer.hpp"
 #include "renderers/program_interface.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_builder.hpp"
 #include "log.hpp"
 
 #include "erhe/gl/gl.hpp"

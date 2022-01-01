@@ -1,6 +1,6 @@
 #include "operations/mesh_operation.hpp"
 #include "tools/selection_tool.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_builder.hpp"
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/primitive/primitive_builder.hpp"

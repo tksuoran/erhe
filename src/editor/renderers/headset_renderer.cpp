@@ -7,7 +7,7 @@
 #include "renderers/line_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/text_renderer.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "tools/theremin_tool.hpp"
@@ -107,7 +107,7 @@ Headset_view_resources::Headset_view_resources(
 
     auto* view_camera = rendering.get<Fly_camera_tool>()->get_camera();
     view_camera->attach(camera);
-    //camera->parent = rendering.get<Scene_manager>()->get_view_camera()->get();
+    //camera->parent = rendering.get<Scene_builder>()->get_view_camera()->get();
     //camera_node->parent = nullptr;
 
     is_valid = true;
@@ -481,7 +481,7 @@ void Headset_renderer::render()
         {
             erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker;
             Configuration*                        configuration;
-            Scene_manager*                        scene_manager;
+            Scene_builder*                        scene_builder;
             Line_renderer*                        line_renderer;
             Text_renderer*                        text_renderer;
         };
@@ -489,7 +489,7 @@ void Headset_renderer::render()
         {
             get<erhe::graphics::OpenGL_state_tracker>(),
             get<Configuration>(),
-            get<Scene_manager>(),
+            get<Scene_builder>(),
             get<Line_renderer>(),
             get<Text_renderer>()
         };
@@ -673,7 +673,7 @@ void Headset_renderer::connect()
     m_application      = get<Application>();
     m_editor_rendering = get<Editor_rendering>();
     m_line_renderer    = get<Line_renderer   >();
-    m_scene_manager    = require<Scene_manager>();
+    m_scene_builder    = require<Scene_builder>();
     m_scene_root       = require<Scene_root   >();
 
     require<Window>();

@@ -10,7 +10,7 @@
 #include "operations/operation_stack.hpp"
 #include "renderers/line_renderer.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
@@ -112,7 +112,7 @@ void Selection_tool::connect()
 {
     m_line_renderer   = get<Line_renderer>();
     m_pointer_context = get<Pointer_context>();
-    m_scene_manager   = require<Scene_manager>();
+    m_scene_builder   = require<Scene_builder>();
 }
 
 void Selection_tool::initialize_component()

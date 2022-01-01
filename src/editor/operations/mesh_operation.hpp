@@ -33,7 +33,7 @@ namespace erhe::scene
 namespace editor
 {
 
-class Scene_manager;
+class Scene_builder;
 class Selection_tool;
 
 class Mesh_operation

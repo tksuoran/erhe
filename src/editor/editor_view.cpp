@@ -9,7 +9,7 @@
 
 #include "operations/operation_stack.hpp"
 #include "renderers/id_renderer.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "windows/log_window.hpp"
@@ -53,7 +53,7 @@ void Editor_view::connect()
     m_log_window       = get<Log_window      >();
     m_operation_stack  = get<Operation_stack >();
     m_pointer_context  = get<Pointer_context >();
-    m_scene_manager    = get<Scene_manager   >();
+    m_scene_builder    = get<Scene_builder   >();
     m_scene_root       = get<Scene_root      >();
     m_viewport_windows = get<Viewport_windows>();
     m_window           = get<Window          >();

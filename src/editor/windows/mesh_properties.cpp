@@ -3,7 +3,7 @@
 #include "rendering.hpp"
 
 #include "renderers/text_renderer.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -29,7 +29,7 @@ Mesh_properties::~Mesh_properties() = default;
 
 void Mesh_properties::connect()
 {
-    m_scene_manager  = get<Scene_manager >();
+    m_scene_builder  = get<Scene_builder >();
     m_scene_root     = get<Scene_root    >();
     m_selection_tool = get<Selection_tool>();
     m_text_renderer  = get<Text_renderer >();

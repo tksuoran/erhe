@@ -93,8 +93,9 @@ Program_interface::Shader_resources::Shader_resources()
 
 void Program_interface::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    // No idea why cppcheck this interface_blocks is not used
 
+    // cppcheck-suppress unreadVariable
     shader_resources = std::make_unique<Shader_resources>();
 }
 

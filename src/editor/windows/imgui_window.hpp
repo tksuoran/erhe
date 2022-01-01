@@ -9,7 +9,7 @@ namespace editor
 {
 
 class Pointer_context;
-class Scene_manager;
+class Scene_builder;
 
 class Imgui_window_context
 {

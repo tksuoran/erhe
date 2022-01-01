@@ -252,7 +252,7 @@ auto Mouse_click_binding::on_button(
 auto Mouse_click_binding::on_motion(Command_context& context) -> bool
 {
     auto* command = get_command();
-    ERHE_VERIFY(command != nullptr);
+    //ERHE_VERIFY(command != nullptr);
 
     if (command->state() == State::Disabled)
     {
@@ -276,7 +276,7 @@ Mouse_motion_binding::Mouse_motion_binding(Command* command)
 auto Mouse_motion_binding::on_motion(Command_context& context) -> bool
 {
     auto* command = get_command();
-    ERHE_VERIFY(get_command() != nullptr);
+    //ERHE_VERIFY(get_command() != nullptr);
 
     if (command->state() == State::Disabled)
     {
@@ -310,7 +310,7 @@ auto Mouse_drag_binding::on_button(
     }
 
     auto* command = get_command();
-    ERHE_VERIFY(command != nullptr);
+    //ERHE_VERIFY(command != nullptr);
 
     if (command->state() == State::Disabled)
     {

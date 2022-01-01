@@ -710,16 +710,16 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
         return false;
     }
 
-    XrViewState view_state{
-        .type           = XR_TYPE_VIEW_STATE,
-        .next           = nullptr,
-        .viewStateFlags = 0
-    };
-    uint32_t view_capacity_input{static_cast<uint32_t>(m_xr_views.size())};
-    uint32_t view_count_output  {0};
-
+    uint32_t view_count_output{0};
     {
         ERHE_PROFILE_SCOPE("xrLocateViews");
+
+        XrViewState view_state{
+            .type           = XR_TYPE_VIEW_STATE,
+            .next           = nullptr,
+            .viewStateFlags = 0
+        };
+        uint32_t view_capacity_input{static_cast<uint32_t>(m_xr_views.size())};
 
         const XrViewLocateInfo view_locate_info{
             .type        = XR_TYPE_VIEW_LOCATE_INFO,
@@ -738,7 +738,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
                 m_xr_views.data()
             )
         );
-        ERHE_VERIFY(view_count_output == view_capacity_input);
+        Expects(view_count_output == view_capacity_input);
     }
 
     const auto& view_configuration_views = m_instance.get_xr_view_configuration_views();

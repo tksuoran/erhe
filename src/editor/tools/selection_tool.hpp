@@ -18,7 +18,7 @@ namespace editor
 {
 
 class Line_renderer;
-class Scene_manager;
+class Scene_builder;
 class Selection_tool;
 
 class Selection_tool_delete_command
@@ -159,7 +159,7 @@ private:
 
     Line_renderer*                     m_line_renderer  {nullptr};
     Pointer_context*                   m_pointer_context{nullptr};
-    Scene_manager*                     m_scene_manager  {nullptr};
+    Scene_builder*                     m_scene_builder  {nullptr};
     int                                m_next_selection_change_subscription{1};
     Selection                          m_selection;
     std::vector<Subscription_entry>    m_selection_change_subscriptions;

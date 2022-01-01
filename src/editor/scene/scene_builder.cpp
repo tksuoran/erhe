@@ -1,4 +1,4 @@
-#include "scene/scene_manager.hpp"
+#include "scene/scene_builder.hpp"
 #include "graphics/gl_context_provider.hpp"
 #include "parsers/json_polyhedron.hpp"
 #include "parsers/wavefront_obj.hpp"
@@ -57,14 +57,14 @@ using namespace std;
 using namespace glm;
 
 
-Scene_manager::Scene_manager()
+Scene_builder::Scene_builder()
     : Component{c_name}
 {
 }
 
-Scene_manager::~Scene_manager() = default;
+Scene_builder::~Scene_builder() = default;
 
-void Scene_manager::connect()
+void Scene_builder::connect()
 {
     require<Gl_context_provider>();
 
@@ -74,7 +74,7 @@ void Scene_manager::connect()
     m_scene_root  = require<Scene_root>();
 }
 
-void Scene_manager::initialize_component()
+void Scene_builder::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -85,7 +85,7 @@ void Scene_manager::initialize_component()
     setup_scene();
 }
 
-auto Scene_manager::make_camera(
+auto Scene_builder::make_camera(
     std::string_view name,
     glm::vec3        position,
     glm::vec3        look_at
@@ -112,7 +112,7 @@ auto Scene_manager::make_camera(
     return camera;
 }
 
-void Scene_manager::setup_cameras()
+void Scene_builder::setup_cameras()
 {
     auto camera_a = make_camera(
         "Camera A",
@@ -127,12 +127,12 @@ void Scene_manager::setup_cameras()
     get<Fly_camera_tool>()->set_camera(camera_a.get());
 }
 
-auto Scene_manager::build_info_set() -> erhe::primitive::Build_info_set&
+auto Scene_builder::build_info_set() -> erhe::primitive::Build_info_set&
 {
     return m_mesh_memory->build_info_set;
 };
 
-void Scene_manager::make_brushes()
+void Scene_builder::make_brushes()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -490,14 +490,14 @@ void Scene_manager::make_brushes()
     buffer_transfer_queue().flush();
 }
 
-auto Scene_manager::buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&
+auto Scene_builder::buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&
 {
     Expects(m_mesh_memory->gl_buffer_transfer_queue);
 
     return *m_mesh_memory->gl_buffer_transfer_queue.get();
 }
 
-void Scene_manager::add_room()
+void Scene_builder::add_room()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -553,7 +553,7 @@ void Scene_manager::add_room()
     //}
 }
 
-void Scene_manager::make_mesh_nodes()
+void Scene_builder::make_mesh_nodes()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -693,7 +693,7 @@ void Scene_manager::make_mesh_nodes()
     }
 }
 
-void Scene_manager::make_cube_benchmark()
+void Scene_builder::make_cube_benchmark()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -738,7 +738,7 @@ void Scene_manager::make_cube_benchmark()
     m_scene_root->scene().sanity_check();
 }
 
-auto Scene_manager::make_directional_light(
+auto Scene_builder::make_directional_light(
     string_view name,
     vec3        position,
     vec3        color,
@@ -774,7 +774,7 @@ auto Scene_manager::make_directional_light(
     return light;
 }
 
-auto Scene_manager::make_spot_light(
+auto Scene_builder::make_spot_light(
     string_view name,
     vec3        position,
     vec3        target,
@@ -808,7 +808,7 @@ auto Scene_manager::make_spot_light(
     return light;
 }
 
-void Scene_manager::setup_lights()
+void Scene_builder::setup_lights()
 {
     m_scene_root->light_layer()->ambient_light = vec4{0.033f, 0.055f, 0.077f, 0.0f};
 
@@ -891,14 +891,14 @@ void Scene_manager::setup_lights()
     }
 }
 
-void Scene_manager::update_fixed_step(const erhe::components::Time_context& time_context)
+void Scene_builder::update_fixed_step(const erhe::components::Time_context& time_context)
 {
     // TODO
     // Physics should mostly run in a separate thread.
     m_scene_root->physics_world().update_fixed_step(time_context.dt);
 }
 
-void Scene_manager::update_once_per_frame(const erhe::components::Time_context& time_context)
+void Scene_builder::update_once_per_frame(const erhe::components::Time_context& time_context)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -908,7 +908,7 @@ void Scene_manager::update_once_per_frame(const erhe::components::Time_context& 
     animate_lights(time_context.time);
 }
 
-void Scene_manager::animate_lights(double time_d)
+void Scene_builder::animate_lights(double time_d)
 {
     if (time_d >= 0.0)
     {
@@ -957,7 +957,7 @@ void Scene_manager::animate_lights(double time_d)
     }
 }
 
-void Scene_manager::setup_scene()
+void Scene_builder::setup_scene()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -999,7 +999,7 @@ public:
 
 }
 
-void Scene_manager::sort_lights()
+void Scene_builder::sort_lights()
 {
     sort(
         m_scene_root->light_layer()->lights.begin(),

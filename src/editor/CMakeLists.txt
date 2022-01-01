@@ -74,8 +74,8 @@ set(source_list
     scene/node_physics.hpp
     scene/node_raytrace.cpp
     scene/node_raytrace.hpp
-    scene/scene_manager.cpp
-    scene/scene_manager.hpp
+    scene/scene_builder.cpp
+    scene/scene_builder.hpp
     scene/scene_root.cpp
     scene/scene_root.hpp
 

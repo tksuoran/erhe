@@ -50,17 +50,17 @@ class Mesh_memory;
 class Node_physics;
 class Scene_root;
 
-class Scene_manager
+class Scene_builder
     : public erhe::components::Component
     , public erhe::components::IUpdate_fixed_step
     , public erhe::components::IUpdate_once_per_frame
 {
 public:
-    static constexpr std::string_view c_name{"Scene_manager"};
+    static constexpr std::string_view c_name{"Scene_builder"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
-    Scene_manager();
-    ~Scene_manager() override;
+    Scene_builder();
+    ~Scene_builder() override;
 
     // Implements Component
     auto get_type_hash       () const -> uint32_t override { return hash; }

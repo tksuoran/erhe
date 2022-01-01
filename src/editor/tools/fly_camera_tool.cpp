@@ -3,7 +3,7 @@
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
 #include "scene/frame_controller.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
@@ -159,7 +159,7 @@ void Fly_camera_tool::connect()
     m_editor_tools    = get<Editor_tools>();
     m_pointer_context = get<Pointer_context>();
     m_scene_root      = require<Scene_root>();
-    require<Scene_manager>();
+    require<Scene_builder>();
     m_trs_tool        = get<Trs_tool>();
 }
 

@@ -67,7 +67,7 @@ class Debug_draw;
 class Mesh_memory;
 class Node_physics;
 class Raytrace_primitive;
-class Scene_manager;
+class Scene_builder;
 class Scene_root;
 class Brush;
 

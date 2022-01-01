@@ -3,7 +3,7 @@
 #include "configuration.hpp"
 #include "editor_tools.hpp"
 
-#include "scene/scene_manager.hpp"
+#include "scene/scene_builder.hpp"
 
 #include "erhe/imgui/imgui_helpers.hpp"
 

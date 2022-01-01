@@ -50,7 +50,7 @@
 #include "windows/viewport_window.hpp"
 
 #include "scene/debug_draw.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe/graphics/opengl_state_tracker.hpp"
@@ -123,7 +123,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Pointer_context     >());
         m_components.add(make_shared<Program_interface   >());
         m_components.add(make_shared<Programs            >());
-        m_components.add(make_shared<Scene_manager       >());
+        m_components.add(make_shared<Scene_builder       >());
         m_components.add(make_shared<Scene_root          >());
         m_components.add(make_shared<Selection_tool      >());
         m_components.add(make_shared<Shader_monitor      >());

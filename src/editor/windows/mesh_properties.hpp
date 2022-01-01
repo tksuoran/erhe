@@ -20,7 +20,7 @@ namespace erhe::scene
 namespace editor
 {
 
-class Scene_manager;
+class Scene_builder;
 class Scene_root;
 class Selection_tool;
 class Text_renderer;
@@ -51,7 +51,7 @@ public:
     void imgui() override;
 
 private:
-    Scene_manager*  m_scene_manager {nullptr};
+    Scene_builder*  m_scene_builder {nullptr};
     Scene_root*     m_scene_root    {nullptr};
     Selection_tool* m_selection_tool{nullptr};
     Text_renderer*  m_text_renderer {nullptr};

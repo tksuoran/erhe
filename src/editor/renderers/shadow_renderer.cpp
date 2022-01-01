@@ -3,7 +3,7 @@
 #include "graphics/gl_context_provider.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/program_interface.hpp"
-#include "scene/scene_manager.hpp"
+#include "scene/scene_builder.hpp"
 
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"

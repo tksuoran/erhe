@@ -21,7 +21,7 @@ namespace editor
 {
 
 class Operation_stack;
-class Scene_manager;
+class Scene_builder;
 class Scene_root;
 class Selection_tool;
 
@@ -96,7 +96,7 @@ private:
     auto drop_node_state(erhe::scene::Node& node);
 
     Operation_stack* m_operation_stack{nullptr};
-    Scene_manager*   m_scene_manager  {nullptr};
+    Scene_builder*   m_scene_builder  {nullptr};
     Scene_root*      m_scene_root     {nullptr};
     Selection_tool*  m_selection_tool {nullptr};
 

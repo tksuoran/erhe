@@ -139,9 +139,9 @@ void Vertex_input_state::update()
         const auto* const attribute = binding->vertex_attribute;
         const auto&       mapping   = binding->vertex_attribute_mapping;
 
-        ERHE_VERIFY(vbo != nullptr);
-        ERHE_VERIFY(attribute != nullptr);
-        ERHE_VERIFY(mapping->layout_location < max_attribute_count);
+        Expects(vbo != nullptr);
+        Expects(attribute != nullptr);
+        Expects(mapping->layout_location < max_attribute_count);
 
         gl::vertex_array_vertex_buffer(
             gl_name(),
@@ -239,7 +239,8 @@ void Vertex_input_state::update()
 
 auto Vertex_input_state::gl_name() const -> unsigned int
 {
-    ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
+    Expects(m_owner_thread == std::this_thread::get_id());
+
     return m_gl_vertex_array.has_value()
         ? m_gl_vertex_array.value().gl_name()
         : 0;

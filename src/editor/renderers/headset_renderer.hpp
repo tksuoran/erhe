@@ -25,7 +25,7 @@ class Application;
 class Editor_rendering;
 class Line_renderer;
 class Mesh_memory;
-class Scene_manager;
+class Scene_builder;
 class Scene_root;
 
 class Headset_view_resources
@@ -95,7 +95,7 @@ private:
     Application*      m_application     {nullptr};
     Editor_rendering* m_editor_rendering{nullptr};
     Line_renderer*    m_line_renderer   {nullptr};
-    Scene_manager*    m_scene_manager   {nullptr};
+    Scene_builder*    m_scene_builder   {nullptr};
     Scene_root*       m_scene_root      {nullptr};
 };
 

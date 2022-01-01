@@ -5,7 +5,7 @@
 #include "log.hpp"
 #include "rendering.hpp"
 
-#include "scene/scene_manager.hpp"
+#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "tools/pointer_context.hpp"
@@ -56,7 +56,7 @@ void Viewport_windows::connect()
     m_pipeline_state_tracker = get    <erhe::graphics::OpenGL_state_tracker>();
     m_pointer_context        = get    <Pointer_context>();
     m_scene_root             = require<Scene_root>();
-    require<Scene_manager>();
+    require<Scene_builder>();
 }
 
 void Viewport_windows::initialize_component()
