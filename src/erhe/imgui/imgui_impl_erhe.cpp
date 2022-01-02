@@ -80,6 +80,89 @@ const std::string_view c_fragment_shader_source =
     "    out_color.a         = texture_sample.a * v_color.a;\n"
     "}\n";
 
+template <size_t texture_unit_count>
+class Texture_unit_cache
+{
+public:
+    void create_dummy_texture()
+    {
+        const erhe::graphics::Texture::Create_info create_info{};
+        m_dummy_texture = std::make_unique<erhe::graphics::Texture>(create_info);
+        m_dummy_texture->set_debug_label("ImGui Dummy");
+        const std::array<uint8_t, 4> dummy_pixel{ 0xee, 0x11, 0xdd, 0xff };
+        const gsl::span<const std::byte> image_data{
+            reinterpret_cast<const std::byte*>(&dummy_pixel[0]),
+            dummy_pixel.size()
+        };
+
+        m_dummy_texture->upload(
+            create_info.internal_format,
+            image_data,
+            create_info.width,
+            create_info.height
+        );
+    }
+
+    void reset()
+    {
+        std::fill(
+            m_textures.begin(),
+            m_textures.end(),
+            nullptr
+        );
+        std::fill(
+            m_used_textures.begin(),
+            m_used_textures.end(),
+            m_dummy_texture->gl_name()
+        );
+    }
+
+    auto allocate_texture_unit(const erhe::graphics::Texture* texture)
+    -> std::optional<std::size_t>
+    {
+        for (size_t texture_unit = 0; texture_unit < texture_unit_count; ++texture_unit)
+        {
+            if (m_textures[texture_unit] == texture)
+            {
+                return texture_unit;
+            }
+        }
+        for (size_t texture_unit = 0; texture_unit < texture_unit_count; ++texture_unit)
+        {
+            if (m_textures[texture_unit] == nullptr)
+            {
+                m_used_textures[texture_unit] = texture->gl_name();
+                m_textures[texture_unit] = texture;
+                return texture_unit;
+            }
+        }
+        return {};
+    }
+
+    void bind()
+    {
+        // Assign textures to texture units
+        gl::bind_textures(
+            0,
+            GLsizei{texture_unit_count},
+            reinterpret_cast<const GLuint *>(m_used_textures.data())
+        );
+    }
+
+private:
+    unique_ptr<erhe::graphics::Texture> m_dummy_texture;
+
+    std::array<
+        const erhe::graphics::Texture*,
+        texture_unit_count
+    > m_textures;
+
+    std::array<
+        GLuint,
+        texture_unit_count
+    > m_used_textures;
+};
+
 class Imgui_renderer
 {
 public:
@@ -121,7 +204,10 @@ public:
             gl::Map_buffer_access_mask::map_write_bit
         };
 
-        explicit Frame_resources(Imgui_renderer& imgui_renderer)
+        explicit Frame_resources(
+            Imgui_renderer& imgui_renderer,
+            const size_t    slot
+        )
             : vertex_buffer{
                 gl::Buffer_target::array_buffer,
                 Imgui_renderer::max_vertex_count * imgui_renderer.vertex_format.stride(),
@@ -162,10 +248,10 @@ public:
                 nullptr
             }
         {
-            vertex_buffer        .set_debug_label("ImGui Renderer Vertex");
-            index_buffer         .set_debug_label("ImGui Renderer Index");
-            draw_parameter_buffer.set_debug_label("ImGui Renderer Draw Parameter");
-            draw_indirect_buffer .set_debug_label("ImGui Renderer Draw Indirect");
+            vertex_buffer        .set_debug_label(fmt::format("ImGui Renderer Vertex {}",         slot));
+            index_buffer         .set_debug_label(fmt::format("ImGui Renderer Index {}",          slot));
+            draw_parameter_buffer.set_debug_label(fmt::format("ImGui Renderer Draw Parameter {}", slot));
+            draw_indirect_buffer .set_debug_label(fmt::format("ImGui Renderer Draw Indirect {}",  slot));
         }
 
         Frame_resources(const Frame_resources&) = delete;
@@ -361,9 +447,9 @@ public:
 
     void create_frame_resources()
     {
-        for (size_t i = 0; i < frame_resources_count; ++i)
+        for (size_t slot = 0; slot < frame_resources_count; ++slot)
         {
-            m_frame_resources.emplace_back(*this);
+            m_frame_resources.emplace_back(*this, slot);
         }
     }
 
@@ -420,103 +506,16 @@ public:
         }                                               
     };
 
+    Texture_unit_cache<Imgui_renderer::texture_unit_count> texture_unit_cache{};
+
 private:
-    std::deque<Frame_resources> m_frame_resources;
-    size_t                      m_current_frame_resource_slot{0};
+    std::deque<Frame_resources>                            m_frame_resources;
+    size_t                                                 m_current_frame_resource_slot{0};
 
     static constexpr size_t frame_resources_count = 4;
 };
 
 Imgui_renderer imgui_renderer;
-
-template <size_t texture_unit_count>
-class Texture_unit_cache
-{
-public:
-    explicit Texture_unit_cache()
-    {
-        create_dummy_texture();
-        reset();
-    }
-
-    void create_dummy_texture()
-    {
-        const erhe::graphics::Texture::Create_info create_info{};
-        m_dummy_texture = std::make_unique<erhe::graphics::Texture>(create_info);
-        m_dummy_texture->set_debug_label("ImGui Dummy");
-        const std::array<uint8_t, 4> dummy_pixel{ 0xee, 0x11, 0xdd, 0xff };
-        const gsl::span<const std::byte> image_data{
-            reinterpret_cast<const std::byte*>(&dummy_pixel[0]),
-            dummy_pixel.size()
-        };
-
-        m_dummy_texture->upload(
-            create_info.internal_format,
-            image_data,
-            create_info.width,
-            create_info.height
-        );
-    }
-
-    void reset()
-    {
-        std::fill(
-            m_textures.begin(),
-            m_textures.end(),
-            nullptr
-        );
-        std::fill(
-            m_used_textures.begin(),
-            m_used_textures.end(),
-            m_dummy_texture->gl_name()
-        );
-    }
-
-    auto allocate_texture_unit(const erhe::graphics::Texture* texture)
-    -> std::optional<std::size_t>
-    {
-        for (size_t texture_unit = 0; texture_unit < texture_unit_count; ++texture_unit)
-        {
-            if (m_textures[texture_unit] == texture)
-            {
-                return texture_unit;
-            }
-        }
-        for (size_t texture_unit = 0; texture_unit < texture_unit_count; ++texture_unit)
-        {
-            if (m_textures[texture_unit] == nullptr)
-            {
-                m_used_textures[texture_unit] = texture->gl_name();
-                m_textures[texture_unit] = texture;
-                return texture_unit;
-            }
-        }
-        return {};
-    }
-
-    void bind()
-    {
-        // Assign textures to texture units
-        gl::bind_textures(
-            0,
-            GLsizei{texture_unit_count},
-            reinterpret_cast<const GLuint *>(m_used_textures.data())
-        );
-    }
-
-private:
-    unique_ptr<erhe::graphics::Texture> m_dummy_texture;
-
-    std::array<
-        const erhe::graphics::Texture*,
-        texture_unit_count
-    > m_textures;
-
-    std::array<
-        GLuint,
-        texture_unit_count
-    > m_used_textures;
-};
 
 static constexpr std::string_view c_imgui_render{"ImGui_ImplErhe_RenderDrawData()"};
 
@@ -542,6 +541,8 @@ auto imgui_color(const float r, const float g, const float b, const float a)
 bool ImGui_ImplErhe_Init(erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker)
 {
     imgui_renderer.pipeline_state_tracker = pipeline_state_tracker;
+
+    imgui_renderer.texture_unit_cache.create_dummy_texture();
 
     // Setup backend capabilities flags
     ImGuiIO& io = ImGui::GetIO();
@@ -712,12 +713,13 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
         ++draw_parameter_byte_offset;
     }
 
+    imgui_renderer.texture_unit_cache.reset();
+
     const size_t start_of_draw_parameter_block = draw_parameter_byte_offset;
 
     const ImVec2 clip_off   = draw_data->DisplayPos;
     const ImVec2 clip_scale = draw_data->FramebufferScale;
     Expects(imgui_renderer.samplers->array_size().value() <= Imgui_renderer::texture_unit_count);
-    Texture_unit_cache<Imgui_renderer::texture_unit_count> texture_unit_cache{};
 
     gl::enable(gl::Enable_cap::clip_distance0);
     gl::enable(gl::Enable_cap::clip_distance1);
@@ -750,7 +752,7 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
             {
                 if (pcmd->UserCallback == ImDrawCallback_ResetRenderState)
                 {
-                    ERHE_FATAL("not implemented");
+                    ERHE_FATAL("not implemented\n");
                 }
                 else
                 {
@@ -781,7 +783,7 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
 
                     // Write texture indices
                     const auto* texture = reinterpret_cast<erhe::graphics::Texture*>(pcmd->TextureId);
-                    const auto texture_unit = texture_unit_cache.allocate_texture_unit(texture);
+                    const auto texture_unit = imgui_renderer.texture_unit_cache.allocate_texture_unit(texture);
                     ERHE_VERIFY(texture_unit.has_value());
                     const uint32_t texture_indices[4] = { static_cast<uint32_t>(texture_unit.value()), 0, 0, 0 };
                     const gsl::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
@@ -826,7 +828,7 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
     // TODO viewport states is not currently in pipeline
     gl::viewport(0, 0, (GLsizei)fb_width, (GLsizei)fb_height);
 
-    texture_unit_cache.bind();
+    imgui_renderer.texture_unit_cache.bind();
 
     ERHE_VERIFY(draw_parameter_byte_offset > 0);
 

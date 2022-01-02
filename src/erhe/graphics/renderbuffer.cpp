@@ -46,13 +46,14 @@ Renderbuffer::Renderbuffer(
 
 Renderbuffer::~Renderbuffer() = default;
 
-void Renderbuffer::set_debug_label(std::string_view label)
+void Renderbuffer::set_debug_label(const std::string& label)
 {
+    m_debug_label = "(R) " + label;
     gl::object_label(
         gl::Object_identifier::renderbuffer,
         gl_name(),
         static_cast<GLsizei>(label.length()),
-        label.data()
+        m_debug_label.c_str()
     );
 }
 

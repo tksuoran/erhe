@@ -40,7 +40,8 @@ using namespace glm;
 using namespace std;
 
 Forward_renderer::Forward_renderer()
-    : Component{c_name}
+    : Component    {c_name}
+    , Base_renderer{std::string{c_name}}
 {
 }
 
@@ -390,7 +391,7 @@ auto Forward_renderer::select_pipeline(const Pass pass) const -> const erhe::gra
         case Pass::tag_depth_hidden_with_stencil             : return &m_pipeline_tool_hidden_stencil_pass;
         case Pass::tag_depth_visible_with_stencil            : return &m_pipeline_tool_visible_stencil_pass;
         default:
-            ERHE_FATAL("bad pass\n");
+            ERHE_FATAL("bad pass %04x\n", static_cast<unsigned int>(pass));
     }
 }
 
@@ -412,7 +413,7 @@ auto Forward_renderer::select_primitive_mode(const Pass pass) const -> erhe::pri
         case Pass::tag_depth_hidden_with_stencil             : return Primitive_mode::polygon_fill;
         case Pass::tag_depth_visible_with_stencil            : return Primitive_mode::polygon_fill;
         default:
-            ERHE_FATAL("bad pass\n");
+            ERHE_FATAL("bad pass %04x\n", static_cast<unsigned int>(pass));
     }
 }
 

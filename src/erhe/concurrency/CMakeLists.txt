@@ -15,7 +15,7 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(${_target} PUBLIC concurrentqueue)
 
-target_strict_cxx(${_target})
+erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
 
 foreach(source IN LISTS source_list)

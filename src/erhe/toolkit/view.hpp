@@ -170,6 +170,10 @@ public:
     {
     }
 
+    virtual void on_refresh()
+    {
+    }
+
     virtual void on_resize(int width, int height)
     {
         static_cast<void>(width);
@@ -249,6 +253,7 @@ public:
 
     void set_view      (View* view);
     void reset_view    (View* view);
+    void on_refresh    () override;
     void on_idle       () override;
     void on_close      () override;
     void on_resize     (const int width, const int height) override;

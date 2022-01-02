@@ -83,16 +83,16 @@ public:
         const int                        z = 0
     );
 
-    void set_debug_label(const std::string_view value);
+    void set_debug_label(const std::string& value);
 
-    [[nodiscard]] auto debug_label    () const -> const std::string&;
-    [[nodiscard]] auto width          () const -> int;
-    [[nodiscard]] auto height         () const -> int;
-    [[nodiscard]] auto depth          () const -> int;
-    [[nodiscard]] auto sample_count   () const -> int;
-    [[nodiscard]] auto target         () const -> gl::Texture_target;
-    [[nodiscard]] auto is_layered     () const -> bool;
-    [[nodiscard]] auto gl_name        () const -> GLuint;
+    [[nodiscard]] auto debug_label () const -> const std::string&;
+    [[nodiscard]] auto width       () const -> int;
+    [[nodiscard]] auto height      () const -> int;
+    [[nodiscard]] auto depth       () const -> int;
+    [[nodiscard]] auto sample_count() const -> int;
+    [[nodiscard]] auto target      () const -> gl::Texture_target;
+    [[nodiscard]] auto is_layered  () const -> bool;
+    [[nodiscard]] auto gl_name     () const -> GLuint;
 
 private:
     Gl_texture          m_handle;

@@ -82,7 +82,7 @@ private:
     {
         if (error != FT_Err_Ok)
         {
-            ERHE_FATAL("freetype error");
+            ERHE_FATAL("freetype error\n");
         }
     }
 

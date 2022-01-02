@@ -40,7 +40,10 @@ using namespace gl;
 using namespace glm;
 using namespace std;
 
-Base_renderer::Base_renderer() = default;
+Base_renderer::Base_renderer(const std::string& name)
+    : m_name{name}
+{
+}
 
 Base_renderer::~Base_renderer() = default;
 
@@ -61,14 +64,16 @@ void Base_renderer::create_frame_resources(
 
     const auto& shader_resources = *m_program_interface->shader_resources.get();
 
-    for (size_t i = 0; i < s_frame_resources_count; ++i)
+    for (size_t slot = 0; slot < s_frame_resources_count; ++slot)
     {
         m_frame_resources.emplace_back(
             shader_resources.material_block .size_bytes(), material_count,
             shader_resources.light_block    .size_bytes(), light_count,
             shader_resources.camera_block   .size_bytes(), camera_count,
             shader_resources.primitive_block.size_bytes(), primitive_count,
-            sizeof(gl::Draw_elements_indirect_command),    draw_count
+            sizeof(gl::Draw_elements_indirect_command),    draw_count,
+            m_name,
+            slot
         );
     }
 }

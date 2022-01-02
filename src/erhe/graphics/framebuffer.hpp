@@ -89,6 +89,7 @@ private:
     std::optional<Gl_framebuffer> m_gl_framebuffer;
     std::vector<Attachment>       m_attachments;
     std::thread::id               m_owner_thread;
+    std::string                   m_debug_label;
 
     static std::mutex                s_mutex;
     static std::vector<Framebuffer*> s_all_framebuffers;

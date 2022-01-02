@@ -30,6 +30,8 @@ public:
         return m_handle.gl_name();
     }
 
+    void set_debug_label(const std::string& value);
+
     gl::Texture_min_filter               min_filter    {gl::Texture_min_filter::nearest};
     gl::Texture_mag_filter               mag_filter    {gl::Texture_mag_filter::nearest};
 
@@ -49,7 +51,8 @@ protected:
     void apply();
 
 private:
-    Gl_sampler m_handle;
+    Gl_sampler  m_handle;
+    std::string m_debug_label;
 };
 
 class Sampler_hash

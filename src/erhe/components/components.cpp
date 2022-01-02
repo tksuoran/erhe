@@ -43,6 +43,18 @@ auto Components::add(const shared_ptr<Component>& component)
 {
     ERHE_VERIFY(component);
 
+    for (auto& c : components)
+    {
+        if (c->get_type_hash() == component->get_type_hash())
+        {
+            ERHE_FATAL(
+                "Component %s type has collision with %s\n",
+                c->name().data(),
+                component->name().data()
+            );
+        }
+    }
+
     component->register_as_component(this);
     components.insert(component);
 

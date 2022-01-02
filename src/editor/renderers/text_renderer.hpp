@@ -94,11 +94,12 @@ private:
         };
 
         Frame_resources(
-            size_t                                    vertex_count,
+            const size_t                              vertex_count,
             erhe::graphics::Shader_stages*            shader_stages,
             erhe::graphics::Vertex_attribute_mappings attribute_mappings,
             erhe::graphics::Vertex_format&            vertex_format,
-            erhe::graphics::Buffer*                   index_buffer
+            erhe::graphics::Buffer*                   index_buffer,
+            const size_t                              slot
         )
             : vertex_buffer{
                 gl::Buffer_target::array_buffer,
@@ -127,8 +128,8 @@ private:
                 .color_blend    = &erhe::graphics::Color_blend_state::color_blend_premultiplied,
             }
         {
-            vertex_buffer    .set_debug_label("Text Renderer Vertex");
-            projection_buffer.set_debug_label("Text Renderer Projection");
+            vertex_buffer    .set_debug_label(fmt::format("Text Renderer Vertex {}", slot));
+            projection_buffer.set_debug_label(fmt::format("Text Renderer Projection {}", slot));
         }
 
         Frame_resources(const Frame_resources&) = delete;

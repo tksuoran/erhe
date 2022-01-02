@@ -38,7 +38,8 @@ using namespace glm;
 using namespace std;
 
 Shadow_renderer::Shadow_renderer()
-    : Component{c_name}
+    : Component    {c_name}
+    , Base_renderer{std::string{c_name}}
 {
 }
 
@@ -104,7 +105,7 @@ void Shadow_renderer::initialize_component()
                 .depth           = s_max_light_count,
             }
         );
-        m_texture->set_debug_label("Shadow texture");
+        m_texture->set_debug_label("Shadowmaps");
         //float depth_clear_value = erhe::graphics::Instance::depth_clear_value;
         //gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
     }
@@ -115,7 +116,9 @@ void Shadow_renderer::initialize_component()
 
         Framebuffer::Create_info create_info;
         create_info.attach(gl::Framebuffer_attachment::depth_attachment, m_texture.get(), 0, static_cast<unsigned int>(i));
-        m_framebuffers.emplace_back(std::make_unique<Framebuffer>(create_info));
+        auto framebuffer = std::make_unique<Framebuffer>(create_info);
+        framebuffer->set_debug_label(fmt::format("Shadow {}", i));
+        m_framebuffers.emplace_back(std::move(framebuffer));
     }
 
     m_viewport = {
@@ -166,7 +169,7 @@ void Shadow_renderer::render(
     for (auto mesh_layer : mesh_layers)
     {
         update_primitive_buffer(*mesh_layer, shadow_filter);
-        auto draw_indirect_buffer_range = update_draw_indirect_buffer(
+        const auto draw_indirect_buffer_range = update_draw_indirect_buffer(
             *mesh_layer,
             Primitive_mode::polygon_fill,
             shadow_filter

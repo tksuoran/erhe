@@ -234,7 +234,7 @@ set_target_properties(
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
-target_strict_cxx(${_target})
+erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
 
 foreach(source IN LISTS source_list)

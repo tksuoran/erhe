@@ -21,7 +21,7 @@ auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function
         case gl::Depth_function::notequal: return gl::Depth_function::notequal;
         default:
         {
-            ERHE_FATAL("bad gl::Depth_function");
+            ERHE_FATAL("bad gl::Depth_function\n");
         }
     }
 }

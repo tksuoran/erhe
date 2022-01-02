@@ -45,7 +45,7 @@ gl::Internal_format to_gl(erhe::graphics::Image_format format)
         case erhe::graphics::Image_format::rgba8: return gl::Internal_format::rgba8;
         default:
         {
-            ERHE_FATAL("Bad image format\n");
+            ERHE_FATAL("Bad image format %04x\n", static_cast<unsigned int>(format));
         }
     }
     // unreachable return gl::Internal_format::rgba8;

@@ -27,7 +27,7 @@ auto glsl_token(gl::Attribute_type type) -> const char*
         case gl::Attribute_type::float_mat4:        return "mat4  ";
         default:
         {
-            ERHE_FATAL("TODO");
+            ERHE_FATAL("TODO\n");
         }
     }
 }

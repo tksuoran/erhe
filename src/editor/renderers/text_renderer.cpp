@@ -181,14 +181,15 @@ void Text_renderer::create_frame_resources()
     ERHE_PROFILE_FUNCTION
 
     constexpr size_t vertex_count{65536};
-    for (size_t i = 0; i < s_frame_resources_count; ++i)
+    for (size_t slot = 0; slot < s_frame_resources_count; ++slot)
     {
         m_frame_resources.emplace_back(
             vertex_count,
             m_shader_stages.get(),
             m_attribute_mappings,
             m_vertex_format,
-            m_index_buffer.get()
+            m_index_buffer.get(),
+            slot
         );
     }
 }

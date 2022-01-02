@@ -52,8 +52,7 @@ public:
 
         // Adds #version, #extensions, #defines, fragment outputs, uniform blocks, samplers,
         // and source (possibly read from file).
-        [[nodiscard]]
-        auto final_source(const Shader_stage& shader) const -> std::string;
+        [[nodiscard]] auto final_source(const Shader_stage& shader) const -> std::string;
 
         void add_interface_block(gsl::not_null<const Shader_resource*> uniform_block);
 
@@ -81,8 +80,7 @@ public:
         Prototype         (const Prototype&) = delete;
         void operator=    (const Prototype&) = delete;
 
-        [[nodiscard]]
-        auto is_valid() const -> bool
+        [[nodiscard]] auto is_valid() const -> bool
         {
             return m_link_succeeded;
         }

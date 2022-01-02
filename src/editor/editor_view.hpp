@@ -54,6 +54,7 @@ public:
 
     // Implements View
     void update        () override;
+    void on_refresh    () override;
     void on_enter      () override;
     void on_mouse_move (const double x, const double y) override;
     void on_mouse_click(const erhe::toolkit::Mouse_button button, const int count) override;
@@ -122,6 +123,7 @@ private:
     std::vector<Command*>                       m_commands;
     std::vector<Key_binding>                    m_key_bindings;
     std::vector<std::unique_ptr<Mouse_binding>> m_mouse_bindings;
+    bool                                        m_ready{false};
 };
 
 }

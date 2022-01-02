@@ -102,7 +102,7 @@ private:
             Read_complete
         };
 
-        Id_frame_resources()
+        Id_frame_resources(const size_t slot)
             : pixel_pack_buffer{
                 gl::Buffer_target::pixel_pack_buffer,
                 s_id_buffer_size,
@@ -110,7 +110,7 @@ private:
                 access_mask
             }
         {
-            pixel_pack_buffer.set_debug_label("ID Renderer Pixel Pack");
+            pixel_pack_buffer.set_debug_label(fmt::format("ID Pixel Pack {}", slot));
         }
 
         Id_frame_resources(const Id_frame_resources& other) = delete;

@@ -31,10 +31,11 @@ public:
     [[nodiscard]] auto height         () const -> unsigned int;
     [[nodiscard]] auto gl_name        () const -> unsigned int;
 
-    void set_debug_label(std::string_view label);
+    void set_debug_label(const std::string& label);
 
 private:
     Gl_renderbuffer     m_handle;
+    std::string         m_debug_label;
     gl::Internal_format m_internal_format;
     unsigned int        m_sample_count{0};
     unsigned int        m_width       {0};

@@ -134,6 +134,47 @@ void Editor_view::remove_command_binding(
 
 static constexpr std::string_view c_swap_buffers{"swap buffers"};
 
+void Editor_view::on_refresh()
+{
+    if (!m_configuration->show_window)
+    {
+        return;
+    }
+    if (!m_ready)
+    {
+        gl::clear_color(0.0f, 0.0f, 0.0f, 1.0f);
+        gl::clear(
+            gl::Clear_buffer_mask::color_buffer_bit |
+            gl::Clear_buffer_mask::depth_buffer_bit |
+            gl::Clear_buffer_mask::stencil_buffer_bit
+        );
+        m_window->get_context_window()->swap_buffers();
+        return;
+    }
+
+    if (m_configuration->gui)
+    {
+        ImGui_ImplErhe_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+        ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+    }
+
+    //m_editor_time     ->update();
+    //m_viewport_windows->update();
+    m_editor_rendering->render();
+
+    if (m_configuration->show_window && m_configuration->gui)
+    {
+        ImGui::EndFrame();
+        ImGui::Render();
+        m_editor_rendering->clear();
+        ImGui_ImplErhe_RenderDrawData(ImGui::GetDrawData());
+    }
+
+    m_window->get_context_window()->swap_buffers();
+}
+
 void Editor_view::update()
 {
     ERHE_PROFILE_FUNCTION
@@ -164,6 +205,8 @@ void Editor_view::update()
 
         m_window->get_context_window()->swap_buffers();
     }
+
+    m_ready = true;
 }
 
 void Editor_view::on_enter()

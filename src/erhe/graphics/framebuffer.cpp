@@ -241,11 +241,12 @@ auto Framebuffer::gl_name() const -> unsigned int
 
 void Framebuffer::set_debug_label(const std::string& label)
 {
+    m_debug_label = "(F) " + label;
     gl::object_label(
         gl::Object_identifier::framebuffer,
         gl_name(),
         static_cast<GLsizei>(label.length()),
-        label.c_str()
+        m_debug_label.c_str()
     );
 }
 

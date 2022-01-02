@@ -30,7 +30,7 @@ public:
     {
         if ((width < 0) || (height < 0) || (components < 1) || (components > 4))
         {
-            ERHE_FATAL("bad dimension");
+            ERHE_FATAL("bad dimension\n");
         }
 
         m_stride = m_width * m_components;
@@ -106,7 +106,7 @@ public:
             (c >= m_components)
         )
         {
-            ERHE_FATAL("invalid index");
+            ERHE_FATAL("invalid index\n");
         }
 
         const size_t offset =
@@ -127,7 +127,7 @@ public:
             (c >= m_components)
         )
         {
-            ERHE_FATAL("invalid index");
+            ERHE_FATAL("invalid index\n");
         }
 
         const size_t offset = static_cast<size_t>(
@@ -165,7 +165,7 @@ public:
             (dst_y + height > this->height())
         )
         {
-            ERHE_FATAL("invalid input");
+            ERHE_FATAL("invalid input\n");
         }
 
         for (int iy = 0; iy < height; ++iy)
@@ -339,7 +339,7 @@ public:
             (src_components < 0)
         )
         {
-            ERHE_FATAL("invalid index");
+            ERHE_FATAL("invalid index\n");
         }
 
         // fmt::print(
@@ -428,7 +428,7 @@ public:
             (src_components < 0)
         )
         {
-            ERHE_FATAL("invalid index");
+            ERHE_FATAL("invalid index\n");
         }
 
         const int dst_width {height};

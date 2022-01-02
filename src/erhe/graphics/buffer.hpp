@@ -45,7 +45,7 @@ public:
     void unmap                () noexcept;
     void flush_bytes          (const size_t byte_offset, const size_t byte_count) noexcept;
     void flush_and_unmap_bytes(const size_t byte_count) noexcept;
-    void set_debug_label      (std::string_view label) noexcept;
+    void set_debug_label      (const std::string& label) noexcept;
     void dump                 () const noexcept;
 
     template <typename T>

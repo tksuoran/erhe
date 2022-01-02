@@ -3,6 +3,7 @@
 #include "application.hpp"
 #include "editor_time.hpp"
 #include "editor_view.hpp"
+#include "graphics/gl_context_provider.hpp"
 #include "log.hpp"
 #include "window.hpp"
 
@@ -27,6 +28,7 @@ Editor_tools::~Editor_tools() = default;
 void Editor_tools::connect()
 {
     require<Application>();
+    require<Gl_context_provider>();
     require<erhe::graphics::OpenGL_state_tracker>();
     require<Window>();
     m_editor_view = get<Editor_view>();
@@ -35,6 +37,8 @@ void Editor_tools::connect()
 
 void Editor_tools::initialize_component()
 {
+    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+
     IMGUI_CHECKVERSION();
     m_imgui_context = ImGui::CreateContext();
     ImGuiIO& io     = ImGui::GetIO();

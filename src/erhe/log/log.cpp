@@ -324,7 +324,7 @@ void Category::write(bool indent, const std::string& text)
 
             default:
             {
-                ERHE_FATAL("Bad log colorizer");
+                ERHE_FATAL("Bad log colorizer\n");
             }
         }
         Log::set_text_color(Color::GRAY);

@@ -2,6 +2,7 @@
 #include "configuration.hpp"
 #include "graphics/gl_context_provider.hpp"
 #include "log.hpp"
+
 #include "renderers/program_interface.hpp"
 #include "renderers/mesh_memory.hpp"
 
@@ -40,6 +41,7 @@ using namespace std;
 
 Id_renderer::Id_renderer()
     : erhe::components::Component{c_name}
+    , Base_renderer              {std::string{c_name}}
 {
 }
 
@@ -112,9 +114,9 @@ void Id_renderer::create_id_frame_resources()
 {
     ERHE_PROFILE_FUNCTION
 
-    for (size_t i = 0; i < s_frame_resources_count; ++i)
+    for (size_t slot = 0; slot < s_frame_resources_count; ++slot)
     {
-        m_id_frame_resources.emplace_back();
+        m_id_frame_resources.emplace_back(slot);
     }
 }
 
@@ -152,13 +154,13 @@ void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
                 viewport.width,
                 viewport.height
             );
-            m_color_renderbuffer->set_debug_label("ID Renderer Color Renderbuffer");
-            m_depth_renderbuffer->set_debug_label("ID Renderer Depth Renderbuffer");
+            m_color_renderbuffer->set_debug_label("ID Color");
+            m_depth_renderbuffer->set_debug_label("ID Depth");
             Framebuffer::Create_info create_info;
             create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_color_renderbuffer.get());
             create_info.attach(gl::Framebuffer_attachment::depth_attachment,  m_depth_renderbuffer.get());
             m_framebuffer = std::make_unique<Framebuffer>(create_info);
-            m_framebuffer->set_debug_label("ID Renderer");
+            m_framebuffer->set_debug_label("ID");
         }
     }
 
@@ -188,13 +190,13 @@ void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
                     .height          = viewport.height
                 }
             );
-            m_color_texture->set_debug_label("ID Renderer Color Texture");
-            m_depth_texture->set_debug_label("ID Renderer Depth Texture");
+            m_color_texture->set_debug_label("ID Color");
+            m_depth_texture->set_debug_label("ID Depth");
             Framebuffer::Create_info create_info;
             create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_color_texture.get());
             create_info.attach(gl::Framebuffer_attachment::depth_attachment,  m_depth_texture.get());
             m_framebuffer = std::make_unique<Framebuffer>(create_info);
-            m_framebuffer->set_debug_label("ID Renderer");
+            m_framebuffer->set_debug_label("ID");
             constexpr float clear_value[4] = {1.0f, 0.0f, 0.0f, 1.0f };
             gl::clear_tex_image(
                 m_color_texture->gl_name(),

@@ -683,7 +683,7 @@ auto Trs_tool::get_plane_normal(const bool world) const -> dvec3
         case Handle::e_handle_rotate_z:
         case Handle::e_handle_translate_xy: return world ? glm::dvec3{0.0, 0.0, 1.0} : m_drag.initial_world_from_local[2];
         default:
-            ERHE_FATAL("bad handle for plane");
+            ERHE_FATAL("bad handle for plane %04x\n", static_cast<unsigned int>(m_active_handle));
             break;
     }
 }
@@ -699,7 +699,7 @@ auto Trs_tool::get_plane_side(const bool world) const -> dvec3
         case Handle::e_handle_rotate_z:
         case Handle::e_handle_translate_xy: return world ? glm::dvec3{1.0, 0.0, 0.0} : m_drag.initial_world_from_local[0];
         default:
-            ERHE_FATAL("bad handle for plane");
+            ERHE_FATAL("bad handle for plane %04x\n", static_cast<unsigned int>(m_active_handle));
             break;
     }
 }
@@ -747,7 +747,7 @@ auto Trs_tool::offset_plane_origo(const Handle handle, const dvec3 p) const -> d
         case Handle::e_handle_rotate_y: return dvec3{0.0f,  p.y, 0.0f};
         case Handle::e_handle_rotate_z: return dvec3{0.0f, 0.0f,  p.z};
         default:
-            ERHE_FATAL("bad handle for rotate");
+            ERHE_FATAL("bad handle for rotate %04x\n", static_cast<unsigned int>(handle));
             break;
     }
 }
@@ -764,7 +764,7 @@ auto Trs_tool::project_to_offset_plane(
         case Handle::e_handle_rotate_y: return dvec3{Q.x, P.y, Q.z};
         case Handle::e_handle_rotate_z: return dvec3{Q.x, Q.y, P.z};
         default:
-            ERHE_FATAL("bad handle for rotate");
+            ERHE_FATAL("bad handle for rotate %04x\n", static_cast<unsigned int>(handle));
             break;
     }
 }
@@ -1109,7 +1109,9 @@ auto Trs_tool::get_handle_type(const Handle handle) const -> Handle_type
         case Handle::e_handle_rotate_z:     return Handle_type::e_handle_type_rotate;
         case Handle::e_handle_none: return Handle_type::e_handle_type_none;
         default:
-            ERHE_FATAL("bad handle");
+        {
+            ERHE_FATAL("bad handle %04x\n", static_cast<unsigned int>(handle));
+        }
     }
 }
 
@@ -1125,7 +1127,9 @@ auto Trs_tool::get_axis_color(const Handle handle) const -> uint32_t
         case Handle::e_handle_rotate_z:    return 0xffff0000;
         case Handle::e_handle_none:
         default:
-            ERHE_FATAL("bad handle");
+        {
+            ERHE_FATAL("bad handle %04x\n", static_cast<unsigned int>(handle));
+        }
     }
 }
 

@@ -33,7 +33,8 @@ class Headset_view_resources
 public:
     Headset_view_resources(
         erhe::xr::Render_view& render_view,
-        Editor_rendering&      rendering
+        Editor_rendering&      rendering,
+        const size_t           slot
     );
 
     void update(

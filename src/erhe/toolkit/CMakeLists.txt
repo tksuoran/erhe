@@ -70,7 +70,7 @@ if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
     target_link_libraries(${_target} PRIVATE SuperluminalAPI)
 endif ()
 
-target_strict_cxx(${_target})
+erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
 
 foreach(source IN LISTS source_list)

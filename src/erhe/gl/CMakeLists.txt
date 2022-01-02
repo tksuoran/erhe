@@ -100,7 +100,7 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
 endif ()
 
 target_compile_definitions(${_target} PUBLIC -DERHE_TRACY_GL)
-target_strict_cxx(${_target})
+erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
 
 foreach (source IN LISTS source_list)

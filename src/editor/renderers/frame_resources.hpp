@@ -38,7 +38,9 @@ public:
         const size_t light_stride,     const size_t light_count,
         const size_t camera_stride,    const size_t camera_count,
         const size_t primitive_stride, const size_t primitive_count,
-        const size_t draw_stride,      const size_t draw_count
+        const size_t draw_stride,      const size_t draw_count,
+        const std::string& name,
+        const size_t slot
     )
         : material_buffer     {gl::Buffer_target::uniform_buffer,        material_count  * material_stride,  storage_mask, access_mask}
         , light_buffer        {gl::Buffer_target::uniform_buffer,        light_count     * light_stride,     storage_mask, access_mask}
@@ -46,11 +48,11 @@ public:
         , primitive_buffer    {gl::Buffer_target::shader_storage_buffer, primitive_count * primitive_stride, storage_mask, access_mask}
         , draw_indirect_buffer{gl::Buffer_target::draw_indirect_buffer,  draw_count      * draw_stride,      storage_mask, access_mask}
     {
-        material_buffer     .set_debug_label("Material");
-        light_buffer        .set_debug_label("Light");
-        camera_buffer       .set_debug_label("Camera");
-        primitive_buffer    .set_debug_label("Primitive");
-        draw_indirect_buffer.set_debug_label("Draw Indirect");
+        material_buffer     .set_debug_label(fmt::format("{} Material {}",      name, slot));
+        light_buffer        .set_debug_label(fmt::format("{} Light {}",         name, slot));
+        camera_buffer       .set_debug_label(fmt::format("{} Camera {}",        name, slot));
+        primitive_buffer    .set_debug_label(fmt::format("{} Primitive {}",     name, slot));
+        draw_indirect_buffer.set_debug_label(fmt::format("{} Draw Indirect {}", name, slot));
     }
 
     Frame_resources(const Frame_resources&) = delete;

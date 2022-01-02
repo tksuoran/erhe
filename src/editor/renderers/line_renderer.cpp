@@ -41,6 +41,8 @@ using glm::vec4;
 
 Line_renderer::Line_renderer()
     : Component{c_name}
+    , visible  {"visible"}
+    , hidden   {"hidden"}
 {
 }
 
@@ -164,7 +166,10 @@ void Line_renderer::Pipeline::initialize(Shader_monitor* shader_monitor)
     }
 }
 
-Line_renderer::Style::Style() = default;
+Line_renderer::Style::Style(const char* name)
+    : m_name{name}
+{
+}
 
 void Line_renderer::Style::create_frame_resources(
     Pipeline*                  pipeline,
@@ -178,7 +183,7 @@ void Line_renderer::Style::create_frame_resources(
     constexpr size_t vertex_count  = 65536;
     constexpr size_t view_stride   = 256;
     constexpr size_t view_count    = 16;
-    for (size_t i = 0; i < s_frame_resources_count; ++i)
+    for (size_t slot = 0; slot < s_frame_resources_count; ++slot)
     {
         m_frame_resources.emplace_back(
             reverse_depth,
@@ -187,7 +192,9 @@ void Line_renderer::Style::create_frame_resources(
             vertex_count,
             pipeline->shader_stages.get(),
             pipeline->attribute_mappings,
-            pipeline->vertex_format
+            pipeline->vertex_format,
+            m_name,
+            slot
         );
     }
 }

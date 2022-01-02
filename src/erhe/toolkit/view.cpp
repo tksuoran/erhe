@@ -201,6 +201,14 @@ void Root_view::on_close()
     }
 }
 
+void Root_view::on_refresh()
+{
+    if (m_view != nullptr)
+    {
+        m_view->on_refresh();
+    }
+}
+
 void Root_view::on_resize(const int width, const int height)
 {
     if (m_view != nullptr)

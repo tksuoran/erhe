@@ -33,7 +33,8 @@ using namespace erhe::graphics;
 
 Headset_view_resources::Headset_view_resources(
     erhe::xr::Render_view& render_view,
-    Editor_rendering&      rendering
+    Editor_rendering&      rendering,
+    const size_t           slot
 )
 {
     // log_headset.trace(
@@ -60,7 +61,7 @@ Headset_view_resources::Headset_view_resources(
             .wrap_texture_name = render_view.color_texture
         }
     );
-    color_texture->set_debug_label("Headset_view_resources::color_texture");
+    color_texture->set_debug_label(fmt::format("XR color {}", slot));
 
     depth_texture = std::make_shared<Texture>(
         Texture_create_info{
@@ -71,7 +72,7 @@ Headset_view_resources::Headset_view_resources(
             .wrap_texture_name = render_view.depth_texture,
         }
     );
-    depth_texture->set_debug_label("Headset_view_resources::depth_texture");
+    depth_texture->set_debug_label(fmt::format("XR depth {}", slot));
 
     // depth_stencil_renderbuffer = std::make_unique<Renderbuffer>(
     //     gl::Internal_format::depth24_stencil8,
@@ -85,7 +86,7 @@ Headset_view_resources::Headset_view_resources(
     create_info.attach(gl::Framebuffer_attachment::depth_attachment,  depth_texture.get());
     //create_info.attach(gl::Framebuffer_attachment::stencil_attachment, depth_stencil_renderbuffer.get());
     framebuffer = std::make_unique<Framebuffer>(create_info);
-    framebuffer->set_debug_label("Headset_view_resources");
+    framebuffer->set_debug_label(fmt::format("XR {}", slot));
 
     if (!framebuffer->check_status())
     {
@@ -202,7 +203,11 @@ auto Headset_renderer::get_headset_view_resources(
     auto i = std::find_if(m_view_resources.begin(), m_view_resources.end(), match_color_texture);
     if (i == m_view_resources.end())
     {
-        auto& j = m_view_resources.emplace_back(render_view, *m_editor_rendering);
+        auto& j = m_view_resources.emplace_back(
+            render_view,
+            *m_editor_rendering,
+            m_view_resources.size()
+        );
         return j;
     }
     return *i;

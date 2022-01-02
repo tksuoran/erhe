@@ -14,9 +14,9 @@ Gl_texture::Gl_texture(gl::Texture_target target)
 
 Gl_texture::Gl_texture(gl::Texture_target target, GLuint wrap_name)
     : m_gl_name{wrap_name}
-    , m_owned  {wrap_name != 0}
+    , m_owned  {wrap_name == 0}
 {
-    if (!m_owned)
+    if (m_owned)
     {
         gl::create_textures(target, 1, &m_gl_name);
     }

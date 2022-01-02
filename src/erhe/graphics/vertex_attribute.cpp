@@ -26,7 +26,9 @@ auto Vertex_attribute::desc(const Usage_type usage)
         case Usage_type::tex_coord:      return "tex_coord";
         case Usage_type::id:             return "id";
         default:
-            ERHE_FATAL("Bad vertex attribute usage");
+        {
+            ERHE_FATAL("Bad vertex attribute usage\n");
+        }
     }
 }
 

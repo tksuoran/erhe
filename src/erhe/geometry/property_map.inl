@@ -84,7 +84,7 @@ Property_map<Key_type, Value_type>::get(Key_type key) const -> Value_type
     const size_t i = static_cast<size_t>(key);
     if ((values.size() <= i) || !present[i])
     {
-        ERHE_FATAL("Value not found");
+        ERHE_FATAL("Value not found\n");
     }
     return values[i];
 }

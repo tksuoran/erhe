@@ -100,7 +100,7 @@ public:
 
     using Material_collection = std::vector<std::shared_ptr<erhe::primitive::Material>>;
 
-    Base_renderer();
+    Base_renderer(const std::string& name);
     virtual ~Base_renderer();
 
     static constexpr size_t s_frame_resources_count = 4;
@@ -164,6 +164,7 @@ public:
 private:
     Program_interface*           m_program_interface{nullptr};
 
+    std::string                  m_name;
     std::vector<Frame_resources> m_frame_resources;
     size_t                       m_current_frame_resource_slot{0};
 

@@ -48,7 +48,7 @@ auto component_count(const gl::Pixel_format pixel_format) -> size_t
 
         default:
         {
-            ERHE_FATAL("Bad pixel format");
+            ERHE_FATAL("Bad pixel format\n");
         }
     }
 }
@@ -78,7 +78,7 @@ auto byte_count(const gl::Pixel_type pixel_type) -> size_t
 
         default:
         {
-            ERHE_FATAL("Bad pixel type");
+            ERHE_FATAL("Bad pixel type\n");
         }
     }
 };
@@ -143,7 +143,7 @@ auto get_upload_pixel_byte_count(
             return component_count(entry.format) * byte_count(entry.type);
         }
     }
-    ERHE_FATAL("Bad internal format");
+    ERHE_FATAL("Bad internal format\n");
 }
 
 auto get_format_and_type(
@@ -197,7 +197,7 @@ auto Texture::storage_dimensions(const gl::Texture_target target) -> int
 
         default:
         {
-            ERHE_FATAL("Bad texture target");
+            ERHE_FATAL("Bad texture target\n");
         }
     }
 }
@@ -235,7 +235,7 @@ auto Texture::mipmap_dimensions(const gl::Texture_target target) -> int
 
         default:
         {
-            ERHE_FATAL("Bad texture target");
+            ERHE_FATAL("Bad texture target\n");
         }
     }
 }
@@ -305,7 +305,7 @@ auto Texture_create_info::calculate_level_count() const -> int
     {
         if (width == 0)
         {
-            ERHE_FATAL("zero texture width");
+            ERHE_FATAL("zero texture width\n");
         }
     }
 
@@ -313,7 +313,7 @@ auto Texture_create_info::calculate_level_count() const -> int
     {
         if (height == 0)
         {
-            ERHE_FATAL("zero texture height");
+            ERHE_FATAL("zero texture height\n");
         }
     }
 
@@ -321,7 +321,7 @@ auto Texture_create_info::calculate_level_count() const -> int
     {
         if (depth == 0)
         {
-            ERHE_FATAL("zero texture depth");
+            ERHE_FATAL("zero texture depth\n");
         }
     }
     
@@ -465,7 +465,7 @@ Texture::Texture(const Create_info& create_info)
 
         default:
         {
-            ERHE_FATAL("Bad texture target");
+            ERHE_FATAL("Bad texture target\n");
         }
     }
 }
@@ -508,7 +508,7 @@ void Texture::upload(
 
         default:
         {
-            ERHE_FATAL("Bad texture target");
+            ERHE_FATAL("Bad texture target\n");
         }
     }
 }
@@ -562,14 +562,14 @@ void Texture::upload(
 
         default:
         {
-            ERHE_FATAL("Bad texture target");
+            ERHE_FATAL("Bad texture target\n");
         }
     }
 }
 
-void Texture::set_debug_label(const std::string_view value)
+void Texture::set_debug_label(const std::string& value)
 {
-    m_debug_label = value;
+    m_debug_label = "(T) " + value;
     gl::object_label(
         gl::Object_identifier::texture,
         gl_name(),
@@ -613,7 +613,7 @@ auto Texture::is_layered() const -> bool
 
         default:
         {
-            ERHE_FATAL("Bad texture target");
+            ERHE_FATAL("Bad texture target\n");
         }
     }
 }

@@ -26,7 +26,9 @@ auto Frame_controller::get_controller(const Control control) -> Controller&
         case Control::rotate_y   : return rotate_y;
         case Control::rotate_z   : return rotate_z;
         default:
-            ERHE_FATAL("bad control");
+        {
+            ERHE_FATAL("bad control %04x\n", static_cast<unsigned int>(control));
+        }
     }
 }
 

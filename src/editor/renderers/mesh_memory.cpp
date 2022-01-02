@@ -61,8 +61,8 @@ void Mesh_memory::initialize_component()
             storage_mask
         );
     }
-    gl_vertex_buffer->set_debug_label("Scene Manager Vertex");
-    gl_index_buffer ->set_debug_label("Scene Manager Index");
+    gl_vertex_buffer->set_debug_label("Mesh Memory Vertex");
+    gl_index_buffer ->set_debug_label("Mesh Memory Index");
 
     gl_buffer_sink = std::make_unique<erhe::primitive::Gl_buffer_sink>(
         *gl_buffer_transfer_queue.get(),

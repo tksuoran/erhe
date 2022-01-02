@@ -119,9 +119,9 @@ auto Buffer::target() const noexcept -> gl::Buffer_target
     return m_target;
 }
 
-void Buffer::set_debug_label(std::string_view label) noexcept
+void Buffer::set_debug_label(const std::string& label) noexcept
 {
-    m_debug_label = std::move(label);
+    m_debug_label = "(B) " + label;
     gl::object_label(
         gl::Object_identifier::buffer,
         gl_name(),

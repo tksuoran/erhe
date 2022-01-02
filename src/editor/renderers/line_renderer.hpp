@@ -167,7 +167,9 @@ private:
             const size_t                              vertex_count,
             erhe::graphics::Shader_stages*            shader_stages,
             erhe::graphics::Vertex_attribute_mappings attribute_mappings,
-            erhe::graphics::Vertex_format&            vertex_format
+            erhe::graphics::Vertex_format&            vertex_format,
+            const std::string&                        style_name,
+            const size_t                              slot
         )
             : vertex_buffer{
                 gl::Buffer_target::array_buffer,
@@ -207,8 +209,8 @@ private:
                 nullptr
             }
         {
-            vertex_buffer.set_debug_label("Line Renderer Vertex");
-            view_buffer.set_debug_label("Line Renderer View");
+            vertex_buffer.set_debug_label(fmt::format("Line Renderer {} Vertex {}", style_name, slot));
+            view_buffer  .set_debug_label(fmt::format("Line Renderer {} View {}", style_name, slot));
         }
 
         Frame_resources(const Frame_resources&) = delete;
@@ -260,7 +262,7 @@ public:
     class Style
     {
     public:
-        Style();
+        Style(const char* name);
         Style         (const Style&) = delete; // Due to std::deque<Frame_resources> m_frame_resources
         void operator=(const Style&) = delete; // Style must be non-copyable and non-movable.
         Style         (Style&&)      = delete;
@@ -332,7 +334,8 @@ public:
         );
 
         std::deque<Frame_resources> m_frame_resources;
-        Pipeline*                   m_pipeline{nullptr};
+        std::string                 m_name;
+        Pipeline*                   m_pipeline  {nullptr};
         size_t                      m_line_count{0};
         Buffer_writer               m_view_writer;
         Buffer_writer               m_vertex_writer;

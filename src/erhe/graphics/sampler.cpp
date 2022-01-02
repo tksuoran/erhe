@@ -31,6 +31,17 @@ Sampler::Sampler(
     apply();
 }
 
+void Sampler::set_debug_label(const std::string& value)
+{
+    m_debug_label = "(S) " + value;
+    gl::object_label(
+        gl::Object_identifier::sampler,
+        gl_name(),
+        static_cast<GLsizei>(m_debug_label.length()),
+        m_debug_label.c_str()
+    );
+}
+
 void Sampler::apply()
 {
     Expects(m_handle.gl_name() != 0);
