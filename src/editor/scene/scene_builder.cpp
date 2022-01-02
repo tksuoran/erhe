@@ -1,5 +1,8 @@
 #include "scene/scene_builder.hpp"
+#include "log.hpp"
+
 #include "graphics/gl_context_provider.hpp"
+#include "parsers/gltf.hpp"
 #include "parsers/json_polyhedron.hpp"
 #include "parsers/wavefront_obj.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -12,34 +15,38 @@
 #include "tools/fly_camera_tool.hpp"
 #include "windows/brushes.hpp"
 #include "windows/materials.hpp"
-#include "log.hpp"
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
 #include <erhe/concurrency/concurrent_queue.hpp>
 #include <erhe/concurrency/serial_queue.hpp>
+
 #include "erhe/geometry/shapes/box.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/disc.hpp"
 #include "erhe/geometry/shapes/sphere.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/geometry/shapes/regular_polyhedron.hpp"
+
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
+
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/primitive/material.hpp"
+
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/iworld.hpp"
+
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
+
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
-
 
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/color_space.hpp>
@@ -202,6 +209,7 @@ void Scene_builder::make_brushes()
         }
     );
 
+    constexpr bool gltf_files              = false; // WIP
     constexpr bool obj_files               = true;
     constexpr bool platonic_solids         = true;
     constexpr bool sphere                  = true;
@@ -212,6 +220,33 @@ void Scene_builder::make_brushes()
     constexpr bool johnson_solids          = false;
 
     constexpr float object_scale = 1.0f;
+
+    if constexpr (gltf_files)
+    {
+        execution_queue.enqueue(
+            [this]()
+            {
+                ERHE_PROFILE_SCOPE("parse gltf files");
+
+                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                constexpr bool instantiate = true;
+
+                const char* files_names[] = {
+                    "res/models/SM_Deccer_Cubes.gltf"
+                };
+                for (auto* path : files_names)
+                {
+                    auto geometries = parse_gltf(path);
+
+                    for (auto& geometry : geometries)
+                    {
+                        geometry->compute_polygon_normals();
+                        make_brush(instantiate, move(geometry), context);
+                    }
+                }
+            }
+        );
+    }
 
     if constexpr (obj_files)
     {

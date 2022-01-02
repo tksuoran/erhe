@@ -37,7 +37,7 @@ void Log_window::initialize_component()
     log_programs    .set_sink(this);
     log_textures    .set_sink(this);
     log_input       .set_sink(this);
-    log_parsers     .set_sink(this);
+    //log_parsers     .set_sink(this);
     log_render      .set_sink(this);
     //log_trs_tool    .set_sink(this);
     log_tools       .set_sink(this);

@@ -91,6 +91,14 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 
+FetchContent_Declare(
+    glTF-SDK
+    GIT_REPOSITORY https://github.com/microsoft/glTF-SDK.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
 # Not yet in use
 FetchContent_Declare(
     googletest

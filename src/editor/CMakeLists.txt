@@ -34,6 +34,8 @@ set(source_list
     parsers/json_polyhedron.hpp
     parsers/wavefront_obj.cpp
     parsers/wavefront_obj.hpp
+    parsers/gltf.cpp
+    parsers/gltf.hpp
 
     renderers/base_renderer.cpp
     renderers/base_renderer.hpp
@@ -222,6 +224,10 @@ endif ()
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
     target_link_libraries(${_target} PRIVATE SuperluminalAPI)
+endif ()
+
+if (${ERHE_GLTF_LIBRARY} STREQUAL "glTF-SDK")
+    target_link_libraries(${_target} PRIVATE GLTFSDK)
 endif ()
 
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

@@ -26,8 +26,9 @@ public:
 
     explicit Json_library(const std::filesystem::path& path);
 
-    [[nodiscard]]
-    auto make_geometry(const std::string& key_name) const -> erhe::geometry::Geometry;
+    [[nodiscard]] auto make_geometry(
+        const std::string& key_name
+    ) const -> erhe::geometry::Geometry;
 
     std::vector<std::string> names;       // all meshes
     std::vector<Category>    categories;  // categories
@@ -35,6 +36,10 @@ public:
 private:
     nlohmann::json m_json;
 };
-erhe::geometry::Geometry make_json_polyhedron(const std::filesystem::path& path, const std::string& entry);
+
+auto make_json_polyhedron(
+    const std::filesystem::path& path,
+    const std::string&           entry
+) -> erhe::geometry::Geometry;
 
 }

@@ -38,6 +38,7 @@ set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Eit
 set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree or none"             "none"     "embree;none")
 set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either bullet or none"              "none"     "bullet;none")
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either superluminal, tracy or none" "none"     "superluminal;tracy;none")
+set_option(ERHE_GLTF_LIBRARY               "GLTF library to use with erhe. Either glTF-SDK, or none"              "none"     "glTF-SDK;none")
 
 # These are in cmake/ directory
 message("Compiler = ${CMAKE_CXX_COMPILER_ID}")
@@ -75,6 +76,13 @@ message("Fetching OpenXR-SDK")
 FetchContent_MakeAvailable(OpenXR-SDK)
 message("Fetching RectangleBinPack")
 FetchContent_MakeAvailable(RectangleBinPack)
+
+if (${ERHE_GLTF_LIBRARY} STREQUAL "glTF-SDK")
+    message("Fetching glTF-SDK")
+    FetchContent_MakeAvailable(glTF-SDK)
+    message(STATUS "Erhe configured to use glTF-SDK for glTF.")
+    add_definitions(-DERHE_GLTF_LIBRARY_GLTF_SDK)
+endif ()
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
     message("Fetching tracy")

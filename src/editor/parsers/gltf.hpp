@@ -12,8 +12,7 @@ namespace erhe::geometry
 
 namespace editor {
 
-[[nodiscard]] auto parse_obj_geometry(
-    const std::filesystem::path& path
-) -> std::vector<std::shared_ptr<erhe::geometry::Geometry>>;
+[[nodiscard]] auto parse_gltf(const std::filesystem::path& path)
+-> std::vector<std::shared_ptr<erhe::geometry::Geometry>>;
 
 }

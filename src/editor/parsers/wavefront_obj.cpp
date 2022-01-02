@@ -1,6 +1,7 @@
 #include "parsers/wavefront_obj.hpp"
 #include "log.hpp"
 
+#include "erhe/geometry/geometry.hpp"
 #include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -217,6 +218,20 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                     case Command::Object_name:
                         // TODO Choose Geometry splitting based on o / g / s / mg
                         //      Currently fixed to use g
+                        token_last_pos = line.find_first_not_of(end_of_line, token_pos);
+                        token_pos      = line.find_first_of    (end_of_line, token_last_pos);
+                        if (token_last_pos != std::string::npos || token_pos != std::string::npos)
+                        {
+                            const auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
+                            geometry         = std::make_shared<erhe::geometry::Geometry>(arg_text);
+                            point_positions  = geometry->point_attributes().create<glm::vec3>(c_point_locations);
+                            point_colors     = geometry->point_attributes().create<glm::vec3>(c_point_colors);
+                            corner_normals   = geometry->corner_attributes().create<glm::vec3>(c_corner_normals);
+                            corner_texcoords = geometry->corner_attributes().create<glm::vec2>(c_corner_texcoords);
+                            result.push_back(geometry);
+                            obj_point_to_geometry_point.clear();
+                            log_parsers.trace("arg: {}\n", arg_text);
+                        }
                         break;
 
                     case Command::Group_name:
