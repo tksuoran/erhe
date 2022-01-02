@@ -53,8 +53,8 @@ public:
     [[nodiscard]] auto texture () const -> erhe::graphics::Texture*;
     [[nodiscard]] auto viewport() const -> erhe::scene::Viewport;
 
-    static constexpr size_t s_max_light_count    = 2;
-    static constexpr size_t s_texture_resolution = 3 * 1024;
+    static constexpr size_t s_max_light_count    = 6;
+    static constexpr size_t s_texture_resolution = 4 * 1024;
     static constexpr bool   s_enable             = true;
 
 private:

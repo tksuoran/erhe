@@ -262,7 +262,7 @@ public:
     class Style
     {
     public:
-        Style(const char* name);
+        explicit Style(const char* name);
         Style         (const Style&) = delete; // Due to std::deque<Frame_resources> m_frame_resources
         void operator=(const Style&) = delete; // Style must be non-copyable and non-movable.
         Style         (Style&&)      = delete;

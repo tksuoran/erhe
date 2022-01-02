@@ -102,7 +102,7 @@ private:
             Read_complete
         };
 
-        Id_frame_resources(const size_t slot)
+        explicit Id_frame_resources(const size_t slot)
             : pixel_pack_buffer{
                 gl::Buffer_target::pixel_pack_buffer,
                 s_id_buffer_size,

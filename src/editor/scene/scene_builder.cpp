@@ -116,8 +116,8 @@ void Scene_builder::setup_cameras()
 {
     auto camera_a = make_camera(
         "Camera A",
-        glm::vec3{0.0f, 1.40f, 1.0f},
-        glm::vec3{0.0f, 1.40f, 0.0f}
+        glm::vec3{0.0f, 4.0f, 10.0f},
+        glm::vec3{0.0f, 0.5f, 0.0f}
     );
     make_camera(
         "Camera B",
@@ -140,7 +140,11 @@ void Scene_builder::make_brushes()
     //erhe::concurrency::Concurrent_queue execution_queue;
     erhe::concurrency::Serial_queue execution_queue;
 
-    auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{5.0f, 0.5f, 5.0f});
+    constexpr float floor_size = 20.0f;
+
+    auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
+        0.5f * glm::vec3{floor_size, 1.0f, floor_size}
+    );
     //auto table_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{1.0f, 0.5f, 0.5f});
 
     // Otherwise it will be destructed when leave add_floor() scope
@@ -150,7 +154,7 @@ void Scene_builder::make_brushes()
 
     // Floor
     execution_queue.enqueue(
-        [this, &floor_box_shape/*, &table_box_shape*/]()
+        [this, floor_size, &floor_box_shape/*, &table_box_shape*/]()
         {
             ERHE_PROFILE_SCOPE("Floor brush");
 
@@ -159,8 +163,8 @@ void Scene_builder::make_brushes()
 
             auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
                 make_box(
-                    vec3{10.0f, 1.0f, 10.0f},
-                    ivec3{10, 1, 10}
+                    vec3{floor_size, 1.0f, floor_size},
+                    ivec3{static_cast<int>(floor_size), 1, static_cast<int>(floor_size)}
                 )
             );
             floor_geometry->name = "floor";
@@ -207,7 +211,7 @@ void Scene_builder::make_brushes()
     //constexpr bool anisotropic_test_object = false;
     constexpr bool johnson_solids          = false;
 
-    constexpr float object_scale = 0.5f;
+    constexpr float object_scale = 1.0f;
 
     if constexpr (obj_files)
     {
@@ -594,7 +598,8 @@ void Scene_builder::make_mesh_nodes()
     int group_width = 2;
     int group_depth = 2;
 
-    const float gap = 0.2f;
+    constexpr float gap          = 0.2f;
+    constexpr float bottom_y_pos = 0.01f;
 
     glm::ivec2 max_corner;
     for (;;)
@@ -649,7 +654,7 @@ void Scene_builder::make_mesh_nodes()
               z    += 0.5f * static_cast<float>(entry.rectangle.height) / 256.0f;
               x    -= 0.5f * static_cast<float>(max_corner.x) / 256.0f;
               z    -= 0.5f * static_cast<float>(max_corner.y) / 256.0f;
-        float y     = 0.5f - brush->gl_primitive_geometry.bounding_box_min.y;
+        float y     = bottom_y_pos - brush->gl_primitive_geometry.bounding_box_min.y;
         //x -= 0.5f * static_cast<float>(group_width);
         //z -= 0.5f * static_cast<float>(group_depth);
         auto material = m_scene_root->materials().at(material_index);
@@ -836,13 +841,13 @@ void Scene_builder::setup_lights()
     //    }
     //);
 
-    constexpr int directional_light_count = 2;
+    constexpr int directional_light_count = 3;
     if constexpr (directional_light_count > 0)
     {
         for (int i = 0; i < directional_light_count; ++i)
         {
             const float rel = static_cast<float>(i) / static_cast<float>(directional_light_count);
-            const float R   = 1.0f;
+            const float R   = 4.0f;
             const float h   = rel * 360.0f;
             const float s   = 0.9f;
             const float v   = 1.0f;
@@ -851,7 +856,7 @@ void Scene_builder::setup_lights()
             erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
 
             const vec3   color     = vec3{r, g, b};
-            const float  intensity = 5.0f / static_cast<float>(directional_light_count);
+            const float  intensity = 8.0f / static_cast<float>(directional_light_count);
             const string name      = fmt::format("Directional light {}", i);
             const float  x_pos     = R * sin(rel * two_pi<float>());
             const float  z_pos     = R * cos(rel * two_pi<float>());
@@ -860,7 +865,7 @@ void Scene_builder::setup_lights()
         }   
     }
 
-    constexpr int spot_light_count = 0;
+    constexpr int spot_light_count = 3;
     if constexpr (spot_light_count > 0)
     {
         for (int i = 0; i < spot_light_count; ++i)
@@ -876,7 +881,7 @@ void Scene_builder::setup_lights()
             erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
 
             const vec3   color           = vec3{r, g, b};
-            const float  intensity       = 100.0f;
+            const float  intensity       = 150.0f;
             const string name            = fmt::format("Spot {}", i);
             const float  x_pos           = R * sin(rel * 6.0f * two_pi<float>());
             const float  z_pos           = R * cos(rel * 6.0f * two_pi<float>());
