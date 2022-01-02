@@ -71,7 +71,7 @@ void Mesh_operation::make_entries(
     m_selection_tool = m_context.selection_tool;
     for (auto item : m_context.selection_tool->selection())
     {
-        auto mesh = as_mesh(item);
+        const auto& mesh = as_mesh(item);
         if (!mesh)
         {
             continue;

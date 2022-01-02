@@ -37,9 +37,9 @@
 #include "windows/brushes.hpp"
 #include "windows/camera_properties.hpp"
 #include "windows/debug_view_window.hpp"
-#include "windows/log_window.hpp"
 #include "windows/imgui_demo_window.hpp"
 #include "windows/layers_window.hpp"
+#include "windows/log_window.hpp"
 #include "windows/material_properties.hpp"
 #include "windows/materials.hpp"
 #include "windows/mesh_properties.hpp"
@@ -47,6 +47,7 @@
 #include "windows/node_tree_window.hpp"
 #include "windows/operations.hpp"
 #include "windows/physics_window.hpp"
+#include "windows/viewport_config.hpp"
 #include "windows/viewport_window.hpp"
 
 #include "scene/debug_draw.hpp"
@@ -132,6 +133,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Textures            >());
         m_components.add(make_shared<Theremin_tool       >());
         m_components.add(make_shared<Trs_tool            >());
+        m_components.add(make_shared<Viewport_config     >());
         m_components.add(make_shared<Viewport_windows    >());
     }
 

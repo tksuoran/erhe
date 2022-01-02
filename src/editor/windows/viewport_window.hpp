@@ -37,6 +37,7 @@ public:
         const std::string_view name,
         Configuration*         configuration,
         Scene_root*            scene_root,
+        Viewport_config*       viewport_config,
         erhe::scene::ICamera*  camera
     );
     ~Viewport_window();
@@ -78,6 +79,7 @@ private:
     std::string                                   m_name;
     Configuration*                                m_configuration      {nullptr};
     Scene_root*                                   m_scene_root         {nullptr};
+    Viewport_config*                              m_viewport_config    {nullptr};
     erhe::scene::Viewport                         m_viewport           {0, 0, 0, 0, true};
     erhe::scene::ICamera*                         m_camera             {nullptr};
     erhe::scene::Projection_transforms            m_projection_transforms;
@@ -92,7 +94,6 @@ private:
     std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_stencil_renderbuffer;
     std::unique_ptr<erhe::graphics::Framebuffer>  m_framebuffer_multisample;
     std::unique_ptr<erhe::graphics::Framebuffer>  m_framebuffer_resolved;
-    Viewport_config                               m_viewport_config;
 };
 
 class Viewport_windows
@@ -118,7 +119,6 @@ public:
     void initialize_component() override;
 
     // Public API
-    auto hover_window() const -> Viewport_window*;
     auto create_window(
         const std::string_view name,
         erhe::scene::ICamera*  camera
@@ -134,6 +134,8 @@ private:
     erhe::graphics::OpenGL_state_tracker*         m_pipeline_state_tracker{nullptr};
     Pointer_context*                              m_pointer_context       {nullptr};
     Scene_root*                                   m_scene_root            {nullptr};
+    Viewport_config*                              m_viewport_config       {nullptr};
+
     std::vector<std::shared_ptr<Viewport_window>> m_windows;
     Viewport_window*                              m_hover_window          {nullptr};
 };

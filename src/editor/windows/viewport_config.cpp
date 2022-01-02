@@ -13,11 +13,18 @@ namespace editor
 {
 
 Viewport_config::Viewport_config()
+    : erhe::components::Component{c_name}
+    , Imgui_window               {c_title}
 {
     render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
     render_style_not_selected.edge_lines = true;
 
     render_style_selected.edge_lines = false;
+}
+
+void Viewport_config::initialize_component()
+{
+    get<Editor_tools>()->register_imgui_window(this);
 }
 
 void Viewport_config::render_style_ui(Render_style& render_style)
@@ -94,28 +101,38 @@ void Viewport_config::render_style_ui(Render_style& render_style)
     {
         ImGui::SliderFloat("Point Size", &render_style.point_size, 0.0f, 20.0f);
     }
-
 }
 
 void Viewport_config::imgui()
 {
+    using namespace erhe::imgui;
+
     ImGui::ColorEdit4("Clear Color", &clear_color.x, ImGuiColorEditFlags_Float);
 
-    const ImGuiTreeNodeFlags parent_flags{
+    const ImGuiTreeNodeFlags flags{
+        ImGuiTreeNodeFlags_Framed            |
         ImGuiTreeNodeFlags_OpenOnArrow       |
         ImGuiTreeNodeFlags_OpenOnDoubleClick |
         ImGuiTreeNodeFlags_SpanFullWidth
     };
 
-    if (ImGui::TreeNodeEx("Default Style", parent_flags))
+    if (ImGui::TreeNodeEx("Default Style", flags))
     {
         render_style_ui(render_style_not_selected);
         ImGui::TreePop();
     }
 
-    if (ImGui::TreeNodeEx("Selection", parent_flags))
+    if (ImGui::TreeNodeEx("Selection", flags))
     {
         render_style_ui(render_style_selected);
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNodeEx("Debug Visualizations", flags))
+    {
+        make_combo("Light",        debug_visualizations.light,        c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
+        make_combo("Light Camera", debug_visualizations.light_camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
+        make_combo("Camera",       debug_visualizations.camera,       c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
         ImGui::TreePop();
     }
 }

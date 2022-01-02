@@ -56,6 +56,7 @@ void Viewport_windows::connect()
     m_pipeline_state_tracker = get    <erhe::graphics::OpenGL_state_tracker>();
     m_pointer_context        = get    <Pointer_context>();
     m_scene_root             = require<Scene_root>();
+    m_viewport_config        = get    <Viewport_config>();
     require<Scene_builder>();
 }
 
@@ -78,6 +79,7 @@ auto Viewport_windows::create_window(
         name,
         m_configuration,
         m_scene_root,
+        m_viewport_config,
         camera
     );
 
@@ -137,12 +139,14 @@ Viewport_window::Viewport_window(
     const std::string_view name,
     Configuration*         configuration,
     Scene_root*            scene_root,
+    Viewport_config*       viewport_config,
     erhe::scene::ICamera*  camera
 )
-    : Imgui_window   {name}
-    , m_configuration{configuration}
-    , m_scene_root   {scene_root}
-    , m_camera       {camera}
+    : Imgui_window     {name}
+    , m_configuration  {configuration}
+    , m_scene_root     {scene_root}
+    , m_viewport_config{viewport_config}
+    , m_camera         {camera}
 {
 }
 
@@ -169,7 +173,7 @@ void Viewport_window::render(
     const Render_context context
     {
         .window          = this,
-        .viewport_config = &m_viewport_config,
+        .viewport_config = m_viewport_config,
         .camera          = m_camera,
         .viewport        = m_viewport
     };
@@ -210,10 +214,10 @@ void Viewport_window::clear(
     pipeline_state_tracker->shader_stages.reset();
     pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
     gl::clear_color(
-        m_viewport_config.clear_color[0],
-        m_viewport_config.clear_color[1],
-        m_viewport_config.clear_color[2],
-        m_viewport_config.clear_color[3]
+        m_viewport_config->clear_color[0],
+        m_viewport_config->clear_color[1],
+        m_viewport_config->clear_color[2],
+        m_viewport_config->clear_color[3]
     );
     gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
     gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);

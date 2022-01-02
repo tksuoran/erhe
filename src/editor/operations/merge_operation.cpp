@@ -106,7 +106,7 @@ Merge_operation::Merge_operation(Context&& context)
     std::vector<float> child_masses;
     for (const auto& item : context.selection_tool->selection())
     {
-        auto mesh = as_mesh(item);
+        const auto& mesh = as_mesh(item);
         if (!mesh)
         {
             continue;

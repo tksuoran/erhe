@@ -14,6 +14,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
+#include "windows/viewport_config.hpp"
 
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -112,7 +113,7 @@ void Selection_tool::connect()
 {
     m_line_renderer   = get<Line_renderer>();
     m_pointer_context = get<Pointer_context>();
-    m_scene_builder   = require<Scene_builder>();
+    m_viewport_config = get<Viewport_config>();
 }
 
 void Selection_tool::initialize_component()
@@ -369,7 +370,7 @@ void Selection_tool::tool_render(const Render_context& context)
 
         if (is_mesh(node))
         {
-            auto mesh = as_mesh(node);
+            const auto& mesh = as_mesh(node);
             for (auto primitive : mesh->data.primitives)
             {
                 if (!primitive.source_geometry)
@@ -401,9 +402,12 @@ void Selection_tool::tool_render(const Render_context& context)
             }
         }
 
-        if (is_light(node))
+        if (
+            is_light(node) &&
+            (m_viewport_config->debug_visualizations.light == Visualization_mode::selected)
+        )
         {
-            auto light = as_light(node);
+            const auto& light = as_light(node);
             const uint32_t light_color = ImGui::ColorConvertFloat4ToU32(
                 ImVec4{
                     light->color.r,
@@ -621,12 +625,25 @@ void Selection_tool::tool_render(const Render_context& context)
             }
         }
 
-        if (is_icamera(node))
+        if (
+            is_icamera(node) &&
+            (
+                (
+                    !is_light(node) &&
+                    (m_viewport_config->debug_visualizations.camera == Visualization_mode::selected)
+                ) ||
+                (
+                    is_light(node) &&
+                    (m_viewport_config->debug_visualizations.light_camera == Visualization_mode::selected)
+                )
+            )
+
+        )
         {
-            const auto icamera         = as_icamera(node).get();
-            const mat4 clip_from_node  = icamera->projection()->get_projection_matrix(1.0f, context.viewport.reverse_depth);
-            const mat4 node_from_clip  = inverse(clip_from_node);
-            const mat4 world_from_clip = icamera->world_from_node() * node_from_clip;
+            const auto& icamera         = as_icamera(node).get();
+            const mat4  clip_from_node  = icamera->projection()->get_projection_matrix(1.0f, context.viewport.reverse_depth);
+            const mat4  node_from_clip  = inverse(clip_from_node);
+            const mat4  world_from_clip = icamera->world_from_node() * node_from_clip;
             constexpr std::array<glm::vec3, 8> p = {
                 glm::vec3{-1.0f, -1.0f, 0.0f},
                 glm::vec3{ 1.0f, -1.0f, 0.0f},

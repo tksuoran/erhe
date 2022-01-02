@@ -460,19 +460,19 @@ void Node_properties::imgui()
             }
         }
 
-        auto icamera = as_icamera(node);
+        const auto& icamera = as_icamera(node);
         if (icamera)
         {
             icamera_properties(*icamera.get());
         }
 
-        auto light = as_light(node);
+        const auto& light = as_light(node);
         if (light)
         {
             light_properties(*light.get());
         }
 
-        auto mesh = as_mesh(node);
+        const auto& mesh = as_mesh(node);
         if (mesh)
         {
             mesh_properties(*mesh.get());

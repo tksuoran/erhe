@@ -849,7 +849,7 @@ void Scene_builder::setup_lights()
             const float rel = static_cast<float>(i) / static_cast<float>(directional_light_count);
             const float R   = 4.0f;
             const float h   = rel * 360.0f;
-            const float s   = 0.9f;
+            const float s   = 0.2f;
             const float v   = 1.0f;
             float r, g, b;
 
