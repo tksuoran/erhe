@@ -493,8 +493,8 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     log_xr.info("View configuration types:\n");
     int best_score{0};
     m_xr_view_configuration_type = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO;
-    bool primary_stereo_supported{false};
-    bool primary_quad_supported{false};
+    //bool primary_stereo_supported{false};
+    //bool primary_quad_supported{false};
 
     for (const auto view_configuration_type : view_configuration_types)
     {
@@ -521,14 +521,14 @@ auto Xr_instance::enumerate_view_configurations() -> bool
             best_score = type_score;
             m_xr_view_configuration_type = view_configuration_type;
         }
-        if (view_configuration_type == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO)
-        {
-            primary_stereo_supported = true;
-        }
-        if (view_configuration_type == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO)
-        {
-            primary_quad_supported = true;
-        }
+        //if (view_configuration_type == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO)
+        //{
+        //    primary_stereo_supported = true;
+        //}
+        //if (view_configuration_type == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO)
+        //{
+        //    primary_quad_supported = true;
+        //}
     }
     if (best_score == 0)
     {

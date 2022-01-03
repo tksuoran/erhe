@@ -360,7 +360,6 @@ auto Mouse_drag_binding::on_button(
 auto Mouse_drag_binding::on_motion(Command_context& context) -> bool
 {
     auto* command = get_command();
-    ERHE_VERIFY(command != nullptr);
 
     if (command->state() == State::Ready)
     {

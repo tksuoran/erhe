@@ -45,7 +45,7 @@ void Editor_tools::initialize_component()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
-    io.Fonts->AddFontFromFileTTF("res/fonts/ProximaNova-Regular.otf", 16.0f);
+    io.Fonts->AddFontFromFileTTF("res/fonts/SourceSansPro-Regular.otf", 17);
 
     ImFontGlyphRangesBuilder builder;
 

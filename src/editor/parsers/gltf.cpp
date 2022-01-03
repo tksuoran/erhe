@@ -158,7 +158,7 @@ class Stream_reader
     : public Microsoft::glTF::IStreamReader
 {
 public:
-    Stream_reader(const std::filesystem::path& path_base) 
+    explicit Stream_reader(const std::filesystem::path& path_base) 
         : m_path_base{path_base}
     {
         Expects(m_path_base.has_root_path());

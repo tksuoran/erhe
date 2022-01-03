@@ -25,7 +25,9 @@ bool make_button(const char* label, const Item_mode mode, const ImVec2 size)
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, c_color_disabled_hovered);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,  c_color_disabled_active);
     }
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{2.0f, 1.0f});
     const bool pressed = ImGui::Button(label, size) && (mode != Item_mode::disabled);
+    ImGui::PopStyleVar();
     if (mode != Item_mode::normal)
     {
         ImGui::PopStyleColor(3);
