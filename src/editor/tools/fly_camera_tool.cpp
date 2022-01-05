@@ -118,8 +118,9 @@ auto Fly_camera_move_command::try_call(Command_context& context) -> bool
 {
     static_cast<void>(context);
 
-    m_fly_camera_tool.move(m_control, m_item, m_active);
-    return true;
+    const bool consumed = m_fly_camera_tool.try_move(m_control, m_item, m_active);
+    m_fly_camera_tool.dump();
+    return consumed;
 }
 
 Fly_camera_tool::Fly_camera_tool()
@@ -232,18 +233,39 @@ void Fly_camera_tool::rotation(const int rx, const int ry, const int rz)
     m_camera_controller.rotate_z.adjust(rz / scale);
 }
 
-void Fly_camera_tool::move(
+auto Fly_camera_tool::try_move(
     const Control         control,
     const Controller_item item, 
     const bool            active
-)
+) -> bool
 {
     std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
+    if (
+        (m_pointer_context->window() == nullptr) && active
+    )
+    {
+        return false;
+    }
+
     auto& controller = m_camera_controller.get_controller(control);
     controller.set(item, active);
+
+    return true;
 }
 
+void Fly_camera_tool::dump()
+{
+    get<Log_window>()->tail_log(
+        "Translate: {}{}{}{}{}{}",
+        m_camera_controller.translate_x.more() ? "X+ " : "",
+        m_camera_controller.translate_x.less() ? "X- " : "",
+        m_camera_controller.translate_y.more() ? "Y+ " : "",
+        m_camera_controller.translate_y.less() ? "Y- " : "",
+        m_camera_controller.translate_z.more() ? "Z+ " : "",
+        m_camera_controller.translate_z.less() ? "Z- " : ""
+    );
+}
 
 void Fly_camera_tool::turn_relative(const double dx, const double dy)
 {

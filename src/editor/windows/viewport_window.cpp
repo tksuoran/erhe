@@ -92,15 +92,25 @@ void Viewport_windows::update()
 {
     ERHE_PROFILE_FUNCTION
 
+    bool any_window{false};
     for (auto window : m_windows)
     {
         window->update();
         if (window->is_hovered())
         {
             m_hover_window = window.get();
+            any_window = true;
         }
     }
-    m_pointer_context->update_viewport(m_hover_window);
+
+    if (any_window)
+    {
+        m_pointer_context->update_viewport(m_hover_window);
+    }
+    else
+    {
+        m_pointer_context->update_viewport(nullptr);
+    }
 }
 
 void Viewport_windows::render()

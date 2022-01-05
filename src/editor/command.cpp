@@ -158,7 +158,7 @@ auto Key_binding::on_key(
             pressed ? "press" : "release"
         );
     }
-    return consumed;
+    return consumed && pressed;
 }
 
 Mouse_binding::Mouse_binding(Command* command)

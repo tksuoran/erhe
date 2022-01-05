@@ -138,12 +138,14 @@ public:
 
     // Commands
     auto try_ready() -> bool;
-    void turn_relative(const double dx, const double dy);
-    void move(
+    auto try_move(
         const Control         control,
         const Controller_item item, 
         const bool            active
-    );
+    ) -> bool;
+    void turn_relative(const double dx, const double dy);
+
+    void dump();
 
 private:
     auto can_use_keyboard() const -> bool;
