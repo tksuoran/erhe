@@ -43,8 +43,6 @@ set(source_list
     renderers/forward_renderer.hpp
     renderers/frame_resources.cpp
     renderers/frame_resources.hpp
-    renderers/headset_renderer.cpp
-    renderers/headset_renderer.hpp
     renderers/id_renderer.cpp
     renderers/id_renderer.hpp
     renderers/light_mesh.cpp
@@ -193,7 +191,14 @@ set(source_list
     res/shaders/wide_lines.frag
 )
 
-add_executable(${_target} ${source_list})
+if (${ERHE_XR_LIBRARY} STREQUAL "OpenXR")
+    set(xr_source_list
+        renderers/headset_renderer.cpp
+        renderers/headset_renderer.hpp
+    )
+endif ()
+
+add_executable(${_target} ${source_list} ${xr_source_list})
 
 target_link_libraries(
     ${_target}
@@ -211,12 +216,14 @@ target_link_libraries(
     erhe_scene
     erhe_toolkit
     erhe_ui
-    erhe_xr
     lunasvg
     miniaudio
     nlohmann_json::nlohmann_json
-    openxr_loader
 )
+
+if (${ERHE_XR_LIBRARY} STREQUAL "OpenXR")
+    target_link_libraries(${_target} PRIVATE erhe_xr openxr_loader)
+endif ()
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
     target_link_libraries(${_target} PRIVATE TracyClient)

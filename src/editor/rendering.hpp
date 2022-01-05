@@ -31,7 +31,9 @@ class Editor_time;
 class Editor_tools;
 class Forward_renderer;
 class Log_window;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
 class Headset_renderer;
+#endif
 class Id_renderer;
 class Line_renderer;
 class Pointer_context;
@@ -100,7 +102,9 @@ private:
     std::shared_ptr<Editor_tools>                         m_editor_tools;
     std::shared_ptr<Forward_renderer>                     m_forward_renderer;
     std::shared_ptr<Log_window>                           m_log_window;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     std::shared_ptr<Headset_renderer>                     m_headset_renderer;
+#endif
     std::shared_ptr<Id_renderer>                          m_id_renderer;
     std::shared_ptr<Line_renderer>                        m_line_renderer;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;

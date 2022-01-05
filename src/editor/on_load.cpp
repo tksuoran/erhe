@@ -16,7 +16,9 @@
 #include "operations/operation_stack.hpp"
 
 #include "renderers/forward_renderer.hpp"
-#include "renderers/headset_renderer.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "renderers/headset_renderer.hpp"
+#endif
 #include "renderers/id_renderer.hpp"
 #include "renderers/line_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -102,7 +104,9 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Forward_renderer    >());
         m_components.add(make_shared<Log_window    >());
         m_components.add(make_shared<Grid_tool           >());
+#if defined(ERHE_XR_LIBRARY_OPENXR)
         m_components.add(make_shared<Headset_renderer    >());
+#endif
         m_components.add(make_shared<Hover_tool          >());
         m_components.add(make_shared<Icon_set            >());
         m_components.add(make_shared<Id_renderer         >());

@@ -12,7 +12,9 @@
 #   include <GLFW/glfw3.h>
 #endif
 
-#include <openxr/openxr.h>
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include <openxr/openxr.h>
+#endif
 
 #include <filesystem>
 

@@ -7,7 +7,9 @@
 #include "editor_view.hpp"
 #include "window.hpp"
 #include "renderers/forward_renderer.hpp"
-#include "renderers/headset_renderer.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "renderers/headset_renderer.hpp"
+#endif
 #include "renderers/id_renderer.hpp"
 #include "renderers/line_renderer.hpp"
 #include "renderers/shadow_renderer.hpp"
@@ -44,7 +46,9 @@ void Editor_rendering::connect()
     m_editor_tools           = get<Editor_tools     >();
     m_forward_renderer       = get<Forward_renderer >();
     m_log_window             = get<Log_window       >();
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     m_headset_renderer       = get<Headset_renderer >();
+#endif
     m_id_renderer            = get<Id_renderer      >();
     m_line_renderer          = get<Line_renderer    >();
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
@@ -83,10 +87,12 @@ void Editor_rendering::begin_frame()
         m_editor_tools->menu();
     }
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_headset_renderer)
     {
         m_headset_renderer->begin_frame();
     }
+#endif
 
     m_editor_tools->begin_frame();
 }
@@ -154,10 +160,12 @@ void Editor_rendering::render()
         render_viewports();
     }
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_headset_renderer)
     {
         m_headset_renderer->render();
     }
+#endif
 
     if (m_shadow_renderer)  m_shadow_renderer ->next_frame();
     if (m_id_renderer)      m_id_renderer     ->next_frame();

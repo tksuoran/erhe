@@ -17,4 +17,7 @@ add_subdirectory(raytrace)
 add_subdirectory(scene)
 add_subdirectory(toolkit)
 add_subdirectory(ui)
-add_subdirectory(xr)
+
+if (${ERHE_XR_LIBRARY} STREQUAL "OpenXR")
+    add_subdirectory(xr)
+endif ()

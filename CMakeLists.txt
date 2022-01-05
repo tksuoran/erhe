@@ -39,6 +39,7 @@ set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. E
 set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either bullet or none"              "none"     "bullet;none")
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either superluminal, tracy or none" "none"     "superluminal;tracy;none")
 set_option(ERHE_GLTF_LIBRARY               "GLTF library to use with erhe. Either glTF-SDK, or none"              "none"     "glTF-SDK;none")
+set_option(ERHE_XR_LIBRARY                 "XR library to use with erhe. Either OpenXR, or none"                  "none"     "OpenXR;none")
 
 # These are in cmake/ directory
 message("Compiler = ${CMAKE_CXX_COMPILER_ID}")
@@ -72,10 +73,15 @@ message("Fetching lunasvg")
 FetchContent_MakeAvailable(lunasvg)
 message("Fetching nlohmann_json")
 FetchContent_MakeAvailable(nlohmann_json)
-message("Fetching OpenXR-SDK")
-FetchContent_MakeAvailable(OpenXR-SDK)
 message("Fetching RectangleBinPack")
 FetchContent_MakeAvailable(RectangleBinPack)
+
+if (${ERHE_GLTF_LIBRARY} STREQUAL "OpenXR")
+    message("Fetching OpenXR-SDK")
+    FetchContent_MakeAvailable(OpenXR-SDK)
+    message(STATUS "Erhe configured to use OpenXR for XR.")
+    add_definitions(-DERHE_XR_LIBRARY_OPENXR)
+endif ()
 
 if (${ERHE_GLTF_LIBRARY} STREQUAL "glTF-SDK")
     message("Fetching glTF-SDK")
