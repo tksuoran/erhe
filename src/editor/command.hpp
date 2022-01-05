@@ -31,8 +31,8 @@ public:
 
 private:
     Editor_view&     m_editor_view;
-    Log_window*      m_log_window;
     Pointer_context& m_pointer_context;
+    Log_window*      m_log_window{nullptr};
 };
 
 class Command

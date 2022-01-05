@@ -87,7 +87,6 @@ public:
     class Context
     {
     public:
-        Selection_tool*                    selection_tool{nullptr};
         erhe::scene::Scene&                scene;
         erhe::scene::Mesh_layer&           layer;
         erhe::physics::IWorld&             physics_world;
@@ -95,6 +94,7 @@ public:
         std::shared_ptr<Node_physics>      node_physics;
         std::shared_ptr<erhe::scene::Node> parent;
         Mode                               mode;
+        Selection_tool*                    selection_tool{nullptr};
     };
 
     explicit Mesh_insert_remove_operation(const Context& context);
@@ -120,12 +120,12 @@ public:
     class Context
     {
     public:
-        std::shared_ptr<Selection_tool>     selection_tool;
         erhe::scene::Light_layer&           layer;
         erhe::scene::Scene&                 scene;
         std::shared_ptr<erhe::scene::Light> light;
         std::shared_ptr<erhe::scene::Node>  parent;
         Mode                                mode;
+        Selection_tool*                     selection_tool{nullptr};
     };
 
     explicit Light_insert_remove_operation(const Context& context);

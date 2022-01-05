@@ -157,9 +157,11 @@ private:
 
     Selection_tool_select_command      m_select_command;
 
-    Line_renderer*                     m_line_renderer  {nullptr};
-    Pointer_context*                   m_pointer_context{nullptr};
-    Viewport_config*                   m_viewport_config{nullptr};
+    // Component dependencies
+    std::shared_ptr<Line_renderer>     m_line_renderer;
+    std::shared_ptr<Pointer_context>   m_pointer_context;
+    std::shared_ptr<Viewport_config>   m_viewport_config;
+
     int                                m_next_selection_change_subscription{1};
     Selection                          m_selection;
     std::vector<Subscription_entry>    m_selection_change_subscriptions;

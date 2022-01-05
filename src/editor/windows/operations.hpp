@@ -43,11 +43,12 @@ public:
 private:
     [[nodiscard]]auto count_selected_meshes() const -> size_t;
 
-    Mesh_memory*       m_mesh_memory    {nullptr};
-    Operation_stack*   m_operation_stack{nullptr};
-    Pointer_context*   m_pointer_context{nullptr};
-    Scene_root*        m_scene_root     {nullptr};
-    Selection_tool*    m_selection_tool {nullptr};
+    // Component dependencies
+    std::shared_ptr<Mesh_memory>     m_mesh_memory;
+    std::shared_ptr<Operation_stack> m_operation_stack;
+    std::shared_ptr<Pointer_context> m_pointer_context;
+    std::shared_ptr<Scene_root>      m_scene_root;
+    std::shared_ptr<Selection_tool>  m_selection_tool;
 
     Tool*              m_current_active_tool{nullptr};
     std::vector<Tool*> m_active_tools;

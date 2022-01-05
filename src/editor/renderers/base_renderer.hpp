@@ -161,7 +161,8 @@ public:
     auto max_index_count          () const -> int;
 
 private:
-    Program_interface*           m_program_interface{nullptr};
+    // Component dependencies
+    std::shared_ptr<Program_interface> m_program_interface;
 
     std::string                  m_name;
     std::vector<Frame_resources> m_frame_resources;

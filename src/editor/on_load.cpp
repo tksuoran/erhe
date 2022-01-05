@@ -169,7 +169,7 @@ void Application::component_initialization_complete(const bool initialization_su
         gl::enable(gl::Enable_cap::primitive_restart);
         gl::primitive_restart_index(0xffffu);
 
-        auto* const window = get<Window>();
+        const auto window = get<Window>();
         if (!window)
         {
             return;
@@ -183,7 +183,7 @@ void Application::component_initialization_complete(const bool initialization_su
 
         auto& root_view = context_window->get_root_view();
 
-        root_view.reset_view(get<Editor_view>());
+        root_view.reset_view(get<Editor_view>().get());
     }
 }
 

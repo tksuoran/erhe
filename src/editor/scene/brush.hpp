@@ -38,7 +38,6 @@ namespace editor
 class Node_physics;
 class Node_raytrace;
 class Raytrace_primitive;
-class Scene_builder;
 
 class Reference_frame
 {

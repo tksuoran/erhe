@@ -60,7 +60,7 @@ public:
     virtual void connect() {};
 
     template<typename T>
-    [[nodiscard]] auto get() const -> T*
+    [[nodiscard]] auto get() const -> std::shared_ptr<T>
     {
         if (m_components == nullptr)
         {
@@ -71,14 +71,14 @@ public:
         {
             if (component->get_type_hash() == T::hash)
             {
-                return reinterpret_cast<T*>(component.get());
+                return dynamic_pointer_cast<T>(component);
             }
         }
         return {};
     }
 
     template<typename T>
-    auto require() -> T*
+    auto require() -> std::shared_ptr<T>
     {
         const auto component = get<T>();
         ERHE_VERIFY(component != nullptr);
@@ -99,28 +99,24 @@ public:
     [[nodiscard]] auto is_registered           () const -> bool;
     [[nodiscard]] auto is_ready_to_initialize  (const bool in_worker_thread) const -> bool;
     [[nodiscard]] auto is_ready_to_deinitialize() const -> bool;
-    [[nodiscard]] auto dependencies            () -> const std::set<Component*>&;
-    [[nodiscard]] auto depended_by             () -> const std::set<Component*>&;
-    void register_as_component   (Components* components);
-    void component_initialized   (Component* component);
-    void component_deinitialized (Component* component);
-    void depends_on              (Component* dependency);
-    void set_connected           ();
-    void set_initializing        ();
-    void set_ready               ();
-    void set_deinitializing      ();
+    [[nodiscard]] auto dependencies            () -> const std::set<std::shared_ptr<Component>>&;
+    void register_as_component(Components* components);
+    void component_initialized(Component* component);
+    void depends_on           (const std::shared_ptr<Component>& dependency);
+    void set_connected        ();
+    void set_initializing     ();
+    void set_ready            ();
+    void set_deinitializing   ();
 
 protected:
     Components* m_components{nullptr};
 
 private:
-    void add_depended_by(Component* component);
-    void unregister     ();
+    void unregister();
 
-    std::string_view     m_name;
-    Component_state      m_state{Component_state::Constructed};
-    std::set<Component*> m_dependencies;
-    std::set<Component*> m_depended_by;
+    std::string_view                     m_name;
+    Component_state                      m_state{Component_state::Constructed};
+    std::set<std::shared_ptr<Component>> m_dependencies;
 };
 
 } // namespace erhe::components

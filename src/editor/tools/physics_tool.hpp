@@ -78,9 +78,10 @@ public:
 private:
     Physics_tool_drag_command                   m_drag_command;
 
-    Line_renderer*                              m_line_renderer  {nullptr};
-    Pointer_context*                            m_pointer_context{nullptr};
-    Scene_root*                                 m_scene_root     {nullptr};
+    // Component dependencies
+    std::shared_ptr<Line_renderer>              m_line_renderer;
+    std::shared_ptr<Pointer_context>            m_pointer_context;
+    std::shared_ptr<Scene_root>                 m_scene_root;
 
     std::shared_ptr<erhe::scene::Mesh>          m_drag_mesh;
     std::shared_ptr<Node_physics>               m_drag_node_physics;

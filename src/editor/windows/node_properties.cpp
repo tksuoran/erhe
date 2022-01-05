@@ -4,7 +4,6 @@
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
-#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "windows/log_window.hpp"
 
@@ -40,7 +39,6 @@ Node_properties::~Node_properties() = default;
 void Node_properties::connect()
 {
     m_operation_stack = get<Operation_stack>();
-    m_scene_builder   = get<Scene_builder  >();
     m_scene_root      = get<Scene_root     >();
     m_selection_tool  = get<Selection_tool >();
 }

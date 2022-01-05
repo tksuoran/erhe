@@ -54,7 +54,6 @@ public:
 
     auto add                                   (const std::shared_ptr<Component>& component) -> Component&;
     void show_dependencies                     () const;
-    void show_depended_by                      () const;
     void cleanup_components                    ();
     void launch_component_initialization       ();
     void wait_component_initialization_complete();

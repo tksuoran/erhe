@@ -9,7 +9,6 @@
 
 #include "operations/operation_stack.hpp"
 #include "renderers/id_renderer.hpp"
-#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "windows/log_window.hpp"
@@ -53,7 +52,6 @@ void Editor_view::connect()
     m_log_window       = get<Log_window      >();
     m_operation_stack  = get<Operation_stack >();
     m_pointer_context  = get<Pointer_context >();
-    m_scene_builder    = get<Scene_builder   >();
     m_scene_root       = get<Scene_root      >();
     m_viewport_windows = get<Viewport_windows>();
     m_window           = get<Window          >();
@@ -221,7 +219,11 @@ void Editor_view::on_key(
     const uint32_t               modifier_mask
 )
 {
-    Command_context context{*this, *m_pointer_context, get<Log_window>()};
+    Command_context context{
+        *this,
+        *m_pointer_context,
+        get<Log_window>().get()
+    };
 
     for (auto& binding : m_key_bindings)
     {
@@ -287,7 +289,11 @@ void Editor_view::sort_mouse_bindings()
 
 void Editor_view::inactivate_ready_commands()
 {
-    Command_context context{*this, *m_pointer_context, get<Log_window>()};
+    Command_context context{
+        *this,
+        *m_pointer_context,
+        get<Log_window>().get()
+    };
     for (auto* command : m_commands)
     {
         if (command->state() == State::Ready)
@@ -344,7 +350,11 @@ void Editor_view::on_mouse_click(
 
     m_pointer_context->update_mouse(button, count);
 
-    Command_context context{*this, *m_pointer_context, get<Log_window>()};
+    Command_context context{
+        *this,
+        *m_pointer_context,
+        get<Log_window>().get()
+    };
     for (const auto& binding : m_mouse_bindings)
     {
         auto* command = binding->get_command();
@@ -375,7 +385,11 @@ void Editor_view::on_mouse_move(const double x, const double y)
 
     m_pointer_context->update_mouse(x, y);
 
-    Command_context context{*this, *m_pointer_context, get<Log_window>()};
+    Command_context context{
+        *this,
+        *m_pointer_context,
+        get<Log_window>().get()
+    };
     for (const auto& binding : m_mouse_bindings)
     {
         auto* command = binding->get_command();

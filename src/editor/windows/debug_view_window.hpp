@@ -54,10 +54,11 @@ public:
     void update_framebuffer();
 
 private:
-    Id_renderer*                                 m_id_renderer           {nullptr};
-    Shadow_renderer*                             m_shadow_renderer       {nullptr};
-    erhe::graphics::OpenGL_state_tracker*        m_pipeline_state_tracker{nullptr};
-    Programs*                                    m_programs              {nullptr};
+    // Component dependencies
+    std::shared_ptr<Id_renderer>                          m_id_renderer;
+    std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
+    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
+    std::shared_ptr<Programs>                             m_programs;
 
     erhe::scene::Viewport                               m_viewport       {0, 0, 0, 0, true};
     erhe::graphics::Vertex_attribute_mappings           m_empty_attribute_mappings;

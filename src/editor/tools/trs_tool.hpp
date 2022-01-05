@@ -263,14 +263,17 @@ private:
     void update_visibility          ();
 
     Trs_tool_drag_command                      m_drag_command;
-    Log_window*                                m_log_window     {nullptr};
-    Line_renderer*                             m_line_renderer  {nullptr};
-    Mesh_memory*                               m_mesh_memory    {nullptr};
-    Operation_stack*                           m_operation_stack{nullptr};
-    Pointer_context*                           m_pointer_context{nullptr};
-    Scene_root*                                m_scene_root     {nullptr};
-    Selection_tool*                            m_selection_tool {nullptr};
-    Text_renderer*                             m_text_renderer  {nullptr};
+
+    // Component dependencies
+    std::shared_ptr<Log_window>                m_log_window;
+    std::shared_ptr<Line_renderer>             m_line_renderer;
+    std::shared_ptr<Mesh_memory>               m_mesh_memory;
+    std::shared_ptr<Operation_stack>           m_operation_stack;
+    std::shared_ptr<Pointer_context>           m_pointer_context;
+    std::shared_ptr<Scene_root>                m_scene_root;
+    std::shared_ptr<Selection_tool>            m_selection_tool;
+    std::shared_ptr<Text_renderer>             m_text_renderer;
+
     bool                                       m_local          {true};
     bool                                       m_touched        {false};
     Handle                                     m_active_handle  {Handle::e_handle_none};

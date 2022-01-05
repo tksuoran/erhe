@@ -46,9 +46,10 @@ public:
     void imgui() override;
 
 private:
-    Scene_root*     m_scene_root    {nullptr};
-    Selection_tool* m_selection_tool{nullptr};
-    Icon_set*       m_icon_set      {nullptr};
+    // Component dependencies
+    std::shared_ptr<Scene_root>     m_scene_root;
+    std::shared_ptr<Selection_tool> m_selection_tool;
+    std::shared_ptr<Icon_set>       m_icon_set;
 
     std::shared_ptr<erhe::scene::Node> m_node_clicked;
 };

@@ -7,7 +7,6 @@
 
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
-#include "tools/fly_camera_tool.hpp"
 #include "tools/pointer_context.hpp"
 #include "windows/log_window.hpp"
 
@@ -49,7 +48,6 @@ Viewport_windows::~Viewport_windows() = default;
 
 void Viewport_windows::connect()
 {
-    //require<Fly_camera_tool>();
     m_configuration          = get    <Configuration>();
     m_editor_rendering       = get    <Editor_rendering>();
     m_editor_view            = require<Editor_view>();
@@ -57,6 +55,8 @@ void Viewport_windows::connect()
     m_pointer_context        = get    <Pointer_context>();
     m_scene_root             = require<Scene_root>();
     m_viewport_config        = get    <Viewport_config>();
+
+    // Need cameras to be setup
     require<Scene_builder>();
 }
 
@@ -129,18 +129,18 @@ void Viewport_windows::render()
     for (auto window : m_windows)
     {
         window->render(
-            m_editor_rendering,
-            m_pipeline_state_tracker
+            *m_editor_rendering.get(),
+            *m_pipeline_state_tracker.get()
         );
     }
 }
 
 Viewport_window::Viewport_window(
-    const std::string_view name,
-    Configuration*         configuration,
-    Scene_root*            scene_root,
-    Viewport_config*       viewport_config,
-    erhe::scene::ICamera*  camera
+    const std::string_view                  name,
+    const std::shared_ptr<Configuration>&   configuration,
+    const std::shared_ptr<Scene_root>&      scene_root,
+    const std::shared_ptr<Viewport_config>& viewport_config,
+    erhe::scene::ICamera*                   camera
 )
     : Imgui_window     {name}
     , m_configuration  {configuration}
@@ -161,8 +161,8 @@ void Viewport_window::update()
 }
 
 void Viewport_window::render(
-    Editor_rendering*                     editor_rendering,
-    erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker
+    Editor_rendering&                     editor_rendering,
+    erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker
 )
 {
     if (!should_render())
@@ -173,14 +173,14 @@ void Viewport_window::render(
     const Render_context context
     {
         .window          = this,
-        .viewport_config = m_viewport_config,
+        .viewport_config = m_viewport_config.get(),
         .camera          = m_camera,
         .viewport        = m_viewport
     };
 
     if (m_is_hovered)
     {
-        editor_rendering->render_id(context);
+        editor_rendering.render_id(context);
     }
 
     if (m_configuration->gui)
@@ -198,7 +198,7 @@ void Viewport_window::render(
     {
         clear(pipeline_state_tracker);
     }
-    editor_rendering->render_viewport(context, m_is_hovered);
+    editor_rendering.render_viewport(context, m_is_hovered);
     if (m_configuration->gui)
     {
         multisample_resolve();
@@ -206,13 +206,13 @@ void Viewport_window::render(
 }
 
 void Viewport_window::clear(
-    erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker
+    erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker
 ) const
 {
     ERHE_PROFILE_FUNCTION
 
-    pipeline_state_tracker->shader_stages.reset();
-    pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
+    pipeline_state_tracker.shader_stages.reset();
+    pipeline_state_tracker.color_blend.execute(&Color_blend_state::color_blend_disabled);
     gl::clear_color(
         m_viewport_config->clear_color[0],
         m_viewport_config->clear_color[1],

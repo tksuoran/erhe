@@ -136,7 +136,6 @@ void Components::cleanup_components()
     queue_all_components_to_be_processed();
 
     log_components.info("Deinitializing {} Components:\n", m_components_to_process.size());
-    show_depended_by();
 
     for (;;)
     {
@@ -147,15 +146,10 @@ void Components::cleanup_components()
         }
         log_components.info("Deinitializing {}\n", component->name());
         deitialize_component(component);
-        for (auto component_ : m_components_to_process)
-        {
-            component_->component_deinitialized(component);
-        }
     }
     if (components.size() > 0)
     {
         log_components.error("Not all components were deinitialized\n");
-        show_depended_by();
         components.clear();
     }
 }
@@ -226,25 +220,6 @@ void Components::show_dependencies() const
                 dependency->processing_requires_main_thread()
                     ? "main"
                     : "worker"
-            );
-        }
-    }
-}
-
-void Components::show_depended_by() const
-{
-    log_components.info("Component depended by:\n");
-    for (auto const& component : components)
-    {
-        log_components.info(
-            "    {}:\n",
-            component->name()
-        );
-        for (auto const& depended_by : component->depended_by())
-        {
-            log_components.info(
-                "        {}\n",
-                depended_by->name()
             );
         }
     }

@@ -75,7 +75,6 @@ public:
 
     // Public API
     void setup_scene();
-    void sort_lights();
 
     // Can discard return value
     auto make_camera(
@@ -128,10 +127,10 @@ private:
     void make_cube_benchmark  ();
     void setup_lights         ();
 
-    // Components
-    Brushes*     m_brushes    {nullptr};
-    Mesh_memory* m_mesh_memory{nullptr};
-    Scene_root*  m_scene_root {nullptr};
+    // Component dependencies
+    std::shared_ptr<Brushes>     m_brushes;
+    std::shared_ptr<Mesh_memory> m_mesh_memory;
+    std::shared_ptr<Scene_root>  m_scene_root;
 
     // Self owned parts
     std::mutex                          m_brush_mutex;

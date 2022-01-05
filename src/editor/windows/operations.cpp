@@ -100,7 +100,7 @@ void Operations::imgui()
             .scene          = m_scene_root->scene(),
             .layer          = m_scene_root->content_layer(),
             .physics_world  = m_scene_root->physics_world(),
-            .selection_tool = m_selection_tool
+            .selection_tool = m_selection_tool.get()
         };
     };
 
@@ -132,8 +132,8 @@ void Operations::imgui()
                 Attach_detach_operation::Context{
                     .scene          = m_scene_root->scene(),
                     .layer          = m_scene_root->content_layer(),
-                    .selection_tool = m_selection_tool,
-                    .attach         = true
+                    .attach         = true,
+                    .selection_tool = m_selection_tool.get()
                 }
             )
         );
@@ -146,8 +146,8 @@ void Operations::imgui()
                 Attach_detach_operation::Context{
                     .scene          = m_scene_root->scene(),
                     .layer          = m_scene_root->content_layer(),
-                    .selection_tool = m_selection_tool,
-                    .attach         = false
+                    .attach         = false,
+                    .selection_tool = m_selection_tool.get()
                 }
             )
         );
@@ -162,7 +162,7 @@ void Operations::imgui()
                     .layer          = m_scene_root->content_layer(),
                     .scene          = m_scene_root->scene(),
                     .physics_world  = m_scene_root->physics_world(),
-                    .selection_tool = m_selection_tool
+                    .selection_tool = m_selection_tool.get()
                 }
             )
         );

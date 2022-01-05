@@ -3,7 +3,6 @@
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
 #include "scene/frame_controller.hpp"
-#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
@@ -156,11 +155,10 @@ Fly_camera_tool::~Fly_camera_tool()
 
 void Fly_camera_tool::connect()
 {
-    m_editor_tools    = get<Editor_tools>();
-    m_pointer_context = get<Pointer_context>();
+    m_editor_tools    = get    <Editor_tools>();
+    m_pointer_context = get    <Pointer_context>();
     m_scene_root      = require<Scene_root>();
-    require<Scene_builder>();
-    m_trs_tool        = get<Trs_tool>();
+    m_trs_tool        = get    <Trs_tool>();
 }
 
 auto Fly_camera_tool::can_use_keyboard() const -> bool
@@ -175,7 +173,7 @@ void Fly_camera_tool::initialize_component()
 #endif
 
     m_editor_tools->register_tool(this);
-    auto* view = get<Editor_view>();
+    const auto view = get<Editor_view>();
 
     using Keycode = erhe::toolkit::Keycode;
     view->bind_command_to_key(&m_move_up_active_command,         Keycode::Key_e, true );

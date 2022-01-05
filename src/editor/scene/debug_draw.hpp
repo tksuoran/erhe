@@ -44,8 +44,10 @@ public:
     float line_width{4.0f};
 
 private:
-    Line_renderer* m_line_renderer{nullptr};
-    Text_renderer* m_text_renderer{nullptr};
+    // Component dependencies
+    std::shared_ptr<Line_renderer> m_line_renderer;
+    std::shared_ptr<Text_renderer> m_text_renderer;
+
     int            m_debug_mode{0};
     Colors         m_colors;
 };

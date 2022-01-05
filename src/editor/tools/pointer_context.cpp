@@ -77,8 +77,7 @@ void Pointer_context::raytrace()
         return;
     }
 
-    auto* const log = get<Log_window>();
-
+    const auto log = get<Log_window>();
 
     const auto pointer_near = position_in_world(1.0);
     //if (pointer_near.has_value())
@@ -261,11 +260,11 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
     }
 #endif
 
-    auto* const id_renderer     = get<Id_renderer>();
-    auto* const scene_root      = get<Scene_root>();
-    const bool  in_content_area = pointer_in_content_area();
+    const auto id_renderer     = get<Id_renderer>();
+    const auto scene_root      = get<Scene_root>();
+    const bool in_content_area = pointer_in_content_area();
     //m_log_window->frame_log("in_content_area = {}", in_content_area);
-    if (in_content_area && (id_renderer != nullptr))
+    if (in_content_area && id_renderer)
     {
         const auto mesh_primitive = id_renderer->get(
             static_cast<int>(position_in_window.x),
@@ -337,8 +336,7 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
         m_hover_local_index = 0;
     }
 
-    auto* const editor_time = get<Editor_time>();
-    m_frame_number = editor_time->m_frame_number;
+    m_frame_number = get<Editor_time>()->m_frame_number;
 }
 
 auto Pointer_context::position_in_world() const -> std::optional<glm::vec3>

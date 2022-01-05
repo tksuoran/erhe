@@ -10,7 +10,6 @@
 #include "operations/operation_stack.hpp"
 #include "renderers/line_renderer.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
@@ -58,12 +57,12 @@ auto Selection_tool_delete_command::try_call(Command_context& context) -> bool
 
 auto Selection_tool::delete_selection() -> bool
 {
-    auto* scene_root = get<Scene_root>();
     if (m_selection.empty())
     {
         return false;
     }
 
+    const auto scene_root = get<Scene_root>();
     Compound_operation::Context compound_context;
     for (auto node : m_selection)
     {
@@ -77,7 +76,6 @@ auto Selection_tool::delete_selection() -> bool
         compound_context.operations.push_back(
             std::make_shared<Mesh_insert_remove_operation>(
                 Mesh_insert_remove_operation::Context{
-                    .selection_tool = this,
                     .scene          = scene_root->scene(),
                     .layer          = scene_root->content_layer(),
                     .physics_world  = scene_root->physics_world(),
@@ -86,7 +84,8 @@ auto Selection_tool::delete_selection() -> bool
                     .parent         = (parent != nullptr)
                         ? parent->shared_from_this()
                         : std::shared_ptr<erhe::scene::Node>{},
-                    .mode           = Scene_item_operation::Mode::remove
+                    .mode           = Scene_item_operation::Mode::remove,
+                    .selection_tool = this
                 }
             )
         );
@@ -120,7 +119,7 @@ void Selection_tool::initialize_component()
 {
     get<Editor_tools>()->register_tool(this);
 
-    auto* view = get<Editor_view>();
+    const auto view = get<Editor_view>();
     view->register_command           (&m_select_command);
     view->bind_command_to_mouse_click(&m_select_command, Mouse_button_left);
 }

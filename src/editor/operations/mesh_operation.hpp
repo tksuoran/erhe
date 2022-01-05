@@ -33,7 +33,6 @@ namespace erhe::scene
 namespace editor
 {
 
-class Scene_builder;
 class Selection_tool;
 
 class Mesh_operation
@@ -47,7 +46,7 @@ public:
         erhe::scene::Scene&              scene;
         erhe::scene::Mesh_layer&         layer;
         erhe::physics::IWorld&           physics_world;
-        Selection_tool*                  selection_tool{nullptr};
+        Selection_tool*                  selection_tool;
     };
 
 protected:
@@ -74,9 +73,10 @@ protected:
     );
 
 private:
+    Selection_tool*    m_selection_tool{nullptr};
+
     Context            m_context;
     std::vector<Entry> m_entries;
-    Selection_tool*    m_selection_tool{nullptr};
 };
 
 }

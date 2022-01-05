@@ -1,7 +1,6 @@
 #include "scene/brush.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
-#include "scene/scene_builder.hpp"
 #include "log.hpp"
 
 #include "erhe/geometry/operation/clone.hpp"

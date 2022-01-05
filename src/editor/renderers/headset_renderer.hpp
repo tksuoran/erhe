@@ -93,11 +93,11 @@ private:
     std::vector<Headset_view_resources>       m_view_resources;
     std::unique_ptr<Controller_visualization> m_controller_visualization;
 
-    Application*      m_application     {nullptr};
-    Editor_rendering* m_editor_rendering{nullptr};
-    Line_renderer*    m_line_renderer   {nullptr};
-    Scene_builder*    m_scene_builder   {nullptr};
-    Scene_root*       m_scene_root      {nullptr};
+    // Component dependencies
+    std::shared_ptr<Application>      m_application;
+    std::shared_ptr<Editor_rendering> m_editor_rendering;
+    std::shared_ptr<Line_renderer>    m_line_renderer;
+    std::shared_ptr<Scene_root>       m_scene_root;
 };
 
 }

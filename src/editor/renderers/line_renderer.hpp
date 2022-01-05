@@ -93,7 +93,7 @@ private:
     class Pipeline
     {
     public:
-        void initialize(Shader_monitor* shader_monitor);
+        void initialize(Shader_monitor& shader_monitor);
 
         bool                                             reverse_depth{false};
         erhe::graphics::Fragment_outputs                 fragment_outputs;
@@ -107,8 +107,6 @@ private:
         size_t                                           viewport_offset              {0};
         size_t                                           fov_offset                   {0};
     };
-
-    Pipeline m_pipeline;
 
     class Frame_resources
     {
@@ -225,8 +223,6 @@ private:
         erhe::graphics::Pipeline           pipeline_depth_fail;
     };
 
-    erhe::graphics::OpenGL_state_tracker* m_pipeline_state_tracker{nullptr};
-
     class Buffer_range
     {
     public:
@@ -258,6 +254,11 @@ private:
         }
     };
 
+    // Component dependencies
+    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
+
+    Pipeline m_pipeline;
+
 public:
     class Style
     {
@@ -270,11 +271,11 @@ public:
 
         // Public API
         [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
-        void create_frame_resources(Pipeline* pipeline, const Configuration* const configuration);
+        void create_frame_resources(Pipeline* pipeline, const Configuration& configuration);
         void next_frame            ();
 
         void render(
-            erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker,
+            erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker,
             const erhe::scene::Viewport           camera_viewport,
             const erhe::scene::ICamera&           camera,
             const bool                            show_visible_lines,

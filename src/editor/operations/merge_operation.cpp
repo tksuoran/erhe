@@ -3,7 +3,6 @@
 #include "tools/selection_tool.hpp"
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/scene_builder.hpp"
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/physics/icollision_shape.hpp"

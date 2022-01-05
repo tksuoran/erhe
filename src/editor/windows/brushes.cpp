@@ -108,8 +108,7 @@ void Brushes::initialize_component()
 
     get<Editor_tools>()->register_tool(this);
 
-    auto* view = get<Editor_view>();
-
+    const auto view = get<Editor_view>();
     view->register_command(&m_preview_command);
     view->register_command(&m_insert_command);
     view->bind_command_to_mouse_motion(&m_preview_command);
@@ -406,14 +405,14 @@ void Brushes::do_insert_operation()
 
     auto op = make_shared<Mesh_insert_remove_operation>(
         Mesh_insert_remove_operation::Context{
-            .selection_tool = m_selection_tool,
             .scene          = m_scene_root->scene(),
             .layer          = m_scene_root->content_layer(),
             .physics_world  = m_scene_root->physics_world(),
             .mesh           = instance.mesh,
             .node_physics   = instance.node_physics,
             .parent         = m_hover_mesh,
-            .mode           = Scene_item_operation::Mode::insert
+            .mode           = Scene_item_operation::Mode::insert,
+            .selection_tool = m_selection_tool.get()
         }
     );
     m_operation_stack->push(op);

@@ -72,15 +72,16 @@ void Line_renderer::initialize_component()
         c_line_renderer_initialize_component.data()
     );
 
-    m_pipeline.initialize(get<Shader_monitor>());
+    m_pipeline.initialize(*get<Shader_monitor>().get());
 
-    visible.create_frame_resources(&m_pipeline, get<Configuration>());
-    hidden.create_frame_resources(&m_pipeline, get<Configuration>());
+    const Configuration& configuration = *get<Configuration>().get();
+    visible.create_frame_resources(&m_pipeline, configuration);
+    hidden.create_frame_resources(&m_pipeline, configuration);
 
     gl::pop_debug_group();
 }
 
-void Line_renderer::Pipeline::initialize(Shader_monitor* shader_monitor)
+void Line_renderer::Pipeline::initialize(Shader_monitor& shader_monitor)
 {
     fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 
@@ -160,10 +161,7 @@ void Line_renderer::Pipeline::initialize(Shader_monitor* shader_monitor)
     Shader_stages::Prototype prototype(create_info);
     shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
 
-    if (shader_monitor)
-    {
-        shader_monitor->add(create_info, shader_stages.get());
-    }
+    shader_monitor.add(create_info, shader_stages.get());
 }
 
 Line_renderer::Style::Style(const char* name, bool world_space)
@@ -173,14 +171,14 @@ Line_renderer::Style::Style(const char* name, bool world_space)
 }
 
 void Line_renderer::Style::create_frame_resources(
-    Pipeline*                  pipeline,
-    const Configuration* const configuration
+    Pipeline*            pipeline,
+    const Configuration& configuration
 )
 {
     ERHE_PROFILE_FUNCTION
 
     m_pipeline = pipeline;
-    const auto       reverse_depth = configuration->reverse_depth;
+    const auto       reverse_depth = configuration.reverse_depth;
     constexpr size_t vertex_count  = 65536;
     constexpr size_t view_stride   = 256;
     constexpr size_t view_count    = 16;
@@ -299,12 +297,13 @@ void Line_renderer::render(
     const erhe::scene::ICamera& camera
 )
 {
-    visible.render(m_pipeline_state_tracker, viewport, camera, true, false);
-    hidden.render(m_pipeline_state_tracker, viewport, camera, true, true);
+    auto& state_tracker = *m_pipeline_state_tracker.get();
+    visible.render(state_tracker, viewport, camera, true, false);
+    hidden.render(state_tracker, viewport, camera, true, true);
 }
 
 void Line_renderer::Style::render(
-    erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker,
+    erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker,
     const erhe::scene::Viewport           viewport,
     const erhe::scene::ICamera&           camera,
     const bool                            show_visible_lines,
@@ -370,7 +369,7 @@ void Line_renderer::Style::render(
     if (show_hidden_lines)
     {
         const auto& pipeline = current_frame_resources().pipeline_depth_fail;
-        pipeline_state_tracker->execute(&pipeline);
+        pipeline_state_tracker.execute(&pipeline);
 
         gl::draw_arrays(
             pipeline.input_assembly->primitive_topology,
@@ -382,7 +381,7 @@ void Line_renderer::Style::render(
     if (show_visible_lines)
     {
         const auto& pipeline = current_frame_resources().pipeline_depth_pass;
-        pipeline_state_tracker->execute(&pipeline);
+        pipeline_state_tracker.execute(&pipeline);
 
         gl::draw_arrays(
             pipeline.input_assembly->primitive_topology,

@@ -52,7 +52,7 @@ void Operation_stack::initialize_component()
 
     hide();
 
-    auto* view = get<Editor_view>();
+    const auto view = get<Editor_view>();
     view->register_command(&m_undo_command);
     view->register_command(&m_redo_command);
     using Keycode = erhe::toolkit::Keycode;

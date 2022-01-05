@@ -41,8 +41,9 @@ public:
     public:
         erhe::scene::Scene&      scene;
         erhe::scene::Mesh_layer& layer;
-        Selection_tool*          selection_tool;
         bool                     attach{true};
+
+        Selection_tool* selection_tool{nullptr};
     };
 
     explicit Attach_detach_operation(Context&& context);

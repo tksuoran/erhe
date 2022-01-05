@@ -47,7 +47,9 @@ public:
     auto get_light_mesh      (const erhe::scene::Light& light) -> erhe::primitive::Primitive_geometry*;
 
 private:
-    Program_interface*                  m_program_interface{nullptr};
+    // Component dependency
+    std::shared_ptr<Program_interface>  m_program_interface;
+
     erhe::primitive::Primitive_geometry m_quad_mesh;
     erhe::primitive::Primitive_geometry m_cone_mesh;
     int                                 m_light_cone_sides{0};

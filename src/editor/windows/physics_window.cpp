@@ -65,8 +65,8 @@ void Physics_window::imgui()
         }
     }
 
-    auto* debug_drawer = get<Debug_draw>();
-    if (debug_drawer != nullptr)
+    const auto debug_drawer = get<Debug_draw>();
+    if (debug_drawer)
     {
         if (ImGui::CollapsingHeader("Visualizations"))
         {
@@ -172,7 +172,7 @@ void Physics_window::tool_render(const Render_context& /*context*/)
 {
     ERHE_PROFILE_FUNCTION
 
-    auto* const debug_drawer = get<Debug_draw>();
+    const auto debug_drawer = get<Debug_draw>();
     if (!debug_drawer || !m_debug_draw.enable || !m_scene_root)
     {
         return;

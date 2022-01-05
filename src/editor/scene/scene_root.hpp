@@ -67,7 +67,6 @@ class Debug_draw;
 class Mesh_memory;
 class Node_physics;
 class Raytrace_primitive;
-class Scene_builder;
 class Scene_root;
 class Brush;
 
@@ -146,6 +145,8 @@ public:
         erhe::scene::ICamera*& camera,
         const bool             nullptr_option = false
     ) const -> bool;
+
+    void sort_lights();
 
 private:
     std::mutex                                              m_materials_mutex;

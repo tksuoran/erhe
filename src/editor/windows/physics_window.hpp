@@ -61,8 +61,10 @@ public:
     auto get_debug_draw_parameters() -> Debug_draw_parameters;
 
 private:
-    Selection_tool*       m_selection_tool{nullptr};
-    Scene_root*           m_scene_root    {nullptr};
+    // Component dependencies
+    std::shared_ptr<Selection_tool> m_selection_tool;
+    std::shared_ptr<Scene_root>     m_scene_root;
+
     Debug_draw_parameters m_debug_draw;
 };
 

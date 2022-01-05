@@ -158,9 +158,10 @@ private:
 
     erhe::scene::Viewport                 m_viewport{0, 0, 0, 0, true};
 
-    erhe::graphics::OpenGL_state_tracker* m_pipeline_state_tracker{nullptr};
-    Programs*                             m_programs              {nullptr};
-    Mesh_memory*                          m_mesh_memory           {nullptr};
+    // Component dependencies
+    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
+    std::shared_ptr<Programs>                             m_programs;
+    std::shared_ptr<Mesh_memory>                          m_mesh_memory;
 
     erhe::graphics::Pipeline                              m_pipeline;
     erhe::graphics::Pipeline                              m_selective_depth_clear_pipeline;

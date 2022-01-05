@@ -41,7 +41,9 @@ public:
     [[nodiscard]] auto snap(const glm::vec3 v) const -> glm::vec3;
 
 private:
-    Line_renderer* m_line_renderer{nullptr};
+    // Component dependencies
+    std::shared_ptr<Line_renderer> m_line_renderer;
+
     bool           m_enable       {false};
     float          m_cell_size    {1.0f};
     int            m_cell_div     {10};

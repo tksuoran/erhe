@@ -43,7 +43,7 @@ public:
     void set_rigidbody_from_node (const erhe::physics::Transform rigidbody_from_node);
 
 private:
-    erhe::physics::IWorld*                           m_physics_world{nullptr};
+    erhe::physics::IWorld*                           m_physics_world      {nullptr};
     erhe::physics::Transform                         m_rigidbody_from_node{};
     erhe::physics::Transform                         m_node_from_rigidbody{};
     std::shared_ptr<erhe::physics::IRigid_body>      m_rigid_body;

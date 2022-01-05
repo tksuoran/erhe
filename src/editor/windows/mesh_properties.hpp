@@ -20,7 +20,6 @@ namespace erhe::scene
 namespace editor
 {
 
-class Scene_builder;
 class Scene_root;
 class Selection_tool;
 class Text_renderer;
@@ -51,10 +50,10 @@ public:
     void imgui() override;
 
 private:
-    Scene_builder*  m_scene_builder {nullptr};
-    Scene_root*     m_scene_root    {nullptr};
-    Selection_tool* m_selection_tool{nullptr};
-    Text_renderer*  m_text_renderer {nullptr};
+    // Component dependencies
+    std::shared_ptr<Scene_root>     m_scene_root;
+    std::shared_ptr<Selection_tool> m_selection_tool;
+    std::shared_ptr<Text_renderer>  m_text_renderer;
 
     int  m_max_labels   {400};
     bool m_show_points  {false};

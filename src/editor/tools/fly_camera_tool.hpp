@@ -27,7 +27,6 @@ namespace editor
 class Editor_tools;
 class Fly_camera_tool;
 class Pointer_context;
-class Scene_builder;
 class Scene_root;
 class Trs_tool;
 
@@ -164,10 +163,11 @@ private:
     Fly_camera_move_command               m_move_backward_inactive_command;
     Frame_controller                      m_camera_controller;
 
-    Editor_tools*                         m_editor_tools    {nullptr};
-    Pointer_context*                      m_pointer_context {nullptr};
-    Scene_root*                           m_scene_root      {nullptr};
-    Trs_tool*                             m_trs_tool        {nullptr};
+    // Component dependencies
+    std::shared_ptr<Editor_tools>         m_editor_tools;
+    std::shared_ptr<Pointer_context>      m_pointer_context;
+    std::shared_ptr<Scene_root>           m_scene_root;
+    std::shared_ptr<Trs_tool>             m_trs_tool;
 
     std::mutex                            m_mutex;
 

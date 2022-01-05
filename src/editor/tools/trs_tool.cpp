@@ -154,7 +154,7 @@ void Trs_tool::initialize_component()
 
     get<Editor_tools>()->register_tool(this);
 
-    auto* view = get<Editor_view>();
+    const auto view = get<Editor_view>();
     view->register_command(&m_drag_command);
     view->bind_command_to_mouse_drag(&m_drag_command, Mouse_button_left);
 }

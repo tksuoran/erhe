@@ -41,8 +41,9 @@ public:
     double                                m_time            {0.0};
     uint64_t                              m_frame_number{0};
 
-    Application* m_application{nullptr};
-    Scene_root*  m_scene_root {nullptr};
+    // Component dependencies
+    std::shared_ptr<Application> m_application;
+    std::shared_ptr<Scene_root>  m_scene_root;
 };  
    
 

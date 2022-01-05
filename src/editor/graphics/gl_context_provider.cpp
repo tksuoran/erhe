@@ -123,7 +123,7 @@ void Gl_context_provider::release_gl_context(Gl_worker_context context)
     m_condition_variable.notify_one();
 }
 
-Scoped_gl_context::Scoped_gl_context(Gl_context_provider* context_provider)
+Scoped_gl_context::Scoped_gl_context(const std::shared_ptr<Gl_context_provider>& context_provider)
     : m_context_provider{context_provider}
     , m_context         {context_provider->acquire_gl_context()}
 {

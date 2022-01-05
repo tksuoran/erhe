@@ -21,7 +21,6 @@ namespace editor
 {
 
 class Operation_stack;
-class Scene_builder;
 class Scene_root;
 class Selection_tool;
 
@@ -95,10 +94,10 @@ private:
     [[nodiscard]] auto get_node_state(erhe::scene::Node& node) -> Node_state&;
     auto drop_node_state(erhe::scene::Node& node);
 
-    Operation_stack* m_operation_stack{nullptr};
-    Scene_builder*   m_scene_builder  {nullptr};
-    Scene_root*      m_scene_root     {nullptr};
-    Selection_tool*  m_selection_tool {nullptr};
+    // Component dependencies
+    std::shared_ptr<Operation_stack> m_operation_stack;
+    std::shared_ptr<Scene_root>      m_scene_root;
+    std::shared_ptr<Selection_tool>  m_selection_tool;
 
     std::vector<Node_state> m_node_states;
 };

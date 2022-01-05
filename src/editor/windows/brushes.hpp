@@ -169,12 +169,13 @@ private:
     Brush_tool_preview_command m_preview_command;
     Brush_tool_insert_command  m_insert_command;
 
-    Materials*       m_materials      {nullptr};
-    Operation_stack* m_operation_stack{nullptr};
-    Pointer_context* m_pointer_context{nullptr};
-    Scene_root*      m_scene_root     {nullptr};
-    Selection_tool*  m_selection_tool {nullptr};
-    Grid_tool*       m_grid_tool      {nullptr};
+    // Component dependencies
+    std::shared_ptr<Materials>       m_materials;
+    std::shared_ptr<Operation_stack> m_operation_stack;
+    std::shared_ptr<Pointer_context> m_pointer_context;
+    std::shared_ptr<Scene_root>      m_scene_root;
+    std::shared_ptr<Selection_tool>  m_selection_tool;
+    std::shared_ptr<Grid_tool>       m_grid_tool;
 
     std::mutex                          m_brush_mutex;
     std::vector<std::shared_ptr<Brush>> m_brushes;

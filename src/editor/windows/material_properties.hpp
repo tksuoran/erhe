@@ -40,7 +40,8 @@ public:
     void imgui() override;
 
 private:
-    Materials* m_materials{nullptr};
+    // Component dependencies
+    std::shared_ptr<Materials> m_materials;
 };
 
 } // namespace editor

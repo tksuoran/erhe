@@ -106,11 +106,12 @@ private:
     [[nodiscard]]
     auto select_primitive_mode(const Pass pass) const -> erhe::primitive::Primitive_mode;
 
-    Configuration*                        m_configuration         {nullptr};
-    erhe::graphics::OpenGL_state_tracker* m_pipeline_state_tracker{nullptr};
-    Mesh_memory*                          m_mesh_memory           {nullptr};
-    Shadow_renderer*                      m_shadow_renderer       {nullptr};
-    Programs*                             m_programs              {nullptr};
+    // Component dependencies
+    std::shared_ptr<Configuration>                        m_configuration;
+    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
+    std::shared_ptr<Mesh_memory>                          m_mesh_memory;
+    std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
+    std::shared_ptr<Programs>                             m_programs;
 
     erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_set_hidden;
     erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_set_visible;

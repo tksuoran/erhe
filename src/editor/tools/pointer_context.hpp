@@ -108,10 +108,11 @@ private:
         bool released{false};
     };
 
-    Editor_rendering*                  m_editor_rendering{nullptr};
-    Log_window*                        m_log_window      {nullptr};
-    Scene_root*                        m_scene_root      {nullptr};
-    Viewport_windows*                  m_viewport_windows{nullptr};
+    // Component dependencies
+    std::shared_ptr<Editor_rendering>  m_editor_rendering;
+    std::shared_ptr<Log_window>        m_log_window;
+    std::shared_ptr<Scene_root>        m_scene_root;
+    std::shared_ptr<Viewport_windows>  m_viewport_windows;
 
     std::optional<glm::vec3>           m_position_in_window;
     std::optional<glm::vec3>           m_position_in_world;

@@ -56,7 +56,7 @@ void Log_window::initialize_component()
 
     erhe::raytrace::log_geometry.set_sink(this);
 
-    auto* view = get<Editor_view>();
+    const auto view = get<Editor_view>();
     view->register_command   (&m_toggle_pause_command);
     view->bind_command_to_key(&m_toggle_pause_command, erhe::toolkit::Keycode::Key_escape);
 
@@ -90,7 +90,7 @@ void Log_window::tail_write(const char* format, fmt::format_args args)
         return;
     }
 
-    std::string message = fmt::vformat(format, args);
+    const std::string message = fmt::vformat(format, args);
     if (!m_tail_entries.empty())
     {
         auto& back = m_tail_entries.back();

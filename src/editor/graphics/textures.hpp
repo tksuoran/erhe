@@ -40,7 +40,7 @@ public:
     std::shared_ptr<erhe::graphics::Texture> background;
 
 private:
-    Image_transfer* m_image_transfer{nullptr};
+    std::shared_ptr<Image_transfer> m_image_transfer;
 };
 
 }

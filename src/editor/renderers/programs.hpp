@@ -71,8 +71,10 @@ private:
 
     [[nodiscard]] auto make_program(const std::string_view name) -> std::unique_ptr<erhe::graphics::Shader_stages>;
 
-    Program_interface*    m_program_interface{nullptr};
-    Shader_monitor*       m_shader_monitor   {nullptr};
+    // Component dependencies
+    std::shared_ptr<Program_interface> m_program_interface;
+    std::shared_ptr<Shader_monitor>    m_shader_monitor;
+
     std::filesystem::path m_shader_path;
 };
 

@@ -56,19 +56,14 @@ void Component::unregister()
     m_components = nullptr;
 }
 
-auto Component::dependencies() -> const std::set<Component*>&
+auto Component::dependencies() -> const std::set<std::shared_ptr<Component>>&
 {
     return m_dependencies;
 }
 
-auto Component::depended_by() -> const std::set<Component*>&
+void Component::depends_on(const std::shared_ptr<Component>& dependency)
 {
-    return m_depended_by;
-}
-
-void Component::depends_on(Component* dependency)
-{
-    ERHE_VERIFY(dependency != nullptr);
+    ERHE_VERIFY(dependency);
 
     if (!dependency->is_registered())
     {
@@ -80,12 +75,6 @@ void Component::depends_on(Component* dependency)
         ERHE_FATAL("Dependency has not been registered");
     }
     m_dependencies.insert(dependency);
-    dependency->add_depended_by(this);
-}
-
-void Component::add_depended_by(Component* component)
-{
-    m_depended_by.insert(component);
 }
 
 void Component::set_connected()
@@ -140,7 +129,7 @@ auto Component::is_ready_to_initialize(const bool in_worker_thread) const
             name(),
             processing_requires_main_thread()
         );
-        for (auto* component : m_dependencies)
+        for (const auto& component : m_dependencies)
         {
             log_components.trace(
                 "    {}: {}\n",
@@ -165,30 +154,18 @@ auto Component::is_ready_to_deinitialize() const
         return false;
     }
 
-    const bool is_ready = m_depended_by.empty();
-    if (!is_ready)
-    {
-        log_components.trace("{} is not ready: depended by:\n", name());
-        for (auto* component : m_depended_by)
-        {
-            log_components.trace(
-                "    {}: {}\n",
-                component->name(),
-                c_str(component->get_state())
-            );
-        }
-    }
-    return is_ready;
+    return true;
 }
 
 void Component::component_initialized(Component* component)
 {
-    m_dependencies.erase(component);
-}
-
-void Component::component_deinitialized(Component* component)
-{
-    m_depended_by.erase(component);
+    std::erase_if(
+        m_dependencies,
+        [component](const auto& entry)
+        {
+            return entry.get() == component;
+        }
+    );
 }
 
 } // namespace erhe::components

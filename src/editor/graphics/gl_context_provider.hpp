@@ -69,7 +69,7 @@ private:
 class Scoped_gl_context
 {
 public:
-    explicit Scoped_gl_context(Gl_context_provider* context_provider);
+    explicit Scoped_gl_context(const std::shared_ptr<Gl_context_provider>& context_provider);
     ~Scoped_gl_context        ();
     Scoped_gl_context         (const Scoped_gl_context&) = delete;
     auto operator=            (const Scoped_gl_context&) = delete;
@@ -77,8 +77,8 @@ public:
     auto operator=            (Scoped_gl_context&&)      = delete;
 
 private:
-    Gl_context_provider* m_context_provider{nullptr};
-    Gl_worker_context    m_context;
+    std::shared_ptr<Gl_context_provider> m_context_provider;
+    Gl_worker_context                    m_context;
 };
 
 }

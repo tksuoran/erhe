@@ -42,7 +42,8 @@ public:
     auto selected_material() const -> std::shared_ptr<erhe::primitive::Material>;
 
 private:
-    Scene_root*                                             m_scene_root{nullptr};
+    // Component dependencies
+    std::shared_ptr<Scene_root>                             m_scene_root;
 
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
     std::vector<const char*>                                m_material_names;

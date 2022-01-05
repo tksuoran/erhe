@@ -21,7 +21,6 @@ class Log_window;
 class Id_renderer;
 class Pointer_context;
 class Operation_stack;
-class Scene_builder;
 class Scene_root;
 class Viewport_window;
 class Viewport_windows;
@@ -106,18 +105,18 @@ private:
     void inactivate_ready_commands  ();
     void update_active_mouse_command(Command* command);
 
-    Configuration*    m_configuration   {nullptr};
-    Editor_rendering* m_editor_rendering{nullptr};
-    Editor_time*      m_editor_time     {nullptr};
-    Editor_tools*     m_editor_tools    {nullptr};
-    Fly_camera_tool*  m_fly_camera_tool {nullptr};
-    Log_window*       m_log_window      {nullptr};
-    Operation_stack*  m_operation_stack {nullptr};
-    Pointer_context*  m_pointer_context {nullptr};
-    Scene_builder*    m_scene_builder   {nullptr};
-    Scene_root*       m_scene_root      {nullptr};
-    Viewport_windows* m_viewport_windows{nullptr};
-    Window*           m_window          {nullptr};
+    // Component dependencies
+    std::shared_ptr<Configuration>    m_configuration;
+    std::shared_ptr<Editor_rendering> m_editor_rendering;
+    std::shared_ptr<Editor_time>      m_editor_time;
+    std::shared_ptr<Editor_tools>     m_editor_tools;
+    std::shared_ptr<Fly_camera_tool>  m_fly_camera_tool;
+    std::shared_ptr<Log_window>       m_log_window;
+    std::shared_ptr<Operation_stack>  m_operation_stack;
+    std::shared_ptr<Pointer_context>  m_pointer_context;
+    std::shared_ptr<Scene_root>       m_scene_root;
+    std::shared_ptr<Viewport_windows> m_viewport_windows;
+    std::shared_ptr<Window>           m_window;
 
     Command*                                    m_active_mouse_command{nullptr};
     std::vector<Command*>                       m_commands;

@@ -82,10 +82,11 @@ private:
     void deselect();
     void select  ();
 
-    Line_renderer*                     m_line_renderer  {nullptr};
-    Pointer_context*                   m_pointer_context{nullptr};
-    Scene_root*                        m_scene_root     {nullptr};
-    Text_renderer*                     m_text_renderer  {nullptr};
+    // Component dependencies
+    std::shared_ptr<Line_renderer>     m_line_renderer;
+    std::shared_ptr<Pointer_context>   m_pointer_context;
+    std::shared_ptr<Scene_root>        m_scene_root;
+    std::shared_ptr<Text_renderer>     m_text_renderer;
 
     std::shared_ptr<erhe::scene::Mesh> m_hover_mesh           {nullptr};
     size_t                             m_hover_primitive_index{0};

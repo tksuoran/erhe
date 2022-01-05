@@ -51,7 +51,7 @@ class Text_renderer
 {
 public:
     static constexpr std::string_view c_name{"Text_renderer"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Text_renderer ();
     ~Text_renderer() override;
@@ -146,7 +146,8 @@ private:
     [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
     void create_frame_resources();
 
-    erhe::graphics::OpenGL_state_tracker*            m_pipeline_state_tracker{nullptr};
+    // Component dependencies
+    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
 
     erhe::graphics::Fragment_outputs                 m_fragment_outputs;
     erhe::graphics::Vertex_attribute_mappings        m_attribute_mappings;

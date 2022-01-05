@@ -48,10 +48,9 @@ public:
 private:
     void window_menu();
 
-    Editor_view* m_editor_view         {nullptr};
-    Editor_time* m_editor_time         {nullptr};
-    bool         m_show_tool_properties{true};
-    bool         m_show_style_editor   {false};
+    // Component dependencies
+    std::shared_ptr<Editor_view> m_editor_view;
+    std::shared_ptr<Editor_time> m_editor_time;
 
     std::mutex                                m_mutex;
     std::vector<gsl::not_null<Tool*>>         m_tools;
@@ -59,6 +58,8 @@ private:
     std::vector<gsl::not_null<Imgui_window*>> m_imgui_windows;
     ImGuiContext*                             m_imgui_context{nullptr};
     ImVector<ImWchar>                         m_glyph_ranges;
+    bool                                      m_show_tool_properties{true};
+    bool                                      m_show_style_editor   {false};
 };
 
 }

@@ -12,7 +12,6 @@
 #include "renderers/line_renderer.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "renderers/text_renderer.hpp"
-#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "windows/log_window.hpp"
 #include "windows/viewport_config.hpp"
@@ -50,7 +49,6 @@ void Editor_rendering::connect()
     m_line_renderer          = get<Line_renderer    >();
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
     m_pointer_context        = get<Pointer_context >();
-    m_scene_builder          = get<Scene_builder   >();
     m_scene_root             = get<Scene_root      >();
     m_shadow_renderer        = get<Shadow_renderer >();
     m_text_renderer          = get<Text_renderer   >();
@@ -121,9 +119,8 @@ void Editor_rendering::render()
 {
     ERHE_PROFILE_FUNCTION
 
-    Expects(m_application   != nullptr);
-    Expects(m_scene_builder != nullptr);
-    Expects(m_editor_view   != nullptr);
+    Expects(m_application);
+    Expects(m_editor_view);
 
     if (m_trigger_capture)
     {
@@ -134,11 +131,11 @@ void Editor_rendering::render()
 
     // Render shadow maps
     if (
-        (m_scene_builder   != nullptr) &&
-        (m_shadow_renderer != nullptr)
+        m_scene_root &&
+        m_shadow_renderer
     )
     {
-        m_scene_builder->sort_lights();
+        m_scene_root->sort_lights();
         m_shadow_renderer->render(
             m_scene_root->content_layers(),
             *m_scene_root->light_layer().get()
@@ -173,7 +170,7 @@ void Editor_rendering::render_viewport(const Render_context& context, const bool
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_scene_builder && m_forward_renderer)
+    if (m_forward_renderer)
     {
         render_content  (context);
         render_selection(context);

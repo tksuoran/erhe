@@ -7,7 +7,6 @@
 #include "renderers/line_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/text_renderer.hpp"
-#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "tools/theremin_tool.hpp"
@@ -100,16 +99,13 @@ Headset_view_resources::Headset_view_resources(
 
     camera = std::make_shared<erhe::scene::Camera>("Headset Camera");
 
-    auto* scene_root = rendering.get<Scene_root>();
+    const auto scene_root = rendering.get<Scene_root>();
     scene_root->scene().cameras.push_back(camera);
-
     scene_root->scene().nodes.emplace_back(camera);
     scene_root->scene().nodes_sorted = false;
 
     auto* view_camera = rendering.get<Fly_camera_tool>()->get_camera();
     view_camera->attach(camera);
-    //camera->parent = rendering.get<Scene_builder>()->get_view_camera()->get();
-    //camera_node->parent = nullptr;
 
     is_valid = true;
 }
@@ -486,17 +482,15 @@ void Headset_renderer::render()
         {
             erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker;
             Configuration*                        configuration;
-            Scene_builder*                        scene_builder;
             Line_renderer*                        line_renderer;
             Text_renderer*                        text_renderer;
         };
         Context context
         {
-            get<erhe::graphics::OpenGL_state_tracker>(),
-            get<Configuration>(),
-            get<Scene_builder>(),
-            get<Line_renderer>(),
-            get<Text_renderer>()
+            get<erhe::graphics::OpenGL_state_tracker>().get(),
+            get<Configuration>().get(),
+            get<Line_renderer>().get(),
+            get<Text_renderer>().get()
         };
 
 #if 0
@@ -678,7 +672,6 @@ void Headset_renderer::connect()
     m_application      = get<Application>();
     m_editor_rendering = get<Editor_rendering>();
     m_line_renderer    = get<Line_renderer   >();
-    m_scene_builder    = require<Scene_builder>();
     m_scene_root       = require<Scene_root   >();
 
     require<Window>();
@@ -694,8 +687,8 @@ void Headset_renderer::initialize_component()
 
     m_headset = std::make_unique<erhe::xr::Headset>(get<Window>()->get_context_window());
 
-    auto* mesh_memory = get<Mesh_memory>();
-    auto* view_root   = get<Fly_camera_tool>()->get_camera();
+    const auto mesh_memory = get<Mesh_memory>();
+    const auto view_root   = get<Fly_camera_tool>()->get_camera();
 
     m_controller_visualization = std::make_unique<Controller_visualization>(
         *mesh_memory,

@@ -36,7 +36,6 @@ class Id_renderer;
 class Line_renderer;
 class Pointer_context;
 class Mesh_memory;
-class Scene_builder;
 class Scene_root;
 class Shadow_renderer;
 class Text_renderer;
@@ -93,23 +92,23 @@ private:
     [[nodiscard]] auto width () const -> int;
     [[nodiscard]] auto height() const -> int;
 
-    Application*                          m_application           {nullptr};
-    Configuration*                        m_configuration         {nullptr};
-    Editor_view*                          m_editor_view           {nullptr};
-    Editor_time*                          m_editor_time           {nullptr};
-    Editor_tools*                         m_editor_tools          {nullptr};
-    Forward_renderer*                     m_forward_renderer      {nullptr};
-    Log_window*                           m_log_window            {nullptr};
-    Headset_renderer*                     m_headset_renderer      {nullptr};
-    Id_renderer*                          m_id_renderer           {nullptr};
-    Line_renderer*                        m_line_renderer         {nullptr};
-    erhe::graphics::OpenGL_state_tracker* m_pipeline_state_tracker{nullptr};
-    Pointer_context*                      m_pointer_context       {nullptr};
-    Scene_builder*                        m_scene_builder         {nullptr};
-    Scene_root*                           m_scene_root            {nullptr};
-    Shadow_renderer*                      m_shadow_renderer       {nullptr};
-    Text_renderer*                        m_text_renderer         {nullptr};
-    Viewport_windows*                     m_viewport_windows      {nullptr};
+    // Component dependencies
+    std::shared_ptr<Application>                          m_application;
+    std::shared_ptr<Configuration>                        m_configuration;
+    std::shared_ptr<Editor_view>                          m_editor_view;
+    std::shared_ptr<Editor_time>                          m_editor_time;
+    std::shared_ptr<Editor_tools>                         m_editor_tools;
+    std::shared_ptr<Forward_renderer>                     m_forward_renderer;
+    std::shared_ptr<Log_window>                           m_log_window;
+    std::shared_ptr<Headset_renderer>                     m_headset_renderer;
+    std::shared_ptr<Id_renderer>                          m_id_renderer;
+    std::shared_ptr<Line_renderer>                        m_line_renderer;
+    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
+    std::shared_ptr<Pointer_context>                      m_pointer_context;
+    std::shared_ptr<Scene_root>                           m_scene_root;
+    std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
+    std::shared_ptr<Text_renderer>                        m_text_renderer;
+    std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
     bool                                  m_trigger_capture{false};
 };

@@ -223,5 +223,44 @@ auto Scene_root::camera_combo(
     return camera_changed;
 }
 
+namespace
+{
+
+[[nodiscard]]
+auto sort_value(const Light::Type light_type) -> int
+{
+    switch (light_type)
+    {
+        case Light::Type::directional: return 0;
+        case Light::Type::point:       return 1;
+        case Light::Type::spot:        return 2;
+        default: return 3;
+    }
+}
+
+class Light_comparator
+{
+public:
+    [[nodiscard]]
+    inline auto operator()(
+        const shared_ptr<Light>& lhs,
+        const shared_ptr<Light>& rhs
+    ) -> bool
+    {
+        return sort_value(lhs->type) < sort_value(rhs->type);
+    }
+};
+
+}
+
+void Scene_root::sort_lights()
+{
+    sort(
+        light_layer()->lights.begin(),
+        light_layer()->lights.end(),
+        Light_comparator()
+    );
+}
+
 
 } // namespace editor
