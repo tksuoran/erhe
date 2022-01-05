@@ -139,15 +139,27 @@ void Vertex_input_state::update()
         const auto* const attribute = binding->vertex_attribute;
         const auto&       mapping   = binding->vertex_attribute_mapping;
 
-        Expects(vbo != nullptr);
-        Expects(attribute != nullptr);
-        Expects(mapping->layout_location < max_attribute_count);
+        if (vbo == nullptr)
+        {
+            log_vertex_attribute_mappings.error("bad vertex input state: vbo == nullptr");
+            continue;
+        }
+        if (attribute == nullptr)
+        {
+            log_vertex_attribute_mappings.error("bad vertex input state: attribute == nullptr");
+            continue;
+        }
+        if (mapping->layout_location >= max_attribute_count)
+        {
+            log_vertex_attribute_mappings.error("bad vertex input state: layout location >= max attribute count");
+            continue;
+        }
 
         gl::vertex_array_vertex_buffer(
             gl_name(),
             static_cast<GLuint>(mapping->layout_location),
             vbo->gl_name(),
-            intptr_t(0),
+            intptr_t{0},
             static_cast<int>(binding->stride)
         );
 

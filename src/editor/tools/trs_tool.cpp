@@ -814,8 +814,8 @@ void Trs_tool::update_rotate()
     }
 
     //constexpr double c_parallel_threshold = 0.2;
-    const dvec3  V0      = dvec3{root()->position_in_world()} - dvec3{camera->position_in_world()};
-    const dvec3  V       = normalize(m_drag.initial_local_from_world * vec4{V0, 0.0});
+    //const dvec3  V0      = dvec3{root()->position_in_world()} - dvec3{camera->position_in_world()};
+    //const dvec3  V       = normalize(m_drag.initial_local_from_world * vec4{V0, 0.0});
     //const double v_dot_n = dot(V, m_rotation.normal);
     bool ready_to_rotate{false};
     //m_log_window->tail_log("R: {} @ {}", root()->name(), root()->position_in_world());
