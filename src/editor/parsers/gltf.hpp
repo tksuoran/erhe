@@ -1,18 +1,15 @@
 #pragma once
 
-namespace erhe::geometry
-{
-    class Geometry;
-}
-
 #include <filesystem>
 #include <memory>
-#include <string>
-#include <vector>
 
 namespace editor {
 
-[[nodiscard]] auto parse_gltf(const std::filesystem::path& path)
--> std::vector<std::shared_ptr<erhe::geometry::Geometry>>;
+class Scene_root;
+
+auto parse_gltf(
+    const std::shared_ptr<Scene_root>& scene_root,
+    const std::filesystem::path&       path
+) -> bool;
 
 }

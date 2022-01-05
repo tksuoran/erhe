@@ -223,29 +223,29 @@ void Scene_builder::make_brushes()
 
     if constexpr (gltf_files)
     {
-        execution_queue.enqueue(
-            [this]()
+        //execution_queue.enqueue(
+        //    [this]()
             {
                 ERHE_PROFILE_SCOPE("parse gltf files");
 
-                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
-                constexpr bool instantiate = true;
+                //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                //constexpr bool instantiate = true;
 
                 const char* files_names[] = {
                     "res/models/SM_Deccer_Cubes.gltf"
                 };
                 for (auto* path : files_names)
                 {
-                    auto geometries = parse_gltf(path);
+                    parse_gltf(m_scene_root, path);
 
-                    for (auto& geometry : geometries)
-                    {
-                        geometry->compute_polygon_normals();
-                        make_brush(instantiate, move(geometry), context);
-                    }
+                    //for (auto& geometry : geometries)
+                    //{
+                    //    geometry->compute_polygon_normals();
+                    //    make_brush(instantiate, move(geometry), context);
+                    //}
                 }
             }
-        );
+        //);
     }
 
     if constexpr (obj_files)

@@ -1,5 +1,12 @@
 #include "parsers/gltf.hpp"
 #include "log.hpp"
+#include "scene/scene_root.hpp"
+
+#include "erhe/scene/camera.hpp"
+#include "erhe/scene/projection.hpp"
+#include "erhe/scene/mesh.hpp"
+#include "erhe/scene/mesh.hpp"
+#include "erhe/scene/scene.hpp"
 
 #include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -20,11 +27,6 @@
 #include <string>
 
 namespace editor {
-
-//auto c_str(Microsoft::glTF::) -> const char*
-//{
-//}
-//
 
 namespace {
 
@@ -197,8 +199,9 @@ using namespace erhe::geometry;
 
 
 auto parse_gltf(
-    const std::filesystem::path& relative_path
-) -> std::vector<std::shared_ptr<erhe::geometry::Geometry>>
+    const std::shared_ptr<Scene_root>& scene_root,
+    const std::filesystem::path&       relative_path
+) -> bool
 {
     ERHE_PROFILE_FUNCTION
 
@@ -311,85 +314,197 @@ auto parse_gltf(
         log_parsers.info("Extension Required: {}\n", extension);
     }
 
-    for (const auto& mesh : document.meshes.Elements())
+    if (document.scenes.Size() != 1)
     {
-        log_parsers.info("Mesh: {}\n", mesh.id);
+        log_parsers.warn("Warning: document.scenes.Size() = {}", document.scenes.Size());
+    }
 
-        for (const auto& primitive : mesh.primitives)
+    auto& root_scene = scene_root->scene();
+    for (const auto& src_scene : document.scenes.Elements())
+    {
+        for (const auto& node_id : src_scene.nodes)
         {
-            std::string accessor_id;
-
-            for (const auto& attribute : primitive.attributes)
+            const auto& node = document.nodes.Get(node_id);
+            if (!node.cameraId.empty())
             {
-                const auto accessor         = document.accessors.Get(attribute.second);
-                const auto buffer_view      = document.bufferViews.Get(accessor.bufferViewId);
-                const auto data             = resource_reader->ReadBinaryData<float>(document, accessor);
-                const auto data_byte_length = data.size() * sizeof(float);
+                log_parsers.info("Camera: {} - {}\n", node_id, node.cameraId);
+                const auto& src_camera = document.cameras.Get(node.cameraId);
+                auto camera = std::make_shared<erhe::scene::Camera>(node.name);
+                if (src_camera.projection)
+                {
+                    const auto& projection = *src_camera.projection.get();
+                    log_parsers.info("Camera.ZNear: {}\n", projection.znear);
 
-                log_parsers.info(
-                    "Primitive attribute: {}\n",
-                    attribute.first
-                    //attribute.second
-                );
+                    camera->projection()->z_near = projection.znear;
 
-                log_parsers.info(
-                    "    Accessor: buffer view = {}, offset = {}, component type = {}, normalized = {}, count = {}, type = {}\n",
-                    accessor.bufferViewId,
-                    accessor.byteOffset,
-                    c_str(accessor.componentType),
-                    accessor.normalized,
-                    accessor.count,
-                    c_str(accessor.type)
-                );
+                    //log_parsers.info("Camera IsFinite: {}\n", projection.IsFinite());
+                    log_parsers.info("Camera.Projection.ProjectionType: {}\n", c_str(projection.GetProjectionType()));
+                    switch (projection.GetProjectionType())
+                    {
+                        case Microsoft::glTF::ProjectionType::PROJECTION_ORTHOGRAPHIC:
+                        {
+                            const auto& ortho = reinterpret_cast<const Microsoft::glTF::Orthographic&>(projection);
+                            log_parsers.info("Camera.Projection.Ortho.XMag: {}\n", ortho.xmag);
+                            log_parsers.info("Camera.Projection.Ortho.YMag: {}\n", ortho.ymag);
+                            log_parsers.info("Camera.Projection.Ortho.ZFar: {}\n", ortho.zfar);
 
-                log_parsers.info(
-                    "    Buffer view: buffer id = {}, offset = {}, length = {}, stride = {}, target = {}, byte count = {}\n",
-                    buffer_view.bufferId,
-                    buffer_view.byteOffset,
-                    buffer_view.byteLength,
-                    (buffer_view.byteStride.HasValue() ? buffer_view.byteStride.Get() : 0),
-                    (buffer_view.target.HasValue() ? c_str(buffer_view.target.Get()) : "(empty)"),
-                    data_byte_length
-                );
+                            camera->projection()->projection_type = erhe::scene::Projection::Type::orthogonal;
+                            camera->projection()->ortho_width     = ortho.xmag;
+                            camera->projection()->ortho_height    = ortho.ymag;
+                            camera->projection()->z_far           = ortho.zfar;
+                            break;
+                        }
+
+                        case Microsoft::glTF::ProjectionType::PROJECTION_PERSPECTIVE:
+                        {
+                            const auto& perspective = reinterpret_cast<const Microsoft::glTF::Perspective&>(projection);
+                            log_parsers.info(
+                                "Camera.Projection.Perspective.AspectRatio: {}\n",
+                                perspective.aspectRatio.HasValue()
+                                    ? perspective.aspectRatio.Get()
+                                    : 0.0f
+                            );
+                            log_parsers.info("Camera.Projection.Ortho.YFov: {}\n", perspective.yfov);
+                            log_parsers.info(
+                                "Camera.Projection.Ortho.ZFar: {}\n",
+                                perspective.zfar.HasValue()
+                                    ? perspective.zfar.Get()
+                                    : 0.0f
+                            );
+
+                            camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
+                            camera->projection()->fov_y           = perspective.yfov;
+                            camera->projection()->z_far           = perspective.zfar.HasValue()
+                                    ? perspective.zfar.Get()
+                                    : 0.0f;
+                            break;
+                        }
+                        default:
+                        {
+                            log_parsers.warn("Camera.Projection: unknown projection type {}\n");
+                            break;
+                        }
+                    }
+                }
+
+                scene_root->scene().cameras.push_back(camera);
+
+                root_scene.nodes.emplace_back(camera);
+                root_scene.nodes_sorted = false;
             }
-
-            log_parsers.info(
-                "Primitive material ID: {}\n",
-                primitive.materialId
-            );
-
+            else if (!node.meshId.empty())
             {
-                const Microsoft::glTF::Accessor& accessor = document.accessors.Get(primitive.indicesAccessorId);
-                //const auto data             = resource_reader->ReadBinaryData<float>(document, accessor);
-                //const auto data_byte_length = data.size() * sizeof(float);
-                log_parsers.info(
-                    "Indices: offset = {}, component type = {}, normalized = {}, count = {}, type = {}\n",
-                   // data_byte_length,
-                    accessor.byteOffset,
-                    c_str(accessor.componentType),
-                    accessor.normalized,
-                    accessor.count,
-                    c_str(accessor.type)
-                );
-            }
+                log_parsers.info("Mesh: {} - {}\n", node_id, node.meshId);
 
-            if (
-                primitive.TryGetAttributeAccessorId(
-                    Microsoft::glTF::ACCESSOR_POSITION,
-                    accessor_id
-                )
-            )
-            {
-                const Microsoft::glTF::Accessor& accessor = document.accessors.Get(accessor_id);
+                const auto& src_mesh = document.meshes.Get(node.meshId);
+                auto mesh = std::make_shared<erhe::scene::Mesh>(node.name);
+
+                for (const auto src_primitive : src_mesh.primitives)
+                {
+                    std::string accessor_id;
+
+                    for (const auto& attribute : src_primitive.attributes)
+                    {
+                        const auto accessor         = document.accessors.Get(attribute.second);
+                        const auto buffer_view      = document.bufferViews.Get(accessor.bufferViewId);
+                        const auto data             = resource_reader->ReadBinaryData<float>(document, accessor);
+                        const auto data_byte_length = data.size() * sizeof(float);
+
+                        log_parsers.info(
+                            "Primitive attribute: {}\n",
+                            attribute.first
+                            //attribute.second
+                        );
+
+                        log_parsers.info(
+                            "    Accessor: buffer view = {}, offset = {}, component type = {}, normalized = {}, count = {}, type = {}\n",
+                            accessor.bufferViewId,
+                            accessor.byteOffset,
+                            c_str(accessor.componentType),
+                            accessor.normalized,
+                            accessor.count,
+                            c_str(accessor.type)
+                        );
+
+                        log_parsers.info(
+                            "    Buffer view: buffer id = {}, offset = {}, length = {}, stride = {}, target = {}, byte count = {}\n",
+                            buffer_view.bufferId,
+                            buffer_view.byteOffset,
+                            buffer_view.byteLength,
+                            (buffer_view.byteStride.HasValue() ? buffer_view.byteStride.Get() : 0),
+                            (buffer_view.target.HasValue() ? c_str(buffer_view.target.Get()) : "(empty)"),
+                            data_byte_length
+                        );
+                    }
+
+                    if (!src_primitive.materialId.empty())
+                    {
+                        const auto& src_material = document.materials.Get(src_primitive.materialId);
+                        log_parsers.info(
+                            "Primitive material: {} = {}\n",
+                            src_primitive.materialId,
+                            src_material.name
+                        );
+                        log_parsers.info(
+                            "Material BaseColor = {}, {}, {}, {}\n",
+                            src_material.metallicRoughness.baseColorFactor.r,
+                            src_material.metallicRoughness.baseColorFactor.g,
+                            src_material.metallicRoughness.baseColorFactor.b,
+                            src_material.metallicRoughness.baseColorFactor.a
+                        );
+                        log_parsers.info(
+                            "Material Metallic = {}\n",
+                            src_material.metallicRoughness.metallicFactor
+                        );
+                        log_parsers.info(
+                            "Material Roughness = {}\n",
+                            src_material.metallicRoughness.metallicFactor
+                        );
+                    }
+
+                    {
+                        const Microsoft::glTF::Accessor& accessor = document.accessors.Get(src_primitive.indicesAccessorId);
+                        //const auto data             = resource_reader->ReadBinaryData<float>(document, accessor);
+                        //const auto data_byte_length = data.size() * sizeof(float);
+                        log_parsers.info(
+                            "Indices: offset = {}, component type = {}, normalized = {}, count = {}, type = {}\n",
+                           // data_byte_length,
+                            accessor.byteOffset,
+                            c_str(accessor.componentType),
+                            accessor.normalized,
+                            accessor.count,
+                            c_str(accessor.type)
+                        );
+                    }
+
+                    if (
+                        src_primitive.TryGetAttributeAccessorId(
+                            Microsoft::glTF::ACCESSOR_POSITION,
+                            accessor_id
+                        )
+                    )
+                    {
+                        const Microsoft::glTF::Accessor& accessor = document.accessors.Get(accessor_id);
                                                 
-                const auto data             = resource_reader->ReadBinaryData<float>(document, accessor);
-                const auto data_byte_length = data.size() * sizeof(float);
+                        const auto data             = resource_reader->ReadBinaryData<float>(document, accessor);
+                        const auto data_byte_length = data.size() * sizeof(float);
 
-                log_parsers.info(
-                    "Primitive: {} bytes of position data\n",
-                    data_byte_length
-                );
+                        log_parsers.info(
+                            "Primitive: {} bytes of position data\n",
+                            data_byte_length
+                        );
+                    }
+                }
+
             }
+            else
+            {
+                log_parsers.info("Node: {} - {}\n", node_id, node.id);
+            }
+
+            const auto& src_node = document.nodes.Get(node.id);
+
+            log_parsers.info("Node.TransformationType = {}\n", c_str(src_node.GetTransformationType()));
         }
     }
 
