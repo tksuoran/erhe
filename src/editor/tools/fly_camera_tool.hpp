@@ -163,7 +163,7 @@ private:
     Fly_camera_move_command               m_move_forward_inactive_command;
     Fly_camera_move_command               m_move_backward_active_command;
     Fly_camera_move_command               m_move_backward_inactive_command;
-    Frame_controller                      m_camera_controller;
+    std::shared_ptr<Frame_controller>     m_camera_controller;
 
     // Component dependencies
     std::shared_ptr<Editor_tools>         m_editor_tools;

@@ -17,16 +17,17 @@ class INode_attachment
 public:
     virtual ~INode_attachment();
 
-    static constexpr uint64_t c_flag_bit_none        = 0u;
-    static constexpr uint64_t c_flag_bit_is_physics  = (1u << 0);
-    static constexpr uint64_t c_flag_bit_is_raytrace = (1u << 1);
+    static constexpr uint64_t c_flag_bit_none                = 0u;
+    static constexpr uint64_t c_flag_bit_is_physics          = (1u << 0);
+    static constexpr uint64_t c_flag_bit_is_raytrace         = (1u << 1);
+    static constexpr uint64_t c_flag_bit_is_frame_controller = (1u << 2);
 
     virtual [[nodiscard]] auto node_attachment_type() const -> const char* = 0;
     virtual void on_attached_to           (Node* node) { m_node = node; };
     virtual void on_detached_from         (Node* node) { static_cast<void>(node); m_node = nullptr; };
     virtual void on_node_transform_changed() {};
 
-    [[nodiscard]] auto node     () const -> Node*;
+    [[nodiscard]] auto get_node () const -> Node*;
     [[nodiscard]] auto flag_bits() const -> uint64_t;
     [[nodiscard]] auto flag_bits() -> uint64_t&;
 

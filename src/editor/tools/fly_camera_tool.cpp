@@ -2,7 +2,6 @@
 #include "log.hpp"
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
-#include "scene/frame_controller.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
@@ -192,20 +191,27 @@ void Fly_camera_tool::initialize_component()
 
     view->register_command(&m_turn_command);
     view->bind_command_to_mouse_drag(&m_turn_command, Mouse_button_left);
+
+    m_camera_controller = std::make_shared<Frame_controller>();
 }
 
 void Fly_camera_tool::set_camera(erhe::scene::ICamera* camera)
 {
-    // set_frame() below requires world from node matrix, which
+    // attach() below requires world from node matrix, which
     // might not be valid due to transform hierarchy.
     m_scene_root->scene().update_node_transforms();
 
-    m_camera_controller.set_node(camera);
+    auto* old_host = m_camera_controller->get_node();
+    if (old_host != nullptr)
+    {
+        old_host->detach(m_camera_controller.get());
+    }
+    camera->attach(m_camera_controller);
 }
 
 auto Fly_camera_tool::get_camera() const -> erhe::scene::ICamera*
 {
-    return as_icamera(m_camera_controller.get_node());
+    return as_icamera(m_camera_controller->get_node());
 }
 
 auto Fly_camera_tool::description() -> const char*
@@ -218,9 +224,9 @@ void Fly_camera_tool::translation(const int tx, const int ty, const int tz)
     std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     constexpr float scale = 16384.0f;
-    m_camera_controller.translate_x.adjust(tx / scale);
-    m_camera_controller.translate_y.adjust(ty / scale);
-    m_camera_controller.translate_z.adjust(tz / scale);
+    m_camera_controller->translate_x.adjust(tx / scale);
+    m_camera_controller->translate_y.adjust(ty / scale);
+    m_camera_controller->translate_z.adjust(tz / scale);
 }
 
 void Fly_camera_tool::rotation(const int rx, const int ry, const int rz)
@@ -228,9 +234,9 @@ void Fly_camera_tool::rotation(const int rx, const int ry, const int rz)
     std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     constexpr float scale = 16384.0f;
-    m_camera_controller.rotate_x.adjust(rx / scale);
-    m_camera_controller.rotate_y.adjust(ry / scale);
-    m_camera_controller.rotate_z.adjust(rz / scale);
+    m_camera_controller->rotate_x.adjust(rx / scale);
+    m_camera_controller->rotate_y.adjust(ry / scale);
+    m_camera_controller->rotate_z.adjust(rz / scale);
 }
 
 auto Fly_camera_tool::try_move(
@@ -248,7 +254,7 @@ auto Fly_camera_tool::try_move(
         return false;
     }
 
-    auto& controller = m_camera_controller.get_controller(control);
+    auto& controller = m_camera_controller->get_controller(control);
     controller.set(item, active);
 
     return true;
@@ -258,12 +264,12 @@ void Fly_camera_tool::dump()
 {
     get<Log_window>()->tail_log(
         "Translate: {}{}{}{}{}{}",
-        m_camera_controller.translate_x.more() ? "X+ " : "",
-        m_camera_controller.translate_x.less() ? "X- " : "",
-        m_camera_controller.translate_y.more() ? "Y+ " : "",
-        m_camera_controller.translate_y.less() ? "Y- " : "",
-        m_camera_controller.translate_z.more() ? "Z+ " : "",
-        m_camera_controller.translate_z.less() ? "Z- " : ""
+        m_camera_controller->translate_x.more() ? "X+ " : "",
+        m_camera_controller->translate_x.less() ? "X- " : "",
+        m_camera_controller->translate_y.more() ? "Y+ " : "",
+        m_camera_controller->translate_y.less() ? "Y- " : "",
+        m_camera_controller->translate_z.more() ? "Z+ " : "",
+        m_camera_controller->translate_z.less() ? "Z- " : ""
     );
 }
 
@@ -274,13 +280,13 @@ void Fly_camera_tool::turn_relative(const double dx, const double dy)
     if (dx != 0.0f)
     {
         const float value = static_cast<float>(m_sensitivity * dx / 1024.0);
-        m_camera_controller.rotate_y.adjust(value);
+        m_camera_controller->rotate_y.adjust(value);
     }
 
     if (dy != 0.0f)
     {
         const float value = static_cast<float>(m_sensitivity * dy / 1024.0);
-        m_camera_controller.rotate_x.adjust(value);
+        m_camera_controller->rotate_x.adjust(value);
     }
 }
 
@@ -290,7 +296,7 @@ void Fly_camera_tool::update_fixed_step(
 {
     std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
-    m_camera_controller.update_fixed_step();
+    m_camera_controller->update_fixed_step();
 }
 
 void Fly_camera_tool::update_once_per_frame(
@@ -299,14 +305,23 @@ void Fly_camera_tool::update_once_per_frame(
 {
     std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
-    m_camera_controller.update();
+    m_camera_controller->update();
+}
+
+auto simple_degrees(const float radians_value) -> float
+{
+    const auto degrees_value   = glm::degrees(radians_value);
+    const auto degrees_mod_360 = std::fmodf(degrees_value, 360.0f);
+    return (degrees_mod_360 <= 180.0f)
+        ? degrees_mod_360
+        : degrees_mod_360 - 360.0f;
 }
 
 void Fly_camera_tool::imgui()
 {
     std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
-    float speed = m_camera_controller.translate_z.max_delta();
+    float speed = m_camera_controller->translate_z.max_delta();
 
     auto* camera = get_camera();
     if (m_scene_root->camera_combo("Camera", camera))
@@ -315,10 +330,12 @@ void Fly_camera_tool::imgui()
     }
     ImGui::SliderFloat("Sensitivity", &m_sensitivity, 0.2f,   2.0f);
     ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
+    ImGui::Text(reinterpret_cast<const char*>(u8"Heading = %f°"), simple_degrees(m_camera_controller->heading()));
+    ImGui::Text(reinterpret_cast<const char*>(u8"Elevation = %f\xb0"), simple_degrees(m_camera_controller->elevation()));
 
-    m_camera_controller.translate_x.set_max_delta(speed);
-    m_camera_controller.translate_y.set_max_delta(speed);
-    m_camera_controller.translate_z.set_max_delta(speed);
+    m_camera_controller->translate_x.set_max_delta(speed);
+    m_camera_controller->translate_y.set_max_delta(speed);
+    m_camera_controller->translate_z.set_max_delta(speed);
 }
 
 }

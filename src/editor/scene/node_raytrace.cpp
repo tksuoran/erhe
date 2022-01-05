@@ -146,10 +146,11 @@ auto Node_raytrace::node_attachment_type() const -> const char*
 
 void Node_raytrace::on_node_transform_changed()
 {
-    ERHE_VERIFY(node() != nullptr);
-    node()->update_transform();
+    auto* node = get_node();
+    ERHE_VERIFY(node != nullptr);
+    node->update_transform();
     ERHE_VERIFY(m_instance);
-    m_instance->set_transform(node()->world_from_node());
+    m_instance->set_transform(node->world_from_node());
     m_instance->commit();
 }
 

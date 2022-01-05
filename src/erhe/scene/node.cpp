@@ -8,14 +8,14 @@ namespace erhe::scene
 
 INode_attachment::~INode_attachment()
 {
-    auto* const host = node();
+    auto* const host = get_node();
     if (host != nullptr)
     {
         host->detach(this);
     }
 }
 
-auto INode_attachment::node() const -> Node*
+auto INode_attachment::get_node() const -> Node*
 {
     return m_node;
 }
@@ -126,13 +126,14 @@ auto Node::detach(INode_attachment* attachment) -> bool
         attachment->node_attachment_type()
     );
 
-    if (attachment->node() != this)
+    auto* node = attachment->get_node();
+    if (node != this)
     {
         log.warn(
             "Attachment {} node {} != this {}\n",
             attachment->node_attachment_type(),
-            attachment->node()
-                ? attachment->node()->name()
+            node
+                ? node->name()
                 : "(none)",
             name()
         );
@@ -445,14 +446,15 @@ void Node::sanity_check() const
 
     for (const auto& attachment : m_attachments)
     {
-        if (attachment->node() != this)
+        auto* node = attachment->get_node();
+        if (node != this)
         {
             log.error(
                 "Node {} attachment {} node == {}\n",
                 name(),
                 attachment->node_attachment_type(),
-                (attachment->node() != nullptr)
-                    ? attachment->node()->name()
+                (node != nullptr)
+                    ? node->name()
                     : "(none)"
             );
         }

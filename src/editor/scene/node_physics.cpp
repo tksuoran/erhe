@@ -53,7 +53,7 @@ void Node_physics::on_node_transform_changed()
         return;
     }
 
-    node()->update_transform();
+    get_node()->update_transform();
     const erhe::physics::Transform world_from_node = get_world_from_node();
     ERHE_VERIFY(m_rigid_body);
     if (m_rigid_body->get_motion_mode() == Motion_mode::e_static)
@@ -79,12 +79,12 @@ auto Node_physics::get_world_from_node() const -> erhe::physics::Transform
 {
     ERHE_PROFILE_FUNCTION
 
-    if (node() == nullptr)
+    if (get_node() == nullptr)
     {
         return erhe::physics::Transform{};
     }
 
-    const glm::mat4 m = node()->world_from_node();
+    const glm::mat4 m = get_node()->world_from_node();
     const glm::vec3 p = glm::vec3{m[3]};
 
     return erhe::physics::Transform{
@@ -125,8 +125,8 @@ void Node_physics::set_world_from_node(const erhe::physics::Transform world_from
         1.0f
     };
     // TODO don't unparent, call set_world_from_node() instead
-    node()->unparent();
-    node()->set_parent_from_node(matrix);
+    get_node()->unparent();
+    get_node()->set_parent_from_node(matrix);
 
     m_transform_change_from_physics = false;
 }

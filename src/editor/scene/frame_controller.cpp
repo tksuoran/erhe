@@ -51,17 +51,17 @@ void Frame_controller::set_heading(const float value)
     update();
 }
 
-vec3 Frame_controller::position() const
+auto Frame_controller::position() const -> vec3
 {
     return m_position;
 }
 
-float Frame_controller::elevation() const
+auto Frame_controller::elevation() const -> float
 {
     return m_elevation;
 }
 
-float Frame_controller::heading() const
+auto Frame_controller::heading() const -> float
 {
     return m_heading;
 }
@@ -69,6 +69,8 @@ float Frame_controller::heading() const
 
 Frame_controller::Frame_controller()
 {
+    m_flag_bits |= INode_attachment::c_flag_bit_is_frame_controller;
+
     clear();
     rotate_x      .set_damp     (0.700f);
     rotate_y      .set_damp     (0.700f);
@@ -89,18 +91,20 @@ Frame_controller::Frame_controller()
     update();
 }
 
-void Frame_controller::set_node(erhe::scene::Node* node)
+auto Frame_controller::node_attachment_type() const -> const char*
 {
-    m_node = node;
+    return "Frame_controller";
+}
 
-    if (!m_node)
+void Frame_controller::on_node_transform_changed()
+{
+    if (m_transform_update)
     {
         return;
     }
 
-    // node->world_from_node() is not necessarily valid, so make sure it is.
-    //node->update_transform();
-
+    auto* node = get_node();
+    node->update_transform();
     const vec4 position  = node->position_in_world();
     const vec4 direction = node->direction_in_world();
 
@@ -116,11 +120,6 @@ void Frame_controller::set_node(erhe::scene::Node* node)
     update();
 }
 
-auto Frame_controller::get_node() const -> erhe::scene::Node*
-{
-    return m_node;
-}
-
 void Frame_controller::clear()
 {
     translate_x.clear();
@@ -133,7 +132,8 @@ void Frame_controller::clear()
 
 void Frame_controller::update()
 {
-    if (m_node == nullptr)
+    auto* node = get_node();
+    if (node == nullptr)
     {
         return;
     }
@@ -160,7 +160,9 @@ void Frame_controller::update()
    parentToLocal._33 = 1.0f;
    */
     //m_local_from_parent = inverse(m_parent_from_local);
-    m_node->set_parent_from_node(parent_from_local);
+    m_transform_update = true;
+    node->set_parent_from_node(parent_from_local);
+    m_transform_update = false;
 
     //vec4 position  = m_node->world_from_local.matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f};
     //vec4 direction = m_node->world_from_local.matrix() * vec4{0.0f, 0.0f, 1.0f, 0.0f};
@@ -214,8 +216,10 @@ void Frame_controller::update_fixed_step()
         m_position += back() * translate_z.current_value() * speed;
     }
 
-    if ((rotate_x.current_value() != 0.0f) ||
-        (rotate_y.current_value() != 0.0f))
+    if (
+        (rotate_x.current_value() != 0.0f) ||
+        (rotate_y.current_value() != 0.0f)
+    )
     {
         m_heading += rotate_y.current_value();
         m_elevation += rotate_x.current_value();
@@ -255,6 +259,73 @@ void Frame_controller::update_fixed_step()
 
    m_local_from_parent = inverse(m_parent_from_local);
 #endif
+}
+
+auto is_frame_controller(const erhe::scene::INode_attachment* const attachment) -> bool
+{
+    if (attachment == nullptr)
+    {
+        return false;
+    }
+    return 
+        (attachment->flag_bits() 
+            & erhe::scene::INode_attachment::c_flag_bit_is_frame_controller) 
+        == 
+            erhe::scene::INode_attachment::c_flag_bit_is_frame_controller;
+}
+
+auto is_frame_controller(
+    const std::shared_ptr<erhe::scene::INode_attachment>& attachment
+) -> bool
+{
+    return is_frame_controller(attachment.get());
+}
+
+auto as_frame_controller(
+    erhe::scene::INode_attachment* attachment
+) -> Frame_controller*
+{
+    if (attachment == nullptr)
+    {
+        return nullptr;
+    }
+    if (
+        (attachment->flag_bits() & erhe::scene::INode_attachment::c_flag_bit_is_frame_controller) == 0
+    )
+    {
+        return nullptr;
+    }
+    return reinterpret_cast<Frame_controller*>(attachment);
+}
+
+auto as_frame_controller(
+    const std::shared_ptr<erhe::scene::INode_attachment>& attachment
+) -> std::shared_ptr<Frame_controller>
+{
+    if (!attachment)
+    {
+        return {};
+    }
+    if (
+        (attachment->flag_bits() & erhe::scene::INode_attachment::c_flag_bit_is_frame_controller) == 0
+    )
+    {
+        return {};
+    }
+    return std::dynamic_pointer_cast<Frame_controller>(attachment);
+}
+
+auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Frame_controller>
+{
+    for (const auto& attachment : node->attachments())
+    {
+        auto frame_controller = as_frame_controller(attachment);
+        if (frame_controller)
+        {
+            return frame_controller;
+        }
+    }
+    return {};
 }
 
 } // namespace editor
