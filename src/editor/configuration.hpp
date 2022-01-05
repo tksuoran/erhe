@@ -30,7 +30,7 @@ public:
     bool gui                    {true};
     bool openxr                 {false};
     bool show_window            {true};
-    bool parallel_initialization{false};
+    bool parallel_initialization{true};
     bool reverse_depth          {true};
 };
 

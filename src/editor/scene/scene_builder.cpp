@@ -144,8 +144,8 @@ void Scene_builder::make_brushes()
     ERHE_PROFILE_FUNCTION
 
     const Brush_create_context brush_create_context{build_info_set()};
-    //erhe::concurrency::Concurrent_queue execution_queue;
-    erhe::concurrency::Serial_queue execution_queue;
+    erhe::concurrency::Concurrent_queue execution_queue;
+    //erhe::concurrency::Serial_queue execution_queue;
 
     constexpr float floor_size = 20.0f;
 

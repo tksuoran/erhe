@@ -43,7 +43,7 @@ void Gl_context_provider::provide_worker_contexts(
         main_window->clear_current();
     }
 
-    auto max_count = 2u; //thread::hardware_concurrency();
+    auto max_count = std::min(thread::hardware_concurrency(), 8u);
     for (auto end = max_count, i = 0u; i < end; ++i)
     {
         ERHE_PROFILE_SCOPE("Worker context");
@@ -80,7 +80,7 @@ void Gl_context_provider::provide_worker_contexts(
 
 auto Gl_context_provider::acquire_gl_context() -> Gl_worker_context
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_COLOR("acquire_gl_context", 0x444444);
 
     if (this_thread::get_id() == m_main_thread_id)
     {
