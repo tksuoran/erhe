@@ -68,10 +68,10 @@ void Editor_view::register_command(Command* command)
 }
 
 auto Editor_view::bind_command_to_key(
-    Command*                     command,
-    const erhe::toolkit::Keycode code,
-    const bool                   pressed,
-    const uint32_t               modifier_mask
+    Command*                      command,
+    const erhe::toolkit::Keycode  code,
+    const bool                    pressed,
+    const std::optional<uint32_t> modifier_mask
 ) -> erhe::toolkit::Unique_id<Key_binding>::id_type
 {
     auto& binding = m_key_bindings.emplace_back(command, code, pressed, modifier_mask);
@@ -381,7 +381,7 @@ void Editor_view::on_mouse_move(const double x, const double y)
         return;
     }
 
-    m_log_window->tail_log(log_color, "mouse move");
+    //m_log_window->tail_log(log_color, "mouse move");
 
     m_pointer_context->update_mouse(x, y);
 

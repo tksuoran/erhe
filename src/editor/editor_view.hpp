@@ -69,10 +69,10 @@ public:
     void register_command(Command* command);
 
     auto bind_command_to_key(
-        Command*                     command,
-        const erhe::toolkit::Keycode code,
-        const bool                   pressed       = true,
-        const uint32_t               modifier_mask = 0
+        Command*                      command,
+        const erhe::toolkit::Keycode  code,
+        const bool                    pressed       = true,
+        const std::optional<uint32_t> modifier_mask = {}
     ) -> erhe::toolkit::Unique_id<Key_binding>::id_type;
 
     auto bind_command_to_mouse_click(

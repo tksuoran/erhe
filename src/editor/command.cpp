@@ -111,10 +111,10 @@ auto Command_binding::get_command() const -> Command*
 }
 
 Key_binding::Key_binding(
-    Command*                     command,
-    const erhe::toolkit::Keycode code,
-    const bool                   pressed,
-    const uint32_t               modifier_mask
+    Command*                      command,
+    const erhe::toolkit::Keycode  code,
+    const bool                    pressed,
+    const std::optional<uint32_t> modifier_mask
 )
     : Command_binding{command      }
     , m_code         {code         }
@@ -131,15 +131,29 @@ auto Key_binding::on_key(
 ) -> bool
 {
     if (
-        (m_code          != code         ) ||
-        (m_pressed       != pressed      ) ||
-        (m_modifier_mask != modifier_mask)
+        (m_code    != code   ) ||
+        (m_pressed != pressed)
     )
     {
         return false;
     }
 
     auto* command = get_command();
+
+    if (
+        m_modifier_mask.has_value() &&
+        m_modifier_mask.value() != modifier_mask)
+    {
+        context.log_window()->tail_log(
+            filter_event_color,
+            "{} rejected key {} due to modifier mask mismatch",
+            command->name(),
+            pressed ? "press" : "release",
+            erhe::toolkit::c_str(code)
+        );
+        return false;
+    }
+
     //ERHE_VERIFY(command != nullptr);
 
     if (command->state() == State::Disabled)

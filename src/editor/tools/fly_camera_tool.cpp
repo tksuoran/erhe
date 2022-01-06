@@ -251,6 +251,8 @@ auto Fly_camera_tool::try_move(
         (m_pointer_context->window() == nullptr) && active
     )
     {
+        get<Log_window>()->tail_log("rejected press because no pointer_context window");
+
         return false;
     }
 
