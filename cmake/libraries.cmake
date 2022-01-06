@@ -78,7 +78,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
-    GIT_TAG        3.3.4
+    GIT_TAG        3.3.6
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -182,14 +182,6 @@ FetchContent_Declare(
     reactphysics3d
     GIT_REPOSITORY https://github.com/DanielChappuis/reactphysics3d.git
     GIT_TAG        v0.8.0
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-FetchContent_Declare(
-    RectangleBinPack
-    GIT_REPOSITORY https://github.com/tksuoran/RectangleBinPack.git
-    GIT_TAG        fix-win32
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

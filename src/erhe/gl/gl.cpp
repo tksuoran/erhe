@@ -21,7 +21,7 @@ namespace gl
 
 using namespace erhe::log;
 
-Category log_gl{Color::YELLOW, Color::GRAY, Level::LEVEL_INFO};
+Category log_gl{0.3f, 0.4f, 1.0f, Console_color::BLUE, Level::LEVEL_INFO};
 
 static bool enable_error_checking = true;
 

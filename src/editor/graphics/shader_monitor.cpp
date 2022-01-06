@@ -9,7 +9,11 @@
 namespace editor
 {
 
-erhe::log::Category log_shader_monitor(erhe::log::Color::CYAN, erhe::log::Color::GRAY, erhe::log::Level::LEVEL_WARN);
+using Category      = erhe::log::Category;
+using Console_color = erhe::log::Console_color;
+using Level         = erhe::log::Level;
+
+Category log_shader_monitor{0.0f, 1.0f, 1.0f, Console_color::CYAN, Level::LEVEL_WARN};
 
 using std::string;
 

@@ -68,9 +68,12 @@ void Log_window::toggle_pause()
     m_paused = !m_paused;
 }
 
-void Log_window::write(std::string_view text) 
+void Log_window::write(const erhe::log::Color color, const std::string_view text) 
 {
-    m_frame_entries.emplace_back(text);
+    m_tail_entries.emplace_back(
+        ImVec4{color.r, color.g, color.b, 1.0},
+        std::string{text}
+    );
 }
 
 void Log_window::frame_write(const char* format, fmt::format_args args)

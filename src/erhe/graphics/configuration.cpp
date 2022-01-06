@@ -286,7 +286,7 @@ void Instance::initialize()
 
     extensions.clear();
 
-    Log::set_text_color(log::Color::GRAY);
+    Log::set_text_color(log::Console_color::GRAY);
 }
 
 } // namespace erhe::graphics

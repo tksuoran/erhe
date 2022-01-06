@@ -261,7 +261,7 @@ void Buffer::unmap() noexcept
         gl_name()
     );
     const log::Indenter indented;
-    Log::set_text_color(erhe::log::Color::GREY);
+    Log::set_text_color(erhe::log::Console_color::GREY);
 
     const auto res = gl::unmap_named_buffer(gl_name());
     ERHE_VERIFY(res == GL_TRUE);

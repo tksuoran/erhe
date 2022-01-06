@@ -280,7 +280,7 @@ auto Node_properties::make_angle_button(
         value_speed,
         value_min,
         value_max,
-        reinterpret_cast<const char*>(u8"%.f\u00b0")
+        "%.f\xc2\xb0" // \xc2\xb0 is degree symbol UTF-8 encoded
     );
     if (value_changed)
     {

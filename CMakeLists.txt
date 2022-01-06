@@ -73,8 +73,6 @@ message("Fetching lunasvg")
 FetchContent_MakeAvailable(lunasvg)
 message("Fetching nlohmann_json")
 FetchContent_MakeAvailable(nlohmann_json)
-message("Fetching RectangleBinPack")
-FetchContent_MakeAvailable(RectangleBinPack)
 
 if (${ERHE_GLTF_LIBRARY} STREQUAL "OpenXR")
     message("Fetching OpenXR-SDK")

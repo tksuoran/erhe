@@ -18,7 +18,11 @@ using std::make_unique;
 
 namespace {
 
-erhe::log::Category log_imgui{erhe::log::Color::CYAN, erhe::log::Color::GRAY, erhe::log::Level::LEVEL_INFO};
+using Category      = erhe::log::Category;
+using Console_color = erhe::log::Console_color;
+using Level         = erhe::log::Level;
+
+Category log_imgui{0.0f, 1.0f, 1.0f, Console_color::CYAN, Level::LEVEL_INFO};
 
 constexpr std::string_view c_vertex_shader_source =
     "\n"

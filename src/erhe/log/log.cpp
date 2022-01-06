@@ -1,4 +1,4 @@
-#include "erhe/log/log.hpp"
+﻿#include "erhe/log/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <cassert>
@@ -7,9 +7,14 @@
 #include <iostream>
 
 #if defined _WIN32
-#    include <windows.h>
+#   include <windows.h>
+
+/// #   include <io.h>
+/// #   include <fcntl.h>
+/// #   include <sys\types.h>
+/// #   include <sys\stat.h>
 #else
-#    include <unistd.h>
+#   include <unistd.h>
 #endif
 
 namespace erhe::log
@@ -22,11 +27,24 @@ auto Log::print_color() -> bool
     return true;
 }
 
-void Log::set_text_color(int c)
+void Log::set_text_color(const int c)
 {
     HANDLE hConsoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
     SetConsoleTextAttribute(hConsoleHandle, static_cast<WORD>(c));
 }
+
+/// const char* error_str(int code)
+/// {
+///     switch (code)
+///     {
+///         case EACCES: return "EACCES";
+///         case EEXIST: return "EEXIST";
+///         case EINVAL: return "EINVAL";
+///         case EMFILE: return "EMFILE";
+///         case ENOENT: return "ENOENT";
+///         default:     return "?";
+///     }
+/// }
 
 void Log::console_init()
 {
@@ -40,12 +58,51 @@ void Log::console_init()
     SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)(icon));
     SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)(icon));
 
-    FILE* l = fopen("log.txt", "wb");
+    std::setlocale(LC_CTYPE, ".UTF8");
+    SetConsoleOutputCP(CP_UTF8);
+
+    FILE* const l = fopen("log.txt", "wb");
     if (l)
     {
         fprintf(l, "");
         fclose(l);
     }
+    /// {
+    ///     int a = _open("a.txt", _O_CREAT | _O_BINARY | _O_TRUNC | _O_WRONLY, _S_IREAD | _S_IWRITE);
+    ///     if (a != -1)
+    ///     {
+    ///         _write(a, "\xef\xbb\xbf", 3);
+    ///         _write(a, "°", 1);
+    ///         _close(a);
+    ///     }
+    ///     else
+    ///     {
+    ///         int code = errno;
+    ///         fprintf(stderr, "_open(): error %d %s\n", code, error_str(code));
+    ///         perror("_open() failed");
+    ///     }
+    /// 
+    ///     int b = _open("b.txt", _O_CREAT | _O_BINARY | _O_TRUNC | _O_WRONLY, _S_IREAD | _S_IWRITE);
+    ///     if (b != -1)
+    ///     {
+    ///         _write(b, "\xef\xbb\xbf", 3);
+    ///         _write(b, "\xc2\xb0", 2);
+    ///         _close(b);
+    ///     }
+    ///     else
+    ///     {
+    ///         int code = errno;
+    ///         fprintf(stderr, "_open(): error %d %s\n", code, error_str(code));
+    ///         perror("_open() failed");
+    ///     }
+    /// }
+
+    /// int l = _open("log.txt", _O_CREAT | _O_BINARY | _O_TRUNC | _O_WRONLY, _S_IREAD | _S_IWRITE);
+    /// if (l != -1)
+    /// {
+    ///     _write(l, "°", 1);
+    ///     _close(l);
+    /// }
 }
 #else
 
@@ -59,7 +116,7 @@ auto Log::print_color()
 # endif
 }
 
-void Log::set_text_color(int c)
+void Log::set_text_color(const int c)
 {
 #    if defined(__APPLE__)
     (void)c;
@@ -98,7 +155,7 @@ void Log::console_init()
 
 int Log::s_indent{0};
 
-void Log::indent(int indent_amount)
+void Log::indent(const int indent_amount)
 {
     s_indent += indent_amount;
 }
@@ -108,26 +165,26 @@ void Category::set_sink(ILog_sink* sink)
     m_sink = sink;
 }
 
-void Category::write(bool indent, int level, const char* format, fmt::format_args args)
+void Category::write(const bool indent, const int level, const char* format, fmt::format_args args)
 {
     if (level < m_level)
     {
         return;
     }
 
-    std::string text = fmt::vformat(format, args);
+    const std::string text = fmt::vformat(format, args);
 
     if (m_sink != nullptr)
     {
-        m_sink->write(text);
+        m_sink->write(m_color, text);
     }
-    else
+    //else
     {
         write(indent, text);
     }
 }
 
-void Category::write(bool indent, int level, const std::string& text)
+void Category::write(const bool indent, const int level, const std::string& text)
 {
     if (level < m_level)
     {
@@ -167,7 +224,7 @@ auto timestamp() -> std::string
     );
 }
 
-void Category::write(bool indent, const std::string& text)
+void Category::write(const bool indent, const std::string& text)
 {
     std::lock_guard<std::mutex> lock{s_mutex};
 
@@ -182,7 +239,7 @@ void Category::write(bool indent, const std::string& text)
         {
             case Colorizer::default_:
             {
-                Log::set_text_color(m_color[0]);
+                Log::set_text_color(m_color.console);
                 p = span = text.data();
                 span_len = 0;
                 char prev = 0;
@@ -223,7 +280,7 @@ void Category::write(bool indent, const std::string& text)
                         //++span_len;
                         span = p;
                         span_len = 0;
-                        Log::set_text_color(m_color[1]);
+                        Log::set_text_color(Console_color::GRAY);
                     }
                     else if (c == ')')
                     {
@@ -232,7 +289,7 @@ void Category::write(bool indent, const std::string& text)
                             fwrite(span, 1, span_len, stdout);
                             //fflush(stdout);
                         }
-                        Log::set_text_color(m_color[0]);
+                        Log::set_text_color(m_color.console);
                         span = p;
                         ++p;
                         span_len = 1;
@@ -251,14 +308,14 @@ void Category::write(bool indent, const std::string& text)
                         span = p;
                         ++p;
                         span_len = 1;
-                        Log::set_text_color(m_color[0]);
+                        Log::set_text_color(m_color.console);
                         m_newline = true;
                     }
                     else if (c == 0)
                     {
                         fputs(span, stdout);
                         //fflush(stdout);
-                        Log::set_text_color(m_color[1]);
+                        Log::set_text_color(Console_color::GRAY);
                         break;
                     }
                     else
@@ -273,7 +330,7 @@ void Category::write(bool indent, const std::string& text)
 
             case Colorizer::glsl:
             {
-                Log::set_text_color(m_color[0]);
+                Log::set_text_color(m_color.console);
                 p = span = text.data();
                 span_len = 1;
                 for (;;)
@@ -296,7 +353,7 @@ void Category::write(bool indent, const std::string& text)
                         //fflush(stdout);
                         span = p;
                         span_len = 1;
-                        Log::set_text_color(m_color[1]);
+                        Log::set_text_color(Console_color::GRAY);
                     }
                     else if (c == '\n')
                     {
@@ -304,14 +361,14 @@ void Category::write(bool indent, const std::string& text)
                         //fflush(stdout);
                         span = p;
                         span_len = 1;
-                        Log::set_text_color(m_color[0]);
+                        Log::set_text_color(m_color.console);
                         m_newline = true;
                     }
                     else if (c == 0)
                     {
                         fputs(span, stdout);
                         //fflush(stdout);
-                        Log::set_text_color(m_color[1]);
+                        Log::set_text_color(Console_color::GRAY);
                         break;
                     }
                     else
@@ -327,16 +384,23 @@ void Category::write(bool indent, const std::string& text)
                 ERHE_FATAL("Bad log colorizer\n");
             }
         }
-        Log::set_text_color(Color::GRAY);
+        Log::set_text_color(Console_color::GRAY);
     }
 
     // Log to file
-    FILE* log_file = fopen("log.txt", "ab+");
+    FILE* log_file = fopen("log.txt", "ab+"); // ,ccs=UTF-8
     if (log_file != nullptr)
     {
         fputs(text.data(), log_file);
         fclose(log_file);
     }
+
+    /// int l = _open("log.txt", _O_BINARY | _O_APPEND | _O_WRONLY, _S_IREAD | _S_IWRITE);
+    /// if (l != -1)
+    /// {
+    ///     _write(l, text.data(), static_cast<unsigned int>(text.size()));
+    ///     _close(l);
+    /// }
 
     // Log to debugger
 #if defined(_WIN32)

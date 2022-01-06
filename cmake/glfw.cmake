@@ -1,5 +1,3 @@
-# Mango has CMakeLists.txt in build subdirectory
-
 function (FetchContent_MakeAvailable_glfw)
     FetchContent_GetProperties(glfw)
     string(TOLOWER "glfw" lc_glfw)

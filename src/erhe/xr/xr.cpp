@@ -19,9 +19,11 @@
 
 namespace erhe::xr {
 
-using namespace erhe::log;
+using Category      = erhe::log::Category;
+using Console_color = erhe::log::Console_color;
+using Level         = erhe::log::Level;
 
-Category log_xr{Color::YELLOW, Color::GRAY, Level::LEVEL_INFO};
+Category log_xr{1.0f, 0.7f, 0.6f, Console_color::YELLOW, Level::LEVEL_INFO};
 
 GEN_C_STR(XrActionType           )
 GEN_C_STR(XrEnvironmentBlendMode )

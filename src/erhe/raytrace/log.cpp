@@ -4,12 +4,14 @@
 namespace erhe::raytrace
 {
 
-using namespace erhe::log;
+using Category      = erhe::log::Category;
+using Console_color = erhe::log::Console_color;
+using Level         = erhe::log::Level;
 
-Category log_buffer  {Color::RED,    Color::GRAY, Level::LEVEL_WARN};
-Category log_device  {Color::YELLOW, Color::GRAY, Level::LEVEL_WARN};
-Category log_geometry{Color::GREEN,  Color::GRAY, Level::LEVEL_WARN};
-Category log_scene   {Color::BLUE,   Color::GRAY, Level::LEVEL_WARN};
-Category log_embree  {Color::GREEN,  Color::GRAY, Level::LEVEL_INFO};
+Category log_buffer  {1.0f, 0.3f, 0.4f, Console_color::RED,    Level::LEVEL_WARN};
+Category log_device  {1.0f, 1.0f, 0.0f, Console_color::YELLOW, Level::LEVEL_WARN};
+Category log_geometry{0.0f, 1.0f, 0.0f, Console_color::GREEN,  Level::LEVEL_WARN};
+Category log_scene   {0.0f, 0.0f, 1.0f, Console_color::BLUE,   Level::LEVEL_WARN};
+Category log_embree  {0.0f, 1.0f, 0.0f, Console_color::GREEN,  Level::LEVEL_INFO};
 
 } // namespace erhe::raytrace
