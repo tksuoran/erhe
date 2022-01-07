@@ -105,7 +105,7 @@ public:
     };
 
     // Creates Shader_stages by consuming prototype
-    Shader_stages(Prototype&& prototype);
+    explicit Shader_stages(Prototype&& prototype);
 
     // Reloads program by consuming prototype
     void reload(Prototype&& prototype);

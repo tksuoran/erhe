@@ -24,8 +24,6 @@ auto Catmull_clark_subdivision_operation::describe() const -> std::string
     return ss.str();
 }
 
-Catmull_clark_subdivision_operation::~Catmull_clark_subdivision_operation() = default;
-
 Catmull_clark_subdivision_operation::Catmull_clark_subdivision_operation(Context&& context)
     : Mesh_operation{std::move(context)}
 {
@@ -39,8 +37,6 @@ auto Sqrt3_subdivision_operation::describe() const -> std::string
     return ss.str();
 }
 
-Sqrt3_subdivision_operation::~Sqrt3_subdivision_operation() = default;
-
 Sqrt3_subdivision_operation::Sqrt3_subdivision_operation(Context&& context)
     : Mesh_operation{std::move(context)}
 {
@@ -53,8 +49,6 @@ auto Triangulate_operation::describe() const -> std::string
     ss << "Triangulate " << Mesh_operation::describe();
     return ss.str();
 }
-
-Triangulate_operation::~Triangulate_operation() = default;
 
 Triangulate_operation::Triangulate_operation(Context&& context)
     : Mesh_operation{std::move(context)}
@@ -95,8 +89,6 @@ auto Dual_operator::describe() const -> std::string
     return ss.str();
 }
 
-Dual_operator::~Dual_operator() = default;
-
 Dual_operator::Dual_operator(Context&& context)
     : Mesh_operation{std::move(context)}
 {
@@ -109,8 +101,6 @@ auto Ambo_operator::describe() const -> std::string
     ss << "Ambo " << Mesh_operation::describe();
     return ss.str();
 }
-
-Ambo_operator::~Ambo_operator() = default;
 
 Ambo_operator::Ambo_operator(Context&& context)
     : Mesh_operation{std::move(context)}
@@ -125,8 +115,6 @@ auto Truncate_operator::describe() const -> std::string
     return ss.str();
 }
 
-Truncate_operator::~Truncate_operator() = default;
-
 Truncate_operator::Truncate_operator(Context&& context)
     : Mesh_operation{std::move(context)}
 {
@@ -139,8 +127,6 @@ auto Reverse_operation::describe() const -> std::string
     ss << "Reverse " << Mesh_operation::describe();
     return ss.str();
 }
-
-Reverse_operation::~Reverse_operation() = default;
 
 Reverse_operation::Reverse_operation(Context&& context)
     : Mesh_operation{std::move(context)}

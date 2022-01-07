@@ -46,7 +46,7 @@ public:
         Selection_tool* selection_tool{nullptr};
     };
 
-    Attach_detach_operation(Context&& context);
+    explicit Attach_detach_operation(Context&& context);
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
