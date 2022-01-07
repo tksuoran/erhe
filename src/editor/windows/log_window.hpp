@@ -91,6 +91,16 @@ private:
     class Tail_entry
     {
     public:
+        Tail_entry(
+            const ImVec4&      color,
+            const std::string& message,
+            const unsigned int repeat_count = 0
+        )
+        : color       {color}
+        , message     {message}
+        , repeat_count{repeat_count}
+        {
+        }
         ImVec4       color;
         std::string  message;
         unsigned int repeat_count{0};

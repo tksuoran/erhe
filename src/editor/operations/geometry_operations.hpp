@@ -9,8 +9,8 @@ class Catmull_clark_subdivision_operation
     : public Mesh_operation
 {
 public:
-    explicit Catmull_clark_subdivision_operation(Context&& context);
-    ~Catmull_clark_subdivision_operation        () override;
+    Catmull_clark_subdivision_operation (Context&& context);
+    ~Catmull_clark_subdivision_operation() override;
 
     [[nodiscard]] auto describe() const -> std::string override;
 };
@@ -19,8 +19,8 @@ class Sqrt3_subdivision_operation
     : public Mesh_operation
 {
 public:
-    explicit Sqrt3_subdivision_operation(Context&& context);
-    ~Sqrt3_subdivision_operation        () override;
+    Sqrt3_subdivision_operation (Context&& context);
+    ~Sqrt3_subdivision_operation() override;
 
     [[nodiscard]] auto describe() const -> std::string override;
 };
@@ -29,8 +29,8 @@ class Triangulate_operation
     : public Mesh_operation
 {
 public:
-    explicit Triangulate_operation(Context&& context);
-    ~Triangulate_operation        () override;
+    Triangulate_operation (Context&& context);
+    ~Triangulate_operation() override;
 
     [[nodiscard]] auto describe() const -> std::string override;
 };
@@ -39,7 +39,7 @@ class Subdivide_operation
     : public Mesh_operation
 {
 public:
-    explicit Subdivide_operation(Context&& context);
+    Subdivide_operation(Context&& context);
 
     [[nodiscard]] auto describe() const -> std::string override;
 };
@@ -48,7 +48,7 @@ class Gyro_operation
     : public Mesh_operation
 {
 public:
-    explicit Gyro_operation(Context&& context);
+    Gyro_operation(Context&& context);
 
     [[nodiscard]] auto describe() const -> std::string override;
 };
@@ -57,8 +57,8 @@ class Dual_operator
     : public Mesh_operation
 {
 public:
-    explicit Dual_operator(Context&& context);
-    ~Dual_operator        () override;
+    Dual_operator (Context&& context);
+    ~Dual_operator() override;
 
     [[nodiscard]] auto describe() const -> std::string override;
 };
@@ -67,8 +67,8 @@ class Ambo_operator
     : public Mesh_operation
 {
 public:
-    explicit Ambo_operator(Context&& context);
-    ~Ambo_operator        () override;
+    Ambo_operator (Context&& context);
+    ~Ambo_operator() override;
 
     auto describe() const -> std::string override;
 };
@@ -77,8 +77,8 @@ class Truncate_operator
     : public Mesh_operation
 {
 public:
-    explicit Truncate_operator(Context&& context);
-    ~Truncate_operator        () override;
+    Truncate_operator (Context&& context);
+    ~Truncate_operator() override;
 
     [[nodiscard]] auto describe() const -> std::string override;
 };
@@ -87,8 +87,8 @@ class Reverse_operation
     : public Mesh_operation
 {
 public:
-    explicit Reverse_operation(Context&& context);
-    ~Reverse_operation        () override;
+    Reverse_operation (Context&& context);
+    ~Reverse_operation() override;
 
     [[nodiscard]] auto describe() const -> std::string override;
 };

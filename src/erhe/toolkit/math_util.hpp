@@ -11,7 +11,7 @@ namespace erhe::toolkit
 {
 
 template <typename T, typename U>
-[[nodiscard]] 
+[[nodiscard]]
 auto round(const float num) -> T
 {
     return
@@ -20,7 +20,7 @@ auto round(const float num) -> T
             : std::ceil(num - U{0.5}));
 }
 
-inline [[nodiscard]] auto next_power_of_two(uint32_t x) -> uint32_t
+[[nodiscard]] inline auto next_power_of_two(uint32_t x) -> uint32_t
 {
     x--;
     x |= x >> 1u;  // handle  2 bit numbers
@@ -34,7 +34,7 @@ inline [[nodiscard]] auto next_power_of_two(uint32_t x) -> uint32_t
 }
 
 template <typename T>
-inline [[nodiscard]] auto uint_from_vector3(const glm::vec3 v) -> uint32_t
+[[nodiscard]] inline auto uint_from_vector3(const glm::vec3 v) -> uint32_t
 {
     const float        rf = v.x * 255.0f;
     const float        gf = v.y * 255.0f;
@@ -47,7 +47,7 @@ inline [[nodiscard]] auto uint_from_vector3(const glm::vec3 v) -> uint32_t
     return static_cast<uint32_t>(i);
 }
 
-inline [[nodiscard]] auto vec3_from_uint(const uint32_t i) -> glm::vec3
+[[nodiscard]] inline auto vec3_from_uint(const uint32_t i) -> glm::vec3
 {
     const uint32_t r = (i >> 16u) & 0xffu;
     const uint32_t g = (i >>  8u) & 0xffu;
@@ -64,7 +64,7 @@ constexpr glm::vec3 vec3_unit_x{1.0f, 0.0f, 0.0f};
 constexpr glm::vec3 vec3_unit_y{0.0f, 1.0f, 0.0f};
 constexpr glm::vec3 vec3_unit_z{0.0f, 0.0f, 1.0f};
 
-inline [[nodiscard]] auto max_axis(const glm::vec3 v) -> glm::vec3
+[[nodiscard]] inline auto max_axis(const glm::vec3 v) -> glm::vec3
 {
     if (
         (std::abs(v.x) >= std::abs(v.y)) &&
@@ -84,7 +84,7 @@ inline [[nodiscard]] auto max_axis(const glm::vec3 v) -> glm::vec3
     return vec3_unit_z;
 }
 
-inline [[nodiscard]] auto min_axis(const glm::vec3 v) -> glm::vec3
+[[nodiscard]] inline auto min_axis(const glm::vec3 v) -> glm::vec3
 {
     if (
         (std::abs(v.x) <= std::abs(v.y)) &&
@@ -105,7 +105,7 @@ inline [[nodiscard]] auto min_axis(const glm::vec3 v) -> glm::vec3
     return vec3_unit_z;
 }
 
-inline [[nodiscard]] auto max_axis_index(const glm::vec3 v) -> glm::vec3::length_type
+[[nodiscard]] inline auto max_axis_index(const glm::vec3 v) -> glm::vec3::length_type
 {
     if (
         (std::abs(v.x) >= std::abs(v.y)) &&
@@ -125,7 +125,7 @@ inline [[nodiscard]] auto max_axis_index(const glm::vec3 v) -> glm::vec3::length
     return glm::vec3::length_type{2};
 }
 
-inline [[nodiscard]] auto min_axis_index(const glm::vec3 v) -> glm::vec3::length_type
+[[nodiscard]] inline auto min_axis_index(const glm::vec3 v) -> glm::vec3::length_type
 {
     if (
         (std::abs(v.x) <= std::abs(v.y)) &&
@@ -538,7 +538,7 @@ template <typename T>
 >
 {
     using vec3 = typename vector_types<T>::vec3;
-    using vec4 = typename vector_types<T>::vec4;
+    //using vec4 = typename vector_types<T>::vec4;
 
     const vec3 u  = P1 - P0;
     const vec3 v  = Q1 - Q0;

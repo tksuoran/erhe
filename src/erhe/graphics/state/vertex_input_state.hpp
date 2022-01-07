@@ -166,7 +166,7 @@ public:
         return m_serial;
     }
 
-    static [[nodiscard]] auto get_next_serial() -> size_t
+    [[nodiscard]] static auto get_next_serial() -> size_t
     {
         std::lock_guard lock{s_mutex};
 

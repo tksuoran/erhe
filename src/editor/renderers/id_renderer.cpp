@@ -249,10 +249,10 @@ void Id_renderer::render_layer(const erhe::scene::Mesh_layer& mesh_layer)
     m_layer_ranges.emplace_back(layer_range);
 }
 
-static constexpr std::string_view c_id_renderer_render_clear  {"Id_renderer::render() clear"  };
+//static constexpr std::string_view c_id_renderer_render_clear  {"Id_renderer::render() clear"  };
 static constexpr std::string_view c_id_renderer_render_content{"Id_renderer::render() content"};
-static constexpr std::string_view c_id_renderer_render_tool   {"Id_renderer::render() tool"   };
-static constexpr std::string_view c_id_renderer_render_read   {"Id_renderer::render() read"   };
+//static constexpr std::string_view c_id_renderer_render_tool   {"Id_renderer::render() tool"   };
+//static constexpr std::string_view c_id_renderer_render_read   {"Id_renderer::render() read"   };
 
 void Id_renderer::render(
     const erhe::scene::Viewport  viewport,
@@ -448,7 +448,7 @@ bool Id_renderer::get(const int x, const int y, uint32_t& id, float& depth)
             {
                 const int x_ = x - idr.x_offset;
                 const int y_ = y - idr.y_offset;
-                if ((x_ < s_extent) && (y_ < s_extent))
+                if ((static_cast<size_t>(x_) < s_extent) && (static_cast<size_t>(y_) < s_extent))
                 {
                     const uint32_t       stride    = s_extent * 4;
                     const uint8_t        r         = idr.data[x_ * 4 + y_ * stride + 0];

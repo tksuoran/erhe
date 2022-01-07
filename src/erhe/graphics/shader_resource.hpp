@@ -59,7 +59,7 @@ public:
 
     using Member_collection = std::vector<std::unique_ptr<Shader_resource>>;
 
-    static [[nodiscard]] auto c_str(Precision v) -> const char*;
+    [[nodiscard]] static auto c_str(Precision v) -> const char*;
 
     // Struct definition
     explicit Shader_resource(

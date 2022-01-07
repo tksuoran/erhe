@@ -108,12 +108,12 @@ public:
         m_max.y = m_min.y + value.y + 1.0f;
     }
 
-    inline [[nodiscard]] auto half_size() const noexcept -> const glm::vec2
+    [[nodiscard]] inline auto half_size() const noexcept -> const glm::vec2
     {
         return size() / 2.0f;
     }
 
-    inline [[nodiscard]] auto center() const noexcept -> const glm::vec2
+    [[nodiscard]] inline auto center() const noexcept -> const glm::vec2
     {
         return min() + half_size();
     }

@@ -88,7 +88,7 @@ public:
         void dump_reflection() const;
 
     private:
-        static [[nodiscard]] auto try_compile_shader(
+        [[nodiscard]] static auto try_compile_shader(
             const Shader_stages::Create_info&               create_info,
             const Shader_stages::Create_info::Shader_stage& shader
         ) -> std::optional<Gl_shader>;
@@ -105,7 +105,7 @@ public:
     };
 
     // Creates Shader_stages by consuming prototype
-    explicit Shader_stages(Prototype&& prototype);
+    Shader_stages(Prototype&& prototype);
 
     // Reloads program by consuming prototype
     void reload(Prototype&& prototype);
@@ -118,7 +118,7 @@ public:
     [[nodiscard]] auto gl_name() const -> unsigned int;
 
 private:
-    static [[nodiscard]] auto format(const std::string& source) -> std::string;
+    [[nodiscard]] static auto format(const std::string& source) -> std::string;
 
     std::string            m_name;
     Gl_program             m_handle;
@@ -128,7 +128,7 @@ private:
 class Shader_stages_hash
 {
 public:
-    auto [[nodiscard]] operator()(const Shader_stages& program) const noexcept -> size_t
+    [[nodiscard]] auto operator()(const Shader_stages& program) const noexcept -> size_t
     {
         return static_cast<size_t>(program.gl_name());
     }

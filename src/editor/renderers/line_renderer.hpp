@@ -263,7 +263,7 @@ public:
     class Style
     {
     public:
-        explicit Style(const char* name, const bool world_space = true);
+        explicit Style(const char* name);
         Style         (const Style&) = delete; // Due to std::deque<Frame_resources> m_frame_resources
         void operator=(const Style&) = delete; // Style must be non-copyable and non-movable.
         Style         (Style&&)      = delete;
@@ -329,7 +329,7 @@ public:
             const glm::vec3            point,
             const float                thickness,
             const uint32_t             color,
-            const gsl::span<float>&    gpu_float_data, 
+            const gsl::span<float>&    gpu_float_data,
             const gsl::span<uint32_t>& gpu_uint_data,
             size_t&                    word_offset
         );
@@ -337,7 +337,7 @@ public:
         std::deque<Frame_resources> m_frame_resources;
         std::string                 m_name;
         Pipeline*                   m_pipeline  {nullptr};
-        bool                        m_world_space;
+        //bool                        m_world_space;
         size_t                      m_line_count{0};
         Buffer_writer               m_view_writer;
         Buffer_writer               m_vertex_writer;

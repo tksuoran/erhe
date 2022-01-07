@@ -164,9 +164,8 @@ void Line_renderer::Pipeline::initialize(Shader_monitor& shader_monitor)
     shader_monitor.add(create_info, shader_stages.get());
 }
 
-Line_renderer::Style::Style(const char* name, bool world_space)
-    : m_name       {name}
-    , m_world_space{world_space}
+Line_renderer::Style::Style(const char* name)
+    : m_name{name}
 {
 }
 

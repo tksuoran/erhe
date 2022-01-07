@@ -48,7 +48,7 @@ public:
 
     // TODO scissors
 
-    static [[nodiscard]] auto get_next_serial() -> size_t
+    [[nodiscard]] static auto get_next_serial() -> size_t
     {
         do
         {

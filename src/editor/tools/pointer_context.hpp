@@ -123,7 +123,7 @@ private:
     bool                               m_alt                 {false};
 
     Mouse_button                       m_mouse_button[static_cast<int>(erhe::toolkit::Mouse_button_count)];
-    bool                               m_mouse_moved         {false};
+    //bool                               m_mouse_moved         {false};
     double                             m_mouse_x             {0.0f};
     double                             m_mouse_y             {0.0f};
     Viewport_window*                   m_window              {nullptr};
@@ -144,8 +144,8 @@ private:
 
     std::optional<glm::vec3>           m_raytrace_hit_position;
     glm::vec3                          m_raytrace_hit_normal  {0.0f};
-    size_t                             m_raytrace_primitive   {0};
-    size_t                             m_raytrace_local_index {0};
+    //size_t                             m_raytrace_primitive   {0};
+    //size_t                             m_raytrace_local_index {0};
 };
 
 } // namespace editor

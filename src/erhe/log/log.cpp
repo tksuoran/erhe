@@ -123,21 +123,21 @@ void Log::set_text_color(const int c)
 #    else
     switch (c)
     {
-        case Color::DARK_BLUE:    fputs("\033[22;34m", stdout); break;
-        case Color::DARK_GREEN:   fputs("\033[22;32m", stdout); break;
-        case Color::DARK_RED:     fputs("\033[22;31m", stdout); break;
-        case Color::DARK_CYAN:    fputs("\033[22;36m", stdout); break;
-        case Color::DARK_MAGENTA: fputs("\033[22;35m", stdout); break;
-        case Color::DARK_YELLOW:  fputs("\033[22;33m", stdout); break;
-        case Color::BLUE:         fputs("\033[1;34m", stdout); break;
-        case Color::GREEN:        fputs("\033[1;32m", stdout); break;
-        case Color::RED:          fputs("\033[1;31m", stdout); break;
-        case Color::CYAN:         fputs("\033[1;36m", stdout); break;
-        case Color::MAGENTA:      fputs("\033[1;35m", stdout); break;
-        case Color::YELLOW:       fputs("\033[1;33m", stdout); break;
-        case Color::DARK_GREY:    fputs("\033[1;30m", stdout); break;
-        case Color::GREY:         fputs("\033[22;37m", stdout); break;
-        case Color::WHITE:        fputs("\033[1;37m", stdout); break;
+        case Console_color::DARK_BLUE:    fputs("\033[22;34m", stdout); break;
+        case Console_color::DARK_GREEN:   fputs("\033[22;32m", stdout); break;
+        case Console_color::DARK_RED:     fputs("\033[22;31m", stdout); break;
+        case Console_color::DARK_CYAN:    fputs("\033[22;36m", stdout); break;
+        case Console_color::DARK_MAGENTA: fputs("\033[22;35m", stdout); break;
+        case Console_color::DARK_YELLOW:  fputs("\033[22;33m", stdout); break;
+        case Console_color::BLUE:         fputs("\033[1;34m", stdout); break;
+        case Console_color::GREEN:        fputs("\033[1;32m", stdout); break;
+        case Console_color::RED:          fputs("\033[1;31m", stdout); break;
+        case Console_color::CYAN:         fputs("\033[1;36m", stdout); break;
+        case Console_color::MAGENTA:      fputs("\033[1;35m", stdout); break;
+        case Console_color::YELLOW:       fputs("\033[1;33m", stdout); break;
+        case Console_color::DARK_GREY:    fputs("\033[1;30m", stdout); break;
+        case Console_color::GREY:         fputs("\033[22;37m", stdout); break;
+        case Console_color::WHITE:        fputs("\033[1;37m", stdout); break;
         default: break;
     }
 #    endif

@@ -6,6 +6,7 @@
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 namespace erhe::concurrency {
@@ -24,11 +25,15 @@ private:
         int          priority;
         std::string  name;
 
-#pragma warning(push)
-#pragma warning(disable : 4324)  // structure was padded due to alignment specifier
+#if defined(_MSC_VER)
+#   pragma warning(push)
+#   pragma warning(disable : 4324)  // structure was padded due to alignment specifier
+#endif
         alignas(64) std::atomic<int>  task_counter{ 0 };
         alignas(64) std::atomic<bool> cancelled   { false };
-#pragma warning(pop)
+#if defined(_MSC_VER)
+#   pragma warning(pop)
+#endif
 
         Queue(
             Thread_pool*           pool,
@@ -74,10 +79,14 @@ private:
     struct Task_queue;
     alignas(64) Task_queue* m_queues;
 
-#pragma warning(push)
-#pragma warning(disable : 4324)  // structure was padded due to alignment specifier
+#if defined(_MSC_VER)
+#   pragma warning(push)
+#   pragma warning(disable : 4324)  // structure was padded due to alignment specifier
+#endif
     alignas(64) std::atomic<bool> m_stop { false };
-#pragma warning(pop)
+#if defined(_MSC_VER)
+#   pragma warning(pop)
+#endif
 
     std::mutex               m_queue_mutex;
     std::condition_variable  m_condition;

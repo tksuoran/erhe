@@ -161,7 +161,7 @@ void Scene_builder::make_brushes()
 
     // Floor
     execution_queue.enqueue(
-        [this, floor_size, &floor_box_shape/*, &table_box_shape*/]()
+        [this, /*floor_size,*/ &floor_box_shape/*, &table_box_shape*/]()
         {
             ERHE_PROFILE_SCOPE("Floor brush");
 

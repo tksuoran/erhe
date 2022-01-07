@@ -24,9 +24,10 @@ namespace editor
 class Raytrace_primitive
 {
 public:
-    explicit Raytrace_primitive(const std::shared_ptr<erhe::geometry::Geometry>& geometry);
+    explicit Raytrace_primitive(
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry
+    );
 
-    //std::string                               name;
     std::shared_ptr<erhe::raytrace::IBuffer>  vertex_buffer;
     std::shared_ptr<erhe::raytrace::IBuffer>  index_buffer;
     std::shared_ptr<erhe::geometry::Geometry> geometry;
@@ -37,7 +38,10 @@ class Node_raytrace
     : public erhe::scene::INode_attachment
 {
 public:
-    explicit Node_raytrace(const std::shared_ptr<Raytrace_primitive>& primitive);
+    explicit Node_raytrace(
+        const std::shared_ptr<Raytrace_primitive>& primitive
+    );
+
     ~Node_raytrace() override;
 
 	// Implements INode_attachment

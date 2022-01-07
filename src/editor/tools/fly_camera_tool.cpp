@@ -320,7 +320,7 @@ void Fly_camera_tool::update_once_per_frame(
 auto simple_degrees(const float radians_value) -> float
 {
     const auto degrees_value   = glm::degrees(radians_value);
-    const auto degrees_mod_360 = std::fmodf(degrees_value, 360.0f);
+    const auto degrees_mod_360 = std::fmod(degrees_value, 360.0f);
     return (degrees_mod_360 <= 180.0f)
         ? degrees_mod_360
         : degrees_mod_360 - 360.0f;
@@ -342,8 +342,8 @@ void Fly_camera_tool::imgui()
     ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
 
     // \xc2\xb0 is degree symbol UTF-8 encoded
-    ImGui::Text("Heading = %.2f\xc2\xb0"), simple_degrees(m_camera_controller->heading());
-    ImGui::Text("Elevation = %.2f\xc2\xb0"), simple_degrees(m_camera_controller->elevation());
+    ImGui::Text("Heading = %.2f\xc2\xb0", simple_degrees(m_camera_controller->heading()));
+    ImGui::Text("Elevation = %.2f\xc2\xb0", simple_degrees(m_camera_controller->elevation()));
 
     m_camera_controller->translate_x.set_max_delta(speed);
     m_camera_controller->translate_y.set_max_delta(speed);

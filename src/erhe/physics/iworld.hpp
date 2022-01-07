@@ -16,12 +16,12 @@ class IWorld
 public:
     virtual ~IWorld(){}
 
-    static [[nodiscard]] auto create() -> IWorld*;
-    static [[nodiscard]] auto create_shared() -> std::shared_ptr<IWorld>;
-    static [[nodiscard]] auto create_unique() -> std::unique_ptr<IWorld>;
+    [[nodiscard]] static auto create() -> IWorld*;
+    [[nodiscard]] static auto create_shared() -> std::shared_ptr<IWorld>;
+    [[nodiscard]] static auto create_unique() -> std::unique_ptr<IWorld>;
 
-    virtual [[nodiscard]] auto is_physics_updates_enabled() const -> bool      = 0;
-    virtual [[nodiscard]] auto get_gravity               () const -> glm::vec3 = 0;
+    [[nodiscard]] virtual auto is_physics_updates_enabled() const -> bool      = 0;
+    [[nodiscard]] virtual auto get_gravity               () const -> glm::vec3 = 0;
     virtual void enable_physics_updates ()                        = 0;
     virtual void disable_physics_updates()                        = 0;
     virtual void update_fixed_step      (const double dt)         = 0;

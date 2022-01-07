@@ -283,7 +283,14 @@ auto Trs_tool::Visualization::make_mesh(
     erhe::primitive::Primitive_geometry&              primitive_geometry
 ) -> std::shared_ptr<erhe::scene::Mesh>
 {
-    auto mesh = std::make_shared<erhe::scene::Mesh>(name, erhe::primitive::Primitive{material, primitive_geometry});
+    auto mesh = std::make_shared<erhe::scene::Mesh>(
+        name,
+        erhe::primitive::Primitive{
+            .material              = material,
+            .gl_primitive_geometry = primitive_geometry,
+            .rt_primitive_geometry = {}
+        }
+    );
     auto* parent = tool_node.get();
     if (parent != nullptr)
     {

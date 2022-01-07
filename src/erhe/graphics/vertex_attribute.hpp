@@ -86,7 +86,7 @@ public:
         size_t                 dimension {0};
     };
 
-    static [[nodiscard]] auto desc(const Usage_type usage) -> const char*;
+    [[nodiscard]] static auto desc(const Usage_type usage) -> const char*;
 
     Vertex_attribute(
         const Usage              usage,

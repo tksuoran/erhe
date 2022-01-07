@@ -49,7 +49,7 @@ Font::~Font()
 #endif
 }
 
-#if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE)
+#if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE) && defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
 Font::Font(
     const std::filesystem::path& path,
     const unsigned int           size,
@@ -82,7 +82,7 @@ Font::Font(
         m_hint_mode = FT_LOAD_NO_HINTING; // NOLINT(hicpp-signed-bitwise)
     }
 
-    m_chars = 
+    m_chars =
         " \"\\@#$%&/" // latin
         "0123456789"
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"

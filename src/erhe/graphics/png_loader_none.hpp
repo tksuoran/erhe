@@ -2,9 +2,10 @@
 
 #include "erhe/graphics/texture.hpp"
 
+#include <filesystem>
 #include <memory>
 
-namespace std::filesystem { class path; }
+//namespace std::filesystem { class path; }
 
 namespace erhe::graphics
 {

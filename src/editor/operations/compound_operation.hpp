@@ -17,7 +17,7 @@ public:
         std::vector<std::shared_ptr<IOperation>> operations;
     };
 
-    explicit Compound_operation(Context&& context);
+    Compound_operation(Context&& context);
     ~Compound_operation        () override;
 
     // Implements IOperation

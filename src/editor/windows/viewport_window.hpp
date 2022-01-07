@@ -40,7 +40,7 @@ public:
         const std::shared_ptr<Viewport_config>& viewport_config,
         erhe::scene::ICamera*                   camera
     );
-    ~Viewport_window();
+    ~Viewport_window() override;
 
     // Implements Imgui_window
     void imgui()    override;

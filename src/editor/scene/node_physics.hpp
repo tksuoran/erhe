@@ -37,8 +37,13 @@ public:
     [[nodiscard]] auto rigid_body         ()       ->       erhe::physics::IRigid_body*;
     [[nodiscard]] auto rigid_body         () const -> const erhe::physics::IRigid_body*;
     [[nodiscard]] auto get_world_from_node() const -> erhe::physics::Transform;
+
+    using erhe::scene::INode_attachment::on_attached_to;
     void on_attached_to          (erhe::physics::IWorld* world);
+
+    using erhe::scene::INode_attachment::on_detached_from;
     void on_detached_from        (erhe::physics::IWorld* world);
+
     void set_world_from_node     (const erhe::physics::Transform world_from_node);
     void set_rigidbody_from_node (const erhe::physics::Transform rigidbody_from_node);
 

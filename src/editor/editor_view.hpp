@@ -93,7 +93,7 @@ public:
 
     [[nodiscard]] auto accept_mouse_command(Command* command) const -> bool
     {
-        return 
+        return
             (m_active_mouse_command == nullptr) ||
             (m_active_mouse_command == command);
     }

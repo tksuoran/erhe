@@ -62,6 +62,15 @@ private:
     class Source_entry
     {
     public:
+        Source_entry(
+            const std::shared_ptr<erhe::scene::Mesh>&      mesh,
+            const std::vector<erhe::primitive::Primitive>& primitives
+        )
+        :   mesh      {mesh}
+        ,   primitives{primitives}
+        {
+        }
+
         std::shared_ptr<erhe::scene::Mesh>      mesh;
         std::vector<erhe::primitive::Primitive> primitives;
     };

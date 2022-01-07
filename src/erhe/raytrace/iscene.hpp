@@ -45,11 +45,11 @@ public:
     virtual void detach   (IInstance* instance) = 0;
     virtual void commit   () = 0;
     virtual void intersect(Ray& ray, Hit& hit) = 0;
-    virtual [[nodiscard]] auto debug_label() const -> std::string_view = 0;
+    [[nodiscard]] virtual auto debug_label() const -> std::string_view = 0;
 
-    static [[nodiscard]] auto create       (const std::string_view debug_label) -> IScene*;
-    static [[nodiscard]] auto create_shared(const std::string_view debug_label) -> std::shared_ptr<IScene>;
-    static [[nodiscard]] auto create_unique(const std::string_view debug_label) -> std::unique_ptr<IScene>;
+    [[nodiscard]] static auto create       (const std::string_view debug_label) -> IScene*;
+    [[nodiscard]] static auto create_shared(const std::string_view debug_label) -> std::shared_ptr<IScene>;
+    [[nodiscard]] static auto create_unique(const std::string_view debug_label) -> std::unique_ptr<IScene>;
 };
 
 } // namespace erhe::raytrace

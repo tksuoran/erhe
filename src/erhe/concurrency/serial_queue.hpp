@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <functional>
@@ -46,11 +47,15 @@ protected:
     std::string m_name;
     std::thread m_thread;
 
-#pragma warning(push)
-#pragma warning(disable : 4324)  // structure was padded due to alignment specifier
+#if defined(_MSC_VER)
+#   pragma warning(push)
+#   pragma warning(disable : 4324)  // structure was padded due to alignment specifier
+#endif
     alignas(64) std::atomic<bool> m_stop        { false };
     alignas(64) std::atomic<int>  m_task_counter{ 0 };
-#pragma warning(pop)
+#if defined(_MSC_VER)
+#   pragma warning(pop)
+#endif
 
     std::deque<Task>        m_task_queue;
     std::mutex              m_queue_mutex;

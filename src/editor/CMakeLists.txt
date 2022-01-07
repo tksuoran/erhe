@@ -34,8 +34,6 @@ set(source_list
     parsers/json_polyhedron.hpp
     parsers/wavefront_obj.cpp
     parsers/wavefront_obj.hpp
-    parsers/gltf.cpp
-    parsers/gltf.hpp
 
     renderers/base_renderer.cpp
     renderers/base_renderer.hpp
@@ -191,6 +189,14 @@ set(source_list
     res/shaders/wide_lines.frag
 )
 
+if (${ERHE_GLTF_LIBRARY} STREQUAL "glTF-SDK")
+    set(gltf_source_list
+        parsers/gltf.cpp
+        parsers/gltf.hpp
+    )
+endif ()
+
+
 if (${ERHE_XR_LIBRARY} STREQUAL "OpenXR")
     set(xr_source_list
         renderers/headset_renderer.cpp
@@ -198,7 +204,7 @@ if (${ERHE_XR_LIBRARY} STREQUAL "OpenXR")
     )
 endif ()
 
-add_executable(${_target} ${source_list} ${xr_source_list})
+add_executable(${_target} ${source_list} ${xr_source_list} ${gltf_source_list})
 
 target_link_libraries(
     ${_target}

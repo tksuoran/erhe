@@ -87,8 +87,8 @@ public:
     }
 
     // Public interface
-    virtual [[nodiscard]] auto get_type_hash                  () const -> uint32_t = 0;
-    virtual [[nodiscard]] auto processing_requires_main_thread() const -> bool;
+    [[nodiscard]] virtual auto get_type_hash                  () const -> uint32_t = 0;
+    [[nodiscard]] virtual auto processing_requires_main_thread() const -> bool;
     virtual void initialize_component() {}
     virtual void on_thread_exit      () {}
     virtual void on_thread_enter     () {}

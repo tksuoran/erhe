@@ -29,12 +29,12 @@ class Buffer_sink
 public:
     virtual ~Buffer_sink();
 
-    virtual [[nodiscard]] auto allocate_vertex_buffer(
+    [[nodiscard]] virtual auto allocate_vertex_buffer(
         const size_t vertex_count,
         const size_t vertex_element_size
     ) -> Buffer_range = 0;
 
-    virtual [[nodiscard]] auto allocate_index_buffer(
+    [[nodiscard]] virtual auto allocate_index_buffer(
         const size_t index_count,
         const size_t index_element_size
     ) -> Buffer_range = 0;

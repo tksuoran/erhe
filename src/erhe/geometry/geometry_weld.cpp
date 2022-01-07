@@ -560,11 +560,11 @@ void Geometry::weld(const Weld_settings& weld_settings)
             {
                 continue;
             }
-            const vec3 centroid = polygon_attribute_maps.centroids->get(old_polygon_id);
+            //const vec3 centroid = polygon_attribute_maps.centroids->get(old_polygon_id);
             //log_weld.trace("    {:2} (old {:2}: centroid {}", new_polygon_id, old_polygon_id, centroid);
             if (polygon_attribute_maps.normals->has(old_polygon_id))
             {
-                const vec3 normal = polygon_attribute_maps.normals->get(old_polygon_id);
+                //const vec3 normal = polygon_attribute_maps.normals->get(old_polygon_id);
                 //log_weld.trace(" normal {}", normal);
             }
             //log_weld.trace("\n");
@@ -697,7 +697,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
         //log_weld.trace("Polygon remapping after update_secondary_new_from_old:\n");
         //polygon_remapper.dump();
         polygon_remapper.trim(
-            [this](Point_id new_id, Point_id old_id)
+            [/*this*/](Point_id new_id, Point_id old_id)
             {
 #if 0 // Disable trace logging
                 log_weld.trace("Dropping polygon new {:2} old {:2} corners:", new_id, old_id);

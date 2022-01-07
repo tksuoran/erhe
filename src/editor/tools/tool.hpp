@@ -14,9 +14,9 @@ class Render_context;
 
 class Tool
 {
-public: 
-    virtual [[nodiscard]] auto description  () -> const char* = 0;
-    virtual [[nodiscard]] auto tool_priority() const -> int { return 999; }
+public:
+    [[nodiscard]] virtual auto description  () -> const char* = 0;
+    [[nodiscard]] virtual auto tool_priority() const -> int { return 999; }
 
     virtual void begin_frame            () {}
     virtual void tool_render            (const Render_context& context) { static_cast<void>(context); }

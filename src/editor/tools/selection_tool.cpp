@@ -551,14 +551,32 @@ void Selection_tool::tool_render(const Render_context& context)
                     thickness
                 );
 
-                struct Cone_edge
+                class Cone_edge
                 {
-                    vec3  p      {0.0f};
-                    vec3  n      {0.0f};
-                    vec3  t      {0.0f};
-                    vec3  b      {0.0f};
-                    float phi    {0.0f};
-                    float n_dot_v{0.0f};
+                public:
+                    Cone_edge(
+                        const glm::vec3& p,
+                        const glm::vec3& n,
+                        const glm::vec3& t,
+                        const glm::vec3& b,
+                        const float      phi,
+                        const float      n_dot_v
+                    )
+                    : p      {p}
+                    , n      {n}
+                    , t      {t}
+                    , b      {b}
+                    , phi    {phi}
+                    , n_dot_v{n_dot_v}
+                    {
+                    }
+
+                    glm::vec3 p;
+                    glm::vec3 n;
+                    glm::vec3 t;
+                    glm::vec3 b;
+                    float     phi;
+                    float     n_dot_v;
                 };
 
                 std::vector<Cone_edge> cone_edges;

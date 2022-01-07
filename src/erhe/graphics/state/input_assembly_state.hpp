@@ -20,7 +20,7 @@ public:
     gl::Primitive_type primitive_topology{gl::Primitive_type::points};
     bool               primitive_restart {false};
 
-    static [[nodiscard]] auto get_next_serial() -> size_t;
+    [[nodiscard]] static auto get_next_serial() -> size_t;
 
     static size_t               s_serial;
     static Input_assembly_state points;

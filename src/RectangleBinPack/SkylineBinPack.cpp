@@ -166,6 +166,7 @@ bool SkylineBinPack::RectangleFits(int skylineNodeIndex, int width, int height, 
 
 int SkylineBinPack::ComputeWastedArea(int skylineNodeIndex, int width, int height, int y) const
 {
+    static_cast<void>(height);
 	int wastedArea = 0;
 	const int rectLeft = skyLine[skylineNodeIndex].x;
 	const int rectRight = rectLeft + width;
@@ -193,6 +194,7 @@ bool SkylineBinPack::RectangleFits(int skylineNodeIndex, int width, int height, 
 
 void SkylineBinPack::AddWasteMapArea(int skylineNodeIndex, int width, int height, int y)
 {
+    static_cast<void>(height);
 	// int wastedArea = 0; // unused
 	const int rectLeft = skyLine[skylineNodeIndex].x;
 	const int rectRight = rectLeft + width;

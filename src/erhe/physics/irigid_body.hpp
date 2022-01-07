@@ -56,15 +56,15 @@ public:
 
     virtual ~IRigid_body(){}
 
-    virtual [[nodiscard]] auto get_collision_shape () const -> std::shared_ptr<ICollision_shape> = 0;
-    virtual [[nodiscard]] auto get_motion_mode     () const -> Motion_mode                       = 0;
-    virtual [[nodiscard]] auto get_friction        () const -> float                             = 0;
-    virtual [[nodiscard]] auto get_rolling_friction() const -> float                             = 0;
-    virtual [[nodiscard]] auto get_restitution     () const -> float                             = 0;
-    virtual [[nodiscard]] auto get_linear_damping  () const -> float                             = 0;
-    virtual [[nodiscard]] auto get_angular_damping () const -> float                             = 0;
-    virtual [[nodiscard]] auto get_local_inertia   () const -> glm::vec3                         = 0;
-    virtual [[nodiscard]] auto get_mass            () const -> float                             = 0;
+    [[nodiscard]] virtual auto get_collision_shape () const -> std::shared_ptr<ICollision_shape> = 0;
+    [[nodiscard]] virtual auto get_motion_mode     () const -> Motion_mode                       = 0;
+    [[nodiscard]] virtual auto get_friction        () const -> float                             = 0;
+    [[nodiscard]] virtual auto get_rolling_friction() const -> float                             = 0;
+    [[nodiscard]] virtual auto get_restitution     () const -> float                             = 0;
+    [[nodiscard]] virtual auto get_linear_damping  () const -> float                             = 0;
+    [[nodiscard]] virtual auto get_angular_damping () const -> float                             = 0;
+    [[nodiscard]] virtual auto get_local_inertia   () const -> glm::vec3                         = 0;
+    [[nodiscard]] virtual auto get_mass            () const -> float                             = 0;
     virtual void set_collision_shape         (const std::shared_ptr<ICollision_shape>& collision_shape) = 0;
     virtual void set_motion_mode             (const Motion_mode motion_mode)                            = 0;
     virtual void set_friction                (float friction)                                           = 0;

@@ -9,6 +9,8 @@ Imgui_window::Imgui_window(const std::string_view title)
 {
 }
 
+Imgui_window::~Imgui_window() = default;
+
 void Imgui_window::show()
 {
     m_is_visible = true;

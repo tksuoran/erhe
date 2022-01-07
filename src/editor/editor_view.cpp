@@ -114,7 +114,7 @@ void Editor_view::remove_command_binding(
 {
     std::erase_if(
         m_key_bindings,
-        [binding_id](Key_binding& binding)
+        [binding_id](const Key_binding& binding)
         {
             return binding.get_id() == binding_id;
         }
@@ -127,8 +127,6 @@ void Editor_view::remove_command_binding(
         }
     );
 }
-
-static constexpr std::string_view c_swap_buffers{"swap buffers"};
 
 void Editor_view::on_refresh()
 {

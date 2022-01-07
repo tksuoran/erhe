@@ -1,5 +1,6 @@
 {
     "files.associations": {
+        "*.log": "log",
         "typeinfo": "cpp",
         "format": "cpp",
         "array": "cpp",
@@ -107,7 +108,8 @@
         "narrow": "cpp",
         "util": "cpp",
         "stop_token": "cpp",
-        "charconv": "cpp"
+        "charconv": "cpp",
+        "any": "cpp"
     },
     "C_Cpp.errorSquiggles": "Disabled",
     "C_Cpp.dimInactiveRegions": false,

@@ -22,7 +22,7 @@ public:
     static constexpr uint64_t c_flag_bit_is_raytrace         = (1u << 1);
     static constexpr uint64_t c_flag_bit_is_frame_controller = (1u << 2);
 
-    virtual [[nodiscard]] auto node_attachment_type() const -> const char* = 0;
+    [[nodiscard]] virtual auto node_attachment_type() const -> const char* = 0;
     virtual void on_attached_to           (Node* node) { m_node = node; };
     virtual void on_detached_from         (Node* node) { static_cast<void>(node); m_node = nullptr; };
     virtual void on_node_transform_changed() {};
@@ -65,7 +65,7 @@ public:
     virtual void on_detached_from    (Node& node);
     virtual void on_transform_changed();
 
-    virtual [[nodiscard]] auto node_type() const -> const char*;
+    [[nodiscard]] virtual auto node_type() const -> const char*;
 
     [[nodiscard]] auto parent                    () const -> Node*;
     [[nodiscard]] auto depth                     () const -> size_t;

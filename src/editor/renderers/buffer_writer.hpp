@@ -81,6 +81,11 @@ public:
                 uniform_align();
                 break;
             }
+            default:
+            {
+                // TODO
+                break;
+            }
         }
         range.first_byte_offset = write_offset;
     }

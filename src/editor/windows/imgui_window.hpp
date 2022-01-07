@@ -20,6 +20,7 @@ class Imgui_window
 {
 public:
     Imgui_window(const std::string_view title);
+    virtual ~Imgui_window();
 
     [[nodiscard]] auto is_visibile() const -> bool;
     [[nodiscard]] auto title      () const -> const std::string_view;

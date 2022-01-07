@@ -26,7 +26,7 @@ public:
     //    const int                 depth  = 1
     //);
 
-    static [[nodiscard]] auto calculate_level_count(
+    [[nodiscard]] static auto calculate_level_count(
         const int width,
         const int height = 0,
         const int depth = 0

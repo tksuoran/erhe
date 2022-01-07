@@ -647,26 +647,26 @@ void Build_context::build_vertex_texcoord()
     vertex_writer.write(root.attributes.texcoord, texcoord);
 }
 
-namespace {
-
-constexpr glm::vec3 unique_colors[13] =
-{
-    {1.0f, 0.3f, 0.7f}, //  3
-    {1.0f, 0.7f, 0.3f}, //  4
-    {0.7f, 1.0f, 0.3f}, //  5
-    {0.3f, 1.0f, 0.7f}, //  6
-    {0.3f, 0.7f, 1.0f}, //  7
-    {0.7f, 0.3f, 1.0f}, //  8
-    {0.8f, 0.0f, 0.0f}, //  9
-    {0.0f, 0.8f, 0.0f}, // 14
-    {0.0f, 0.0f, 0.8f}, // 15
-    {0.7f, 0.7f, 0.0f}, // 12
-    {0.7f, 0.0f, 0.7f}, // 13
-    {0.0f, 0.7f, 0.7f}, // 10
-    {0.7f, 0.7f, 0.7f}  // 11
-};
-
-}
+// namespace {
+//
+// constexpr glm::vec3 unique_colors[13] =
+// {
+//     {1.0f, 0.3f, 0.7f}, //  3
+//     {1.0f, 0.7f, 0.3f}, //  4
+//     {0.7f, 1.0f, 0.3f}, //  5
+//     {0.3f, 1.0f, 0.7f}, //  6
+//     {0.3f, 0.7f, 1.0f}, //  7
+//     {0.7f, 0.3f, 1.0f}, //  8
+//     {0.8f, 0.0f, 0.0f}, //  9
+//     {0.0f, 0.8f, 0.0f}, // 14
+//     {0.0f, 0.0f, 0.8f}, // 15
+//     {0.7f, 0.7f, 0.0f}, // 12
+//     {0.7f, 0.0f, 0.7f}, // 13
+//     {0.0f, 0.7f, 0.7f}, // 10
+//     {0.7f, 0.7f, 0.7f}  // 11
+// };
+// 
+// }
 
 void Build_context::build_vertex_color(const uint32_t /*polygon_corner_count*/)
 {

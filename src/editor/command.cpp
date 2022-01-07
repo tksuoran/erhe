@@ -36,6 +36,8 @@ Command::Command(const char* name)
 {
 }
 
+Command::~Command() = default;
+
 auto Command::try_call(Command_context& context) -> bool
 {
     static_cast<void>(context);
@@ -83,10 +85,16 @@ auto Command::name() const -> const char*
     return m_name;
 }
 
+Command_binding::Command_binding()
+{
+}
+
 Command_binding::Command_binding(Command* command)
     : m_command{command}
 {
 }
+
+Command_binding::~Command_binding() = default;
 
 auto Command_binding::get_id() const -> erhe::toolkit::Unique_id<Command_binding>::id_type
 {
@@ -110,6 +118,8 @@ Key_binding::Key_binding(
     , m_modifier_mask{modifier_mask}
 {
 }
+
+//Key_binding::~Key_binding() = default;
 
 auto Key_binding::on_key(
     Command_context&             context,
@@ -164,6 +174,8 @@ Mouse_binding::Mouse_binding(Command* command)
 {
 }
 
+//Mouse_binding::~Mouse_binding() = default;
+
 auto Mouse_binding::on_button(
     Command_context&                  context,
     const erhe::toolkit::Mouse_button button,
@@ -190,6 +202,8 @@ Mouse_click_binding::Mouse_click_binding(
     , m_button     {button }
 {
 }
+
+//Mouse_click_binding::~Mouse_click_binding() = default;
 
 auto Mouse_click_binding::on_button(
     Command_context&                  context,
@@ -269,6 +283,8 @@ Mouse_motion_binding::Mouse_motion_binding(Command* command)
 {
 }
 
+//Mouse_motion_binding::~Mouse_motion_binding() = default;
+
 auto Mouse_motion_binding::on_motion(Command_context& context) -> bool
 {
     auto* command = get_command();
@@ -292,6 +308,8 @@ Mouse_drag_binding::Mouse_drag_binding(
     , m_button     {button }
 {
 }
+
+//Mouse_drag_binding::~Mouse_drag_binding() = default;
 
 auto Mouse_drag_binding::on_button(
     Command_context&                  context,

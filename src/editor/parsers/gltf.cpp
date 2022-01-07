@@ -156,7 +156,7 @@ auto c_str(ProjectionType value) -> const char*
 //constexpr const char* ACCESSOR_WEIGHTS_0  = "WEIGHTS_0";
 }
 
-class Stream_reader 
+class Stream_reader
     : public Microsoft::glTF::IStreamReader
 {
 public:

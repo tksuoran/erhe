@@ -22,8 +22,6 @@ public:
     Transform clip_from_world;
 };
 
-//Transforms m_camera_transforms;
-
 class ICamera
     : public Node
 {
@@ -31,13 +29,9 @@ public:
     explicit ICamera(const std::string_view name);
     virtual ~ICamera() {}
 
-    virtual [[nodiscard]] auto projection           () -> Projection* = 0;
-    virtual [[nodiscard]] auto projection           () const -> const Projection* = 0;
-    virtual [[nodiscard]] auto projection_transforms(Viewport viewport) const -> Projection_transforms = 0;
-    //virtual [[nodiscard]] auto clip_from_node () const -> glm::mat4 = 0;
-    //virtual [[nodiscard]] auto clip_from_world() const -> glm::mat4 = 0;
-    //virtual [[nodiscard]] auto node_from_clip () const -> glm::mat4 = 0;
-    //virtual [[nodiscard]] auto world_from_clip() const -> glm::mat4 = 0;
+    [[nodiscard]] virtual auto projection           () -> Projection* = 0;
+    [[nodiscard]] virtual auto projection           () const -> const Projection* = 0;
+    [[nodiscard]] virtual auto projection_transforms(Viewport viewport) const -> Projection_transforms = 0;
 };
 
 class Camera
@@ -49,29 +43,13 @@ public:
 
     [[nodiscard]] auto node_type() const -> const char* override;
 
-    //void update(const Viewport viewport) override;
-
     // Implements ICamera
     [[nodiscard]] auto projection           () -> Projection*                                  override;
     [[nodiscard]] auto projection           () const -> const Projection*                      override;
     [[nodiscard]] auto projection_transforms(Viewport viewport) const -> Projection_transforms override;
 
-    //[[nodiscard]] auto clip_from_node () const -> glm::mat4         override;
-    //[[nodiscard]] auto clip_from_world() const -> glm::mat4         override;
-    //[[nodiscard]] auto node_from_clip () const -> glm::mat4         override;
-    //[[nodiscard]] auto world_from_clip() const -> glm::mat4         override;
-
 private:
     Projection m_projection;
-
-    //class Transforms
-    //{
-    //public:
-    //    Transform clip_from_node;
-    //    Transform clip_from_world;
-    //};
-    //
-    //Transforms m_camera_transforms;
 };
 
 [[nodiscard]] auto is_icamera(const Node* const node) -> bool;

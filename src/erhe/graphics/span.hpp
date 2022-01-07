@@ -6,28 +6,28 @@
 namespace erhe::graphics
 {
 
-inline [[nodiscard]] auto as_span(const glm::mat4& m) -> gsl::span<const float>
+[[nodiscard]] inline auto as_span(const glm::mat4& m) -> gsl::span<const float>
 {
     return gsl::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(m)), 16);
 }
 
-inline [[nodiscard]] auto as_span(const glm::vec4& v) -> gsl::span<const float>
+[[nodiscard]] inline auto as_span(const glm::vec4& v) -> gsl::span<const float>
 {
     return gsl::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(v)), 4);
 }
 
-inline [[nodiscard]] auto as_span(const glm::vec3& v) -> gsl::span<const float>
+[[nodiscard]] inline auto as_span(const glm::vec3& v) -> gsl::span<const float>
 {
     return gsl::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(v)), 3);
 }
 
-inline [[nodiscard]] auto as_span(const glm::vec2& v) -> gsl::span<const float>
+[[nodiscard]] inline auto as_span(const glm::vec2& v) -> gsl::span<const float>
 {
     return gsl::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(v)), 2);
 }
 
 template <typename T>
-inline [[nodiscard]] auto as_span(const T& value) -> gsl::span<const T>
+[[nodiscard]] inline auto as_span(const T& value) -> gsl::span<const T>
 {
     return gsl::span<const T>(&value, 1);
 }

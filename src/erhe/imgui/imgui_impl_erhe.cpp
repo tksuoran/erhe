@@ -433,7 +433,7 @@ public:
         }
         for (
             ;
-            texture_unit < texture_unit_count;
+            static_cast<size_t>(texture_unit) < texture_unit_count;
             ++texture_unit
         )
         {
@@ -522,22 +522,6 @@ private:
 Imgui_renderer imgui_renderer;
 
 static constexpr std::string_view c_imgui_render{"ImGui_ImplErhe_RenderDrawData()"};
-
-auto imgui_color(const float r, const float g, const float b, const float a)
-{
-    //return ImVec4{
-    //    erhe::toolkit::srgb_to_linear(r * a),
-    //    erhe::toolkit::srgb_to_linear(g * a),
-    //    erhe::toolkit::srgb_to_linear(b * a),
-    //    a
-    //};
-    return ImVec4{
-        r,
-        g,
-        b,
-        a
-    };
-}
 
 } // anonymous namespace
 
