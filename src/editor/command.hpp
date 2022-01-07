@@ -12,7 +12,6 @@ namespace editor {
 
 class Command;
 class Editor_view;
-class Log_window;
 class Pointer_context;
 class Viewport_window;
 
@@ -21,19 +20,16 @@ class Command_context
 public:
     Command_context(
         Editor_view&     editor_view,
-        Pointer_context& pointer_context,
-        Log_window*      log_window
+        Pointer_context& pointer_context
     );
 
     [[nodiscard]] auto viewport_window     () -> Viewport_window*;
     [[nodiscard]] auto hovering_over_tool  () -> bool;
-    [[nodiscard]] auto log_window          () -> Log_window*;
     [[nodiscard]] auto accept_mouse_command(Command* command) -> bool;
 
 private:
     Editor_view&     m_editor_view;
     Pointer_context& m_pointer_context;
-    Log_window*      m_log_window{nullptr};
 };
 
 class Command

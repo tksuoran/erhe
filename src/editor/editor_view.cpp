@@ -11,7 +11,6 @@
 #include "renderers/id_renderer.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
-#include "windows/log_window.hpp"
 #include "windows/viewport_window.hpp"
 
 #include "erhe/geometry/geometry.hpp"
@@ -49,7 +48,6 @@ void Editor_view::connect()
     m_editor_time      = get<Editor_time     >();
     m_editor_tools     = get<Editor_tools    >();
     m_fly_camera_tool  = get<Fly_camera_tool >();
-    m_log_window       = get<Log_window      >();
     m_operation_stack  = get<Operation_stack >();
     m_pointer_context  = get<Pointer_context >();
     m_scene_root       = get<Scene_root      >();
@@ -221,8 +219,7 @@ void Editor_view::on_key(
 {
     Command_context context{
         *this,
-        *m_pointer_context,
-        get<Log_window>().get()
+        *m_pointer_context
     };
 
     for (auto& binding : m_key_bindings)
@@ -233,8 +230,7 @@ void Editor_view::on_key(
         }
     }
 
-    context.log_window()->tail_log(
-        filter_event_color,
+    log_input_event_filtered.trace(
         "key {} {} not consumed",
         erhe::toolkit::c_str(code),
         pressed ? "press" : "release"
@@ -291,8 +287,7 @@ void Editor_view::inactivate_ready_commands()
 {
     Command_context context{
         *this,
-        *m_pointer_context,
-        get<Log_window>().get()
+        *m_pointer_context
     };
     for (auto* command : m_commands)
     {
@@ -341,8 +336,7 @@ void Editor_view::on_mouse_click(
         return;
     }
 
-    m_log_window->tail_log(
-        log_color,
+    log_input_event.trace(
         "mouse button {} {}",
         erhe::toolkit::c_str(button),
         count
@@ -352,8 +346,7 @@ void Editor_view::on_mouse_click(
 
     Command_context context{
         *this,
-        *m_pointer_context,
-        get<Log_window>().get()
+        *m_pointer_context
     };
     for (const auto& binding : m_mouse_bindings)
     {
@@ -377,18 +370,17 @@ void Editor_view::on_mouse_move(const double x, const double y)
         (m_active_mouse_command == nullptr)
     )
     {
-        m_log_window->tail_log(filter_event_color, "ImGui WantCaptureMouse");
+        log_input_event_filtered.trace("ImGui WantCaptureMouse");
         return;
     }
 
-    //m_log_window->tail_log(log_color, "mouse move");
+    log_input_event.trace("mouse move");
 
     m_pointer_context->update_mouse(x, y);
 
     Command_context context{
         *this,
-        *m_pointer_context,
-        get<Log_window>().get()
+        *m_pointer_context
     };
     for (const auto& binding : m_mouse_bindings)
     {
@@ -407,7 +399,7 @@ void Editor_view::on_key_press(
     const uint32_t               modifier_mask
 )
 {
-    m_log_window->tail_log(log_color, "key press {}", erhe::toolkit::c_str(code));
+    log_input_event.trace("key press {}", erhe::toolkit::c_str(code));
 
     on_key(true, code, modifier_mask);
 }
@@ -417,7 +409,7 @@ void Editor_view::on_key_release(
     const uint32_t               modifier_mask
 )
 {
-    m_log_window->tail_log(log_color, "key release {}", erhe::toolkit::c_str(code));
+    log_input_event.trace("key release {}", erhe::toolkit::c_str(code));
 
     on_key(false, code, modifier_mask);
 }

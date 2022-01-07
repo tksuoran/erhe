@@ -36,7 +36,7 @@ public:
     [[nodiscard]] auto node_attachment_type() const -> const char* override;
     void on_node_transform_changed() override;
 
-    void clear            ();
+    void reset            ();
     void update           ();
     void update_fixed_step();
     void set_position     (const glm::vec3 position);

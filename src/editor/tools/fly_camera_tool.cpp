@@ -117,9 +117,7 @@ auto Fly_camera_move_command::try_call(Command_context& context) -> bool
 {
     static_cast<void>(context);
 
-    const bool consumed = m_fly_camera_tool.try_move(m_control, m_item, m_active);
-    m_fly_camera_tool.dump();
-    return consumed;
+    return m_fly_camera_tool.try_move(m_control, m_item, m_active);
 }
 
 Fly_camera_tool::Fly_camera_tool()
@@ -195,6 +193,23 @@ void Fly_camera_tool::initialize_component()
     m_camera_controller = std::make_shared<Frame_controller>();
 }
 
+void Fly_camera_tool::update_camera()
+{
+    if (!m_use_viewport_camera)
+    {
+        return;
+    }
+
+    auto* window = m_pointer_context->window();
+    auto* camera = (window != nullptr)
+        ? window->camera()
+        : nullptr;
+    if (m_camera_controller->get_node() != camera)
+    {
+        set_camera(camera);
+    }
+}
+
 void Fly_camera_tool::set_camera(erhe::scene::ICamera* camera)
 {
     // attach() below requires world from node matrix, which
@@ -204,9 +219,13 @@ void Fly_camera_tool::set_camera(erhe::scene::ICamera* camera)
     auto* old_host = m_camera_controller->get_node();
     if (old_host != nullptr)
     {
+        m_camera_controller->reset();
         old_host->detach(m_camera_controller.get());
     }
-    camera->attach(m_camera_controller);
+    if (camera != nullptr)
+    {
+        camera->attach(m_camera_controller);
+    }
 }
 
 auto Fly_camera_tool::get_camera() const -> erhe::scene::ICamera*
@@ -262,19 +281,6 @@ auto Fly_camera_tool::try_move(
     return true;
 }
 
-void Fly_camera_tool::dump()
-{
-    get<Log_window>()->tail_log(
-        "Translate: {}{}{}{}{}{}",
-        m_camera_controller->translate_x.more() ? "X+ " : "",
-        m_camera_controller->translate_x.less() ? "X- " : "",
-        m_camera_controller->translate_y.more() ? "Y+ " : "",
-        m_camera_controller->translate_y.less() ? "Y- " : "",
-        m_camera_controller->translate_z.more() ? "Z+ " : "",
-        m_camera_controller->translate_z.less() ? "Z- " : ""
-    );
-}
-
 void Fly_camera_tool::turn_relative(const double dx, const double dy)
 {
     std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
@@ -307,6 +313,7 @@ void Fly_camera_tool::update_once_per_frame(
 {
     std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
+    update_camera();
     m_camera_controller->update();
 }
 
@@ -326,10 +333,11 @@ void Fly_camera_tool::imgui()
     float speed = m_camera_controller->translate_z.max_delta();
 
     auto* camera = get_camera();
-    if (m_scene_root->camera_combo("Camera", camera))
+    if (m_scene_root->camera_combo("Camera", camera) && !m_use_viewport_camera)
     {
         set_camera(camera);
     }
+    ImGui::Checkbox   ("Use Viewport Camera", &m_use_viewport_camera);
     ImGui::SliderFloat("Sensitivity", &m_sensitivity, 0.2f,   2.0f);
     ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
 

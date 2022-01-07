@@ -15,6 +15,30 @@ using namespace glm;
 
 using namespace erhe::toolkit;
 
+Frame_controller::Frame_controller()
+{
+    m_flag_bits |= INode_attachment::c_flag_bit_is_frame_controller;
+
+    reset();
+    rotate_x      .set_damp     (0.700f);
+    rotate_y      .set_damp     (0.700f);
+    rotate_z      .set_damp     (0.700f);
+    rotate_x      .set_max_delta(0.02f);
+    rotate_y      .set_max_delta(0.02f);
+    rotate_z      .set_max_delta(0.02f);
+    translate_x   .set_damp     (0.92f);
+    translate_y   .set_damp     (0.92f);
+    translate_z   .set_damp     (0.92f);
+    translate_x   .set_max_delta(0.004f);
+    translate_y   .set_max_delta(0.004f);
+    translate_z   .set_max_delta(0.004f);
+    speed_modifier.set_max_value(3.0f);
+    speed_modifier.set_damp     (0.92f);
+    speed_modifier.set_max_delta(0.5f);
+
+    update();
+}
+
 auto Frame_controller::get_controller(const Control control) -> Controller&
 {
     switch (control)
@@ -66,31 +90,6 @@ auto Frame_controller::heading() const -> float
     return m_heading;
 }
 
-
-Frame_controller::Frame_controller()
-{
-    m_flag_bits |= INode_attachment::c_flag_bit_is_frame_controller;
-
-    clear();
-    rotate_x      .set_damp     (0.700f);
-    rotate_y      .set_damp     (0.700f);
-    rotate_z      .set_damp     (0.700f);
-    rotate_x      .set_max_delta(0.02f);
-    rotate_y      .set_max_delta(0.02f);
-    rotate_z      .set_max_delta(0.02f);
-    translate_x   .set_damp     (0.92f);
-    translate_y   .set_damp     (0.92f);
-    translate_z   .set_damp     (0.92f);
-    translate_x   .set_max_delta(0.004f);
-    translate_y   .set_max_delta(0.004f);
-    translate_z   .set_max_delta(0.004f);
-    speed_modifier.set_max_value(3.0f);
-    speed_modifier.set_damp     (0.92f);
-    speed_modifier.set_max_delta(0.5f);
-
-    update();
-}
-
 auto Frame_controller::node_attachment_type() const -> const char*
 {
     return "Frame_controller";
@@ -120,14 +119,14 @@ void Frame_controller::on_node_transform_changed()
     update();
 }
 
-void Frame_controller::clear()
+void Frame_controller::reset()
 {
-    translate_x.clear();
-    translate_y.clear();
-    translate_z.clear();
-    rotate_x.clear();
-    rotate_y.clear();
-    rotate_z.clear();
+    translate_x.reset();
+    translate_y.reset();
+    translate_z.reset();
+    rotate_x.reset();
+    rotate_y.reset();
+    rotate_z.reset();
 }
 
 void Frame_controller::update()

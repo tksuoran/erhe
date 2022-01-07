@@ -1,25 +1,18 @@
 #include "command.hpp"
 #include "tools/pointer_context.hpp"
 #include "editor_view.hpp"
-
-#include "windows/log_window.hpp"
+#include "log.hpp"
 
 #include "erhe/toolkit/verify.hpp"
 
 namespace editor {
 
-const ImVec4 state_transition_color{0.8f, 0.9f, 1.0f, 0.6f};
-const ImVec4 consume_event_color   {1.0f, 1.0f, 8.0f, 0.6f};
-const ImVec4 filter_event_color    {1.0f, 0.8f, 7.0f, 0.6f};
-
 Command_context::Command_context(
     Editor_view&     editor_view,
-    Pointer_context& pointer_context,
-    Log_window*      log_window
+    Pointer_context& pointer_context
 )
     : m_editor_view    {editor_view}
     , m_pointer_context{pointer_context}
-    , m_log_window     {log_window}
 {
 }
 
@@ -31,11 +24,6 @@ auto Command_context::viewport_window() -> Viewport_window*
 auto Command_context::hovering_over_tool() -> bool
 {
     return m_pointer_context.hovering_over_tool();
-}
-
-auto Command_context::log_window() -> Log_window*
-{
-    return m_log_window;
 }
 
 auto Command_context::accept_mouse_command(Command* command) -> bool
@@ -71,22 +59,22 @@ auto Command::state() const -> State
 
 void Command::set_inactive(Command_context& context)
 {
-    context.log_window()->tail_log(state_transition_color, "{} -> inactive", name());
+    log_command_state_transition.trace("{} -> inactive", name());
     on_inactive(context);
     m_state = State::Inactive;
 };
 
 void Command::set_ready(Command_context& context)
 {
-    context.log_window()->tail_log(state_transition_color, "{} -> ready", name());
-    //static_cast<void>(context);
+    static_cast<void>(context);
+    log_command_state_transition.trace("{} -> ready", name());
     m_state = State::Ready;
 }
 
 void Command::set_active(Command_context& context)
 {
-    context.log_window()->tail_log(state_transition_color, "{} -> active", name());
-    //static_cast<void>(context);
+    static_cast<void>(context);
+    log_command_state_transition.trace("{} -> active", name());
     m_state = State::Active;
 }
 
@@ -144,8 +132,7 @@ auto Key_binding::on_key(
         m_modifier_mask.has_value() &&
         m_modifier_mask.value() != modifier_mask)
     {
-        context.log_window()->tail_log(
-            filter_event_color,
+        log_input_event_filtered.trace(
             "{} rejected key {} due to modifier mask mismatch",
             command->name(),
             pressed ? "press" : "release",
@@ -153,8 +140,6 @@ auto Key_binding::on_key(
         );
         return false;
     }
-
-    //ERHE_VERIFY(command != nullptr);
 
     if (command->state() == State::Disabled)
     {
@@ -164,8 +149,7 @@ auto Key_binding::on_key(
     const bool consumed = command->try_call(context);
     if (consumed)
     {
-        context.log_window()->tail_log(
-            consume_event_color,
+        log_input_event_consumed.trace(
             "{} consumed key {} {}",
             command->name(),
             erhe::toolkit::c_str(code),
@@ -219,7 +203,6 @@ auto Mouse_click_binding::on_button(
     }
 
     auto* command = get_command();
-    //ERHE_VERIFY(command != nullptr);
 
     if (command->state() == State::Disabled)
     {
@@ -251,8 +234,7 @@ auto Mouse_click_binding::on_button(
         if (command->state() == State::Ready)
         {
             consumed = command->try_call(context);
-            context.log_window()->tail_log(
-                consume_event_color,
+            log_input_event_consumed.trace(
                 "{} consumed mouse button {} click",
                 command->name(),
                 erhe::toolkit::c_str(button)
@@ -290,7 +272,6 @@ Mouse_motion_binding::Mouse_motion_binding(Command* command)
 auto Mouse_motion_binding::on_motion(Command_context& context) -> bool
 {
     auto* command = get_command();
-    //ERHE_VERIFY(get_command() != nullptr);
 
     if (command->state() == State::Disabled)
     {
@@ -324,7 +305,6 @@ auto Mouse_drag_binding::on_button(
     }
 
     auto* command = get_command();
-    //ERHE_VERIFY(command != nullptr);
 
     if (command->state() == State::Disabled)
     {
@@ -334,8 +314,7 @@ auto Mouse_drag_binding::on_button(
     if (!context.accept_mouse_command(command))
     {
         ERHE_VERIFY(command->state() == State::Inactive);
-        context.log_window()->tail_log(
-            filter_event_color,
+        log_input_event_filtered.trace(
             "{} not active so button event ignored",
             command->name()
         );
@@ -360,8 +339,7 @@ auto Mouse_drag_binding::on_button(
             // if command was ini active state.
             consumed = command->state() == State::Active;
             command->set_inactive(context);
-            context.log_window()->tail_log(
-                consume_event_color,
+            log_input_event_consumed.trace(
                 "{} consumed mouse drag release {}",
                 command->name(),
                 erhe::toolkit::c_str(button)
@@ -383,8 +361,7 @@ auto Mouse_drag_binding::on_motion(Command_context& context) -> bool
     const bool consumed = command->try_call(context);;
     if (consumed)
     {
-        context.log_window()->tail_log(
-            consume_event_color,
+        log_input_event_consumed.trace(
             "{} consumed mouse drag motion",
             command->name()
         );

@@ -145,9 +145,8 @@ public:
     ) -> bool;
     void turn_relative(const double dx, const double dy);
 
-    void dump();
-
 private:
+    void update_camera   ();
     auto can_use_keyboard() const -> bool;
 
     Fly_camera_turn_command               m_turn_command;
@@ -177,7 +176,8 @@ private:
     Fly_camera_space_mouse_listener       m_space_mouse_listener;
     erhe::toolkit::Space_mouse_controller m_space_mouse_controller;
 #endif
-    float                                 m_sensitivity{1.0f};
+    float                                 m_sensitivity        {1.0f};
+    bool                                  m_use_viewport_camera{true};
 };
 
 } // namespace editor

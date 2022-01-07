@@ -29,12 +29,11 @@ public:
     void update                ();
     void adjust                (const float delta);
     void adjust                (const double delta);
-    //void set_focus             (const bool focus);
     void set_more              (const bool value);
     void set_less              (const bool value);
     void set_stop              (const bool value);
     void set                   (const Controller_item item, const bool value);
-    void clear                 ();
+    void reset                 ();
     void set_damp_mode         (const bool linear, const bool multiply);
     void set_damp_and_max_delta(const float damp, const float max_delta);
 
@@ -45,7 +44,6 @@ private:
     bool  m_less           {false};
     bool  m_stop           {false};
     bool  m_active         {false};
-    //bool  m_focus          {true};
     bool  m_dampen_linear  {false};
     bool  m_dampen_multiply{true};
     float m_damp           { 0.950f};
