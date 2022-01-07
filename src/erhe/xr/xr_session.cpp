@@ -1,4 +1,4 @@
-#include "erhe/xr/xr_session.hpp"
+ï»¿#include "erhe/xr/xr_session.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -24,7 +24,7 @@
 
 //#if defined(_MSC_VER) && !defined(__clang__)
 //#   pragma warning(push)
-//#   pragma warning(disable : 26812) // The enum type is unscoped. Prefer ‘enum class’ over ‘enum’ (Enum.3).
+//#   pragma warning(disable : 26812) // The enum type is unscoped. Prefer â€˜enum classâ€™ over â€˜enumâ€™ (Enum.3).
 //#endif
 
 #ifdef linux
@@ -751,13 +751,19 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
 
         auto& swapchain = m_view_swapchains[i];
         auto acquired_color_swapchain_image_opt = swapchain.color_swapchain.acquire();
-        if (!acquired_color_swapchain_image_opt.has_value() || !swapchain.color_swapchain.wait())
+        if (
+            !acquired_color_swapchain_image_opt.has_value() ||
+            !swapchain.color_swapchain.wait()
+        )
         {
             return false;
         }
 
         auto acquired_depth_swapchain_image_opt = swapchain.depth_swapchain.acquire();
-        if (!acquired_depth_swapchain_image_opt.has_value() || !swapchain.depth_swapchain.wait())
+        if (
+            !acquired_depth_swapchain_image_opt.has_value() ||
+            !swapchain.depth_swapchain.wait()
+        )
         {
             return false;
         }
@@ -767,7 +773,10 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
 
         const uint32_t color_texture = acquired_color_swapchain_image.get_gl_texture();
         const uint32_t depth_texture = acquired_depth_swapchain_image.get_gl_texture();
-        if ((color_texture == 0) || (depth_texture == 0))
+        if (
+            (color_texture == 0) ||
+            (depth_texture == 0)
+        )
         {
             return false;
         }

@@ -23,6 +23,7 @@ namespace editor
 
 class Application;
 class Editor_rendering;
+class Headset_renderer;
 class Line_renderer;
 class Mesh_memory;
 class Scene_builder;
@@ -33,14 +34,12 @@ class Headset_view_resources
 public:
     Headset_view_resources(
         erhe::xr::Render_view& render_view,
+        Headset_renderer&      headset_renderer,
         Editor_rendering&      rendering,
         const size_t           slot
     );
 
-    void update(
-        erhe::xr::Render_view& render_view,
-        Editor_rendering&      rendering
-    );
+    void update(erhe::xr::Render_view& render_view);
 
     std::shared_ptr<erhe::graphics::Texture>     color_texture;
     std::shared_ptr<erhe::graphics::Texture>     depth_texture;
@@ -85,11 +84,15 @@ public:
     // Public API
     void begin_frame();
     void render     ();
+    auto root_camera() -> std::shared_ptr<erhe::scene::Camera>;
 
 private:
-    [[nodiscard]] auto get_headset_view_resources(erhe::xr::Render_view& render_view) -> Headset_view_resources&;
+    [[nodiscard]] auto get_headset_view_resources(
+        erhe::xr::Render_view& render_view
+    ) -> Headset_view_resources&;
 
     std::unique_ptr<erhe::xr::Headset>        m_headset;
+    std::shared_ptr<erhe::scene::Camera>      m_root_camera;
     std::vector<Headset_view_resources>       m_view_resources;
     std::unique_ptr<Controller_visualization> m_controller_visualization;
 

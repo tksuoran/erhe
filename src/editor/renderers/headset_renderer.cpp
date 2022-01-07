@@ -32,6 +32,7 @@ using namespace erhe::graphics;
 
 Headset_view_resources::Headset_view_resources(
     erhe::xr::Render_view& render_view,
+    Headset_renderer&      headset_renderer,
     Editor_rendering&      rendering,
     const size_t           slot
 )
@@ -97,23 +98,20 @@ Headset_view_resources::Headset_view_resources(
     gl::named_framebuffer_draw_buffers(framebuffer->gl_name(), 1, &draw_buffers[0]);
     gl::named_framebuffer_read_buffer (framebuffer->gl_name(), gl::Color_buffer::color_attachment0);
 
-    camera = std::make_shared<erhe::scene::Camera>("Headset Camera");
+    camera = std::make_shared<erhe::scene::Camera>(
+        fmt::format("Headset Camera slot {}", slot)
+    );
 
     const auto scene_root = rendering.get<Scene_root>();
     scene_root->scene().cameras.push_back(camera);
     scene_root->scene().nodes.emplace_back(camera);
     scene_root->scene().nodes_sorted = false;
-
-    auto* view_camera = rendering.get<Fly_camera_tool>()->get_camera();
-    view_camera->attach(camera);
+    headset_renderer.root_camera()->attach(camera);
 
     is_valid = true;
 }
 
-void Headset_view_resources::update(
-    erhe::xr::Render_view& render_view,
-    Editor_rendering&      /*rendering*/
-)
+void Headset_view_resources::update(erhe::xr::Render_view& render_view)
 {
     *camera->projection() = erhe::scene::Projection{
         .projection_type = erhe::scene::Projection::Type::perspective_xr,
@@ -201,6 +199,7 @@ auto Headset_renderer::get_headset_view_resources(
     {
         auto& j = m_view_resources.emplace_back(
             render_view,
+            *this,
             *m_editor_rendering,
             m_view_resources.size()
         );
@@ -418,7 +417,6 @@ public:
     std::vector<Gradient_stop> stops;
 };
 
-
 const Palette cool             { "cool",             {{0.0f, 125,  0,179},{0.130f,116,  0,218},{0.250f, 98, 74,237},{0.380f, 68,146,231},{0.500f,  0,204,197},{0.630f,  0,247,146},{0.750f,  0,255, 88},{0.880f, 40,255,  8},{1.000f,147,255,  0}}};
 const Palette cool_simple      { "cool-simple",      {{0.0f,   0,255,255},{1.000f,255,  0,255}}};
 const Palette spring           { "spring",           {{0.0f, 255,  0,255},{1.000f,255,255,  0}}};
@@ -487,10 +485,10 @@ void Headset_renderer::render()
         };
         Context context
         {
-            get<erhe::graphics::OpenGL_state_tracker>().get(),
-            get<Configuration>().get(),
-            get<Line_renderer>().get(),
-            get<Text_renderer>().get()
+            .pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>().get(),
+            .configuration          = get<Configuration>().get(),
+            .line_renderer          = get<Line_renderer>().get(),
+            .text_renderer          = get<Text_renderer>().get()
         };
 
 #if 0
@@ -601,15 +599,17 @@ void Headset_renderer::render()
             {
                 return false;
             }
-            view_resources.update(render_view, *m_editor_rendering);
+
+            view_resources.update(render_view);
+
             auto* framebuffer = view_resources.framebuffer.get();
             gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
+
             auto status = gl::check_named_framebuffer_status(framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
             if (status != gl::Framebuffer_status::framebuffer_complete)
             {
                 log_headset.error("view framebuffer status = {}\n", c_str(status));
             }
-
 
             const erhe::scene::Viewport viewport
             {
@@ -695,6 +695,20 @@ void Headset_renderer::initialize_component()
         *m_scene_root,
         view_root
     );
+
+    m_root_camera = std::make_shared<erhe::scene::Camera>(
+        fmt::format("Headset Root Camera")
+    );
+
+    const auto scene_root = get<Scene_root>();
+    scene_root->scene().cameras.push_back(m_root_camera);
+    scene_root->scene().nodes.emplace_back(m_root_camera);
+    scene_root->scene().nodes_sorted = false;
+}
+
+auto Headset_renderer::root_camera() -> std::shared_ptr<erhe::scene::Camera>
+{
+    return m_root_camera;
 }
 
 void Headset_renderer::begin_frame()
