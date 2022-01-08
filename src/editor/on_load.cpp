@@ -17,7 +17,9 @@
 
 #include "renderers/forward_renderer.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "renderers/headset_renderer.hpp"
+#   include "xr/headset_renderer.hpp"
+#   include "xr/hand_tracker.hpp"
+#   include "xr/theremin.hpp"
 #endif
 #include "renderers/id_renderer.hpp"
 #include "renderers/line_renderer.hpp"
@@ -33,7 +35,6 @@
 #include "tools/physics_tool.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
-#include "tools/theremin_tool.hpp"
 #include "tools/trs_tool.hpp"
 
 #include "windows/brushes.hpp"
@@ -102,9 +103,10 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Editor_view         >());
         m_components.add(make_shared<Fly_camera_tool     >());
         m_components.add(make_shared<Forward_renderer    >());
-        m_components.add(make_shared<Log_window    >());
+        m_components.add(make_shared<Log_window          >());
         m_components.add(make_shared<Grid_tool           >());
 #if defined(ERHE_XR_LIBRARY_OPENXR)
+        m_components.add(make_shared<Hand_tracker        >());
         m_components.add(make_shared<Headset_renderer    >());
 #endif
         m_components.add(make_shared<Hover_tool          >());
@@ -113,7 +115,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Image_transfer      >());
         m_components.add(make_shared<Imgui_demo_window   >());
         m_components.add(make_shared<Layers_window       >());
-        m_components.add(make_shared<Line_renderer       >());
+        m_components.add(make_shared<Line_renderer_set   >());
         m_components.add(make_shared<Material_properties >());
         m_components.add(make_shared<Materials           >());
         m_components.add(make_shared<Mesh_memory         >());
@@ -135,7 +137,9 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Shadow_renderer     >());
         m_components.add(make_shared<Text_renderer       >());
         m_components.add(make_shared<Textures            >());
-        m_components.add(make_shared<Theremin_tool       >());
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        m_components.add(make_shared<Theremin            >());
+#endif
         m_components.add(make_shared<Trs_tool            >());
         m_components.add(make_shared<Viewport_config     >());
         m_components.add(make_shared<Viewport_windows    >());

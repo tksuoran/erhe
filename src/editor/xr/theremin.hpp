@@ -22,12 +22,14 @@ namespace erhe::primitive {
 namespace editor
 {
 
-class Line_renderer;
+class Hand_tracker;
+class Headset_renderer;
+class Line_renderer_set;
 class Pointer_context;
 class Scene_root;
 class Text_renderer;
 
-class Theremin_tool
+class Theremin
     : public erhe::components::Component
     , public Tool
     , public Imgui_window
@@ -43,8 +45,8 @@ public:
         )
     };
 
-    Theremin_tool ();
-    ~Theremin_tool() override;
+    Theremin();
+    ~Theremin() override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
@@ -53,6 +55,7 @@ public:
 
     // Implements Tool
     [[nodiscard]] auto description() -> const char* override;
+    void tool_render(const Render_context& context) override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -70,6 +73,11 @@ public:
     void set_right_distance(float distance);
 
 private:
+    // Component dependencies
+    std::shared_ptr<Hand_tracker     > m_hand_tracker;
+    std::shared_ptr<Headset_renderer > m_headset_renderer;
+    std::shared_ptr<Line_renderer_set> m_line_renderer_set;
+
     bool             m_enable_audio        {false};
     float            m_left_distance       {0.0f};
     float            m_right_distance      {0.0f};

@@ -103,14 +103,14 @@ void Trs_tool::connect()
 {
     require<Gl_context_provider>();
 
-    m_log_window       = get    <Log_window     >();
-    m_line_renderer    = get    <Line_renderer  >();
-    m_mesh_memory      = require<Mesh_memory    >();
-    m_operation_stack  = get    <Operation_stack>();
-    m_pointer_context  = get    <Pointer_context>();
-    m_scene_root       = require<Scene_root     >();
-    m_selection_tool   = require<Selection_tool >();
-    m_text_renderer    = get    <Text_renderer  >();
+    m_log_window        = get    <Log_window       >();
+    m_line_renderer_set = get    <Line_renderer_set>();
+    m_mesh_memory       = require<Mesh_memory      >();
+    m_operation_stack   = get    <Operation_stack  >();
+    m_pointer_context   = get    <Pointer_context  >();
+    m_scene_root        = require<Scene_root       >();
+    m_selection_tool    = require<Selection_tool   >();
+    m_text_renderer     = get    <Text_renderer    >();
 }
 
 void Trs_tool::initialize_component()
@@ -941,8 +941,7 @@ void Trs_tool::tool_render(const Render_context& context)
     ERHE_PROFILE_FUNCTION
 
     if (
-        //(state() != State::Active) ||
-        (m_line_renderer == nullptr) ||
+        (m_line_renderer_set == nullptr) ||
         (get_handle_type(m_active_handle) != Handle_type::e_handle_type_rotate) ||
         (context.camera == nullptr)
     )
@@ -950,7 +949,7 @@ void Trs_tool::tool_render(const Render_context& context)
         return;
     }
 
-    auto& line_renderer = m_line_renderer->hidden;
+    auto& line_renderer = m_line_renderer_set->hidden;
 
     const dvec3  p                 = m_rotation.center_of_rotation;
     const dvec3  n                 = m_rotation.normal;

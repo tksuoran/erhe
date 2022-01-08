@@ -1,5 +1,12 @@
+#pragma once
+
+#include "windows/imgui_window.hpp"
+
+#include "xr/headset_view_resources.hpp"
+
 #include "erhe/components/component.hpp"
-#include "erhe/xr/xr.hpp"
+
+#include <array>
 
 namespace erhe::graphics
 {
@@ -23,53 +30,22 @@ namespace editor
 
 class Application;
 class Editor_rendering;
+class Hand_tracker;
 class Headset_renderer;
-class Line_renderer;
+class Line_renderer_set;
 class Mesh_memory;
 class Scene_builder;
 class Scene_root;
 
-class Headset_view_resources
-{
-public:
-    Headset_view_resources(
-        erhe::xr::Render_view& render_view,
-        Headset_renderer&      headset_renderer,
-        Editor_rendering&      rendering,
-        const size_t           slot
-    );
-
-    void update(erhe::xr::Render_view& render_view);
-
-    std::shared_ptr<erhe::graphics::Texture>     color_texture;
-    std::shared_ptr<erhe::graphics::Texture>     depth_texture;
-    std::unique_ptr<erhe::graphics::Framebuffer> framebuffer;
-    std::shared_ptr<erhe::scene::Camera>         camera;
-    bool                                         is_valid{false};
-};
-
-class Controller_visualization
-{
-public:
-    Controller_visualization(
-        Mesh_memory&       mesh_memory,
-        Scene_root&        scene_root,
-        erhe::scene::Node* view_root
-    );
-
-    [[nodiscard]] auto get_node() const -> erhe::scene::Node*;
-
-    void update(const erhe::xr::Pose& pose);
-
-private:
-    std::shared_ptr<erhe::scene::Mesh> m_controller_mesh;
-};
+class Controller_visualization;
 
 class Headset_renderer
     : public erhe::components::Component
+    , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name{"Headset_renderer"};
+    static constexpr std::string_view c_name       {"Headset_renderer"};
+    static constexpr std::string_view c_description{"Headset Renderer"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Headset_renderer ();
@@ -81,6 +57,9 @@ public:
     void connect             () override;
     void initialize_component() override;
 
+    // Implements Imgui_window
+    void imgui() override;
+
     // Public API
     void begin_frame();
     void render     ();
@@ -91,16 +70,18 @@ private:
         erhe::xr::Render_view& render_view
     ) -> Headset_view_resources&;
 
+    // Component dependencies
+    std::shared_ptr<Application>       m_application;
+    std::shared_ptr<Editor_rendering>  m_editor_rendering;
+    std::shared_ptr<Hand_tracker>      m_hand_tracker;
+    std::shared_ptr<Line_renderer_set> m_line_renderer_set;
+    std::shared_ptr<Scene_root>        m_scene_root;
+
     std::unique_ptr<erhe::xr::Headset>        m_headset;
     std::shared_ptr<erhe::scene::Camera>      m_root_camera;
     std::vector<Headset_view_resources>       m_view_resources;
     std::unique_ptr<Controller_visualization> m_controller_visualization;
-
-    // Component dependencies
-    std::shared_ptr<Application>      m_application;
-    std::shared_ptr<Editor_rendering> m_editor_rendering;
-    std::shared_ptr<Line_renderer>    m_line_renderer;
-    std::shared_ptr<Scene_root>       m_scene_root;
+    std::array<float, 4>                      m_clear_color{0.0f, 0.0f, 0.0f, 0.96f};
 };
 
 }

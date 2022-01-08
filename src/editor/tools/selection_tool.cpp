@@ -110,9 +110,9 @@ Selection_tool::~Selection_tool() = default;
 
 void Selection_tool::connect()
 {
-    m_line_renderer   = get<Line_renderer>();
-    m_pointer_context = get<Pointer_context>();
-    m_viewport_config = get<Viewport_config>();
+    m_line_renderer_set = get<Line_renderer_set>();
+    m_pointer_context   = get<Pointer_context>();
+    m_viewport_config   = get<Viewport_config>();
 }
 
 void Selection_tool::initialize_component()
@@ -343,7 +343,7 @@ void Selection_tool::tool_render(const Render_context& context)
 {
     using namespace glm;
 
-    if (m_line_renderer == nullptr)
+    if (m_line_renderer_set == nullptr)
     {
         return;
     }
@@ -355,7 +355,7 @@ void Selection_tool::tool_render(const Render_context& context)
     constexpr uint32_t white      = 0xffffffffu;
     constexpr uint32_t half_white = 0x88888888u; // premultiplied
     constexpr float    thickness  = 10.0f;
-    auto& line_renderer = m_line_renderer->hidden;
+    auto& line_renderer = m_line_renderer_set->hidden;
     for (auto node : m_selection)
     {
         const glm::mat4 m     {node->world_from_node()};

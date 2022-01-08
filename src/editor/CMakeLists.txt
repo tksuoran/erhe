@@ -89,8 +89,6 @@ set(source_list
     tools/physics_tool.hpp
     tools/selection_tool.cpp
     tools/selection_tool.hpp
-    tools/theremin_tool.cpp
-    tools/theremin_tool.hpp
     tools/trs_tool.cpp
     tools/trs_tool.hpp
     tools/tool.cpp
@@ -199,8 +197,18 @@ endif ()
 
 if (${ERHE_XR_LIBRARY} STREQUAL "OpenXR")
     set(xr_source_list
-        renderers/headset_renderer.cpp
-        renderers/headset_renderer.hpp
+        xr/controller_visualization.cpp
+        xr/controller_visualization.hpp
+        xr/gradients.cpp
+        xr/gradients.hpp
+        xr/hand_tracker.cpp
+        xr/hand_tracker.hpp
+        xr/headset_renderer.cpp
+        xr/headset_renderer.hpp
+        xr/headset_view_resources.cpp
+        xr/headset_view_resources.hpp
+        xr/theremin.cpp
+        xr/theremin.hpp
     )
 endif ()
 
@@ -256,7 +264,7 @@ set_target_properties(
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
 
-foreach(source IN LISTS source_list)
+foreach(source IN LISTS source_list xr_source_list gltf_source_list)
     get_filename_component(source_path "${source}" PATH)
     string(REPLACE "/" "\\" source_path_msvc "${source_path}")
     source_group("${source_path_msvc}" FILES "${source}")

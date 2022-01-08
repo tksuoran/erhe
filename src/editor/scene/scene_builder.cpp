@@ -210,12 +210,12 @@ void Scene_builder::make_brushes()
     );
 
     constexpr bool gltf_files              = false; // WIP
-    constexpr bool obj_files               = true;
-    constexpr bool platonic_solids         = true;
-    constexpr bool sphere                  = true;
-    constexpr bool torus                   = true;
-    constexpr bool cylinder                = true;
-    constexpr bool cone                    = true;
+    constexpr bool obj_files               = false;
+    constexpr bool platonic_solids         = false;
+    constexpr bool sphere                  = false;
+    constexpr bool torus                   = false;
+    constexpr bool cylinder                = false;
+    constexpr bool cone                    = false;
     //constexpr bool anisotropic_test_object = false;
     constexpr bool johnson_solids          = false;
 
@@ -542,7 +542,7 @@ void Scene_builder::add_room()
 
     auto floor_material = m_scene_root->make_material(
         "Floor",
-        vec4{0.1f, 0.1f, 0.1f, 1.0f},
+        vec4{0.02f, 0.02f, 0.02f, 1.0f},
         0.5f,
         0.8f
     );

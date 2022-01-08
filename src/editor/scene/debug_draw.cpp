@@ -26,8 +26,8 @@ void Debug_draw::connect()
     using IDebug_draw = erhe::physics::IDebug_draw;
 
     require<Scene_root>();
-    m_line_renderer = get<Line_renderer>();
-    m_text_renderer = get<Text_renderer>();
+    m_line_renderer_set = get<Line_renderer_set>();
+    m_text_renderer     = get<Text_renderer>();
 
     m_debug_mode =
         IDebug_draw::c_Draw_wireframe           |
@@ -66,8 +66,8 @@ void Debug_draw::set_colors(const Colors& colors)
 void Debug_draw::draw_line(const glm::vec3 from, const glm::vec3 to, const glm::vec3 color)
 {
     auto color_ui32 = ImGui::ColorConvertFloat4ToU32(ImVec4(color.x, color.y, color.z, 1.0f));
-    m_line_renderer->visible.set_line_color(color_ui32);
-    m_line_renderer->visible.add_lines( { {from, to} }, line_width);
+    m_line_renderer_set->visible.set_line_color(color_ui32);
+    m_line_renderer_set->visible.add_lines( { {from, to} }, line_width);
 }
 
 void Debug_draw::draw_3d_text(const glm::vec3 location, const char* text)

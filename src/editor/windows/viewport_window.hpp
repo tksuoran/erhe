@@ -28,6 +28,9 @@ class Editor_view;
 class Pointer_context;
 class Render_context;
 class Scene_root;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+class Headset_renderer;
+#endif
 
 class Viewport_window
     : public Imgui_window
@@ -139,6 +142,10 @@ private:
     std::shared_ptr<Pointer_context>                      m_pointer_context;
     std::shared_ptr<Scene_root>                           m_scene_root;
     std::shared_ptr<Viewport_config>                      m_viewport_config;
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    std::shared_ptr<Headset_renderer>                     m_headset_renderer;
+#endif
 
     std::vector<std::shared_ptr<Viewport_window>> m_windows;
     Viewport_window*                              m_hover_window{nullptr};

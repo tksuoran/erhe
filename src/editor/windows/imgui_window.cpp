@@ -41,7 +41,12 @@ auto Imgui_window::begin() -> bool
     on_begin();
 
     bool keep_visible{true};
-    const bool not_collapsed = ImGui::Begin(title().data(), &keep_visible);
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse;
+    const bool not_collapsed = ImGui::Begin(
+        title().data(), 
+        &keep_visible,
+        flags
+    );
     if (!keep_visible)
     {
         hide();

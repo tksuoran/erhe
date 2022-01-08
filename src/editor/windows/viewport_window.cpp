@@ -9,6 +9,9 @@
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "windows/log_window.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#include "xr/headset_renderer.hpp"
+#endif
 
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
@@ -48,13 +51,16 @@ Viewport_windows::~Viewport_windows() = default;
 
 void Viewport_windows::connect()
 {
-    m_configuration          = get    <Configuration>();
+    m_configuration          = get    <Configuration   >();
     m_editor_rendering       = get    <Editor_rendering>();
-    m_editor_view            = require<Editor_view>();
+    m_editor_view            = require<Editor_view     >();
     m_pipeline_state_tracker = get    <erhe::graphics::OpenGL_state_tracker>();
-    m_pointer_context        = get    <Pointer_context>();
-    m_scene_root             = require<Scene_root>();
-    m_viewport_config        = get    <Viewport_config>();
+    m_pointer_context        = get    <Pointer_context >();
+    m_scene_root             = require<Scene_root      >();
+    m_viewport_config        = get    <Viewport_config >();
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    m_headset_renderer       = require<Headset_renderer>();
+#endif
 
     // Need cameras to be setup
     require<Scene_builder>();
@@ -62,12 +68,17 @@ void Viewport_windows::connect()
 
 void Viewport_windows::initialize_component()
 {
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    auto* camera = m_headset_renderer->root_camera().get();
+    create_window("Headset Camera", camera);
+#else
     for (auto camera : m_scene_root->scene().cameras)
     {
         auto* icamera = as_icamera(camera.get());
         std::string name = fmt::format("Scene for Camera {}", icamera->name());
         create_window(name, icamera);
     }
+#endif
 }
 
 auto Viewport_windows::create_window(

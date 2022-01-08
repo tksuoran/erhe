@@ -22,7 +22,7 @@ namespace erhe::physics {
 namespace editor
 {
 
-class Line_renderer;
+class Line_renderer_set;
 class Node_physics;
 class Physics_tool;
 class Pointer_context;
@@ -79,7 +79,7 @@ private:
     Physics_tool_drag_command                   m_drag_command;
 
     // Component dependencies
-    std::shared_ptr<Line_renderer>              m_line_renderer;
+    std::shared_ptr<Line_renderer_set>          m_line_renderer_set;
     std::shared_ptr<Pointer_context>            m_pointer_context;
     std::shared_ptr<Scene_root>                 m_scene_root;
 

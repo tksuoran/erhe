@@ -21,7 +21,7 @@ Grid_tool::~Grid_tool() = default;
 
 void Grid_tool::connect()
 {
-    m_line_renderer = get<Line_renderer>();
+    m_line_renderer_set = get<Line_renderer_set>();
 }
 
 void Grid_tool::initialize_component()
@@ -38,7 +38,7 @@ void Grid_tool::tool_render(const Render_context& /*context*/)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_line_renderer == nullptr)
+    if (m_line_renderer_set == nullptr)
     {
         return;
     }
@@ -48,15 +48,15 @@ void Grid_tool::tool_render(const Render_context& /*context*/)
         return;
     }
 
-    const ImVec4 im_major_color{m_major_color.x, m_major_color.y, m_major_color.z, m_major_color.w};
-    const ImVec4 im_minor_color{m_minor_color.x, m_minor_color.y, m_minor_color.z, m_minor_color.w};
+    const ImVec4   im_major_color{m_major_color.x, m_major_color.y, m_major_color.z, m_major_color.w};
+    const ImVec4   im_minor_color{m_minor_color.x, m_minor_color.y, m_minor_color.z, m_minor_color.w};
     const uint32_t cell_major_color = ImGui::ColorConvertFloat4ToU32(im_major_color);
     const uint32_t cell_minor_color = ImGui::ColorConvertFloat4ToU32(im_minor_color);
 
     const float extent     = static_cast<float>(m_cell_count) * m_cell_size;
     const float minor_step = m_cell_size / static_cast<float>(m_cell_div);
     int cell;
-    auto& line_renderer = m_line_renderer->visible;
+    auto& line_renderer = m_line_renderer_set->visible;
     for (cell = -m_cell_count; cell < m_cell_count; ++cell)
     {
         float xz = static_cast<float>(cell) * m_cell_size;

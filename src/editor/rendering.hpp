@@ -35,7 +35,7 @@ class Log_window;
 class Headset_renderer;
 #endif
 class Id_renderer;
-class Line_renderer;
+class Line_renderer_set;
 class Pointer_context;
 class Mesh_memory;
 class Scene_root;
@@ -106,7 +106,7 @@ private:
     std::shared_ptr<Headset_renderer>                     m_headset_renderer;
 #endif
     std::shared_ptr<Id_renderer>                          m_id_renderer;
-    std::shared_ptr<Line_renderer>                        m_line_renderer;
+    std::shared_ptr<Line_renderer_set>                    m_line_renderer_set;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Pointer_context>                      m_pointer_context;
     std::shared_ptr<Scene_root>                           m_scene_root;

@@ -41,7 +41,7 @@ namespace editor
 {
 
 class Log_window;
-class Line_renderer;
+class Line_renderer_set;
 class Node_physics;
 class Mesh_memory;
 class Operation_stack;
@@ -266,7 +266,7 @@ private:
 
     // Component dependencies
     std::shared_ptr<Log_window>                m_log_window;
-    std::shared_ptr<Line_renderer>             m_line_renderer;
+    std::shared_ptr<Line_renderer_set>         m_line_renderer_set;
     std::shared_ptr<Mesh_memory>               m_mesh_memory;
     std::shared_ptr<Operation_stack>           m_operation_stack;
     std::shared_ptr<Pointer_context>           m_pointer_context;

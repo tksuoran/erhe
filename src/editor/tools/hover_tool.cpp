@@ -61,10 +61,10 @@ auto Hover_tool::description() -> const char*
 
 void Hover_tool::connect()
 {
-    m_line_renderer   = get<Line_renderer>();
-    m_pointer_context = get<Pointer_context>();
-    m_scene_root      = require<Scene_root>();
-    m_text_renderer   = get<Text_renderer>();
+    m_line_renderer_set = get    <Line_renderer_set>();
+    m_pointer_context   = get    <Pointer_context  >();
+    m_scene_root        = require<Scene_root       >();
+    m_text_renderer     = get    <Text_renderer    >();
     require<Editor_tools>();
 }
 
@@ -105,6 +105,8 @@ auto Hover_tool::try_call() -> bool
 void Hover_tool::tool_render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
+
+    auto& line_renderer = m_line_renderer_set->hidden;
 
     constexpr uint32_t red   = 0xff0000ffu;
     constexpr uint32_t green = 0xff00ff00u;
@@ -156,8 +158,8 @@ void Hover_tool::tool_render(const Render_context& context)
         {
             const glm::vec3 p0 = m_hover_position_world.value() + 0.0f * m_hover_normal.value();
             const glm::vec3 p1 = m_hover_position_world.value() + 1.0f * m_hover_normal.value();
-            m_line_renderer->hidden.set_line_color(0xff0000ffu);
-            m_line_renderer->hidden.add_lines(
+            line_renderer.set_line_color(0xff0000ffu);
+            line_renderer.add_lines(
                 {
                     {
                         p0,
@@ -177,8 +179,8 @@ void Hover_tool::tool_render(const Render_context& context)
             const glm::vec3 pos_y = p0 + glm::vec3{0.0f, 1.0f, 0.0f};
             const glm::vec3 neg_z = p0 - glm::vec3{0.0f, 0.0f, 1.0f};
             const glm::vec3 pos_z = p0 + glm::vec3{0.0f, 0.0f, 1.0f};
-            m_line_renderer->hidden.set_line_color(red);
-            m_line_renderer->hidden.add_lines(
+            m_line_renderer_set->hidden.set_line_color(red);
+            m_line_renderer_set->hidden.add_lines(
                 {
                     {
                         neg_x,
@@ -187,8 +189,8 @@ void Hover_tool::tool_render(const Render_context& context)
                 },
                 10.0f
             );
-            m_line_renderer->hidden.set_line_color(green);
-            m_line_renderer->hidden.add_lines(
+            m_line_renderer_set->hidden.set_line_color(green);
+            m_line_renderer_set->hidden.add_lines(
                 {
                     {
                         neg_y,
@@ -197,8 +199,8 @@ void Hover_tool::tool_render(const Render_context& context)
                 },
                 10.0f
             );
-            m_line_renderer->hidden.set_line_color(blue);
-            m_line_renderer->hidden.add_lines(
+            line_renderer.set_line_color(blue);
+            line_renderer.add_lines(
                 {
                     {
                         neg_z,

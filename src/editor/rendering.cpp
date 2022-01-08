@@ -8,7 +8,7 @@
 #include "window.hpp"
 #include "renderers/forward_renderer.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "renderers/headset_renderer.hpp"
+#   include "xr/headset_renderer.hpp"
 #endif
 #include "renderers/id_renderer.hpp"
 #include "renderers/line_renderer.hpp"
@@ -50,7 +50,7 @@ void Editor_rendering::connect()
     m_headset_renderer       = get<Headset_renderer >();
 #endif
     m_id_renderer            = get<Id_renderer      >();
-    m_line_renderer          = get<Line_renderer    >();
+    m_line_renderer_set      = get<Line_renderer_set>();
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
     m_pointer_context        = get<Pointer_context >();
     m_scene_root             = get<Scene_root      >();
@@ -167,11 +167,11 @@ void Editor_rendering::render()
     }
 #endif
 
-    if (m_shadow_renderer)  m_shadow_renderer ->next_frame();
-    if (m_id_renderer)      m_id_renderer     ->next_frame();
-    if (m_forward_renderer) m_forward_renderer->next_frame();
-    if (m_text_renderer)    m_text_renderer   ->next_frame();
-    if (m_line_renderer)    m_line_renderer   ->next_frame();
+    if (m_shadow_renderer)   m_shadow_renderer  ->next_frame();
+    if (m_id_renderer)       m_id_renderer      ->next_frame();
+    if (m_forward_renderer)  m_forward_renderer ->next_frame();
+    if (m_text_renderer)     m_text_renderer    ->next_frame();
+    if (m_line_renderer_set) m_line_renderer_set->next_frame();
 }
 
 void Editor_rendering::render_viewport(const Render_context& context, const bool has_pointer)
@@ -194,9 +194,9 @@ void Editor_rendering::render_viewport(const Render_context& context, const bool
         m_editor_tools->render_tools(context);
     }
 
-    if (m_line_renderer)
+    if (m_line_renderer_set)
     {
-        m_line_renderer->render(context.viewport, *context.camera);
+        m_line_renderer_set->render(context.viewport, *context.camera);
     }
 
     if (m_text_renderer)

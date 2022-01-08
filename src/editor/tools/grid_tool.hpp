@@ -10,7 +10,7 @@
 namespace editor
 {
 
-class Line_renderer;
+class Line_renderer_set;
 
 class Grid_tool
     : public erhe::components::Component
@@ -42,15 +42,15 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Line_renderer> m_line_renderer;
+    std::shared_ptr<Line_renderer_set> m_line_renderer_set;
 
-    bool           m_enable       {false};
-    float          m_cell_size    {1.0f};
-    int            m_cell_div     {10};
-    int            m_cell_count   {20};
-    float          m_thickness    {40.0f};
-    glm::vec4      m_major_color  {0.065f, 0.065f, 0.065f, 1.0f};
-    glm::vec4      m_minor_color  {0.035f, 0.035f, 0.035f, 1.0f};
+    bool      m_enable     {false};
+    float     m_cell_size  {1.0f};
+    int       m_cell_div   {10};
+    int       m_cell_count {20};
+    float     m_thickness  {40.0f};
+    glm::vec4 m_major_color{0.065f, 0.065f, 0.065f, 1.0f};
+    glm::vec4 m_minor_color{0.035f, 0.035f, 0.035f, 1.0f};
 };
 
 } // namespace editor

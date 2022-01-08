@@ -17,7 +17,7 @@ namespace erhe::scene {
 namespace editor
 {
 
-class Line_renderer;
+class Line_renderer_set;
 class Selection_tool;
 class Viewport_config;
 
@@ -158,7 +158,7 @@ private:
     Selection_tool_select_command      m_select_command;
 
     // Component dependencies
-    std::shared_ptr<Line_renderer>     m_line_renderer;
+    std::shared_ptr<Line_renderer_set> m_line_renderer_set;
     std::shared_ptr<Pointer_context>   m_pointer_context;
     std::shared_ptr<Viewport_config>   m_viewport_config;
 

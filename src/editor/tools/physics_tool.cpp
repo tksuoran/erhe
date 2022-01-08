@@ -78,9 +78,9 @@ Physics_tool::~Physics_tool()
 
 void Physics_tool::connect()
 {
-    m_line_renderer   = get<Line_renderer>();
-    m_pointer_context = get<Pointer_context>();
-    m_scene_root      = get<Scene_root>();
+    m_line_renderer_set = get<Line_renderer_set>();
+    m_pointer_context   = get<Pointer_context  >();
+    m_scene_root        = get<Scene_root       >();
 }
 
 void Physics_tool::initialize_component()
@@ -242,8 +242,8 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
     {
         return;
     }
-    m_line_renderer->hidden.set_line_color(0xffffffffu);
-    m_line_renderer->hidden.add_lines(
+    m_line_renderer_set->hidden.set_line_color(0xffffffffu);
+    m_line_renderer_set->hidden.add_lines(
         {
             {
                 m_drag_position_start,

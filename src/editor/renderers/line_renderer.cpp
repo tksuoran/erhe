@@ -39,16 +39,16 @@ using glm::mat4;
 using glm::vec3;
 using glm::vec4;
 
-Line_renderer::Line_renderer()
+Line_renderer_set::Line_renderer_set()
     : Component{c_name}
     , visible  {"visible"}
     , hidden   {"hidden"}
 {
 }
 
-Line_renderer::~Line_renderer() = default;
+Line_renderer_set::~Line_renderer_set() = default;
 
-void Line_renderer::connect()
+void Line_renderer_set::connect()
 {
     require<Gl_context_provider>();
     require<Configuration>();
@@ -57,9 +57,9 @@ void Line_renderer::connect()
     m_pipeline_state_tracker = get<OpenGL_state_tracker>();
 }
 
-static constexpr std::string_view c_line_renderer_initialize_component{"Line_renderer::initialize_component()"};
+static constexpr std::string_view c_line_renderer_initialize_component{"Line_renderer_set::initialize_component()"};
 
-void Line_renderer::initialize_component()
+void Line_renderer_set::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -81,7 +81,7 @@ void Line_renderer::initialize_component()
     gl::pop_debug_group();
 }
 
-void Line_renderer::Pipeline::initialize(Shader_monitor& shader_monitor)
+void Line_renderer_pipeline::initialize(Shader_monitor& shader_monitor)
 {
     fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 
@@ -164,14 +164,14 @@ void Line_renderer::Pipeline::initialize(Shader_monitor& shader_monitor)
     shader_monitor.add(create_info, shader_stages.get());
 }
 
-Line_renderer::Style::Style(const char* name)
+Line_renderer::Line_renderer(const char* name)
     : m_name{name}
 {
 }
 
-void Line_renderer::Style::create_frame_resources(
-    Pipeline*            pipeline,
-    const Configuration& configuration
+void Line_renderer::create_frame_resources(
+    Line_renderer_pipeline* pipeline,
+    const Configuration&    configuration
 )
 {
     ERHE_PROFILE_FUNCTION
@@ -197,18 +197,18 @@ void Line_renderer::Style::create_frame_resources(
     }
 }
 
-auto Line_renderer::Style::current_frame_resources() -> Frame_resources&
+auto Line_renderer::current_frame_resources() -> Frame_resources&
 {
     return m_frame_resources[m_current_frame_resource_slot];
 }
 
-void Line_renderer::next_frame()
+void Line_renderer_set::next_frame()
 {
     visible.next_frame();
     hidden.next_frame();
 }
 
-void Line_renderer::Style::next_frame()
+void Line_renderer::next_frame()
 {
     m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % s_frame_resources_count;
     m_view_writer  .reset();
@@ -216,7 +216,7 @@ void Line_renderer::Style::next_frame()
     m_line_count = 0;
 }
 
-void Line_renderer::Style::put(
+void Line_renderer::put(
     const glm::vec3            point,
     const float                thickness,
     const uint32_t             color,
@@ -232,7 +232,7 @@ void Line_renderer::Style::put(
     gpu_uint_data [word_offset++] = color;
 }
 
-void Line_renderer::Style::add_lines(
+void Line_renderer::add_lines(
     const glm::mat4                   transform,
     const std::initializer_list<Line> lines,
     const float                       thickness
@@ -262,7 +262,7 @@ void Line_renderer::Style::add_lines(
     m_vertex_writer.end();
 }
 
-void Line_renderer::Style::add_lines(
+void Line_renderer::add_lines(
     const std::initializer_list<Line> lines,
     const float                       thickness
 )
@@ -291,7 +291,7 @@ void Line_renderer::Style::add_lines(
 
 static constexpr std::string_view c_line_renderer_render{"Line_renderer::render()"};
 
-void Line_renderer::render(
+void Line_renderer_set::render(
     const erhe::scene::Viewport viewport,
     const erhe::scene::ICamera& camera
 )
@@ -301,7 +301,7 @@ void Line_renderer::render(
     hidden.render(state_tracker, viewport, camera, true, true);
 }
 
-void Line_renderer::Style::render(
+void Line_renderer::render(
     erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker,
     const erhe::scene::Viewport           viewport,
     const erhe::scene::ICamera&           camera,

@@ -23,7 +23,7 @@ namespace editor
 {
 
 class Hover_tool;
-class Line_renderer;
+class Line_renderer_set;
 class Pointer_context;
 class Scene_root;
 class Text_renderer;
@@ -83,7 +83,7 @@ private:
     void select  ();
 
     // Component dependencies
-    std::shared_ptr<Line_renderer>     m_line_renderer;
+    std::shared_ptr<Line_renderer_set> m_line_renderer_set;
     std::shared_ptr<Pointer_context>   m_pointer_context;
     std::shared_ptr<Scene_root>        m_scene_root;
     std::shared_ptr<Text_renderer>     m_text_renderer;
