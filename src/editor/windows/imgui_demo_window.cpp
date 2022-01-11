@@ -1,5 +1,5 @@
 #include "windows/imgui_demo_window.hpp"
-#include "editor_tools.hpp"
+#include "editor_imgui_windows.hpp"
 
 #include <imgui.h>
 
@@ -14,9 +14,14 @@ Imgui_demo_window::Imgui_demo_window()
 
 Imgui_demo_window::~Imgui_demo_window() = default;
 
+void Imgui_demo_window::connect()
+{
+    require<Editor_imgui_windows>();
+}
+
 void Imgui_demo_window::initialize_component()
 {
-    get<Editor_tools>()->register_imgui_window(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 
     hide();
 }

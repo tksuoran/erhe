@@ -58,9 +58,10 @@ auto size_of_type(const gl::Draw_elements_type type) -> size_t
 {
     switch (type)
     {
-        case gl::Draw_elements_type::unsigned_byte:  return 1;
-        case gl::Draw_elements_type::unsigned_short: return 2;
-        case gl::Draw_elements_type::unsigned_int:   return 4;
+        using enum gl::Draw_elements_type;
+        case unsigned_byte:  return 1;
+        case unsigned_short: return 2;
+        case unsigned_int:   return 4;
         default:
             ERHE_FATAL("Bad draw elements index type\n");
     }
@@ -70,31 +71,32 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
 {
     switch (type)
     {
-        case gl::Vertex_attrib_type::byte:
-        case gl::Vertex_attrib_type::unsigned_byte:
+        using enum gl::Vertex_attrib_type;
+        case byte:
+        case unsigned_byte:
         {
             return 1;
         }
 
-        case gl::Vertex_attrib_type::half_float:
-        case gl::Vertex_attrib_type::short_:
-        case gl::Vertex_attrib_type::unsigned_short:
+        case half_float:
+        case short_:
+        case unsigned_short:
         {
             return 2;
         }
 
-        case gl::Vertex_attrib_type::fixed:
-        case gl::Vertex_attrib_type::float_:
-        case gl::Vertex_attrib_type::int_:
-        case gl::Vertex_attrib_type::int_2_10_10_10_rev:
-        case gl::Vertex_attrib_type::unsigned_int:
-        case gl::Vertex_attrib_type::unsigned_int_10f_11f_11f_rev:
-        case gl::Vertex_attrib_type::unsigned_int_2_10_10_10_rev:
+        case fixed:
+        case float_:
+        case int_:
+        case int_2_10_10_10_rev:
+        case unsigned_int:
+        case unsigned_int_10f_11f_11f_rev:
+        case unsigned_int_2_10_10_10_rev:
         {
             return 4;
         }
 
-        case gl::Vertex_attrib_type::double_:
+        case double_:
         {
             return 8;
         }

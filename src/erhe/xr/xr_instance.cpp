@@ -1037,19 +1037,23 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
         );
         switch (result)
         {
-        case XR_SUCCESS:
-            break;
+            case XR_SUCCESS:
+                break;
 
-        case XR_SESSION_LOSS_PENDING:
-        case XR_SESSION_NOT_FOCUSED:
-            // TODO
-            actions.trigger_value_state.isActive = XR_FALSE;
-            actions.squeeze_click_state.isActive = XR_FALSE;
-            return true;
+            case XR_SESSION_LOSS_PENDING:
+            case XR_SESSION_NOT_FOCUSED:
+            {
+                // TODO
+                actions.trigger_value_state.isActive = XR_FALSE;
+                actions.squeeze_click_state.isActive = XR_FALSE;
+                return true;
+            }
 
-        default:
-            log_xr.error("xrSyncActions() returned error {}\n", c_str(result));
-            return false;
+            default:
+            {
+                log_xr.error("xrSyncActions() returned error {}\n", c_str(result));
+                return false;
+            }
         }
     }
 

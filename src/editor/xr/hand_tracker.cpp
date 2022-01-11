@@ -137,6 +137,32 @@ auto Hand::get_closest_point_to_line(
     return result;
 }
 
+auto Hand::distance(
+    const XrHandJointEXT lhs,
+    const XrHandJointEXT rhs
+) const -> std::optional<float>
+{
+    const auto lhs_joint = static_cast<XrHandJointEXT>(lhs);
+    const auto rhs_joint = static_cast<XrHandJointEXT>(rhs);
+    const bool lhs_valid = is_valid(lhs_joint);
+    const bool rhs_valid = is_valid(rhs_joint);
+    if (!lhs_valid || !rhs_valid)
+    {
+        return {};
+    }
+    const glm::vec3 lhs_pos{
+        m_joints[lhs_joint].location.pose.position.x,
+        m_joints[lhs_joint].location.pose.position.y,
+        m_joints[lhs_joint].location.pose.position.z
+    };
+    const glm::vec3 rhs_pos{
+        m_joints[rhs_joint].location.pose.position.x,
+        m_joints[rhs_joint].location.pose.position.y,
+        m_joints[rhs_joint].location.pose.position.z
+    };
+    return glm::distance(lhs_pos, rhs_pos);
+}
+
 auto Hand::is_active() const -> bool
 {
     return m_is_active;
@@ -153,8 +179,12 @@ auto Hand::is_valid(const XrHandJointEXT joint) const -> bool
     {
         return false;
     }
-    return
-        (m_joints[joint].location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) == XR_SPACE_LOCATION_POSITION_VALID_BIT;
+
+    // TODO
+    //return
+    //    (m_joints[joint].location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) == XR_SPACE_LOCATION_POSITION_VALID_BIT;
+
+    return m_joints[joint].location.radius > 0.0f;
 }
 
 void Hand::draw(Line_renderer& line_renderer, const glm::mat4 transform)
@@ -254,10 +284,21 @@ auto Hand_tracker::get_hand(const Hand_name hand_name) -> Hand&
 {
     switch (hand_name)
     {
-        case Hand_name::Left: return m_left_hand;
-        case Hand_name::Right: return m_right_hand;
+        using enum Hand_name;
+        case Left: return m_left_hand;
+        case Right: return m_right_hand;
         default: ERHE_FATAL("bad hand name %x", static_cast<unsigned int>(hand_name));
     }
+}
+
+void Hand_tracker::set_left_hand_color(const uint32_t color)
+{
+    m_left_hand_color = ImGui::ColorConvertU32ToFloat4(color);
+}
+
+void Hand_tracker::set_right_hand_color(const uint32_t color)
+{
+    m_right_hand_color = ImGui::ColorConvertU32ToFloat4(color);
 }
 
 void Hand_tracker::tool_render(const Render_context& context)
@@ -269,7 +310,12 @@ void Hand_tracker::tool_render(const Render_context& context)
         return;
     }
 
-    const auto camera        = m_headset_renderer->root_camera();
+    const auto camera = m_headset_renderer->root_camera();
+    if (!camera)
+    {
+        return;
+    }
+
     const auto transform     = camera->world_from_node();
     auto&      line_renderer = m_line_renderer_set->hidden;
 
@@ -284,9 +330,9 @@ void Hand_tracker::tool_render(const Render_context& context)
 
 void Hand_tracker::imgui()
 {
-    ImGui::Checkbox  ("Show Hands", &m_show_hands);
-    ImGui::ColorEdit4("Left Hand",  &m_left_hand_color.x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4("Right Hand", &m_right_hand_color.x, ImGuiColorEditFlags_Float);
+    ImGui::Checkbox("Show Hands", &m_show_hands);
+    //ImGui::ColorEdit4("Left Hand",  &m_left_hand_color.x, ImGuiColorEditFlags_Float);
+    //ImGui::ColorEdit4("Right Hand", &m_right_hand_color.x, ImGuiColorEditFlags_Float);
 }
 
 #if 0

@@ -44,6 +44,8 @@ public:
         const glm::vec3 p1
     ) const -> std::optional<erhe::toolkit::Closest_points<float>>;
 
+    auto distance(const XrHandJointEXT lhs, const XrHandJointEXT rhs) const -> std::optional<float>;
+
     auto is_active() const -> bool;
 
     auto is_valid(const XrHandJointEXT joint) const -> bool;
@@ -92,8 +94,10 @@ public:
     // Implements Imgui_window
     void imgui() override;
 
-    void update  (erhe::xr::Headset& headset);
-    auto get_hand(const Hand_name hand_name) -> Hand&;
+    void update              (erhe::xr::Headset& headset);
+    auto get_hand            (const Hand_name hand_name) -> Hand&;
+    void set_left_hand_color (const uint32_t color);
+    void set_right_hand_color(const uint32_t color);
 
 private:
     // Component dependencies

@@ -118,9 +118,10 @@ auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const ImVec
 {
     switch (type)
     {
-        case erhe::scene::Light_type::spot:        return icons.spot_light;
-        case erhe::scene::Light_type::directional: return icons.directional_light;
-        case erhe::scene::Light_type::point:       return icons.point_light;
+        using enum erhe::scene::Light_type;
+        case spot:        return icons.spot_light;
+        case directional: return icons.directional_light;
+        case point:       return icons.point_light;
         default: return {};
     }
 }

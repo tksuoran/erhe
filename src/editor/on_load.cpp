@@ -2,6 +2,7 @@
 #include "configuration.hpp"
 #include "log.hpp"
 #include "rendering.hpp"
+#include "editor_imgui_windows.hpp"
 #include "editor_time.hpp"
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
@@ -97,6 +98,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Brushes             >());
         m_components.add(make_shared<Debug_draw          >());
         m_components.add(make_shared<Debug_view_window   >());
+        m_components.add(make_shared<Editor_imgui_windows>());
         m_components.add(make_shared<Editor_rendering    >());
         m_components.add(make_shared<Editor_time         >());
         m_components.add(make_shared<Editor_tools        >());
@@ -164,6 +166,28 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     m_components.wait_component_initialization_complete();
 
     component_initialization_complete(true);
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        get<Brushes            >()->hide();
+        get<Debug_view_window  >()->hide();
+        get<Editor_view        >()->hide();
+        get<Fly_camera_tool    >()->hide();
+        get<Log_window         >()->hide();
+        get<Grid_tool          >()->hide();
+        get<Imgui_demo_window  >()->hide();
+        get<Layers_window      >()->hide();
+        get<Material_properties>()->hide();
+        get<Materials          >()->hide();
+        get<Mesh_properties    >()->hide();
+        get<Node_properties    >()->hide();
+        get<Node_tree_window   >()->hide();
+        get<Operation_stack    >()->hide();
+        get<Operations         >()->hide();
+        get<Physics_window     >()->hide();
+        get<Viewport_config    >()->hide();
+        get<Trs_tool           >()->hide();
+#endif
+
 
     opengl_state_tracker->on_thread_enter();
 

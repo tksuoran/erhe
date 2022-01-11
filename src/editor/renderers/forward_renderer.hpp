@@ -50,6 +50,7 @@ public:
         corner_points,
         depth_only,
         edge_lines,
+        gui,
         hidden_line_with_blend,
         polygon_centroids,
         polygon_fill,
@@ -59,7 +60,7 @@ public:
         tag_depth_visible_with_stencil, // uses stencil value 2
     };
 
-    static constexpr std::array<std::string_view, 13> c_pass_strings =
+    static constexpr std::array<std::string_view, 14> c_pass_strings =
     {
         "Brush Back",
         "Brush front",
@@ -67,6 +68,7 @@ public:
         "Corner Points",
         "Depth Only",
         "Edge Lines",
+        "GUI",
         "Hidden Line with Blend",
         "Polygon Centroids",
         "Polygon Fill",
@@ -122,6 +124,7 @@ private:
     erhe::graphics::Color_blend_state                     m_color_blend_constant_point_two;
 
     erhe::graphics::Pipeline                              m_pipeline_fill;
+    erhe::graphics::Pipeline                              m_pipeline_gui;
 
     // Six passes for rendering tools that can be partially occluded
     erhe::graphics::Pipeline                              m_pipeline_tool_hidden_stencil_pass;

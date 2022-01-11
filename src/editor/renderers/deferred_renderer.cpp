@@ -504,7 +504,8 @@ void Deferred_renderer::light_pass(const Light_collection &lights, const Camera 
 
         switch (l->type)
         {
-            case Light::Type::spot:
+            using enum Light::Type;
+            case spot:
             {
                 if (use_stencil())
                 {
@@ -521,7 +522,7 @@ void Deferred_renderer::light_pass(const Light_collection &lights, const Camera 
                 break;
             }
 
-            case Light::Type::directional:
+            case directional:
             {
                 if (use_stencil())
                 {

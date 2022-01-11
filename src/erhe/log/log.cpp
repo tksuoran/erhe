@@ -123,21 +123,22 @@ void Log::set_text_color(const int c)
 #    else
     switch (c)
     {
-        case Console_color::DARK_BLUE:    fputs("\033[22;34m", stdout); break;
-        case Console_color::DARK_GREEN:   fputs("\033[22;32m", stdout); break;
-        case Console_color::DARK_RED:     fputs("\033[22;31m", stdout); break;
-        case Console_color::DARK_CYAN:    fputs("\033[22;36m", stdout); break;
-        case Console_color::DARK_MAGENTA: fputs("\033[22;35m", stdout); break;
-        case Console_color::DARK_YELLOW:  fputs("\033[22;33m", stdout); break;
-        case Console_color::BLUE:         fputs("\033[1;34m", stdout); break;
-        case Console_color::GREEN:        fputs("\033[1;32m", stdout); break;
-        case Console_color::RED:          fputs("\033[1;31m", stdout); break;
-        case Console_color::CYAN:         fputs("\033[1;36m", stdout); break;
-        case Console_color::MAGENTA:      fputs("\033[1;35m", stdout); break;
-        case Console_color::YELLOW:       fputs("\033[1;33m", stdout); break;
-        case Console_color::DARK_GREY:    fputs("\033[1;30m", stdout); break;
-        case Console_color::GREY:         fputs("\033[22;37m", stdout); break;
-        case Console_color::WHITE:        fputs("\033[1;37m", stdout); break;
+        using enum Console_color;
+        case DARK_BLUE:    fputs("\033[22;34m", stdout); break;
+        case DARK_GREEN:   fputs("\033[22;32m", stdout); break;
+        case DARK_RED:     fputs("\033[22;31m", stdout); break;
+        case DARK_CYAN:    fputs("\033[22;36m", stdout); break;
+        case DARK_MAGENTA: fputs("\033[22;35m", stdout); break;
+        case DARK_YELLOW:  fputs("\033[22;33m", stdout); break;
+        case BLUE:         fputs("\033[1;34m", stdout); break;
+        case GREEN:        fputs("\033[1;32m", stdout); break;
+        case RED:          fputs("\033[1;31m", stdout); break;
+        case CYAN:         fputs("\033[1;36m", stdout); break;
+        case MAGENTA:      fputs("\033[1;35m", stdout); break;
+        case YELLOW:       fputs("\033[1;33m", stdout); break;
+        case DARK_GREY:    fputs("\033[1;30m", stdout); break;
+        case GREY:         fputs("\033[22;37m", stdout); break;
+        case WHITE:        fputs("\033[1;37m", stdout); break;
         default: break;
     }
 #    endif
@@ -237,7 +238,8 @@ void Category::write(const bool indent, const std::string& text)
         char c;
         switch (m_colorizer)
         {
-            case Colorizer::default_:
+            using enum Colorizer;
+            case default_:
             {
                 Log::set_text_color(m_color.console);
                 p = span = text.data();
@@ -328,7 +330,7 @@ void Category::write(const bool indent, const std::string& text)
                 break;
             }
 
-            case Colorizer::glsl:
+            case glsl:
             {
                 Log::set_text_color(m_color.console);
                 p = span = text.data();

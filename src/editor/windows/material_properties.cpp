@@ -1,5 +1,5 @@
 #include "windows/material_properties.hpp"
-#include "editor_tools.hpp"
+#include "editor_imgui_windows.hpp"
 
 #include "windows/materials.hpp"
 
@@ -22,11 +22,12 @@ Material_properties::~Material_properties() = default;
 void Material_properties::connect()
 {
     m_materials = get<Materials>();
+    require<Editor_imgui_windows>();
 }
 
 void Material_properties::initialize_component()
 {
-    get<Editor_tools>()->register_imgui_window(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 }
 
 void Material_properties::imgui()

@@ -1005,7 +1005,7 @@ void Scene_builder::setup_scene()
     setup_lights();
     make_brushes();
     make_mesh_nodes();
-    add_room();
+    //add_room();
     //make_cube_benchmark();
 }
 

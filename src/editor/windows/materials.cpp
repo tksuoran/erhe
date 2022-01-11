@@ -1,5 +1,5 @@
 #include "windows/materials.hpp"
-#include "editor_tools.hpp"
+#include "editor_imgui_windows.hpp"
 
 #include "scene/scene_root.hpp"
 
@@ -20,19 +20,20 @@ Materials::Materials()
 
 Materials::~Materials() = default;
 
-void Materials::connect()
-{
-    m_scene_root = get<Scene_root>();
-}
-
 auto Materials::selected_material() const -> std::shared_ptr<erhe::primitive::Material>
 {
     return m_selected_material;
 }
 
+void Materials::connect()
+{
+    m_scene_root = require<Scene_root>();
+    require<Editor_imgui_windows>();
+}
+
 void Materials::initialize_component()
 {
-    get<Editor_tools>()->register_imgui_window(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 
     if constexpr (true) // White default material
     {

@@ -44,10 +44,10 @@ private:
     // Component dependencies
     std::shared_ptr<Line_renderer_set> m_line_renderer_set;
 
-    bool      m_enable     {false};
+    bool      m_enable     {true};
     float     m_cell_size  {1.0f};
     int       m_cell_div   {10};
-    int       m_cell_count {20};
+    int       m_cell_count {5};
     float     m_thickness  {40.0f};
     glm::vec4 m_major_color{0.065f, 0.065f, 0.065f, 1.0f};
     glm::vec4 m_minor_color{0.035f, 0.035f, 0.035f, 1.0f};

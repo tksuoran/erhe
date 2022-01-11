@@ -2,6 +2,7 @@
 
 #include "configuration.hpp"
 #include "log.hpp"
+#include "editor_imgui_windows.hpp"
 #include "editor_time.hpp"
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
@@ -53,11 +54,12 @@ void Editor_view::connect()
     m_scene_root       = get<Scene_root      >();
     m_viewport_windows = get<Viewport_windows>();
     m_window           = get<Window          >();
+    require<Editor_imgui_windows>();
 }
 
 void Editor_view::initialize_component()
 {
-    get<Editor_tools>()->register_imgui_window(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 }
 
 void Editor_view::register_command(Command* command)
@@ -243,10 +245,11 @@ namespace {
 {
     switch (state)
     {
-    case State::Active:   return 1;
-    case State::Ready:    return 2;
-    case State::Inactive: return 3;
-    case State::Disabled: return 4;
+        using enum State;
+        case Active:   return 1;
+        case Ready:    return 2;
+        case Inactive: return 3;
+        case Disabled: return 4;
     }
     return 999;
 }

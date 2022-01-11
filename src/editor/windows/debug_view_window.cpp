@@ -1,5 +1,5 @@
 #include "windows/debug_view_window.hpp"
-#include "editor_tools.hpp"
+#include "editor_imgui_windows.hpp"
 
 #include "graphics/gl_context_provider.hpp"
 #include "renderers/shadow_renderer.hpp"
@@ -33,14 +33,15 @@ void Debug_view_window::connect()
     m_programs               = require<Programs>();
     m_shadow_renderer        = get<Shadow_renderer>();
 
-    require<Gl_context_provider>();
+    require<Editor_imgui_windows>();
+    require<Gl_context_provider >();
 }
 
 void Debug_view_window::initialize_component()
 {
     const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
-    get<Editor_tools>()->register_imgui_window(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 
     m_empty_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
         m_empty_attribute_mappings,

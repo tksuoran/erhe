@@ -25,10 +25,11 @@ namespace editor
 
 class Application;
 class Configuration;
-class Editor_view;
+class Editor_imgui_windows;
 class Editor_rendering;
 class Editor_time;
 class Editor_tools;
+class Editor_view;
 class Forward_renderer;
 class Log_window;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -97,9 +98,10 @@ private:
     // Component dependencies
     std::shared_ptr<Application>                          m_application;
     std::shared_ptr<Configuration>                        m_configuration;
-    std::shared_ptr<Editor_view>                          m_editor_view;
+    std::shared_ptr<Editor_imgui_windows>                 m_editor_imgui_windows;
     std::shared_ptr<Editor_time>                          m_editor_time;
     std::shared_ptr<Editor_tools>                         m_editor_tools;
+    std::shared_ptr<Editor_view>                          m_editor_view;
     std::shared_ptr<Forward_renderer>                     m_forward_renderer;
     std::shared_ptr<Log_window>                           m_log_window;
 #if defined(ERHE_XR_LIBRARY_OPENXR)

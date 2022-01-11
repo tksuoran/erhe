@@ -12,19 +12,20 @@ auto glsl_token(gl::Attribute_type type) -> const char*
 {
     switch (type)
     {
-        case gl::Attribute_type::int_:              return "int   ";
-        case gl::Attribute_type::int_vec2:          return "ivec2 ";
-        case gl::Attribute_type::int_vec3:          return "ivec3 ";
-        case gl::Attribute_type::int_vec4:          return "ivec4 ";
-        case gl::Attribute_type::unsigned_int:      return "uint  ";
-        case gl::Attribute_type::unsigned_int_vec2: return "uvec2 ";
-        case gl::Attribute_type::unsigned_int_vec3: return "uvec3 ";
-        case gl::Attribute_type::unsigned_int_vec4: return "uvec4 ";
-        case gl::Attribute_type::float_:            return "float ";
-        case gl::Attribute_type::float_vec2:        return "vec2  ";
-        case gl::Attribute_type::float_vec3:        return "vec3  ";
-        case gl::Attribute_type::float_vec4:        return "vec4  ";
-        case gl::Attribute_type::float_mat4:        return "mat4  ";
+        using enum gl::Attribute_type;
+        case int_:              return "int   ";
+        case int_vec2:          return "ivec2 ";
+        case int_vec3:          return "ivec3 ";
+        case int_vec4:          return "ivec4 ";
+        case unsigned_int:      return "uint  ";
+        case unsigned_int_vec2: return "uvec2 ";
+        case unsigned_int_vec3: return "uvec3 ";
+        case unsigned_int_vec4: return "uvec4 ";
+        case float_:            return "float ";
+        case float_vec2:        return "vec2  ";
+        case float_vec3:        return "vec3  ";
+        case float_vec4:        return "vec4  ";
+        case float_mat4:        return "mat4  ";
         default:
         {
             ERHE_FATAL("TODO\n");

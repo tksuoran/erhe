@@ -165,18 +165,19 @@ void Vertex_input_state::update()
 
         switch (attribute->shader_type)
         {
-            case gl::Attribute_type::bool_:
-            case gl::Attribute_type::bool_vec2:
-            case gl::Attribute_type::bool_vec3:
-            case gl::Attribute_type::bool_vec4:
-            case gl::Attribute_type::int_:
-            case gl::Attribute_type::int_vec2:
-            case gl::Attribute_type::int_vec3:
-            case gl::Attribute_type::int_vec4:
-            case gl::Attribute_type::unsigned_int:
-            case gl::Attribute_type::unsigned_int_vec2:
-            case gl::Attribute_type::unsigned_int_vec3:
-            case gl::Attribute_type::unsigned_int_vec4:
+            using enum gl::Attribute_type;
+            case bool_:
+            case bool_vec2:
+            case bool_vec3:
+            case bool_vec4:
+            case int_:
+            case int_vec2:
+            case int_vec3:
+            case int_vec4:
+            case unsigned_int:
+            case unsigned_int_vec2:
+            case unsigned_int_vec3:
+            case unsigned_int_vec4:
             {
                 gl::vertex_array_attrib_i_format(
                     gl_name(),
@@ -188,19 +189,19 @@ void Vertex_input_state::update()
                 break;
             }
 
-            case gl::Attribute_type::float_:
-            case gl::Attribute_type::float_vec2:
-            case gl::Attribute_type::float_vec3:
-            case gl::Attribute_type::float_vec4:
-            case gl::Attribute_type::float_mat2:
-            case gl::Attribute_type::float_mat2x3:
-            case gl::Attribute_type::float_mat2x4:
-            case gl::Attribute_type::float_mat3:
-            case gl::Attribute_type::float_mat3x2:
-            case gl::Attribute_type::float_mat3x4:
-            case gl::Attribute_type::float_mat4:
-            case gl::Attribute_type::float_mat4x2:
-            case gl::Attribute_type::float_mat4x3:
+            case float_:
+            case float_vec2:
+            case float_vec3:
+            case float_vec4:
+            case float_mat2:
+            case float_mat2x3:
+            case float_mat2x4:
+            case float_mat3:
+            case float_mat3x2:
+            case float_mat3x4:
+            case float_mat4:
+            case float_mat4x2:
+            case float_mat4x3:
             {
                 gl::vertex_array_attrib_format(
                     gl_name(),
@@ -213,19 +214,19 @@ void Vertex_input_state::update()
                 break;
             }
 
-            case gl::Attribute_type::double_:
-            case gl::Attribute_type::double_vec2:
-            case gl::Attribute_type::double_vec3:
-            case gl::Attribute_type::double_vec4:
-            case gl::Attribute_type::double_mat2:
-            case gl::Attribute_type::double_mat2x3:
-            case gl::Attribute_type::double_mat2x4:
-            case gl::Attribute_type::double_mat3:
-            case gl::Attribute_type::double_mat3x2:
-            case gl::Attribute_type::double_mat3x4:
-            case gl::Attribute_type::double_mat4:
-            case gl::Attribute_type::double_mat4x2:
-            case gl::Attribute_type::double_mat4x3:
+            case double_:
+            case double_vec2:
+            case double_vec3:
+            case double_vec4:
+            case double_mat2:
+            case double_mat2x3:
+            case double_mat2x4:
+            case double_mat3:
+            case double_mat3x2:
+            case double_mat3x4:
+            case double_mat4:
+            case double_mat4x2:
+            case double_mat4x3:
             {
                 gl::vertex_array_attrib_l_format(
                     gl_name(),

@@ -541,6 +541,8 @@ bool ImGui_ImplErhe_Init(erhe::graphics::OpenGL_state_tracker* pipeline_state_tr
     // 
 
     auto& style = ImGui::GetStyle();
+    style.WindowMenuButtonPosition = ImGuiDir_None;
+
     style.WindowPadding    = ImVec2{3.0f, 3.0f};
     style.FramePadding     = ImVec2{3.0f, 3.0f};
     style.CellPadding      = ImVec2{3.0f, 3.0f};

@@ -11,14 +11,15 @@ auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function
 {
     switch (depth_function)
     {
-        case gl::Depth_function::always  : return gl::Depth_function::always  ;
-        case gl::Depth_function::equal   : return gl::Depth_function::equal   ;
-        case gl::Depth_function::gequal  : return gl::Depth_function::lequal  ;
-        case gl::Depth_function::greater : return gl::Depth_function::less    ;
-        case gl::Depth_function::lequal  : return gl::Depth_function::gequal  ;
-        case gl::Depth_function::less    : return gl::Depth_function::greater ;
-        case gl::Depth_function::never   : return gl::Depth_function::never   ;
-        case gl::Depth_function::notequal: return gl::Depth_function::notequal;
+        using enum gl::Depth_function;
+        case always  : return gl::Depth_function::always  ;
+        case equal   : return gl::Depth_function::equal   ;
+        case gequal  : return gl::Depth_function::lequal  ;
+        case greater : return gl::Depth_function::less    ;
+        case lequal  : return gl::Depth_function::gequal  ;
+        case less    : return gl::Depth_function::greater ;
+        case never   : return gl::Depth_function::never   ;
+        case notequal: return gl::Depth_function::notequal;
         default:
         {
             ERHE_FATAL("bad gl::Depth_function\n");

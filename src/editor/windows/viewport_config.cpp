@@ -1,7 +1,7 @@
 #include "windows/viewport_config.hpp"
 #include "application.hpp"
 #include "configuration.hpp"
-#include "editor_tools.hpp"
+#include "editor_imgui_windows.hpp"
 
 #include "erhe/imgui/imgui_helpers.hpp"
 
@@ -20,9 +20,14 @@ Viewport_config::Viewport_config()
     render_style_selected.edge_lines = false;
 }
 
+void Viewport_config::connect()
+{
+    require<Editor_imgui_windows>();
+}
+
 void Viewport_config::initialize_component()
 {
-    get<Editor_tools>()->register_imgui_window(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 }
 
 void Viewport_config::render_style_ui(Render_style& render_style)

@@ -1,6 +1,6 @@
 #include "windows/layers_window.hpp"
 #include "log.hpp"
-#include "editor_tools.hpp"
+#include "editor_imgui_windows.hpp"
 
 #include "graphics/icon_set.hpp"
 #include "tools/selection_tool.hpp"
@@ -37,11 +37,12 @@ void Layers_window::connect()
     Expects(m_scene_root     != nullptr);
     Expects(m_selection_tool != nullptr);
     Expects(m_icon_set       != nullptr);
+    require<Editor_imgui_windows>();
 }
 
 void Layers_window::initialize_component()
 {
-    get<Editor_tools>()->register_imgui_window(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 }
 
 void Layers_window::imgui()

@@ -1,5 +1,5 @@
 #include "windows/node_tree_window.hpp"
-#include "editor_tools.hpp"
+#include "editor_imgui_windows.hpp"
 #include "graphics/icon_set.hpp"
 #include "log.hpp"
 
@@ -34,6 +34,7 @@ void Node_tree_window::connect()
     m_scene_root     = get<Scene_root>();
     m_selection_tool = get<Selection_tool>();
     m_icon_set       = get<Icon_set>();
+    require<Editor_imgui_windows>();
     Expects(m_scene_root     != nullptr);
     Expects(m_selection_tool != nullptr);
     Expects(m_icon_set       != nullptr);
@@ -41,7 +42,7 @@ void Node_tree_window::connect()
 
 void Node_tree_window::initialize_component()
 {
-    get<Editor_tools>()->register_imgui_window(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 }
 
 void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)

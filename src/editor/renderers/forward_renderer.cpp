@@ -1,6 +1,7 @@
 #include "renderers/forward_renderer.hpp"
 #include "configuration.hpp"
 #include "graphics/gl_context_provider.hpp"
+
 #include "renderers/mesh_memory.hpp"
 #include "renderers/program_interface.hpp"
 #include "renderers/shadow_renderer.hpp"
@@ -95,6 +96,14 @@ void Forward_renderer::initialize_component()
     m_pipeline_fill.depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
     m_pipeline_fill.color_blend    = &Color_blend_state::color_blend_disabled;
     m_pipeline_fill.viewport       = nullptr;
+
+    m_pipeline_gui.shader_stages  = m_programs->textured.get();
+    m_pipeline_gui.vertex_input   = m_vertex_input.get();
+    m_pipeline_gui.input_assembly = &Input_assembly_state::triangles;
+    m_pipeline_gui.rasterization  = &Rasterization_state::cull_mode_none;
+    m_pipeline_gui.depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth);
+    m_pipeline_gui.color_blend    = &Color_blend_state::color_blend_premultiplied;
+    m_pipeline_gui.viewport       = nullptr;
 
     m_depth_stencil_tool_set_hidden = Depth_stencil_state{
         true,                     // depth test enabled
@@ -377,19 +386,21 @@ auto Forward_renderer::select_pipeline(const Pass pass) const -> const erhe::gra
 {
     switch (pass)
     {
-        case Pass::brush_back                                : return &m_pipeline_brush_back;
-        case Pass::brush_front                               : return &m_pipeline_brush_front;
-        case Pass::clear_depth                               : return &m_pipeline_tool_depth_clear_pass;
-        case Pass::corner_points                             : return &m_pipeline_points;
-        case Pass::depth_only                                : return &m_pipeline_tool_depth_pass;
-        case Pass::edge_lines                                : return &m_pipeline_edge_lines;
-        case Pass::hidden_line_with_blend                    : return &m_pipeline_line_hidden_blend;
-        case Pass::polygon_centroids                         : return &m_pipeline_points;
-        case Pass::polygon_fill                              : return &m_pipeline_fill;
-        case Pass::require_stencil_tag_depth_hidden_and_blend: return &m_pipeline_tool_hidden_color_pass;
-        case Pass::require_stencil_tag_depth_visible         : return &m_pipeline_tool_visible_color_pass;
-        case Pass::tag_depth_hidden_with_stencil             : return &m_pipeline_tool_hidden_stencil_pass;
-        case Pass::tag_depth_visible_with_stencil            : return &m_pipeline_tool_visible_stencil_pass;
+        using enum Pass;
+        case brush_back                                : return &m_pipeline_brush_back;
+        case brush_front                               : return &m_pipeline_brush_front;
+        case clear_depth                               : return &m_pipeline_tool_depth_clear_pass;
+        case corner_points                             : return &m_pipeline_points;
+        case depth_only                                : return &m_pipeline_tool_depth_pass;
+        case edge_lines                                : return &m_pipeline_edge_lines;
+        case gui                                       : return &m_pipeline_gui;
+        case hidden_line_with_blend                    : return &m_pipeline_line_hidden_blend;
+        case polygon_centroids                         : return &m_pipeline_points;
+        case polygon_fill                              : return &m_pipeline_fill;
+        case require_stencil_tag_depth_hidden_and_blend: return &m_pipeline_tool_hidden_color_pass;
+        case require_stencil_tag_depth_visible         : return &m_pipeline_tool_visible_color_pass;
+        case tag_depth_hidden_with_stencil             : return &m_pipeline_tool_hidden_stencil_pass;
+        case tag_depth_visible_with_stencil            : return &m_pipeline_tool_visible_stencil_pass;
         default:
             ERHE_FATAL("bad pass %04x\n", static_cast<unsigned int>(pass));
     }
@@ -399,19 +410,21 @@ auto Forward_renderer::select_primitive_mode(const Pass pass) const -> erhe::pri
 {
     switch (pass)
     {
-        case Pass::brush_back                                : return Primitive_mode::polygon_fill;
-        case Pass::brush_front                               : return Primitive_mode::polygon_fill;
-        case Pass::clear_depth                               : return Primitive_mode::polygon_fill;
-        case Pass::corner_points                             : return Primitive_mode::corner_points;
-        case Pass::depth_only                                : return Primitive_mode::polygon_fill;
-        case Pass::edge_lines                                : return Primitive_mode::edge_lines;
-        case Pass::hidden_line_with_blend                    : return Primitive_mode::edge_lines;
-        case Pass::polygon_centroids                         : return Primitive_mode::polygon_centroids;
-        case Pass::polygon_fill                              : return Primitive_mode::polygon_fill;
-        case Pass::require_stencil_tag_depth_hidden_and_blend: return Primitive_mode::polygon_fill;
-        case Pass::require_stencil_tag_depth_visible         : return Primitive_mode::polygon_fill;
-        case Pass::tag_depth_hidden_with_stencil             : return Primitive_mode::polygon_fill;
-        case Pass::tag_depth_visible_with_stencil            : return Primitive_mode::polygon_fill;
+        using enum Pass;
+        case brush_back                                : return Primitive_mode::polygon_fill;
+        case brush_front                               : return Primitive_mode::polygon_fill;
+        case clear_depth                               : return Primitive_mode::polygon_fill;
+        case corner_points                             : return Primitive_mode::corner_points;
+        case depth_only                                : return Primitive_mode::polygon_fill;
+        case edge_lines                                : return Primitive_mode::edge_lines;
+        case gui                                       : return Primitive_mode::polygon_fill;
+        case hidden_line_with_blend                    : return Primitive_mode::edge_lines;
+        case polygon_centroids                         : return Primitive_mode::polygon_centroids;
+        case polygon_fill                              : return Primitive_mode::polygon_fill;
+        case require_stencil_tag_depth_hidden_and_blend: return Primitive_mode::polygon_fill;
+        case require_stencil_tag_depth_visible         : return Primitive_mode::polygon_fill;
+        case tag_depth_hidden_with_stencil             : return Primitive_mode::polygon_fill;
+        case tag_depth_visible_with_stencil            : return Primitive_mode::polygon_fill;
         default:
             ERHE_FATAL("bad pass %04x\n", static_cast<unsigned int>(pass));
     }

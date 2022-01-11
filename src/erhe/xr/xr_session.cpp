@@ -217,12 +217,13 @@ int color_format_score(const gl::Internal_format image_format)
 {
     switch (image_format)
     {
-        case gl::Internal_format::rgba8:          return 1;
-        case gl::Internal_format::srgb8_alpha8:   return 2;
-        case gl::Internal_format::rgb10_a2:       return 3;
-        case gl::Internal_format::r11f_g11f_b10f: return 4;
-        case gl::Internal_format::rgba16f:        return 5;
-        default: return 0;
+        using enum gl::Internal_format;
+        case rgba8:          return 1;
+        case srgb8_alpha8:   return 2;
+        case rgb10_a2:       return 3;
+        case r11f_g11f_b10f: return 4;
+        case rgba16f:        return 5;
+        default:             return 0;
     }
 }
 

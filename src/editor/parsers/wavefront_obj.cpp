@@ -215,7 +215,9 @@ auto parse_obj_geometry(const std::filesystem::path& path)
             {
                 switch (command)
                 {
-                    case Command::Object_name:
+                    using enum Command;
+                    case Object_name:
+                    {
                         // TODO Choose Geometry splitting based on o / g / s / mg
                         //      Currently fixed to use g
                         token_last_pos = line.find_first_not_of(end_of_line, token_pos);
@@ -233,8 +235,9 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                             log_parsers.trace("arg: {}\n", arg_text);
                         }
                         break;
+                    }
 
-                    case Command::Group_name:
+                    case Group_name:
                     {
                         token_last_pos = line.find_first_not_of(delimiters, token_pos);
                         token_pos      = line.find_first_of(end_of_line, token_last_pos);
@@ -254,9 +257,9 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                         break;
                     }
 
-                    case Command::Use_material:
-                    case Command::Unknown:
-                    case Command::Material_library:
+                    case Use_material:
+                    case Unknown:
+                    case Material_library:
                     {
                         // consume rest of the line for now
                         token_last_pos = line.find_first_not_of(end_of_line, token_pos);
@@ -271,23 +274,23 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                         break;
                     }
 
-                    case Command::Vertex_position:
+                    case Vertex_position:
                     // Three required variables: x, y, and z
                     // One optional variable: w
                     // Some applications support colors; if they are available, add RBG values after the variables.
                     // The default is 1.
 
-                    case Command::Vertex_normal:
+                    case Vertex_normal:
                     // If a UV (vt) or vertex normal (vn) are defined for one vertex in a shape, they must be defined for all.
                     // Three required variables: x, y, and z
 
-                    case Command::Vertex_texture_coordinate:
+                    case Vertex_texture_coordinate:
                     // If a UV (vt) or vertex normal (vn) are defined for one vertex in a shape, they must be defined for all.
                     // One required variable: u
                     // Two optional variables: v and w
                     // The default is 0.
 
-                    case Command::Vertex_parameter_space:
+                    case Vertex_parameter_space:
                     // Use u for curve points
                     // Use u and v for surface points and non-rational trimming curve control points
                     // Use u, v, and w for rational trimming curve control points
@@ -306,7 +309,7 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                         break;
                     }
 
-                    case Command::Face:
+                    case Face:
                     {
                         token_last_pos = line.find_first_not_of(delimiters, token_pos);
                         token_pos      = line.find_first_of    (delimiters, token_last_pos);
@@ -349,13 +352,14 @@ auto parse_obj_geometry(const std::filesystem::path& path)
 
             switch (command)
             {
-                case Command::Group_name:
-                case Command::Use_material:
-                case Command::Unknown:
-                case Command::Material_library:
+                using enum Command;
+                case Group_name:
+                case Use_material:
+                case Unknown:
+                case Material_library:
                 default:
                     break;
-                case Command::Vertex_position:
+                case Vertex_position:
                 {
                     //ZoneScopedN("position");
                     if (float_args.size() >= 3)
@@ -381,7 +385,7 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                     break;
                 }
 
-                case Command::Vertex_normal:
+                case Vertex_normal:
                 {
                     //ZoneScopedN("normal");
                     if (float_args.size() == 3)
@@ -394,7 +398,7 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                     //}
                     break;
                 }
-                case Command::Vertex_texture_coordinate:
+                case Vertex_texture_coordinate:
                 {
                     //ZoneScopedN("texcoord");
                     // TODO support 1 / 3
@@ -408,7 +412,7 @@ auto parse_obj_geometry(const std::filesystem::path& path)
                     //}
                     break;
                 }
-                case Command::Face:
+                case Face:
                 {
                     //ZoneScopedN("face");
                     Expects(geometry);

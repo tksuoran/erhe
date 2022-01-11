@@ -2,7 +2,7 @@
 
 #include "application.hpp"
 #include "configuration.hpp"
-#include "editor_tools.hpp"
+#include "editor_imgui_windows.hpp"
 #include "log.hpp"
 #include "rendering.hpp"
 #include "window.hpp"
@@ -179,23 +179,33 @@ void Headset_renderer::connect()
     m_scene_root        = require<Scene_root       >();
 
     require<Configuration>();
-    require<Editor_tools>();
+    require<Editor_imgui_windows>();
     require<Window>();
 }
 
 void Headset_renderer::initialize_component()
 {
+    get<Editor_imgui_windows>()->register_imgui_window(this);
+
+    setup_root_camera();
+
     if (!get<Configuration>()->openxr)
     {
         return;
     }
 
-    get<Editor_tools>()->register_imgui_window(this);
-
     m_headset = std::make_unique<erhe::xr::Headset>(get<Window>()->get_context_window());
 
     const auto mesh_memory = get<Mesh_memory>();
+    m_controller_visualization = std::make_unique<Controller_visualization>(
+        *mesh_memory,
+        *m_scene_root,
+        m_root_camera.get()
+    );
+}
 
+void Headset_renderer::setup_root_camera()
+{
     m_root_camera = std::make_shared<erhe::scene::Camera>(
         "Headset Root Camera"
     );
@@ -211,11 +221,6 @@ void Headset_renderer::initialize_component()
     scene_root->scene().nodes.emplace_back(m_root_camera);
     scene_root->scene().nodes_sorted = false;
 
-    m_controller_visualization = std::make_unique<Controller_visualization>(
-        *mesh_memory,
-        *m_scene_root,
-        m_root_camera.get()
-    );
 }
 
 auto Headset_renderer::root_camera() -> std::shared_ptr<erhe::scene::Camera>

@@ -433,25 +433,26 @@ auto Trs_tool::on_drag() -> bool
     auto handle_type = get_handle_type(m_active_handle);
     switch (handle_type)
     {
-        case Handle_type::e_handle_type_translate_axis:
+        using enum Handle_type;
+        case e_handle_type_translate_axis:
         {
             update_axis_translate();
             return true;
         }
 
-        case Handle_type::e_handle_type_translate_plane:
+        case e_handle_type_translate_plane:
         {
             update_plane_translate();
             return true;
         }
 
-        case Handle_type::e_handle_type_rotate:
+        case e_handle_type_rotate:
         {
             update_rotate();
             return true;
         }
 
-        case Handle_type::e_handle_type_none:
+        case e_handle_type_none:
         default:
         {
             return false;
@@ -532,15 +533,16 @@ auto Trs_tool::get_axis_direction() const -> dvec3
 {
     switch (m_active_handle)
     {
-        case Handle::e_handle_translate_x:  return m_local ? m_drag.initial_world_from_local[0] : glm::dvec3{1.0, 0.0, 0.0};
-        case Handle::e_handle_translate_y:  return m_local ? m_drag.initial_world_from_local[1] : glm::dvec3{0.0, 1.0, 0.0};
-        case Handle::e_handle_translate_z:  return m_local ? m_drag.initial_world_from_local[2] : glm::dvec3{0.0, 0.0, 1.0};
-        case Handle::e_handle_translate_yz: return m_local ? m_drag.initial_world_from_local[0] : glm::dvec3{1.0, 0.0, 0.0};
-        case Handle::e_handle_translate_xz: return m_local ? m_drag.initial_world_from_local[1] : glm::dvec3{0.0, 1.0, 0.0};
-        case Handle::e_handle_translate_xy: return m_local ? m_drag.initial_world_from_local[2] : glm::dvec3{0.0, 0.0, 1.0};
-        case Handle::e_handle_rotate_x:     return m_local ? m_drag.initial_world_from_local[0] : glm::dvec3{1.0, 0.0, 0.0};
-        case Handle::e_handle_rotate_y:     return m_local ? m_drag.initial_world_from_local[1] : glm::dvec3{0.0, 1.0, 0.0};
-        case Handle::e_handle_rotate_z:     return m_local ? m_drag.initial_world_from_local[2] : glm::dvec3{0.0, 0.0, 1.0};
+        using enum Handle;
+        case e_handle_translate_x:  return m_local ? m_drag.initial_world_from_local[0] : glm::dvec3{1.0, 0.0, 0.0};
+        case e_handle_translate_y:  return m_local ? m_drag.initial_world_from_local[1] : glm::dvec3{0.0, 1.0, 0.0};
+        case e_handle_translate_z:  return m_local ? m_drag.initial_world_from_local[2] : glm::dvec3{0.0, 0.0, 1.0};
+        case e_handle_translate_yz: return m_local ? m_drag.initial_world_from_local[0] : glm::dvec3{1.0, 0.0, 0.0};
+        case e_handle_translate_xz: return m_local ? m_drag.initial_world_from_local[1] : glm::dvec3{0.0, 1.0, 0.0};
+        case e_handle_translate_xy: return m_local ? m_drag.initial_world_from_local[2] : glm::dvec3{0.0, 0.0, 1.0};
+        case e_handle_rotate_x:     return m_local ? m_drag.initial_world_from_local[0] : glm::dvec3{1.0, 0.0, 0.0};
+        case e_handle_rotate_y:     return m_local ? m_drag.initial_world_from_local[1] : glm::dvec3{0.0, 1.0, 0.0};
+        case e_handle_rotate_z:     return m_local ? m_drag.initial_world_from_local[2] : glm::dvec3{0.0, 0.0, 1.0};
         default:
         {
             ERHE_FATAL("bad axis\n");
@@ -683,12 +685,13 @@ auto Trs_tool::get_plane_normal(const bool world) const -> dvec3
 {
     switch (m_active_handle)
     {
-        case Handle::e_handle_rotate_x:
-        case Handle::e_handle_translate_yz: return world ? glm::dvec3{1.0, 0.0, 0.0} : m_drag.initial_world_from_local[0];
-        case Handle::e_handle_rotate_y:
-        case Handle::e_handle_translate_xz: return world ? glm::dvec3{0.0, 1.0, 0.0} : m_drag.initial_world_from_local[1];
-        case Handle::e_handle_rotate_z:
-        case Handle::e_handle_translate_xy: return world ? glm::dvec3{0.0, 0.0, 1.0} : m_drag.initial_world_from_local[2];
+        using enum Handle;
+        case e_handle_rotate_x:
+        case e_handle_translate_yz: return world ? glm::dvec3{1.0, 0.0, 0.0} : m_drag.initial_world_from_local[0];
+        case e_handle_rotate_y:
+        case e_handle_translate_xz: return world ? glm::dvec3{0.0, 1.0, 0.0} : m_drag.initial_world_from_local[1];
+        case e_handle_rotate_z:
+        case e_handle_translate_xy: return world ? glm::dvec3{0.0, 0.0, 1.0} : m_drag.initial_world_from_local[2];
         default:
             ERHE_FATAL("bad handle for plane %04x\n", static_cast<unsigned int>(m_active_handle));
             break;
@@ -699,12 +702,13 @@ auto Trs_tool::get_plane_side(const bool world) const -> dvec3
 {
     switch (m_active_handle)
     {
-        case Handle::e_handle_rotate_x:
-        case Handle::e_handle_translate_yz: return world ? glm::dvec3{0.0, 1.0, 0.0} : m_drag.initial_world_from_local[1];
-        case Handle::e_handle_rotate_y:
-        case Handle::e_handle_translate_xz: return world ? glm::dvec3{0.0, 0.0, 1.0} : m_drag.initial_world_from_local[2];
-        case Handle::e_handle_rotate_z:
-        case Handle::e_handle_translate_xy: return world ? glm::dvec3{1.0, 0.0, 0.0} : m_drag.initial_world_from_local[0];
+        using enum Handle;
+        case e_handle_rotate_x:
+        case e_handle_translate_yz: return world ? glm::dvec3{0.0, 1.0, 0.0} : m_drag.initial_world_from_local[1];
+        case e_handle_rotate_y:
+        case e_handle_translate_xz: return world ? glm::dvec3{0.0, 0.0, 1.0} : m_drag.initial_world_from_local[2];
+        case e_handle_rotate_z:
+        case e_handle_translate_xy: return world ? glm::dvec3{1.0, 0.0, 0.0} : m_drag.initial_world_from_local[0];
         default:
             ERHE_FATAL("bad handle for plane %04x\n", static_cast<unsigned int>(m_active_handle));
             break;
@@ -750,9 +754,10 @@ auto Trs_tool::offset_plane_origo(const Handle handle, const dvec3 p) const -> d
 {
     switch (handle)
     {
-        case Handle::e_handle_rotate_x: return dvec3{ p.x, 0.0f, 0.0f};
-        case Handle::e_handle_rotate_y: return dvec3{0.0f,  p.y, 0.0f};
-        case Handle::e_handle_rotate_z: return dvec3{0.0f, 0.0f,  p.z};
+        using enum Handle;
+        case e_handle_rotate_x: return dvec3{ p.x, 0.0f, 0.0f};
+        case e_handle_rotate_y: return dvec3{0.0f,  p.y, 0.0f};
+        case e_handle_rotate_z: return dvec3{0.0f, 0.0f,  p.z};
         default:
             ERHE_FATAL("bad handle for rotate %04x\n", static_cast<unsigned int>(handle));
             break;
@@ -767,9 +772,10 @@ auto Trs_tool::project_to_offset_plane(
 {
     switch (handle)
     {
-        case Handle::e_handle_rotate_x: return dvec3{P.x, Q.y, Q.z};
-        case Handle::e_handle_rotate_y: return dvec3{Q.x, P.y, Q.z};
-        case Handle::e_handle_rotate_z: return dvec3{Q.x, Q.y, P.z};
+        using enum Handle;
+        case e_handle_rotate_x: return dvec3{P.x, Q.y, Q.z};
+        case e_handle_rotate_y: return dvec3{Q.x, P.y, Q.z};
+        case e_handle_rotate_z: return dvec3{Q.x, Q.y, P.z};
         default:
             ERHE_FATAL("bad handle for rotate %04x\n", static_cast<unsigned int>(handle));
             break;
@@ -1054,7 +1060,10 @@ void Trs_tool::tool_render(const Render_context& context)
 void Trs_tool::end_drag()
 {
     m_log_window->tail_log("Trs_tool::end_drag()");
-    hide();
+    m_active_handle                  = Handle::e_handle_none;
+    m_drag.initial_position_in_world = dvec3{0.0};
+    m_drag.initial_world_from_local  = dmat4{1};
+    m_drag.initial_window_depth      = 0.0;
     update_visibility();
 
     if (m_touched)
@@ -1082,14 +1091,6 @@ void Trs_tool::end_drag()
     }
 }
 
-void Trs_tool::hide()
-{
-    m_active_handle                  = Handle::e_handle_none;
-    m_drag.initial_position_in_world = dvec3{0.0};
-    m_drag.initial_world_from_local  = dmat4{1};
-    m_drag.initial_window_depth      = 0.0;
-}
-
 auto Trs_tool::get_handle(Mesh* mesh) const -> Trs_tool::Handle
 {
     const auto i = m_handles.find(mesh);
@@ -1104,16 +1105,17 @@ auto Trs_tool::get_handle_type(const Handle handle) const -> Handle_type
 {
     switch (handle)
     {
-        case Handle::e_handle_translate_x:  return Handle_type::e_handle_type_translate_axis;
-        case Handle::e_handle_translate_y:  return Handle_type::e_handle_type_translate_axis;
-        case Handle::e_handle_translate_z:  return Handle_type::e_handle_type_translate_axis;
-        case Handle::e_handle_translate_xy: return Handle_type::e_handle_type_translate_plane;
-        case Handle::e_handle_translate_xz: return Handle_type::e_handle_type_translate_plane;
-        case Handle::e_handle_translate_yz: return Handle_type::e_handle_type_translate_plane;
-        case Handle::e_handle_rotate_x:     return Handle_type::e_handle_type_rotate;
-        case Handle::e_handle_rotate_y:     return Handle_type::e_handle_type_rotate;
-        case Handle::e_handle_rotate_z:     return Handle_type::e_handle_type_rotate;
-        case Handle::e_handle_none: return Handle_type::e_handle_type_none;
+        using enum Handle;
+        case e_handle_translate_x:  return Handle_type::e_handle_type_translate_axis;
+        case e_handle_translate_y:  return Handle_type::e_handle_type_translate_axis;
+        case e_handle_translate_z:  return Handle_type::e_handle_type_translate_axis;
+        case e_handle_translate_xy: return Handle_type::e_handle_type_translate_plane;
+        case e_handle_translate_xz: return Handle_type::e_handle_type_translate_plane;
+        case e_handle_translate_yz: return Handle_type::e_handle_type_translate_plane;
+        case e_handle_rotate_x:     return Handle_type::e_handle_type_rotate;
+        case e_handle_rotate_y:     return Handle_type::e_handle_type_rotate;
+        case e_handle_rotate_z:     return Handle_type::e_handle_type_rotate;
+        case e_handle_none: return Handle_type::e_handle_type_none;
         default:
         {
             ERHE_FATAL("bad handle %04x\n", static_cast<unsigned int>(handle));
@@ -1125,13 +1127,14 @@ auto Trs_tool::get_axis_color(const Handle handle) const -> uint32_t
 {
     switch (handle)
     {
-        case Handle::e_handle_translate_x: return 0xff0000ff;
-        case Handle::e_handle_translate_y: return 0xff00ff00;
-        case Handle::e_handle_translate_z: return 0xffff0000;
-        case Handle::e_handle_rotate_x:    return 0xff0000ff;
-        case Handle::e_handle_rotate_y:    return 0xff00ff00;
-        case Handle::e_handle_rotate_z:    return 0xffff0000;
-        case Handle::e_handle_none:
+        using enum Handle;
+        case e_handle_translate_x: return 0xff0000ff;
+        case e_handle_translate_y: return 0xff00ff00;
+        case e_handle_translate_z: return 0xffff0000;
+        case e_handle_rotate_x:    return 0xff0000ff;
+        case e_handle_rotate_y:    return 0xff00ff00;
+        case e_handle_rotate_z:    return 0xffff0000;
+        case e_handle_none:
         default:
         {
             ERHE_FATAL("bad handle %04x\n", static_cast<unsigned int>(handle));

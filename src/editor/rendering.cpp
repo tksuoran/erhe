@@ -2,6 +2,7 @@
 #include "application.hpp"
 #include "configuration.hpp"
 #include "log.hpp"
+#include "editor_imgui_windows.hpp"
 #include "editor_time.hpp"
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
@@ -39,24 +40,25 @@ Editor_rendering::~Editor_rendering()
 
 void Editor_rendering::connect()
 {
-    m_application            = get<Application      >();
-    m_configuration          = get<Configuration    >();
-    m_editor_view            = get<Editor_view      >();
-    m_editor_time            = get<Editor_time      >();
-    m_editor_tools           = get<Editor_tools     >();
-    m_forward_renderer       = get<Forward_renderer >();
-    m_log_window             = get<Log_window       >();
+    m_application            = get<Application         >();
+    m_configuration          = get<Configuration       >();
+    m_editor_imgui_windows   = get<Editor_imgui_windows>();
+    m_editor_view            = get<Editor_view         >();
+    m_editor_time            = get<Editor_time         >();
+    m_editor_tools           = get<Editor_tools        >();
+    m_forward_renderer       = get<Forward_renderer    >();
+    m_log_window             = get<Log_window          >();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_headset_renderer       = get<Headset_renderer >();
+    m_headset_renderer       = get<Headset_renderer    >();
 #endif
-    m_id_renderer            = get<Id_renderer      >();
-    m_line_renderer_set      = get<Line_renderer_set>();
+    m_id_renderer            = get<Id_renderer         >();
+    m_line_renderer_set      = get<Line_renderer_set   >();
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-    m_pointer_context        = get<Pointer_context >();
-    m_scene_root             = get<Scene_root      >();
-    m_shadow_renderer        = get<Shadow_renderer >();
-    m_text_renderer          = get<Text_renderer   >();
-    m_viewport_windows       = get<Viewport_windows>();
+    m_pointer_context        = get<Pointer_context     >();
+    m_scene_root             = get<Scene_root          >();
+    m_shadow_renderer        = get<Shadow_renderer     >();
+    m_text_renderer          = get<Text_renderer       >();
+    m_viewport_windows       = get<Viewport_windows    >();
 }
 
 void Editor_rendering::init_state()
@@ -82,10 +84,10 @@ void Editor_rendering::begin_frame()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_configuration->gui)
-    {
-        m_editor_tools->menu();
-    }
+    //if (m_configuration->gui)
+    //{
+    //    m_editor_imgui_windows->menu();
+    //}
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_headset_renderer)
@@ -151,7 +153,7 @@ void Editor_rendering::render()
     if (m_configuration->gui)
     {
         render_viewports();
-        m_editor_tools->imgui_windows();
+        m_editor_imgui_windows->imgui_windows();
     }
     else if (m_configuration->show_window)
     {

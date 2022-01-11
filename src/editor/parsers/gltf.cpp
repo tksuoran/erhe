@@ -36,6 +36,7 @@ auto c_str(BufferViewTarget value) -> const char*
 {
     switch (value)
     {
+        using enum BufferViewTarget;
         case ARRAY_BUFFER:         return "array_buffer";
         case ELEMENT_ARRAY_BUFFER: return "element_array_buffer";
         default:                   return "?";
@@ -46,6 +47,7 @@ auto c_str(ComponentType value) -> const char*
 {
     switch (value)
     {
+        using enum ComponentType;
         case COMPONENT_UNKNOWN       : return "unknown";
         case COMPONENT_BYTE          : return "byte";
         case COMPONENT_UNSIGNED_BYTE : return "unsigned_byte";
@@ -61,6 +63,7 @@ auto c_str(AccessorType value) -> const char*
 {
     switch (value)
     {
+        using enum AccessorType;
         case TYPE_UNKNOWN: return "unknown";
         case TYPE_SCALAR:  return "scalar";
         case TYPE_VEC2:    return "vec2";
@@ -77,6 +80,7 @@ auto c_str(MeshMode value) -> const char*
 {
     switch (value)
     {
+        using enum MeshMode;
         case MESH_POINTS:         return "points";
         case MESH_LINES:          return "lines";
         case MESH_LINE_LOOP:      return "line_loop";
@@ -92,6 +96,7 @@ auto c_str(AlphaMode value) -> const char*
 {
     switch (value)
     {
+        using enum AlphaMode;
         case ALPHA_UNKNOWN: return "unknown";
         case ALPHA_OPAQUE:  return "opaque";
         case ALPHA_BLEND:   return "blend";
@@ -104,6 +109,7 @@ auto c_str(TargetPath value) -> const char*
 {
     switch (value)
     {
+        using enum TargetPath;
         case TARGET_UNKNOWN:     return "unknown";
         case TARGET_TRANSLATION: return "translation";
         case TARGET_ROTATION:    return "rotation";
@@ -117,6 +123,7 @@ auto c_str(InterpolationType value) -> const char*
 {
     switch (value)
     {
+        using enum InterpolationType;
         case INTERPOLATION_UNKNOWN:     return "unknown";
         case INTERPOLATION_LINEAR:      return "linear";
         case INTERPOLATION_STEP:        return "step";
@@ -129,6 +136,7 @@ auto c_str(TransformationType value) -> const char*
 {
     switch (value)
     {
+        using enum TransformationType;
         case TRANSFORMATION_IDENTITY: return "identity";
         case TRANSFORMATION_MATRIX:   return "matrix";
         case TRANSFORMATION_TRS:      return "trs";
@@ -140,6 +148,7 @@ auto c_str(ProjectionType value) -> const char*
 {
     switch (value)
     {
+        using enum ProjectionType;
         case PROJECTION_PERSPECTIVE:  return "perspective";
         case PROJECTION_ORTHOGRAPHIC: return "orthographic";
         default:                      return "?";
@@ -341,7 +350,8 @@ auto parse_gltf(
                     log_parsers.info("Camera.Projection.ProjectionType: {}\n", c_str(projection.GetProjectionType()));
                     switch (projection.GetProjectionType())
                     {
-                        case Microsoft::glTF::ProjectionType::PROJECTION_ORTHOGRAPHIC:
+                        using enum Microsoft::glTF::ProjectionType;
+                        case PROJECTION_ORTHOGRAPHIC:
                         {
                             const auto& ortho = reinterpret_cast<const Microsoft::glTF::Orthographic&>(projection);
                             log_parsers.info("Camera.Projection.Ortho.XMag: {}\n", ortho.xmag);
@@ -355,7 +365,7 @@ auto parse_gltf(
                             break;
                         }
 
-                        case Microsoft::glTF::ProjectionType::PROJECTION_PERSPECTIVE:
+                        case PROJECTION_PERSPECTIVE:
                         {
                             const auto& perspective = reinterpret_cast<const Microsoft::glTF::Perspective&>(projection);
                             log_parsers.info(

@@ -120,8 +120,8 @@ FetchContent_Declare(
     harfbuzz
     #GIT_REPOSITORY https://github.com/tksuoran/harfbuzz.git
     #GIT_TAG        fixes
-    GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz.git
-    GIT_TAG        3.2.0
+    GIT_REPOSITORY https://github.com/tksuoran/harfbuzz.git
+    GIT_TAG        cmake
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

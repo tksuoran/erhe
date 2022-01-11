@@ -231,9 +231,10 @@ auto Base_renderer::update_light_buffer(
         log_render.trace("light_index = {}\n", light_index);
         switch (light->type)
         {
-            case Light::Type::directional: ++directional_light_count; break;
-            case Light::Type::point:       ++point_light_count; break;
-            case Light::Type::spot:        ++spot_light_count; break;
+            using enum Light::Type;
+            case directional: ++directional_light_count; break;
+            case point:       ++point_light_count; break;
+            case spot:        ++spot_light_count; break;
             default: break;
         }
 

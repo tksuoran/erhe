@@ -10,65 +10,65 @@ namespace erhe::graphics
 namespace
 {
 
-auto glsl_token(const gl::Uniform_type type)
--> const char*
+auto glsl_token(const gl::Uniform_type type) -> const char*
 {
     switch (type)
     {
-        case gl::Uniform_type::int_:              return "int   ";
-        case gl::Uniform_type::int_vec2:          return "ivec2 ";
-        case gl::Uniform_type::int_vec3:          return "ivec3 ";
-        case gl::Uniform_type::int_vec4:          return "ivec4 ";
-        case gl::Uniform_type::unsigned_int:      return "uint  ";
-        case gl::Uniform_type::unsigned_int_vec2: return "uvec2 ";
-        case gl::Uniform_type::unsigned_int_vec3: return "uvec3 ";
-        case gl::Uniform_type::unsigned_int_vec4: return "uvec4 ";
-        case gl::Uniform_type::float_:            return "float ";
-        case gl::Uniform_type::float_vec2:        return "vec2  ";
-        case gl::Uniform_type::float_vec3:        return "vec3  ";
-        case gl::Uniform_type::float_vec4:        return "vec4  ";
-        case gl::Uniform_type::float_mat4:        return "mat4  ";
+        using enum gl::Uniform_type;
+        case int_:              return "int   ";
+        case int_vec2:          return "ivec2 ";
+        case int_vec3:          return "ivec3 ";
+        case int_vec4:          return "ivec4 ";
+        case unsigned_int:      return "uint  ";
+        case unsigned_int_vec2: return "uvec2 ";
+        case unsigned_int_vec3: return "uvec3 ";
+        case unsigned_int_vec4: return "uvec4 ";
+        case float_:            return "float ";
+        case float_vec2:        return "vec2  ";
+        case float_vec3:        return "vec3  ";
+        case float_vec4:        return "vec4  ";
+        case float_mat4:        return "mat4  ";
 
-        case gl::Uniform_type::sampler_1d:                                  return "sampler1D";
-        case gl::Uniform_type::sampler_2d:                                  return "sampler2D";
-        case gl::Uniform_type::sampler_3d:                                  return "sampler3D";
-        case gl::Uniform_type::sampler_cube:                                return "samplerCube";
-        case gl::Uniform_type::sampler_1d_shadow:                           return "sampler1DShadow";
-        case gl::Uniform_type::sampler_2d_shadow:                           return "sampler2DShadow";
-        case gl::Uniform_type::sampler_2d_rect:                             return "sampler2DRect";
-        case gl::Uniform_type::sampler_2d_rect_shadow:                      return "sampler2DRectShadow";
-        case gl::Uniform_type::sampler_1d_array:                            return "sampler1DArray";
-        case gl::Uniform_type::sampler_2d_array:                            return "sampler2DArray";
-        case gl::Uniform_type::sampler_buffer:                              return "samplerBuffer";
-        case gl::Uniform_type::sampler_1d_array_shadow:                     return "sampler1DArrayShadow";
-        case gl::Uniform_type::sampler_2d_array_shadow:                     return "sampler2DArrayShadow";
-        case gl::Uniform_type::sampler_cube_shadow:                         return "samplerCubeShadow";
-        case gl::Uniform_type::int_sampler_1d:                              return "intSampler1D";
-        case gl::Uniform_type::int_sampler_2d:                              return "intSampler2D";
-        case gl::Uniform_type::int_sampler_3d:                              return "intSampler3D";
-        case gl::Uniform_type::int_sampler_cube:                            return "intSamplerCube";
-        case gl::Uniform_type::int_sampler_2d_rect:                         return "intSampler2DRect";
-        case gl::Uniform_type::int_sampler_1d_array:                        return "intSampler1DArray";
-        case gl::Uniform_type::int_sampler_2d_array:                        return "intSampler2DArray";
-        case gl::Uniform_type::int_sampler_buffer:                          return "intSamplerBuffer";
-        case gl::Uniform_type::unsigned_int_sampler_1d:                     return "unsignedIntSampler1D";
-        case gl::Uniform_type::unsigned_int_sampler_2d:                     return "unsignedIntSampler2D";
-        case gl::Uniform_type::unsigned_int_sampler_3d:                     return "unsignedIntSampler3D";
-        case gl::Uniform_type::unsigned_int_sampler_cube:                   return "unsignedIntSamplerCube";
-        case gl::Uniform_type::unsigned_int_sampler_2d_rect:                return "unsignedIntSampler2DRect";
-        case gl::Uniform_type::unsigned_int_sampler_1d_array:               return "unsignedIntSampler1DArray";
-        case gl::Uniform_type::unsigned_int_sampler_2d_array:               return "unsignedIntSampler2DArray";
-        case gl::Uniform_type::unsigned_int_sampler_buffer:                 return "unsignedIntSamplerBuffer";
-        case gl::Uniform_type::sampler_cube_map_array:                      return "samplerCubemapArray";
-        case gl::Uniform_type::sampler_cube_map_array_shadow:               return "samplerCubemapArrayShadow";
-        case gl::Uniform_type::int_sampler_cube_map_array:                  return "intSamplerCubemapArray";
-        case gl::Uniform_type::unsigned_int_sampler_cube_map_array:         return "unsignedIntSamplerCubemapArray";
-        case gl::Uniform_type::sampler_2d_multisample:                      return "sampler2DMultisampler";
-        case gl::Uniform_type::int_sampler_2d_multisample:                  return "intSampler2DMultisampler";
-        case gl::Uniform_type::unsigned_int_sampler_2d_multisample:         return "unsignedIntSampler2DMultisample";
-        case gl::Uniform_type::sampler_2d_multisample_array:                return "sampler2DMultisampleArray";
-        case gl::Uniform_type::int_sampler_2d_multisample_array:            return "intSampler2DMultisampleArray";
-        case gl::Uniform_type::unsigned_int_sampler_2d_multisample_array:   return "unsignedIntSampler2DMultisampleArray";
+        case sampler_1d:                                  return "sampler1D";
+        case sampler_2d:                                  return "sampler2D";
+        case sampler_3d:                                  return "sampler3D";
+        case sampler_cube:                                return "samplerCube";
+        case sampler_1d_shadow:                           return "sampler1DShadow";
+        case sampler_2d_shadow:                           return "sampler2DShadow";
+        case sampler_2d_rect:                             return "sampler2DRect";
+        case sampler_2d_rect_shadow:                      return "sampler2DRectShadow";
+        case sampler_1d_array:                            return "sampler1DArray";
+        case sampler_2d_array:                            return "sampler2DArray";
+        case sampler_buffer:                              return "samplerBuffer";
+        case sampler_1d_array_shadow:                     return "sampler1DArrayShadow";
+        case sampler_2d_array_shadow:                     return "sampler2DArrayShadow";
+        case sampler_cube_shadow:                         return "samplerCubeShadow";
+        case int_sampler_1d:                              return "intSampler1D";
+        case int_sampler_2d:                              return "intSampler2D";
+        case int_sampler_3d:                              return "intSampler3D";
+        case int_sampler_cube:                            return "intSamplerCube";
+        case int_sampler_2d_rect:                         return "intSampler2DRect";
+        case int_sampler_1d_array:                        return "intSampler1DArray";
+        case int_sampler_2d_array:                        return "intSampler2DArray";
+        case int_sampler_buffer:                          return "intSamplerBuffer";
+        case unsigned_int_sampler_1d:                     return "unsignedIntSampler1D";
+        case unsigned_int_sampler_2d:                     return "unsignedIntSampler2D";
+        case unsigned_int_sampler_3d:                     return "unsignedIntSampler3D";
+        case unsigned_int_sampler_cube:                   return "unsignedIntSamplerCube";
+        case unsigned_int_sampler_2d_rect:                return "unsignedIntSampler2DRect";
+        case unsigned_int_sampler_1d_array:               return "unsignedIntSampler1DArray";
+        case unsigned_int_sampler_2d_array:               return "unsignedIntSampler2DArray";
+        case unsigned_int_sampler_buffer:                 return "unsignedIntSamplerBuffer";
+        case sampler_cube_map_array:                      return "samplerCubemapArray";
+        case sampler_cube_map_array_shadow:               return "samplerCubemapArrayShadow";
+        case int_sampler_cube_map_array:                  return "intSamplerCubemapArray";
+        case unsigned_int_sampler_cube_map_array:         return "unsignedIntSamplerCubemapArray";
+        case sampler_2d_multisample:                      return "sampler2DMultisampler";
+        case int_sampler_2d_multisample:                  return "intSampler2DMultisampler";
+        case unsigned_int_sampler_2d_multisample:         return "unsignedIntSampler2DMultisample";
+        case sampler_2d_multisample_array:                return "sampler2DMultisampleArray";
+        case int_sampler_2d_multisample_array:            return "intSampler2DMultisampleArray";
+        case unsigned_int_sampler_2d_multisample_array:   return "unsignedIntSampler2DMultisampleArray";
 
         default:
         {
@@ -77,12 +77,12 @@ auto glsl_token(const gl::Uniform_type type)
     }
 }
 
-static constexpr unsigned int sampler_is_sampler  = 0b000001u;
-static constexpr unsigned int sampler_multisample = 0b000010u;
-static constexpr unsigned int sampler_cube        = 0b000100u;
-static constexpr unsigned int sampler_array       = 0b001000u;
-static constexpr unsigned int sampler_shadow      = 0b010000u;
-static constexpr unsigned int sampler_rectangle   = 0b100000u;
+static constexpr unsigned int sampler_flags_is_sampler  = 0b000001u;
+static constexpr unsigned int sampler_flags_multisample = 0b000010u;
+static constexpr unsigned int sampler_flags_cube        = 0b000100u;
+static constexpr unsigned int sampler_flags_array       = 0b001000u;
+static constexpr unsigned int sampler_flags_shadow      = 0b010000u;
+static constexpr unsigned int sampler_flags_rectangle   = 0b100000u;
 
 class Type_details
 {
@@ -109,16 +109,16 @@ public:
         , basic_type       {basic_type}
         , texture_target   {texture_target}
         , sampler_dimension{sampler_dimension}
-        , sampler_mask     {sampler_is_sampler | sampler_mask}
+        , sampler_mask     {sampler_flags_is_sampler | sampler_mask}
     {
     }
 
     [[nodiscard]] auto is_sampler    () const -> bool { return sampler_mask != 0; }
-    [[nodiscard]] auto is_multisample() const -> bool { return (sampler_mask & sampler_multisample) != 0; }
-    [[nodiscard]] auto is_cube       () const -> bool { return (sampler_mask & sampler_cube       ) != 0; }
-    [[nodiscard]] auto is_array      () const -> bool { return (sampler_mask & sampler_array      ) != 0; }
-    [[nodiscard]] auto is_shadow     () const -> bool { return (sampler_mask & sampler_shadow     ) != 0; }
-    [[nodiscard]] auto is_rectangle  () const -> bool { return (sampler_mask & sampler_rectangle  ) != 0; }
+    [[nodiscard]] auto is_multisample() const -> bool { return (sampler_mask & sampler_flags_multisample) != 0; }
+    [[nodiscard]] auto is_cube       () const -> bool { return (sampler_mask & sampler_flags_cube       ) != 0; }
+    [[nodiscard]] auto is_array      () const -> bool { return (sampler_mask & sampler_flags_array      ) != 0; }
+    [[nodiscard]] auto is_shadow     () const -> bool { return (sampler_mask & sampler_flags_shadow     ) != 0; }
+    [[nodiscard]] auto is_rectangle  () const -> bool { return (sampler_mask & sampler_flags_rectangle  ) != 0; }
 
     gl::Uniform_type   type             {gl::Uniform_type::bool_};
     gl::Uniform_type   basic_type       {gl::Uniform_type::bool_};
@@ -133,67 +133,68 @@ auto get_type_details(const gl::Uniform_type type)
 {
     switch (type)
     {
-        case gl::Uniform_type::int_:              return Type_details(type, gl::Uniform_type::int_,         1);
-        case gl::Uniform_type::int_vec2:          return Type_details(type, gl::Uniform_type::int_,         2);
-        case gl::Uniform_type::int_vec3:          return Type_details(type, gl::Uniform_type::int_,         3);
-        case gl::Uniform_type::int_vec4:          return Type_details(type, gl::Uniform_type::int_,         4);
-        case gl::Uniform_type::unsigned_int:      return Type_details(type, gl::Uniform_type::unsigned_int, 1);
-        case gl::Uniform_type::unsigned_int_vec2: return Type_details(type, gl::Uniform_type::unsigned_int, 2);
-        case gl::Uniform_type::unsigned_int_vec3: return Type_details(type, gl::Uniform_type::unsigned_int, 3);
-        case gl::Uniform_type::unsigned_int_vec4: return Type_details(type, gl::Uniform_type::unsigned_int, 4);
-        case gl::Uniform_type::float_:            return Type_details(type, gl::Uniform_type::float_,       1);
-        case gl::Uniform_type::float_vec2:        return Type_details(type, gl::Uniform_type::float_,       2);
-        case gl::Uniform_type::float_vec3:        return Type_details(type, gl::Uniform_type::float_,       3);
-        case gl::Uniform_type::float_vec4:        return Type_details(type, gl::Uniform_type::float_,       4);
-        case gl::Uniform_type::float_mat4:        return Type_details(type, gl::Uniform_type::float_vec4,   4);
+        using enum gl::Uniform_type;
+        case int_:              return Type_details(type, gl::Uniform_type::int_,         1);
+        case int_vec2:          return Type_details(type, gl::Uniform_type::int_,         2);
+        case int_vec3:          return Type_details(type, gl::Uniform_type::int_,         3);
+        case int_vec4:          return Type_details(type, gl::Uniform_type::int_,         4);
+        case unsigned_int:      return Type_details(type, gl::Uniform_type::unsigned_int, 1);
+        case unsigned_int_vec2: return Type_details(type, gl::Uniform_type::unsigned_int, 2);
+        case unsigned_int_vec3: return Type_details(type, gl::Uniform_type::unsigned_int, 3);
+        case unsigned_int_vec4: return Type_details(type, gl::Uniform_type::unsigned_int, 4);
+        case float_:            return Type_details(type, gl::Uniform_type::float_,       1);
+        case float_vec2:        return Type_details(type, gl::Uniform_type::float_,       2);
+        case float_vec3:        return Type_details(type, gl::Uniform_type::float_,       3);
+        case float_vec4:        return Type_details(type, gl::Uniform_type::float_,       4);
+        case float_mat4:        return Type_details(type, gl::Uniform_type::float_vec4,   4);
 
-        case gl::Uniform_type::sampler_1d:                                  return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_1d,        1, 0);
-        case gl::Uniform_type::sampler_2d:                                  return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_2d,        2, 0);
-        case gl::Uniform_type::sampler_3d:                                  return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_3d,        3, 0);
-        case gl::Uniform_type::sampler_cube:                                return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_cube_map,  2, sampler_cube);
+        case sampler_1d:                                  return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_1d,        1, 0);
+        case sampler_2d:                                  return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_2d,        2, 0);
+        case sampler_3d:                                  return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_3d,        3, 0);
+        case sampler_cube:                                return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_cube_map,  2, sampler_flags_cube);
 
-        case gl::Uniform_type::sampler_1d_shadow:                           return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_1d,        1, sampler_shadow);
-        case gl::Uniform_type::sampler_2d_shadow:                           return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_2d,        2, sampler_shadow);
-        case gl::Uniform_type::sampler_2d_rect:                             return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_rectangle, 2, sampler_rectangle);
-        case gl::Uniform_type::sampler_2d_rect_shadow:                      return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_rectangle, 2, sampler_shadow | sampler_rectangle);
-        case gl::Uniform_type::sampler_1d_array:                            return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_1d_array,  1, sampler_array);
-        case gl::Uniform_type::sampler_2d_array:                            return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_2d_array,  2, sampler_array);
-        case gl::Uniform_type::sampler_buffer:                              return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_buffer,    1, 0);
-        case gl::Uniform_type::sampler_1d_array_shadow:                     return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_1d_array,  1, sampler_array | sampler_shadow);
-        case gl::Uniform_type::sampler_2d_array_shadow:                     return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_2d_array,  2, sampler_array | sampler_shadow);
-        case gl::Uniform_type::sampler_cube_shadow:                         return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_cube_map,  2, sampler_cube | sampler_shadow);
+        case sampler_1d_shadow:                           return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_1d,        1, sampler_flags_shadow);
+        case sampler_2d_shadow:                           return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_2d,        2, sampler_flags_shadow);
+        case sampler_2d_rect:                             return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_rectangle, 2, sampler_flags_rectangle);
+        case sampler_2d_rect_shadow:                      return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_rectangle, 2, sampler_flags_shadow | sampler_flags_rectangle);
+        case sampler_1d_array:                            return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_1d_array,  1, sampler_flags_array);
+        case sampler_2d_array:                            return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_2d_array,  2, sampler_flags_array);
+        case sampler_buffer:                              return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_buffer,    1, 0);
+        case sampler_1d_array_shadow:                     return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_1d_array,  1, sampler_flags_array | sampler_flags_shadow);
+        case sampler_2d_array_shadow:                     return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_2d_array,  2, sampler_flags_array | sampler_flags_shadow);
+        case sampler_cube_shadow:                         return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_cube_map,  2, sampler_flags_cube | sampler_flags_shadow);
 
-        case gl::Uniform_type::int_sampler_1d:                              return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_1d,        1, 0);
-        case gl::Uniform_type::int_sampler_2d:                              return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_2d,        2, 0);
-        case gl::Uniform_type::int_sampler_3d:                              return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_3d,        3, 0);
-        case gl::Uniform_type::int_sampler_cube:                            return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_cube_map,  2, sampler_cube);
-        case gl::Uniform_type::int_sampler_2d_rect:                         return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_rectangle, 2, sampler_rectangle);
-        case gl::Uniform_type::int_sampler_1d_array:                        return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_1d_array,  1, sampler_array);
-        case gl::Uniform_type::int_sampler_2d_array:                        return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_2d_array,  2, sampler_array);
-        case gl::Uniform_type::int_sampler_buffer:                          return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_buffer,    1, 0);
+        case int_sampler_1d:                              return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_1d,        1, 0);
+        case int_sampler_2d:                              return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_2d,        2, 0);
+        case int_sampler_3d:                              return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_3d,        3, 0);
+        case int_sampler_cube:                            return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_cube_map,  2, sampler_flags_cube);
+        case int_sampler_2d_rect:                         return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_rectangle, 2, sampler_flags_rectangle);
+        case int_sampler_1d_array:                        return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_1d_array,  1, sampler_flags_array);
+        case int_sampler_2d_array:                        return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_2d_array,  2, sampler_flags_array);
+        case int_sampler_buffer:                          return Type_details(type, gl::Uniform_type::int_, gl::Texture_target::texture_buffer,    1, 0);
 
-        case gl::Uniform_type::unsigned_int_sampler_1d:                     return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_1d,        1, 0);
-        case gl::Uniform_type::unsigned_int_sampler_2d:                     return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_2d,        2, 0);
-        case gl::Uniform_type::unsigned_int_sampler_3d:                     return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_3d,        3, 0);
-        case gl::Uniform_type::unsigned_int_sampler_cube:                   return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_cube_map,  2, sampler_cube);
-        case gl::Uniform_type::unsigned_int_sampler_2d_rect:                return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_rectangle, 2, sampler_rectangle);
-        case gl::Uniform_type::unsigned_int_sampler_1d_array:               return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_1d_array,  1, sampler_array);
-        case gl::Uniform_type::unsigned_int_sampler_2d_array:               return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_2d_array,  2, sampler_array);
-        case gl::Uniform_type::unsigned_int_sampler_buffer:                 return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_buffer,    1, 0);
+        case unsigned_int_sampler_1d:                     return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_1d,        1, 0);
+        case unsigned_int_sampler_2d:                     return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_2d,        2, 0);
+        case unsigned_int_sampler_3d:                     return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_3d,        3, 0);
+        case unsigned_int_sampler_cube:                   return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_cube_map,  2, sampler_flags_cube);
+        case unsigned_int_sampler_2d_rect:                return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_rectangle, 2, sampler_flags_rectangle);
+        case unsigned_int_sampler_1d_array:               return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_1d_array,  1, sampler_flags_array);
+        case unsigned_int_sampler_2d_array:               return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_2d_array,  2, sampler_flags_array);
+        case unsigned_int_sampler_buffer:                 return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_buffer,    1, 0);
 
-        case gl::Uniform_type::sampler_cube_map_array:                      return Type_details(type, gl::Uniform_type::float_,       gl::Texture_target::texture_cube_map_array,  2, sampler_cube | sampler_array);
-        case gl::Uniform_type::sampler_cube_map_array_shadow:               return Type_details(type, gl::Uniform_type::float_,       gl::Texture_target::texture_cube_map_array,  2, sampler_cube | sampler_array | sampler_shadow);
+        case sampler_cube_map_array:                      return Type_details(type, gl::Uniform_type::float_,       gl::Texture_target::texture_cube_map_array,  2, sampler_flags_cube | sampler_flags_array);
+        case sampler_cube_map_array_shadow:               return Type_details(type, gl::Uniform_type::float_,       gl::Texture_target::texture_cube_map_array,  2, sampler_flags_cube | sampler_flags_array | sampler_flags_shadow);
 
-        case gl::Uniform_type::int_sampler_cube_map_array:                  return Type_details(type, gl::Uniform_type::int_,         gl::Texture_target::texture_cube_map_array,  2, sampler_cube | sampler_array);
-        case gl::Uniform_type::unsigned_int_sampler_cube_map_array:         return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_cube_map_array,  2, sampler_cube | sampler_array);
+        case int_sampler_cube_map_array:                  return Type_details(type, gl::Uniform_type::int_,         gl::Texture_target::texture_cube_map_array,  2, sampler_flags_cube | sampler_flags_array);
+        case unsigned_int_sampler_cube_map_array:         return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_cube_map_array,  2, sampler_flags_cube | sampler_flags_array);
 
-        case gl::Uniform_type::sampler_2d_multisample:                      return Type_details(type, gl::Uniform_type::float_,       gl::Texture_target::texture_2d_multisample,  2, sampler_multisample);
-        case gl::Uniform_type::int_sampler_2d_multisample:                  return Type_details(type, gl::Uniform_type::int_,         gl::Texture_target::texture_2d_multisample,  2, sampler_multisample);
-        case gl::Uniform_type::unsigned_int_sampler_2d_multisample:         return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_2d_multisample,  2, sampler_multisample);
+        case sampler_2d_multisample:                      return Type_details(type, gl::Uniform_type::float_,       gl::Texture_target::texture_2d_multisample,  2, sampler_flags_multisample);
+        case int_sampler_2d_multisample:                  return Type_details(type, gl::Uniform_type::int_,         gl::Texture_target::texture_2d_multisample,  2, sampler_flags_multisample);
+        case unsigned_int_sampler_2d_multisample:         return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_2d_multisample,  2, sampler_flags_multisample);
 
-        case gl::Uniform_type::sampler_2d_multisample_array:                return Type_details(type, gl::Uniform_type::float_,       gl::Texture_target::texture_2d_multisample,  2, sampler_multisample | sampler_array);
-        case gl::Uniform_type::int_sampler_2d_multisample_array:            return Type_details(type, gl::Uniform_type::int_,         gl::Texture_target::texture_2d_multisample,  2, sampler_multisample | sampler_array);
-        case gl::Uniform_type::unsigned_int_sampler_2d_multisample_array:   return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_2d_multisample,  2, sampler_multisample | sampler_array);
+        case sampler_2d_multisample_array:                return Type_details(type, gl::Uniform_type::float_,       gl::Texture_target::texture_2d_multisample,  2, sampler_flags_multisample | sampler_flags_array);
+        case int_sampler_2d_multisample_array:            return Type_details(type, gl::Uniform_type::int_,         gl::Texture_target::texture_2d_multisample,  2, sampler_flags_multisample | sampler_flags_array);
+        case unsigned_int_sampler_2d_multisample_array:   return Type_details(type, gl::Uniform_type::unsigned_int, gl::Texture_target::texture_2d_multisample,  2, sampler_flags_multisample | sampler_flags_array);
 
         default:
         {
@@ -206,9 +207,10 @@ auto get_type_size(const gl::Uniform_type type) -> size_t
 {
     switch (type)
     {
-        case gl::Uniform_type::int_:         return sizeof(int32_t);
-        case gl::Uniform_type::unsigned_int: return sizeof(uint32_t);
-        case gl::Uniform_type::float_:       return sizeof(float);
+        using enum gl::Uniform_type;
+        case int_:         return sizeof(int32_t);
+        case unsigned_int: return sizeof(uint32_t);
+        case float_:       return sizeof(float);
         default:
         {
             auto type_details = get_type_details(type);
@@ -238,13 +240,14 @@ auto Shader_resource::is_basic(const Type type) -> bool
 {
     switch (type)
     {
-        case Type::basic                : return true;
-        case Type::sampler              : return true;
-        case Type::struct_type          : return false;
-        case Type::struct_member        : return false;
-        case Type::default_uniform_block: return false;
-        case Type::uniform_block        : return false;
-        case Type::shader_storage_block : return false;
+        using enum Type;
+        case basic                : return true;
+        case sampler              : return true;
+        case struct_type          : return false;
+        case struct_member        : return false;
+        case default_uniform_block: return false;
+        case uniform_block        : return false;
+        case shader_storage_block : return false;
         default:
         {
             ERHE_FATAL("bad Shader_resource::Type\n");
@@ -256,13 +259,14 @@ auto Shader_resource::is_aggregate(const Shader_resource::Type type) -> bool
 {
     switch (type)
     {
-        case Type::basic                : return false;
-        case Type::sampler              : return false;
-        case Type::struct_type          : return true;
-        case Type::struct_member        : return false;
-        case Type::default_uniform_block: return true;
-        case Type::uniform_block        : return true;
-        case Type::shader_storage_block : return true;
+        using enum Type;
+        case basic                : return false;
+        case sampler              : return false;
+        case struct_type          : return true;
+        case struct_member        : return false;
+        case default_uniform_block: return true;
+        case uniform_block        : return true;
+        case shader_storage_block : return true;
         default:
         {
             ERHE_FATAL("bad Shader_resource::Type\n");
@@ -274,13 +278,14 @@ auto Shader_resource::should_emit_members(const Shader_resource::Type type) -> b
 {
     switch (type)
     {
-        case Type::basic                : return false;
-        case Type::sampler              : return false;
-        case Type::struct_type          : return true;
-        case Type::struct_member        : return false;
-        case Type::default_uniform_block: return true;
-        case Type::uniform_block        : return true;
-        case Type::shader_storage_block : return true;
+        using enum Type;
+        case basic                : return false;
+        case sampler              : return false;
+        case struct_type          : return true;
+        case struct_member        : return false;
+        case default_uniform_block: return true;
+        case uniform_block        : return true;
+        case shader_storage_block : return true;
         default:
         {
             ERHE_FATAL("bad Shader_resource::Type\n");
@@ -292,13 +297,14 @@ auto Shader_resource::is_block(const Shader_resource::Type type) -> bool
 {
     switch (type)
     {
-        case Type::basic                : return false;
-        case Type::sampler              : return false;
-        case Type::struct_type          : return false;
-        case Type::struct_member        : return false;
-        case Type::default_uniform_block: return true;
-        case Type::uniform_block        : return true;
-        case Type::shader_storage_block : return true;
+        using enum Type;
+        case basic                : return false;
+        case sampler              : return false;
+        case struct_type          : return false;
+        case struct_member        : return false;
+        case default_uniform_block: return true;
+        case uniform_block        : return true;
+        case shader_storage_block : return true;
         default:
         {
             ERHE_FATAL("bad Shader_resource::Type\n");
@@ -310,13 +316,14 @@ auto Shader_resource::uses_binding_points(const Shader_resource::Type type) -> b
 {
     switch (type)
     {
-        case Type::basic                : return false;
-        case Type::sampler              : return false;
-        case Type::struct_type          : return false;
-        case Type::struct_member        : return false;
-        case Type::default_uniform_block: return false;
-        case Type::uniform_block        : return true;
-        case Type::shader_storage_block : return true;
+        using enum Type;
+        case basic                : return false;
+        case sampler              : return false;
+        case struct_type          : return false;
+        case struct_member        : return false;
+        case default_uniform_block: return false;
+        case uniform_block        : return true;
+        case shader_storage_block : return true;
         default:
         {
             ERHE_FATAL("bad Shader_resource::Type\n");
@@ -324,14 +331,15 @@ auto Shader_resource::uses_binding_points(const Shader_resource::Type type) -> b
     }
 }
 
-auto Shader_resource::c_str(const Shader_resource::Precision v) -> const char*
+auto Shader_resource::c_str(const Shader_resource::Precision precision) -> const char*
 {
-    switch (v)
+    switch (precision)
     {
-        case Precision::lowp:    return "lowp";
-        case Precision::mediump: return "mediump";
-        case Precision::highp:   return "highp";
-        case Precision::superp:  return "superp";
+        using enum Shader_resource::Precision;
+        case lowp:    return "lowp";
+        case mediump: return "mediump";
+        case highp:   return "highp";
+        case superp:  return "superp";
         default:
         {
             ERHE_FATAL("Bad uniform precision\n");
@@ -598,39 +606,40 @@ auto Shader_resource::type_string() const -> std::string
 
     switch (m_type)
     {
-        case Type::basic:
+        using enum Type;
+        case basic:
         {
             return " ";
         }
 
-        case Type::struct_type:
+        case struct_type:
         {
             return "struct ";
         }
 
-        case Type::struct_member:
+        case struct_member:
         {
             return m_struct_type->name() + " ";
         }
 
-        case Type::default_uniform_block:
+        case default_uniform_block:
         {
             Expects(m_parent == nullptr);
             return "";
         }
 
-        case Type::uniform_block:
+        case uniform_block:
         {
             Expects(m_parent == nullptr);
             return "uniform ";
         }
-        case Type::shader_storage_block:
+        case shader_storage_block:
         {
             Expects(m_parent == nullptr);
             return "buffer ";
         }
 
-        case Type::sampler:
+        case sampler:
         {
             ERHE_FATAL("Samplers are only allowed in default uniform block\n");
         }

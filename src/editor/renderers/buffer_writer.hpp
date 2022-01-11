@@ -71,12 +71,13 @@ public:
     {
         switch (buffer_target)
         {
-            case gl::Buffer_target::shader_storage_buffer:
+            using enum gl::Buffer_target;
+            case shader_storage_buffer:
             {
                 shader_storage_align();
                 break;
             }
-            case gl::Buffer_target::uniform_buffer:
+            case uniform_buffer:
             {
                 uniform_align();
                 break;

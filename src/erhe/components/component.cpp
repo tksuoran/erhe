@@ -10,12 +10,13 @@ auto c_str(const Component_state state) -> const char*
 {
     switch (state)
     {
-        case Component_state::Constructed:    return "Constructed";
-        case Component_state::Connected:      return "Connected";
-        case Component_state::Initializing:   return "Initializing";
-        case Component_state::Ready:          return "Ready";
-        case Component_state::Deinitializing: return "Deinitializing";
-        case Component_state::Deinitialized:  return "Deinitialized";
+        using enum Component_state;
+        case Constructed:    return "Constructed";
+        case Connected:      return "Connected";
+        case Initializing:   return "Initializing";
+        case Ready:          return "Ready";
+        case Deinitializing: return "Deinitializing";
+        case Deinitialized:  return "Deinitialized";
         default: return "?";
     }
 }

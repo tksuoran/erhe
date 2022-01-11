@@ -1,5 +1,5 @@
 #include "windows/node_properties.hpp"
-#include "editor_tools.hpp"
+#include "editor_imgui_windows.hpp"
 
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -41,11 +41,12 @@ void Node_properties::connect()
     m_operation_stack = get<Operation_stack>();
     m_scene_root      = get<Scene_root     >();
     m_selection_tool  = get<Selection_tool >();
+    require<Editor_imgui_windows>();
 }
 
 void Node_properties::initialize_component()
 {
-    get<Editor_tools>()->register_imgui_window(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 }
 
 void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
@@ -66,7 +67,8 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
         make_combo("Type", projection->projection_type, erhe::scene::Projection::c_type_strings, IM_ARRAYSIZE(erhe::scene::Projection::c_type_strings));
         switch (projection->projection_type)
         {
-            case erhe::scene::Projection::Type::perspective:
+            using enum erhe::scene::Projection::Type;
+            case perspective:
             {
                 ImGui::SliderFloat("Fov X",  &projection->fov_x,  0.0f, glm::pi<float>());
                 ImGui::SliderFloat("Fov Y",  &projection->fov_y,  0.0f, glm::pi<float>());
@@ -75,7 +77,7 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
                 break;
             }
 
-            case erhe::scene::Projection::Type::perspective_xr:
+            case perspective_xr:
             {
                 ImGui::SliderFloat("Fov Left",  &projection->fov_left,  -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);
                 ImGui::SliderFloat("Fov Right", &projection->fov_right, -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);
@@ -86,7 +88,7 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
                 break;
             }
 
-            case erhe::scene::Projection::Type::perspective_horizontal:
+            case perspective_horizontal:
             {
                 ImGui::SliderFloat("Fov X",  &projection->fov_x,  0.0f, glm::pi<float>());
                 ImGui::SliderFloat("Z Near", &projection->z_near, 0.0f, 1000.0f, "%.3f", logarithmic);
@@ -94,7 +96,7 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
                 break;
             }
 
-            case erhe::scene::Projection::Type::perspective_vertical:
+            case perspective_vertical:
             {
                 ImGui::SliderFloat("Fov Y",  &projection->fov_y,  0.0f, glm::pi<float>());
                 ImGui::SliderFloat("Z Near", &projection->z_near, 0.0f, 1000.0f, "%.3f", logarithmic);
@@ -102,7 +104,7 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
                 break;
             }
 
-            case erhe::scene::Projection::Type::orthogonal_horizontal:
+            case orthogonal_horizontal:
             {
                 ImGui::SliderFloat("Width",  &projection->ortho_width, 0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Z Near", &projection->z_near,      0.0f, 1000.0f, "%.3f", logarithmic);
@@ -110,7 +112,7 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
                 break;
             }
 
-            case erhe::scene::Projection::Type::orthogonal_vertical:
+            case orthogonal_vertical:
             {
                 ImGui::SliderFloat("Height", &projection->ortho_height, 0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Z Near", &projection->z_near,       0.0f, 1000.0f, "%.3f", logarithmic);
@@ -118,7 +120,7 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
                 break;
             }
 
-            case erhe::scene::Projection::Type::orthogonal:
+            case orthogonal:
             {
                 ImGui::SliderFloat("Width",  &projection->ortho_width,  0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Height", &projection->ortho_height, 0.0f, 1000.0f, "%.3f", logarithmic);
@@ -127,7 +129,7 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
                 break;
             }
 
-            case erhe::scene::Projection::Type::orthogonal_rectangle:
+            case orthogonal_rectangle:
             {
                 ImGui::SliderFloat("Left",   &projection->ortho_left,   0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Width",  &projection->ortho_width,  0.0f, 1000.0f, "%.3f", logarithmic);
@@ -138,7 +140,7 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
                 break;
             }
 
-            case erhe::scene::Projection::Type::generic_frustum:
+            case generic_frustum:
             {
                 ImGui::SliderFloat("Left",   &projection->frustum_left,   0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Right",  &projection->frustum_right,  0.0f, 1000.0f, "%.3f", logarithmic);
@@ -149,7 +151,7 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
                 break;
             }
 
-            case erhe::scene::Projection::Type::other:
+            case other:
             {
                 // TODO(tksuoran@gmail.com): Implement
                 break;

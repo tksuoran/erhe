@@ -25,7 +25,7 @@ namespace erhe::graphics
         return Image_format::rgba8; //gl::Internal_format::rgba8;
     }
 
-    FATAL("unsupported PNG image color type");
+    ERHE_FATAL("unsupported PNG image color type");
 }
 
 [[nodiscard]] auto to_mango(const gl::Internal_format format) -> mango::image::Format
@@ -34,12 +34,13 @@ namespace erhe::graphics
 
     switch (format)
     {
-        case gl::Internal_format::rgb8:  return Format{24, Format::UNORM, Format::RGB,  8, 8, 8, 0};
-        case gl::Internal_format::rgba8: return Format{32, Format::UNORM, Format::RGBA, 8, 8, 8, 8};
+        using enum gl::Internal_format;
+        case rgb8:  return Format{24, Format::UNORM, Format::RGB,  8, 8, 8, 0};
+        case rgba8: return Format{32, Format::UNORM, Format::RGBA, 8, 8, 8, 8};
         default: break;
     }
 
-    FATAL("unsupported PNG image color type");
+    ERHE_FATAL("unsupported PNG image color type");
 }
 
 [[nodiscard]] auto to_mango(const Image_format format) -> mango::image::Format
@@ -48,12 +49,13 @@ namespace erhe::graphics
 
     switch (format)
     {
-        case Image_format::rgb8:  return Format{24, Format::UNORM, Format::RGB,  8, 8, 8, 0};
-        case Image_format::rgba8: return Format{32, Format::UNORM, Format::RGBA, 8, 8, 8, 8};
+        using enum Image_format;
+        case rgb8:  return Format{24, Format::UNORM, Format::RGB,  8, 8, 8, 0};
+        case rgba8: return Format{32, Format::UNORM, Format::RGBA, 8, 8, 8, 8};
         default: break;
     }
 
-    FATAL("unsupported PNG image color type");
+    ERHE_FATAL("unsupported PNG image color type");
 }
 
 PNG_loader::PNG_loader() = default;

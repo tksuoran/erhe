@@ -139,6 +139,8 @@ set(source_list
     renderdoc_capture_support.hpp
     rendering.cpp
     rendering.hpp
+    editor_imgui_windows.cpp
+    editor_imgui_windows.hpp
     editor_time.cpp
     editor_time.hpp
     editor_tools.cpp
@@ -178,6 +180,8 @@ set(source_list
     res/shaders/standard.frag
     res/shaders/text.vert
     res/shaders/text.frag
+    res/shaders/textured.vert
+    res/shaders/textured.frag
     res/shaders/tool.vert
     res/shaders/tool.frag
     res/shaders/visualize_depth.vert

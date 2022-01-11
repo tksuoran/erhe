@@ -1,5 +1,5 @@
 #include "windows/log_window.hpp"
-#include "editor_tools.hpp"
+#include "editor_imgui_windows.hpp"
 #include "editor_view.hpp"
 #include "log.hpp"
 
@@ -29,9 +29,14 @@ Log_window::Log_window()
 
 Log_window::~Log_window() = default;
 
+void Log_window::connect()
+{
+    require<Editor_imgui_windows>();
+}
+
 void Log_window::initialize_component()
 {
-    get<Editor_tools>()->register_imgui_window(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 
     log_startup     .set_sink(this);
     log_programs    .set_sink(this);

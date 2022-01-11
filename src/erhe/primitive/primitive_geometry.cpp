@@ -22,13 +22,14 @@ auto Primitive_geometry::index_range(const Primitive_mode primitive_mode) const 
 {
     switch (primitive_mode)
     {
-        case Primitive_mode::not_set          : return {};
-        case Primitive_mode::polygon_fill     : return triangle_fill_indices;
-        case Primitive_mode::edge_lines       : return edge_line_indices;
-        case Primitive_mode::corner_points    : return corner_point_indices;
-        case Primitive_mode::polygon_centroids: return polygon_centroid_indices;
-        case Primitive_mode::count            : return {};
-        default:                                return {};
+        using enum Primitive_mode;
+        case not_set          : return {};
+        case polygon_fill     : return triangle_fill_indices;
+        case edge_lines       : return edge_line_indices;
+        case corner_points    : return corner_point_indices;
+        case polygon_centroids: return polygon_centroid_indices;
+        case count            : return {};
+        default:                return {};
     }
 }
 
@@ -37,13 +38,14 @@ auto primitive_type(Primitive_mode primitive_mode)
 {
     switch (primitive_mode)
     {
-        case Primitive_mode::not_set          : return {};
-        case Primitive_mode::polygon_fill     : return gl::Primitive_type::triangles;
-        case Primitive_mode::edge_lines       : return gl::Primitive_type::lines;
-        case Primitive_mode::corner_points    : return gl::Primitive_type::points;
-        case Primitive_mode::polygon_centroids: return gl::Primitive_type::points;
-        case Primitive_mode::count            : return {};
-        default:                                return {};
+        using enum Primitive_mode;
+        case not_set          : return {};
+        case polygon_fill     : return gl::Primitive_type::triangles;
+        case edge_lines       : return gl::Primitive_type::lines;
+        case corner_points    : return gl::Primitive_type::points;
+        case polygon_centroids: return gl::Primitive_type::points;
+        case count            : return {};
+        default:                return {};
     }
 }
 

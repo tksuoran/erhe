@@ -29,33 +29,7 @@ using namespace erhe::graphics;
 using namespace erhe::geometry;
 using namespace erhe::scene;
 using namespace erhe::primitive;
-using namespace std;
 using namespace glm;
-
-
-Camera_rig::Camera_rig(
-    Scene_root&                          /*scene_root*/,
-    std::shared_ptr<erhe::scene::Camera> camera
-)
-    : position{camera}
-{
-    // position_fps_heading           = make_shared<erhe::scene::Camera>("Camera");
-    // position_fps_heading_elevation = make_shared<erhe::scene::Camera>("Camera");
-    // position_free                  = make_shared<erhe::scene::Camera>("Camera");
-    // *position_fps_heading          ->projection() = *camera->projection();
-    // *position_fps_heading_elevation->projection() = *camera->projection();
-    // *position_free                 ->projection() = *camera->projection();
-    // scene_root.scene().cameras.push_back(position_fps_heading          );
-    // scene_root.scene().cameras.push_back(position_fps_heading_elevation);
-    // scene_root.scene().cameras.push_back(position_fps_heading);
-    //
-    // auto position_fps_heading_node = make_shared<erhe::scene::Node>();
-    // scene_root.scene().nodes.emplace_back(position_fps_heading_node);
-    // const glm::mat4 identity{1.0f};
-    // position_fps_heading_node->transforms.parent_from_node.set(identity);
-    // position_fps_heading_node->update();
-    // position_fps_heading_node->attach(position_fps_heading);
-}
 
 
 Scene_root::Scene_root()
@@ -74,9 +48,12 @@ void Scene_root::initialize_component()
     ERHE_PROFILE_FUNCTION
 
     // Layer configuration
+    using std::make_shared;
+    using std::make_unique;
     m_content_layer    = make_shared<Mesh_layer>("content");
     m_controller_layer = make_shared<Mesh_layer>("controller");
     m_tool_layer       = make_shared<Mesh_layer>("tool");
+    m_gui_layer        = make_shared<Mesh_layer>("gui");
     m_brush_layer      = make_shared<Mesh_layer>("brush");
     m_light_layer      = make_shared<Light_layer>("lights");
 
@@ -88,10 +65,6 @@ void Scene_root::initialize_component()
     m_scene->mesh_layers .push_back(m_brush_layer);
     m_scene->light_layers.push_back(m_light_layer);
 
-    m_all_layers         .push_back(m_content_layer.get());
-    m_all_layers         .push_back(m_controller_layer.get());
-    m_all_layers         .push_back(m_tool_layer.get());
-    m_all_layers         .push_back(m_brush_layer.get());
     m_content_layers     .push_back(m_content_layer.get());
     m_content_fill_layers.push_back(m_content_layer.get());
     m_content_fill_layers.push_back(m_controller_layer.get());
@@ -103,12 +76,12 @@ void Scene_root::initialize_component()
     m_raytrace_scene = erhe::raytrace::IScene::create_unique("root");
 }
 
-auto Scene_root::materials() -> vector<shared_ptr<Material>>&
+auto Scene_root::materials() -> std::vector<std::shared_ptr<Material>>&
 {
     return m_materials;
 }
 
-auto Scene_root::materials() const -> const vector<shared_ptr<Material>>&
+auto Scene_root::materials() const -> const std::vector<std::shared_ptr<Material>>&
 {
     return m_materials;
 }
@@ -226,14 +199,14 @@ auto Scene_root::camera_combo(
 namespace
 {
 
-[[nodiscard]]
-auto sort_value(const Light::Type light_type) -> int
+[[nodiscard]] auto sort_value(const Light::Type light_type) -> int
 {
     switch (light_type)
     {
-        case Light::Type::directional: return 0;
-        case Light::Type::point:       return 1;
-        case Light::Type::spot:        return 2;
+        using enum Light::Type;
+        case directional: return 0;
+        case point:       return 1;
+        case spot:        return 2;
         default: return 3;
     }
 }
@@ -241,10 +214,9 @@ auto sort_value(const Light::Type light_type) -> int
 class Light_comparator
 {
 public:
-    [[nodiscard]]
-    inline auto operator()(
-        const shared_ptr<Light>& lhs,
-        const shared_ptr<Light>& rhs
+    [[nodiscard]] inline auto operator()(
+        const std::shared_ptr<Light>& lhs,
+        const std::shared_ptr<Light>& rhs
     ) -> bool
     {
         return sort_value(lhs->type) < sort_value(rhs->type);
@@ -255,7 +227,7 @@ public:
 
 void Scene_root::sort_lights()
 {
-    sort(
+    std::sort(
         light_layer()->lights.begin(),
         light_layer()->lights.end(),
         Light_comparator()

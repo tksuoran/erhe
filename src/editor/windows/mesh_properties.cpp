@@ -31,6 +31,7 @@ void Mesh_properties::connect()
     m_scene_root     = get<Scene_root    >();
     m_selection_tool = get<Selection_tool>();
     m_text_renderer  = get<Text_renderer >();
+    require<Editor_tools>();
 }
 
 void Mesh_properties::initialize_component()

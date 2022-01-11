@@ -188,9 +188,10 @@ void Controller::set(const Controller_item item, const bool value)
 {
     switch (item)
     {
-        case Controller_item::less: set_less(value); break;
-        case Controller_item::more: set_more(value); break;
-        case Controller_item::stop: set_stop(value); break;
+        using enum Controller_item;
+        case less: set_less(value); break;
+        case more: set_more(value); break;
+        case stop: set_stop(value); break;
         default: break;
     }
 }

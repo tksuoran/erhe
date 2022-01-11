@@ -70,26 +70,13 @@ class Raytrace_primitive;
 class Scene_root;
 class Brush;
 
-class Camera_rig
-{
-public:
-    Camera_rig(
-        Scene_root&                          scene_root,
-        std::shared_ptr<erhe::scene::Camera> camera
-    );
-
-    std::shared_ptr<erhe::scene::Camera> position;
-    std::shared_ptr<erhe::scene::Camera> position_fps_heading;           // parent = position
-    std::shared_ptr<erhe::scene::Camera> position_fps_heading_elevation; // parent = fps_position_heading
-    std::shared_ptr<erhe::scene::Camera> position_free;                  // parent = position
-};
 
 class Scene_root
     : public erhe::components::Component
 {
 public:
     static constexpr std::string_view c_name{"Scene_root"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
     
     Scene_root ();
     ~Scene_root() override;
@@ -126,8 +113,8 @@ public:
     [[nodiscard]] auto content_layer      () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
     [[nodiscard]] auto controller_layer   () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
     [[nodiscard]] auto tool_layer         () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
+    [[nodiscard]] auto gui_layer          () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
     [[nodiscard]] auto light_layer        () const -> std::shared_ptr<erhe::scene::Light_layer>;
-    [[nodiscard]] auto all_layers         () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_all_layers; }
     [[nodiscard]] auto content_fill_layers() -> std::vector<const erhe::scene::Mesh_layer*>& { return m_content_fill_layers; }
     [[nodiscard]] auto content_layers     () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_content_layers; }
     [[nodiscard]] auto tool_layers        () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_tool_layers; }
@@ -160,11 +147,11 @@ private:
     std::shared_ptr<erhe::scene::Mesh_layer>  m_controller_layer;
     std::shared_ptr<erhe::scene::Mesh_layer>  m_tool_layer;
     std::shared_ptr<erhe::scene::Mesh_layer>  m_brush_layer;
+    std::shared_ptr<erhe::scene::Mesh_layer>  m_gui_layer;
     std::shared_ptr<erhe::scene::Light_layer> m_light_layer;
     std::shared_ptr<erhe::scene::Camera>      m_camera;
     std::shared_ptr<Frame_controller>         m_camera_controls;
 
-    std::vector<const erhe::scene::Mesh_layer*> m_all_layers;
     std::vector<const erhe::scene::Mesh_layer*> m_content_fill_layers;
     std::vector<const erhe::scene::Mesh_layer*> m_content_layers;
     std::vector<const erhe::scene::Mesh_layer*> m_tool_layers;

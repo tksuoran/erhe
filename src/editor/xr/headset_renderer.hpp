@@ -70,6 +70,8 @@ private:
         erhe::xr::Render_view& render_view
     ) -> Headset_view_resources&;
 
+    void setup_root_camera();
+
     // Component dependencies
     std::shared_ptr<Application>       m_application;
     std::shared_ptr<Editor_rendering>  m_editor_rendering;
@@ -81,7 +83,7 @@ private:
     std::shared_ptr<erhe::scene::Camera>      m_root_camera;
     std::vector<Headset_view_resources>       m_view_resources;
     std::unique_ptr<Controller_visualization> m_controller_visualization;
-    std::array<float, 4>                      m_clear_color{0.0f, 0.0f, 0.0f, 0.96f};
+    std::array<float, 4>                      m_clear_color{0.0f, 0.0f, 0.0f, 0.5f};
 };
 
 }

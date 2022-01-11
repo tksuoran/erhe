@@ -47,6 +47,12 @@ void Programs::initialize_component()
     );
 
     default_uniform_block   = std::make_unique<erhe::graphics::Shader_resource>();
+
+    gui_texture_sampler_location = default_uniform_block->add_sampler(
+        "s_gui_texture",
+        gl::Uniform_type::sampler_2d
+    )->location();
+
     shadow_sampler_location = default_uniform_block->add_sampler(
         "s_shadow",
         gl::Uniform_type::sampler_2d_array
@@ -59,6 +65,7 @@ void Programs::initialize_component()
     // Not available on Dell laptop.
     //standard      = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
     standard        = make_program("standard");
+    textured        = make_program("textured");
     edge_lines      = make_program("edge_lines");
     wide_lines      = make_program("wide_lines");
     points          = make_program("points");

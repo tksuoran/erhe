@@ -41,8 +41,9 @@ gl::Internal_format to_gl(erhe::graphics::Image_format format)
 {
     switch (format)
     {
-        case erhe::graphics::Image_format::rgb8:  return gl::Internal_format::rgb8;
-        case erhe::graphics::Image_format::rgba8: return gl::Internal_format::rgba8;
+        using enum erhe::graphics::Image_format;
+        case rgb8:  return gl::Internal_format::rgb8;
+        case rgba8: return gl::Internal_format::rgba8;
         default:
         {
             ERHE_FATAL("Bad image format %04x\n", static_cast<unsigned int>(format));

@@ -1,4 +1,4 @@
-#include "editor_tools.hpp"
+#include "editor_imgui_windows.hpp"
 #include "editor_view.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/ioperation.hpp"
@@ -46,9 +46,15 @@ Operation_stack::Operation_stack()
 
 Operation_stack::~Operation_stack() = default;
 
+void Operation_stack::connect()
+{
+    require<Editor_view         >();
+    require<Editor_imgui_windows>();
+}
+
 void Operation_stack::initialize_component()
 {
-    get<Editor_tools>()->register_imgui_window(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 
     hide();
 

@@ -42,13 +42,15 @@ public:
 
     // Public members
     std::unique_ptr<erhe::graphics::Shader_resource> default_uniform_block; // containing sampler uniforms
-    int                                              shadow_sampler_location{0};
+    int                                              shadow_sampler_location     {-1};
+    int                                              gui_texture_sampler_location{-1};
     std::unique_ptr<erhe::graphics::Sampler>         nearest_sampler;
     std::unique_ptr<erhe::graphics::Sampler>         linear_sampler;
 
     std::unique_ptr<erhe::graphics::Shader_stages> basic;
     std::unique_ptr<erhe::graphics::Shader_stages> brush;
     std::unique_ptr<erhe::graphics::Shader_stages> standard;    // standard material, polygon fill
+    std::unique_ptr<erhe::graphics::Shader_stages> textured;
     std::unique_ptr<erhe::graphics::Shader_stages> edge_lines;
     std::unique_ptr<erhe::graphics::Shader_stages> wide_lines;
     std::unique_ptr<erhe::graphics::Shader_stages> points;

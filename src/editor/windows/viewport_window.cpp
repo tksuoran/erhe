@@ -1,5 +1,6 @@
 #include "windows/viewport_window.hpp"
 #include "configuration.hpp"
+#include "editor_imgui_windows.hpp"
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
 #include "log.hpp"
@@ -95,7 +96,7 @@ auto Viewport_windows::create_window(
     );
 
     m_windows.push_back(new_window);
-    get<Editor_tools>()->register_imgui_window(new_window.get());
+    get<Editor_imgui_windows>()->register_imgui_window(new_window.get());
     return new_window.get();
 }
 

@@ -86,17 +86,18 @@ auto Light_mesh::get_light_transform(const Light& light) -> glm::mat4
 {
     switch (light.type)
     {
-        case Light::Type::directional:
+        using enum Light::Type;
+        case directional:
         {
             return mat4{1.0f};
         }
 
-        case Light::Type::point:
+        case point:
         {
             return mat4{1.0f};
         }
 
-        case Light::Type::spot:
+        case spot:
         {
             //           Side:                     Bottom:              .
             //             .                    ______________          .
@@ -159,17 +160,18 @@ auto Light_mesh::get_light_mesh(const Light& light) -> Primitive_geometry*
 {
     switch (light.type)
     {
-        case Light::Type::directional:
+        using enum Light::Type;
+        case directional:
         {
             return &m_quad_mesh;
         }
 
-        case Light::Type::point:
+        case point:
         {
             return nullptr;
         }
 
-        case Light::Type::spot:
+        case spot:
         {
             return &m_cone_mesh;
         }

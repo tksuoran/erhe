@@ -1,6 +1,6 @@
 #include "windows/operations.hpp"
+#include "editor_imgui_windows.hpp"
 #include "log.hpp"
-#include "editor_tools.hpp"
 
 #include "operations/attach_detach_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -36,11 +36,12 @@ void Operations::connect()
     m_pointer_context = get<Pointer_context>();
     m_scene_root      = get<Scene_root     >();
     m_selection_tool  = get<Selection_tool >();
+    require<Editor_imgui_windows>();
 }
 
 void Operations::initialize_component()
 {
-    get<Editor_tools>()->register_imgui_window(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 }
 
 auto Operations::count_selected_meshes() const -> size_t

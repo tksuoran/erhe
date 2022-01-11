@@ -312,14 +312,15 @@ Property_map<Key_type, Value_type>::import_from(
     {
         switch (m_descriptor.transform_mode)
         {
+            using enum Transform_mode;
             default:
-            case Transform_mode::none:
+            case none:
             {
                 values.insert(values.end(), source->values.begin(), source->values.end());
                 break;
             }
 
-            case Transform_mode::matrix:
+            case matrix:
             {
                 for (size_t i = 0, end = source->values.size(); i < end; ++i)
                 {
@@ -331,7 +332,7 @@ Property_map<Key_type, Value_type>::import_from(
             }
 
             // TODO Use cofactor matrix for bivectors?
-            case Transform_mode::normalize_inverse_transpose_matrix:           
+            case normalize_inverse_transpose_matrix:           
             {
                 const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
                 for (size_t i = 0, end = source->values.size(); i < end; ++i)
@@ -344,7 +345,7 @@ Property_map<Key_type, Value_type>::import_from(
             }
 
             // TODO Use cofactor matrix for bivectors?
-            case Transform_mode::normalize_inverse_transpose_matrix_vec3_float:
+            case normalize_inverse_transpose_matrix_vec3_float:
             {
                 if constexpr (std::is_same_v<Value_type, glm::vec4>)
                 {

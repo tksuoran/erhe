@@ -39,8 +39,9 @@ auto Mesh_insert_remove_operation::describe() const -> std::string
     std::stringstream ss;
     switch (m_context.mode)
     {
-        case Mode::insert: ss << "Mesh_insert "; break;
-        case Mode::remove: ss << "Mesh_remove "; break;
+        using enum Mode;
+        case insert: ss << "Mesh_insert "; break;
+        case remove: ss << "Mesh_remove "; break;
         default: break;
     }
     ss << m_context.mesh->name();
@@ -118,8 +119,9 @@ auto Light_insert_remove_operation::describe() const -> std::string
     std::stringstream ss;
     switch (m_context.mode)
     {
-        case Mode::insert: ss << "Light_insert "; break;
-        case Mode::remove: ss << "Light_remove "; break;
+        using enum Mode;
+        case insert: ss << "Light_insert "; break;
+        case remove: ss << "Light_remove "; break;
         default: break;
     }
     ss << m_context.light->name();

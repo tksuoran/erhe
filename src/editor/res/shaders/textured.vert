@@ -1,9 +1,11 @@
-in vec4 a_position_texcoord;
-
 out vec2 v_texcoord;
 
 void main()
 {
-    gl_Position = primitives.clip_from_model * vec4(a_position_texcoord.xy, 0.5, 1.0);
-    v_texcoord = a_position_texcoord.zw;
+    mat4 world_from_node = primitive.primitives[gl_DrawID].world_from_node;
+    mat4 clip_from_world = camera.cameras[0].clip_from_world;
+
+    vec4 position = world_from_node * vec4(a_position, 1.0);
+    gl_Position   = clip_from_world * position;
+    v_texcoord    = a_texcoord;
 }

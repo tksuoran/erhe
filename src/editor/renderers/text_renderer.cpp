@@ -154,7 +154,7 @@ void Text_renderer::initialize_component()
 
     m_projection_block->add_mat4("clip_from_window");
 
-    m_font = std::make_unique<erhe::ui::Font>("res/fonts/Ubuntu-R.ttf", 12, 0.4f);
+    m_font = std::make_unique<erhe::ui::Font>("res/fonts/SourceSansPro-Regular.otf", 12, 0.4f);
 
     const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
     const std::filesystem::path vs_path = shader_path / std::filesystem::path("text.vert");
