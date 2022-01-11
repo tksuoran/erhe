@@ -148,7 +148,7 @@ public:
         {
             point_id = bottom_point_id;
             //log_sphere.trace("point id {:2} (bottom)", point_id);
-        }                              
+        }
         else if (slice == slice_count)
         {
             point_id = points[std::make_pair(0, stack)];

@@ -24,8 +24,7 @@ public:
 
     Vertex_stream_binding(const Vertex_stream_binding& other);
 
-    [[nodiscard]] 
-    auto operator=(const Vertex_stream_binding& other) -> Vertex_stream_binding& = delete;
+    [[nodiscard]]  auto operator=(const Vertex_stream_binding& other) -> Vertex_stream_binding& = delete;
 
     Buffer*                                   vertex_buffer   {nullptr};
     std::shared_ptr<Vertex_attribute_mapping> vertex_attribute_mapping;

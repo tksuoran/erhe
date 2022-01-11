@@ -56,15 +56,26 @@ void Debug_draw_adapter::set_debug_draw(IDebug_draw* debug_draw)
 }
 
 // Implements btIDebugDraw
-void Debug_draw_adapter::drawLine(const btVector3& from, const btVector3& to, const btVector3& color)
+void Debug_draw_adapter::drawLine(
+    const btVector3& from,
+    const btVector3& to,
+    const btVector3& color
+)
 {
     if (m_debug_draw != nullptr)
     {
-        m_debug_draw->draw_line(from_bullet(from), from_bullet(to), from_bullet(color));
+        m_debug_draw->draw_line(
+            from_bullet(from),
+            from_bullet(to),
+            from_bullet(color)
+        );
     }
 }
 
-void Debug_draw_adapter::draw3dText(const btVector3& location, const char* textString)
+void Debug_draw_adapter::draw3dText(
+    const btVector3& location,
+    const char*      textString
+)
 {
     if (m_debug_draw != nullptr)
     {

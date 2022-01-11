@@ -293,7 +293,11 @@ auto Texture::size_level_count(int size) -> int
     return level_count;
 }
 
-auto Texture_create_info::calculate_level_count(const int width, const int height, const int depth) -> int
+auto Texture_create_info::calculate_level_count(
+    const int width,
+    const int height,
+    const int depth
+) -> int
 {
     const auto x_level_count = Texture::size_level_count(width);
     const auto y_level_count = Texture::size_level_count(height);
@@ -328,7 +332,7 @@ auto Texture_create_info::calculate_level_count() const -> int
             ERHE_FATAL("zero texture depth\n");
         }
     }
-    
+
     return use_mipmaps
         ? calculate_level_count(
             width,

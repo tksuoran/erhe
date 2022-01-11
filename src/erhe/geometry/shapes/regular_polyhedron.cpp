@@ -119,7 +119,7 @@ auto make_icosahedron(const double r) -> Geometry
             const double a0  = 2.0 / (1.0 + sq5);
             const double b   = std::sqrt((3.0 + sq5) / (1.0 + sq5));
             const double a   = a0 / b;
-                                
+
             geometry.make_point( 0,      r * a,  r / b);
             geometry.make_point( 0,      r * a, -r / b);
             geometry.make_point( 0,     -r * a,  r / b);

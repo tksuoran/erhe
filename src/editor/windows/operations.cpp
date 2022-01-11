@@ -66,7 +66,8 @@ void Operations::register_active_tool(Tool* tool)
 
 void Operations::imgui()
 {
-    using namespace erhe::imgui;
+    using erhe::imgui::make_button;
+    using erhe::imgui::Item_mode;
 
     if (m_selection_tool == nullptr)
     {
@@ -97,7 +98,7 @@ void Operations::imgui()
 
     const auto mesh_context = [this](){
         return Mesh_operation::Context{
-            .build_info_set = m_mesh_memory->build_info_set,
+            .build_info     = m_mesh_memory->build_info,
             .scene          = m_scene_root->scene(),
             .layer          = m_scene_root->content_layer(),
             .physics_world  = m_scene_root->physics_world(),
@@ -159,7 +160,7 @@ void Operations::imgui()
         m_operation_stack->push(
             std::make_shared<Merge_operation>(
                 Merge_operation::Context{
-                    .build_info_set = m_mesh_memory->build_info_set,
+                    .build_info    = m_mesh_memory->build_info,
                     .layer          = m_scene_root->content_layer(),
                     .scene          = m_scene_root->scene(),
                     .physics_world  = m_scene_root->physics_world(),

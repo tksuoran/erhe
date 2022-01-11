@@ -25,12 +25,12 @@
 namespace editor
 {
 
-using namespace erhe::graphics;
-using namespace erhe::geometry;
-using namespace erhe::scene;
-using namespace erhe::primitive;
-using namespace glm;
-
+using erhe::scene::Light;
+using erhe::scene::Light_layer;
+using erhe::scene::Mesh;
+using erhe::scene::Mesh_layer;
+using erhe::scene::Scene;
+using erhe::primitive::Material;
 
 Scene_root::Scene_root()
     : Component{c_name}

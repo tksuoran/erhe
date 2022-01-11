@@ -5,8 +5,9 @@
 namespace erhe::graphics
 {
 
-auto Vertex_attribute::desc(const Usage_type usage)
--> const char*
+auto Vertex_attribute::desc(
+    const Usage_type usage
+) -> const char*
 {
     if (usage == (Usage_type::position | Usage_type::tex_coord))
     {

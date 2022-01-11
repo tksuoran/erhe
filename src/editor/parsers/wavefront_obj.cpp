@@ -15,13 +15,17 @@
 
 namespace editor {
 
-using namespace glm;
-using namespace erhe::geometry;
+using erhe::geometry::Corner_id;
+using erhe::geometry::Point_id;
+using erhe::geometry::Polygon_id;
+using erhe::geometry::c_point_locations;
+using erhe::geometry::c_point_colors;
+using erhe::geometry::c_corner_normals;
+using erhe::geometry::c_corner_texcoords;
 
 // http://paulbourke.net/dataformats/obj/
 // http://www.martinreddy.net/gfx/3d/OBJ.spec
 // https://www.marxentlabs.com/obj-files/
-
 
 enum class Command : unsigned int
 {
@@ -143,10 +147,10 @@ auto parse_obj_geometry(const std::filesystem::path& path)
         erhe::geometry::Property_map<erhe::geometry::Corner_id, glm::vec3>* corner_normals  {nullptr};
         erhe::geometry::Property_map<erhe::geometry::Corner_id, glm::vec2>* corner_texcoords{nullptr};
 
-        const std::string& delimiters  = " \t\v";
-        const std::string& end_of_line = "\n";
-        const std::string& slash       = "/\r";
-        const std::string& comment     = "#";
+        const std::string delimiters  = " \t\v";
+        const std::string end_of_line = "\n";
+        const std::string slash       = "/\r";
+        const std::string comment     = "#";
 
         std::string::size_type line_last_pos = text.find_first_not_of(end_of_line, 0);
         std::string::size_type line_pos      = text.find_first_of(end_of_line, line_last_pos);

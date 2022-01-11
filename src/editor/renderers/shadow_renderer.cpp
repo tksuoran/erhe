@@ -28,13 +28,14 @@
 namespace editor
 {
 
-using namespace erhe::toolkit;
-using namespace erhe::graphics;
-using namespace erhe::primitive;
-using namespace erhe::scene;
-using namespace gl;
-using namespace glm;
-using namespace std;
+using erhe::graphics::Framebuffer;
+using erhe::graphics::Texture;
+
+using erhe::graphics::Vertex_input_state;
+using erhe::graphics::Input_assembly_state;
+using erhe::graphics::Rasterization_state;
+using erhe::graphics::Depth_stencil_state;
+using erhe::graphics::Color_blend_state;
 
 Shadow_renderer::Shadow_renderer()
     : Component    {c_name}
@@ -54,7 +55,7 @@ void Shadow_renderer::connect()
 
     m_mesh_memory            = require<Mesh_memory>();
     m_configuration          = require<Configuration>();
-    m_pipeline_state_tracker = get<OpenGL_state_tracker>();
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 }
 
 static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow_renderer::initialize_component()"};
@@ -170,7 +171,7 @@ void Shadow_renderer::render(
         update_primitive_buffer(*mesh_layer, shadow_filter);
         const auto draw_indirect_buffer_range = update_draw_indirect_buffer(
             *mesh_layer,
-            Primitive_mode::polygon_fill,
+            erhe::primitive::Primitive_mode::polygon_fill,
             shadow_filter
         );
         if (draw_indirect_buffer_range.draw_indirect_count == 0)
@@ -189,7 +190,7 @@ void Shadow_renderer::render(
             {
                 break; // TODO
             }
-            //light->update(m_viewport);
+
             if (!light->cast_shadow)
             {
                 continue;

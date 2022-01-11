@@ -35,13 +35,17 @@
 namespace editor
 {
 
-using namespace std;
-using namespace glm;
-using namespace erhe::scene;
-using namespace erhe::primitive;
-using namespace erhe::toolkit;
-using namespace erhe::geometry;
-using namespace erhe::geometry::shapes;
+using glm::normalize;
+using glm::cross;
+using glm::dot;
+using glm::distance;
+using glm::dmat4;
+using glm::dvec2;
+using glm::dvec3;
+using glm::dvec4;
+using glm::mat4;
+using glm::vec3;
+using glm::vec4;
 
 void Trs_tool_drag_command::try_ready(Command_context& context)
 {
@@ -156,7 +160,7 @@ void Trs_tool::initialize_component()
 
     const auto view = get<Editor_view>();
     view->register_command(&m_drag_command);
-    view->bind_command_to_mouse_drag(&m_drag_command, Mouse_button_left);
+    view->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_left);
 }
 
 void Trs_tool::set_translate(const bool enabled)
@@ -171,7 +175,9 @@ void Trs_tool::set_rotate(const bool enabled)
     update_visibility();
 }
 
-void Trs_tool::set_node(const std::shared_ptr<Node>& node)
+void Trs_tool::set_node(
+    const std::shared_ptr<erhe::scene::Node>& node
+)
 {
     if (node == m_target_node)
     {
@@ -194,7 +200,7 @@ void Trs_tool::set_node(const std::shared_ptr<Node>& node)
         ? get_physics_node(node.get())
         : std::shared_ptr<Node_physics>();
 
-    auto* const rigid_body = m_node_physics 
+    auto* const rigid_body = m_node_physics
         ? m_node_physics->rigid_body()
         : nullptr;
 
@@ -222,7 +228,9 @@ Trs_tool::Visualization::Visualization()
     tool_node = std::make_shared<erhe::scene::Node>("Trs");
 }
 
-void Trs_tool::Visualization::update_scale(const vec3 view_position_in_world)
+void Trs_tool::Visualization::update_scale(
+    const vec3 view_position_in_world
+)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -235,7 +243,10 @@ void Trs_tool::Visualization::update_scale(const vec3 view_position_in_world)
     view_distance = length(position_in_world - vec3{view_position_in_world});
 }
 
-void Trs_tool::Visualization::update_visibility(const bool visible, const Handle active_handle)
+void Trs_tool::Visualization::update_visibility(
+    const bool visible,
+    const Handle active_handle
+)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -301,7 +312,10 @@ auto Trs_tool::Visualization::make_mesh(
     return mesh;
 }
 
-void Trs_tool::Visualization::initialize(Mesh_memory& mesh_memory, Scene_root& scene_root)
+void Trs_tool::Visualization::initialize(
+    Mesh_memory& mesh_memory,
+    Scene_root&  scene_root
+)
 {
     x_material         = scene_root.make_material("x",         vec4{1.00f, 0.00f, 0.0f, 1.0f});
     y_material         = scene_root.make_material("y",         vec4{0.23f, 1.00f, 0.0f, 1.0f});
@@ -316,19 +330,23 @@ void Trs_tool::Visualization::initialize(Mesh_memory& mesh_memory, Scene_root& s
     constexpr float box_length               = 1.0f;
     constexpr float arrow_tip                = arrow_cylinder_length + arrow_cone_length;
     constexpr float rotate_ring_major_radius = 4.0f;
-    constexpr float rotate_ring_minor_radius = 0.1f; // 0.125f;
+    constexpr float rotate_ring_minor_radius = 0.1f; // 0.125f
+    using erhe::geometry::shapes::make_cylinder;
+    using erhe::geometry::shapes::make_cone;
+    using erhe::geometry::shapes::make_box;
+    using erhe::geometry::shapes::make_torus;
     const auto arrow_cylinder_geometry  = make_cylinder(0.0, arrow_cylinder_length, arrow_cylinder_radius, true, true, 32, 4);
     const auto arrow_cone_geometry      = make_cone    (arrow_cylinder_length, arrow_tip, arrow_cone_radius, true, 32, 4);
     const auto box_geometry             = make_box     (0.0, box_length, 0.0, box_length, -box_half_thickness, box_half_thickness);
     auto       rotate_ring_geometry     = make_torus   (rotate_ring_major_radius, rotate_ring_minor_radius, 80, 32);
     // Torus geometry is on xz plane, swap x and y to make it yz plane
-    rotate_ring_geometry.transform(mat4_swap_xy);
+    rotate_ring_geometry.transform(erhe::toolkit::mat4_swap_xy);
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
-    auto arrow_cylinder_pg = make_primitive(arrow_cylinder_geometry, mesh_memory.build_info_set.gl);
-    auto arrow_cone_pg     = make_primitive(arrow_cone_geometry    , mesh_memory.build_info_set.gl);
-    auto box_pg            = make_primitive(box_geometry           , mesh_memory.build_info_set.gl);
-    auto rotate_ring_pg    = make_primitive(rotate_ring_geometry   , mesh_memory.build_info_set.gl);
+    auto arrow_cylinder_pg = make_primitive(arrow_cylinder_geometry, mesh_memory.build_info);
+    auto arrow_cone_pg     = make_primitive(arrow_cone_geometry    , mesh_memory.build_info);
+    auto box_pg            = make_primitive(box_geometry           , mesh_memory.build_info);
+    auto rotate_ring_pg    = make_primitive(rotate_ring_geometry   , mesh_memory.build_info);
 
     x_arrow_cylinder_mesh  = make_mesh(scene_root, "X arrow cylinder", x_material, arrow_cylinder_pg);
     x_arrow_cone_mesh      = make_mesh(scene_root, "X arrow cone",     x_material, arrow_cone_pg    );
@@ -345,17 +363,19 @@ void Trs_tool::Visualization::initialize(Mesh_memory& mesh_memory, Scene_root& s
 
     x_arrow_cylinder_mesh->set_parent_from_node(mat4{1});
     x_arrow_cone_mesh    ->set_parent_from_node(mat4{1});
-    y_arrow_cylinder_mesh->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
-    y_arrow_cone_mesh    ->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
-    z_arrow_cylinder_mesh->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
-    z_arrow_cone_mesh    ->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
+
+    using erhe::scene::Transform;
+    y_arrow_cylinder_mesh->set_parent_from_node(Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
+    y_arrow_cone_mesh    ->set_parent_from_node(Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
+    z_arrow_cylinder_mesh->set_parent_from_node(Transform::create_rotation(-glm::pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
+    z_arrow_cone_mesh    ->set_parent_from_node(Transform::create_rotation(-glm::pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
     xy_box_mesh          ->set_parent_from_node(mat4{1});
-    xz_box_mesh          ->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{1.0f, 0.0f, 0.0f}));
-    yz_box_mesh          ->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
+    xz_box_mesh          ->set_parent_from_node(Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{1.0f, 0.0f, 0.0f}));
+    yz_box_mesh          ->set_parent_from_node(Transform::create_rotation(-glm::pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
 
     x_rotate_ring_mesh->set_parent_from_node(mat4{1});
-    y_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
-    z_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
+    y_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
+    z_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation(-glm::pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
 
     //root->transforms.parent_from_node.set_rotation(pi<float>() / 4.0f, vec3{0.0f, 1.0f, 0.0f});
 
@@ -364,7 +384,9 @@ void Trs_tool::Visualization::initialize(Mesh_memory& mesh_memory, Scene_root& s
 
 void Trs_tool::imgui()
 {
-    using namespace erhe::imgui;
+    using erhe::imgui::make_button;
+    using erhe::imgui::make_combo;
+    using erhe::imgui::Item_mode;
     ERHE_PROFILE_FUNCTION
 
     const bool   show_translate = m_visualization.show_translate;
@@ -503,7 +525,7 @@ auto Trs_tool::on_drag_ready() -> bool
                 .normal               = n,
                 .reference_direction  = direction,
                 .center_of_rotation   = center,
-                .start_rotation_angle = angle_of_rotation<double>(direction, n, side),
+                .start_rotation_angle = erhe::toolkit::angle_of_rotation<double>(direction, n, side),
                 .world_from_node      = m_target_node->world_from_node_transform()
             };
         }
@@ -534,15 +556,15 @@ auto Trs_tool::get_axis_direction() const -> dvec3
     switch (m_active_handle)
     {
         using enum Handle;
-        case e_handle_translate_x:  return m_local ? m_drag.initial_world_from_local[0] : glm::dvec3{1.0, 0.0, 0.0};
-        case e_handle_translate_y:  return m_local ? m_drag.initial_world_from_local[1] : glm::dvec3{0.0, 1.0, 0.0};
-        case e_handle_translate_z:  return m_local ? m_drag.initial_world_from_local[2] : glm::dvec3{0.0, 0.0, 1.0};
-        case e_handle_translate_yz: return m_local ? m_drag.initial_world_from_local[0] : glm::dvec3{1.0, 0.0, 0.0};
-        case e_handle_translate_xz: return m_local ? m_drag.initial_world_from_local[1] : glm::dvec3{0.0, 1.0, 0.0};
-        case e_handle_translate_xy: return m_local ? m_drag.initial_world_from_local[2] : glm::dvec3{0.0, 0.0, 1.0};
-        case e_handle_rotate_x:     return m_local ? m_drag.initial_world_from_local[0] : glm::dvec3{1.0, 0.0, 0.0};
-        case e_handle_rotate_y:     return m_local ? m_drag.initial_world_from_local[1] : glm::dvec3{0.0, 1.0, 0.0};
-        case e_handle_rotate_z:     return m_local ? m_drag.initial_world_from_local[2] : glm::dvec3{0.0, 0.0, 1.0};
+        case e_handle_translate_x:  return m_local ? m_drag.initial_world_from_local[0] : dvec3{1.0, 0.0, 0.0};
+        case e_handle_translate_y:  return m_local ? m_drag.initial_world_from_local[1] : dvec3{0.0, 1.0, 0.0};
+        case e_handle_translate_z:  return m_local ? m_drag.initial_world_from_local[2] : dvec3{0.0, 0.0, 1.0};
+        case e_handle_translate_yz: return m_local ? m_drag.initial_world_from_local[0] : dvec3{1.0, 0.0, 0.0};
+        case e_handle_translate_xz: return m_local ? m_drag.initial_world_from_local[1] : dvec3{0.0, 1.0, 0.0};
+        case e_handle_translate_xy: return m_local ? m_drag.initial_world_from_local[2] : dvec3{0.0, 0.0, 1.0};
+        case e_handle_rotate_x:     return m_local ? m_drag.initial_world_from_local[0] : dvec3{1.0, 0.0, 0.0};
+        case e_handle_rotate_y:     return m_local ? m_drag.initial_world_from_local[1] : dvec3{0.0, 1.0, 0.0};
+        case e_handle_rotate_z:     return m_local ? m_drag.initial_world_from_local[2] : dvec3{0.0, 0.0, 1.0};
         default:
         {
             ERHE_FATAL("bad axis\n");
@@ -566,7 +588,7 @@ void Trs_tool::update_axis_translate()
     const dvec3 P1     = m_drag.initial_position_in_world + drag_world_direction;
     const dvec3 ss_P0  = window->project_to_viewport(P0);
     const dvec3 ss_P1  = window->project_to_viewport(P1);
-    const auto  ss_closest = closest_point<double>(
+    const auto  ss_closest = erhe::toolkit::closest_point<double>(
         dvec2{ss_P0},
         dvec2{ss_P1},
         dvec2{m_pointer_context->position_in_viewport_window().value()}
@@ -580,7 +602,7 @@ void Trs_tool::update_axis_translate()
         {
             const auto R0 = R0_opt.value();
             const auto R1 = R1_opt.value();
-            const auto closest_points_r = closest_points<double>(P0, P1, R0, R1);
+            const auto closest_points_r = erhe::toolkit::closest_points<double>(P0, P1, R0, R1);
             if (closest_points_r.has_value())
             {
                 update_axis_translate_final(closest_points_r.value().P);
@@ -595,7 +617,7 @@ void Trs_tool::update_axis_translate()
         {
             const auto Q0 = Q0_opt.value();
             const auto Q1 = Q1_opt.value();
-            const auto closest_points_q = closest_points<double>(P0, P1, Q0, Q1);
+            const auto closest_points_q = erhe::toolkit::closest_points<double>(P0, P1, Q0, Q1);
             if (closest_points_q.has_value())
             {
                 update_axis_translate_final(closest_points_q.value().P);
@@ -604,11 +626,11 @@ void Trs_tool::update_axis_translate()
     }
 }
 
-void Trs_tool::update_axis_translate_final(const glm::dvec3 drag_position_in_world)
+void Trs_tool::update_axis_translate_final(const dvec3 drag_position_in_world)
 {
     const dvec3 translation_vector  = drag_position_in_world - m_drag.initial_position_in_world;
     const dvec3 snapped_translation = snap_translate(translation_vector);
-    const dmat4 translation         = create_translation<double>(snapped_translation);
+    const dmat4 translation         = erhe::toolkit::create_translation<double>(snapped_translation);
     const dmat4 world_from_node     = translation * m_drag.initial_world_from_local;
 
     set_node_world_transform(world_from_node);
@@ -648,7 +670,7 @@ auto Trs_tool::is_rotate_active() const -> bool
         (m_active_handle == Handle::e_handle_rotate_z);
 }
 
-auto Trs_tool::snap_translate(const glm::dvec3 in_translation) const -> glm::dvec3
+auto Trs_tool::snap_translate(const dvec3 in_translation) const -> dvec3
 {
     if (!m_translate_snap_enable)
     {
@@ -663,7 +685,7 @@ auto Trs_tool::snap_translate(const glm::dvec3 in_translation) const -> glm::dve
     const double y    = is_y_translate_active() ? std::floor((in_y + snap * 0.5) / snap) * snap : in_y;
     const double z    = is_z_translate_active() ? std::floor((in_z + snap * 0.5) / snap) * snap : in_z;
 
-    return glm::dvec3{
+    return dvec3{
         x,
         y,
         z
@@ -687,11 +709,11 @@ auto Trs_tool::get_plane_normal(const bool world) const -> dvec3
     {
         using enum Handle;
         case e_handle_rotate_x:
-        case e_handle_translate_yz: return world ? glm::dvec3{1.0, 0.0, 0.0} : m_drag.initial_world_from_local[0];
+        case e_handle_translate_yz: return world ? dvec3{1.0, 0.0, 0.0} : m_drag.initial_world_from_local[0];
         case e_handle_rotate_y:
-        case e_handle_translate_xz: return world ? glm::dvec3{0.0, 1.0, 0.0} : m_drag.initial_world_from_local[1];
+        case e_handle_translate_xz: return world ? dvec3{0.0, 1.0, 0.0} : m_drag.initial_world_from_local[1];
         case e_handle_rotate_z:
-        case e_handle_translate_xy: return world ? glm::dvec3{0.0, 0.0, 1.0} : m_drag.initial_world_from_local[2];
+        case e_handle_translate_xy: return world ? dvec3{0.0, 0.0, 1.0} : m_drag.initial_world_from_local[2];
         default:
             ERHE_FATAL("bad handle for plane %04x\n", static_cast<unsigned int>(m_active_handle));
             break;
@@ -704,11 +726,11 @@ auto Trs_tool::get_plane_side(const bool world) const -> dvec3
     {
         using enum Handle;
         case e_handle_rotate_x:
-        case e_handle_translate_yz: return world ? glm::dvec3{0.0, 1.0, 0.0} : m_drag.initial_world_from_local[1];
+        case e_handle_translate_yz: return world ? dvec3{0.0, 1.0, 0.0} : m_drag.initial_world_from_local[1];
         case e_handle_rotate_y:
-        case e_handle_translate_xz: return world ? glm::dvec3{0.0, 0.0, 1.0} : m_drag.initial_world_from_local[2];
+        case e_handle_translate_xz: return world ? dvec3{0.0, 0.0, 1.0} : m_drag.initial_world_from_local[2];
         case e_handle_rotate_z:
-        case e_handle_translate_xy: return world ? glm::dvec3{1.0, 0.0, 0.0} : m_drag.initial_world_from_local[0];
+        case e_handle_translate_xy: return world ? dvec3{1.0, 0.0, 0.0} : m_drag.initial_world_from_local[0];
         default:
             ERHE_FATAL("bad handle for plane %04x\n", static_cast<unsigned int>(m_active_handle));
             break;
@@ -734,7 +756,7 @@ void Trs_tool::update_plane_translate()
     const dvec3 Q1 = Q1_opt.value();
     const dvec3 v  = normalize(Q1 - Q0);
 
-    const auto intersection = intersect_plane<double>(world_n, p0, Q0, v);
+    const auto intersection = erhe::toolkit::intersect_plane<double>(world_n, p0, Q0, v);
     if (!intersection.has_value())
     {
         return;
@@ -743,7 +765,7 @@ void Trs_tool::update_plane_translate()
     const dvec3 drag_point_new_position_in_world = Q0 + intersection.value() * v;
     const dvec3 translation_vector               = drag_point_new_position_in_world - m_drag.initial_position_in_world;
     const dvec3 snapped_translation              = snap_translate(translation_vector);
-    const dmat4 translation                      = create_translation<double>(snapped_translation);
+    const dmat4 translation                      = erhe::toolkit::create_translation<double>(snapped_translation);
     const dmat4 world_from_node                  = translation * m_drag.initial_world_from_local;
 
     set_node_world_transform(world_from_node);
@@ -782,7 +804,7 @@ auto Trs_tool::project_to_offset_plane(
     }
 }
 
-auto Trs_tool::project_pointer_to_plane(const dvec3 n, const dvec3 p) -> std::optional<glm::dvec3>
+auto Trs_tool::project_pointer_to_plane(const dvec3 n, const dvec3 p) -> std::optional<dvec3>
 {
     const auto near_opt = m_pointer_context->position_in_world(0.0);
     const auto far_opt  = m_pointer_context->position_in_world(1.0);
@@ -797,7 +819,7 @@ auto Trs_tool::project_pointer_to_plane(const dvec3 n, const dvec3 p) -> std::op
     const dvec3 q0           = near_opt.value();
     const dvec3 q1           = far_opt .value();
     const dvec3 v            = normalize(q1 - q0);
-    const auto  intersection = intersect_plane<double>(n, p, q0, v);
+    const auto  intersection = erhe::toolkit::intersect_plane<double>(n, p, q0, v);
     if (intersection.has_value())
     {
         return q0 + intersection.value() * v;
@@ -883,13 +905,13 @@ void Trs_tool::update_rotate_final()
 {
     Expects(m_rotation.intersection.has_value());
 
-    const dvec3  q_                     = normalize                 (m_rotation.intersection.value() - m_rotation.center_of_rotation);
-    const double angle                  = angle_of_rotation<double> (q_, m_rotation.normal, m_rotation.reference_direction);
-    const double snapped_angle          = snap_rotate               (angle);
-    const dvec3  rotation_axis_in_world = get_axis_direction        ();
-    const dmat4  rotation               = create_rotation<double>   (snapped_angle, rotation_axis_in_world);
-    const dmat4  translate              = create_translation<double>(dvec3{-m_rotation.center_of_rotation});
-    const dmat4  untranslate            = create_translation<double>(dvec3{ m_rotation.center_of_rotation});
+    const dvec3  q_                     = normalize                                (m_rotation.intersection.value() - m_rotation.center_of_rotation);
+    const double angle                  = erhe::toolkit::angle_of_rotation<double> (q_, m_rotation.normal, m_rotation.reference_direction);
+    const double snapped_angle          = snap_rotate                              (angle);
+    const dvec3  rotation_axis_in_world = get_axis_direction                       ();
+    const dmat4  rotation               = erhe::toolkit::create_rotation<double>   (snapped_angle, rotation_axis_in_world);
+    const dmat4  translate              = erhe::toolkit::create_translation<double>(dvec3{-m_rotation.center_of_rotation});
+    const dmat4  untranslate            = erhe::toolkit::create_translation<double>(dvec3{ m_rotation.center_of_rotation});
     const dmat4  world_from_node        = untranslate * rotation * translate * m_drag.initial_world_from_local;
 
     m_rotation.current_angle = angle;
@@ -900,7 +922,7 @@ void Trs_tool::update_rotate_final()
     m_touched = true;
 }
 
-void Trs_tool::set_node_world_transform(const glm::dmat4 world_from_node)
+void Trs_tool::set_node_world_transform(const dmat4 world_from_node)
 {
     const dmat4 parent_from_world = (root()->parent() != nullptr)
         ? dmat4{root()->parent()->node_from_world()} * world_from_node
@@ -973,7 +995,7 @@ void Trs_tool::tool_render(const Render_context& context)
 
     {
         const int sector_count = m_rotate_snap_enable
-            ? static_cast<int>(two_pi<double>() / glm::radians(double{m_rotate_snap}))
+            ? static_cast<int>(glm::two_pi<double>() / glm::radians(double{m_rotate_snap}))
             : 80;
         std::vector<vec3> positions;
 
@@ -981,7 +1003,7 @@ void Trs_tool::tool_render(const Render_context& context)
         for (int i = 0; i < sector_count + 1; ++i)
         {
             const double rel   = static_cast<double>(i) / static_cast<double>(sector_count);
-            const double theta = rel * two_pi<double>();
+            const double theta = rel * glm::two_pi<double>();
             const bool   first = (i == 0);
             const bool   major = (i % 10 == 0);
             const double r0    =
@@ -1020,7 +1042,7 @@ void Trs_tool::tool_render(const Render_context& context)
         for (int i = 0; i < sector_count + 1; ++i)
         {
             const double rel   = static_cast<double>(i) / static_cast<double>(sector_count);
-            const double theta = rel * two_pi<double>();
+            const double theta = rel * glm::two_pi<double>();
             positions.emplace_back(
                 p +
                 r1 * std::cos(theta) * side1 +
@@ -1091,7 +1113,7 @@ void Trs_tool::end_drag()
     }
 }
 
-auto Trs_tool::get_handle(Mesh* mesh) const -> Trs_tool::Handle
+auto Trs_tool::get_handle(erhe::scene::Mesh* mesh) const -> Trs_tool::Handle
 {
     const auto i = m_handles.find(mesh);
     if (i == m_handles.end())
@@ -1153,7 +1175,7 @@ void Trs_tool::Visualization::update_transforms(const uint64_t serial)
 
     auto world_from_root_transform = local
         ? root->world_from_node_transform()
-        : Transform::create_translation(root->position_in_world());
+        : erhe::scene::Transform::create_translation(root->position_in_world());
 
     const mat4 scaling = erhe::toolkit::create_scale<float>(scale * view_distance / 100.0f);
     world_from_root_transform.catenate(scaling);

@@ -146,7 +146,7 @@ auto Programs::make_program(
     }
     create_info.extensions = extensions;
 
-    Shader_stages::Prototype prototype(create_info);
+    Shader_stages::Prototype prototype{create_info};
     ERHE_VERIFY(prototype.is_valid());
     auto p = std::make_unique<Shader_stages>(std::move(prototype));
 

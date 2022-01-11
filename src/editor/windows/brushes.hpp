@@ -27,7 +27,7 @@ namespace Physics
 
 namespace erhe::primitive
 {
-    class Build_info_set;
+    class Build_info;
     class Material;
     class Primitive_geometry;
 }
@@ -87,13 +87,8 @@ private:
 class Brush_create_context
 {
 public:
-    explicit Brush_create_context(
-        erhe::primitive::Build_info_set&    build_info_set,
-        const erhe::primitive::Normal_style normal_style = erhe::primitive::Normal_style::corner_normals
-    );
-
-    erhe::primitive::Build_info_set& build_info_set;
-    erhe::primitive::Normal_style    normal_style{erhe::primitive::Normal_style::corner_normals};
+    erhe::primitive::Build_info&  build_info;
+    erhe::primitive::Normal_style normal_style{erhe::primitive::Normal_style::corner_normals};
 };
 
 class Brushes
@@ -133,7 +128,7 @@ public:
     void on_motion       ();
 
     [[nodiscard]] auto allocate_brush(
-        erhe::primitive::Build_info_set& build_info_set
+        erhe::primitive::Build_info& build_info
     ) -> std::shared_ptr<Brush>;
 
     [[nodiscard]] auto make_brush(
@@ -149,10 +144,10 @@ public:
     ) -> std::shared_ptr<Brush>;
 
     [[nodiscard]] auto make_brush(
-        std::shared_ptr<erhe::geometry::Geometry> geometry,
-        const Brush_create_context&               context,
-        Collision_volume_calculator               collision_volume_calculator,
-        Collision_shape_generator                 collision_shape_generator
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry,
+        const Brush_create_context&                      context,
+        const Collision_volume_calculator                collision_volume_calculator,
+        const Collision_shape_generator                  collision_shape_generator
     ) -> std::shared_ptr<Brush>;
 
 private:

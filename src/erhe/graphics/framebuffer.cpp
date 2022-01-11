@@ -12,7 +12,10 @@ namespace erhe::graphics
 
 namespace {
 
-void dump_fbo_attachment(int fbo_name, gl::Framebuffer_attachment attachment)
+void dump_fbo_attachment(
+    int                        fbo_name,
+    gl::Framebuffer_attachment attachment
+)
 {
     int type{0};
     gl::get_named_framebuffer_attachment_parameter_iv(
@@ -113,7 +116,7 @@ void Framebuffer::Create_info::attach(
 Framebuffer::Framebuffer(const Create_info& create_info)
     : m_attachments{create_info.attachments}
 {
-    std::lock_guard lock{s_mutex};
+    const std::lock_guard lock{s_mutex};
 
     s_all_framebuffers.push_back(this);
 
@@ -122,7 +125,7 @@ Framebuffer::Framebuffer(const Create_info& create_info)
 
 Framebuffer::~Framebuffer()
 {
-    std::lock_guard lock{s_mutex};
+    const std::lock_guard lock{s_mutex};
 
     s_all_framebuffers.erase(
         std::remove(
@@ -136,7 +139,7 @@ Framebuffer::~Framebuffer()
 
 void Framebuffer::on_thread_enter()
 {
-    std::lock_guard lock{s_mutex};
+    const std::lock_guard lock{s_mutex};
 
     for (auto* framebuffer : s_all_framebuffers)
     {
@@ -149,7 +152,7 @@ void Framebuffer::on_thread_enter()
 
 void Framebuffer::on_thread_exit()
 {
-    std::lock_guard lock{s_mutex};
+    const std::lock_guard lock{s_mutex};
 
     gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, 0);
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);

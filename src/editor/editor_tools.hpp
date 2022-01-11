@@ -2,8 +2,6 @@
 
 #include "erhe/components/component.hpp"
 
-//#include <imgui.h>
-
 #include <gsl/gsl>
 
 namespace editor {
@@ -34,7 +32,7 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect             () override;
+    void connect() override;
 
     // Public API
     void render_tools            (const Render_context& context);

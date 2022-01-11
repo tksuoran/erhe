@@ -77,7 +77,7 @@ class Scene_root
 public:
     static constexpr std::string_view c_name{"Scene_root"};
     static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
-    
+
     Scene_root ();
     ~Scene_root() override;
 

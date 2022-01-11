@@ -5,6 +5,8 @@
 
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/png_loader.hpp"
+#include "erhe/gl/gl.hpp"
+#include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/window.hpp"
 
@@ -75,7 +77,7 @@ auto Window::create_gl_window() -> bool
                 glfwSetWindowIcon(
                     reinterpret_cast<GLFWwindow*>(
                         m_context_window->get_glfw_window()
-                    ), 
+                    ),
                     1,
                     &icons[0]
                 );
@@ -87,6 +89,13 @@ auto Window::create_gl_window() -> bool
     ERHE_PROFILE_GPU_CONTEXT
 
     erhe::graphics::Instance::initialize();
+
+    for (size_t i = 0; i < 3; ++i)
+    {
+        gl::clear_color(0.0f, 0.0f, 0.0f, 1.0f);
+        gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
+        m_context_window->swap_buffers();
+    }
 
     log_startup.info("Created OpenGL Window\n");
 

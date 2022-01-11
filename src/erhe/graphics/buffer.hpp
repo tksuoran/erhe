@@ -109,7 +109,7 @@ public:
 ) noexcept -> bool;
 
 [[nodiscard]] auto operator!=(
-    const Buffer& lhs, 
+    const Buffer& lhs,
     const Buffer& rhs
 ) noexcept -> bool;
 

@@ -13,7 +13,7 @@ void Geometry::for_each_corner(std::function<void(Corner_context&)> callback)
     {
         Corner& corner = corners[corner_id];
         Corner_context context{
-            .corner_id = corner_id, 
+            .corner_id = corner_id,
             .corner    = corner
         };
         callback(context);
@@ -101,7 +101,7 @@ void Geometry::for_each_polygon(std::function<void(Polygon_context&)> callback)
     {
         Polygon& polygon = polygons[polygon_id];
         Polygon_context context{
-            .polygon_id = polygon_id, 
+            .polygon_id = polygon_id,
             .polygon    = polygon
         };
         callback(context);
@@ -166,7 +166,7 @@ void Geometry::for_each_edge_const(std::function<void(Edge_context_const&)> call
     {
         const Edge& edge = edges[edge_id];
         Edge_context_const context{
-            .edge_id = edge_id, 
+            .edge_id = edge_id,
             .edge    = edge
         };
         callback(context);

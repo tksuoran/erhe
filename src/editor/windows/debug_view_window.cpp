@@ -15,8 +15,8 @@
 namespace editor
 {
 
-using namespace erhe::graphics;
-using namespace std;
+using erhe::graphics::Framebuffer;
+using erhe::graphics::Texture;
 
 Debug_view_window::Debug_view_window()
     : erhe::components::Component{c_name}
@@ -29,7 +29,7 @@ Debug_view_window::~Debug_view_window() = default;
 void Debug_view_window::connect()
 {
     m_id_renderer            = get<Id_renderer>();
-    m_pipeline_state_tracker = erhe::components::Component::get<OpenGL_state_tracker>();
+    m_pipeline_state_tracker = erhe::components::Component::get<erhe::graphics::OpenGL_state_tracker>();
     m_programs               = require<Programs>();
     m_shadow_renderer        = get<Shadow_renderer>();
 
@@ -151,7 +151,7 @@ void Debug_view_window::render()
     );
 
      m_pipeline_state_tracker->execute(&m_pipeline);
-    
+
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
     gl::viewport   (m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
 

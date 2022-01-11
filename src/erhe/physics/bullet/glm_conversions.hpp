@@ -20,12 +20,6 @@ inline [[nodiscard]] auto to_bullet(const glm::vec3 v) -> btVector3
 
 inline [[nodiscard]] auto from_bullet(const btMatrix3x3 m) -> glm::mat3
 {
-    //return glm::mat3{
-    //    m.getColumn(0).x(), m.getColumn(1).x(), m.getColumn(2).x(),
-    //    m.getColumn(0).y(), m.getColumn(1).y(), m.getColumn(2).y(),
-    //    m.getColumn(0).z(), m.getColumn(1).z(), m.getColumn(2).z()
-    //};
-
     return glm::mat3{
         m.getColumn(0).x(), m.getColumn(0).y(), m.getColumn(0).z(),
         m.getColumn(1).x(), m.getColumn(1).y(), m.getColumn(1).z(),
@@ -40,12 +34,6 @@ inline [[nodiscard]] auto to_bullet(const glm::mat3 m) -> btMatrix3x3
         m[0][1], m[1][1], m[2][1],
         m[0][2], m[1][2], m[2][2]
     };
-
-    //return btMatrix3x3{
-    //    m[0][0], m[0][1], m[0][2], 
-    //    m[1][0], m[1][1], m[1][2], 
-    //    m[2][0], m[2][1], m[2][2]
-    //};
 }
 
 inline [[nodiscard]] auto from_bullet(const btTransform t) -> Transform

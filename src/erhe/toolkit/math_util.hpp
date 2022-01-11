@@ -369,7 +369,7 @@ template <typename T>
     const typename vector_types<T>::vec2 t
 ) -> typename vector_types<T>::mat4
 {
-    return typename vector_types<T>::mat4{ 
+    return typename vector_types<T>::mat4{
         T{1.0}, T{0.0}, T{0.0}, T{0.0},
         T{0.0}, T{1.0}, T{0.0}, T{0.0},
         T{0.0}, T{0.0}, T{1.0}, T{0.0},
@@ -382,7 +382,7 @@ template <typename T>
     const typename vector_types<T>::vec3 t
 ) -> typename vector_types<T>::mat4
 {
-    return typename vector_types<T>::mat4{ 
+    return typename vector_types<T>::mat4{
         T{1.0}, T{0.0}, T{0.0}, T{0.0},
         T{0.0}, T{1.0}, T{0.0}, T{0.0},
         T{0.0}, T{0.0}, T{1.0}, T{0.0},
@@ -397,7 +397,7 @@ template <typename T>
     const T z
 ) -> typename vector_types<T>::mat4
 {
-    return typename vector_types<T>::mat4{ 
+    return typename vector_types<T>::mat4{
         T{1.0}, T{0.0}, T{0.0}, T{0.0},
         T{0.0}, T{1.0}, T{0.0}, T{0.0},
         T{0.0}, T{0.0}, T{1.0}, T{0.0},
@@ -448,7 +448,7 @@ template <typename T>
     const T z
 ) -> typename vector_types<T>::mat4
 {
-    return typename vector_types<T>::mat4{ 
+    return typename vector_types<T>::mat4{
         x,      T{0.0}, T{0.0}, T{0.0},
         T{0.0}, y,      T{0.0}, T{0.0},
         T{0.0}, T{0.0}, z,      T{0.0},
@@ -461,7 +461,7 @@ template <typename T>
     const typename vector_types<T>::vec3 s
 ) -> typename vector_types<T>::mat4
 {
-    return typename vector_types<T>::mat4{ 
+    return typename vector_types<T>::mat4{
         s.x,    T{0.0}, T{0.0}, T{0.0},
         T{0.0}, s.y,    T{0.0}, T{0.0},
         T{0.0}, T{0.0}, s.z,    T{0.0},
@@ -474,7 +474,7 @@ template <typename T>
     const T s
 ) -> typename vector_types<T>::mat4
 {
-    return typename vector_types<T>::mat4{ 
+    return typename vector_types<T>::mat4{
         s,      T{0.0}, T{0.0}, T{0.0},
         T{0.0}, s,      T{0.0}, T{0.0},
         T{0.0}, T{0.0}, s,      T{0.0},

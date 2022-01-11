@@ -69,7 +69,7 @@ void Layers_window::imgui()
                 m_icon_set->icon(*mesh.get());
                 ImGui::TreeNodeEx(
                     mesh->name().c_str(),
-                    leaf_flags | 
+                    leaf_flags |
                     (
                         mesh->is_selected()
                             ? ImGuiTreeNodeFlags_Selected

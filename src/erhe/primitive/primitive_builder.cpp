@@ -351,7 +351,7 @@ void Build_context_root::calculate_bounding_box(
     );
 }
 
-Primitive_geometry Primitive_builder::build()
+auto Primitive_builder::build() -> Primitive_geometry
 {
     Primitive_geometry primitive_geometry;
     build(&primitive_geometry);
@@ -442,7 +442,7 @@ void Build_context::build_polygon_id()
     }
 }
 
-auto Build_context::get_polygon_normal() -> glm::vec3
+auto Build_context::get_polygon_normal() -> vec3
 {
     vec3 polygon_normal{0.0f, 1.0f, 0.0f};
     if (property_maps.polygon_normals != nullptr)
@@ -666,7 +666,7 @@ void Build_context::build_vertex_texcoord()
 //     {0.0f, 0.7f, 0.7f}, // 10
 //     {0.7f, 0.7f, 0.7f}  // 11
 // };
-// 
+//
 // }
 
 void Build_context::build_vertex_color(const uint32_t /*polygon_corner_count*/)

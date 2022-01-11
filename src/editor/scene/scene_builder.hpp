@@ -63,7 +63,7 @@ public:
     ~Scene_builder() override;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -82,12 +82,14 @@ public:
         const glm::vec3        position,
         const glm::vec3        look_at = glm::vec3{0.0f, 0.0f, 0.0f}
     ) -> std::shared_ptr<erhe::scene::Camera>;
+
     auto make_directional_light(
         const std::string_view name,
         const glm::vec3        position,
         const glm::vec3        color,
         const float            intensity
     ) -> std::shared_ptr<erhe::scene::Light>;
+
     auto make_spot_light(
         const std::string_view name,
         const glm::vec3        position,
@@ -115,17 +117,16 @@ public:
     }
 
 private:
-    [[nodiscard]] auto build_info_set       () -> erhe::primitive::Build_info_set&;
+    [[nodiscard]] auto build_info           () -> erhe::primitive::Build_info&;
     [[nodiscard]] auto buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&;
 
-    void setup_cameras        ();
-    void animate_lights       (double time_d);
-
-    void add_room             ();
-    void make_brushes         ();
-    void make_mesh_nodes      ();
-    void make_cube_benchmark  ();
-    void setup_lights         ();
+    void setup_cameras      ();
+    void animate_lights     (const double time_d);
+    void add_room           ();
+    void make_brushes       ();
+    void make_mesh_nodes    ();
+    void make_cube_benchmark();
+    void setup_lights       ();
 
     // Component dependencies
     std::shared_ptr<Brushes>     m_brushes;

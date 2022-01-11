@@ -26,13 +26,13 @@ public:
     ~Shader_monitor() override;
 
     // Implements Component
-    [[nodiscard]]
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void initialize_component() override;
 
     // Implements IUpdate_once_per_frame
     void update_once_per_frame(const erhe::components::Time_context& time_context) override;
 
+    // Public API
     void add(
         erhe::graphics::Shader_stages::Create_info    create_info,
         gsl::not_null<erhe::graphics::Shader_stages*> program
@@ -72,8 +72,7 @@ private:
     class Compare_object
     {
     public:
-        [[nodiscard]]
-        auto operator()(
+        [[nodiscard]] auto operator()(
             const Reload_entry& lhs,
             const Reload_entry& rhs
         ) const -> bool

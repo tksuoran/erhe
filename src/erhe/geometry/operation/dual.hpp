@@ -10,7 +10,11 @@ class Dual
     : public Geometry_operation
 {
 public:
-    Dual(Geometry& source, Geometry& destination, bool post_process = true);
+    Dual(
+        Geometry& source,
+        Geometry& destination,
+        bool post_process = true
+    );
 };
 
 [[nodiscard]] auto dual(

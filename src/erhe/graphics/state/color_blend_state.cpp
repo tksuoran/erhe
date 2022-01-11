@@ -20,7 +20,7 @@ Color_blend_state::Color_blend_state(
     bool                  color_write_mask_red,
     bool                  color_write_mask_green,
     bool                  color_write_mask_blue,
-    bool                  color_write_mask_alpha 
+    bool                  color_write_mask_alpha
 )
     : serial                {get_next_serial()}
     , enabled               {enabled}

@@ -31,13 +31,10 @@
 namespace editor
 {
 
-using namespace erhe::toolkit;
-using namespace erhe::graphics;
-using namespace erhe::scene;
-using namespace erhe::primitive;
-using namespace gl;
-using namespace glm;
-using namespace std;
+using erhe::graphics::Framebuffer;
+using erhe::graphics::Renderbuffer;
+using erhe::graphics::Texture;
+using glm::mat4;
 
 Id_renderer::Id_renderer()
     : erhe::components::Component{c_name}
@@ -55,7 +52,7 @@ void Id_renderer::connect()
     require<Gl_context_provider>();
     require<Program_interface>();
 
-    m_pipeline_state_tracker = erhe::components::Component::get<OpenGL_state_tracker>();
+    m_pipeline_state_tracker = erhe::components::Component::get<erhe::graphics::OpenGL_state_tracker>();
     m_mesh_memory            = require<Mesh_memory>();
     m_programs               = require<Programs>();
 }
@@ -209,7 +206,9 @@ void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
     }
 }
 
-void Id_renderer::render_layer(const erhe::scene::Mesh_layer& mesh_layer)
+void Id_renderer::render_layer(
+    const erhe::scene::Mesh_layer& mesh_layer
+)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -227,7 +226,7 @@ void Id_renderer::render_layer(const erhe::scene::Mesh_layer& mesh_layer)
     update_primitive_buffer(mesh_layer, id_filter, true);
     auto draw_indirect_buffer_range = update_draw_indirect_buffer(
         mesh_layer,
-        Primitive_mode::polygon_fill,
+        erhe::primitive::Primitive_mode::polygon_fill,
         id_filter
     );
     if (draw_indirect_buffer_range.draw_indirect_count == 0)
@@ -249,16 +248,16 @@ void Id_renderer::render_layer(const erhe::scene::Mesh_layer& mesh_layer)
     m_layer_ranges.emplace_back(layer_range);
 }
 
-//static constexpr std::string_view c_id_renderer_render_clear  {"Id_renderer::render() clear"  };
+static constexpr std::string_view c_id_renderer_render_clear  {"Id_renderer::render() clear"  };
 static constexpr std::string_view c_id_renderer_render_content{"Id_renderer::render() content"};
-//static constexpr std::string_view c_id_renderer_render_tool   {"Id_renderer::render() tool"   };
-//static constexpr std::string_view c_id_renderer_render_read   {"Id_renderer::render() read"   };
+static constexpr std::string_view c_id_renderer_render_tool   {"Id_renderer::render() tool"   };
+static constexpr std::string_view c_id_renderer_render_read   {"Id_renderer::render() read"   };
 
 void Id_renderer::render(
     const erhe::scene::Viewport  viewport,
     const Mesh_layer_collection& content_mesh_layers,
     const Mesh_layer_collection& tool_mesh_layers,
-    erhe::scene::ICamera&        camera,
+    const erhe::scene::ICamera&  camera,
     const double                 time,
     const int                    x,
     const int                    y
@@ -268,7 +267,10 @@ void Id_renderer::render(
 
     m_ranges.clear();
 
-    if ((viewport.width == 0) || (viewport.height == 0))
+    if (
+        (viewport.width == 0) ||
+        (viewport.height == 0)
+    )
     {
         return;
     }
@@ -342,7 +344,6 @@ void Id_renderer::render(
     }
 
     // Clear depth for tool pixels
-    if constexpr (true)
     {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool.data())
         m_pipeline_state_tracker->execute(&m_selective_depth_clear_pipeline);
@@ -412,7 +413,12 @@ inline T read_as(uint8_t const* raw_memory)
     return result;
 }
 
-bool Id_renderer::get(const int x, const int y, uint32_t& id, float& depth)
+bool Id_renderer::get(
+    const int x,
+    const int y,
+    uint32_t& id,
+    float&    depth
+)
 {
     int slot = static_cast<int>(m_current_id_frame_resource_slot);
 
@@ -465,7 +471,11 @@ bool Id_renderer::get(const int x, const int y, uint32_t& id, float& depth)
     return false;
 }
 
-auto Id_renderer::get(const int x, const int y, float& depth) -> Id_renderer::Mesh_primitive
+auto Id_renderer::get(
+    const int x,
+    const int y,
+    float&    depth
+) -> Id_renderer::Mesh_primitive
 {
     Mesh_primitive result;
     uint32_t id{0};

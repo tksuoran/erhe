@@ -53,16 +53,16 @@ Program_interface::Shader_resources::Shader_resources()
     material_block.add_struct("materials", &material_struct, 200);
 
     light_block_offsets = {
-        .directional_light_count = light_block.add_uint  ("directional_light_count"     )->offset_in_parent(),
-        .spot_light_count        = light_block.add_uint  ("spot_light_count"            )->offset_in_parent(),
-        .point_light_count       = light_block.add_uint  ("point_light_count"           )->offset_in_parent(),
-        .reserved                = light_block.add_uint  ("reserved"                    )->offset_in_parent(),
-        .ambient_light           = light_block.add_vec4  ("ambient_light"               )->offset_in_parent(),
+        .directional_light_count = light_block.add_uint("directional_light_count"     )->offset_in_parent(),
+        .spot_light_count        = light_block.add_uint("spot_light_count"            )->offset_in_parent(),
+        .point_light_count       = light_block.add_uint("point_light_count"           )->offset_in_parent(),
+        .reserved                = light_block.add_uint("reserved"                    )->offset_in_parent(),
+        .ambient_light           = light_block.add_vec4("ambient_light"               )->offset_in_parent(),
         .light = {
-            .texture_from_world           = light_struct.add_mat4 ("texture_from_world"          )->offset_in_parent(),
-            .position_and_inner_spot_cos  = light_struct.add_vec4 ("position_and_inner_spot_cos" )->offset_in_parent(),
-            .direction_and_outer_spot_cos = light_struct.add_vec4 ("direction_and_outer_spot_cos")->offset_in_parent(),
-            .radiance_and_range           = light_struct.add_vec4 ("radiance_and_range"          )->offset_in_parent(),
+            .texture_from_world           = light_struct.add_mat4("texture_from_world"          )->offset_in_parent(),
+            .position_and_inner_spot_cos  = light_struct.add_vec4("position_and_inner_spot_cos" )->offset_in_parent(),
+            .direction_and_outer_spot_cos = light_struct.add_vec4("direction_and_outer_spot_cos")->offset_in_parent(),
+            .radiance_and_range           = light_struct.add_vec4("radiance_and_range"          )->offset_in_parent(),
         },
         .light_struct            = light_block.add_struct("lights", &light_struct, c_max_light_count)->offset_in_parent()
     };

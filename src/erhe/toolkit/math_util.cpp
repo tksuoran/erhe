@@ -165,7 +165,7 @@ auto create_projection(
     const float n, const float f, // Near and z_far z clip depths
     const float w, const float h, // Width and height of viewport (at depth vz)
     const vec3  c,                // Center of viewport
-    const vec3  e                 // Center of projection (eye position) 
+    const vec3  e                 // Center of projection (eye position)
 ) -> mat4
 {
     const float flip_handed = -1.0f;

@@ -51,8 +51,7 @@ void Fragment_outputs::add(
     m_outputs.emplace_back(name, type, location);
 }
 
-auto Fragment_outputs::source() const
--> std::string
+auto Fragment_outputs::source() const -> std::string
 {
     std::stringstream ss;
 

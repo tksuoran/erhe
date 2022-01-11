@@ -12,10 +12,6 @@
 
 namespace editor {
 
-using namespace erhe::graphics;
-using namespace erhe::primitive;
-using namespace std;
-
 Mesh_memory::Mesh_memory()
     : Component{c_name}
 {
@@ -40,22 +36,23 @@ void Mesh_memory::initialize_component()
     constexpr size_t vertex_byte_count  = 256 * 1024 * 1024;
     constexpr size_t index_byte_count   =  64 * 1024 * 1024;
 
-    gl_buffer_transfer_queue = make_unique<Buffer_transfer_queue>();
+    gl_buffer_transfer_queue = std::make_unique<erhe::graphics::Buffer_transfer_queue>();
 
     {
         ERHE_PROFILE_SCOPE("GL VBO");
 
-        gl_vertex_buffer = make_shared<erhe::graphics::Buffer>(
+        gl_vertex_buffer = std::make_shared<erhe::graphics::Buffer>(
             gl::Buffer_target::array_buffer,
             vertex_byte_count,
             storage_mask
+
         );
     }
 
     {
         ERHE_PROFILE_SCOPE("GL IBO");
 
-        gl_index_buffer = make_shared<erhe::graphics::Buffer>(
+        gl_index_buffer = std::make_shared<erhe::graphics::Buffer>(
             gl::Buffer_target::element_array_buffer,
             index_byte_count,
             storage_mask
@@ -70,14 +67,14 @@ void Mesh_memory::initialize_component()
         *gl_index_buffer.get()
     );
 
-    build_info_set.gl.buffer.buffer_sink = gl_buffer_sink.get();
+    build_info.buffer.buffer_sink = gl_buffer_sink.get();
 
-    auto& gl_format_info = build_info_set.gl.format;
-    auto& gl_buffer_info = build_info_set.gl.buffer;
+    auto& format_info = build_info.format;
+    auto& buffer_info = build_info.buffer;
 
-    gl_buffer_info.index_type = gl::Draw_elements_type::unsigned_int;
+    buffer_info.index_type = gl::Draw_elements_type::unsigned_int;
 
-    gl_format_info.features = {
+    format_info.features = {
         .fill_triangles   = true,
         .edge_lines       = true,
         .corner_points    = true,
@@ -91,10 +88,20 @@ void Mesh_memory::initialize_component()
         .texcoord         = true,
         .id               = true
     };
-    gl_format_info.normal_style              = Normal_style::corner_normals;
-    gl_format_info.vertex_attribute_mappings = &Component::get<Program_interface>()->shader_resources->attribute_mappings;
+    format_info.normal_style              = erhe::primitive::Normal_style::corner_normals;
+    format_info.vertex_attribute_mappings = &Component::get<Program_interface>()->shader_resources->attribute_mappings;
 
-    Primitive_builder::prepare_vertex_format(build_info_set.gl);
+    erhe::primitive::Primitive_builder::prepare_vertex_format(build_info);
+}
+
+auto Mesh_memory::gl_vertex_format() const -> erhe::graphics::Vertex_format&
+{
+    return *build_info.buffer.vertex_format.get();
+}
+
+auto Mesh_memory::gl_index_type() const -> gl::Draw_elements_type
+{
+    return build_info.buffer.index_type;
 }
 
 }

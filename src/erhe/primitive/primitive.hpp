@@ -35,6 +35,8 @@ public:
     Normal_style                              normal_style{Normal_style::none};
 };
 
-std::optional<gl::Primitive_type> primitive_type(Primitive_mode primitive_mode);
+auto primitive_type(
+    const Primitive_mode primitive_mode
+) -> std::optional<gl::Primitive_type>;
 
 } // namespace erhe::primitive

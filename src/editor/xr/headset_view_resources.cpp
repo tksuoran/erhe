@@ -11,12 +11,11 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/xr/headset.hpp"
 
-//#include <imgui.h>
-
 namespace editor
 {
 
-using namespace erhe::graphics;
+using erhe::graphics::Framebuffer;
+using erhe::graphics::Texture;
 
 Headset_view_resources::Headset_view_resources(
     erhe::xr::Render_view& render_view,
@@ -41,7 +40,7 @@ Headset_view_resources::Headset_view_resources(
     // );
 
     color_texture = std::make_shared<Texture>(
-        Texture_create_info{
+        Texture::Create_info{
             .target            = gl::Texture_target::texture_2d,
             .internal_format   = render_view.color_format,
             .width             = static_cast<int>(render_view.width),
@@ -52,7 +51,7 @@ Headset_view_resources::Headset_view_resources(
     color_texture->set_debug_label(fmt::format("XR color {}", slot));
 
     depth_texture = std::make_shared<Texture>(
-        Texture_create_info{
+        Texture::Create_info{
             .target            = gl::Texture_target::texture_2d,
             .internal_format   = render_view.depth_format,
             .width             = static_cast<int>(render_view.width),
@@ -62,17 +61,9 @@ Headset_view_resources::Headset_view_resources(
     );
     depth_texture->set_debug_label(fmt::format("XR depth {}", slot));
 
-    // depth_stencil_renderbuffer = std::make_unique<Renderbuffer>(
-    //     gl::Internal_format::depth24_stencil8,
-    //     texture_create_info.sample_count,
-    //     render_view.width,
-    //     render_view.height
-    // );
-
     Framebuffer::Create_info create_info;
     create_info.attach(gl::Framebuffer_attachment::color_attachment0, color_texture.get());
     create_info.attach(gl::Framebuffer_attachment::depth_attachment,  depth_texture.get());
-    //create_info.attach(gl::Framebuffer_attachment::stencil_attachment, depth_stencil_renderbuffer.get());
     framebuffer = std::make_unique<Framebuffer>(create_info);
     framebuffer->set_debug_label(fmt::format("XR {}", slot));
 
@@ -82,7 +73,7 @@ Headset_view_resources::Headset_view_resources(
         return;
     }
 
-    gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
+    const gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
     gl::named_framebuffer_draw_buffers(framebuffer->gl_name(), 1, &draw_buffers[0]);
     gl::named_framebuffer_read_buffer (framebuffer->gl_name(), gl::Color_buffer::color_attachment0);
 

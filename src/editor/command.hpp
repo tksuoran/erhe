@@ -39,7 +39,7 @@ public:
     virtual ~Command();
 
     // Virtual interface
-    [[nodiscard]] virtual auto try_call   (Command_context& context) -> bool;
+    [[nodiscard]] virtual auto try_call(Command_context& context) -> bool;
     virtual void try_ready  (Command_context& context);
     virtual void on_inactive(Command_context& context);
 
@@ -68,6 +68,7 @@ public:
         , m_id     {std::move(other.m_id)}
     {
     }
+
     auto operator=(Command_binding&& other) noexcept -> Command_binding&
     {
         m_command = other.m_command;
@@ -94,10 +95,6 @@ public:
         const bool                    pressed,
         const std::optional<uint32_t> modifier_mask
     );
-    //~Key_binding() override;
-
-    //Key_binding(const Key_binding&) = delete;
-    //Key_binding(Key_binding&&) = default`;
 
     auto on_key(
         Command_context&             context,
@@ -117,10 +114,6 @@ class Mouse_binding
 {
 public:
     explicit Mouse_binding(Command* command);
-    //~Mouse_binding() override;
-
-    //Mouse_binding(const Mouse_binding&) = delete;
-    //Mouse_binding(Mouse_binding&&) = default;
 
     virtual auto on_button(
         Command_context&                  context,
@@ -140,7 +133,6 @@ public:
         Command*                          command,
         const erhe::toolkit::Mouse_button button
     );
-    //~Mouse_click_binding() override;
 
     auto on_button(
         Command_context&                  context,
@@ -160,7 +152,6 @@ class Mouse_motion_binding
 {
 public:
     explicit Mouse_motion_binding(Command* command);
-    //~Mouse_motion_binding() override;
 
     auto on_motion(Command_context& context) -> bool override;
 };
@@ -174,7 +165,6 @@ public:
         Command*                          command,
         const erhe::toolkit::Mouse_button button
     );
-    //~Mouse_drag_binding() override;
 
     auto on_button(
         Command_context&                  context,

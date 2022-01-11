@@ -9,11 +9,14 @@
 namespace editor
 {
 
-using namespace erhe::scene;
-using namespace erhe::physics;
-using namespace std;
+using erhe::physics::IRigid_body_create_info;
+using erhe::physics::IRigid_body;
+using erhe::physics::Motion_mode;
+using erhe::scene::INode_attachment;
 
-Node_physics::Node_physics(const IRigid_body_create_info& create_info)
+Node_physics::Node_physics(
+    const IRigid_body_create_info& create_info
+)
     : m_rigidbody_from_node{}
     , m_node_from_rigidbody{}
     , m_rigid_body         {IRigid_body::create_shared(create_info, this)}
@@ -58,7 +61,7 @@ void Node_physics::on_node_transform_changed()
     ERHE_VERIFY(m_rigid_body);
     if (m_rigid_body->get_motion_mode() == Motion_mode::e_static)
     {
-        log_physics.warn("Attempt to move static rigid body - promoting to kinematic.\n");
+        erhe::physics::log_physics.warn("Attempt to move static rigid body - promoting to kinematic.\n");
         m_rigid_body->set_motion_mode(Motion_mode::e_kinematic);
     }
     m_rigid_body->set_world_transform(world_from_node * m_node_from_rigidbody);
@@ -93,12 +96,16 @@ auto Node_physics::get_world_from_node() const -> erhe::physics::Transform
     };
 }
 
-void Node_physics::set_world_from_rigidbody(const erhe::physics::Transform world_from_rigidbody) 
+void Node_physics::set_world_from_rigidbody(
+    const erhe::physics::Transform world_from_rigidbody
+)
 {
     set_world_from_node(world_from_rigidbody * m_rigidbody_from_node);
 }
 
-void Node_physics::set_world_from_node(const erhe::physics::Transform world_from_node) 
+void Node_physics::set_world_from_node(
+    const erhe::physics::Transform world_from_node
+)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -168,7 +175,9 @@ auto as_physics(INode_attachment* attachment) -> Node_physics*
     return reinterpret_cast<Node_physics*>(attachment);
 }
 
-auto as_physics(const std::shared_ptr<INode_attachment>& attachment) -> std::shared_ptr<Node_physics>
+auto as_physics(
+    const std::shared_ptr<INode_attachment>& attachment
+) -> std::shared_ptr<Node_physics>
 {
     if (!attachment)
     {
@@ -181,7 +190,9 @@ auto as_physics(const std::shared_ptr<INode_attachment>& attachment) -> std::sha
     return std::dynamic_pointer_cast<Node_physics>(attachment);
 }
 
-auto get_physics_node(Node* node) -> std::shared_ptr<Node_physics>
+auto get_physics_node(
+    erhe::scene::Node* node
+) -> std::shared_ptr<Node_physics>
 {
     for (const auto& attachment : node->attachments())
     {

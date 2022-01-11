@@ -15,17 +15,17 @@
 
 namespace editor {
 
-using namespace std;
-using namespace erhe::geometry;
-using namespace erhe::scene;
-using namespace erhe::primitive;
-using namespace erhe::physics;
-using namespace std;
+using erhe::scene::Light;
+using erhe::scene::Light_layer;
+using erhe::scene::Mesh;
+using erhe::scene::Mesh_layer;
+using erhe::scene::Scene;
+using erhe::physics::IWorld;
 
 void add_to_scene_layer(
-    Scene&           scene,
-    Mesh_layer&      layer,
-    shared_ptr<Mesh> mesh
+    Scene&                scene,
+    Mesh_layer&           layer,
+    std::shared_ptr<Mesh> mesh
 )
 {
     ERHE_VERIFY(mesh);
@@ -65,9 +65,9 @@ void add_to_scene_layer(
 }
 
 void add_to_scene_layer(
-    Scene&            scene,
-    Light_layer&      layer,
-    shared_ptr<Light> light
+    Scene&                 scene,
+    Light_layer&           layer,
+    std::shared_ptr<Light> light
 )
 {
     ERHE_VERIFY(light);
@@ -106,8 +106,8 @@ void add_to_scene_layer(
 }
 
 void add_to_physics_world(
-    IWorld&                  physics_world,
-    shared_ptr<Node_physics> node_physics
+    IWorld&                       physics_world,
+    std::shared_ptr<Node_physics> node_physics
 )
 {
     ERHE_VERIFY(node_physics);
@@ -129,9 +129,9 @@ void add_to_raytrace_scene(
 }
 
 void remove_from_scene_layer(
-    Scene&           scene,
-    Mesh_layer&      layer,
-    shared_ptr<Mesh> mesh
+    Scene&                scene,
+    Mesh_layer&           layer,
+    std::shared_ptr<Mesh> mesh
 )
 {
     ERHE_VERIFY(mesh);
@@ -139,7 +139,7 @@ void remove_from_scene_layer(
     {
         auto& meshes = layer.meshes;
         const auto i = std::remove(meshes.begin(), meshes.end(), mesh);
-        if (i == meshes.end()) 
+        if (i == meshes.end())
         {
             log_scene.error("mesh {} not in layer meshes\n", mesh->name());
         }
@@ -183,9 +183,9 @@ void remove_from_raytrace_scene(
 }
 
 void remove_from_scene_layer(
-    Scene&            scene,
-    Light_layer&      layer,
-    shared_ptr<Light> light
+    Scene&                 scene,
+    Light_layer&           layer,
+    std::shared_ptr<Light> light
 )
 {
     ERHE_VERIFY(light);

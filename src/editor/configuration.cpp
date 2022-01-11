@@ -50,9 +50,13 @@ auto Configuration::depth_clear_value_pointer() const -> const float*
     return reverse_depth ? &float_zero_value : &float_one_value;
 }
 
-auto Configuration::depth_function(const gl::Depth_function depth_function) const -> gl::Depth_function
+auto Configuration::depth_function(
+    const gl::Depth_function depth_function
+) const -> gl::Depth_function
 {
-    return reverse_depth ? erhe::graphics::reverse(depth_function) : depth_function;
+    return reverse_depth
+        ? erhe::graphics::reverse(depth_function)
+        : depth_function;
 }
 
 } // namespace editor

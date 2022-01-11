@@ -13,6 +13,8 @@ public:
     Ambo(Geometry& source, Geometry& destination);
 };
 
-[[nodiscard]] auto ambo(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto ambo(
+    erhe::geometry::Geometry& source
+) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

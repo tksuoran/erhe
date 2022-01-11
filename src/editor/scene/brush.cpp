@@ -20,12 +20,18 @@
 namespace editor
 {
 
-using namespace erhe::geometry;
 using erhe::geometry::Polygon; // Resolve conflict with wingdi.h BOOL Polygon(HDC,const POINT *,int)
-using namespace erhe::primitive;
-using namespace erhe::scene;
-using namespace std;
-using namespace glm;
+using erhe::geometry::c_polygon_centroids;
+using erhe::geometry::c_polygon_normals;
+using erhe::geometry::c_point_locations;
+using erhe::geometry::Corner_id;
+using erhe::geometry::Point_id;
+using erhe::geometry::Polygon_id;
+using glm::mat4;
+using glm::vec3;
+using glm::vec4;
+
+Reference_frame::Reference_frame() = default;
 
 Reference_frame::Reference_frame(
     const erhe::geometry::Geometry& geometry,
@@ -68,9 +74,9 @@ void Reference_frame::transform_by(const mat4 m)
     B        = m * vec4{B, 0.0f};
     T        = m * vec4{T, 0.0f};
     N        = m * vec4{N, 0.0f};
-    B        = normalize(cross(N, T));
-    N        = normalize(cross(T, B));
-    T        = normalize(cross(B, N));
+    B        = glm::normalize(cross(N, T));
+    N        = glm::normalize(cross(T, B));
+    T        = glm::normalize(cross(B, N));
 }
 
 auto Reference_frame::scale() const -> float
@@ -88,8 +94,8 @@ auto Reference_frame::transform() const -> mat4
     };
 }
 
-Brush::Brush(erhe::primitive::Build_info_set& build_info_set)
-    : build_info_set{build_info_set}
+Brush::Brush(erhe::primitive::Build_info& build_info)
+    : build_info{build_info}
 {
 }
 
@@ -98,7 +104,7 @@ void Brush::initialize(const Create_info& create_info)
     ERHE_PROFILE_FUNCTION
 
     geometry                    = create_info.geometry;
-    build_info_set              = create_info.build_info_set;
+    build_info                  = create_info.build_info;
     normal_style                = create_info.normal_style;
     density                     = create_info.density;
     volume                      = create_info.volume;
@@ -113,7 +119,7 @@ void Brush::initialize(const Create_info& create_info)
 
         gl_primitive_geometry = make_primitive(
             *create_info.geometry.get(),
-            build_info_set.gl,
+            build_info,
             normal_style
         );
     }
@@ -128,7 +134,9 @@ void Brush::initialize(const Create_info& create_info)
         ERHE_PROFILE_SCOPE("make brush concex hull collision shape");
 
         this->collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
-            reinterpret_cast<const float*>(geometry->point_attributes().find<vec3>(c_point_locations)->values.data()),
+            reinterpret_cast<const float*>(
+                geometry->point_attributes().find<vec3>(c_point_locations)->values.data()
+            ),
             static_cast<int>(geometry->get_point_count()),
             static_cast<int>(sizeof(vec3))
         );
@@ -144,7 +152,7 @@ void Brush::initialize(const Create_info& create_info)
 
 Brush::Brush(const Create_info& create_info)
     : geometry                   {create_info.geometry}
-    , build_info_set             {create_info.build_info_set}
+    , build_info                 {create_info.build_info}
     , normal_style               {create_info.normal_style}
     , collision_shape            {create_info.collision_shape}
     , collision_volume_calculator{create_info.collision_volume_calculator}
@@ -161,7 +169,7 @@ Brush::Brush(const Create_info& create_info)
 
         gl_primitive_geometry = make_primitive(
             *create_info.geometry.get(),
-            build_info_set.gl,
+            build_info,
             normal_style
         );
     }
@@ -173,7 +181,11 @@ Brush::Brush(const Create_info& create_info)
         ERHE_PROFILE_SCOPE("make brush concex hull collision shape");
 
         this->collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
-            reinterpret_cast<const float*>(geometry->point_attributes().find<vec3>(c_point_locations)->values.data()),
+            reinterpret_cast<const float*>(
+                geometry->point_attributes().find<vec3>(
+                    c_point_locations
+                )->values.data()
+            ),
             static_cast<int>(geometry->get_point_count()),
             static_cast<int>(sizeof(vec3))
         );
@@ -189,7 +201,7 @@ Brush::Brush(const Create_info& create_info)
 
 Brush::Brush(Brush&& other) noexcept
     : geometry                   {std::move(other.geometry)}
-    , build_info_set             {other.build_info_set}
+    , build_info                 {other.build_info}
     , gl_primitive_geometry      {std::move(other.gl_primitive_geometry)}
     , rt_primitive               {std::move(other.rt_primitive)}
     , normal_style               {other.normal_style}
@@ -315,7 +327,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
 
     auto scaled_gl_primitive_geometry = make_primitive(
         *scaled_geometry.get(),
-        build_info_set.gl,
+        build_info,
         normal_style
     );
 
@@ -394,9 +406,9 @@ auto Brush::make_instance(
 
     ERHE_VERIFY(scaled.rt_primitive);
 
-    auto mesh = std::make_shared<Mesh>(name);
+    auto mesh = std::make_shared<erhe::scene::Mesh>(name);
     mesh->data.primitives.push_back(
-        Primitive{
+        erhe::primitive::Primitive{
             .material              = material,
             .gl_primitive_geometry = scaled.gl_primitive_geometry,
             .rt_primitive_geometry = scaled.rt_primitive->primitive_geometry,
@@ -414,13 +426,13 @@ auto Brush::make_instance(
     {
         ERHE_PROFILE_SCOPE("make brush node physics");
 
-        erhe::physics::IRigid_body_create_info create_info{
-            density * scaled.volume,
-            scaled.collision_shape,
-            scaled.local_inertia
+        const erhe::physics::IRigid_body_create_info create_info{
+            .mass            = density * scaled.volume,
+            .collision_shape = scaled.collision_shape,
+            .local_inertia   = scaled.local_inertia
         };
         node_physics = std::make_shared<Node_physics>(create_info);
-        mesh->attach(node_physics);        
+        mesh->attach(node_physics);
     }
 
     if (scaled.rt_primitive)

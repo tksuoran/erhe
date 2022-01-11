@@ -7,6 +7,7 @@
 #include "erhe/primitive/primitive.hpp"
 
 #include <glm/glm.hpp>
+
 #include <initializer_list>
 #include <memory>
 #include <vector>
@@ -87,13 +88,14 @@ public:
     ~Forward_renderer() override;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
+    // Public API
     void render(
-        erhe::scene::Viewport                 viewport,
-        erhe::scene::ICamera&                 camera,
+        const erhe::scene::Viewport           viewport,
+        const erhe::scene::ICamera&           camera,
         const Mesh_layer_collection&          mesh_layers,
         const erhe::scene::Light_layer&       light_layer,
         const Material_collection&            materials,
@@ -102,11 +104,8 @@ public:
     );
 
 private:
-    [[nodiscard]]
-    auto select_pipeline      (const Pass pass) const -> const erhe::graphics::Pipeline*;
-
-    [[nodiscard]]
-    auto select_primitive_mode(const Pass pass) const -> erhe::primitive::Primitive_mode;
+    [[nodiscard]] auto select_pipeline      (const Pass pass) const -> const erhe::graphics::Pipeline*;
+    [[nodiscard]] auto select_primitive_mode(const Pass pass) const -> erhe::primitive::Primitive_mode;
 
     // Component dependencies
     std::shared_ptr<Configuration>                        m_configuration;

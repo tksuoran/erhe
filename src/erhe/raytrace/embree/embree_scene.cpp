@@ -187,7 +187,7 @@ void Embree_scene::intersect(Ray& ray, Hit& hit)
         m_scene,
         &context,
         &ray_hit
-    ); 
+    );
     ray.t_near       = ray_hit.ray.tnear;
     ray.t_far        = ray_hit.ray.tfar;
     hit.normal       = glm::vec3{ray_hit.hit.Ng_x, ray_hit.hit.Ng_y, ray_hit.hit.Ng_z};

@@ -45,7 +45,7 @@ void Geometry::merge(Geometry& other, const glm::mat4 transform)
         const Point_id dst_point_id = point_id + m_next_point_id;
         const Point&   src_point    = other.points[point_id];;
         Point&         dst_point    = points[dst_point_id];
-        dst_point.first_point_corner_id = src_point.first_point_corner_id + m_next_point_corner_reserve; 
+        dst_point.first_point_corner_id = src_point.first_point_corner_id + m_next_point_corner_reserve;
         dst_point.corner_count          = src_point.corner_count;
         dst_point.reserved_corner_count = src_point.reserved_corner_count;
     }

@@ -88,9 +88,8 @@ Merge_operation::Merge_operation(Context&& context)
         return;
     }
 
-    using namespace erhe::geometry;
-    using namespace erhe::primitive;
-    using namespace glm;
+    using erhe::primitive::Normal_style;
+    using glm::mat4;
 
     erhe::geometry::Geometry combined_geometry;
     m_state_before.selection      = context.selection_tool->selection();
@@ -176,7 +175,7 @@ Merge_operation::Merge_operation(Context&& context)
     m_state_before.rigidbody_from_node = erhe::physics::Transform{};
     erhe::physics::Transform principal_axis_transform;
     m_state_after.collision_shape->calculate_principal_axis_transform(
-        child_masses, 
+        child_masses,
         principal_axis_transform,
         m_state_after.local_inertia
     );
@@ -190,7 +189,7 @@ Merge_operation::Merge_operation(Context&& context)
     m_combined_primitive.material              = material;
     m_combined_primitive.gl_primitive_geometry = make_primitive(
         combined_geometry,
-        context.build_info_set.gl,
+        context.build_info,
         normal_style
     );
     //m_combined_primitive.rt_primitive_geometry

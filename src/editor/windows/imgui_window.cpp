@@ -43,7 +43,7 @@ auto Imgui_window::begin() -> bool
     bool keep_visible{true};
     const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse;
     const bool not_collapsed = ImGui::Begin(
-        title().data(), 
+        title().data(),
         &keep_visible,
         flags
     );

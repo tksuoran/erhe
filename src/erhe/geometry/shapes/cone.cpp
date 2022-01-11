@@ -325,7 +325,6 @@ public:
         }
 
         // Bottom parts
-        //if (false)
         if (bottom_radius == 0.0)
         {
             //log_cone.trace("Bottom - point / triangle fan\n");
@@ -366,7 +365,7 @@ public:
                 corner_texcoords->put(tip_corner_id, average_texcoord);
 
                 const Point_id centroid_id = cone_point(rel_slice_centroid, rel_stack_centroid);
-                
+
                 if constexpr (use_geometric_centroids)
                 {
                     polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
@@ -409,7 +408,6 @@ public:
 
         // Middle quads, bottom up
         log_cone.trace("Middle quads, bottom up\n");
-        //if (false)
         for (
             int stack = -stack_division - bottom_not_singular;
             stack < stack_division + top_not_singular;

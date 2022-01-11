@@ -57,7 +57,7 @@ Mesh_insert_remove_operation::Mesh_insert_remove_operation(const Context& contex
     if (context.mode == Mode::remove)
     {
         const auto i = std::remove(m_selection_before.begin(), m_selection_before.end(), context.mesh);
-        if (i != m_selection_before.end()) 
+        if (i != m_selection_before.end())
         {
             m_selection_before.erase(i, m_selection_before.end());
         }
@@ -136,8 +136,12 @@ Light_insert_remove_operation::Light_insert_remove_operation(const Context& cont
 
     if (context.mode == Mode::remove)
     {
-        const auto i = std::remove(m_selection_after.begin(), m_selection_after.end(), context.light);
-        if (i != m_selection_after.end()) 
+        const auto i = std::remove(
+            m_selection_after.begin(),
+            m_selection_after.end(),
+            context.light
+        );
+        if (i != m_selection_after.end())
         {
             m_selection_after.erase(i, m_selection_after.end());
         }

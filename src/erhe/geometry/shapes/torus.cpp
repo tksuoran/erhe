@@ -243,7 +243,7 @@ auto torus_volume(
         glm::pi<float>() *
         minor_radius *
         minor_radius *
-        glm::two_pi<float>() * 
+        glm::two_pi<float>() *
         major_radius;
 }
 

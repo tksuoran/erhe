@@ -24,16 +24,8 @@ public:
     virtual void tool_properties        () {}
     virtual void on_enable_state_changed() {}
 
-    void set_enable_state(const bool enable_state)
-    {
-        m_enabled = enable_state;
-        on_enable_state_changed();
-    };
-
-    auto is_enabled() const -> bool
-    {
-        return m_enabled;
-    }
+    [[nodiscard]] auto is_enabled() const -> bool;
+    void set_enable_state(const bool enable_state);
 
 private:
     bool m_enabled{true};

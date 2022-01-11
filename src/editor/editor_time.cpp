@@ -9,8 +9,6 @@
 
 namespace editor {
 
-using namespace std;
-
 
 Editor_time::Editor_time()
     : erhe::components::Component{c_name}
@@ -27,16 +25,16 @@ void Editor_time::connect()
 
 void Editor_time::start_time()
 {
-    m_current_time = chrono::steady_clock::now();
+    m_current_time = std::chrono::steady_clock::now();
 }
 
 void Editor_time::update()
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto new_time   = chrono::steady_clock::now();
+    const auto new_time   = std::chrono::steady_clock::now();
     const auto duration   = new_time - m_current_time;
-    double     frame_time = chrono::duration<double, ratio<1>>(duration).count();
+    double     frame_time = std::chrono::duration<double, std::ratio<1>>(duration).count();
 
     if (frame_time > 0.25)
     {

@@ -5,14 +5,16 @@
 namespace erhe::physics
 {
 
-auto ICollision_shape::create_box_shape(const glm::vec3 half_extents)
-    -> ICollision_shape*
+auto ICollision_shape::create_box_shape(
+    const glm::vec3 half_extents
+) -> ICollision_shape*
 {
     return new Bullet_box_shape(half_extents);
 }
 
-auto ICollision_shape::create_box_shape_shared(const glm::vec3 half_extents)
-    -> std::shared_ptr<ICollision_shape>
+auto ICollision_shape::create_box_shape_shared(
+    const glm::vec3 half_extents
+) -> std::shared_ptr<ICollision_shape>
 {
     return std::make_shared<Bullet_box_shape>(half_extents);
 }
@@ -111,14 +113,16 @@ auto ICollision_shape::create_cylinder_shape_shared(
     }
 }
 
-auto ICollision_shape::create_sphere_shape(const float radius)
-    -> ICollision_shape*
+auto ICollision_shape::create_sphere_shape(
+    const float radius
+) -> ICollision_shape*
 {
     return new Bullet_sphere_shape(radius);
 }
 
-auto ICollision_shape::create_sphere_shape_shared(const float radius)
-    -> std::shared_ptr<ICollision_shape>
+auto ICollision_shape::create_sphere_shape_shared(
+    const float radius
+) -> std::shared_ptr<ICollision_shape>
 {
     return std::make_shared<Bullet_sphere_shape>(radius);
 }

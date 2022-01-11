@@ -6,68 +6,77 @@
 namespace erhe::raytrace
 {
 
-    namespace 
+using erhe::geometry::c_point_locations;
+using erhe::geometry::Corner;
+using erhe::geometry::Corner_id;
+using erhe::geometry::Point_id;
+using erhe::geometry::Polygon_id;
+using erhe::geometry::Polygon_corner_id;
+using glm::vec3;
+using glm::vec4;
+
+namespace
 {
 
 #define CULLING 0
 
-auto ray_triangle_intersect( 
-    const glm::vec3& origin,
-    const glm::vec3& direction, 
-    const glm::vec3& v0,
-    const glm::vec3& v1,
-    const glm::vec3& v2, 
+auto ray_triangle_intersect(
+    const vec3& origin,
+    const vec3& direction,
+    const vec3& v0,
+    const vec3& v1,
+    const vec3& v2,
     float& t,
     float& u,
     float& v
 ) -> bool
-{ 
-    const glm::vec3 v0v1 = v1 - v0; 
-    const glm::vec3 v0v2 = v2 - v0; 
-    const glm::vec3 pvec = glm::cross(direction, v0v2); 
-    const float det = glm::dot(v0v1, pvec); 
-#ifdef CULLING 
+{
+    const vec3 v0v1 = v1 - v0;
+    const vec3 v0v2 = v2 - v0;
+    const vec3 pvec = glm::cross(direction, v0v2);
+    const float det = glm::dot(v0v1, pvec);
+#ifdef CULLING
     constexpr float epsilon = 0.00001f;
 
     // if the determinant is negative the triangle is backfacing
     // if the determinant is close to 0, the ray misses the triangle
     if (det < epsilon)
     {
-        return false; 
+        return false;
     }
-#else 
+#else
     // ray and triangle are parallel if det is close to 0
     if (std::fabs(det) < epsilon)
     {
-        return false; 
+        return false;
     }
-#endif 
-    float inv_det = 1.0f / det; 
- 
-    glm::vec3 tvec = origin - v0; 
-    u = glm::dot(tvec, pvec) * inv_det; 
+#endif
+    const float inv_det = 1.0f / det;
+
+    const vec3 tvec = origin - v0;
+    u = glm::dot(tvec, pvec) * inv_det;
     if ((u < 0.0f) || (u > 1.0f))
     {
         return false;
     }
-    glm::vec3 qvec = glm::cross(tvec, v0v1); 
-    v = glm::dot(direction, qvec) * inv_det; 
+    const vec3 qvec = glm::cross(tvec, v0v1);
+    v = glm::dot(direction, qvec) * inv_det;
     if ((v < 0.0f) || (u + v > 1.0f))
     {
         return false;
     }
- 
-    t = glm::dot(v0v2, qvec) * inv_det; 
- 
-    return true; 
-} 
+
+    t = glm::dot(v0v2, qvec) * inv_det;
+
+    return true;
+}
 
 }
 
 auto intersect(
     const erhe::scene::Mesh&    mesh,
-    const glm::vec3             origin_in_world,
-    const glm::vec3             direction_in_world,
+    const vec3                  origin_in_world,
+    const vec3                  direction_in_world,
     erhe::geometry::Geometry*&  out_geometry,
     erhe::geometry::Polygon_id& out_polygon_id,
     float&                      out_t,
@@ -75,9 +84,6 @@ auto intersect(
     float&                      out_v
 ) -> bool
 {
-    using namespace erhe::geometry;
-    using namespace glm;
-
     const auto mesh_from_world   = mesh.node_from_world();
     const vec3 origin_in_mesh    = vec3{mesh_from_world * vec4{origin_in_world, 1.0f}};
     const vec3 direction_in_mesh = vec3{mesh_from_world * vec4{direction_in_world, 0.0f}};

@@ -19,8 +19,6 @@
 namespace editor
 {
 
-using namespace erhe::toolkit;
-
 void Physics_tool_drag_command::try_ready(Command_context& context)
 {
     if (state() != State::Inactive)
@@ -90,7 +88,7 @@ void Physics_tool::initialize_component()
 
     const auto view = get<Editor_view>();
     view->register_command(&m_drag_command);
-    view->bind_command_to_mouse_drag(&m_drag_command, Mouse_button_right);
+    view->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_right);
 
     get<Operations>()->register_active_tool(this);
 }

@@ -6,6 +6,7 @@
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/transform.hpp"
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -16,7 +17,6 @@ namespace erhe::physics
 
 namespace erhe::primitive
 {
-    class Build_info_set;
     class Primitive_geometry;
 };
 

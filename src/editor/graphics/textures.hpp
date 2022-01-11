@@ -29,13 +29,12 @@ public:
     ~Textures() override;
 
     // Implements Component
-    [[nodiscard]]
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
-    [[nodiscard]]
-    auto load(const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>;
+    // Public API
+    [[nodiscard]] auto load(const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>;
 
     std::shared_ptr<erhe::graphics::Texture> background;
 

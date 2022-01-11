@@ -65,7 +65,7 @@ void Debug_draw::set_colors(const Colors& colors)
 
 void Debug_draw::draw_line(const glm::vec3 from, const glm::vec3 to, const glm::vec3 color)
 {
-    auto color_ui32 = ImGui::ColorConvertFloat4ToU32(ImVec4(color.x, color.y, color.z, 1.0f));
+    auto color_ui32 = ImGui::ColorConvertFloat4ToU32(ImVec4{color.x, color.y, color.z, 1.0f});
     m_line_renderer_set->visible.set_line_color(color_ui32);
     m_line_renderer_set->visible.add_lines( { {from, to} }, line_width);
 }
@@ -86,7 +86,12 @@ auto Debug_draw::get_debug_mode() const -> int
     return m_debug_mode;
 }
 
-void Debug_draw::draw_contact_point(const glm::vec3 point, const glm::vec3 normal, float distance, int lifeTime, const glm::vec3 color)
+void Debug_draw::draw_contact_point(
+    const glm::vec3 point,
+    const glm::vec3 normal,
+    float           distance,
+    int             lifeTime,
+    const glm::vec3 color)
 {
     static_cast<void>(lifeTime);
 

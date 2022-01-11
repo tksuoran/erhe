@@ -17,7 +17,13 @@ Renderbuffer::Renderbuffer(
     Expects(m_width  > 0);
     Expects(m_height > 0);
 
-    gl::named_renderbuffer_storage_multisample(gl_name(), 0, internal_format, width, height);
+    gl::named_renderbuffer_storage_multisample(
+        gl_name(),
+        0,
+        internal_format,
+        width,
+        height
+    );
 }
 
 Renderbuffer::Renderbuffer(

@@ -47,7 +47,13 @@ void Node_tree_window::initialize_component()
 
 void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
 {
-    using namespace erhe::scene;
+    using erhe::scene::is_empty;
+    using erhe::scene::is_mesh;
+    using erhe::scene::is_light;
+    using erhe::scene::is_camera;
+    using erhe::scene::as_mesh;
+    using erhe::scene::as_light;
+    using erhe::scene::as_camera;
 
     if (is_empty(node))
     {

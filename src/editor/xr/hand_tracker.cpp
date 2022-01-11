@@ -88,7 +88,7 @@ void Hand::update(erhe::xr::Headset& headset)
         const bool  position_tracked    = (m_joints[i].location.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT   ) == XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
         const float radius              = m_joints[i].location.radius;
         if (orientation_valid  ) ++orientation_valid_count;
-        if (position_valid     ) ++position_valid_count;     
+        if (position_valid     ) ++position_valid_count;
         if (orientation_tracked) ++orientation_tracked_count;
         if (position_tracked   ) ++position_tracked_count;
         if (radius > 0.0f      ) ++nonzero_size_count;
@@ -331,111 +331,9 @@ void Hand_tracker::tool_render(const Render_context& context)
 void Hand_tracker::imgui()
 {
     ImGui::Checkbox("Show Hands", &m_show_hands);
-    //ImGui::ColorEdit4("Left Hand",  &m_left_hand_color.x, ImGuiColorEditFlags_Float);
-    //ImGui::ColorEdit4("Right Hand", &m_right_hand_color.x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4("Left Hand",  &m_left_hand_color.x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4("Right Hand", &m_right_hand_color.x, ImGuiColorEditFlags_Float);
 }
-
-#if 0
-        {
-            ERHE_PROFILE_SCOPE("headset lines");
-
-            auto* theremin_tool = get<Theremin_tool>();
-            auto& line_renderer = context.line_renderer->hidden;
-            constexpr uint32_t red       = 0xff0000ffu;
-            constexpr uint32_t green     = 0xff00ff00u;
-            constexpr uint32_t blue      = 0xffff0000u;
-            constexpr float    thickness = 70.0f;
-
-            auto* controller_node      = m_controller_visualization->get_node();
-            auto  controller_position  = controller_node->position_in_world();
-            auto  controller_direction = controller_node->direction_in_world();
-            auto  end_position         = controller_position - m_headset->trigger_value() * 2.0f * controller_direction;
-            const glm::vec3 origo {0.0f, 0.0f, 0.0f};
-            const glm::vec3 unit_x{1.0f, 0.0f, 0.0f};
-            const glm::vec3 unit_y{0.0f, 1.0f, 0.0f};
-            const glm::vec3 unit_z{0.0f, 0.0f, 1.0f};
-            line_renderer.set_line_color(red);
-            line_renderer.add_lines({{origo, unit_x}}, thickness);
-            line_renderer.set_line_color(green);
-            line_renderer.add_lines({{origo, unit_y}}, thickness);
-            line_renderer.set_line_color(blue);
-            line_renderer.add_lines({{origo, unit_z}}, thickness);
-            line_renderer.set_line_color(green);
-            line_renderer.add_lines({{controller_position, end_position }}, thickness);
-
-            auto*      view_camera  = get<Fly_camera_tool>()->camera();
-            const auto transform    = view_camera->world_from_node();
-            auto*      log_window   = get<Log_window>();
-            const bool left_active  = m_headset->get_hand_tracking_active(XR_HAND_LEFT_EXT);
-            const bool right_active = m_headset->get_hand_tracking_active(XR_HAND_RIGHT_EXT);
-            log_window->frame_log("Hand tracking left - {}", left_active ? "active" : "inactive");
-
-            std::optional<erhe::toolkit::Closest_points<float>> left_closest_point;
-            std::optional<erhe::toolkit::Closest_points<float>> right_closest_point;
-            if (left_active)
-            {
-                Hand_visualization left_hand;
-                const glm::vec3 p0{-0.15f, 0.0f, 0.0f};
-                const glm::vec3 p1{-0.15f, 2.0f, 0.0f};
-                left_hand.update(*m_headset.get(), XR_HAND_LEFT_EXT);
-                left_closest_point = left_hand.get_closest_point_to_line(transform, p0, p1);
-                line_renderer.set_line_color(0xff8888ff);
-                line_renderer.add_lines( { { p0, p1 } }, thickness );
-                if (left_closest_point.has_value())
-                {
-                    const auto  P = left_closest_point.value().P;
-                    const auto  Q = left_closest_point.value().Q;
-                    const float d = glm::distance(P, Q);
-                    const float s = 0.085f / d;
-                    line_renderer.set_line_color(viridis.get(s));
-                    line_renderer.add_lines( { { P, Q } }, thickness );
-                    if (theremin_tool != nullptr)
-                    {
-                        theremin_tool->set_left_distance(d);
-                    }
-                }
-
-                line_renderer.set_line_color(0xff0088ff);
-                left_hand.draw_joint_line_strip(transform, thumb_joints,  line_renderer);
-                left_hand.draw_joint_line_strip(transform, index_joints,  line_renderer);
-                left_hand.draw_joint_line_strip(transform, middle_joints, line_renderer);
-                left_hand.draw_joint_line_strip(transform, ring_joints,   line_renderer);
-                left_hand.draw_joint_line_strip(transform, little_joints, line_renderer);
-            }
-
-            log_window->frame_log("Hand tracking right - {}", right_active ? "active" : "inactive");
-            if (right_active)
-            {
-                Hand_visualization right_hand;
-                const glm::vec3 p0{0.15f, 0.0f, 0.0f};
-                const glm::vec3 p1{0.15f, 2.0f, 0.0f};
-                right_hand.update(*m_headset.get(), XR_HAND_RIGHT_EXT);
-                right_closest_point = right_hand.get_closest_point_to_line(transform, p0, p1);
-                line_renderer.set_line_color(0xffff8888);
-                line_renderer.add_lines( { { p0, p1 } }, thickness );
-                if (right_closest_point.has_value())
-                {
-                    const auto  P = right_closest_point.value().P;
-                    const auto  Q = right_closest_point.value().Q;
-                    const float d = glm::distance(P, Q);
-                    const float s = 0.085f / d;
-                    line_renderer.set_line_color(temperature.get(s));
-                    line_renderer.add_lines( { { P, Q } }, thickness );
-                    if (theremin_tool != nullptr)
-                    {
-                        theremin_tool->set_right_distance(d);
-                    }
-                }
-
-                line_renderer.set_line_color(0xffff8800);
-                right_hand.draw_joint_line_strip(transform, thumb_joints,  line_renderer);
-                right_hand.draw_joint_line_strip(transform, index_joints,  line_renderer);
-                right_hand.draw_joint_line_strip(transform, middle_joints, line_renderer);
-                right_hand.draw_joint_line_strip(transform, ring_joints,   line_renderer);
-                right_hand.draw_joint_line_strip(transform, little_joints, line_renderer);
-            }
-        }
-#endif
 
 } // namespace editor
 

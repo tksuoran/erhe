@@ -20,17 +20,4 @@ public:
     Buffer_info buffer;
 };
 
-class Build_info_set
-{
-public:
-    Build_info_set() = default;
-
-    explicit Build_info_set(Buffer_sink* gl_buffer_sink)
-        : gl{gl_buffer_sink}
-    {
-    }
-
-    Build_info gl;
-};
-
 } // namespace erhe::primitive

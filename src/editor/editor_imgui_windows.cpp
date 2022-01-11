@@ -5,13 +5,12 @@
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
 
+#include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/imgui/imgui_impl_erhe.hpp"
 
 #include <backends/imgui_impl_glfw.h>
 
 namespace editor {
-
-using namespace std;
 
 Editor_imgui_windows::Editor_imgui_windows()
     : erhe::components::Component{c_name}
@@ -37,11 +36,11 @@ void Editor_imgui_windows::initialize_component()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    io.Fonts->AddFontFromFileTTF("res/fonts/SourceSansPro-Regular.otf", 32);
-#else
+///#if defined(ERHE_XR_LIBRARY_OPENXR)
+///    io.Fonts->AddFontFromFileTTF("res/fonts/SourceSansPro-Regular.otf", 32);
+///#else
     io.Fonts->AddFontFromFileTTF("res/fonts/SourceSansPro-Regular.otf", 17);
-#endif
+///#endif
 
     ImFontGlyphRangesBuilder builder;
 
@@ -165,23 +164,16 @@ void Editor_imgui_windows::window_menu()
 
 void Editor_imgui_windows::register_imgui_window(Imgui_window* window)
 {
-    lock_guard<mutex> lock{m_mutex};
+    std::lock_guard<std::mutex> lock{m_mutex};
 
     m_imgui_windows.emplace_back(window);
 }
 
 void Editor_imgui_windows::imgui_windows()
 {
-    //Expects(m_pointer_context != nullptr);
-
-    //const auto initial_priority_action = get_priority_action();
-    //if (m_editor_view == nullptr)
-    //{
-    //    return;
-    //}
-#if !defined(ERHE_XR_LIBRARY_OPENXR)
+/// #if !defined(ERHE_XR_LIBRARY_OPENXR)
     menu();
-#endif
+/// #endif
 
     for (auto imgui_window : m_imgui_windows)
     {
@@ -195,11 +187,6 @@ void Editor_imgui_windows::imgui_windows()
         }
     }
 
-    //if (m_pointer_context->priority_action() != initial_priority_action)
-    //{
-    //    set_priority_action(m_pointer_context->priority_action());
-    //}
-    //
     //auto priority_action_tool = get_action_tool(m_pointer_context->priority_action());
     //if (
     //    m_show_tool_properties &&

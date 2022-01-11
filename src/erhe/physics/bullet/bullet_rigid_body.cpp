@@ -52,7 +52,9 @@ Bullet_rigid_body::Bullet_rigid_body(
         btRigidBody::btRigidBodyConstructionInfo{
             static_cast<btScalar>(create_info.mass),
             &m_motion_state_adapter,
-            dynamic_cast<Bullet_collision_shape*>(m_collision_shape.get())->get_bullet_collision_shape(),
+            dynamic_cast<Bullet_collision_shape*>(
+                m_collision_shape.get()
+            )->get_bullet_collision_shape(),
             to_bullet(create_info.local_inertia)
         }
     }
@@ -77,10 +79,14 @@ auto Bullet_rigid_body::get_motion_mode() const -> Motion_mode
     return m_motion_mode;
 }
 
-void Bullet_rigid_body::set_collision_shape(const std::shared_ptr<ICollision_shape>& collision_shape)
+void Bullet_rigid_body::set_collision_shape(
+    const std::shared_ptr<ICollision_shape>& collision_shape
+)
 {
     m_bullet_rigid_body.setCollisionShape(
-        dynamic_cast<Bullet_collision_shape*>(collision_shape.get())->get_bullet_collision_shape()
+        dynamic_cast<Bullet_collision_shape*>(
+            collision_shape.get()
+        )->get_bullet_collision_shape()
     );
     m_collision_shape = collision_shape;
 }
@@ -191,7 +197,10 @@ auto Bullet_rigid_body::get_linear_damping() const -> float
     return static_cast<float>(m_bullet_rigid_body.getLinearDamping());
 }
 
-void Bullet_rigid_body::set_damping(const float linear_damping, const float angular_damping)
+void Bullet_rigid_body::set_damping(
+    const float linear_damping,
+    const float angular_damping
+)
 {
     m_bullet_rigid_body.setDamping(linear_damping, angular_damping);
 }
@@ -211,9 +220,15 @@ auto Bullet_rigid_body::get_mass() const -> float
     return static_cast<float>(m_bullet_rigid_body.getMass());
 }
 
-void Bullet_rigid_body::set_mass_properties(const float mass, const glm::vec3 local_inertia)
+void Bullet_rigid_body::set_mass_properties(
+    const float     mass,
+    const glm::vec3 local_inertia
+)
 {
-    m_bullet_rigid_body.setMassProps(static_cast<btScalar>(mass), to_bullet(local_inertia));
+    m_bullet_rigid_body.setMassProps(
+        static_cast<btScalar>(mass),
+        to_bullet(local_inertia)
+    );
 }
 
 auto Bullet_rigid_body::get_bullet_rigid_body() -> btRigidBody*

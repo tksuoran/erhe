@@ -26,7 +26,8 @@ void Compound_operation::undo() const
         auto i = rbegin(m_context.operations),
         end = rend(m_context.operations);
         i < end;
-        ++i)
+        ++i
+    )
     {
         auto operation = *i;
         operation->undo();

@@ -26,8 +26,7 @@ public:
     ~Application() override;
 
     // Implements Component
-    [[nodiscard]]
-    auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
 
     auto initialize_components(int argc, char** argv) -> bool;
     void run();

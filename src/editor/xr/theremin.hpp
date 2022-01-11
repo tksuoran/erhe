@@ -85,7 +85,7 @@ private:
     std::shared_ptr<Headset_renderer > m_headset_renderer;
     std::shared_ptr<Line_renderer_set> m_line_renderer_set;
 
-    bool                 m_enable_audio         {true};   // master on/off switch
+    bool                 m_enable_audio         {false};  // master on/off switch
     float                m_left_distance        {0.0f};   // closest point of left hand to the left antenna
     float                m_right_distance       {0.0f};   // closest point of right hand to the right antenna
     float                m_left_distance_scale  {2.0f};   // adjusts left hand distance scaling
@@ -102,11 +102,6 @@ private:
     ma_device_config     m_audio_config;
     ma_device            m_audio_device;
     std::vector<float>   m_wavetable; // for visualization
-
-    //float                m_pow                  {1.0f};
-    //float                m_sine_weight          {1.0f};
-    //float                m_square_weight        {0.0f};
-    //float                m_triangle_weight      {0.0f};
 };
 
 } // namespace editor

@@ -1,8 +1,10 @@
 #pragma once
 
-#include "erhe/graphics/opengl_state_tracker.hpp"
+namespace erhe::graphics {
+    class OpenGL_state_tracker;
+}
 
-#include <imgui.h>
+struct ImDrawData;
 
 bool ImGui_ImplErhe_Init(erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker);
 void ImGui_ImplErhe_Shutdown();

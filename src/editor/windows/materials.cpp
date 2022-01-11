@@ -70,7 +70,8 @@ void Materials::initialize_component()
 void Materials::imgui()
 {
     const auto& materials = m_scene_root->materials();
-    using namespace erhe::imgui;
+    using erhe::imgui::make_button;
+    using erhe::imgui::Item_mode;
 
     ImGui::Begin(c_title.data());
     const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};

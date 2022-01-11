@@ -21,15 +21,13 @@ public:
     public:
         Slot();
 
-        [[nodiscard]]
-        auto span_for(
+        [[nodiscard]] auto span_for(
             const int                 width,
             const int                 height,
             const gl::Internal_format internal_format
         ) -> gsl::span<std::byte>;
 
-        [[nodiscard]]
-        auto gl_name() -> unsigned int
+        [[nodiscard]] auto gl_name() -> unsigned int
         {
             return pbo.gl_name();
         }
@@ -46,13 +44,12 @@ public:
     ~Image_transfer() override;
 
     // Implements Component
-    [[nodiscard]]
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
-    [[nodiscard]]
-    auto get_slot() -> Slot&;
+    // Public API
+    [[nodiscard]] auto get_slot() -> Slot&;
 
 private:
     size_t                               m_index{0};

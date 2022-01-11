@@ -165,7 +165,11 @@ Property_map<Key_type, Value_type>::interpolate(
         return;
     }
 
-    for (size_t new_key = 0, end = key_new_to_olds.size(); new_key < end; ++new_key)
+    for (
+        size_t new_key = 0, end = key_new_to_olds.size();
+        new_key < end;
+        ++new_key
+    )
     {
         const std::vector<std::pair<float, Key_type>>& old_keys = key_new_to_olds[new_key];
 
@@ -332,7 +336,7 @@ Property_map<Key_type, Value_type>::import_from(
             }
 
             // TODO Use cofactor matrix for bivectors?
-            case normalize_inverse_transpose_matrix:           
+            case normalize_inverse_transpose_matrix:
             {
                 const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
                 for (size_t i = 0, end = source->values.size(); i < end; ++i)

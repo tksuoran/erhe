@@ -34,9 +34,8 @@ public:
     void initialize_component() override;
 
     // Implements Tool
-                  void tool_render(const Render_context& context) override;
-    //[[nodiscard]] auto state      () const -> State               override;
-    [[nodiscard]] auto description() -> const char*               override;
+    [[nodiscard]] auto description() -> const char* override;
+    void tool_render(const Render_context& context) override;
 
     // Implements Window
     void imgui() override;

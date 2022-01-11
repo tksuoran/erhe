@@ -537,7 +537,7 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     }
     //if (primary_stereo_supported)
     //{
-    //    m_xr_view_configuration_type = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;   
+    //    m_xr_view_configuration_type = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
     //}
     log_xr.info("Selected view configuration type: {}\n", c_str(m_xr_view_configuration_type));
 

@@ -13,10 +13,14 @@
 #include <imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
-using namespace erhe::geometry;
-
 namespace editor
 {
+
+using erhe::geometry::c_polygon_centroids;
+using erhe::geometry::c_point_locations;
+using erhe::geometry::Edge_id;
+using erhe::geometry::Point_id;
+using erhe::geometry::Polygon_id;
 
 Mesh_properties::Mesh_properties()
     : erhe::components::Component{c_name}
@@ -36,7 +40,6 @@ void Mesh_properties::connect()
 
 void Mesh_properties::initialize_component()
 {
-    //get<Editor_tools>()->register_imgui_window(this);
     get<Editor_tools>()->register_tool(this);
 
     hide();

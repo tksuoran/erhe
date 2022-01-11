@@ -38,7 +38,7 @@ auto read(const std::filesystem::path& path) -> std::optional<std::string>
             size_t bytes_to_read = file_length;
             size_t bytes_read = 0;
             std::string result(file_length, '\0');
-            do 
+            do
             {
                 const auto read_byte_count = std::fread(result.data() + bytes_read, 1, bytes_to_read, file);
                 if (read_byte_count == 0)

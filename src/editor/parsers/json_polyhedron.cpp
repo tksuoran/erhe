@@ -12,14 +12,11 @@
 
 namespace editor {
 
-using namespace glm;
-using namespace erhe::geometry;
-
 using json = nlohmann::json;
 
 Json_library::Json_library(const std::filesystem::path& path)
 {
-    auto opt_text = erhe::toolkit::read(path);
+    const auto opt_text = erhe::toolkit::read(path);
     if (!opt_text.has_value())
     {
         return;
@@ -32,15 +29,20 @@ Json_library::Json_library(const std::filesystem::path& path)
     // Collect dcategories
     for (auto& entry : m_json.items())
     {
-        std::string key_name       = entry.key();
-        std::string name           = entry.value()["name"];
-        auto        category_names = entry.value()["category"];
+        const std::string key_name       = entry.key();
+        const std::string name           = entry.value()["name"];
+        const auto        category_names = entry.value()["category"];
         for (auto& category_name_object : category_names)
         {
             std::string category_name = category_name_object.get<std::string>();
-            auto i = std::find_if(categories.begin(), categories.end(), [category_name](const Category& category){
-                return category.category_name == category_name;
-            });
+            const auto i = std::find_if(
+                categories.begin(),
+                categories.end(),
+                [category_name](const Category& category)
+                {
+                    return category.category_name == category_name;
+                }
+            );
             if (i != categories.end())
             {
                 i->key_names.emplace_back(key_name);
@@ -55,10 +57,11 @@ Json_library::Json_library(const std::filesystem::path& path)
     }
 }
 
-auto Json_library::make_geometry(const std::string& key_name) const
--> Geometry
+auto Json_library::make_geometry(
+    const std::string& key_name
+) const -> erhe::geometry::Geometry
 {
-    Geometry geometry;
+    erhe::geometry::Geometry geometry;
     auto& mesh = m_json[key_name];
     geometry.name = mesh["name"];
     auto& points = mesh["vertex"];
@@ -69,6 +72,7 @@ auto Json_library::make_geometry(const std::string& key_name) const
         const float z = point[2].get<float>();
         geometry.make_point(-x, -y, -z);
     }
+
     auto& polygons = mesh["face"];
     for (auto& polygon : polygons)
     {
@@ -82,7 +86,8 @@ auto Json_library::make_geometry(const std::string& key_name) const
             }
         }
     }
-    geometry.flip_reversed_polygons();
+
+    geometry.flip_reversed_polygons(); // This only works for 'round' shapes
     geometry.make_point_corners();
     geometry.build_edges();
     geometry.generate_polygon_texture_coordinates();

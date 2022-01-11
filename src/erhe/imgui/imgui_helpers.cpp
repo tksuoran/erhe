@@ -4,12 +4,12 @@
 namespace erhe::imgui
 {
 
-const ImVec4 c_color                  = ImVec4(0.30f, 0.40f, 0.80f, 1.0f);
-const ImVec4 c_color_hovered          = ImVec4(0.40f, 0.50f, 0.90f, 1.0f);
-const ImVec4 c_color_active           = ImVec4(0.50f, 0.60f, 1.00f, 1.0f); // pressed
-const ImVec4 c_color_disabled         = ImVec4(0.28f, 0.28f, 0.28f, 1.0f);
-const ImVec4 c_color_disabled_hovered = ImVec4(0.28f, 0.28f, 0.28f, 1.0f);
-const ImVec4 c_color_disabled_active  = ImVec4(0.28f, 0.28f, 0.28f, 1.0f); // pressed
+const ImVec4 c_color                  = ImVec4{0.30f, 0.40f, 0.80f, 1.0f};
+const ImVec4 c_color_hovered          = ImVec4{0.40f, 0.50f, 0.90f, 1.0f};
+const ImVec4 c_color_active           = ImVec4{0.50f, 0.60f, 1.00f, 1.0f}; // pressed
+const ImVec4 c_color_disabled         = ImVec4{0.28f, 0.28f, 0.28f, 1.0f};
+const ImVec4 c_color_disabled_hovered = ImVec4{0.28f, 0.28f, 0.28f, 1.0f};
+const ImVec4 c_color_disabled_active  = ImVec4{0.28f, 0.28f, 0.28f, 1.0f}; // pressed
 
 bool make_button(const char* label, const Item_mode mode, const ImVec2 size)
 {

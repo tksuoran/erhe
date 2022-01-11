@@ -28,7 +28,7 @@ public:
     [[nodiscard]] auto depth_clear_value_pointer() const -> const float *; // reverse_depth ? 0.0f : 1.0f;
     [[nodiscard]] auto depth_function           (const gl::Depth_function depth_function) const -> gl::Depth_function;
     bool gui                    {true};
-    bool openxr                 {true};
+    bool openxr                 {false};
     bool show_window            {true};
     bool parallel_initialization{true};
     bool reverse_depth          {true};

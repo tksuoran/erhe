@@ -31,13 +31,12 @@
 namespace editor
 {
 
-using namespace std;
-using namespace glm;
-using namespace erhe::geometry;
+using glm::mat4;
+using glm::vec3;
+using glm::vec4;
 using erhe::geometry::Polygon; // Resolve conflict with wingdi.h BOOL Polygon(HDC,const POINT *,int)
-using namespace erhe::primitive;
-using namespace erhe::scene;
-using namespace erhe::toolkit;
+using erhe::geometry::Polygon_id;
+using erhe::scene::Node;
 
 auto Brush_tool_preview_command::try_call(Command_context& context) -> bool
 {
@@ -73,15 +72,6 @@ auto Brush_tool_insert_command::try_call(Command_context& context) -> bool
     return consumed;
 }
 
-Brush_create_context::Brush_create_context(
-    erhe::primitive::Build_info_set& build_info_set,
-    erhe::primitive::Normal_style    normal_style
-)
-    : build_info_set{build_info_set}
-    , normal_style  {normal_style}
-{
-}
-
 Brushes::Brushes()
     : erhe::components::Component{c_name}
     , Imgui_window               {c_title}
@@ -112,36 +102,40 @@ void Brushes::initialize_component()
     view->register_command(&m_preview_command);
     view->register_command(&m_insert_command);
     view->bind_command_to_mouse_motion(&m_preview_command);
-    view->bind_command_to_mouse_click (&m_insert_command, Mouse_button_right);
+    view->bind_command_to_mouse_click (&m_insert_command, erhe::toolkit::Mouse_button_right);
 
     get<Operations>()->register_active_tool(this);
 }
 
-auto Brushes::allocate_brush(Build_info_set& build_info_set) -> std::shared_ptr<Brush>
+auto Brushes::allocate_brush(
+    erhe::primitive::Build_info& build_info
+) -> std::shared_ptr<Brush>
 {
     std::lock_guard<std::mutex> lock{m_brush_mutex};
 
-    const auto brush = std::make_shared<Brush>(build_info_set);
+    const auto brush = std::make_shared<Brush>(build_info);
     m_brushes.push_back(brush);
     return brush;
 }
 
 auto Brushes::make_brush(
-    erhe::geometry::Geometry&&                         geometry,
-    const Brush_create_context&                        context,
-    const shared_ptr<erhe::physics::ICollision_shape>& collision_shape
+    erhe::geometry::Geometry&&                              geometry,
+    const Brush_create_context&                             context,
+    const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape
 ) -> std::shared_ptr<Brush>
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto shared_geometry = make_shared<erhe::geometry::Geometry>(move(geometry));
+    const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
+        std::move(geometry)
+    );
     return make_brush(shared_geometry, context, collision_shape);
 }
 
 auto Brushes::make_brush(
-    const shared_ptr<erhe::geometry::Geometry>&        geometry,
-    const Brush_create_context&                        context,
-    const shared_ptr<erhe::physics::ICollision_shape>& collision_shape
+    const std::shared_ptr<erhe::geometry::Geometry>&        geometry,
+    const Brush_create_context&                             context,
+    const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape
 ) -> std::shared_ptr<Brush>
 {
     ERHE_PROFILE_FUNCTION
@@ -150,13 +144,13 @@ auto Brushes::make_brush(
     geometry->compute_polygon_normals();
     geometry->compute_tangents();
     geometry->compute_polygon_centroids();
-    geometry->compute_point_normals(c_point_normals_smooth);
+    geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
 
-    const auto brush = allocate_brush(context.build_info_set);
+    const auto brush = allocate_brush(context.build_info);
     brush->initialize(
         Brush::Create_info{
             .geometry        = geometry,
-            .build_info_set  = context.build_info_set,
+            .build_info      = context.build_info,
             .normal_style    = context.normal_style,
             .density         = 1.0f,
             .volume          = geometry->get_mass_properties().volume,
@@ -167,10 +161,10 @@ auto Brushes::make_brush(
 }
 
 auto Brushes::make_brush(
-    shared_ptr<erhe::geometry::Geometry> geometry,
-    const Brush_create_context&          context,
-    Collision_volume_calculator          collision_volume_calculator,
-    Collision_shape_generator            collision_shape_generator
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry,
+    const Brush_create_context&                      context,
+    const Collision_volume_calculator                collision_volume_calculator,
+    const Collision_shape_generator                  collision_shape_generator
 ) -> std::shared_ptr<Brush>
 {
     ERHE_PROFILE_FUNCTION
@@ -179,10 +173,10 @@ auto Brushes::make_brush(
     geometry->compute_polygon_normals();
     geometry->compute_tangents();
     geometry->compute_polygon_centroids();
-    geometry->compute_point_normals(c_point_normals_smooth);
+    geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
     const Brush::Create_info create_info{
         .geometry                    = geometry,
-        .build_info_set              = context.build_info_set,
+        .build_info                  = context.build_info,
         .normal_style                = context.normal_style,
         .density                     = 1.0f,
         .volume                      = 1.0f,
@@ -191,7 +185,7 @@ auto Brushes::make_brush(
         .collision_shape_generator   = collision_shape_generator
     };
 
-    const auto brush = allocate_brush(context.build_info_set);
+    const auto brush = allocate_brush(context.build_info);
     brush->initialize(create_info);
     return brush;
 }
@@ -262,12 +256,12 @@ void Brushes::on_motion()
     m_hover_geometry    = m_pointer_context->hover_geometry();
 
     m_hover_position = m_hover_content
-        ? m_pointer_context->position_in_world() 
-        : optional<vec3>{};
+        ? m_pointer_context->position_in_world()
+        : std::optional<vec3>{};
 
     m_hover_normal = m_hover_content
         ? m_pointer_context->hover_normal()
-        : optional<vec3>{};
+        : std::optional<vec3>{};
 
     if (m_hover_mesh && m_hover_position.has_value())
     {
@@ -296,7 +290,7 @@ auto Brushes::get_brush_transform() -> mat4
 
     ERHE_VERIFY(brush_frame.scale() != 0.0f);
 
-    float scale = hover_frame.scale() / brush_frame.scale();
+    const float scale = hover_frame.scale() / brush_frame.scale();
 
     m_transform_scale = scale;
     if (scale != 1.0f)
@@ -309,7 +303,10 @@ auto Brushes::get_brush_transform() -> mat4
     debug_info.brush_frame_scale = brush_frame.scale();
     debug_info.transform_scale   = scale;
 
-    if (!m_snap_to_hover_polygon && m_hover_position.has_value())
+    if (
+        !m_snap_to_hover_polygon &&
+        m_hover_position.has_value()
+    )
     {
         hover_frame.centroid = m_hover_position.value();
         if (m_snap_to_grid)
@@ -382,7 +379,10 @@ void Brushes::update_mesh_node_transform()
 
 void Brushes::do_insert_operation()
 {
-    if (!m_hover_position.has_value() || (m_brush == nullptr))
+    if (
+        !m_hover_position.has_value() ||
+        (m_brush == nullptr)
+    )
     {
         return;
     }
@@ -403,7 +403,7 @@ void Brushes::do_insert_operation()
          Node::c_visibility_shadow_cast |
          Node::c_visibility_id);
 
-    auto op = make_shared<Mesh_insert_remove_operation>(
+    auto op = std::make_shared<Mesh_insert_remove_operation>(
         Mesh_insert_remove_operation::Context{
             .scene          = m_scene_root->scene(),
             .layer          = m_scene_root->content_layer(),
@@ -420,7 +420,10 @@ void Brushes::do_insert_operation()
 
 void Brushes::add_brush_mesh()
 {
-    if ((m_brush == nullptr) || !m_hover_position.has_value())
+    if (
+        (m_brush == nullptr) ||
+        !m_hover_position.has_value()
+    )
     {
         return;
     }
@@ -459,7 +462,10 @@ void Brushes::update_mesh()
         return;
     }
 
-    if ((m_brush == nullptr) || !m_hover_position.has_value())
+    if (
+        (m_brush == nullptr) ||
+        !m_hover_position.has_value()
+    )
     {
         remove_brush_mesh();
     }
@@ -469,7 +475,8 @@ void Brushes::update_mesh()
 
 void Brushes::tool_properties()
 {
-    using namespace erhe::imgui;
+    using erhe::imgui::make_check_box;
+    using erhe::imgui::Item_mode;
 
     ImGui::InputFloat("Hover scale",     &debug_info.hover_frame_scale);
     ImGui::InputFloat("Brush scale",     &debug_info.brush_frame_scale);
@@ -487,7 +494,8 @@ void Brushes::tool_properties()
 
 void Brushes::imgui()
 {
-    using namespace erhe::imgui;
+    using erhe::imgui::make_button;
+    using erhe::imgui::Item_mode;
 
     const size_t brush_count = m_brushes.size();
 

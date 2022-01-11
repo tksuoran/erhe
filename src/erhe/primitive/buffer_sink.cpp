@@ -34,9 +34,9 @@ auto Gl_buffer_sink::allocate_vertex_buffer(
     );
 
     return Buffer_range{
-        vertex_count,
-        vertex_element_size,
-        byte_offset
+        .count        = vertex_count,
+        .element_size = vertex_element_size,
+        .byte_offset  = byte_offset
     };
 }
 
@@ -48,9 +48,9 @@ auto Gl_buffer_sink::allocate_index_buffer(
     const auto index_byte_offset = m_index_buffer.allocate_bytes(index_count * index_element_size);
 
     return Buffer_range{
-        index_count,
-        index_element_size,
-        index_byte_offset
+        .count        = index_count,
+        .element_size = index_element_size,
+        .byte_offset  = index_byte_offset
     };
 }
 
@@ -90,7 +90,11 @@ auto Raytrace_buffer_sink::allocate_vertex_buffer(
         vertex_count * vertex_element_size,
         vertex_element_size
     );
-    return Buffer_range{vertex_count, vertex_element_size, vertex_byte_offset};
+    return Buffer_range{
+        .count        = vertex_count,
+        .element_size = vertex_element_size,
+        .byte_offset  = vertex_byte_offset
+    };
 }
 
 auto Raytrace_buffer_sink::allocate_index_buffer(
@@ -99,7 +103,11 @@ auto Raytrace_buffer_sink::allocate_index_buffer(
 ) -> Buffer_range
 {
     const auto index_byte_offset = m_index_buffer.allocate_bytes(index_count * index_element_size);
-    return Buffer_range{index_count, index_element_size, index_byte_offset};
+    return Buffer_range{
+        .count        = index_count,
+        .element_size = index_element_size,
+        .byte_offset  = index_byte_offset
+    };
 }
 
 void Raytrace_buffer_sink::buffer_ready(Vertex_buffer_writer& writer) const

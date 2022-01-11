@@ -42,7 +42,7 @@ class Raytrace_primitive;
 class Reference_frame
 {
 public:
-    Reference_frame() = default;
+    Reference_frame();
 
     Reference_frame(
         const erhe::geometry::Geometry& geometry,
@@ -67,7 +67,7 @@ class Brush_create_info final
 {
 public:
     std::shared_ptr<erhe::geometry::Geometry>        geometry;
-    erhe::primitive::Build_info_set&                 build_info_set;
+    erhe::primitive::Build_info&                     build_info;
     erhe::primitive::Normal_style                    normal_style;
     float                                            density{1.0f};
     float                                            volume {1.0f};
@@ -103,7 +103,7 @@ public:
         glm::vec3                                        local_inertia;
     };
 
-    explicit Brush(erhe::primitive::Build_info_set& build_info_set);
+    explicit Brush(erhe::primitive::Build_info& build_info);
     explicit Brush(const Create_info& create_info);
     Brush         (const Brush&) = delete;
     void operator=(const Brush&) = delete;
@@ -123,7 +123,7 @@ public:
     ) -> Instance;
 
     std::shared_ptr<erhe::geometry::Geometry>        geometry;
-    erhe::primitive::Build_info_set                  build_info_set;
+    erhe::primitive::Build_info                      build_info;
     erhe::primitive::Primitive_geometry              gl_primitive_geometry;
     std::shared_ptr<Raytrace_primitive>              rt_primitive;
     erhe::primitive::Normal_style                    normal_style{erhe::primitive::Normal_style::corner_normals};

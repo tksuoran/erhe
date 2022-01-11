@@ -33,8 +33,9 @@ auto Primitive_geometry::index_range(const Primitive_mode primitive_mode) const 
     }
 }
 
-auto primitive_type(Primitive_mode primitive_mode)
--> std::optional<gl::Primitive_type>
+auto primitive_type(
+    const Primitive_mode primitive_mode
+) -> std::optional<gl::Primitive_type>
 {
     switch (primitive_mode)
     {

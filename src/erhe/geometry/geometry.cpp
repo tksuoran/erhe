@@ -276,7 +276,7 @@ void Geometry::build_edges()
 
     const erhe::log::Indenter scope_indent;
 
-    // First pass - shared edges 
+    // First pass - shared edges
     size_t polygon_index{0};
     for_each_polygon([&](auto& i)
     {
@@ -947,9 +947,9 @@ auto Geometry::get_mass_properties() -> Mass_properties
 
     const float mass = sum / 6.0f;
     return Mass_properties{
-        mass,
-        glm::vec3{0.0f},
-        glm::mat3{1.0f}
+        .volume            = mass,
+        .center_of_gravity = glm::vec3{0.0f},
+        .inertial          = glm::mat3{1.0f}
     };
 #else
     // Copy vertex data in gt format

@@ -100,8 +100,7 @@ public:
 
     void set_index_buffer(const Buffer* buffer);
 
-    [[nodiscard]]
-    auto index_buffer() -> const Buffer*
+    [[nodiscard]] auto index_buffer() -> const Buffer*
     {
         return m_index_buffer;
     }
@@ -114,15 +113,14 @@ public:
 
     void update();
 
-    [[nodiscard]]
-    auto bindings() const -> const Binding_collection&
+    [[nodiscard]] auto bindings() const -> const Binding_collection&
     {
         return m_bindings;
     }
 
     static void on_thread_enter()
     {
-        std::lock_guard lock{s_mutex};
+        const std::lock_guard lock{s_mutex};
 
         for (auto* vertex_input_state : s_all_vertex_input_states)
         {
@@ -141,7 +139,7 @@ public:
 
     static void on_thread_exit()
     {
-        std::lock_guard lock{s_mutex};
+        const std::lock_guard lock{s_mutex};
 
         gl::bind_vertex_array(0);
         auto this_thread_id = std::this_thread::get_id();
@@ -160,15 +158,14 @@ public:
         }
     }
 
-    [[nodiscard]]
-    auto serial() const -> size_t
+    [[nodiscard]] auto serial() const -> size_t
     {
         return m_serial;
     }
 
     [[nodiscard]] static auto get_next_serial() -> size_t
     {
-        std::lock_guard lock{s_mutex};
+        const std::lock_guard lock{s_mutex};
 
         do
         {

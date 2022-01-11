@@ -32,13 +32,11 @@
 namespace editor
 {
 
-using namespace erhe::toolkit;
-using namespace erhe::graphics;
-using namespace erhe::primitive;
-using namespace erhe::scene;
-using namespace gl;
-using namespace glm;
-using namespace std;
+using erhe::graphics::Vertex_input_state;
+using erhe::graphics::Input_assembly_state;
+using erhe::graphics::Rasterization_state;
+using erhe::graphics::Depth_stencil_state;
+using erhe::graphics::Color_blend_state;
 
 Forward_renderer::Forward_renderer()
     : Component    {c_name}
@@ -60,7 +58,7 @@ void Forward_renderer::connect()
     m_configuration          = require<Configuration>();
     m_mesh_memory            = require<Mesh_memory>();
     m_programs               = require<Programs   >();
-    m_pipeline_state_tracker = get<OpenGL_state_tracker>();
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
     m_shadow_renderer        = get<Shadow_renderer>();
 }
 
@@ -82,7 +80,7 @@ void Forward_renderer::initialize_component()
 
     const auto& shader_resources = *get<Program_interface>()->shader_resources.get();
 
-    m_vertex_input = std::make_unique<Vertex_input_state>(
+    m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
         shader_resources.attribute_mappings,
         m_mesh_memory->gl_vertex_format(),
         m_mesh_memory->gl_vertex_buffer.get(),
@@ -411,20 +409,20 @@ auto Forward_renderer::select_primitive_mode(const Pass pass) const -> erhe::pri
     switch (pass)
     {
         using enum Pass;
-        case brush_back                                : return Primitive_mode::polygon_fill;
-        case brush_front                               : return Primitive_mode::polygon_fill;
-        case clear_depth                               : return Primitive_mode::polygon_fill;
-        case corner_points                             : return Primitive_mode::corner_points;
-        case depth_only                                : return Primitive_mode::polygon_fill;
-        case edge_lines                                : return Primitive_mode::edge_lines;
-        case gui                                       : return Primitive_mode::polygon_fill;
-        case hidden_line_with_blend                    : return Primitive_mode::edge_lines;
-        case polygon_centroids                         : return Primitive_mode::polygon_centroids;
-        case polygon_fill                              : return Primitive_mode::polygon_fill;
-        case require_stencil_tag_depth_hidden_and_blend: return Primitive_mode::polygon_fill;
-        case require_stencil_tag_depth_visible         : return Primitive_mode::polygon_fill;
-        case tag_depth_hidden_with_stencil             : return Primitive_mode::polygon_fill;
-        case tag_depth_visible_with_stencil            : return Primitive_mode::polygon_fill;
+        case brush_back                                : return erhe::primitive::Primitive_mode::polygon_fill;
+        case brush_front                               : return erhe::primitive::Primitive_mode::polygon_fill;
+        case clear_depth                               : return erhe::primitive::Primitive_mode::polygon_fill;
+        case corner_points                             : return erhe::primitive::Primitive_mode::corner_points;
+        case depth_only                                : return erhe::primitive::Primitive_mode::polygon_fill;
+        case edge_lines                                : return erhe::primitive::Primitive_mode::edge_lines;
+        case gui                                       : return erhe::primitive::Primitive_mode::polygon_fill;
+        case hidden_line_with_blend                    : return erhe::primitive::Primitive_mode::edge_lines;
+        case polygon_centroids                         : return erhe::primitive::Primitive_mode::polygon_centroids;
+        case polygon_fill                              : return erhe::primitive::Primitive_mode::polygon_fill;
+        case require_stencil_tag_depth_hidden_and_blend: return erhe::primitive::Primitive_mode::polygon_fill;
+        case require_stencil_tag_depth_visible         : return erhe::primitive::Primitive_mode::polygon_fill;
+        case tag_depth_hidden_with_stencil             : return erhe::primitive::Primitive_mode::polygon_fill;
+        case tag_depth_visible_with_stencil            : return erhe::primitive::Primitive_mode::polygon_fill;
         default:
             ERHE_FATAL("bad pass %04x\n", static_cast<unsigned int>(pass));
     }
@@ -433,8 +431,8 @@ auto Forward_renderer::select_primitive_mode(const Pass pass) const -> erhe::pri
 static constexpr std::string_view c_forward_renderer_render{"Forward_renderer::render()"};
 
 void Forward_renderer::render(
-    Viewport                              viewport,
-    ICamera&                              camera,
+    const erhe::scene::Viewport           viewport,
+    const erhe::scene::ICamera&           camera,
     const Mesh_layer_collection&          mesh_layers,
     const erhe::scene::Light_layer&       light_layer,
     const Material_collection&            materials,

@@ -18,9 +18,9 @@ namespace
 {
 
 inline void write_low(
-    gsl::span<std::uint8_t> destination,
-    gl::Draw_elements_type  type,
-    size_t                  value)
+    const gsl::span<std::uint8_t> destination,
+    const gl::Draw_elements_type  type,
+    const size_t                  value)
 {
     switch (type)
     {
@@ -56,9 +56,9 @@ inline void write_low(
 }
 
 inline void write_low(
-    gsl::span<std::uint8_t> destination,
-    gl::Vertex_attrib_type  type,
-    unsigned int            value)
+    const gsl::span<std::uint8_t> destination,
+    const gl::Vertex_attrib_type  type,
+    const unsigned int            value)
 {
     switch (type)
     {
@@ -94,9 +94,9 @@ inline void write_low(
 }
 
 inline void write_low(
-    gsl::span<std::uint8_t> destination,
-    gl::Vertex_attrib_type  type,
-    glm::vec2               value)
+    const gsl::span<std::uint8_t> destination,
+    const gl::Vertex_attrib_type  type,
+    const glm::vec2               value)
 {
     if (type == gl::Vertex_attrib_type::float_)
     {
@@ -120,9 +120,9 @@ inline void write_low(
 }
 
 inline void write_low(
-    gsl::span<std::uint8_t> destination,
-    gl::Vertex_attrib_type  type,
-    glm::vec3               value)
+    const gsl::span<std::uint8_t> destination,
+    const gl::Vertex_attrib_type  type,
+    const glm::vec3               value)
 {
     if (type == gl::Vertex_attrib_type::float_)
     {
@@ -145,9 +145,9 @@ inline void write_low(
 }
 
 inline void write_low(
-    gsl::span<std::uint8_t> destination,
-    gl::Vertex_attrib_type  type,
-    glm::vec4               value)
+    const gsl::span<std::uint8_t> destination,
+    const gl::Vertex_attrib_type  type,
+    const glm::vec4               value)
 {
     if (type == gl::Vertex_attrib_type::float_)
     {
@@ -217,23 +217,31 @@ Index_buffer_writer::Index_buffer_writer(
 
     if (features.corner_points)
     {
-        corner_point_index_data_span = index_data_span.subspan(primitive_geometry.corner_point_indices.first_index * index_type_size,
-                                                               mesh_info.index_count_corner_points * index_type_size);
+        corner_point_index_data_span = index_data_span.subspan(
+            primitive_geometry.corner_point_indices.first_index * index_type_size,
+            mesh_info.index_count_corner_points * index_type_size
+        );
     }
     if (features.fill_triangles)
     {
-        triangle_fill_index_data_span = index_data_span.subspan(primitive_geometry.triangle_fill_indices.first_index * index_type_size,
-                                                                mesh_info.index_count_fill_triangles * index_type_size);
+        triangle_fill_index_data_span = index_data_span.subspan(
+            primitive_geometry.triangle_fill_indices.first_index * index_type_size,
+            mesh_info.index_count_fill_triangles * index_type_size
+        );
     }
     if (features.edge_lines)
     {
-        edge_line_index_data_span = index_data_span.subspan(primitive_geometry.edge_line_indices.first_index * index_type_size,
-                                                            mesh_info.index_count_edge_lines * index_type_size);
+        edge_line_index_data_span = index_data_span.subspan(
+            primitive_geometry.edge_line_indices.first_index * index_type_size,
+            mesh_info.index_count_edge_lines * index_type_size
+        );
     }
     if (features.centroid_points)
     {
-        polygon_centroid_index_data_span = index_data_span.subspan(primitive_geometry.polygon_centroid_indices.first_index * index_type_size,
-                                                                   mesh_info.polygon_count * index_type_size);
+        polygon_centroid_index_data_span = index_data_span.subspan(
+            primitive_geometry.polygon_centroid_indices.first_index * index_type_size,
+            mesh_info.polygon_count * index_type_size
+        );
     }
 }
 
@@ -247,15 +255,10 @@ auto Index_buffer_writer::start_offset() -> size_t
     return build_context.root.primitive_geometry->index_buffer_range.byte_offset;
 }
 
-void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::vec2 value)
-{
-    write_low(vertex_data_span.subspan(vertex_write_offset + attribute.offset,
-                                       attribute.size),
-              attribute.data_type,
-              value);
-}
-
-void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::vec3 value)
+void Vertex_buffer_writer::write(
+    const Vertex_attribute_info& attribute,
+    const glm::vec2              value
+)
 {
     write_low(
         vertex_data_span.subspan(
@@ -267,7 +270,10 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const g
     );
 }
 
-void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::vec4 value)
+void Vertex_buffer_writer::write(
+    const Vertex_attribute_info& attribute,
+    const glm::vec3              value
+)
 {
     write_low(
         vertex_data_span.subspan(
@@ -279,7 +285,25 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const g
     );
 }
 
-void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const uint32_t value)
+void Vertex_buffer_writer::write(
+    const Vertex_attribute_info& attribute,
+    const glm::vec4              value
+)
+{
+    write_low(
+        vertex_data_span.subspan(
+            vertex_write_offset + attribute.offset,
+            attribute.size
+        ),
+        attribute.data_type,
+        value
+    );
+}
+
+void Vertex_buffer_writer::write(
+    const Vertex_attribute_info& attribute,
+    const uint32_t               value
+)
 {
     write_low(
         vertex_data_span.subspan(

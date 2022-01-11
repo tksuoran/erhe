@@ -2,9 +2,8 @@
 
 #include "erhe/components/component.hpp"
 #include "erhe/graphics/buffer.hpp"
-#include "erhe/graphics/configuration.hpp"
+//#include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
-#include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/state/color_blend_state.hpp"

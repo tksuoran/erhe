@@ -17,11 +17,9 @@
 namespace editor
 {
 
-using namespace erhe::toolkit;
-using namespace erhe::primitive;
-using namespace erhe::scene;
-using namespace glm;
-using namespace std;
+using mat4 = glm::mat4;
+using vec3 = glm::vec3;
+using vec4 = glm::vec4;
 
 Light_mesh::Light_mesh()
     : Component{c_name}
@@ -82,11 +80,11 @@ void Light_mesh::initialize_component()
 #endif
 }
 
-auto Light_mesh::get_light_transform(const Light& light) -> glm::mat4
+auto Light_mesh::get_light_transform(const erhe::scene::Light& light) -> glm::mat4
 {
     switch (light.type)
     {
-        using enum Light::Type;
+        using enum erhe::scene::Light::Type;
         case directional:
         {
             return mat4{1.0f};
@@ -118,7 +116,7 @@ auto Light_mesh::get_light_transform(const Light& light) -> glm::mat4
             const float apothem = length * std::tan(alpha * 0.5f);
             const float radius  = apothem / std::cos(glm::pi<float>() / static_cast<float>(m_light_cone_sides));
 
-            return create_scale(radius, radius, length);
+            return erhe::toolkit::create_scale(radius, radius, length);
         }
 
         default:
@@ -128,9 +126,12 @@ auto Light_mesh::get_light_transform(const Light& light) -> glm::mat4
     }
 }
 
-auto Light_mesh::point_in_light(const glm::vec3 point, const Light& light) -> bool
+auto Light_mesh::point_in_light(
+    const glm::vec3           point,
+    const erhe::scene::Light& light
+) -> bool
 {
-    if (light.type != Light::Type::spot)
+    if (light.type != erhe::scene::Light::Type::spot)
     {
         return true;
     }
@@ -142,8 +143,8 @@ auto Light_mesh::point_in_light(const glm::vec3 point, const Light& light) -> bo
     const mat4  light_from_world   = light.node_from_world();
     const vec3  view_in_light_     = vec3{light_from_world * vec4{point, 1.0f}};
     const float distance           = -view_in_light_.z;
-    const vec3  view_in_light      = normalize(view_in_light_);
-    const float cos_angle          = dot(view_in_light, vec3{0.0f, 0.0f, -1.0f});
+    const vec3  view_in_light      = glm::normalize(view_in_light_);
+    const float cos_angle          = glm::dot(view_in_light, vec3{0.0f, 0.0f, -1.0f});
     const bool  outside_cone_angle = (cos_angle < spot_cutoff);
     const bool  outside_cone_range = (distance < 0.0f) || (distance > range);
     if (outside_cone_angle || outside_cone_range)
@@ -156,11 +157,13 @@ auto Light_mesh::point_in_light(const glm::vec3 point, const Light& light) -> bo
     }
 }
 
-auto Light_mesh::get_light_mesh(const Light& light) -> Primitive_geometry*
+auto Light_mesh::get_light_mesh(
+    const erhe::scene::Light& light
+) -> erhe::primitive::Primitive_geometry*
 {
     switch (light.type)
     {
-        using enum Light::Type;
+        using enum erhe::scene::Light::Type;
         case directional:
         {
             return &m_quad_mesh;

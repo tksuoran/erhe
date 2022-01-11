@@ -33,21 +33,9 @@ auto glsl_token(gl::Attribute_type type) -> const char*
     }
 }
 
-//Shader_stages::Create_info::Create_info(
-//    const std::string_view           name,
-//    const Shader_resource*           default_uniform_block, // containing samplers
-//    const Vertex_attribute_mappings* vertex_attribute_mappings,
-//    const Fragment_outputs*          fragment_outputs
-//)
-//    : name                     {name}
-//    , vertex_attribute_mappings{vertex_attribute_mappings}
-//    , fragment_outputs         {fragment_outputs}
-//    , default_uniform_block    {default_uniform_block}
-//{
-//}
-
-auto Shader_stages::Create_info::final_source(const Shader_stage& shader) const
-    -> std::string
+auto Shader_stages::Create_info::final_source(
+    const Shader_stage& shader
+) const -> std::string
 {
     std::stringstream sb;
     sb << "#version 460 core\n\n";

@@ -20,9 +20,6 @@
 namespace editor
 {
 
-using namespace erhe::primitive;
-using namespace erhe::geometry;
-
 namespace {
 
 void miniaudio_data_callback(
@@ -88,13 +85,12 @@ void Theremin::initialize_component()
         ma_device_start(&m_audio_device);
     }
 
-    //hide();
+    hide();
 }
 
 void Theremin::set_left_distance(float distance)
 {
     m_left_distance = distance;
-    //m_volume = m_left_distance_scale * distance;
 }
 
 void Theremin::set_right_distance(float distance)
@@ -148,18 +144,11 @@ void Theremin::generate(
 )
 {
     const float volume  = m_volume * (1.0f - normalized_finger_distance());
-    //const float normalize = 1.0f / (m_sine_weight + m_square_weight + m_triangle_weight);
     for (uint32_t sample = 0; sample < sample_count; ++sample)
     {
         const float rel  = phase + static_cast<float>(sample) / waveform_length_in_samples;
         const float t    = glm::two_pi<float>() * rel;
         const float sine = std::sin(t);
-        //const float square         = sine < 0.0f ? -1.0f : 1.0f;
-        //const float triangle       = 2.0f * (rel - std::floor(rel)) - 1.0f;
-        //const float base_value     = (m_sine_weight * sine + m_square_weight * square + m_triangle_weight * triangle) * normalize;
-        //const float sign           = (base_value < 0.0f) ? -1.0f : 1.0f;
-        //const float abs_value      = std::abs(base_value);
-        //const float pow_value      = sign * std::pow(abs_value, m_pow);
         *output++ = volume * sine;
     }
 }
@@ -194,19 +183,20 @@ auto from_midi(int midi_note) -> Note_and_octave
 
     switch (note)
     {
-        case  0: return { Note::c,       octave };
-        case  1: return { Note::c_sharp, octave };
-        case  2: return { Note::d,       octave };
-        case  3: return { Note::d_sharp, octave };
-        case  4: return { Note::e,       octave };
-        case  5: return { Note::f,       octave };
-        case  6: return { Note::f_sharp, octave };
-        case  7: return { Note::g,       octave };
-        case  8: return { Note::g_sharp, octave };
-        case  9: return { Note::a,       octave };
-        case 10: return { Note::a_sharp, octave };
-        case 11: return { Note::b,       octave };
-        default: return { Note::a,       octave };
+        using enum Note;
+        case  0: return { c,       octave };
+        case  1: return { c_sharp, octave };
+        case  2: return { d,       octave };
+        case  3: return { d_sharp, octave };
+        case  4: return { e,       octave };
+        case  5: return { f,       octave };
+        case  6: return { f_sharp, octave };
+        case  7: return { g,       octave };
+        case  8: return { g_sharp, octave };
+        case  9: return { a,       octave };
+        case 10: return { a_sharp, octave };
+        case 11: return { b,       octave };
+        default: return { a,       octave };
     }
 }
 
@@ -268,7 +258,7 @@ auto frequency_to_midi_note(float f) -> int
     const double rp = std::round(p);
     return static_cast<int>(rp);
 }
-    
+
 void Theremin::tool_render(const Render_context& context)
 {
     static_cast<void>(context);
@@ -290,17 +280,12 @@ void Theremin::tool_render(const Render_context& context)
     const auto& left_hand     = m_hand_tracker->get_hand(Hand_name::Left);
     const auto& right_hand    = m_hand_tracker->get_hand(Hand_name::Right);
 
-    //constexpr uint32_t red        = 0xff0000ffu;
-    //constexpr uint32_t half_red   = 0x88000088u;
     constexpr uint32_t green      = 0xff00ff00u;
     constexpr uint32_t half_green = 0x88008800u;
-    //constexpr uint32_t blue       = 0xffff0000u;
     constexpr float    thickness  = 70.0f;
 
     const glm::vec3 left_p0{-0.15f, 0.0f, 0.0f};
     const glm::vec3 left_p1{-0.15f, 2.0f, 0.0f};
-    //line_renderer.set_line_color(red);
-    //line_renderer.add_lines( { { left_p0, left_p1 } }, thickness );
 
     const glm::vec3 right_p0{0.15f, 0.0f, 0.0f};
     const glm::vec3 right_p1{0.15f, 2.0f, 0.0f};
@@ -314,7 +299,7 @@ void Theremin::tool_render(const Render_context& context)
     {
         m_left_finger_distance = m_left_finger_distance.value() * 100.0f;
     }
-    //const float volume = m_volume * (1.0f - normalized_finger_distance());
+
     const auto finger_distance_color = gradient::cubehelix.get(1.0f - normalized_finger_distance());
     m_hand_tracker->set_left_hand_color(
         ImGui::ColorConvertFloat4ToU32(
@@ -339,15 +324,14 @@ void Theremin::tool_render(const Render_context& context)
             const auto  P = left_closest_point.value().P;
             const auto  Q = left_closest_point.value().Q;
             const float d = glm::distance(P, Q);
-            //const float s = 0.085f / d;
-            //line_renderer.set_line_color(gradient::viridis.get(s));
-            //line_renderer.set_line_color(half_red);
-            //line_renderer.add_lines( { { P, Q } }, thickness );
             set_left_distance(d);
         }
     }
 
-    m_right_finger_distance = right_hand.distance(XR_HAND_JOINT_THUMB_TIP_EXT, XR_HAND_JOINT_INDEX_TIP_EXT);
+    m_right_finger_distance = right_hand.distance(
+        XR_HAND_JOINT_THUMB_TIP_EXT,
+        XR_HAND_JOINT_INDEX_TIP_EXT
+    );
 
     // From m to cm
     if (m_right_finger_distance.has_value())
@@ -367,8 +351,6 @@ void Theremin::tool_render(const Render_context& context)
             const auto  P = right_closest_point.value().P;
             const auto  Q = right_closest_point.value().Q;
             const float d = glm::distance(P, Q);
-            //const float s = 0.085f / d;
-            //line_renderer.set_line_color(gradient::temperature.get(s));
             line_renderer.set_line_color(half_green);
             line_renderer.add_lines( { { P, Q } }, thickness );
             set_right_distance(d);
@@ -395,19 +377,8 @@ void Theremin::imgui()
                 "Left Finger Tip Distance: Not tracked"
             );
         }
-        //if (m_right_finger_distance.has_value())
-        //{
-        //    ImGui::Text("Right Finger Distance: %.1f cm", m_right_finger_distance.value());
-        //}
-        //else
-        //{
-        //    ImGui::TextColored(
-        //        ImVec4{1.0f, 0.3f, 0.2f, 1.0f},
-        //        "Right Finger Distance: Not tracked"
-        //    );
-        //}
-        ImGui::SliderFloat("Min Left Finger Tip Distance", &m_finger_distance_min, 0.5f, 30.0f, "%.1f cm"); // cm
-        ImGui::SliderFloat("Max Left Finger Tip Distance", &m_finger_distance_max, 0.5f, 30.0f, "%.1f cm"); // cm
+        ImGui::SliderFloat("Min Left Finger Tip Distance", &m_finger_distance_min, 0.5f, 30.0f, "%.1f cm");
+        ImGui::SliderFloat("Max Left Finger Tip Distance", &m_finger_distance_max, 0.5f, 30.0f, "%.1f cm");
         if (enable_changed)
         {
             if (m_enable_audio && m_audio_ok)
@@ -420,27 +391,42 @@ void Theremin::imgui()
             }
         }
 
-        //ImGui::InputFloat("Left Distance",        &m_left_distance, 0.0f, 0.0f, "%.3f", ImGuiInputTextFlags_ReadOnly);
-        ImGui::InputFloat("Right Hand Distance",       &m_right_distance, 0.0f, 0.0f, "%.3f m", ImGuiInputTextFlags_ReadOnly);
-        //ImGui::InputFloat("Left Distance Scale",  &m_left_distance_scale);
-        ImGui::InputFloat("Right Hanb Distance Scale", &m_right_distance_scale);
-        bool any = false;
-        any = ImGui::DragFloat("Frequency",       &m_frequency, 0.0f, 5.0f, 2000.0f, "%.1f Hz") || any;
+        ImGui::InputFloat(
+            "Right Hand Distance",
+            &m_right_distance,
+            0.0f,
+            0.0f,
+            "%.3f m",
+            ImGuiInputTextFlags_ReadOnly
+        );
+
+        ImGui::InputFloat(
+            "Right Hanb Distance Scale",
+            &m_right_distance_scale
+        );
+
+        ImGui::DragFloat(
+            "Frequency",
+            &m_frequency,
+            0.0f,
+            5.0f,
+            2000.0f,
+            "%.1f Hz"
+        );
+
         const int  midi_note = frequency_to_midi_note(m_frequency);
         const auto note      = from_midi(midi_note);
+
         ImGui::Checkbox("Snap to Note", &m_snap_to_note);
         if (m_snap_to_note)
         {
             m_frequency = midi_note_to_frequency(midi_note);
         }
+
         m_hand_tracker->set_right_hand_color(get_note_color(midi_note));
         ImGui::Text("Note: %s-%d", c_str(note.note), note.octave);
-        any = ImGui::SliderFloat("Volume",          &m_volume,            0.0f,    1.0f) || any;
-        //any = ImGui::SliderFloat("Sine Weight",     &m_sine_weight,      -5.0f,    5.0f) || any;
-        //any = ImGui::SliderFloat("Square Weight",   &m_square_weight,    -5.0f,    5.0f) || any;
-        //any = ImGui::SliderFloat("Triangle Weight", &m_triangle_weight,  -5.0f,    5.0f) || any;
-        //any = ImGui::SliderFloat("Pow",             &m_pow,             -10.0f, 2000.0f, "%.4f", ImGuiSliderFlags_Logarithmic) || any;
-        //if (any || m_wavetable.empty())
+        ImGui::SliderFloat("Volume", &m_volume, 0.0f, 1.0f);
+
         {
             m_wavetable.resize(500);
             const auto waveform_length_in_samples = static_cast<float   >(m_wavetable.size());

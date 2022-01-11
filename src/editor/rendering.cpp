@@ -27,7 +27,7 @@
 
 namespace editor {
 
-using namespace erhe::graphics;
+using erhe::graphics::Color_blend_state;
 
 Editor_rendering::Editor_rendering()
     : erhe::components::Component{c_name}
@@ -84,10 +84,10 @@ void Editor_rendering::begin_frame()
 {
     ERHE_PROFILE_FUNCTION
 
-    //if (m_configuration->gui)
-    //{
-    //    m_editor_imgui_windows->menu();
-    //}
+    if (m_configuration->gui)
+    {
+        m_editor_imgui_windows->menu();
+    }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_headset_renderer)
@@ -191,10 +191,7 @@ void Editor_rendering::render_viewport(const Render_context& context, const bool
         }
     }
 
-    //if (has_pointer)
-    {
-        m_editor_tools->render_tools(context);
-    }
+    m_editor_tools->render_tools(context);
 
     if (m_line_renderer_set)
     {
@@ -253,7 +250,7 @@ void Editor_rendering::render_content(const Render_context& context)
     constexpr erhe::scene::Visibility_filter content_not_selected_filter{
         .require_all_bits_set   = erhe::scene::Node::c_visibility_content,
         .require_all_bits_clear = erhe::scene::Node::c_visibility_selected
-    };                                        
+    };
 
     if (render_style.polygon_fill)
     {
@@ -355,7 +352,7 @@ void Editor_rendering::render_selection(const Render_context& context)
         .require_all_bits_set =
             erhe::scene::Node::c_visibility_content |
             erhe::scene::Node::c_visibility_selected
-    };                                        
+    };
 
     if (render_style.polygon_fill)
     {

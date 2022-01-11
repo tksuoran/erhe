@@ -26,8 +26,7 @@
 namespace editor
 {
 
-using namespace erhe::primitive;
-using namespace erhe::geometry;
+using glm::vec3;
 
 void Hover_tool_hover_command::on_inactive(Command_context& context)
 {
@@ -88,8 +87,8 @@ auto Hover_tool::try_call() -> bool
 {
     m_hover_content        = m_pointer_context->hovering_over_content();
     m_hover_tool           = m_pointer_context->hovering_over_tool();
-    m_hover_position_world = m_hover_content ? m_pointer_context->position_in_world() : std::optional<glm::vec3>{};
-    m_hover_normal         = m_hover_content ? m_pointer_context->hover_normal()      : std::optional<glm::vec3>{};
+    m_hover_position_world = m_hover_content ? m_pointer_context->position_in_world() : std::optional<vec3>{};
+    m_hover_normal         = m_hover_content ? m_pointer_context->hover_normal()      : std::optional<vec3>{};
     if (
         (m_pointer_context->hover_mesh()      != m_hover_mesh) ||
         (m_pointer_context->hover_primitive() != m_hover_primitive_index)
@@ -114,8 +113,8 @@ void Hover_tool::tool_render(const Render_context& context)
     constexpr uint32_t white = 0xffffffffu;
 
     const uint32_t text_color =
-        m_hover_content 
-            ? white 
+        m_hover_content
+            ? white
             : m_hover_tool
                 ? blue
                 : red;
@@ -134,8 +133,8 @@ void Hover_tool::tool_render(const Render_context& context)
             m_hover_position_world.has_value()
         )
         {
-            const auto      position_in_viewport = context.window->project_to_viewport(m_hover_position_world.value());
-            const glm::vec3 position_at_fixed_depth{
+            const auto position_in_viewport = context.window->project_to_viewport(m_hover_position_world.value());
+            const vec3 position_at_fixed_depth{
                 position_in_viewport.x + 50.0f,
                 position_in_viewport.y,
                 -0.5f
@@ -156,8 +155,8 @@ void Hover_tool::tool_render(const Render_context& context)
             m_hover_normal.has_value()
         )
         {
-            const glm::vec3 p0 = m_hover_position_world.value() + 0.0f * m_hover_normal.value();
-            const glm::vec3 p1 = m_hover_position_world.value() + 1.0f * m_hover_normal.value();
+            const vec3 p0 = m_hover_position_world.value() + 0.0f * m_hover_normal.value();
+            const vec3 p1 = m_hover_position_world.value() + 1.0f * m_hover_normal.value();
             line_renderer.set_line_color(0xff0000ffu);
             line_renderer.add_lines(
                 {
@@ -172,13 +171,13 @@ void Hover_tool::tool_render(const Render_context& context)
 #if 1
         if (m_pointer_context->raytrace_hit_position().has_value())
         {
-            const glm::vec3 p0 = m_pointer_context->raytrace_hit_position().value();
-            const glm::vec3 neg_x = p0 - glm::vec3{1.0f, 0.0f, 0.0f};
-            const glm::vec3 pos_x = p0 + glm::vec3{1.0f, 0.0f, 0.0f};
-            const glm::vec3 neg_y = p0 - glm::vec3{0.0f, 1.0f, 0.0f};
-            const glm::vec3 pos_y = p0 + glm::vec3{0.0f, 1.0f, 0.0f};
-            const glm::vec3 neg_z = p0 - glm::vec3{0.0f, 0.0f, 1.0f};
-            const glm::vec3 pos_z = p0 + glm::vec3{0.0f, 0.0f, 1.0f};
+            const vec3 p0 = m_pointer_context->raytrace_hit_position().value();
+            const vec3 neg_x = p0 - vec3{1.0f, 0.0f, 0.0f};
+            const vec3 pos_x = p0 + vec3{1.0f, 0.0f, 0.0f};
+            const vec3 neg_y = p0 - vec3{0.0f, 1.0f, 0.0f};
+            const vec3 pos_y = p0 + vec3{0.0f, 1.0f, 0.0f};
+            const vec3 neg_z = p0 - vec3{0.0f, 0.0f, 1.0f};
+            const vec3 pos_z = p0 + vec3{0.0f, 0.0f, 1.0f};
             m_line_renderer_set->hidden.set_line_color(red);
             m_line_renderer_set->hidden.add_lines(
                 {
@@ -231,7 +230,7 @@ void Hover_tool::deselect()
         m_hover_mesh = nullptr;
     }
 }
-     
+
 void Hover_tool::select()
 {
     ERHE_PROFILE_FUNCTION

@@ -37,14 +37,10 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-    [[nodiscard]]
-    auto get_light_transform (const erhe::scene::Light& light) -> glm::mat4;
-
-    [[nodiscard]]
-    auto point_in_light      (const glm::vec3 point_in_world, const erhe::scene::Light& light) -> bool;
-
-    [[nodiscard]]
-    auto get_light_mesh      (const erhe::scene::Light& light) -> erhe::primitive::Primitive_geometry*;
+    // Public API
+    [[nodiscard]] auto get_light_transform(const erhe::scene::Light& light) -> glm::mat4;
+    [[nodiscard]] auto point_in_light     (const glm::vec3 point_in_world, const erhe::scene::Light& light) -> bool;
+    [[nodiscard]] auto get_light_mesh     (const erhe::scene::Light& light) -> erhe::primitive::Primitive_geometry*;
 
 private:
     // Component dependency

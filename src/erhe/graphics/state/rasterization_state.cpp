@@ -65,7 +65,7 @@ Rasterization_state Rasterization_state::cull_mode_front_and_back{true,  gl::Cul
 
 auto Rasterization_state::cull_mode_front_cw(const bool reverse_depth) -> Rasterization_state*
 {
-    return reverse_depth 
+    return reverse_depth
         ? &s_cull_mode_front_ccw
         : &s_cull_mode_front_cw;
 }
@@ -158,8 +158,10 @@ void Rasterization_state_tracker::execute(Rasterization_state const* state)
     m_last = state->serial;
 }
 
-auto operator==(const Rasterization_state& lhs, const Rasterization_state& rhs) noexcept
--> bool
+auto operator==(
+    const Rasterization_state& lhs,
+    const Rasterization_state& rhs
+) noexcept -> bool
 {
     return
         (lhs.enabled              == rhs.enabled             ) &&
@@ -168,8 +170,10 @@ auto operator==(const Rasterization_state& lhs, const Rasterization_state& rhs) 
         (lhs.polygon_mode         == rhs.polygon_mode        );
 }
 
-auto operator!=(const Rasterization_state& lhs, const Rasterization_state& rhs) noexcept
--> bool
+auto operator!=(
+    const Rasterization_state& lhs,
+    const Rasterization_state& rhs
+) noexcept -> bool
 {
     return !(lhs == rhs);
 }

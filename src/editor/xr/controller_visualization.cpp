@@ -28,7 +28,7 @@ Controller_visualization::Controller_visualization(
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
     auto controller_pg = erhe::primitive::make_primitive(
         controller_geometry,
-        mesh_memory.build_info_set.gl
+        mesh_memory.build_info
     );
 
     erhe::primitive::Primitive primitive{

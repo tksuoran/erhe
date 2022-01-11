@@ -245,7 +245,12 @@ public:
         return corner_id;
     }
 
-    Box_builder(Geometry& geometry, const vec3 size, const ivec3 div, const float p)
+    Box_builder(
+        Geometry&   geometry,
+        const vec3  size,
+        const ivec3 div,
+        const float p
+    )
         : geometry{geometry}
         , size    {size}
         , div     {div}
@@ -384,8 +389,11 @@ public:
     }
 };
 
-auto make_box(const glm::vec3 size, const glm::ivec3 div, const float p)
--> Geometry
+auto make_box(
+    const glm::vec3  size,
+    const glm::ivec3 div,
+    const float      p
+) -> Geometry
 {
     ERHE_PROFILE_FUNCTION
 

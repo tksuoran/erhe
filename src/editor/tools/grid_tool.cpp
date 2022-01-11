@@ -11,6 +11,8 @@
 namespace editor
 {
 
+using glm::vec3;
+
 Grid_tool::Grid_tool()
     : erhe::components::Component{c_name}
     , Imgui_window               {c_description}
@@ -64,12 +66,12 @@ void Grid_tool::tool_render(const Render_context& /*context*/)
         line_renderer.add_lines(
             {
                 {
-                    glm::vec3{     xz, 0.0f, -extent},
-                    glm::vec3{     xz, 0.0f,  extent}
+                    vec3{     xz, 0.0f, -extent},
+                    vec3{     xz, 0.0f,  extent}
                 },
                 {
-                    glm::vec3{-extent, 0.0f,      xz},
-                    glm::vec3{ extent, 0.0f,      xz}
+                    vec3{-extent, 0.0f,      xz},
+                    vec3{ extent, 0.0f,      xz}
                 }
             },
             m_thickness
@@ -81,12 +83,12 @@ void Grid_tool::tool_render(const Render_context& /*context*/)
             line_renderer.add_lines(
                 {
                     {
-                        glm::vec3{     xz, 0.0f, -extent},
-                        glm::vec3{     xz, 0.0f,  extent}
+                        vec3{     xz, 0.0f, -extent},
+                        vec3{     xz, 0.0f,  extent}
                     },
                     {
-                        glm::vec3{-extent, 0.0f,      xz},
-                        glm::vec3{ extent, 0.0f,      xz}
+                        vec3{-extent, 0.0f,      xz},
+                        vec3{ extent, 0.0f,      xz}
                     }
                 },
                 m_thickness
@@ -98,12 +100,12 @@ void Grid_tool::tool_render(const Render_context& /*context*/)
     line_renderer.add_lines(
         {
             {
-                glm::vec3{    xz, 0.0f, -extent},
-                glm::vec3{    xz, 0.0f,  extent}
+                vec3{    xz, 0.0f, -extent},
+                vec3{    xz, 0.0f,  extent}
             },
             {
-                glm::vec3{-extent, 0.0f,     xz},
-                glm::vec3{ extent, 0.0f,     xz}
+                vec3{-extent, 0.0f,     xz},
+                vec3{ extent, 0.0f,     xz}
             }
         },
         m_thickness
@@ -123,9 +125,9 @@ void Grid_tool::imgui()
     ImGui::ColorEdit4 ("Minor Color", &m_minor_color.x, ImGuiColorEditFlags_Float);
 }
 
-auto Grid_tool::snap(const glm::vec3 v) const -> glm::vec3
+auto Grid_tool::snap(const vec3 v) const -> vec3
 {
-    return glm::vec3{
+    return vec3{
         std::floor((v.x + m_cell_size * 0.5f) / m_cell_size) * m_cell_size,
         std::floor((v.y + m_cell_size * 0.5f) / m_cell_size) * m_cell_size,
         std::floor((v.z + m_cell_size * 0.5f) / m_cell_size) * m_cell_size

@@ -19,7 +19,7 @@ namespace erhe::physics
 
 namespace erhe::primitive
 {
-    class Build_info_set;
+    class Build_info;
 }
 
 namespace erhe::scene
@@ -42,11 +42,11 @@ public:
     class Context
     {
     public:
-        erhe::primitive::Build_info_set& build_info_set;
-        erhe::scene::Scene&              scene;
-        erhe::scene::Mesh_layer&         layer;
-        erhe::physics::IWorld&           physics_world;
-        Selection_tool*                  selection_tool;
+        erhe::primitive::Build_info& build_info;
+        erhe::scene::Scene&          scene;
+        erhe::scene::Mesh_layer&     layer;
+        erhe::physics::IWorld&       physics_world;
+        Selection_tool*              selection_tool;
     };
 
 protected:

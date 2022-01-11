@@ -38,8 +38,8 @@ public:
     // Implements Imgui_window
     void imgui() override;
 
-    [[nodiscard]]
-    auto selected_material() const -> std::shared_ptr<erhe::primitive::Material>;
+    // Public API
+    [[nodiscard]] auto selected_material() const -> std::shared_ptr<erhe::primitive::Material>;
 
 private:
     // Component dependencies

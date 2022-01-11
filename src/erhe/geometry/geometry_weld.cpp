@@ -10,13 +10,17 @@
 namespace erhe::geometry
 {
 
-const char* c_str(const glm::vec3::length_type axis)
+using glm::vec2;
+using glm::vec3;
+using glm::vec4;
+
+const char* c_str(const vec3::length_type axis)
 {
     switch (axis)
     {
-        case glm::vec3::length_type{0}: return "X";
-        case glm::vec3::length_type{1}: return "Y";
-        case glm::vec3::length_type{2}: return "Z";
+        case vec3::length_type{0}: return "X";
+        case vec3::length_type{1}: return "Y";
+        case vec3::length_type{2}: return "Z";
         default: return "?";
     }
 }
@@ -245,63 +249,63 @@ public:
 
     void reorder_to_drop_duplicates()
     {
-        log_weld.trace("Merge list:");
-        for (auto entry : merge.entries)
-        {
-            log_weld.trace(" {}->{}", entry.secondary, entry.primary);
-        }
-        log_weld.trace("\n");
+        //log_weld.trace("Merge list:");
+        //for (auto entry : merge.entries)
+        //{
+        //    log_weld.trace(" {}->{}", entry.secondary, entry.primary);
+        //}
+        //log_weld.trace("\n");
 
-        log_weld.trace("Dropped due to merge:");
+        //log_weld.trace("Dropped due to merge:");
         for (size_t i = 0, end = merge.size(); i < end; ++i)
         {
             const auto& entry = merge.entries[i];
             const T secondary_new_id = entry.secondary;
             if (secondary_new_id >= new_end)
             {
-                log_weld.trace(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
+                //log_weld.trace(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
                 continue;
             }
             const T keep_new_id = get_next_end();
             if (secondary_new_id == keep_new_id)
             {
-                log_weld.trace(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
+                //log_weld.trace(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
                 continue;
             }
-            log_weld.trace(" {:2} -> {:2} ", secondary_new_id, keep_new_id);
+            //log_weld.trace(" {:2} -> {:2} ", secondary_new_id, keep_new_id);
             swap(secondary_new_id, keep_new_id);
         }
-        log_weld.trace("\n");
+        //log_weld.trace("\n");
 
-        log_weld.trace("Dropped due to eliminate:");
+        //log_weld.trace("Dropped due to eliminate:");
         for (size_t i = 0, end = eliminate.size(); i < end; ++i)
         {
             T secondary_new_id = eliminate[i];
             if (secondary_new_id >= new_end)
             {
-                log_weld.trace(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
+                //log_weld.trace(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
                 continue;
             }
             T keep_new_id = get_next_end();
             if (secondary_new_id == keep_new_id)
             {
-                log_weld.trace(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
+                //log_weld.trace(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
                 continue;
             }
-            log_weld.trace(" {:2} -> {:2} ", secondary_new_id, keep_new_id);
+            //log_weld.trace(" {:2} -> {:2} ", secondary_new_id, keep_new_id);
             swap(secondary_new_id, keep_new_id);
         }
-        log_weld.trace("\n");
+        //log_weld.trace("\n");
     }
 
     void reorder_to_drop_unused()
     {
-        log_weld.trace("Usage:\n");
+        //log_weld.trace("Usage:\n");
         new_end = 0;
         for (T new_id = 0, end = new_size; new_id < end; ++new_id)
         {
             const T old_id = old_from_new[new_id];
-            log_weld.trace("new {:2} old {:2} : {}\n", new_id, old_id, (old_used[old_id] ? "true" : "false"));
+            //log_weld.trace("new {:2} old {:2} : {}\n", new_id, old_id, (old_used[old_id] ? "true" : "false"));
             if (old_used[old_id])
             {
                 new_end = new_id + 1;
@@ -316,27 +320,27 @@ public:
                 T secondary_new_id = new_id;
                 if (secondary_new_id >= new_end)
                 {
-                    log_weld.trace("Dropping unused, end {:2} new {:2} old {:2}\n", new_end, secondary_new_id, old_id);
+                    //log_weld.trace("Dropping unused, end {:2} new {:2} old {:2}\n", new_end, secondary_new_id, old_id);
                     continue;
                 }
                 T keep_new_id = get_next_end(true);
                 if (secondary_new_id == keep_new_id)
                 {
-                    log_weld.trace("Dropping unused, end {:2} new {:2} old {:2}\n", new_end, secondary_new_id, old_id);
+                    //log_weld.trace("Dropping unused, end {:2} new {:2} old {:2}\n", new_end, secondary_new_id, old_id);
                     continue;
                 }
-                log_weld.trace(
-                    "Dropping unused, end {:2} new {:2} old {:2} -> new {:2} old {:2}\n",
-                    new_end,
-                    secondary_new_id,
-                    old_id,
-                    keep_new_id,
-                    old_from_new[keep_new_id]
-                );
+                //log_weld.trace(
+                //    "Dropping unused, end {:2} new {:2} old {:2} -> new {:2} old {:2}\n",
+                //    new_end,
+                //    secondary_new_id,
+                //    old_id,
+                //    keep_new_id,
+                //    old_from_new[keep_new_id]
+                //);
                 swap(secondary_new_id, keep_new_id);
             }
         }
-        log_weld.trace("\n");
+        //log_weld.trace("\n");
     }
 
     void for_each_primary_new(
@@ -456,18 +460,16 @@ public:
 
 void Geometry::weld(const Weld_settings& weld_settings)
 {
-    using namespace glm;
-
     ERHE_PROFILE_FUNCTION
 
     class Point_attribute_maps
     {
     public:
-        Property_map<Point_id, glm::vec3>* locations {nullptr};
-        Property_map<Point_id, glm::vec3>* normals   {nullptr};
-        Property_map<Point_id, glm::vec3>* tangents  {nullptr};
-        Property_map<Point_id, glm::vec3>* bitangents{nullptr};
-        Property_map<Point_id, glm::vec2>* texcoords {nullptr};
+        Property_map<Point_id, vec3>* locations {nullptr};
+        Property_map<Point_id, vec3>* normals   {nullptr};
+        Property_map<Point_id, vec3>* tangents  {nullptr};
+        Property_map<Point_id, vec3>* bitangents{nullptr};
+        Property_map<Point_id, vec2>* texcoords {nullptr};
     };
     const Point_attribute_maps point_attribute_maps
     {
@@ -481,8 +483,8 @@ void Geometry::weld(const Weld_settings& weld_settings)
     class Polygon_attribute_maps
     {
     public:
-        Property_map<Polygon_id, glm::vec3>* centroids{nullptr};
-        Property_map<Polygon_id, glm::vec3>* normals  {nullptr};
+        Property_map<Polygon_id, vec3>* centroids{nullptr};
+        Property_map<Polygon_id, vec3>* normals  {nullptr};
     };
 
     const Polygon_attribute_maps polygon_attribute_maps{
@@ -490,8 +492,8 @@ void Geometry::weld(const Weld_settings& weld_settings)
         .normals    = polygon_attributes().find<vec3>(c_polygon_normals)
     };
 
-    glm::vec3 min_corner(std::numeric_limits<float>::max(),    std::numeric_limits<float>::max(),    std::numeric_limits<float>::max());
-    glm::vec3 max_corner(std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest());
+    vec3 min_corner{std::numeric_limits<float>::max(),    std::numeric_limits<float>::max(),    std::numeric_limits<float>::max()};
+    vec3 max_corner{std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()};
     //log_weld.trace("Points before sort:\n");
     for (Point_id point_id = 0; point_id < m_next_point_id; ++point_id)
     {
@@ -505,12 +507,12 @@ void Geometry::weld(const Weld_settings& weld_settings)
         max_corner = glm::max(max_corner, position);
     }
 
-    const glm::vec3 bounding_box_size0 = max_corner - min_corner;
-    const auto      axis0 = erhe::toolkit::max_axis_index(bounding_box_size0);
-    glm::vec3 bounding_box_size1 = bounding_box_size0;
+    const vec3 bounding_box_size0 = max_corner - min_corner;
+    const auto axis0 = erhe::toolkit::max_axis_index(bounding_box_size0);
+    vec3       bounding_box_size1 = bounding_box_size0;
     bounding_box_size1[axis0] = 0.0f;
     const auto axis1 = erhe::toolkit::max_axis_index(bounding_box_size1);
-    glm::vec3 bounding_box_size2 = bounding_box_size1;
+    vec3       bounding_box_size2 = bounding_box_size1;
     bounding_box_size2[axis1] = 0.0f;
     const auto axis2 = erhe::toolkit::max_axis_index(bounding_box_size2);
 
@@ -530,14 +532,20 @@ void Geometry::weld(const Weld_settings& weld_settings)
         std::sort(
             polygon_remapper.old_from_new.begin(),
             polygon_remapper.old_from_new.end(),
-            [axis0, axis1, axis2, polygon_attribute_maps](const Polygon_id& lhs, const Polygon_id& rhs)
+            [axis0, axis1, axis2, polygon_attribute_maps](
+                const Polygon_id& lhs,
+                const Polygon_id& rhs
+            )
             {
-                if (!polygon_attribute_maps.centroids->has(lhs) || !polygon_attribute_maps.centroids->has(rhs))
+                if (
+                    !polygon_attribute_maps.centroids->has(lhs) ||
+                    !polygon_attribute_maps.centroids->has(rhs)
+                )
                 {
                     return false;
                 }
-                const glm::vec3 position_lhs = polygon_attribute_maps.centroids->get(lhs);
-                const glm::vec3 position_rhs = polygon_attribute_maps.centroids->get(rhs);
+                const vec3 position_lhs = polygon_attribute_maps.centroids->get(lhs);
+                const vec3 position_rhs = polygon_attribute_maps.centroids->get(rhs);
                 if (position_lhs[axis0] != position_rhs[axis0])
                 {
                     return position_lhs[axis0] < position_rhs[axis0];;
@@ -584,8 +592,8 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 centroid = attribute_maps.centroids->get(old_id);
                 normal   = attribute_maps.normals  ->get(old_id);
             }
-            glm::vec3 centroid{0.0f, 0.0f, 0.0f};
-            glm::vec3 normal  {0.0f, 0.0f, 0.0f};
+            vec3 centroid{0.0f, 0.0f, 0.0f};
+            vec3 normal  {0.0f, 0.0f, 0.0f};
         };
         for (
             Polygon_id primary_new_id = 0;
@@ -737,7 +745,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
             polygons[new_polygon_id].corner_count            = 0;
             for (uint32_t i = 0, end = old_polygon.corner_count; i < end; ++i)
             {
-                const Polygon_corner_id old_polygon_corner_id = old_polygon.first_polygon_corner_id + i;                
+                const Polygon_corner_id old_polygon_corner_id = old_polygon.first_polygon_corner_id + i;
                 const Polygon_corner_id new_polygon_corner_id = new_polygon.first_polygon_corner_id + new_polygon.corner_count;
                 const Corner_id         corner_id             = old_polygon_corners[old_polygon_corner_id];
                 polygon_corners[new_polygon_corner_id] = corner_id;
@@ -750,7 +758,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 [this, new_polygon_id, &old_polygons, &old_polygon_corners, &next_polygon_corner]
                 (
                     Polygon_id primary_new_id,
-                    Polygon_id /*primary_old_id*/, 
+                    Polygon_id /*primary_old_id*/,
                     Polygon_id /*secondary_new_id*/,
                     Polygon_id secondary_old_id
                 )
@@ -812,8 +820,8 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 {
                     return false;
                 }
-                const glm::vec3 position_lhs = point_attribute_maps.locations->get(lhs);
-                const glm::vec3 position_rhs = point_attribute_maps.locations->get(rhs);
+                const vec3 position_lhs = point_attribute_maps.locations->get(lhs);
+                const vec3 position_rhs = point_attribute_maps.locations->get(rhs);
                 if (position_lhs[axis0] != position_rhs[axis0])
                 {
                     const bool is_less = position_lhs[axis0] < position_rhs[axis0];
@@ -870,15 +878,15 @@ void Geometry::weld(const Weld_settings& weld_settings)
             {
                 if ((attribute_maps.locations  != nullptr) && attribute_maps.locations ->has(old_id)) position  = attribute_maps.locations ->get(old_id);
                 if ((attribute_maps.normals    != nullptr) && attribute_maps.normals   ->has(old_id)) normal    = attribute_maps.normals   ->get(old_id);
-                if ((attribute_maps.tangents   != nullptr) && attribute_maps.tangents  ->has(old_id)) tangent   = attribute_maps.tangents  ->get(old_id); 
-                if ((attribute_maps.bitangents != nullptr) && attribute_maps.bitangents->has(old_id)) bitangent = attribute_maps.bitangents->get(old_id);  
-                if ((attribute_maps.texcoords  != nullptr) && attribute_maps.texcoords ->has(old_id)) texcoord  = attribute_maps.texcoords ->get(old_id); 
+                if ((attribute_maps.tangents   != nullptr) && attribute_maps.tangents  ->has(old_id)) tangent   = attribute_maps.tangents  ->get(old_id);
+                if ((attribute_maps.bitangents != nullptr) && attribute_maps.bitangents->has(old_id)) bitangent = attribute_maps.bitangents->get(old_id);
+                if ((attribute_maps.texcoords  != nullptr) && attribute_maps.texcoords ->has(old_id)) texcoord  = attribute_maps.texcoords ->get(old_id);
             }
-            std::optional<glm::vec3> position;
-            std::optional<glm::vec3> normal;
-            std::optional<glm::vec3> tangent;
-            std::optional<glm::vec3> bitangent;
-            std::optional<glm::vec2> texcoord;
+            std::optional<vec3> position;
+            std::optional<vec3> normal;
+            std::optional<vec3> tangent;
+            std::optional<vec3> bitangent;
+            std::optional<vec2> texcoord;
         };
 
         for (Point_id primary_new_id = 0; primary_new_id < m_next_point_id; ++primary_new_id)
@@ -1046,7 +1054,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 [this, new_point_id, &old_points, &old_point_corners, &next_point_corner]
                 (
                     const Polygon_id primary_new_id,
-                    const Polygon_id /*primary_old_id*/, 
+                    const Polygon_id /*primary_old_id*/,
                     const Polygon_id /*secondary_new_id*/,
                     const Polygon_id secondary_old_id
                 )

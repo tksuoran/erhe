@@ -10,11 +10,6 @@
 namespace editor
 {
 
-using namespace std;
-using namespace erhe::geometry;
-using namespace erhe::primitive;
-using namespace erhe::scene;
-
 Mesh_operation::Mesh_operation(Context&& context)
     : m_context{std::move(context)}
 {
@@ -62,7 +57,9 @@ void Mesh_operation::undo() const
 }
 
 void Mesh_operation::make_entries(
-    const function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation
+    const std::function<
+        erhe::geometry::Geometry(erhe::geometry::Geometry&)
+    > operation
 )
 {
     m_context.scene.sanity_check();
@@ -93,10 +90,12 @@ void Mesh_operation::make_entries(
             auto& gr = *g;
             auto result_geometry = operation(gr);
             result_geometry.sanity_check();
-            primitive.source_geometry       = make_shared<erhe::geometry::Geometry>(move(result_geometry));
+            primitive.source_geometry = std::make_shared<erhe::geometry::Geometry>(
+                std::move(result_geometry)
+            );
             primitive.gl_primitive_geometry = make_primitive(
                 *primitive.source_geometry.get(),
-                m_context.build_info_set.gl,
+                m_context.build_info,
                 primitive.normal_style
             );
         }

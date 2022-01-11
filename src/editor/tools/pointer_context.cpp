@@ -19,6 +19,9 @@
 namespace editor
 {
 
+using erhe::geometry::c_polygon_normals;
+using erhe::geometry::Polygon_id;
+
 Pointer_context::Pointer_context()
     : erhe::components::Component{c_name}
 {
@@ -42,11 +45,10 @@ void Pointer_context::update_keyboard(
 {
     static_cast<void>(pressed);
     static_cast<void>(code);
-    using namespace erhe::toolkit;
 
-    m_shift   = (modifier_mask & Key_modifier_bit_shift) == Key_modifier_bit_shift;
-    m_alt     = (modifier_mask & Key_modifier_bit_menu ) == Key_modifier_bit_menu;
-    m_control = (modifier_mask & Key_modifier_bit_ctrl ) == Key_modifier_bit_ctrl;
+    m_shift   = (modifier_mask & erhe::toolkit::Key_modifier_bit_shift) == erhe::toolkit::Key_modifier_bit_shift;
+    m_alt     = (modifier_mask & erhe::toolkit::Key_modifier_bit_menu ) == erhe::toolkit::Key_modifier_bit_menu;
+    m_control = (modifier_mask & erhe::toolkit::Key_modifier_bit_ctrl ) == erhe::toolkit::Key_modifier_bit_ctrl;
 }
 
 void Pointer_context::update_mouse(
@@ -139,7 +141,7 @@ void Pointer_context::raytrace()
                 {
                     log->frame_log("Hit geometry: {}", geometry->name);
                 }
-                if (hit.primitive_id < primitive->primitive_geometry.primitive_id_to_polygon_id.size()) 
+                if (hit.primitive_id < primitive->primitive_geometry.primitive_id_to_polygon_id.size())
                 {
                     const auto polygon_id = primitive->primitive_geometry.primitive_id_to_polygon_id[hit.primitive_id];
                     log->frame_log("Hit polygon: {}", polygon_id);
@@ -299,7 +301,6 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
                 m_hover_normal   = {};
                 if (m_hover_geometry != nullptr)
                 {
-                    using namespace erhe::geometry;
                     const auto polygon_id = static_cast<Polygon_id>(m_hover_local_index);
                     if (
                         polygon_id < m_hover_geometry->get_polygon_count()

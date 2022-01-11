@@ -45,7 +45,10 @@ Clone::Clone(Geometry& source, Geometry& destination, glm::mat4 transform)
     destination.m_edge_property_map_collection    = source.m_edge_property_map_collection   .clone_with_transform(transform);
 }
 
-auto clone(Geometry& source, glm::mat4 transform) -> Geometry
+auto clone(
+    Geometry&       source,
+    const glm::mat4 transform
+) -> Geometry
 {
     return Geometry{
         fmt::format("clone({})", source.name),

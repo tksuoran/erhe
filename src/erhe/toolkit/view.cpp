@@ -129,7 +129,7 @@ auto c_str(const Keycode code) -> const char*
         case Key_right_control: return "right control";
         case Key_right_alt    : return "right alt";
         case Key_right_super  : return "right super";
-        case Key_menu         : return "menu";    
+        case Key_menu         : return "menu";
         default: return "?";
     }
 };

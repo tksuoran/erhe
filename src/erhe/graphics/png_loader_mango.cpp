@@ -75,7 +75,9 @@ auto PNG_loader::open(
 {
     m_file = std::make_unique<mango::filesystem::File>(path.string());
     mango::filesystem::File& file = *m_file;
-    m_image_decoder = std::make_unique<mango::image::ImageDecoder>(file.operator mango::ConstMemory(), ".png");
+    m_image_decoder = std::make_unique<mango::image::ImageDecoder>(
+        file.operator mango::ConstMemory(), ".png"
+    );
     if (!m_image_decoder->isDecoder())
     {
         m_file.reset();

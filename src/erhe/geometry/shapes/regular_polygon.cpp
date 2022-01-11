@@ -10,15 +10,15 @@ auto make_triangle(const double r) -> Geometry
 {
     ERHE_PROFILE_FUNCTION
 
-    // 0.57735027 = sqrt(3) / 3
-    // 0.28867513 = sqrt(3) / 6
+    const double a = sqrt(3.0) / 3.0; // 0.57735027
+    const double b = sqrt(3.0) / 6.0; // 0.28867513
     return Geometry{
         "triangle",
         [=](auto& geometry)
         {
-            geometry.make_point(static_cast<float>(r * -0.28867513f), static_cast<float>(r *  0.5f), 0.0f, 0.0f, 1.0f);
-            geometry.make_point(static_cast<float>(r *  0.57735027f), static_cast<float>(r *  0.0f), 0.0f, 1.0f, 1.0f);
-            geometry.make_point(static_cast<float>(r * -0.28867513f), static_cast<float>(r * -0.5f), 0.0f, 1.0f, 0.0f);
+            geometry.make_point(static_cast<float>(r * -b), static_cast<float>(r *  0.5f), 0.0f, 0.0f, 1.0f);
+            geometry.make_point(static_cast<float>(r *  a), static_cast<float>(r *  0.0f), 0.0f, 1.0f, 1.0f);
+            geometry.make_point(static_cast<float>(r * -b), static_cast<float>(r * -0.5f), 0.0f, 1.0f, 0.0f);
 
             geometry.make_polygon_reverse( {0, 1, 2} );
 

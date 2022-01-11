@@ -31,14 +31,12 @@ public:
     }
 };
 
-[[nodiscard]]
-auto operator==(
+[[nodiscard]] auto operator==(
     const Blend_state_component& lhs,
     const Blend_state_component& rhs
 ) noexcept -> bool;
 
-[[nodiscard]]
-auto operator!=(
+[[nodiscard]] auto operator!=(
     const Blend_state_component& lhs,
     const Blend_state_component& rhs
 ) noexcept -> bool;

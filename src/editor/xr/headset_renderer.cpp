@@ -31,7 +31,7 @@
 namespace editor
 {
 
-using namespace erhe::graphics;
+using erhe::graphics::Color_blend_state;
 
 Headset_renderer::Headset_renderer()
     : erhe::components::Component{c_name}
@@ -49,7 +49,8 @@ auto Headset_renderer::get_headset_view_resources(
     {
         return i.color_texture->gl_name() == render_view.color_texture;
     };
-    auto i = std::find_if(m_view_resources.begin(), m_view_resources.end(), match_color_texture);
+
+    const auto i = std::find_if(m_view_resources.begin(), m_view_resources.end(), match_color_texture);
     if (i == m_view_resources.end())
     {
         auto& j = m_view_resources.emplace_back(
@@ -210,7 +211,7 @@ void Headset_renderer::setup_root_camera()
         "Headset Root Camera"
     );
     const glm::mat4 m = erhe::toolkit::create_look_at(
-        glm::vec3{0.0f, 0.0f, 2.0f}, // eye
+        glm::vec3{0.0f, 0.0f, 1.0f}, // eye
         glm::vec3{0.0f, 0.0f, 0.0f}, // look at
         glm::vec3{0.0f, 1.0f, 0.0f}  // up
     );
@@ -243,7 +244,11 @@ void Headset_renderer::begin_frame()
 
 void Headset_renderer::imgui()
 {
-    ImGui::ColorEdit4("Clear Color", &m_clear_color[0], ImGuiColorEditFlags_Float);    
+    ImGui::ColorEdit4(
+        "Clear Color",
+        &m_clear_color[0],
+        ImGuiColorEditFlags_Float
+    );
 }
 
 }

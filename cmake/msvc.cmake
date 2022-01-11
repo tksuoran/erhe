@@ -27,22 +27,15 @@ function (erhe_target_settings target)
 
     # Source code is UTF-8
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
-
-    # Attempts to disable incremental linking for RelWithDebInfo.
-    # This does not work yet.
-
-    #target_link_options(
-    #    ${target} PUBLIC
-    #    $<$<AND:$<CONFIG:RelWithDebInfo>,$<COMPILE_LANGUAGE:CXX>>:/incremental:no>)
-    #foreach(t EXE SHARED MODULE)
-    #    string(APPEND CMAKE_${t}_LINKER_FLAGS_DEBUG_INIT " /debug /pdbtype:sept ${MSVC_INCREMENTAL_YES_FLAG}")
-    #    string(APPEND CMAKE_${t}_LINKER_FLAGS_RELWITHDEBINFO_INIT " /debug /pdbtype:sept ${MSVC_INCREMENTAL_YES_FLAG}")
-
-    foreach(FLAG_TYPE EXE MODULE SHARED)
-        string(REPLACE "INCREMENTAL:YES" "INCREMENTAL:NO" FLAG_TMP "${CMAKE_${FLAG_TYPE}_LINKER_FLAGS_DEBUG}")
-        string(REPLACE "incremental:yes" "incremental:no" FLAG_TMP "${CMAKE_${FLAG_TYPE}_LINKER_FLAGS_DEBUG}")
-        #string(REPLACE "/EDITANDCONTINUE" "" FLAG_TMP "${CMAKE_${FLAG_TYPE}_LINKER_FLAGS_DEBUG}")
-        set(CMAKE_${FLAG_TYPE}_LINKER_FLAGS_DEBUG "/incremental:NO ${FLAG_TMP}" CACHE STRING "Overriding default debug ${FLAG_TYPE} linker flags." FORCE)
-        mark_as_advanced(CMAKE_${FLAG_TYPE}_LINKER_FLAGS_DEBUG)
-    endforeach()
 endfunction()
+
+function (erhe_disable_incremental_linking)
+    #set(CMAKE_STATIC_LINKER_FLAGS_RELEASE        "/debug /incremental:no" PARENT_SCOPE)
+    #set(CMAKE_STATIC_LINKER_FLAGS_RELWITHDEBINFO "/debug /incremental:no" PARENT_SCOPE)
+    #set(CMAKE_SHARED_LINKER_FLAGS_RELEASE        "/debug /incremental:no" PARENT_SCOPE)
+    #set(CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO "/debug /incremental:no" PARENT_SCOPE)
+    set(CMAKE_EXE_LINKER_FLAGS_DEBUG             "/debug /incremental:no" PARENT_SCOPE)
+    set(CMAKE_EXE_LINKER_FLAGS_MINSIZEREL        "/debug /incremental:no" PARENT_SCOPE)
+    set(CMAKE_EXE_LINKER_FLAGS_RELEASE           "/debug /incremental:no" PARENT_SCOPE)
+    set(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO    "/debug /incremental:no" PARENT_SCOPE)
+endfunction (erhe_disable_incremental_linking)

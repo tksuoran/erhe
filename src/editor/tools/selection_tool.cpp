@@ -26,7 +26,9 @@
 namespace editor
 {
 
-using namespace erhe::toolkit;
+using glm::mat4;
+using glm::vec3;
+using glm::vec4;
 
 void Selection_tool_select_command::try_ready(Command_context& context)
 {
@@ -121,7 +123,7 @@ void Selection_tool::initialize_component()
 
     const auto view = get<Editor_view>();
     view->register_command           (&m_select_command);
-    view->bind_command_to_mouse_click(&m_select_command, Mouse_button_left);
+    view->bind_command_to_mouse_click(&m_select_command, erhe::toolkit::Mouse_button_left);
 }
 
 auto Selection_tool::description() -> const char*
@@ -329,7 +331,7 @@ void Selection_tool::call_selection_change_subscriptions() const
     }
 }
 
-namespace 
+namespace
 {
 
 auto sign(const float x) -> float
@@ -341,8 +343,6 @@ auto sign(const float x) -> float
 
 void Selection_tool::tool_render(const Render_context& context)
 {
-    using namespace glm;
-
     if (m_line_renderer_set == nullptr)
     {
         return;
@@ -358,11 +358,11 @@ void Selection_tool::tool_render(const Render_context& context)
     auto& line_renderer = m_line_renderer_set->hidden;
     for (auto node : m_selection)
     {
-        const glm::mat4 m     {node->world_from_node()};
-        const glm::vec3 O     {0.0f};
-        const glm::vec3 axis_x{1.0f, 0.0f, 0.0f};
-        const glm::vec3 axis_y{0.0f, 1.0f, 0.0f};
-        const glm::vec3 axis_z{0.0f, 0.0f, 1.0f};
+        const mat4 m     {node->world_from_node()};
+        const vec3 O     {0.0f};
+        const vec3 axis_x{1.0f, 0.0f, 0.0f};
+        const vec3 axis_y{0.0f, 1.0f, 0.0f};
+        const vec3 axis_z{0.0f, 0.0f, 1.0f};
         line_renderer.add_lines( m, red,   {{ O, axis_x }}, thickness );
         line_renderer.add_lines( m, green, {{ O, axis_y }}, thickness );
         line_renderer.add_lines( m, blue,  {{ O, axis_z }}, thickness );
@@ -462,8 +462,8 @@ void Selection_tool::tool_render(const Render_context& context)
                 const float length        = light->range;
                 const float outer_apothem = length * std::tan(outer_alpha * 0.5f);
                 const float inner_apothem = length * std::tan(inner_alpha * 0.5f);
-                const float outer_radius  = outer_apothem / std::cos(pi<float>() / static_cast<float>(light_cone_sides));
-                const float inner_radius  = inner_apothem / std::cos(pi<float>() / static_cast<float>(light_cone_sides));
+                const float outer_radius  = outer_apothem / std::cos(glm::pi<float>() / static_cast<float>(light_cone_sides));
+                const float inner_radius  = inner_apothem / std::cos(glm::pi<float>() / static_cast<float>(light_cone_sides));
 
                 const vec3 view_position = node->transform_point_from_world_to_local(context.camera->position_in_world());
                 //auto* editor_time = get<Editor_time>();
@@ -474,18 +474,18 @@ void Selection_tool::tool_render(const Render_context& context)
 
                 for (int i = 0; i < light_cone_sides; ++i)
                 {
-                    const float t0 = two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(light_cone_sides);
-                    const float t1 = two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(light_cone_sides);
+                    const float t0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(light_cone_sides);
+                    const float t1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(light_cone_sides);
                     line_renderer.add_lines(
                         m,
                         light_color,
                         {
                             {
-                                -length * axis_z 
-                                + outer_radius * std::cos(t0) * axis_x 
+                                -length * axis_z
+                                + outer_radius * std::cos(t0) * axis_x
                                 + outer_radius * std::sin(t0) * axis_y,
-                                -length * axis_z 
-                                + outer_radius * std::cos(t1) * axis_x 
+                                -length * axis_z
+                                + outer_radius * std::cos(t1) * axis_x
                                 + outer_radius * std::sin(t1) * axis_y
                             }
                         },
@@ -496,16 +496,16 @@ void Selection_tool::tool_render(const Render_context& context)
                         half_light_color,
                         {
                             {
-                                -length * axis_z 
-                                + inner_radius * std::cos(t0) * axis_x 
+                                -length * axis_z
+                                + inner_radius * std::cos(t0) * axis_x
                                 + inner_radius * std::sin(t0) * axis_y,
-                                -length * axis_z 
-                                + inner_radius * std::cos(t1) * axis_x 
+                                -length * axis_z
+                                + inner_radius * std::cos(t1) * axis_x
                                 + inner_radius * std::sin(t1) * axis_y
                             }
                             //{
                             //    -length * axis_z * half_position
-                            //    + outer_radius * std::cos(t0) * axis_x * half_position 
+                            //    + outer_radius * std::cos(t0) * axis_x * half_position
                             //    + outer_radius * std::sin(t0) * axis_y * half_position,
                             //    -length * axis_z * half_position
                             //    + outer_radius * std::cos(t1) * axis_x * half_position
@@ -555,12 +555,12 @@ void Selection_tool::tool_render(const Render_context& context)
                 {
                 public:
                     Cone_edge(
-                        const glm::vec3& p,
-                        const glm::vec3& n,
-                        const glm::vec3& t,
-                        const glm::vec3& b,
-                        const float      phi,
-                        const float      n_dot_v
+                        const vec3& p,
+                        const vec3& n,
+                        const vec3& t,
+                        const vec3& b,
+                        const float phi,
+                        const float n_dot_v
                     )
                     : p      {p}
                     , n      {n}
@@ -571,18 +571,18 @@ void Selection_tool::tool_render(const Render_context& context)
                     {
                     }
 
-                    glm::vec3 p;
-                    glm::vec3 n;
-                    glm::vec3 t;
-                    glm::vec3 b;
-                    float     phi;
-                    float     n_dot_v;
+                    vec3  p;
+                    vec3  n;
+                    vec3  t;
+                    vec3  b;
+                    float phi;
+                    float n_dot_v;
                 };
 
                 std::vector<Cone_edge> cone_edges;
                 for (int i = 0; i < edge_count; ++i)
                 {
-                    const float phi     = two_pi<float>() * static_cast<float>(i) / static_cast<float>(edge_count);
+                    const float phi     = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(edge_count);
                     const float sin_phi = std::sin(phi);
                     const float cos_phi = std::cos(phi);
 
@@ -594,8 +594,8 @@ void Selection_tool::tool_render(const Render_context& context)
 
                     const vec3 B = normalize(O - p); // generatrix
                     const vec3 T{
-                        static_cast<float>(std::sin(phi + half_pi<float>())),
-                        static_cast<float>(std::cos(phi + half_pi<float>())),
+                        static_cast<float>(std::sin(phi + glm::half_pi<float>())),
+                        static_cast<float>(std::cos(phi + glm::half_pi<float>())),
                         0.0f
                     };
                     const vec3  N0      = glm::cross(B, T);
@@ -661,15 +661,15 @@ void Selection_tool::tool_render(const Render_context& context)
             const mat4  clip_from_node  = icamera->projection()->get_projection_matrix(1.0f, context.viewport.reverse_depth);
             const mat4  node_from_clip  = inverse(clip_from_node);
             const mat4  world_from_clip = icamera->world_from_node() * node_from_clip;
-            constexpr std::array<glm::vec3, 8> p = {
-                glm::vec3{-1.0f, -1.0f, 0.0f},
-                glm::vec3{ 1.0f, -1.0f, 0.0f},
-                glm::vec3{ 1.0f,  1.0f, 0.0f},
-                glm::vec3{-1.0f,  1.0f, 0.0f},
-                glm::vec3{-1.0f, -1.0f, 1.0f},
-                glm::vec3{ 1.0f, -1.0f, 1.0f},
-                glm::vec3{ 1.0f,  1.0f, 1.0f},
-                glm::vec3{-1.0f,  1.0f, 1.0f}
+            constexpr std::array<vec3, 8> p = {
+                vec3{-1.0f, -1.0f, 0.0f},
+                vec3{ 1.0f, -1.0f, 0.0f},
+                vec3{ 1.0f,  1.0f, 0.0f},
+                vec3{-1.0f,  1.0f, 0.0f},
+                vec3{-1.0f, -1.0f, 1.0f},
+                vec3{ 1.0f, -1.0f, 1.0f},
+                vec3{ 1.0f,  1.0f, 1.0f},
+                vec3{-1.0f,  1.0f, 1.0f}
             };
 
             line_renderer.add_lines(

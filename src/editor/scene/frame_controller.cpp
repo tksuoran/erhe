@@ -11,9 +11,9 @@
 namespace editor
 {
 
-using namespace glm;
-
-using namespace erhe::toolkit;
+using glm::mat4;
+using glm::vec3;
+using glm::vec4;
 
 Frame_controller::Frame_controller()
 {
@@ -71,7 +71,7 @@ void Frame_controller::set_elevation(const float value)
 void Frame_controller::set_heading(const float value)
 {
     m_heading = value;
-    m_heading_matrix = create_rotation(m_heading, vec3_unit_y);
+    m_heading_matrix = erhe::toolkit::create_rotation(m_heading, erhe::toolkit::vec3_unit_y);
     update();
 }
 
@@ -110,11 +110,11 @@ void Frame_controller::on_node_transform_changed()
     m_position = position;
     float heading{0.0f};
     float elevation{0.0f};
-    cartesian_to_heading_elevation(direction, elevation, heading);
+    erhe::toolkit::cartesian_to_heading_elevation(direction, elevation, heading);
     m_elevation = elevation;
     m_heading   = heading;
 
-    m_heading_matrix = create_rotation(m_heading, vec3_unit_y);
+    m_heading_matrix = erhe::toolkit::create_rotation(m_heading, erhe::toolkit::vec3_unit_y);
 
     update();
 }
@@ -137,7 +137,7 @@ void Frame_controller::update()
         return;
     }
 
-    const mat4 elevation_matrix = create_rotation(m_elevation, vec3_unit_x);
+    const mat4 elevation_matrix = erhe::toolkit::create_rotation(m_elevation, erhe::toolkit::vec3_unit_x);
     m_rotation_matrix = m_heading_matrix * elevation_matrix;
 
     mat4 parent_from_local = m_rotation_matrix;
@@ -222,8 +222,8 @@ void Frame_controller::update_fixed_step()
     {
         m_heading += rotate_y.current_value();
         m_elevation += rotate_x.current_value();
-        mat4 elevation_matrix = create_rotation(m_elevation, vec3_unit_x);
-        m_heading_matrix = create_rotation(m_heading, vec3_unit_y);
+        const mat4 elevation_matrix = erhe::toolkit::create_rotation(m_elevation, erhe::toolkit::vec3_unit_x);
+        m_heading_matrix = erhe::toolkit::create_rotation(m_heading, erhe::toolkit::vec3_unit_y);
         m_rotation_matrix = m_heading_matrix * elevation_matrix;
     }
 
@@ -238,7 +238,7 @@ void Frame_controller::update_fixed_step()
    if (m_position.y < 0.03f)
       m_position.y = 0.03f;
 
-   /*  Put translation to column 3  */ 
+   /*  Put translation to column 3  */
    m_parent_from_local[3] = vec4{m_position, 1.0f};
 
 #    if 0
@@ -247,7 +247,7 @@ void Frame_controller::update_fixed_step()
    localToParent._23 = positionInParent.Z;
    localToParent._33 = 1.0f;
 
-   /*  Put inverse translation to column 3 */ 
+   /*  Put inverse translation to column 3 */
    parentToLocal._03 = parentToLocal._00 * -positionInParent.X + parentToLocal._01 * -positionInParent.Y + parentToLocal._02 * - positionInParent.Z;
    parentToLocal._13 = parentToLocal._10 * -positionInParent.X + parentToLocal._11 * -positionInParent.Y + parentToLocal._12 * - positionInParent.Z;
    parentToLocal._23 = parentToLocal._20 * -positionInParent.X + parentToLocal._21 * -positionInParent.Y + parentToLocal._22 * - positionInParent.Z;
@@ -260,16 +260,18 @@ void Frame_controller::update_fixed_step()
 #endif
 }
 
-auto is_frame_controller(const erhe::scene::INode_attachment* const attachment) -> bool
+auto is_frame_controller(
+    const erhe::scene::INode_attachment* const attachment
+) -> bool
 {
     if (attachment == nullptr)
     {
         return false;
     }
-    return 
-        (attachment->flag_bits() 
-            & erhe::scene::INode_attachment::c_flag_bit_is_frame_controller) 
-        == 
+    return
+        (attachment->flag_bits()
+            & erhe::scene::INode_attachment::c_flag_bit_is_frame_controller)
+        ==
             erhe::scene::INode_attachment::c_flag_bit_is_frame_controller;
 }
 
@@ -314,7 +316,9 @@ auto as_frame_controller(
     return std::dynamic_pointer_cast<Frame_controller>(attachment);
 }
 
-auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Frame_controller>
+auto get_frame_controller(
+    const erhe::scene::Node* node
+) -> std::shared_ptr<Frame_controller>
 {
     for (const auto& attachment : node->attachments())
     {

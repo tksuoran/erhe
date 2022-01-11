@@ -131,7 +131,7 @@ public:
         }
 
         const size_t offset = static_cast<size_t>(
-            (static_cast<size_t>(x) * static_cast<size_t>(m_components)) + 
+            (static_cast<size_t>(x) * static_cast<size_t>(m_components)) +
             (static_cast<size_t>(y) * static_cast<size_t>(m_stride)) +
             static_cast<size_t>(c)
         );

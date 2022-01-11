@@ -29,12 +29,7 @@
 namespace editor
 {
 
-using namespace erhe::graphics;
-using namespace erhe::scene;
-using namespace erhe::ui;
-using namespace gl;
-using namespace std;
-
+using erhe::graphics::Shader_stages;
 using glm::mat4;
 using glm::vec3;
 using glm::vec4;
@@ -54,7 +49,7 @@ void Line_renderer_set::connect()
     require<Configuration>();
     require<Shader_monitor>();
 
-    m_pipeline_state_tracker = get<OpenGL_state_tracker>();
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 }
 
 static constexpr std::string_view c_line_renderer_initialize_component{"Line_renderer_set::initialize_component()"};
@@ -220,7 +215,7 @@ void Line_renderer::put(
     const glm::vec3            point,
     const float                thickness,
     const uint32_t             color,
-    const gsl::span<float>&    gpu_float_data, 
+    const gsl::span<float>&    gpu_float_data,
     const gsl::span<uint32_t>& gpu_uint_data,
     size_t&                    word_offset
 )
@@ -345,6 +340,8 @@ void Line_renderer::render(
         fov_sides.down
     };
 
+    using erhe::graphics::write;
+    using erhe::graphics::as_span;
     write(view_gpu_data, m_view_writer.write_offset + m_pipeline->clip_from_world_offset,        as_span(clip_from_world       ));
     write(view_gpu_data, m_view_writer.write_offset + m_pipeline->view_position_in_world_offset, as_span(view_position_in_world));
     write(view_gpu_data, m_view_writer.write_offset + m_pipeline->viewport_offset,               as_span(viewport_floats       ));

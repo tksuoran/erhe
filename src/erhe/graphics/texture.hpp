@@ -15,17 +15,6 @@ class Buffer;
 class Texture_create_info
 {
 public:
-    //Texture_create_info();
-    //
-    //Texture_create_info(
-    //    const gl::Texture_target  target,
-    //    const gl::Internal_format internal_format,
-    //    const bool                use_mipmaps,
-    //    const int                 width,
-    //    const int                 height = 1,
-    //    const int                 depth  = 1
-    //);
-
     [[nodiscard]] static auto calculate_level_count(
         const int width,
         const int height = 0,

@@ -1,15 +1,11 @@
 #pragma once
 
 #include "renderers/buffer_writer.hpp"
-#include "renderers/programs.hpp"
 #include "renderers/frame_resources.hpp"
-#include "renderers/light_mesh.hpp"
 
 #include "erhe/components/component.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
-#include "erhe/graphics/configuration.hpp"
 
-#include "erhe/scene/mesh.hpp"
 #include <glm/glm.hpp>
 
 #include <algorithm>
@@ -30,6 +26,7 @@ namespace erhe::scene
     class Camera;
     class Light;
     class Light_layer;
+    class Mesh;
     class Mesh_layer;
     class Node;
     class Viewport;
@@ -137,7 +134,7 @@ public:
 
     // Can discard return value
     auto update_camera_buffer(
-        erhe::scene::ICamera&       camera,
+        const erhe::scene::ICamera& camera,
         const erhe::scene::Viewport viewport
     ) -> Buffer_range;
 

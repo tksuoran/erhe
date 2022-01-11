@@ -75,7 +75,7 @@ public:
     Fly_camera_move_command(
         Fly_camera_tool&      fly_camera_tool,
         const Control         control,
-        const Controller_item item, 
+        const Controller_item item,
         const bool            active
     )
         : Command          {"Fly_camera.move"}
@@ -140,7 +140,7 @@ public:
     auto try_ready() -> bool;
     auto try_move(
         const Control         control,
-        const Controller_item item, 
+        const Controller_item item,
         const bool            active
     ) -> bool;
     void turn_relative(const double dx, const double dy);

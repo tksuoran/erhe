@@ -425,8 +425,9 @@ public:
     void trace(erhe::log::Category& log) const;
 };
 
-struct Mass_properties
+class Mass_properties
 {
+public:
     float     volume;
     glm::vec3 center_of_gravity;
     glm::mat3 inertial;
@@ -620,23 +621,20 @@ public:
     // Returns true on success.
     auto compute_polygon_normals() -> bool;
 
-    [[nodiscard]]
-    auto has_polygon_normals() const -> bool;
+    [[nodiscard]] auto has_polygon_normals() const -> bool;
 
     // Requires point locations.
     // Returns false if point locations are not available.
     // Returns true on success.
     auto compute_polygon_centroids() -> bool;
 
-    [[nodiscard]]
-    auto has_polygon_centroids() const -> bool;
+    [[nodiscard]] auto has_polygon_centroids() const -> bool;
 
     // Calculates point normal from polygon normals
     // Returns incorrect data if there are missing polygon normals.
     auto compute_point_normal(Point_id point_id) -> glm::vec3;
 
-    [[nodiscard]]
-    auto has_point_normals() const -> bool;
+    [[nodiscard]] auto has_point_normals() const -> bool;
 
     // Calculates point normals from polygon normals.
     // If polygon normals are not up to date before this call,
@@ -714,8 +712,7 @@ public:
 
     void sanity_check() const;
 
-    [[nodiscard]]
-    auto get_mass_properties() -> Mass_properties;
+    [[nodiscard]] auto get_mass_properties() -> Mass_properties;
 
     class Corner_context
     {
@@ -856,10 +853,10 @@ public:
     uint64_t                        m_serial_point_bitangents           {0}; // never generated
     uint64_t                        m_serial_point_texture_coordinates  {0}; // never generated
     uint64_t                        m_serial_smooth_point_normals       {0};
-    uint64_t                        m_serial_corner_normals             {0}; 
+    uint64_t                        m_serial_corner_normals             {0};
     uint64_t                        m_serial_corner_tangents            {0};
     uint64_t                        m_serial_corner_bitangents          {0};
-    uint64_t                        m_serial_corner_texture_coordinates {0}; 
+    uint64_t                        m_serial_corner_texture_coordinates {0};
 };
 
 } // namespace erhe::geometry

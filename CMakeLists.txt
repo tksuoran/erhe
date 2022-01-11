@@ -52,6 +52,11 @@ include(mango)
 include(tracy)
 include(vscode)
 
+# CMAKE_CONFIGURATION_TYPES=...;Debug;Custom
+# CMAKE_MAP_IMPORTED_CONFIG_CUSTOM=Custom;;Debug
+# ... is placeholder for any other built-in config you wish to use. The mapping here is for IMPORTED targets, which will prefer Custom, config-less then Debug locations, all the types must also be present in the first var above. (edited)
+#erhe_disable_incremental_linking()
+
 # Dependencies
 message("Fetching dependencies")
 message("Fetching concurrentqueue")

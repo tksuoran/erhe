@@ -21,8 +21,6 @@ Attach_detach_operation::Attach_detach_operation(Context&& context)
         return;
     }
 
-    using namespace glm;
-
     bool first = true;
     for (auto node : selection)
     {

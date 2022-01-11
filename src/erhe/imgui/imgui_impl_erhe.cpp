@@ -4,10 +4,13 @@
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/pipeline.hpp"
+#include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
+
+#include <imgui.h>
 
 #include <deque>
 
@@ -121,8 +124,9 @@ public:
         );
     }
 
-    auto allocate_texture_unit(const erhe::graphics::Texture* texture)
-    -> std::optional<std::size_t>
+    auto allocate_texture_unit(
+        const erhe::graphics::Texture* texture
+    ) -> std::optional<std::size_t>
     {
         for (size_t texture_unit = 0; texture_unit < texture_unit_count; ++texture_unit)
         {
@@ -176,10 +180,10 @@ public:
 
     // scale, translation, clip rectangle, texture indices
     //static constexpr size_t draw_parameters_block_size = vec2_size + vec2_size + vec4_size + uivec4_size;
-    static constexpr size_t max_draw_count             =   6'000;
-    static constexpr size_t max_index_count            = 300'000;
-    static constexpr size_t max_vertex_count           = 800'000;
-    static constexpr size_t texture_unit_count         = 16;
+    static constexpr size_t max_draw_count     =   6'000;
+    static constexpr size_t max_index_count    = 300'000;
+    static constexpr size_t max_vertex_count   = 800'000;
+    static constexpr size_t texture_unit_count = 16;
 
     Imgui_renderer() = default;
 
@@ -507,7 +511,7 @@ public:
             gl::Blend_equation_mode::func_add,          // alpha.equation_mode
             gl::Blending_factor::one,                   // alpha.source_factor
             gl::Blending_factor::one_minus_src_alpha    // alpha.destination_factor
-        }                                               
+        }
     };
 
     Texture_unit_cache<Imgui_renderer::texture_unit_count> texture_unit_cache{};
@@ -538,7 +542,6 @@ bool ImGui_ImplErhe_Init(erhe::graphics::OpenGL_state_tracker* pipeline_state_tr
     io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
     io.ConfigFlags |= ImGuiConfigFlags_NavNoCaptureKeyboard;
     //io.Fonts->AddFontFromFileTTF("res\\fonts\\Ubuntu-R.ttf", 20);
-    // 
 
     auto& style = ImGui::GetStyle();
     style.WindowMenuButtonPosition = ImGuiDir_None;
@@ -816,7 +819,7 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
     imgui_renderer.pipeline_state_tracker->execute(&pipeline);
 
     // TODO viewport states is not currently in pipeline
-    gl::viewport(0, 0, (GLsizei)fb_width, (GLsizei)fb_height);
+    gl::viewport(0, 0, static_cast<GLsizei>(fb_width), static_cast<GLsizei>(fb_height));
 
     imgui_renderer.texture_unit_cache.bind();
 

@@ -9,6 +9,10 @@
 namespace erhe::geometry
 {
 
+using glm::mat4;
+using glm::vec2;
+using glm::vec3;
+using glm::vec4;
 
 auto Geometry::has_polygon_tangents() const -> bool
 {
@@ -39,8 +43,6 @@ auto Geometry::compute_tangents(
     const bool override_existing
 ) -> bool
 {
-    using namespace glm;
-
     ERHE_PROFILE_FUNCTION
 
     if (
@@ -79,18 +81,18 @@ auto Geometry::compute_tangents(
         int       triangle_count{0};
         bool      override_existing{false};
 
-        Property_map<Polygon_id, glm::vec3>* polygon_normals     {nullptr};
-        Property_map<Polygon_id, glm::vec3>* polygon_centroids   {nullptr};
-        Property_map<Polygon_id, glm::vec4>* polygon_tangents    {nullptr};
-        Property_map<Polygon_id, glm::vec4>* polygon_bitangents  {nullptr};
-        Property_map<Corner_id, glm::vec3>*  corner_normals      {nullptr};
-        Property_map<Corner_id, glm::vec4>*  corner_tangents     {nullptr};
-        Property_map<Corner_id, glm::vec4>*  corner_bitangents   {nullptr};
-        Property_map<Corner_id, glm::vec2>*  corner_texcoords    {nullptr};
-        Property_map<Point_id, glm::vec3>*   point_locations     {nullptr};
-        Property_map<Point_id, glm::vec3>*   point_normals       {nullptr};
-        Property_map<Point_id, glm::vec3>*   point_normals_smooth{nullptr};
-        Property_map<Point_id, glm::vec2>*   point_texcoords     {nullptr};
+        Property_map<Polygon_id, vec3>* polygon_normals     {nullptr};
+        Property_map<Polygon_id, vec3>* polygon_centroids   {nullptr};
+        Property_map<Polygon_id, vec4>* polygon_tangents    {nullptr};
+        Property_map<Polygon_id, vec4>* polygon_bitangents  {nullptr};
+        Property_map<Corner_id, vec3>*  corner_normals      {nullptr};
+        Property_map<Corner_id, vec4>*  corner_tangents     {nullptr};
+        Property_map<Corner_id, vec4>*  corner_bitangents   {nullptr};
+        Property_map<Corner_id, vec2>*  corner_texcoords    {nullptr};
+        Property_map<Point_id, vec3>*   point_locations     {nullptr};
+        Property_map<Point_id, vec3>*   point_normals       {nullptr};
+        Property_map<Point_id, vec3>*   point_normals_smooth{nullptr};
+        Property_map<Point_id, vec2>*   point_texcoords     {nullptr};
 
         // Polygons are triangulated.
         class Triangle
@@ -175,69 +177,71 @@ auto Geometry::compute_tangents(
         [[nodiscard]] auto get_position(
             const int iFace,
             const int iVert
-        ) const -> glm::vec3
+        ) const -> vec3
         {
             const Polygon_id polygon_id = get_polygon_id(iFace);
             if (iVert == 0)
             {
-                const glm::vec3 position = polygon_centroids->get(polygon_id);
+                const vec3 position = polygon_centroids->get(polygon_id);
                 return position;
             }
-            const Point_id  point_id = get_point_id(iFace, iVert);
-            const glm::vec3 position = point_locations->get(point_id);
+            const Point_id point_id = get_point_id(iFace, iVert);
+            const vec3     position = point_locations->get(point_id);
             return position;
         }
 
         [[nodiscard]] auto get_normal(
             const int iFace,
             const int iVert
-        ) const -> glm::vec3
+        ) const -> vec3
         {
             const Polygon_id polygon_id = get_polygon_id(iFace);
             if (iVert == 0)
             {
-                const glm::vec3 normal = polygon_normals->get(polygon_id);
+                const vec3 normal = polygon_normals->get(polygon_id);
                 return normal;
             }
             const Corner_id corner_id = get_corner_id(iFace, iVert);
             const Point_id  point_id  = get_point_id (iFace, iVert);
             if ((corner_normals != nullptr) && corner_normals->has(corner_id))
             {
-                const glm::vec3 normal = corner_normals->get(corner_id);
+                const vec3 normal = corner_normals->get(corner_id);
                 return normal;
             }
             else if ((point_normals != nullptr) && point_normals->has(point_id))
             {
-                const glm::vec3 normal = point_normals->get(point_id);
+                const vec3 normal = point_normals->get(point_id);
                 return normal;
             }
             else if ((point_normals_smooth != nullptr) && point_normals_smooth->has(point_id))
             {
-                const glm::vec3 normal = point_normals_smooth->get(point_id);
+                const vec3 normal = point_normals_smooth->get(point_id);
                 return normal;
             }
             else if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id))
             {
-                const glm::vec3 normal = polygon_normals->get(polygon_id);
+                const vec3 normal = polygon_normals->get(polygon_id);
                 return normal;
             }
             ERHE_FATAL("No normal source\n");
-            // unreachable return glm::vec3{0.0f, 1.0f, 0.0f};
+            // unreachable return vec3{0.0f, 1.0f, 0.0f};
         }
 
         [[nodiscard]] auto get_texcoord(
             const int iFace,
             const int iVert
-        ) -> glm::vec2
+        ) -> vec2
         {
             if (iVert == 0)
             {
                 // Calculate and return average texture coordinate from all polygon vertices
                 const Polygon& polygon    = get_polygon(iFace);
-                glm::vec2      texcoord{0.0f, 0.0f};
-                for (Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id;
-                     polygon_corner_id < polygon.first_polygon_corner_id + polygon.corner_count;
-                     ++polygon_corner_id)
+                vec2           texcoord{0.0f, 0.0f};
+                for (
+                    Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id;
+                    polygon_corner_id < polygon.first_polygon_corner_id + polygon.corner_count;
+                    ++polygon_corner_id
+                )
                 {
                     const Corner_id corner_id = geometry->polygon_corners[polygon_corner_id];
                     const Corner&   corner    = geometry->corners[corner_id];
@@ -255,30 +259,30 @@ auto Geometry::compute_tangents(
                         ERHE_FATAL("No texcoord\n");
                     }
                 }
-                const glm::vec2 average_texcoord = texcoord / static_cast<float>(polygon.corner_count);
+                const vec2 average_texcoord = texcoord / static_cast<float>(polygon.corner_count);
                 return average_texcoord;
             }
             const Corner_id corner_id = get_corner_id(iFace, iVert);
             const Point_id  point_id  = get_point_id (iFace, iVert);
             if ((corner_texcoords != nullptr) && corner_texcoords->has(corner_id))
             {
-                const glm::vec2 texcoord = corner_texcoords->get(corner_id);
+                const vec2 texcoord = corner_texcoords->get(corner_id);
                 return texcoord;
             }
             else if ((point_texcoords != nullptr) && point_texcoords->has(point_id))
             {
-                const glm::vec2 texcoord = point_texcoords->get(point_id);
+                const vec2 texcoord = point_texcoords->get(point_id);
                 return texcoord;
             }
             ERHE_FATAL("No texture coordinate\n");
-            // unreachatble return glm::vec2(0.0f, 0.0f);
+            // unreachatble return vec2(0.0f, 0.0f);
         }
 
         void set_tangent(
-            const int       iFace,
-            const int       iVert,
-            const glm::vec3 tangent,
-            const float     sign
+            const int   iFace,
+            const int   iVert,
+            const vec3  tangent,
+            const float sign
         )
         {
             const Polygon& polygon = get_polygon(iFace);
@@ -291,19 +295,19 @@ auto Geometry::compute_tangents(
 
             if (polygon_tangents && (override_existing || !polygon_tangents->has(polygon_id)))
             {
-                polygon_tangents->put(polygon_id, glm::vec4{tangent, sign});
+                polygon_tangents->put(polygon_id, vec4{tangent, sign});
             }
             if (corner_tangents && (override_existing || !corner_tangents->has(corner_id)))
             {
-                corner_tangents->put(corner_id, glm::vec4{tangent, sign});
+                corner_tangents->put(corner_id, vec4{tangent, sign});
             }
         }
 
         void set_bitangent(
-            const int       iFace,
-            const int       iVert,
-            const glm::vec3 bitangent,
-            const float     sign
+            const int   iFace,
+            const int   iVert,
+            const vec3  bitangent,
+            const float sign
         )
         {
             const Polygon& polygon = get_polygon(iFace);
@@ -316,11 +320,11 @@ auto Geometry::compute_tangents(
 
             if (polygon_bitangents && (override_existing || !polygon_bitangents->has(polygon_id)))
             {
-                polygon_bitangents->put(polygon_id, glm::vec4{bitangent, sign});
+                polygon_bitangents->put(polygon_id, vec4{bitangent, sign});
             }
             if (corner_bitangents && (override_existing || !corner_bitangents->has(corner_id)))
             {
-                corner_bitangents->put(corner_id, glm::vec4{bitangent, sign});
+                corner_bitangents->put(corner_id, vec4{bitangent, sign});
             }
         }
 
@@ -391,7 +395,7 @@ auto Geometry::compute_tangents(
         )
         {
             const auto* context    = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
-            glm::vec3   g_location = context->get_position(iFace, iVert);
+            vec3        g_location = context->get_position(iFace, iVert);
             fvPosOut[0] = g_location[0];
             fvPosOut[1] = g_location[1];
             fvPosOut[2] = g_location[2];
@@ -405,7 +409,7 @@ auto Geometry::compute_tangents(
         )
         {
             const auto* context  = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
-            glm::vec3   g_normal = context->get_normal(iFace, iVert);
+            vec3        g_normal = context->get_normal(iFace, iVert);
             fvNormOut[0] = g_normal[0];
             fvNormOut[1] = g_normal[1];
             fvNormOut[2] = g_normal[2];
@@ -418,8 +422,8 @@ auto Geometry::compute_tangents(
             int32_t                   iVert
         )
         {
-            auto*     context    = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
-            glm::vec2 g_texcoord = context->get_texcoord(iFace, iVert);
+            auto* context    = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
+            vec2  g_texcoord = context->get_texcoord(iFace, iVert);
             fvTexcOut[0] = g_texcoord[0];
             fvTexcOut[1] = g_texcoord[1];
         },
@@ -438,14 +442,14 @@ auto Geometry::compute_tangents(
             static_cast<void>(fMagS);
             static_cast<void>(fMagT);
             static_cast<void>(bIsOrientationPreserving);
-            auto*           context = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
-            const auto      N     = context->get_normal(iFace, iVert);
-            const glm::vec3 T     = glm::vec3{fvTangent  [0], fvTangent  [1], fvTangent  [2]};
-            const glm::vec3 B     = glm::vec3{fvBiTangent[0], fvBiTangent[1], fvBiTangent[2]};
-            const vec3      t_xyz = glm::normalize(T - N * glm::dot(N, T));
-            const float     t_w   = (glm::dot(glm::cross(N, T), B) < 0.0f) ? -1.0f : 1.0f;
-            const vec3      b_xyz = glm::normalize(B - N * glm::dot(N, B));
-            const float     b_w   = (glm::dot(glm::cross(B, N), T) < 0.0f) ? -1.0f : 1.0f;
+            auto*       context = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
+            const auto  N     = context->get_normal(iFace, iVert);
+            const vec3  T     = vec3{fvTangent  [0], fvTangent  [1], fvTangent  [2]};
+            const vec3  B     = vec3{fvBiTangent[0], fvBiTangent[1], fvBiTangent[2]};
+            const vec3  t_xyz = glm::normalize(T - N * glm::dot(N, T));
+            const float t_w   = (glm::dot(glm::cross(N, T), B) < 0.0f) ? -1.0f : 1.0f;
+            const vec3  b_xyz = glm::normalize(B - N * glm::dot(N, B));
+            const float b_w   = (glm::dot(glm::cross(B, N), T) < 0.0f) ? -1.0f : 1.0f;
             context->set_tangent  (iFace, iVert, t_xyz, t_w);
             context->set_bitangent(iFace, iVert, b_xyz, b_w);
         }
@@ -481,10 +485,10 @@ auto Geometry::compute_tangents(
                 continue;
             }
 
-            std::optional<glm::vec4> T;
-            std::optional<glm::vec4> B;
-            std::vector<glm::vec4>   tangents;
-            std::vector<glm::vec4>   bitangents;
+            std::optional<vec4> T;
+            std::optional<vec4> B;
+            std::vector<vec4>   tangents;
+            std::vector<vec4>   bitangents;
             for (uint32_t i = 0; i < polygon.corner_count; ++i)
             {
                 const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + i;
@@ -494,7 +498,7 @@ auto Geometry::compute_tangents(
                     const auto tangent = g.corner_tangents->get(corner_id);
                     for (auto other : tangents)
                     {
-                        const float dot = glm::dot(glm::vec3{tangent}, glm::vec3{other});
+                        const float dot = glm::dot(vec3{tangent}, vec3{other});
                         if (dot > 0.99f)
                         {
                             T = tangent;
@@ -507,7 +511,7 @@ auto Geometry::compute_tangents(
                     const auto bitangent = g.corner_bitangents->get(corner_id);
                     for (auto other : bitangents)
                     {
-                        const float dot = glm::dot(glm::vec3{bitangent}, glm::vec3{other});
+                        const float dot = glm::dot(vec3{bitangent}, vec3{other});
                         if (dot > 0.99f)
                         {
                             B = bitangent;
@@ -517,13 +521,13 @@ auto Geometry::compute_tangents(
                 }
             }
 
-            glm::vec4 tangent{1.0, 0.0, 0.0, 1.0};
+            vec4 tangent{1.0, 0.0, 0.0, 1.0};
             if (T.has_value())
             {
                 tangent = T.value();
             }
 
-            glm::vec4 bitangent{0.0, 0.0, 1.0, 1.0};
+            vec4 bitangent{0.0, 0.0, 1.0, 1.0};
             if (B.has_value())
             {
                 bitangent = B.value();

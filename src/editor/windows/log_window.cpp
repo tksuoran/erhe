@@ -73,7 +73,10 @@ void Log_window::toggle_pause()
     m_paused = !m_paused;
 }
 
-void Log_window::write(const erhe::log::Color color, const std::string_view text) 
+void Log_window::write(
+    const erhe::log::Color color,
+    const std::string_view text
+)
 {
     m_tail_entries.emplace_back(
         ImVec4{color.r, color.g, color.b, 1.0},
@@ -141,10 +144,30 @@ void Log_window::imgui()
     if (ImGui::TreeNodeEx("Tail", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
     {
         ImGui::SetNextItemWidth(100.0f);
-        ImGui::DragInt("Show", &m_tail_buffer_show_size, 1.0f, 1, std::numeric_limits<int>::max(), "%d", ImGuiSliderFlags_AlwaysClamp);
+
+        ImGui::DragInt(
+            "Show",
+            &m_tail_buffer_show_size,
+            1.0f,
+            1,
+            std::numeric_limits<int>::max(),
+            "%d",
+            ImGuiSliderFlags_AlwaysClamp
+        );
+
         ImGui::SameLine();
         ImGui::SetNextItemWidth(100.0f);
-        ImGui::DragInt("Trim", &m_tail_buffer_trim_size, 1.0f, 1, std::numeric_limits<int>::max(), "%d", ImGuiSliderFlags_AlwaysClamp);
+
+        ImGui::DragInt(
+            "Trim",
+            &m_tail_buffer_trim_size,
+            1.0f,
+            1,
+            std::numeric_limits<int>::max(),
+            "%d",
+            ImGuiSliderFlags_AlwaysClamp
+        );
+
         ImGui::SameLine();
         ImGui::SetNextItemWidth(100.0f);
         if (ImGui::Button("Clear"))
@@ -191,7 +214,12 @@ void Log_window::imgui()
         }
         ImGui::TreePop();
     }
-    if (ImGui::TreeNodeEx("Frame", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
+    if (
+        ImGui::TreeNodeEx(
+            "Frame",
+            ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed
+        )
+    )
     {
         for (const auto& entry : m_frame_entries)
         {

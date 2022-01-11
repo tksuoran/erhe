@@ -12,13 +12,6 @@ enum class Item_mode : unsigned int
     active      // button in active state
 };
 
-//const ImVec4 c_color;
-//const ImVec4 c_color_hovered;
-//const ImVec4 c_color_active;
-//const ImVec4 c_color_disabled;
-//const ImVec4 c_color_disabled_hovered;
-//const ImVec4 c_color_disabled_active;
-
 bool make_button   (const char* label, const Item_mode mode, const ImVec2 size);
 void make_check_box(const char* label, bool* value, const Item_mode mode = Item_mode::normal);
 

@@ -44,7 +44,6 @@ public:
     // Component dependencies
     std::shared_ptr<Application> m_application;
     std::shared_ptr<Scene_root>  m_scene_root;
-};  
-   
+};
 
-}
+} // namespace editor

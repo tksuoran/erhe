@@ -17,10 +17,6 @@
 namespace editor
 {
 
-using namespace std;
-using namespace erhe::scene;
-using namespace erhe::toolkit;
-
 #ifdef _WIN32
 Fly_camera_space_mouse_listener::Fly_camera_space_mouse_listener(
     Fly_camera_tool& fly_camera_tool
@@ -184,11 +180,11 @@ void Fly_camera_tool::initialize_component()
     view->bind_command_to_key(&m_move_right_inactive_command,    Keycode::Key_d, false);
     view->bind_command_to_key(&m_move_forward_active_command,    Keycode::Key_w, true );
     view->bind_command_to_key(&m_move_forward_inactive_command,  Keycode::Key_w, false);
-    view->bind_command_to_key(&m_move_backward_active_command,   Keycode::Key_s, true ); 
+    view->bind_command_to_key(&m_move_backward_active_command,   Keycode::Key_s, true );
     view->bind_command_to_key(&m_move_backward_inactive_command, Keycode::Key_s, false);
 
     view->register_command(&m_turn_command);
-    view->bind_command_to_mouse_drag(&m_turn_command, Mouse_button_left);
+    view->bind_command_to_mouse_drag(&m_turn_command, erhe::toolkit::Mouse_button_left);
 
     m_camera_controller = std::make_shared<Frame_controller>();
 }
@@ -260,7 +256,7 @@ void Fly_camera_tool::rotation(const int rx, const int ry, const int rz)
 
 auto Fly_camera_tool::try_move(
     const Control         control,
-    const Controller_item item, 
+    const Controller_item item,
     const bool            active
 ) -> bool
 {

@@ -12,6 +12,7 @@ class Material
 {
 public:
     Material();
+
     explicit Material(
         const std::string_view name,
         const glm::vec4        base_color = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},

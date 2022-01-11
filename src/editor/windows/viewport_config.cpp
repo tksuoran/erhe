@@ -32,7 +32,7 @@ void Viewport_config::initialize_component()
 
 void Viewport_config::render_style_ui(Render_style& render_style)
 {
-    using namespace erhe::imgui;
+    using erhe::imgui::make_combo;
 
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_OpenOnArrow       |
@@ -108,7 +108,7 @@ void Viewport_config::render_style_ui(Render_style& render_style)
 
 void Viewport_config::imgui()
 {
-    using namespace erhe::imgui;
+    using erhe::imgui::make_combo;
 
     ImGui::ColorEdit4("Clear Color", &clear_color.x, ImGuiColorEditFlags_Float);
 

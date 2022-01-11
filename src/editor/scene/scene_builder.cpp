@@ -55,14 +55,28 @@
 namespace editor
 {
 
-using namespace erhe::graphics;
-using namespace erhe::geometry;
-using namespace erhe::geometry::shapes;
-using namespace erhe::scene;
-using namespace erhe::primitive;
-using namespace std;
-using namespace glm;
-
+using erhe::geometry::shapes::make_dodecahedron;
+using erhe::geometry::shapes::make_icosahedron;
+using erhe::geometry::shapes::make_octahedron;
+using erhe::geometry::shapes::make_tetrahedron;
+using erhe::geometry::shapes::make_cuboctahedron;
+using erhe::geometry::shapes::make_cube;
+using erhe::geometry::shapes::make_cone;
+using erhe::geometry::shapes::make_sphere;
+using erhe::geometry::shapes::make_torus;
+using erhe::geometry::shapes::torus_volume;
+using erhe::geometry::shapes::make_cylinder;
+using erhe::scene::Projection;
+using erhe::scene::Light;
+using erhe::scene::Node;
+using erhe::geometry::shapes::make_box;
+using erhe::primitive::Normal_style;
+using glm::mat3;
+using glm::mat4;
+using glm::ivec3;
+using glm::vec2;
+using glm::vec3;
+using glm::vec4;
 
 Scene_builder::Scene_builder()
     : Component{c_name}
@@ -94,8 +108,8 @@ void Scene_builder::initialize_component()
 
 auto Scene_builder::make_camera(
     std::string_view name,
-    glm::vec3        position,
-    glm::vec3        look_at
+    vec3             position,
+    vec3             look_at
 ) -> std::shared_ptr<erhe::scene::Camera>
 {
     auto camera = make_shared<erhe::scene::Camera>(name);
@@ -123,36 +137,36 @@ void Scene_builder::setup_cameras()
 {
     auto camera_a = make_camera(
         "Camera A",
-        glm::vec3{0.0f, 4.0f, 10.0f},
-        glm::vec3{0.0f, 0.5f, 0.0f}
+        vec3{0.0f, 4.0f, 10.0f},
+        vec3{0.0f, 0.5f, 0.0f}
     );
     make_camera(
         "Camera B",
-        glm::vec3{-1.0f, 1.65f,  4.0f}
+        vec3{-1.0f, 1.65f,  4.0f}
     );
 
     get<Fly_camera_tool>()->set_camera(camera_a.get());
 }
 
-auto Scene_builder::build_info_set() -> erhe::primitive::Build_info_set&
+auto Scene_builder::build_info() -> erhe::primitive::Build_info&
 {
-    return m_mesh_memory->build_info_set;
+    return m_mesh_memory->build_info;
 };
 
 void Scene_builder::make_brushes()
 {
     ERHE_PROFILE_FUNCTION
 
-    const Brush_create_context brush_create_context{build_info_set()};
+    const Brush_create_context brush_create_context{build_info()};
     erhe::concurrency::Concurrent_queue execution_queue;
     //erhe::concurrency::Serial_queue execution_queue;
 
     constexpr float floor_size = 20.0f;
 
     auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
-        0.5f * glm::vec3{floor_size, 1.0f, floor_size}
+        0.5f * vec3{floor_size, 1.0f, floor_size}
     );
-    //auto table_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{1.0f, 0.5f, 0.5f});
+    //auto table_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(vec3{1.0f, 0.5f, 0.5f});
 
     // Otherwise it will be destructed when leave add_floor() scope
     m_collision_shapes.push_back(floor_box_shape);
@@ -165,7 +179,10 @@ void Scene_builder::make_brushes()
         {
             ERHE_PROFILE_SCOPE("Floor brush");
 
-            Brush_create_context context{build_info_set()}; //, Normal_style::polygon_normals};
+            Brush_create_context context{
+                .build_info   = build_info(),
+                .normal_style = Normal_style::corner_normals
+            };
             context.normal_style = Normal_style::polygon_normals;
 
             auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
@@ -177,10 +194,10 @@ void Scene_builder::make_brushes()
             floor_geometry->name = "floor";
             floor_geometry->build_edges();
 
-            m_floor_brush = make_unique<Brush>(
+            m_floor_brush = std::make_unique<Brush>(
                 Brush::Create_info{
                     .geometry        = floor_geometry,
-                    .build_info_set  = build_info_set(),
+                    .build_info      = build_info(),
                     .normal_style    = Normal_style::polygon_normals,
                     .density         = 0.0f,
                     .volume          = 0.0f,
@@ -209,15 +226,14 @@ void Scene_builder::make_brushes()
         }
     );
 
-    constexpr bool gltf_files              = false; // WIP
-    constexpr bool obj_files               = false;
-    constexpr bool platonic_solids         = false;
-    constexpr bool sphere                  = false;
-    constexpr bool torus                   = false;
-    constexpr bool cylinder                = false;
-    constexpr bool cone                    = false;
-    //constexpr bool anisotropic_test_object = false;
-    constexpr bool johnson_solids          = false;
+    constexpr bool gltf_files      = false; // WIP
+    constexpr bool obj_files       = true;
+    constexpr bool platonic_solids = true;
+    constexpr bool sphere          = true;
+    constexpr bool torus           = true;
+    constexpr bool cylinder        = true;
+    constexpr bool cone            = true;
+    constexpr bool johnson_solids  = false;
 
     constexpr float object_scale = 1.0f;
 
@@ -255,7 +271,10 @@ void Scene_builder::make_brushes()
             {
                 ERHE_PROFILE_SCOPE("parse .obj files");
 
-                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                const Brush_create_context context{
+                    .build_info   = build_info(),
+                    .normal_style = Normal_style::polygon_normals
+                };
                 constexpr bool instantiate = true;
 
                 const char* obj_files_names[] = {
@@ -292,7 +311,10 @@ void Scene_builder::make_brushes()
             {
                 ERHE_PROFILE_SCOPE("Platonic solids");
 
-                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                const Brush_create_context context{
+                    .build_info   = build_info(),
+                    .normal_style = Normal_style::polygon_normals
+                };
                 constexpr bool instantiate = true;
 
                 make_brush(instantiate, make_dodecahedron (object_scale), context);
@@ -304,7 +326,9 @@ void Scene_builder::make_brushes()
                     instantiate,
                     make_cube(object_scale),
                     context,
-                    erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{object_scale * 0.5f})
+                    erhe::physics::ICollision_shape::create_box_shape_shared(
+                        vec3{object_scale * 0.5f}
+                    )
                 );
             }
         );
@@ -318,7 +342,10 @@ void Scene_builder::make_brushes()
                 ERHE_PROFILE_SCOPE("Sphere");
 
                 //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
-                const Brush_create_context context{build_info_set(), Normal_style::corner_normals};
+                const Brush_create_context context{
+                    .build_info   = build_info(),
+                    .normal_style = Normal_style::corner_normals
+                };
                 constexpr bool instantiate = true;
 
                 make_brush(
@@ -339,7 +366,10 @@ void Scene_builder::make_brushes()
                 ERHE_PROFILE_SCOPE("Torus");
 
                 //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
-                const Brush_create_context context{build_info_set(), Normal_style::corner_normals};
+                const Brush_create_context context{
+                    .build_info   = build_info(),
+                    .normal_style = Normal_style::corner_normals
+                };
                 constexpr bool instantiate = true;
 
                 constexpr float major_radius = 1.0f  * object_scale;
@@ -381,8 +411,8 @@ void Scene_builder::make_brushes()
                         torus_shape->add_child_shape(
                             capsule,
                             erhe::physics::Transform{
-                                glm::mat3{m},
-                                glm::vec3{position}
+                                mat3{m},
+                                vec3{position}
                             }
                         );
                     }
@@ -391,7 +421,7 @@ void Scene_builder::make_brushes()
 
                 make_brush(
                     instantiate,
-                    make_shared<erhe::geometry::Geometry>(
+                    std::make_shared<erhe::geometry::Geometry>(
                         make_torus(major_radius, minor_radius, 42, 32)
                     ),
                     context,
@@ -409,16 +439,17 @@ void Scene_builder::make_brushes()
             {
                 ERHE_PROFILE_SCOPE("Cylinder");
 
-                //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
-                const Brush_create_context context{build_info_set(), Normal_style::corner_normals};
+                const Brush_create_context context{
+                    .build_info   = build_info(),
+                    .normal_style = Normal_style::corner_normals // Normal_style::polygon_normals
+                };
                 constexpr bool instantiate = true;
-                //auto cylinder_geometry = make_cylinder(-1.0f, 1.0f, 1.0f, true, true, 32, 2); // always axis = x
                 auto cylinder_geometry = make_cylinder(
                     -1.0f * object_scale,
                      1.0f * object_scale,
                      1.0f * object_scale, true, true, 32, 2
                 ); // always axis = x
-                cylinder_geometry.transform(erhe::toolkit::mat4_swap_xy);                    // convert to axis = y
+                cylinder_geometry.transform(erhe::toolkit::mat4_swap_xy); // convert to axis = y
 
                 make_brush(
                     instantiate,
@@ -426,7 +457,7 @@ void Scene_builder::make_brushes()
                     context,
                     erhe::physics::ICollision_shape::create_cylinder_shape_shared(
                         erhe::physics::Axis::Y,
-                        glm::vec3{object_scale, object_scale, object_scale}
+                        vec3{object_scale, object_scale, object_scale}
                     )
                 );
             }
@@ -440,11 +471,13 @@ void Scene_builder::make_brushes()
             {
                 ERHE_PROFILE_SCOPE("Cone");
 
-                //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
-                const Brush_create_context context{build_info_set(), Normal_style::corner_normals};
+                const Brush_create_context context{
+                    .build_info   = build_info(),
+                    .normal_style = Normal_style::corner_normals
+                };
                 constexpr bool instantiate = true;
                 auto cone_geometry = make_cone(-object_scale, object_scale, object_scale, true, 42, 4); // always axis = x
-                cone_geometry.transform(erhe::toolkit::mat4_swap_xy);           // convert to axis = y
+                cone_geometry.transform(erhe::toolkit::mat4_swap_xy); // convert to axis = y
 
                 make_brush(
                     instantiate,
@@ -463,39 +496,39 @@ void Scene_builder::make_brushes()
     ///// if constexpr (anisotropic_test_object)
     ///// {
     /////     ERHE_PROFILE_SCOPE("test scene for anisotropic debugging");
-    ///// 
+    /////
     /////     auto x_material = m_scene_root->make_material("x", vec4{1.000f, 0.000f, 0.0f, 1.0f}, 0.3f, 0.0f, 0.3f);
     /////     auto y_material = m_scene_root->make_material("y", vec4{0.228f, 1.000f, 0.0f, 1.0f}, 0.3f, 0.0f, 0.3f);
     /////     auto z_material = m_scene_root->make_material("z", vec4{0.000f, 0.228f, 1.0f, 1.0f}, 0.3f, 0.0f, 0.3f);
-    ///// 
+    /////
     /////     const float ring_major_radius = 4.0f;
     /////     const float ring_minor_radius = 0.55f; // 0.15f;
     /////     auto        ring_geometry     = make_torus(ring_major_radius, ring_minor_radius, 80, 32);
     /////     ring_geometry.transform(erhe::toolkit::mat4_swap_xy);
     /////     auto rotate_ring_pg = make_primitive(ring_geometry, build_info_set().gl);
-    ///// 
+    /////
     /////     const vec3 pos{20.0f, 0.0f, 0.0f};
     /////     auto x_rotate_ring_mesh = m_scene_root->make_mesh_node("X ring", rotate_ring_pg, x_material, nullptr, pos);
     /////     auto y_rotate_ring_mesh = m_scene_root->make_mesh_node("Y ring", rotate_ring_pg, y_material, x_rotate_ring_mesh.get());
     /////     auto z_rotate_ring_mesh = m_scene_root->make_mesh_node("Z ring", rotate_ring_pg, z_material, x_rotate_ring_mesh.get());
-    ///// 
+    /////
     /////     // x_rotate_ring_mesh identity
     /////     y_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
     /////     z_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
-    ///// 
-    /////     x_rotate_ring_mesh->visibility_mask() |= 
+    /////
+    /////     x_rotate_ring_mesh->visibility_mask() |=
     /////         (Node::c_visibility_content     |
     /////          Node::c_visibility_shadow_cast |
     /////          Node::c_visibility_id);
-    /////     y_rotate_ring_mesh->visibility_mask() |= 
+    /////     y_rotate_ring_mesh->visibility_mask() |=
     /////         (Node::c_visibility_content     |
     /////          Node::c_visibility_shadow_cast |
     /////          Node::c_visibility_id);
-    /////     z_rotate_ring_mesh->visibility_mask() |= 
+    /////     z_rotate_ring_mesh->visibility_mask() |=
     /////         (Node::c_visibility_content     |
     /////          Node::c_visibility_shadow_cast |
     /////          Node::c_visibility_id);
-    ///// 
+    /////
     ///// }
 
     if constexpr (johnson_solids)
@@ -505,7 +538,10 @@ void Scene_builder::make_brushes()
             {
                 ERHE_PROFILE_SCOPE("Johnson solids");
 
-                const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
+                const Brush_create_context context{
+                    .build_info   = build_info(),
+                    .normal_style = Normal_style::polygon_normals
+                };
                 constexpr bool instantiate = true;
 
                 const Json_library library("res/polyhedra/johnson.json");
@@ -518,7 +554,7 @@ void Scene_builder::make_brushes()
                     }
                     geometry.compute_polygon_normals();
 
-                    make_brush(instantiate, move(geometry), context);
+                    make_brush(instantiate, std::move(geometry), context);
                 }
             }
         );
@@ -563,16 +599,21 @@ void Scene_builder::add_room()
     //    table_material,
     //    1.0f
     //);
-    floor_instance.mesh->visibility_mask() |= 
+    floor_instance.mesh->visibility_mask() |=
         (Node::c_visibility_content     |
          //Node::c_visibility_shadow_cast |
          Node::c_visibility_id);
-    //table_instance.mesh->visibility_mask() |= 
+    //table_instance.mesh->visibility_mask() |=
     //    (Node::c_visibility_content     |
     //     Node::c_visibility_shadow_cast |
     //     Node::c_visibility_id);
 
-    add_to_scene_layer(m_scene_root->scene(), m_scene_root->content_layer(), floor_instance.mesh);
+    add_to_scene_layer(
+        m_scene_root->scene(),
+        m_scene_root->content_layer(),
+        floor_instance.mesh
+    );
+
     //add_to_scene_layer(m_scene_root->scene(), m_scene_root->content_layer(), table_instance.mesh);
     if (floor_instance.node_physics)
     {
@@ -612,7 +653,7 @@ void Scene_builder::make_mesh_nodes()
         rbp::Rect rectangle;
     };
 
-    std::lock_guard<std::mutex> lock{m_scene_brushes_mutex};
+    const std::lock_guard<std::mutex> lock{m_scene_brushes_mutex};
 
     std::sort(
         m_scene_brushes.begin(),
@@ -623,7 +664,7 @@ void Scene_builder::make_mesh_nodes()
         }
     );
 
-    vector<Pack_entry> pack_entries;
+    std::vector<Pack_entry> pack_entries;
     for (auto brush : m_scene_brushes)
     {
         pack_entries.emplace_back(brush.get());
@@ -695,12 +736,12 @@ void Scene_builder::make_mesh_nodes()
         auto material = m_scene_root->materials().at(material_index);
         auto instance = brush->make_instance(
             erhe::toolkit::create_translation<float>(
-                glm::vec3{x, y, z}
+                vec3{x, y, z}
             ),
             material,
             1.0f
         );
-        instance.mesh->visibility_mask() |= 
+        instance.mesh->visibility_mask() |=
             (Node::c_visibility_content     |
              Node::c_visibility_shadow_cast |
              Node::c_visibility_id);
@@ -741,7 +782,7 @@ void Scene_builder::make_cube_benchmark()
 
     auto material = m_scene_root->make_material("cube", vec4{1.0, 1.000f, 1.0f, 1.0f}, 0.3f, 0.0f, 0.3f);
     auto cube     = make_cube(0.1f);
-    auto cube_pg  = make_primitive(cube, build_info_set().gl, Normal_style::polygon_normals);
+    auto cube_pg  = make_primitive(cube, build_info(), Normal_style::polygon_normals);
 
     constexpr float scale = 0.5f;
     constexpr int   x_count = 20;
@@ -765,7 +806,7 @@ void Scene_builder::make_cube_benchmark()
                 auto mesh = std::make_shared<erhe::scene::Mesh>("", primitive);
                 mesh->set_world_from_node(erhe::toolkit::create_translation<float>(pos));
                 m_scene_root->add(mesh);
-                mesh->visibility_mask() |= 
+                mesh->visibility_mask() |=
                     (
                         Node::c_visibility_content     |
                         Node::c_visibility_shadow_cast |
@@ -779,13 +820,13 @@ void Scene_builder::make_cube_benchmark()
 }
 
 auto Scene_builder::make_directional_light(
-    string_view name,
-    vec3        position,
-    vec3        color,
-    float       intensity
-) -> shared_ptr<Light>
+    const std::string_view name,
+    const vec3             position,
+    const vec3             color,
+    const float            intensity
+) -> std::shared_ptr<Light>
 {
-    auto light = make_shared<Light>(name);
+    auto light = std::make_shared<Light>(name);
     light->type                          = Light::Type::directional;
     light->color                         = color;
     light->intensity                     = intensity;
@@ -815,15 +856,15 @@ auto Scene_builder::make_directional_light(
 }
 
 auto Scene_builder::make_spot_light(
-    string_view name,
-    vec3        position,
-    vec3        target,
-    vec3        color,
-    float       intensity,
-    vec2        spot_cone_angle
-) -> shared_ptr<Light>
+    const std::string_view name,
+    const vec3             position,
+    const vec3             target,
+    const vec3             color,
+    const float            intensity,
+    const vec2             spot_cone_angle
+) -> std::shared_ptr<Light>
 {
-    auto light = make_shared<Light>(name);
+    auto light = std::make_shared<Light>(name);
     light->type                          = Light::Type::spot;
     light->color                         = color;
     light->intensity                     = intensity;
@@ -854,23 +895,23 @@ void Scene_builder::setup_lights()
 
     //make_directional_light(
     //    "Key",
-    //    glm::vec3{10.0f, 10.0f, 10.0f},
-    //    glm::vec3{1.0f, 0.9f, 0.8f},
+    //    vec3{10.0f, 10.0f, 10.0f},
+    //    vec3{1.0f, 0.9f, 0.8f},
     //    2.0f
     //);
     //make_directional_light(
     //    "Fill",
-    //    glm::vec3{-10.0f, 5.0f, -10.0f},
-    //    glm::vec3{0.8f, 0.9f, 1.0f},
+    //    vec3{-10.0f, 5.0f, -10.0f},
+    //    vec3{0.8f, 0.9f, 1.0f},
     //    1.0f
     //);
     //make_spot_light(
     //    "Spot",
-    //    glm::vec3(0.0f, 1.0f, 0.0f), // position
-    //    glm::vec3(0.0f, 0.0f, 0.0f), // target
-    //    glm::vec3(0.0f, 1.0f, 0.0f), // color
+    //    vec3(0.0f, 1.0f, 0.0f), // position
+    //    vec3(0.0f, 0.0f, 0.0f), // target
+    //    vec3(0.0f, 1.0f, 0.0f), // color
     //    10.0f,                       // intensity
-    //    glm::vec2{                   // cone angles
+    //    vec2{                   // cone angles
     //        glm::pi<float>() * 0.125f,
     //        glm::pi<float>() * 0.25f
     //    }
@@ -890,14 +931,14 @@ void Scene_builder::setup_lights()
 
             erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
 
-            const vec3   color     = vec3{r, g, b};
-            const float  intensity = 8.0f / static_cast<float>(directional_light_count);
-            const string name      = fmt::format("Directional light {}", i);
-            const float  x_pos     = R * sin(rel * two_pi<float>());
-            const float  z_pos     = R * cos(rel * two_pi<float>());
-            const vec3   position  = vec3{x_pos, 10.0f, z_pos};
+            const vec3        color     = vec3{r, g, b};
+            const float       intensity = 8.0f / static_cast<float>(directional_light_count);
+            const std::string name      = fmt::format("Directional light {}", i);
+            const float       x_pos     = R * sin(rel * glm::two_pi<float>());
+            const float       z_pos     = R * cos(rel * glm::two_pi<float>());
+            const vec3        position  = vec3{x_pos, 10.0f, z_pos};
             make_directional_light(name, position, color, intensity);
-        }   
+        }
     }
 
     constexpr int spot_light_count = 3;
@@ -906,39 +947,43 @@ void Scene_builder::setup_lights()
         for (int i = 0; i < spot_light_count; ++i)
         {
             const float rel   = static_cast<float>(i) / static_cast<float>(spot_light_count);
-            const float theta = rel * two_pi<float>();
+            const float theta = rel * glm::two_pi<float>();
             const float R     = 0.5f + 20.0f * rel;
-            const float h     = fract(theta) * 360.0f;
+            const float h     = glm::fract(theta) * 360.0f;
             const float s     = 0.9f;
             const float v     = 1.0f;
             float r, g, b;
 
             erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
 
-            const vec3   color           = vec3{r, g, b};
-            const float  intensity       = 150.0f;
-            const string name            = fmt::format("Spot {}", i);
-            const float  x_pos           = R * sin(rel * 6.0f * two_pi<float>());
-            const float  z_pos           = R * cos(rel * 6.0f * two_pi<float>());
-            const vec3   position        = vec3{x_pos, 10.0f, z_pos};
-            const vec3   target          = vec3{x_pos * 0.5, 0.0f, z_pos * 0.5f};
-            const vec2   spot_cone_angle = vec2{
-                pi<float>() / 5.0f,
-                pi<float>() / 4.0f
+            const vec3        color           = vec3{r, g, b};
+            const float       intensity       = 150.0f;
+            const std::string name            = fmt::format("Spot {}", i);
+            const float       x_pos           = R * sin(rel * 6.0f * glm::two_pi<float>());
+            const float       z_pos           = R * cos(rel * 6.0f * glm::two_pi<float>());
+            const vec3        position        = vec3{x_pos, 10.0f, z_pos};
+            const vec3        target          = vec3{x_pos * 0.5, 0.0f, z_pos * 0.5f};
+            const vec2        spot_cone_angle = vec2{
+                glm::pi<float>() / 5.0f,
+                glm::pi<float>() / 4.0f
             };
             make_spot_light(name, position, target, color, intensity, spot_cone_angle);
         }
     }
 }
 
-void Scene_builder::update_fixed_step(const erhe::components::Time_context& time_context)
+void Scene_builder::update_fixed_step(
+    const erhe::components::Time_context& time_context
+)
 {
     // TODO
     // Physics should mostly run in a separate thread.
     m_scene_root->physics_world().update_fixed_step(time_context.dt);
 }
 
-void Scene_builder::update_once_per_frame(const erhe::components::Time_context& time_context)
+void Scene_builder::update_once_per_frame(
+    const erhe::components::Time_context& time_context
+)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -948,7 +993,7 @@ void Scene_builder::update_once_per_frame(const erhe::components::Time_context& 
     animate_lights(time_context.time);
 }
 
-void Scene_builder::animate_lights(double time_d)
+void Scene_builder::animate_lights(const double time_d)
 {
     if (time_d >= 0.0)
     {
@@ -969,7 +1014,7 @@ void Scene_builder::animate_lights(double time_d)
         }
 
         const float rel = static_cast<float>(light_index) / static_cast<float>(n_lights);
-        const float t   = 0.5f * time + rel * pi<float>() * 7.0f;
+        const float t   = 0.5f * time + rel * glm::pi<float>() * 7.0f;
         const float R   = 4.0f;
         const float r   = 8.0f;
 
@@ -1005,7 +1050,7 @@ void Scene_builder::setup_scene()
     setup_lights();
     make_brushes();
     make_mesh_nodes();
-    //add_room();
+    add_room();
     //make_cube_benchmark();
 }
 

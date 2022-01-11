@@ -6,7 +6,10 @@
 namespace erhe::geometry::operation
 {
 
-Reverse::Reverse(Geometry& source, Geometry& destination)
+Reverse::Reverse(
+    Geometry& source,
+    Geometry& destination
+)
     : Geometry_operation{source, destination}
 {
     destination.points                               = source.points;

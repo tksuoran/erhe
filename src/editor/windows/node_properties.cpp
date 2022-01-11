@@ -51,7 +51,7 @@ void Node_properties::initialize_component()
 
 void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
 {
-    using namespace erhe::imgui;
+    using erhe::imgui::make_combo;
 
     auto* const projection = camera.projection();
     if (projection == nullptr)
@@ -64,7 +64,12 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
     {
         const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
         ImGui::SetNextItemWidth(200);
-        make_combo("Type", projection->projection_type, erhe::scene::Projection::c_type_strings, IM_ARRAYSIZE(erhe::scene::Projection::c_type_strings));
+        make_combo(
+            "Type",
+            projection->projection_type,
+            erhe::scene::Projection::c_type_strings,
+            IM_ARRAYSIZE(erhe::scene::Projection::c_type_strings)
+        );
         switch (projection->projection_type)
         {
             using enum erhe::scene::Projection::Type;
@@ -164,14 +169,19 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
 
 void Node_properties::light_properties(erhe::scene::Light& light) const
 {
-    using namespace erhe::imgui;
+    using erhe::imgui::make_combo;
 
     const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
 
     ImGui::PushID("##light_properties");
     if (ImGui::TreeNodeEx("Light", ImGuiTreeNodeFlags_Framed))
     {
-        make_combo("Type", light.type, erhe::scene::Light::c_type_strings, IM_ARRAYSIZE(erhe::scene::Light::c_type_strings));
+        make_combo(
+            "Type",
+            light.type,
+            erhe::scene::Light::c_type_strings,
+            IM_ARRAYSIZE(erhe::scene::Light::c_type_strings)
+        );
         if (light.type == erhe::scene::Light::Type::spot)
         {
             ImGui::SliderFloat("Inner Spot", &light.inner_spot_angle, 0.0f, glm::pi<float>());

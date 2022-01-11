@@ -58,21 +58,19 @@ public:
     void connect             () override;
     void initialize_component() override;
 
+    // Public API
     void render(
         const erhe::scene::Viewport  viewport,
         const Mesh_layer_collection& content_mesh_layers,
         const Mesh_layer_collection& tool_mesh_layers,
-        erhe::scene::ICamera&        camera,
+        const erhe::scene::ICamera&  camera,
         const double                 time,
         const int                    x,
         const int                    y
     );
 
-    [[nodiscard]]
-    auto get(const int x, const int y, uint32_t& id, float& depth) -> bool;
-
-    [[nodiscard]]
-    auto get(const int x, const int y, float& depth) -> Mesh_primitive;
+    [[nodiscard]] auto get(const int x, const int y, uint32_t& id, float& depth) -> bool;
+    [[nodiscard]] auto get(const int x, const int y, float& depth) -> Mesh_primitive;
 
     void next_frame();
 

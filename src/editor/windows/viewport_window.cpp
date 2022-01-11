@@ -28,8 +28,14 @@
 namespace editor
 {
 
-using namespace erhe::graphics;
-using namespace std;
+using erhe::graphics::Vertex_input_state;
+using erhe::graphics::Input_assembly_state;
+using erhe::graphics::Rasterization_state;
+using erhe::graphics::Depth_stencil_state;
+using erhe::graphics::Color_blend_state;
+using erhe::graphics::Framebuffer;
+using erhe::graphics::Renderbuffer;
+using erhe::graphics::Texture;
 
 namespace {
 
@@ -69,17 +75,17 @@ void Viewport_windows::connect()
 
 void Viewport_windows::initialize_component()
 {
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    auto* camera = m_headset_renderer->root_camera().get();
-    create_window("Headset Camera", camera);
-#else
+/// #if defined(ERHE_XR_LIBRARY_OPENXR)
+///     auto* camera = m_headset_renderer->root_camera().get();
+///     create_window("Headset Camera", camera);
+/// #else
     for (auto camera : m_scene_root->scene().cameras)
     {
         auto* icamera = as_icamera(camera.get());
         std::string name = fmt::format("Scene for Camera {}", icamera->name());
         create_window(name, icamera);
     }
-#endif
+/// #endif
 }
 
 auto Viewport_windows::create_window(
@@ -296,7 +302,12 @@ void Viewport_window::imgui()
     update_framebuffer();
 }
 
-void Viewport_window::set_viewport(const int x, const int y, const int width, const int height)
+void Viewport_window::set_viewport(
+    const int x,
+    const int y,
+    const int width,
+    const int height
+)
 {
     m_content_region_min.x = x;
     m_content_region_min.y = y;
@@ -449,7 +460,7 @@ void Viewport_window::update_framebuffer()
     gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
 
     {
-        m_color_texture_multisample = make_unique<Texture>(
+        m_color_texture_multisample = std::make_unique<Texture>(
             Texture::Create_info{
                 .target = (s_sample_count > 0)
                     ? gl::Texture_target::texture_2d_multisample
@@ -472,7 +483,7 @@ void Viewport_window::update_framebuffer()
     }
 
     {
-        m_color_texture_resolved = make_shared<Texture>(
+        m_color_texture_resolved = std::make_shared<Texture>(
             Texture::Create_info{
                 .target          = gl::Texture_target::texture_2d,
                 .internal_format = gl::Internal_format::rgba8,
@@ -495,7 +506,7 @@ void Viewport_window::update_framebuffer()
         }
     }
 
-    m_depth_stencil_renderbuffer = make_unique<Renderbuffer>(
+    m_depth_stencil_renderbuffer = std::make_unique<Renderbuffer>(
         gl::Internal_format::depth24_stencil8,
         s_sample_count,
         m_content_region_size.x,
@@ -507,7 +518,7 @@ void Viewport_window::update_framebuffer()
         create_info.attach(gl::Framebuffer_attachment::color_attachment0,  m_color_texture_multisample.get());
         create_info.attach(gl::Framebuffer_attachment::depth_attachment,   m_depth_stencil_renderbuffer.get());
         create_info.attach(gl::Framebuffer_attachment::stencil_attachment, m_depth_stencil_renderbuffer.get());
-        m_framebuffer_multisample = make_unique<Framebuffer>(create_info);
+        m_framebuffer_multisample = std::make_unique<Framebuffer>(create_info);
         m_framebuffer_multisample->set_debug_label("Viewport Window Multisample");
 
         gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
@@ -524,8 +535,11 @@ void Viewport_window::update_framebuffer()
 
     {
         Framebuffer::Create_info create_info;
-        create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_color_texture_resolved.get());
-        m_framebuffer_resolved = make_unique<Framebuffer>(create_info);
+        create_info.attach(
+            gl::Framebuffer_attachment::color_attachment0,
+            m_color_texture_resolved.get()
+        );
+        m_framebuffer_resolved = std::make_unique<Framebuffer>(create_info);
         m_framebuffer_resolved->set_debug_label("Viewport Window Multisample Resolved");
 
         constexpr gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0};
@@ -540,7 +554,9 @@ void Viewport_window::update_framebuffer()
     }
 }
 
-auto Viewport_window::to_scene_content(const glm::vec2 position_in_root) const -> glm::vec2
+auto Viewport_window::to_scene_content(
+    const glm::vec2 position_in_root
+) const -> glm::vec2
 {
     const float content_x      = static_cast<float>(position_in_root.x) - m_content_region_min.x;
     const float content_y      = static_cast<float>(position_in_root.y) - m_content_region_min.y;
@@ -551,7 +567,9 @@ auto Viewport_window::to_scene_content(const glm::vec2 position_in_root) const -
     };
 }
 
-auto Viewport_window::project_to_viewport(const glm::dvec3 position_in_world) const -> glm::dvec3
+auto Viewport_window::project_to_viewport(
+    const glm::dvec3 position_in_world
+) const -> glm::dvec3
 {
     constexpr double depth_range_near = 0.0;
     constexpr double depth_range_far  = 1.0;
@@ -567,7 +585,9 @@ auto Viewport_window::project_to_viewport(const glm::dvec3 position_in_world) co
     );
 }
 
-auto Viewport_window::unproject_to_world(const glm::dvec3 position_in_window) const -> std::optional<glm::dvec3>
+auto Viewport_window::unproject_to_world(
+    const glm::dvec3 position_in_window
+) const -> std::optional<glm::dvec3>
 {
     constexpr double depth_range_near = 0.0;
     constexpr double depth_range_far  = 1.0;

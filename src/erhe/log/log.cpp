@@ -81,7 +81,7 @@ void Log::console_init()
     ///         fprintf(stderr, "_open(): error %d %s\n", code, error_str(code));
     ///         perror("_open() failed");
     ///     }
-    /// 
+    ///
     ///     int b = _open("b.txt", _O_CREAT | _O_BINARY | _O_TRUNC | _O_WRONLY, _S_IREAD | _S_IWRITE);
     ///     if (b != -1)
     ///     {
@@ -219,7 +219,7 @@ auto timestamp() -> std::string
         time.tm_mon + 1,
         time.tm_mday,
         time.tm_hour,
-        time.tm_min, 
+        time.tm_min,
         time.tm_sec,
         ts.tv_nsec / 1000000
     );

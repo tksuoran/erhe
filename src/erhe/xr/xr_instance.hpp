@@ -103,7 +103,7 @@ public:
     PFN_xrGetOpenGLGraphicsRequirementsKHR xrGetOpenGLGraphicsRequirementsKHR{nullptr};
 
     PFN_xrCreateHandTrackerEXT             xrCreateHandTrackerEXT            {nullptr};
-    PFN_xrDestroyHandTrackerEXT            xrDestroyHandTrackerEXT           {nullptr}; 
+    PFN_xrDestroyHandTrackerEXT            xrDestroyHandTrackerEXT           {nullptr};
     PFN_xrLocateHandJointsEXT              xrLocateHandJointsEXT             {nullptr};
 
 private:

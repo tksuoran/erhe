@@ -49,36 +49,6 @@ auto Light::projection() const -> const Projection*
     return &m_projection;
 }
 
-// auto Light::clip_from_node() const -> glm::mat4
-// {
-//     return m_light_transforms.clip_from_node.matrix();
-// }
-// 
-// auto Light::clip_from_world() const -> glm::mat4
-// {
-//     return m_light_transforms.clip_from_world.matrix();
-// }
-// 
-// auto Light::node_from_clip() const -> glm::mat4
-// {
-//     return m_light_transforms.clip_from_node.inverse_matrix();
-// }
-// 
-// auto Light::world_from_clip() const -> glm::mat4
-// {
-//     return m_light_transforms.clip_from_world.inverse_matrix();
-// }
-// 
-// auto Light::texture_from_world() const -> glm::mat4
-// {
-//     return m_light_transforms.texture_from_world.matrix();
-// }
-// 
-// auto Light::world_from_texture() const -> glm::mat4
-// {
-//     return m_light_transforms.texture_from_world.inverse_matrix();
-// }
-
 auto is_light(const Node* const node) -> bool
 {
     if (node == nullptr)

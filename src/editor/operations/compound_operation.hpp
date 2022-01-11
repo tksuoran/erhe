@@ -2,6 +2,7 @@
 
 #include "operations/ioperation.hpp"
 
+#include <memory>
 #include <string>
 #include <vector>
 

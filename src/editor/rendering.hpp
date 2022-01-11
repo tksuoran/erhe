@@ -70,17 +70,12 @@ public:
     ~Editor_rendering() override;
 
     // Implements Component
-    [[nodiscard]]
-    auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect      () override;
 
-    void init_state         ();
-    void render             ();
-
-    [[nodiscard]]
-    auto to_scene_content   (const glm::vec2 position_in_root) const -> glm::vec2;
-    //auto is_content_in_focus() const -> bool;
-
+    // Public API
+    void init_state        ();
+    void render            ();
     void render_viewport   (const Render_context& context, const bool has_pointer);
     void render_content    (const Render_context& context);
     void render_selection  (const Render_context& context);
@@ -116,7 +111,7 @@ private:
     std::shared_ptr<Text_renderer>                        m_text_renderer;
     std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
-    bool                                  m_trigger_capture{false};
+    bool                                                  m_trigger_capture{false};
 };
 
 }

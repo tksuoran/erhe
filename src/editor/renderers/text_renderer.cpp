@@ -28,12 +28,7 @@
 namespace editor
 {
 
-using namespace erhe::graphics;
-using namespace erhe::scene;
-using namespace erhe::ui;
-using namespace gl;
-using namespace std;
-
+using erhe::graphics::Shader_stages;
 using glm::mat4;
 using glm::vec3;
 using glm::vec4;
@@ -50,7 +45,7 @@ void Text_renderer::connect()
 {
     require<Gl_context_provider>();
 
-    m_pipeline_state_tracker = get<OpenGL_state_tracker>();
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 }
 
 static constexpr std::string_view c_text_renderer_initialize_component{"Text_renderer::initialize_component()"};
@@ -278,6 +273,8 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
         0.0f,
         1.0f
     );
+    using erhe::graphics::as_span;
+    using erhe::graphics::write;
     write(gpu_float_data, 0, as_span(clip_from_window));
     m_projection_writer.write_offset += 4 * 4 * sizeof(float);
     m_projection_writer.end();

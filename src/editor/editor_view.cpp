@@ -27,9 +27,6 @@
 
 namespace editor {
 
-using namespace erhe::geometry;
-using namespace erhe::toolkit;
-
 const ImVec4 log_color          {0.8f, 0.8f, 1.0f, 0.7f};
 const ImVec4 consume_event_color{1.0f, 1.0f, 8.0f, 0.6f};
 const ImVec4 filter_event_color {1.0f, 0.8f, 7.0f, 0.6f};
@@ -156,8 +153,6 @@ void Editor_view::on_refresh()
         ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
     }
 
-    //m_editor_time     ->update();
-    //m_viewport_windows->update();
     m_editor_rendering->render();
 
     if (m_configuration->show_window && m_configuration->gui)
@@ -170,6 +165,8 @@ void Editor_view::on_refresh()
 
     m_window->get_context_window()->swap_buffers();
 }
+
+static constexpr std::string_view c_swap_buffers{"swap_buffers" };
 
 void Editor_view::update()
 {
@@ -327,7 +324,9 @@ void Editor_view::on_mouse_click(
     sort_mouse_bindings();
 
     ImGuiIO& io = ImGui::GetIO();
-    const bool viewport_hovered = (m_pointer_context->window() != nullptr) && m_pointer_context->window()->is_hovered();
+    const bool viewport_hovered =
+        (m_pointer_context->window() != nullptr) &&
+        m_pointer_context->window()->is_hovered();
     if (
         io.WantCaptureMouse &&
         !viewport_hovered &&

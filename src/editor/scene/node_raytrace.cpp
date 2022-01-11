@@ -16,9 +16,9 @@
 namespace editor
 {
 
-using namespace erhe::scene;
-using namespace erhe::raytrace;
-using namespace std;
+using erhe::raytrace::IGeometry;
+using erhe::raytrace::IInstance;
+using erhe::scene::INode_attachment;
 
 Raytrace_primitive::Raytrace_primitive(
     const std::shared_ptr<erhe::geometry::Geometry>& geometry
@@ -27,7 +27,7 @@ Raytrace_primitive::Raytrace_primitive(
 {
     // Just float vec3 position
     auto vertex_format = std::make_shared<erhe::graphics::Vertex_format>();
-    vertex_format->make_attribute( 
+    vertex_format->make_attribute(
         {
             erhe::graphics::Vertex_attribute::Usage_type::position,
             0
@@ -87,7 +87,9 @@ Raytrace_primitive::Raytrace_primitive(
     );
 }
 
-Node_raytrace::Node_raytrace(const std::shared_ptr<Raytrace_primitive>& primitive)
+Node_raytrace::Node_raytrace(
+    const std::shared_ptr<Raytrace_primitive>& primitive
+)
     : m_primitive{primitive}
 {
     m_flag_bits |= INode_attachment::c_flag_bit_is_raytrace;
@@ -124,11 +126,17 @@ Node_raytrace::Node_raytrace(const std::shared_ptr<Raytrace_primitive>& primitiv
     );
     m_geometry->commit();
 
-    m_scene = erhe::raytrace::IScene::create_unique(primitive->geometry->name + "_scene");
+    m_scene = erhe::raytrace::IScene::create_unique(
+        primitive->geometry->name + "_scene"
+    );
+
     m_scene->attach(m_geometry.get());
     m_scene->commit();
 
-    m_instance = erhe::raytrace::IInstance::create_unique(primitive->geometry->name + "_instance_geometry");
+    m_instance = erhe::raytrace::IInstance::create_unique(
+        primitive->geometry->name + "_instance_geometry"
+    );
+
     m_instance->set_scene(m_scene.get());
     m_instance->commit();
     m_instance->set_user_data(this);
@@ -206,7 +214,9 @@ auto as_raytrace(INode_attachment* attachment) -> Node_raytrace*
     return reinterpret_cast<Node_raytrace*>(attachment);
 }
 
-auto as_raytrace(const std::shared_ptr<INode_attachment>& attachment) -> std::shared_ptr<Node_raytrace>
+auto as_raytrace(
+    const std::shared_ptr<INode_attachment>& attachment
+) -> std::shared_ptr<Node_raytrace>
 {
     if (!attachment)
     {
@@ -219,7 +229,9 @@ auto as_raytrace(const std::shared_ptr<INode_attachment>& attachment) -> std::sh
     return std::dynamic_pointer_cast<Node_raytrace>(attachment);
 }
 
-auto get_raytrace(Node* node) -> std::shared_ptr<Node_raytrace>
+auto get_raytrace(
+    erhe::scene::Node* node
+) -> std::shared_ptr<Node_raytrace>
 {
     for (const auto& attachment : node->attachments())
     {

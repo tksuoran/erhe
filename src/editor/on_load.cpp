@@ -167,26 +167,26 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 
     component_initialization_complete(true);
 
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-        get<Brushes            >()->hide();
-        get<Debug_view_window  >()->hide();
-        get<Editor_view        >()->hide();
-        get<Fly_camera_tool    >()->hide();
-        get<Log_window         >()->hide();
-        get<Grid_tool          >()->hide();
-        get<Imgui_demo_window  >()->hide();
-        get<Layers_window      >()->hide();
-        get<Material_properties>()->hide();
-        get<Materials          >()->hide();
-        get<Mesh_properties    >()->hide();
-        get<Node_properties    >()->hide();
-        get<Node_tree_window   >()->hide();
-        get<Operation_stack    >()->hide();
-        get<Operations         >()->hide();
-        get<Physics_window     >()->hide();
-        get<Viewport_config    >()->hide();
-        get<Trs_tool           >()->hide();
-#endif
+/// #if defined(ERHE_XR_LIBRARY_OPENXR)
+///         get<Brushes            >()->hide();
+///         get<Debug_view_window  >()->hide();
+///         get<Editor_view        >()->hide();
+///         get<Fly_camera_tool    >()->hide();
+///         get<Log_window         >()->hide();
+///         get<Grid_tool          >()->hide();
+///         get<Imgui_demo_window  >()->hide();
+///         get<Layers_window      >()->hide();
+///         get<Material_properties>()->hide();
+///         get<Materials          >()->hide();
+///         get<Mesh_properties    >()->hide();
+///         get<Node_properties    >()->hide();
+///         get<Node_tree_window   >()->hide();
+///         get<Operation_stack    >()->hide();
+///         get<Operations         >()->hide();
+///         get<Physics_window     >()->hide();
+///         get<Viewport_config    >()->hide();
+///         get<Trs_tool           >()->hide();
+/// #endif
 
 
     opengl_state_tracker->on_thread_enter();

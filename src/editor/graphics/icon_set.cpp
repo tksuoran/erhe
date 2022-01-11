@@ -85,7 +85,7 @@ auto Icon_set::load(const std::filesystem::path& path)
         m_column = 0;
         m_row++;
     }
-    
+
     return ImVec2(u, v);
 }
 

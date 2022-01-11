@@ -2,7 +2,7 @@
 
 #include "renderers/buffer_writer.hpp"
 
-#include "erhe/graphics/buffer.hpp"
+#include "erhe/components/component.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/shader_resource.hpp"
@@ -11,10 +11,8 @@
 #include "erhe/graphics/state/input_assembly_state.hpp"
 #include "erhe/graphics/state/rasterization_state.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
-#include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
-#include "erhe/components/component.hpp"
 
 #include <glm/glm.hpp>
 
@@ -61,7 +59,7 @@ public:
     void operator=(Text_renderer&&)      = delete;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 

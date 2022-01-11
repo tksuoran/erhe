@@ -38,9 +38,6 @@ public:
 
     [[nodiscard]] auto node_type() const -> const char* override;
 
-    //[[nodiscard]] auto texture_from_world() const -> glm::mat4;
-    //[[nodiscard]] auto world_from_texture() const -> glm::mat4;
-
     // Implements ICamera
     [[nodiscard]] auto projection() -> Projection*             override;
     [[nodiscard]] auto projection() const -> const Projection* override;
@@ -56,16 +53,6 @@ public:
     bool      cast_shadow     {true};
 
     Projection m_projection;
-
-    // class Transforms
-    // {
-    // public:
-    //     Transform clip_from_node;
-    //     Transform clip_from_world;
-    //     Transform texture_from_world{glm::mat4{1.0f}, glm::mat4{1.0f}};
-    // };
-    // 
-    // Transforms m_light_transforms;
 
     static constexpr glm::mat4 texture_from_clip{
         0.5f, 0.0f, 0.0f, 0.0f,

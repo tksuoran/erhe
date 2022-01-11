@@ -16,20 +16,17 @@ Fragment_output::Fragment_output(
 {
 }
 
-auto Fragment_output::name() const
--> const std::string&
+auto Fragment_output::name() const -> const std::string&
 {
     return m_name;
 }
 
-auto Fragment_output::type() const
--> gl::Fragment_shader_output_type
+auto Fragment_output::type() const -> gl::Fragment_shader_output_type
 {
     return m_type;
 }
 
-auto Fragment_output::location() const
--> unsigned int
+auto Fragment_output::location() const -> unsigned int
 {
     return m_location;
 }

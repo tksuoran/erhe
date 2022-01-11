@@ -6,8 +6,6 @@
 
 namespace editor {
 
-using namespace std;
-
 Editor_tools::Editor_tools()
     : erhe::components::Component{c_name}
 {
@@ -22,7 +20,7 @@ void Editor_tools::connect()
 
 void Editor_tools::register_tool(Tool* tool)
 {
-    lock_guard<mutex> lock{m_mutex};
+    const std::lock_guard<std::mutex> lock{m_mutex};
 
     m_tools.emplace_back(tool);
     auto* const imgui_window = dynamic_cast<Imgui_window*>(tool);
@@ -34,7 +32,7 @@ void Editor_tools::register_tool(Tool* tool)
 
 void Editor_tools::register_background_tool(Tool* tool)
 {
-    lock_guard<mutex> lock{m_mutex};
+    const std::lock_guard<std::mutex> lock{m_mutex};
 
     m_background_tools.emplace_back(tool);
     auto* const imgui_window = dynamic_cast<Imgui_window*>(tool);

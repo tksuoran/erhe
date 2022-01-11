@@ -14,7 +14,7 @@ namespace erhe::physics
 
 namespace erhe::primitive
 {
-    class Build_info_set;
+    class Build_info;
     class Primitive_geometry;
 };
 
@@ -43,12 +43,12 @@ public:
     class Context
     {
     public:
-        erhe::primitive::Build_info_set& build_info_set;
-        erhe::scene::Mesh_layer&         layer;
-        erhe::scene::Scene&              scene;
-        erhe::physics::IWorld&           physics_world;
-        erhe::raytrace::IScene*          raytrace_scene{nullptr};
-        Selection_tool*                  selection_tool{nullptr};
+        erhe::primitive::Build_info& build_info;
+        erhe::scene::Mesh_layer&     layer;
+        erhe::scene::Scene&          scene;
+        erhe::physics::IWorld&       physics_world;
+        erhe::raytrace::IScene*      raytrace_scene{nullptr};
+        Selection_tool*              selection_tool{nullptr};
     };
 
     explicit Merge_operation(Context&& context);

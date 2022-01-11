@@ -37,8 +37,7 @@ public:
     ~Node_properties() override;
 
     // Implements Component
-    [[nodiscard]]
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
@@ -73,6 +72,7 @@ private:
         const char* const label,
         const char* const imgui_label
     ) const -> Value_edit_state;
+
     auto make_angle_button(
         float&            radians_value,
         const uint32_t    text_color,

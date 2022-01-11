@@ -119,8 +119,6 @@ Key_binding::Key_binding(
 {
 }
 
-//Key_binding::~Key_binding() = default;
-
 auto Key_binding::on_key(
     Command_context&             context,
     const bool                   pressed,
@@ -174,8 +172,6 @@ Mouse_binding::Mouse_binding(Command* command)
 {
 }
 
-//Mouse_binding::~Mouse_binding() = default;
-
 auto Mouse_binding::on_button(
     Command_context&                  context,
     const erhe::toolkit::Mouse_button button,
@@ -202,8 +198,6 @@ Mouse_click_binding::Mouse_click_binding(
     , m_button     {button }
 {
 }
-
-//Mouse_click_binding::~Mouse_click_binding() = default;
 
 auto Mouse_click_binding::on_button(
     Command_context&                  context,
@@ -262,7 +256,6 @@ auto Mouse_click_binding::on_button(
 auto Mouse_click_binding::on_motion(Command_context& context) -> bool
 {
     auto* command = get_command();
-    //ERHE_VERIFY(command != nullptr);
 
     if (command->state() == State::Disabled)
     {
@@ -282,8 +275,6 @@ Mouse_motion_binding::Mouse_motion_binding(Command* command)
     : Mouse_binding{command}
 {
 }
-
-//Mouse_motion_binding::~Mouse_motion_binding() = default;
 
 auto Mouse_motion_binding::on_motion(Command_context& context) -> bool
 {
@@ -308,8 +299,6 @@ Mouse_drag_binding::Mouse_drag_binding(
     , m_button     {button }
 {
 }
-
-//Mouse_drag_binding::~Mouse_drag_binding() = default;
 
 auto Mouse_drag_binding::on_button(
     Command_context&                  context,
