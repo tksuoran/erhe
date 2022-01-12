@@ -64,6 +64,9 @@ auto Headset_renderer::get_headset_view_resources(
     return *i;
 }
 
+static constexpr std::string_view c_id_headset_clear{"HS clear"};
+static constexpr std::string_view c_id_headset_render_content{"HS render content"};
+
 void Headset_renderer::render()
 {
     ERHE_PROFILE_FUNCTION
@@ -131,7 +134,7 @@ void Headset_renderer::render()
             gl::enable(gl::Enable_cap::framebuffer_srgb);
 
             {
-                ERHE_PROFILE_GPU_SCOPE("Headset clear")
+                ERHE_PROFILE_GPU_SCOPE(c_id_headset_clear)
 
                 gl::clear_color(
                     m_clear_color[0],
@@ -159,7 +162,7 @@ void Headset_renderer::render()
 
                 if (m_line_renderer_set) // && m_headset->trigger_value() > 0.0f)
                 {
-                    ERHE_PROFILE_GPU_SCOPE("Headset line render")
+                    ERHE_PROFILE_GPU_SCOPE(c_id_headset_render_content)
                     m_line_renderer_set->render(viewport, *render_context.camera);
                 }
             }

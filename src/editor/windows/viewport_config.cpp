@@ -15,7 +15,7 @@ Viewport_config::Viewport_config()
     , Imgui_window               {c_title}
 {
     render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
-    render_style_not_selected.edge_lines = true;
+    render_style_not_selected.edge_lines = false;
 
     render_style_selected.edge_lines = false;
 }

@@ -139,14 +139,14 @@ void Geometry::make_point_corners()
     {
         i.polygon.for_each_corner(*this, [&](auto& j)
         {
-            ERHE_VERIFY(j.corner_id != std::numeric_limits<Corner_id>::max());
-            ERHE_VERIFY(j.corner_id < m_next_corner_id);
+            //ERHE_VERIFY(j.corner_id != std::numeric_limits<Corner_id>::max());
+            //ERHE_VERIFY(j.corner_id < m_next_corner_id);
             const Point_id  point_id        = j.corner.point_id;
-            ERHE_VERIFY(point_id != std::numeric_limits<Point_id>::max());
-            ERHE_VERIFY(point_id < m_next_point_id);
+            //ERHE_VERIFY(point_id != std::numeric_limits<Point_id>::max());
+            //ERHE_VERIFY(point_id < m_next_point_id);
             Point&          point           = j.geometry.points[point_id];
             Point_corner_id point_corner_id = point.first_point_corner_id + point.corner_count++;
-            ERHE_VERIFY(point_corner_id < point_corners.size());
+            //ERHE_VERIFY(point_corner_id < point_corners.size());
             point_corners[point_corner_id] = j.corner_id;
         });
     });
@@ -157,19 +157,24 @@ void Geometry::make_point_corners()
 
 void Geometry::sort_point_corners()
 {
+    ERHE_PROFILE_FUNCTION
+
     class Point_corner_info
     {
     public:
         Point_corner_id point_corner_id{0};
         Corner_id       corner_id      {0};
-        Point_id        point_ids      [3] = { 0, 0, 0 };
+        Point_id        prev_point_id  {0};
+        Point_id        next_point_id  {0};
         bool            used           {false};
     };
 
+    std::vector<Point_corner_info> point_corner_infos;
+    point_corner_infos.reserve(20);
+
     for_each_point([&](auto& i)
     {
-        std::vector<Point_corner_info> point_corner_infos;
-
+        point_corner_infos.clear();
         i.point.for_each_corner(*this, [&](auto& j)
         {
             Corner_id        prev_corner_id   = 0;
@@ -196,14 +201,12 @@ void Geometry::sort_point_corners()
             const Corner& prev_corner = corners[prev_corner_id];
             const Corner& next_corner = corners[next_corner_id];
 
-            Point_corner_info point_corner_info;
-            point_corner_info.point_corner_id = j.point_corner_id;
-            point_corner_info.corner_id       = middle_corner_id;
-            point_corner_info.point_ids[0]    = prev_corner  .point_id;
-            point_corner_info.point_ids[1]    = middle_corner.point_id;
-            point_corner_info.point_ids[2]    = next_corner  .point_id;
-
-            point_corner_infos.push_back(point_corner_info);
+            point_corner_infos.emplace_back(
+                j.point_corner_id,
+                middle_corner_id,
+                prev_corner.point_id,
+                next_corner.point_id
+            );
         });
 
         for (uint32_t j = 0, end = static_cast<uint32_t>(point_corner_infos.size()); j < end; ++j)
@@ -219,7 +222,7 @@ void Geometry::sort_point_corners()
                 {
                     continue;
                 }
-                if (node.point_ids[2] == head.point_ids[0])
+                if (node.next_point_id == head.prev_point_id)
                 {
                     found = true;
                     node.used = true;

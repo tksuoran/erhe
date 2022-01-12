@@ -146,7 +146,7 @@ void Shadow_renderer::render(
 
     ERHE_PROFILE_FUNCTION
 
-    ERHE_PROFILE_GPU_SCOPE(c_shadow_renderer_render.data())
+    ERHE_PROFILE_GPU_SCOPE(c_shadow_renderer_render)
 
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
@@ -196,25 +196,35 @@ void Shadow_renderer::render(
                 continue;
             }
 
-            update_camera_buffer(*light.get(), m_viewport);
+            if (light_index == m_slot)
+            {
+                update_camera_buffer(*light.get(), m_viewport);
 
-            gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffers[light_index]->gl_name());
-            gl::clear_buffer_fv(gl::Buffer::depth, 0, m_configuration->depth_clear_value_pointer());
+                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffers[light_index]->gl_name());
+                gl::clear_buffer_fv(gl::Buffer::depth, 0, m_configuration->depth_clear_value_pointer());
 
-            bind_camera_buffer();
+                bind_camera_buffer();
 
-            gl::multi_draw_elements_indirect(
-                m_pipeline.input_assembly->primitive_topology,
-                m_mesh_memory->gl_index_type(),
-                reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
-                static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
-                static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
-            );
+                gl::multi_draw_elements_indirect(
+                    m_pipeline.input_assembly->primitive_topology,
+                    m_mesh_memory->gl_index_type(),
+                    reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
+                    static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
+                    static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
+                );
+            }
             ++light_index;
         }
     }
 
     gl::pop_debug_group();
+
+    ++m_slot;
+    if (m_slot >= light_layer.lights.size())
+    {
+        m_slot = 0;
+    }
+
 }
 
 auto Shadow_renderer::texture() const -> erhe::graphics::Texture*

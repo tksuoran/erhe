@@ -58,8 +58,6 @@ public:
     static constexpr bool   s_enable             = true;
 
 private:
-    erhe::scene::Viewport                 m_viewport{0, 0, 0, 0, true};
-
     // Component dependencies
     std::shared_ptr<Configuration>                        m_configuration;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
@@ -69,6 +67,8 @@ private:
     std::unique_ptr<erhe::graphics::Vertex_input_state>       m_vertex_input;
     std::unique_ptr<erhe::graphics::Texture>                  m_texture;
     std::vector<std::unique_ptr<erhe::graphics::Framebuffer>> m_framebuffers;
+    erhe::scene::Viewport                                     m_viewport{0, 0, 0, 0, true};
+    size_t                                                    m_slot{0};
 };
 
 } // namespace editor

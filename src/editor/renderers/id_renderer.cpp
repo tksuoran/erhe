@@ -299,7 +299,7 @@ void Id_renderer::render(
     bind_camera_buffer();
 
     {
-        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_clear.data())
+        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_clear)
 
         m_pipeline_state_tracker->shader_stages.reset();
         m_pipeline_state_tracker->color_blend.execute(&erhe::graphics::Color_blend_state::color_blend_disabled);
@@ -339,13 +339,13 @@ void Id_renderer::render(
     m_pipeline_state_tracker->execute(&m_pipeline);
     for (auto layer : content_mesh_layers)
     {
-        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_content.data())
+        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_content)
         render_layer(*layer);
     }
 
     // Clear depth for tool pixels
     {
-        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool.data())
+        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
         m_pipeline_state_tracker->execute(&m_selective_depth_clear_pipeline);
         gl::depth_range(0.0f, 0.0f);
         for (auto layer : tool_mesh_layers)
@@ -356,7 +356,7 @@ void Id_renderer::render(
 
     // Resume normal depth usage
     {
-        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool.data())
+        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
 
         m_pipeline_state_tracker->execute(&m_pipeline);
         gl::depth_range(0.0f, 1.0f);
@@ -368,7 +368,7 @@ void Id_renderer::render(
     }
 
     {
-        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_read.data())
+        ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_read)
 
         if (m_use_scissor)
         {

@@ -417,7 +417,7 @@ auto Context_window::open(
         glfwSetInputMode(window, GLFW_CURSOR,               GLFW_CURSOR_NORMAL);
         glfwSetInputMode(window, GLFW_STICKY_KEYS,          GL_FALSE);
         glfwSetInputMode(window, GLFW_STICKY_MOUSE_BUTTONS, GL_FALSE);
-        glfwSwapInterval(0);
+        glfwSwapInterval(1);
 
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 

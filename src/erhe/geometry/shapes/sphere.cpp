@@ -65,11 +65,11 @@ public:
 
     auto sphere_point(const double rel_slice, const double rel_stack) -> Point_id
     {
-        const double phi     = (glm::pi<double>() * 2.0 * rel_slice);
+        const double phi     = glm::pi<double>() * 2.0 * rel_slice;
         const double sin_phi = std::sin(phi);
         const double cos_phi = std::cos(phi);
 
-        const double theta     = (glm::pi<double>() * 0.5 * rel_stack);
+        const double theta     = glm::pi<double>() * 0.5 * rel_stack;
         const double sin_theta = std::sin(theta);
         const double cos_theta = std::cos(theta);
 
@@ -86,8 +86,8 @@ public:
         const auto s = 1.0f - static_cast<float>(rel_slice);
         const auto t = 1.0f - static_cast<float>(0.5 * (1.0 + rel_stack));
 
-        const vec3     N(xVN, yVN, zVN);
-        const vec3     axis(0.0f, 1.0f, 0.0f);
+        const vec3     N{xVN, yVN, zVN};
+        const vec3     axis{0.0f, 1.0f, 0.0f};
         const vec3     B        = glm::normalize(glm::cross(axis, N));
         const vec3     T        = glm::normalize(glm::cross(N, B));
         const Point_id point_id = geometry.make_point();
@@ -165,8 +165,8 @@ public:
 
         if (is_uv_discontinuity)
         {
-            auto s = 1.0f - static_cast<float>(rel_slice);
-            auto t = 1.0f - static_cast<float>(0.5 * (1.0 + rel_stack));
+            const auto s = 1.0f - static_cast<float>(rel_slice);
+            const auto t = 1.0f - static_cast<float>(0.5 * (1.0 + rel_stack));
 
             corner_texcoords->put(corner_id, vec2{s, t});
         }

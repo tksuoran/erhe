@@ -490,7 +490,7 @@ void Forward_renderer::render(
         update_light_buffer   (light_layer, m_shadow_renderer->viewport());
         for (auto mesh_layer : mesh_layers)
         {
-            ERHE_PROFILE_GPU_SCOPE(c_forward_renderer_render.data())
+            ERHE_PROFILE_GPU_SCOPE(c_forward_renderer_render);
 
             update_primitive_buffer(*mesh_layer, visibility_filter);
             const auto draw_indirect_buffer_range = update_draw_indirect_buffer(*mesh_layer, primitive_mode, visibility_filter);

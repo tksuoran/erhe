@@ -3,7 +3,9 @@
 namespace erhe::geometry
 {
 
-void Geometry::for_each_corner(std::function<void(Corner_context&)> callback)
+void Geometry::for_each_corner(
+    std::function<void(Corner_context&)> callback
+)
 {
     for (
         Corner_id corner_id = 0, end = get_corner_count();
@@ -70,7 +72,9 @@ void Geometry::for_each_point(
     }
 }
 
-void Geometry::for_each_point_const(std::function<void(Point_context_const&)> callback) const
+void Geometry::for_each_point_const(
+    std::function<void(Point_context_const&)> callback
+) const
 {
     for (
         Point_id point_id = 0, end = get_point_count();
@@ -91,7 +95,9 @@ void Geometry::for_each_point_const(std::function<void(Point_context_const&)> ca
     }
 }
 
-void Geometry::for_each_polygon(std::function<void(Polygon_context&)> callback)
+void Geometry::for_each_polygon(
+    std::function<void(Polygon_context&)> callback
+)
 {
     for (
         Polygon_id polygon_id = 0, end = get_polygon_count();
@@ -135,7 +141,9 @@ void Geometry::for_each_polygon_const(
     }
 }
 
-void Geometry::for_each_edge(std::function<void(Edge_context&)> callback)
+void Geometry::for_each_edge(
+    std::function<void(Edge_context&)> callback
+)
 {
     for (
         Edge_id edge_id = 0, end = get_edge_count();
@@ -156,7 +164,9 @@ void Geometry::for_each_edge(std::function<void(Edge_context&)> callback)
     }
 }
 
-void Geometry::for_each_edge_const(std::function<void(Edge_context_const&)> callback) const
+void Geometry::for_each_edge_const(
+    std::function<void(Edge_context_const&)> callback
+) const
 {
     for (
         Edge_id edge_id = 0, end = get_edge_count();

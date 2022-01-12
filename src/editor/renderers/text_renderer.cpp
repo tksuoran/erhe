@@ -249,7 +249,7 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
 
     ERHE_PROFILE_FUNCTION
 
-    ERHE_PROFILE_GPU_SCOPE(c_text_renderer_render.data())
+    ERHE_PROFILE_GPU_SCOPE(c_text_renderer_render)
 
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
