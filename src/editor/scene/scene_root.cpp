@@ -121,7 +121,7 @@ void Scene_root::add(
     Mesh_layer*                               layer
 )
 {
-    std::lock_guard<std::mutex> lock{m_scene_mutex};
+    const std::lock_guard<std::mutex> lock{m_scene_mutex};
 
     if (layer == nullptr)
     {

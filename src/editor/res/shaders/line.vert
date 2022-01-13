@@ -28,7 +28,9 @@ void main()
     float viewport_height           = view.viewport[2];
     float d                         = distance(view_position_in_world, position.xyz);
     float thickness                 = a_position.w;
-    float distance_scaled_thickness = (thickness < 0.0) ? -thickness : max(thickness / d, 0.01);
+    float distance_scaled_thickness = (thickness < 0.0)
+        ? -thickness
+        : max(thickness / d, 0.01);
 
     gl_Position   = clip_from_world * position;
     vs_position   = a_position.xyz;

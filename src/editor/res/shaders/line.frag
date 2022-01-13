@@ -49,7 +49,6 @@ vec3 srgb_to_linear(vec3 v)
 
 void main(void)
 {
-#if ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES
     float t                      = dot(gl_FragCoord.xy - v_start, v_line) / v_l2;
     vec2  projection             = v_start + clamp(t, 0.0, 1.0) * v_line;
     vec2  delta                  = gl_FragCoord.xy - projection;
@@ -58,6 +57,8 @@ void main(void)
     float k                      = clamp(s - d2, 0.0, 1.0);
     float end_weight             = step(abs(t * 2.0 - 1.0), 1);
     float alpha                  = mix(k, 1.0, end_weight);
+
+#if ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES
     vec3  view_position_in_world = view.view_position_in_world.xyz;
     float d                      = distance(view_position_in_world, v_position);
     float clamped_d              = max(1.0, sqrt(d));
@@ -66,6 +67,11 @@ void main(void)
     //out_color = vec4(v_color.rgb * v_color.a * alpha, v_color.a * alpha);
     out_color = vec4(v_color.rgb * v_color.a * inv_clamped_d, v_color.a * inv_clamped_d);
 #else
-    out_color = vec4(v_color.rgb * v_color.a, v_color.a);
+    if (alpha < 0.5)
+    {
+        discard;
+    }
+    //out_color = vec4(v_color.rgb * v_color.a, alpha);
+    out_color = vec4(srgb_to_linear(v_color.rgb) * v_color.a, 1.0);
 #endif
 }

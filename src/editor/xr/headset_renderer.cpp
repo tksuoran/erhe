@@ -3,6 +3,7 @@
 #include "application.hpp"
 #include "configuration.hpp"
 #include "editor_imgui_windows.hpp"
+#include "editor_tools.hpp"
 #include "log.hpp"
 #include "rendering.hpp"
 #include "window.hpp"
@@ -40,6 +41,43 @@ Headset_renderer::Headset_renderer()
 }
 
 Headset_renderer::~Headset_renderer() = default;
+
+void Headset_renderer::connect()
+{
+    m_application       = get    <Application      >();
+    m_editor_rendering  = get    <Editor_rendering >();
+    m_editor_tools      = get    <Editor_tools     >();
+    m_hand_tracker      = get    <Hand_tracker     >();
+    m_line_renderer_set = get    <Line_renderer_set>();
+    m_scene_root        = require<Scene_root       >();
+
+    require<Configuration>();
+    require<Editor_imgui_windows>();
+    require<Window>();
+}
+
+void Headset_renderer::initialize_component()
+{
+    get<Editor_imgui_windows>()->register_imgui_window(this);
+
+    setup_root_camera();
+
+    if (!get<Configuration>()->openxr)
+    {
+        return;
+    }
+
+    m_headset = std::make_unique<erhe::xr::Headset>(
+        get<Window>()->get_context_window()
+    );
+
+    const auto mesh_memory = get<Mesh_memory>();
+    m_controller_visualization = std::make_unique<Controller_visualization>(
+        *mesh_memory,
+        *m_scene_root,
+        m_root_camera.get()
+    );
+}
 
 auto Headset_renderer::get_headset_view_resources(
     erhe::xr::Render_view& render_view
@@ -158,7 +196,9 @@ void Headset_renderer::render()
                     .camera          = as_icamera(view_resources.camera.get()),
                     .viewport        = viewport
                 };
+
                 m_editor_rendering->render_content(render_context);
+                m_editor_tools->render_tools(render_context);
 
                 if (m_line_renderer_set) // && m_headset->trigger_value() > 0.0f)
                 {
@@ -174,49 +214,15 @@ void Headset_renderer::render()
     m_headset->end_frame();
 }
 
-void Headset_renderer::connect()
-{
-    m_application       = get    <Application      >();
-    m_editor_rendering  = get    <Editor_rendering >();
-    m_hand_tracker      = get    <Hand_tracker     >();
-    m_line_renderer_set = get    <Line_renderer_set>();
-    m_scene_root        = require<Scene_root       >();
-
-    require<Configuration>();
-    require<Editor_imgui_windows>();
-    require<Window>();
-}
-
-void Headset_renderer::initialize_component()
-{
-    get<Editor_imgui_windows>()->register_imgui_window(this);
-
-    setup_root_camera();
-
-    if (!get<Configuration>()->openxr)
-    {
-        return;
-    }
-
-    m_headset = std::make_unique<erhe::xr::Headset>(get<Window>()->get_context_window());
-
-    const auto mesh_memory = get<Mesh_memory>();
-    m_controller_visualization = std::make_unique<Controller_visualization>(
-        *mesh_memory,
-        *m_scene_root,
-        m_root_camera.get()
-    );
-}
-
 void Headset_renderer::setup_root_camera()
 {
     m_root_camera = std::make_shared<erhe::scene::Camera>(
         "Headset Root Camera"
     );
     const glm::mat4 m = erhe::toolkit::create_look_at(
-        glm::vec3{0.0f, 0.0f, 1.0f}, // eye
-        glm::vec3{0.0f, 0.0f, 0.0f}, // look at
-        glm::vec3{0.0f, 1.0f, 0.0f}  // up
+        glm::vec3{0.0f, 0.0f,  1.0f}, // eye
+        glm::vec3{0.0f, 0.0f,  0.0f}, // look at
+        glm::vec3{0.0f, 1.0f,  0.0f}  // up
     );
     m_root_camera->set_parent_from_node(m);
 

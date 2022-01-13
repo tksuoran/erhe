@@ -99,7 +99,8 @@ public:
     }
 
 private:
-    [[nodiscard]] auto get_command_priority(Command* command) const -> int;
+    [[nodiscard]] auto get_command_priority   (Command* command) const -> int;
+    [[nodiscard]] auto get_imgui_capture_mouse() const -> bool;
 
     void sort_mouse_bindings        ();
     void inactivate_ready_commands  ();

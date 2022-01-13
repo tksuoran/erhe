@@ -95,56 +95,56 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(window);
         m_components.add(shared_from_this());
         m_components.add(gl_context_provider);
-        m_components.add(make_shared<Brushes             >());
-        m_components.add(make_shared<Debug_draw          >());
-        m_components.add(make_shared<Debug_view_window   >());
+        //m_components.add(make_shared<Brushes             >());
+        //m_components.add(make_shared<Debug_draw          >());
+        //m_components.add(make_shared<Debug_view_window   >());
         m_components.add(make_shared<Editor_imgui_windows>());
         m_components.add(make_shared<Editor_rendering    >());
         m_components.add(make_shared<Editor_time         >());
         m_components.add(make_shared<Editor_tools        >());
         m_components.add(make_shared<Editor_view         >());
-        m_components.add(make_shared<Fly_camera_tool     >());
-        m_components.add(make_shared<Forward_renderer    >());
-        m_components.add(make_shared<Log_window          >());
+        //m_components.add(make_shared<Fly_camera_tool     >());
+        //m_components.add(make_shared<Forward_renderer    >());
+        //m_components.add(make_shared<Log_window          >());
         m_components.add(make_shared<Grid_tool           >());
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         m_components.add(make_shared<Hand_tracker        >());
         m_components.add(make_shared<Headset_renderer    >());
 #endif
-        m_components.add(make_shared<Hover_tool          >());
-        m_components.add(make_shared<Icon_set            >());
-        m_components.add(make_shared<Id_renderer         >());
+        //m_components.add(make_shared<Hover_tool          >());
+        //m_components.add(make_shared<Icon_set            >());
+        //m_components.add(make_shared<Id_renderer         >());
         m_components.add(make_shared<Image_transfer      >());
-        m_components.add(make_shared<Imgui_demo_window   >());
-        m_components.add(make_shared<Layers_window       >());
+        //m_components.add(make_shared<Imgui_demo_window   >());
+        //m_components.add(make_shared<Layers_window       >());
         m_components.add(make_shared<Line_renderer_set   >());
-        m_components.add(make_shared<Material_properties >());
+        //m_components.add(make_shared<Material_properties >());
         m_components.add(make_shared<Materials           >());
         m_components.add(make_shared<Mesh_memory         >());
-        m_components.add(make_shared<Mesh_properties     >());
-        m_components.add(make_shared<Node_properties     >());
-        m_components.add(make_shared<Node_tree_window    >());
+        //m_components.add(make_shared<Mesh_properties     >());
+        //m_components.add(make_shared<Node_properties     >());
+        //m_components.add(make_shared<Node_tree_window    >());
         m_components.add(make_shared<OpenGL_state_tracker>());
-        m_components.add(make_shared<Operation_stack     >());
-        m_components.add(make_shared<Operations          >());
-        m_components.add(make_shared<Physics_tool        >());
-        m_components.add(make_shared<Physics_window      >());
-        m_components.add(make_shared<Pointer_context     >());
+        //m_components.add(make_shared<Operation_stack     >());
+        //m_components.add(make_shared<Operations          >());
+        //m_components.add(make_shared<Physics_tool        >());
+        //m_components.add(make_shared<Physics_window      >());
+        //m_components.add(make_shared<Pointer_context     >());
         m_components.add(make_shared<Program_interface   >());
         m_components.add(make_shared<Programs            >());
-        m_components.add(make_shared<Scene_builder       >());
+        //m_components.add(make_shared<Scene_builder       >());
         m_components.add(make_shared<Scene_root          >());
-        m_components.add(make_shared<Selection_tool      >());
+        //m_components.add(make_shared<Selection_tool      >());
         m_components.add(make_shared<Shader_monitor      >());
-        m_components.add(make_shared<Shadow_renderer     >());
-        m_components.add(make_shared<Text_renderer       >());
-        m_components.add(make_shared<Textures            >());
+        //m_components.add(make_shared<Shadow_renderer     >());
+        //m_components.add(make_shared<Text_renderer       >());
+        //m_components.add(make_shared<Textures            >());
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         m_components.add(make_shared<Theremin            >());
 #endif
-        m_components.add(make_shared<Trs_tool            >());
+        //m_components.add(make_shared<Trs_tool            >());
         m_components.add(make_shared<Viewport_config     >());
-        m_components.add(make_shared<Viewport_windows    >());
+        //m_components.add(make_shared<Viewport_windows    >());
     }
 
     if (!window->create_gl_window())

@@ -337,7 +337,7 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
         m_hover_local_index = 0;
     }
 
-    m_frame_number = get<Editor_time>()->m_frame_number;
+    m_frame_number = get<Editor_time>()->frame_number();
 }
 
 auto Pointer_context::position_in_world() const -> std::optional<glm::vec3>

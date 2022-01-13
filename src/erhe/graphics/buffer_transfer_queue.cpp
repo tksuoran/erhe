@@ -26,7 +26,7 @@ void Buffer_transfer_queue::enqueue(
     std::vector<uint8_t>&& data
 )
 {
-    std::lock_guard<std::mutex> lock{m_mutex};
+    const std::lock_guard<std::mutex> lock{m_mutex};
 
     log_buffer.trace(
         "queued buffer {} transfer offset = {} size = {}\n",
@@ -39,7 +39,7 @@ void Buffer_transfer_queue::enqueue(
 
 void Buffer_transfer_queue::flush()
 {
-    std::lock_guard<std::mutex> lock{m_mutex};
+    const std::lock_guard<std::mutex> lock{m_mutex};
 
     for (const auto& entry : m_queued)
     {

@@ -450,10 +450,13 @@ void Forward_renderer::render(
     );
 
     const unsigned int shadow_texture_unit = 0;
-    const unsigned int shadow_texture_name = m_shadow_renderer->texture()->gl_name();
-    gl::bind_sampler (shadow_texture_unit, m_programs->nearest_sampler->gl_name());
-    gl::bind_textures(shadow_texture_unit, 1, &shadow_texture_name);
-    gl::viewport     (viewport.x, viewport.y, viewport.width, viewport.height);
+    if (m_shadow_renderer)
+    {
+        const unsigned int shadow_texture_name = m_shadow_renderer->texture()->gl_name();
+        gl::bind_sampler (shadow_texture_unit, m_programs->nearest_sampler->gl_name());
+        gl::bind_textures(shadow_texture_unit, 1, &shadow_texture_name);
+    }
+    gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     for (auto& pass : passes)
     {
         const auto* const pipeline = select_pipeline(pass);

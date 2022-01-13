@@ -1,4 +1,5 @@
 ﻿#include "editor_imgui_windows.hpp"
+#include "configuration.hpp"
 #include "window.hpp"
 
 #include "graphics/gl_context_provider.hpp"
@@ -24,6 +25,7 @@ void Editor_imgui_windows::connect()
     require<Gl_context_provider>();
     require<erhe::graphics::OpenGL_state_tracker>();
     require<Window>();
+    require<Configuration>();
 }
 
 void Editor_imgui_windows::initialize_component()
@@ -36,11 +38,11 @@ void Editor_imgui_windows::initialize_component()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
-///#if defined(ERHE_XR_LIBRARY_OPENXR)
-///    io.Fonts->AddFontFromFileTTF("res/fonts/SourceSansPro-Regular.otf", 32);
-///#else
-    io.Fonts->AddFontFromFileTTF("res/fonts/SourceSansPro-Regular.otf", 17);
-///#endif
+
+    if (get<Configuration>()->gui)
+    {
+        io.Fonts->AddFontFromFileTTF("res/fonts/SourceSansPro-Regular.otf", 17);
+    }
 
     ImFontGlyphRangesBuilder builder;
 
@@ -164,7 +166,7 @@ void Editor_imgui_windows::window_menu()
 
 void Editor_imgui_windows::register_imgui_window(Imgui_window* window)
 {
-    std::lock_guard<std::mutex> lock{m_mutex};
+    const std::lock_guard<std::mutex> lock{m_mutex};
 
     m_imgui_windows.emplace_back(window);
 }

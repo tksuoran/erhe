@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include <miniaudio.h>
 
+#include <chrono>
 #include <memory>
 #include <optional>
 
@@ -74,10 +75,10 @@ public:
         const float    phase
     );
 
-    void set_left_distance (float distance);
-    void set_right_distance(float distance);
+    void set_antenna_distance(const float distance);
 
 private:
+    void update_grid_color() const;
     auto normalized_finger_distance() const -> float;
 
     // Component dependencies
@@ -85,15 +86,13 @@ private:
     std::shared_ptr<Headset_renderer > m_headset_renderer;
     std::shared_ptr<Line_renderer_set> m_line_renderer_set;
 
-    bool                 m_enable_audio         {false};  // master on/off switch
-    float                m_left_distance        {0.0f};   // closest point of left hand to the left antenna
-    float                m_right_distance       {0.0f};   // closest point of right hand to the right antenna
-    float                m_left_distance_scale  {2.0f};   // adjusts left hand distance scaling
-    float                m_right_distance_scale {100.0f}; // adjusts right hand distance scaling
-    std::optional<float> m_left_finger_distance;          // left hand distance between thumb and index finger tips
-    std::optional<float> m_right_finger_distance;         // right hand distance between thumb and index finger tips
-    float                m_finger_distance_min  {1.0f};   // minimum distance for thumb and index finger tips
-    float                m_finger_distance_max  {7.0f};   // maximum distance for thumb and index finger tips
+    bool                 m_enable_audio          {true};   // master on/off switch
+    float                m_antenna_distance      {0.0f};   // closest point of right hand to the frequency antenna
+    float                m_antenna_distance_scale{100.0f}; // adjusts right hand antenna distance scaling
+    std::optional<float> m_left_finger_distance;           // left hand distance between thumb and index finger tips
+    std::optional<float> m_right_finger_distance;          // right hand distance between thumb and index finger tips
+    float                m_finger_distance_min  {1.0f};    // minimum distance for thumb and index finger tips
+    float                m_finger_distance_max  {7.0f};    // maximum distance for thumb and index finger tips
     float                m_volume               {1.0f};
     float                m_frequency            {440.0f};
     bool                 m_snap_to_note         {true}; // snap frequency to nearest note
@@ -102,6 +101,12 @@ private:
     ma_device_config     m_audio_config;
     ma_device            m_audio_device;
     std::vector<float>   m_wavetable; // for visualization
+
+    std::optional<
+        std::chrono::steady_clock::time_point
+    >                    m_right_hold_start_time;
+    bool                 m_right_click{false};
+
 };
 
 } // namespace editor

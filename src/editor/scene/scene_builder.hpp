@@ -109,7 +109,7 @@ public:
         const auto brush = m_brushes->make_brush(std::forward<Args>(args)...);
         if (instantiate_to_scene)
         {
-            std::lock_guard<std::mutex> lock{m_scene_brushes_mutex};
+            const std::lock_guard<std::mutex> lock{m_scene_brushes_mutex};
 
             m_scene_brushes.push_back(brush);
         }

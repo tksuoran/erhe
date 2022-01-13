@@ -181,7 +181,12 @@ void Editor_view::update()
     }
 
     m_editor_time     ->update();
-    m_viewport_windows->update();
+
+    if (m_viewport_windows)
+    {
+        m_viewport_windows->update();
+    }
+
     m_editor_rendering->render();
 
     if (m_configuration->show_window && m_configuration->gui)
@@ -316,19 +321,34 @@ void Editor_view::update_active_mouse_command(Command* command)
     }
 }
 
+auto Editor_view::get_imgui_capture_mouse() const -> bool
+{
+    const auto& imgui_windows = get<Editor_imgui_windows>();
+    if (!imgui_windows)
+    {
+        return false;
+    }
+
+    return ImGui::GetIO().WantCaptureMouse;
+}
+
 void Editor_view::on_mouse_click(
     const erhe::toolkit::Mouse_button button,
     const int                         count
 )
 {
+    if (!m_pointer_context)
+    {
+        return;
+    }
     sort_mouse_bindings();
 
-    ImGuiIO& io = ImGui::GetIO();
+    const bool imgui_capture_mouse = get_imgui_capture_mouse();
     const bool viewport_hovered =
         (m_pointer_context->window() != nullptr) &&
         m_pointer_context->window()->is_hovered();
     if (
-        io.WantCaptureMouse &&
+        imgui_capture_mouse &&
         !viewport_hovered &&
         (m_active_mouse_command == nullptr)
     )
@@ -362,10 +382,18 @@ void Editor_view::on_mouse_click(
 
 void Editor_view::on_mouse_move(const double x, const double y)
 {
-    ImGuiIO& io = ImGui::GetIO();
-    const bool viewport_hovered = (m_pointer_context->window() != nullptr) && m_pointer_context->window()->is_hovered();
+    if (!m_pointer_context)
+    {
+        return;
+    }
+
+    const bool imgui_capture_mouse = get_imgui_capture_mouse();
+    const bool viewport_hovered =
+        (m_pointer_context->window() != nullptr) &&
+        m_pointer_context->window()->is_hovered();
+
     if (
-        io.WantCaptureMouse &&
+        imgui_capture_mouse &&
         !viewport_hovered &&
         (m_active_mouse_command == nullptr)
     )
@@ -382,6 +410,7 @@ void Editor_view::on_mouse_move(const double x, const double y)
         *this,
         *m_pointer_context
     };
+
     for (const auto& binding : m_mouse_bindings)
     {
         auto* command = binding->get_command();

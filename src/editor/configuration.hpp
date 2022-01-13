@@ -27,11 +27,16 @@ public:
     // Public API
     [[nodiscard]] auto depth_clear_value_pointer() const -> const float *; // reverse_depth ? 0.0f : 1.0f;
     [[nodiscard]] auto depth_function           (const gl::Depth_function depth_function) const -> gl::Depth_function;
-    bool gui                    {true};
-    bool openxr                 {false};
-    bool show_window            {true};
-    bool parallel_initialization{true};
-    bool reverse_depth          {true};
+    bool gui                     {false};
+    bool openxr                  {true};
+    bool show_window             {false};
+    bool parallel_initialization {true};
+    bool reverse_depth           {true};
+    //int  window_width           {1920};
+    //int  window_height          {1080};
+    int  window_width            {256};
+    int  window_height           {256};
+    int  window_msaa_sample_count{0};
 };
 
 } // namespace editor

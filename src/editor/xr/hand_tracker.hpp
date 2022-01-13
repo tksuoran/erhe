@@ -30,6 +30,26 @@ enum class Hand_name : unsigned int
     Right = 1
 };
 
+class Finger_name
+{
+public:
+    static const size_t thumb  = 0;
+    static const size_t index  = 1;
+    static const size_t middle = 2;
+    static const size_t ring   = 3;
+    static const size_t little = 4;
+    static const size_t palm   = 5;
+    static const size_t wrist  = 6;
+    static const size_t count  = 7;
+};
+
+class Closest_finger
+{
+public:
+    size_t                               finger;
+    erhe::toolkit::Closest_points<float> closest_points;
+};
+
 class Hand
 {
 public:
@@ -42,12 +62,13 @@ public:
         const glm::mat4 transform,
         const glm::vec3 p0,
         const glm::vec3 p1
-    ) const -> std::optional<erhe::toolkit::Closest_points<float>>;
+    ) const -> std::optional<Closest_finger>;
 
     auto distance (const XrHandJointEXT lhs, const XrHandJointEXT rhs) const -> std::optional<float>;
     auto is_active() const -> bool;
     auto is_valid (const XrHandJointEXT joint) const -> bool;
     void draw     (Line_renderer& line_renderer, const glm::mat4 transform);
+    void set_color(const size_t finger, const ImVec4 color);
 
 private:
     void draw_joint_line_strip(
@@ -59,6 +80,7 @@ private:
     XrHandEXT                                                          m_hand;
     std::array<erhe::xr::Hand_tracking_joint, XR_HAND_JOINT_COUNT_EXT> m_joints;
     bool                                                               m_is_active;
+    std::array<ImVec4, Finger_name::count>                             m_color;
 };
 
 class Hand_tracker
@@ -92,10 +114,14 @@ public:
     void imgui() override;
 
     // Public API
-    void update              (erhe::xr::Headset& headset);
-    auto get_hand            (const Hand_name hand_name) -> Hand&;
-    void set_left_hand_color (const uint32_t color);
-    void set_right_hand_color(const uint32_t color);
+    void update   (erhe::xr::Headset& headset);
+    auto get_hand (const Hand_name hand_name) -> Hand&;
+    void set_color(const Hand_name hand_name, const ImVec4 color);
+    void set_color(
+        const Hand_name hand_name,
+        const size_t    finger_name,
+        const ImVec4    color
+    );
 
 private:
     // Component dependencies
@@ -105,9 +131,7 @@ private:
     Hand m_left_hand;
     Hand m_right_hand;
 
-    bool   m_show_hands      {true};
-    ImVec4 m_left_hand_color {1.0f, 0.5f, 0.0f, 1.0f};
-    ImVec4 m_right_hand_color{0.0f, 1.0f, 0.5f, 1.0f};
+    bool m_show_hands{true};
 };
 
 } // namespace editor

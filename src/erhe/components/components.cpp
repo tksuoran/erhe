@@ -247,7 +247,7 @@ void Components::initialize_component(const bool in_worker_thread)
     {
         ERHE_PROFILE_DATA("init component", component->name().data(), component->name().length())
 
-        std::lock_guard<std::mutex> lock{m_mutex};
+        const std::lock_guard<std::mutex> lock{m_mutex};
 
         component->set_ready();
         m_components_to_process.erase(component);
@@ -328,7 +328,7 @@ void Components::launch_component_initialization()
 auto Components::get_component_to_initialize(const bool in_worker_thread) -> Component*
 {
     {
-        std::lock_guard<std::mutex> lock{m_mutex};
+        const std::lock_guard<std::mutex> lock{m_mutex};
 
         if (m_components_to_process.empty())
         {
@@ -339,7 +339,7 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
     for (;;)
     {
         {
-            std::lock_guard<std::mutex> lock{m_mutex};
+            const std::lock_guard<std::mutex> lock{m_mutex};
 
             const auto i = std::find_if(
                 m_components_to_process.begin(),
@@ -397,7 +397,7 @@ auto Components::is_component_initialization_complete() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    std::lock_guard<std::mutex> lock{m_mutex};
+    const std::lock_guard<std::mutex> lock{m_mutex};
     return m_is_ready; // TODO atomic bool
 }
 
@@ -415,7 +415,7 @@ void Components::wait_component_initialization_complete()
     }
 
     m_execution_queue->wait();
-    std::lock_guard<std::mutex> lock{m_mutex};
+    const std::lock_guard<std::mutex> lock{m_mutex};
     m_is_ready = true;
 }
 

@@ -67,7 +67,7 @@ void Line_renderer_set::initialize_component()
         c_line_renderer_initialize_component.data()
     );
 
-    m_pipeline.initialize(*get<Shader_monitor>().get());
+    m_pipeline.initialize(get<Shader_monitor>().get());
 
     const Configuration& configuration = *get<Configuration>().get();
     visible.create_frame_resources(&m_pipeline, configuration);
@@ -76,7 +76,7 @@ void Line_renderer_set::initialize_component()
     gl::pop_debug_group();
 }
 
-void Line_renderer_pipeline::initialize(Shader_monitor& shader_monitor)
+void Line_renderer_pipeline::initialize(Shader_monitor* shader_monitor)
 {
     fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 
@@ -146,7 +146,7 @@ void Line_renderer_pipeline::initialize(Shader_monitor& shader_monitor)
         .default_uniform_block     = &default_uniform_block
     };
     create_info.defines.push_back({"ERHE_LINE_SHADER_SHOW_DEBUG_LINES",        "0"});
-    create_info.defines.push_back({"ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES", "1"});
+    create_info.defines.push_back({"ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES", "0"});
     create_info.defines.push_back({"ERHE_LINE_SHADER_STRIP",                   "1"});
     create_info.add_interface_block(view_block.get());
     create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
@@ -156,7 +156,10 @@ void Line_renderer_pipeline::initialize(Shader_monitor& shader_monitor)
     Shader_stages::Prototype prototype(create_info);
     shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
 
-    shader_monitor.add(create_info, shader_stages.get());
+    if (shader_monitor != nullptr)
+    {
+        shader_monitor->add(create_info, shader_stages.get());
+    }
 }
 
 Line_renderer::Line_renderer(const char* name)
@@ -250,6 +253,35 @@ void Line_renderer::add_lines(
         const glm::vec4 p1{transform * glm::vec4{line.p1, 1.0f}};
         put(vec3{p0} / p0.w, thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
         put(vec3{p1} / p1.w, thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
+    }
+
+    m_vertex_writer.write_offset += lines.size() * 2 * m_pipeline->vertex_format.stride();
+    m_line_count += lines.size();
+    m_vertex_writer.end();
+}
+
+void Line_renderer::add_lines(
+    const glm::mat4                    transform,
+    const std::initializer_list<Line4> lines
+)
+{
+    auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+
+    m_vertex_writer.begin();
+
+    std::byte* const          start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
+    const size_t              byte_count = vertex_gpu_data.size_bytes();
+    const size_t              word_count = byte_count / sizeof(float);
+    const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
+    const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
+
+    size_t word_offset = 0;
+    for (const Line4& line : lines)
+    {
+        const glm::vec4 p0{transform * glm::vec4{glm::vec3{line.p0}, 1.0f}};
+        const glm::vec4 p1{transform * glm::vec4{glm::vec3{line.p1}, 1.0f}};
+        put(vec3{p0} / p0.w, line.p0.w, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
+        put(vec3{p1} / p1.w, line.p1.w, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
     }
 
     m_vertex_writer.write_offset += lines.size() * 2 * m_pipeline->vertex_format.stride();

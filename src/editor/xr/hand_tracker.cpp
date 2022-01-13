@@ -61,7 +61,47 @@ const std::vector<XrHandJointEXT> little_joints = {
 Hand::Hand(const XrHandEXT hand)
     : m_hand{hand}
 {
+    std::fill(
+        m_color.begin(),
+        m_color.end(),
+        ImVec4{0.8f, 0.8f, 0.8f, 1.0f}
+    );
 }
+
+auto to_finger(const XrHandJointEXT joint) -> size_t
+{
+    switch (joint)
+    {
+        case XR_HAND_JOINT_PALM_EXT               : return Finger_name::palm;
+        case XR_HAND_JOINT_WRIST_EXT              : return Finger_name::wrist;
+        case XR_HAND_JOINT_THUMB_METACARPAL_EXT   : return Finger_name::thumb;
+        case XR_HAND_JOINT_THUMB_PROXIMAL_EXT     : return Finger_name::thumb;
+        case XR_HAND_JOINT_THUMB_DISTAL_EXT       : return Finger_name::thumb;
+        case XR_HAND_JOINT_THUMB_TIP_EXT          : return Finger_name::thumb;
+        case XR_HAND_JOINT_INDEX_METACARPAL_EXT   : return Finger_name::index;
+        case XR_HAND_JOINT_INDEX_PROXIMAL_EXT     : return Finger_name::index;
+        case XR_HAND_JOINT_INDEX_INTERMEDIATE_EXT : return Finger_name::index;
+        case XR_HAND_JOINT_INDEX_DISTAL_EXT       : return Finger_name::index;
+        case XR_HAND_JOINT_INDEX_TIP_EXT          : return Finger_name::index;
+        case XR_HAND_JOINT_MIDDLE_METACARPAL_EXT  : return Finger_name::middle;
+        case XR_HAND_JOINT_MIDDLE_PROXIMAL_EXT    : return Finger_name::middle;
+        case XR_HAND_JOINT_MIDDLE_INTERMEDIATE_EXT: return Finger_name::middle;
+        case XR_HAND_JOINT_MIDDLE_DISTAL_EXT      : return Finger_name::middle;
+        case XR_HAND_JOINT_MIDDLE_TIP_EXT         : return Finger_name::middle;
+        case XR_HAND_JOINT_RING_METACARPAL_EXT    : return Finger_name::ring;
+        case XR_HAND_JOINT_RING_PROXIMAL_EXT      : return Finger_name::ring;
+        case XR_HAND_JOINT_RING_INTERMEDIATE_EXT  : return Finger_name::ring;
+        case XR_HAND_JOINT_RING_DISTAL_EXT        : return Finger_name::ring;
+        case XR_HAND_JOINT_RING_TIP_EXT           : return Finger_name::ring;
+        case XR_HAND_JOINT_LITTLE_METACARPAL_EXT  : return Finger_name::little;
+        case XR_HAND_JOINT_LITTLE_PROXIMAL_EXT    : return Finger_name::little;
+        case XR_HAND_JOINT_LITTLE_INTERMEDIATE_EXT: return Finger_name::little;
+        case XR_HAND_JOINT_LITTLE_DISTAL_EXT      : return Finger_name::little;
+        case XR_HAND_JOINT_LITTLE_TIP_EXT         : return Finger_name::little;
+        default:                                    return Finger_name::palm;
+    }
+}
+
 
 void Hand::update(erhe::xr::Headset& headset)
 {
@@ -100,14 +140,14 @@ auto Hand::get_closest_point_to_line(
     const glm::mat4 transform,
     const glm::vec3 p0,
     const glm::vec3 p1
-) const -> std::optional<erhe::toolkit::Closest_points<float>>
+) const -> std::optional<Closest_finger>
 {
     if (!m_is_active)
     {
         return {};
     }
 
-    std::optional<erhe::toolkit::Closest_points<float>> result;
+    std::optional<Closest_finger> result;
     float min_distance = std::numeric_limits<float>::max();
     for (size_t i = 0; i < XR_HAND_JOINT_COUNT_EXT; ++i)
     {
@@ -129,7 +169,13 @@ auto Hand::get_closest_point_to_line(
                 if (distance < min_distance)
                 {
                     min_distance = distance;
-                    result = { p, q };
+                    result = {
+                        .finger = to_finger(joint),
+                        .closest_points = {
+                            .P = p,
+                            .Q = q
+                        }
+                    };
                 }
             }
         }
@@ -187,17 +233,34 @@ auto Hand::is_valid(const XrHandJointEXT joint) const -> bool
     return m_joints[joint].location.radius > 0.0f;
 }
 
-void Hand::draw(Line_renderer& line_renderer, const glm::mat4 transform)
+void Hand::set_color(const size_t finger, const ImVec4 color)
+{
+    m_color[finger] = color;
+}
+
+void Hand::draw(
+    Line_renderer&  line_renderer,
+    const glm::mat4 transform
+)
 {
     if (!m_is_active)
     {
         return;
     }
 
+    line_renderer.set_line_color(m_color[Finger_name::thumb]);
     draw_joint_line_strip(transform, thumb_joints,  line_renderer);
+
+    line_renderer.set_line_color(m_color[Finger_name::index]);
     draw_joint_line_strip(transform, index_joints,  line_renderer);
+
+    line_renderer.set_line_color(m_color[Finger_name::middle]);
     draw_joint_line_strip(transform, middle_joints, line_renderer);
+
+    line_renderer.set_line_color(m_color[Finger_name::ring]);
     draw_joint_line_strip(transform, ring_joints,   line_renderer);
+
+    line_renderer.set_line_color(m_color[Finger_name::little]);
     draw_joint_line_strip(transform, little_joints, line_renderer);
 }
 
@@ -240,11 +303,20 @@ void Hand::draw_joint_line_strip(
             transform,
             {
                 {
-                    glm::vec3{joint_a.location.pose.position.x, joint_a.location.pose.position.y, joint_a.location.pose.position.z},
-                    glm::vec3{joint_b.location.pose.position.x, joint_b.location.pose.position.y, joint_b.location.pose.position.z}
+                    glm::vec4{
+                        joint_a.location.pose.position.x,
+                        joint_a.location.pose.position.y,
+                        joint_a.location.pose.position.z,
+                        joint_a.location.radius * 256.0f
+                    },
+                    glm::vec4{
+                        joint_b.location.pose.position.x,
+                        joint_b.location.pose.position.y,
+                        joint_b.location.pose.position.z,
+                        joint_b.location.radius * 256.0f
+                    }
                 }
-            },
-            10.0f
+            }
         );
     }
 }
@@ -291,14 +363,22 @@ auto Hand_tracker::get_hand(const Hand_name hand_name) -> Hand&
     }
 }
 
-void Hand_tracker::set_left_hand_color(const uint32_t color)
+void Hand_tracker::set_color(const Hand_name hand_name, const ImVec4 color)
 {
-    m_left_hand_color = ImGui::ColorConvertU32ToFloat4(color);
+    get_hand(hand_name).set_color(Finger_name::thumb,  color);
+    get_hand(hand_name).set_color(Finger_name::index,  color);
+    get_hand(hand_name).set_color(Finger_name::middle, color);
+    get_hand(hand_name).set_color(Finger_name::ring,   color);
+    get_hand(hand_name).set_color(Finger_name::little, color);
 }
 
-void Hand_tracker::set_right_hand_color(const uint32_t color)
+void Hand_tracker::set_color(
+    const Hand_name hand_name,
+    const size_t    finger_name,
+    const ImVec4    color
+)
 {
-    m_right_hand_color = ImGui::ColorConvertU32ToFloat4(color);
+    get_hand(hand_name).set_color(finger_name, color);
 }
 
 void Hand_tracker::tool_render(const Render_context& context)
@@ -319,20 +399,13 @@ void Hand_tracker::tool_render(const Render_context& context)
     const auto transform     = camera->world_from_node();
     auto&      line_renderer = m_line_renderer_set->hidden;
 
-    // 0xff0088ff
-    line_renderer.set_line_color(ImGui::ColorConvertFloat4ToU32(m_left_hand_color));
     m_left_hand .draw(line_renderer, transform);
-
-    // 0xff88ff00
-    line_renderer.set_line_color(ImGui::ColorConvertFloat4ToU32(m_right_hand_color));
     m_right_hand.draw(line_renderer, transform);
 }
 
 void Hand_tracker::imgui()
 {
     ImGui::Checkbox("Show Hands", &m_show_hands);
-    ImGui::ColorEdit4("Left Hand",  &m_left_hand_color.x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4("Right Hand", &m_right_hand_color.x, ImGuiColorEditFlags_Float);
 }
 
 } // namespace editor

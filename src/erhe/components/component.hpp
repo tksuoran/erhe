@@ -81,8 +81,11 @@ public:
     auto require() -> std::shared_ptr<T>
     {
         const auto component = get<T>();
-        ERHE_VERIFY(component != nullptr);
-        depends_on(component);
+        //ERHE_VERIFY(component != nullptr);
+        if (component != nullptr)
+        {
+            depends_on(component);
+        }
         return component;
     }
 

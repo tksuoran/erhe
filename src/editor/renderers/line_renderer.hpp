@@ -55,6 +55,13 @@ public:
     glm::vec3 p1;
 };
 
+class Line4
+{
+public:
+    glm::vec4 p0;
+    glm::vec4 p1;
+};
+
 //class Color_line
 //{
 //public:
@@ -66,7 +73,7 @@ public:
 class Line_renderer_pipeline
 {
 public:
-    void initialize(Shader_monitor& shader_monitor);
+    void initialize(Shader_monitor* shader_monitor);
 
     bool                                             reverse_depth{false};
     erhe::graphics::Fragment_outputs                 fragment_outputs;
@@ -121,6 +128,11 @@ public:
         m_line_color = ImGui::ColorConvertFloat4ToU32(ImVec4{color.r, color.g, color.b, 1.0f});
     }
 
+    void set_line_color(const ImVec4 color)
+    {
+        m_line_color = ImGui::ColorConvertFloat4ToU32(color);
+    }
+
     void add_lines(
         const std::initializer_list<Line> lines,
         const float                       thickness
@@ -130,6 +142,11 @@ public:
         const glm::mat4                   transform,
         const std::initializer_list<Line> lines,
         const float                       thickness
+    );
+
+    void add_lines(
+        const glm::mat4                    transform,
+        const std::initializer_list<Line4> lines
     );
 
     void add_lines(

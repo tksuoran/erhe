@@ -63,7 +63,7 @@ auto Null_buffer::allocate_bytes(
     const size_t alignment
 ) noexcept -> size_t
 {
-    std::lock_guard<std::mutex> lock{m_allocate_mutex};
+    const std::lock_guard<std::mutex> lock{m_allocate_mutex};
 
     while ((m_next_free_byte % alignment) != 0)
     {

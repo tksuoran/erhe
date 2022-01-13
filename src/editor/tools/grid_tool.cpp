@@ -134,4 +134,13 @@ auto Grid_tool::snap(const vec3 v) const -> vec3
     };
 }
 
+void Grid_tool::set_major_color(const glm::vec4 color)
+{
+    m_major_color = color;
+}
+void Grid_tool::set_minor_color(const glm::vec4 color)
+{
+    m_minor_color = color;
+}
+
 } // namespace editor

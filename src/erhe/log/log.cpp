@@ -227,7 +227,7 @@ auto timestamp() -> std::string
 
 void Category::write(const bool indent, const std::string& text)
 {
-    std::lock_guard<std::mutex> lock{s_mutex};
+    const std::lock_guard<std::mutex> lock{s_mutex};
 
     // Log to console
     if (Log::print_color())

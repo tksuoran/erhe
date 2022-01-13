@@ -236,7 +236,7 @@ auto Fly_camera_tool::description() -> const char*
 
 void Fly_camera_tool::translation(const int tx, const int ty, const int tz)
 {
-    std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     constexpr float scale = 16384.0f;
     m_camera_controller->translate_x.adjust(tx / scale);
@@ -246,7 +246,7 @@ void Fly_camera_tool::translation(const int tx, const int ty, const int tz)
 
 void Fly_camera_tool::rotation(const int rx, const int ry, const int rz)
 {
-    std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     constexpr float scale = 16384.0f;
     m_camera_controller->rotate_x.adjust(rx / scale);
@@ -260,10 +260,11 @@ auto Fly_camera_tool::try_move(
     const bool            active
 ) -> bool
 {
-    std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     if (
-        (m_pointer_context->window() == nullptr) && active
+        (m_pointer_context->window() == nullptr) &&
+        active
     )
     {
         get<Log_window>()->tail_log("rejected press because no pointer_context window");
@@ -279,7 +280,7 @@ auto Fly_camera_tool::try_move(
 
 void Fly_camera_tool::turn_relative(const double dx, const double dy)
 {
-    std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     if (dx != 0.0f)
     {
@@ -298,7 +299,7 @@ void Fly_camera_tool::update_fixed_step(
     const erhe::components::Time_context& /*time_context*/
 )
 {
-    std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     m_camera_controller->update_fixed_step();
 }
@@ -307,7 +308,7 @@ void Fly_camera_tool::update_once_per_frame(
     const erhe::components::Time_context& /*time_context*/
 )
 {
-    std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     update_camera();
     m_camera_controller->update();
@@ -324,7 +325,7 @@ auto simple_degrees(const float radians_value) -> float
 
 void Fly_camera_tool::imgui()
 {
-    std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     float speed = m_camera_controller->translate_z.max_delta();
 

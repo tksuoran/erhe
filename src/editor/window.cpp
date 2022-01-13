@@ -37,12 +37,10 @@ auto Window::create_gl_window() -> bool
 
     const auto& configuration = *get<Configuration>();
 
-    const int msaa_sample_count = configuration.gui ? 0 : 16;
-
     m_context_window = std::make_unique<erhe::toolkit::Context_window>(
-        1920,
-        1080,
-        msaa_sample_count
+        configuration.window_width,
+        configuration.window_height,
+        configuration.window_msaa_sample_count
     );
 
 #if defined(ERHE_WINDOW_LIBRARY_GLFW)

@@ -380,7 +380,7 @@ void Viewport_window::multisample_resolve()
 {
     ERHE_PROFILE_FUNCTION
 
-    ERHE_PROFILE_GPU_SCOPE(c_multisample_resolve.data());
+    ERHE_PROFILE_GPU_SCOPE(c_multisample_resolve);
 
     if (!m_framebuffer_multisample || !m_framebuffer_resolved)
     {

@@ -46,18 +46,32 @@ void Editor_time::update()
     const double dt = 1.0 / 100.0;
     while (m_time_accumulator >= dt)
     {
-        update_fixed_step(erhe::components::Time_context{dt, m_time, m_frame_number});
+        update_fixed_step(
+            erhe::components::Time_context{
+                .dt           = dt,
+                .time         = m_time,
+                .frame_number = m_frame_number
+            }
+        );
         m_time_accumulator -= dt;
         m_time += dt;
     }
 
-    update_once_per_frame(erhe::components::Time_context{dt, m_time, m_frame_number});
+    update_once_per_frame(
+        erhe::components::Time_context{
+            .dt           = dt,
+            .time         = m_time,
+            .frame_number = m_frame_number
+        }
+    );
     m_scene_root->scene().update_node_transforms();
 
     ERHE_PROFILE_FRAME_END
 }
 
-void Editor_time::update_fixed_step(const erhe::components::Time_context& time_context)
+void Editor_time::update_fixed_step(
+    const erhe::components::Time_context& time_context
+)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -67,7 +81,9 @@ void Editor_time::update_fixed_step(const erhe::components::Time_context& time_c
     }
 }
 
-void Editor_time::update_once_per_frame(const erhe::components::Time_context& time_context)
+void Editor_time::update_once_per_frame(
+    const erhe::components::Time_context& time_context
+)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -76,6 +92,11 @@ void Editor_time::update_once_per_frame(const erhe::components::Time_context& ti
         update->update_once_per_frame(time_context);
     }
     ++m_frame_number;
+}
+
+auto Editor_time::frame_number() const -> uint64_t
+{
+    return m_frame_number;
 }
 
 auto Editor_time::time() const -> double

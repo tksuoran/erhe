@@ -111,7 +111,7 @@ auto Brushes::allocate_brush(
     erhe::primitive::Build_info& build_info
 ) -> std::shared_ptr<Brush>
 {
-    std::lock_guard<std::mutex> lock{m_brush_mutex};
+    const std::lock_guard<std::mutex> lock{m_brush_mutex};
 
     const auto brush = std::make_shared<Brush>(build_info);
     m_brushes.push_back(brush);

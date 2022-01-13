@@ -30,6 +30,7 @@ namespace editor
 
 class Application;
 class Editor_rendering;
+class Editor_tools;
 class Hand_tracker;
 class Headset_renderer;
 class Line_renderer_set;
@@ -75,6 +76,7 @@ private:
     // Component dependencies
     std::shared_ptr<Application>       m_application;
     std::shared_ptr<Editor_rendering>  m_editor_rendering;
+    std::shared_ptr<Editor_tools>      m_editor_tools;
     std::shared_ptr<Hand_tracker>      m_hand_tracker;
     std::shared_ptr<Line_renderer_set> m_line_renderer_set;
     std::shared_ptr<Scene_root>        m_scene_root;
@@ -83,7 +85,7 @@ private:
     std::shared_ptr<erhe::scene::Camera>      m_root_camera;
     std::vector<Headset_view_resources>       m_view_resources;
     std::unique_ptr<Controller_visualization> m_controller_visualization;
-    std::array<float, 4>                      m_clear_color{0.0f, 0.0f, 0.0f, 0.5f};
+    std::array<float, 4>                      m_clear_color{0.0f, 0.0f, 0.0f, 0.95f};
 };
 
 }

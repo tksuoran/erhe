@@ -236,6 +236,11 @@ void Editor_rendering::render_content(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
+    if (!m_forward_renderer)
+    {
+        return;
+    }
+
     if (context.camera == nullptr)
     {
         return;
