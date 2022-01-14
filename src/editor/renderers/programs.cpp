@@ -46,9 +46,14 @@ void Programs::initialize_component()
         gl::Texture_mag_filter::linear
     );
 
-    default_uniform_block   = std::make_unique<erhe::graphics::Shader_resource>();
+    linear_mipmap_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
+        gl::Texture_min_filter::linear_mipmap_linear,
+        gl::Texture_mag_filter::linear
+    );
 
-    gui_texture_sampler_location = default_uniform_block->add_sampler(
+    default_uniform_block = std::make_unique<erhe::graphics::Shader_resource>();
+
+    gui_sampler_location = default_uniform_block->add_sampler(
         "s_gui_texture",
         gl::Uniform_type::sampler_2d
     )->location();

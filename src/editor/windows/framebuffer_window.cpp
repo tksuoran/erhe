@@ -63,6 +63,12 @@ void Framebuffer_window::bind_resources()
 {
 }
 
+void Framebuffer_window::bind_framebuffer()
+{
+    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
+    gl::viewport        (m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
+}
+
 void Framebuffer_window::update_framebuffer()
 {
     const auto win_min = ImGui::GetWindowContentRegionMin();
@@ -132,32 +138,6 @@ void Framebuffer_window::update_framebuffer()
     create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_texture.get());
     m_framebuffer = std::make_unique<Framebuffer>(create_info);
     m_framebuffer->set_debug_label(m_debug_label);
-
-    update_framebuffer();
-}
-
-void Framebuffer_window::render(
-    erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker
-)
-{
-    if (
-        (m_viewport.width < 1) ||
-        (m_viewport.height < 0)
-    )
-    {
-        return;
-    }
-
-    erhe::graphics::Scoped_debug_group pass_scope{m_debug_label};
-
-    pipeline_state_tracker.execute(&m_pipeline);
-
-    bind_resources();
-
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
-    gl::viewport        (m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
-    gl::draw_arrays     (m_pipeline.input_assembly->primitive_topology, 0, 4);
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
 }
 
 void Framebuffer_window::imgui()

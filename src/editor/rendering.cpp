@@ -8,6 +8,8 @@
 #include "editor_view.hpp"
 #include "window.hpp"
 #include "renderers/forward_renderer.hpp"
+#include "renderers/mesh_memory.hpp"
+#include "renderers/programs.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_renderer.hpp"
 #endif
@@ -60,6 +62,409 @@ void Editor_rendering::connect()
     m_shadow_renderer        = get<Shadow_renderer     >();
     m_text_renderer          = get<Text_renderer       >();
     m_viewport_windows       = get<Viewport_windows    >();
+
+    require<Programs   >();
+    require<Mesh_memory>();
+}
+
+void Editor_rendering::initialize_component()
+{
+    using erhe::graphics::Vertex_input_state;
+    using erhe::graphics::Input_assembly_state;
+    using erhe::graphics::Rasterization_state;
+    using erhe::graphics::Depth_stencil_state;
+    using erhe::graphics::Color_blend_state;
+
+    auto& programs     = *get<Programs>().get();
+    auto* vertex_input = get<Mesh_memory>()->vertex_input.get();
+
+    m_depth_stencil_tool_set_hidden = Depth_stencil_state{
+        true,                     // depth test enabled
+        false,                    // depth writes disabled
+        m_configuration->depth_function(gl::Depth_function::greater),  // where depth is further
+        true,                     // enable stencil operation
+        {
+            gl::Stencil_op::keep,         // on stencil test fail, do nothing
+            gl::Stencil_op::keep,         // on depth test fail, do nothing
+            gl::Stencil_op::replace,      // on depth test pass, set stencil to 1
+            gl::Stencil_function::always, // stencil test always passes
+            1u,
+            0xffffu,
+            0xffffu
+        },
+        {
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_op::replace,
+            gl::Stencil_function::always,
+            1u,
+            0xffffu,
+            0xffffu
+        },
+    };
+
+    m_depth_stencil_tool_set_visible = Depth_stencil_state{
+        true,                   // depth test enabled
+        false,                  // depth writes disabled
+        m_configuration->depth_function(gl::Depth_function::lequal), // where depth is closer
+        true,                   // enable stencil operation
+        {
+            gl::Stencil_op::keep,         // on stencil test fail, do nothing
+            gl::Stencil_op::keep,         // on depth test fail, do nothing
+            gl::Stencil_op::replace,      // on depth test pass, set stencil
+            gl::Stencil_function::always, // stencil test always passes
+            2u,
+            0xffffu,
+            0xffffu
+        },
+        {
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_op::replace,
+            gl::Stencil_function::always,
+            2u,
+            0xffffu,
+            0xffffu
+        },
+    };
+
+    m_depth_stencil_tool_test_for_hidden = Depth_stencil_state{
+        true,                     // depth test enabled
+        true,                     //
+        m_configuration->depth_function(gl::Depth_function::lequal),   //
+        true,                     // enable stencil operation
+        {
+            gl::Stencil_op::keep,        // on stencil test fail, do nothing
+            gl::Stencil_op::keep,        // on depth test fail, do nothing
+            gl::Stencil_op::keep,        // on depth test pass, do nothing
+            gl::Stencil_function::equal, // stencil test requires exact value 1
+            1u,
+            0xffffu,
+            0xffffu
+        },
+        {
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_op::replace,
+            gl::Stencil_function::always,
+            1u,
+            0xffffu,
+            0xffffu
+        },
+    };
+
+    m_depth_stencil_tool_test_for_visible = Depth_stencil_state{
+        true,                     // depth test enabled
+        true,                     //
+        m_configuration->depth_function(gl::Depth_function::lequal),   //
+        true,                     // enable stencil operation
+        {
+            gl::Stencil_op::keep,        // on stencil test fail, do nothing
+            gl::Stencil_op::keep,        // on depth test fail, do nothing
+            gl::Stencil_op::keep,        // on depth test pass, do nothing
+            gl::Stencil_function::equal, // stencil test requires exact value 2
+            2u,
+            0xffffu,
+            0xffffu
+        },
+        {
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_function::equal,
+            2u,
+            0xffffu,
+            0xffffu
+        },
+    };
+
+    m_color_blend_constant_point_six = Color_blend_state {
+        true,
+        {
+            gl::Blend_equation_mode::func_add,
+            gl::Blending_factor::constant_alpha,
+            gl::Blending_factor::one_minus_constant_alpha
+        },
+        {
+            gl::Blend_equation_mode::func_add,
+            gl::Blending_factor::constant_alpha,
+            gl::Blending_factor::one_minus_constant_alpha
+        },
+        glm::vec4{0.0f, 0.0f, 0.0f, 0.6f},
+        true,
+        true,
+        true,
+        true
+    };
+
+    m_color_blend_constant_point_two = Color_blend_state {
+        true,
+        {
+            gl::Blend_equation_mode::func_add,
+            gl::Blending_factor::constant_alpha,
+            gl::Blending_factor::one_minus_constant_alpha
+        },
+        {
+            gl::Blend_equation_mode::func_add,
+            gl::Blending_factor::constant_alpha,
+            gl::Blending_factor::one_minus_constant_alpha
+        },
+        glm::vec4{0.0f, 0.0f, 0.0f, 0.2f},
+        true,
+        true,
+        true,
+        true
+    };
+
+    m_depth_hidden = Depth_stencil_state{
+        true,                     // depth test enabled
+        false,                    // depth writes disabled
+        m_configuration->depth_function(gl::Depth_function::greater),  // where depth is further
+        false,                    // no stencil test
+        {
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_function::always,
+            0u,
+            0xffffu,
+            0xffffu
+        },
+        {
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_op::keep,
+            gl::Stencil_function::always,
+            0u,
+            0xffffu,
+            0xffffu
+        },
+    };
+
+    m_rp_polygon_fill = Render_pass
+    {
+        .name = "Polygon fill",
+        .pipeline =
+        {
+            .shader_stages  = programs.standard.get(),
+            .vertex_input   = vertex_input,
+            .input_assembly = &Input_assembly_state::triangles,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+            .color_blend    = &Color_blend_state::color_blend_disabled
+        }
+    };
+
+    m_rp_gui = Render_pass
+    {
+        .name = "GUI",
+        .pipeline =
+        {
+            .shader_stages  = programs.textured.get(),
+            .vertex_input   = vertex_input,
+            .input_assembly = &Input_assembly_state::triangles,
+            .rasterization  = &Rasterization_state::cull_mode_none,
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+            .color_blend    = &Color_blend_state::color_blend_premultiplied
+        },
+        .begin = [this, &programs](){
+            const unsigned int gui_texture_unit = 1;
+            const unsigned int gui_texture_name = m_editor_imgui_windows->texture()->gl_name();
+            gl::bind_sampler (gui_texture_unit, programs.linear_mipmap_linear_sampler->gl_name());
+            gl::bind_textures(gui_texture_unit, 1, &gui_texture_name);
+            gl::program_uniform_1i(
+                programs.textured->gl_name(),
+                programs.gui_sampler_location,
+                gui_texture_unit
+            );
+        },
+    };
+
+    // Tool pass one: For hidden tool parts, set stencil to 1.
+    // Only reads depth buffer, only writes stencil buffer.
+    m_rp_tool1_hidden_stencil = Render_pass
+    {
+        .name = "Tool pass 1: Tag depth hidden with stencil = 1",
+        .pipeline =
+        {
+            .shader_stages  = programs.tool.get(),
+            .vertex_input   = vertex_input,
+            .input_assembly = &Input_assembly_state::triangles,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+            .depth_stencil  = &m_depth_stencil_tool_set_hidden,
+            .color_blend    = &Color_blend_state::color_writes_disabled
+        }
+    };
+
+    // Tool pass two: For visible tool parts, set stencil to 2.
+    // Only reads depth buffer, only writes stencil buffer.
+    m_rp_tool2_visible_stencil = Render_pass
+    {
+        .name = "Tool pass 2: Tag visible tool parts with stencil = 2",
+        .pipeline =
+        {
+            .shader_stages  = programs.tool.get(),
+            .vertex_input   = vertex_input,
+            .input_assembly = &Input_assembly_state::triangles,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+            .depth_stencil  = &m_depth_stencil_tool_set_visible,
+            .color_blend    = &Color_blend_state::color_writes_disabled
+        }
+    };
+
+    // Tool pass three: Set depth to fixed value (with depth range)
+    // Only writes depth buffer, depth test always.
+    m_rp_tool3_depth_clear = Render_pass
+    {
+        .name = "Tool pass 3: Set depth to fixed value",
+        .pipeline =
+        {
+            .shader_stages  = programs.tool.get(),
+            .vertex_input   = vertex_input,
+            .input_assembly = &Input_assembly_state::triangles,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+            .depth_stencil  = &Depth_stencil_state::depth_test_always_stencil_test_disabled,
+            .color_blend    = &Color_blend_state::color_writes_disabled
+        },
+        .begin = [](){ gl::depth_range(0.0f, 0.0f); },
+        .end   = [](){ gl::depth_range(0.0f, 1.0f); }
+    };
+
+    // Tool pass four: Set depth to proper tool depth
+    // Normal depth buffer update with depth test.
+    m_rp_tool4_depth = Render_pass
+    {
+        .name = "Tool pass 4: Set depth to proper tool depth",
+        .pipeline =
+        {
+            .shader_stages  = programs.tool.get(),
+            .vertex_input   = vertex_input,
+            .input_assembly = &Input_assembly_state::triangles,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+            .color_blend    = &Color_blend_state::color_writes_disabled
+        }
+    };
+
+    // Tool pass five: Render visible tool parts
+    // Normal depth test, stencil test require 1, color writes enabled, no blending
+    m_rp_tool5_visible_color = Render_pass
+    {
+        .name = "Tool pass 5: Render visible tool parts",
+        .pipeline =
+        {
+            .shader_stages  = programs.tool.get(),
+            .vertex_input   = vertex_input,
+            .input_assembly = &Input_assembly_state::triangles,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+            .depth_stencil  = &m_depth_stencil_tool_test_for_visible,
+            .color_blend    = &Color_blend_state::color_blend_disabled
+        }
+    };
+
+    // Tool pass six: Render hidden tool parts
+    // Normal depth test, stencil test requires 2, color writes enabled, blending
+    m_rp_tool6_hidden_color = Render_pass
+    {
+        .name = "Tool pass 6: Render hidden tool parts",
+        .pipeline =
+        {
+            .shader_stages  = programs.tool.get(),
+            .vertex_input   = vertex_input,
+            .input_assembly = &Input_assembly_state::triangles,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+            .depth_stencil  = &m_depth_stencil_tool_test_for_hidden,
+            .color_blend    = &m_color_blend_constant_point_six
+        }
+    };
+
+    m_rp_edge_lines = Render_pass
+    {
+        .name = "Edge lines",
+        .pipeline =
+        {
+            .shader_stages  = programs.wide_lines.get(),
+            .vertex_input   = vertex_input,
+            .input_assembly = &Input_assembly_state::lines,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+            .color_blend    = &Color_blend_state::color_blend_premultiplied
+        },
+        .primitive_mode = erhe::primitive::Primitive_mode::edge_lines
+    };
+
+    m_rp_corner_points = Render_pass
+    {
+        .name = "Corner Points",
+        .pipeline =
+        {
+            .shader_stages  = programs.points.get(),
+            .vertex_input   = vertex_input,
+            .input_assembly = &Input_assembly_state::points,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+            .color_blend    = &Color_blend_state::color_blend_disabled
+        },
+        .primitive_mode = erhe::primitive::Primitive_mode::corner_points
+    };
+
+    m_rp_polygon_centroids = Render_pass
+    {
+        .name = "Polygon Centroids",
+        .pipeline =
+        {
+            .shader_stages  = programs.points.get(),
+            .vertex_input   = vertex_input,
+            .input_assembly = &Input_assembly_state::points,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+            .color_blend    = &Color_blend_state::color_blend_disabled
+        },
+        .primitive_mode = erhe::primitive::Primitive_mode::polygon_centroids
+    };
+
+    m_rp_line_hidden_blend = Render_pass
+    {
+        .name = "Hidden lines with blending",
+        .pipeline =
+        {
+            .shader_stages  = programs.wide_lines.get(),
+            .vertex_input   = vertex_input,
+            .input_assembly = &Input_assembly_state::lines,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+            .depth_stencil  = &m_depth_hidden,
+            .color_blend    = &m_color_blend_constant_point_two
+        },
+        .primitive_mode = erhe::primitive::Primitive_mode::edge_lines
+    };
+
+    m_rp_brush_back = Render_pass
+    {
+        .name = "Brush back faces",
+        .pipeline =
+        {
+            .shader_stages  = programs.brush.get(),
+            .vertex_input   = vertex_input,
+            .input_assembly = &Input_assembly_state::triangles,
+            .rasterization  = Rasterization_state::cull_mode_front_cw(m_configuration->reverse_depth),
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+            .color_blend    = &Color_blend_state::color_blend_premultiplied
+        }
+    };
+
+    m_rp_brush_front = Render_pass
+    {
+        .name = "Brush front faces",
+        .pipeline =
+        {
+            .shader_stages  = programs.brush.get(),
+            .vertex_input   = vertex_input,
+            .input_assembly = &Input_assembly_state::triangles,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+            .color_blend    = &Color_blend_state::color_blend_premultiplied
+        }
+    };
 }
 
 void Editor_rendering::init_state()
@@ -85,10 +490,9 @@ void Editor_rendering::begin_frame()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_configuration->gui)
-    {
-        m_editor_imgui_windows->menu();
-    }
+    m_editor_imgui_windows->begin_imgui_frame();
+
+    m_editor_imgui_windows->menu();
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_headset_renderer)
@@ -100,11 +504,10 @@ void Editor_rendering::begin_frame()
     m_editor_tools->begin_frame();
 }
 
-void Editor_rendering::render_viewports()
+void Editor_rendering::bind_default_framebuffer()
 {
-    ERHE_PROFILE_FUNCTION
-
-    m_viewport_windows->render();
+    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+    gl::viewport        (0, 0, width(), height());
 }
 
 void Editor_rendering::clear()
@@ -117,11 +520,9 @@ void Editor_rendering::clear()
     // unit state when doing the clear.
     m_pipeline_state_tracker->shader_stages.reset();
     m_pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
-    gl::viewport        (0, 0, width(), height());
-    gl::clear_color     (0.0f, 0.0f, 0.2f, 0.1f);
-    gl::clear_depth_f   (*m_configuration->depth_clear_value_pointer());
-    gl::clear           (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
+    gl::clear_color  (0.0f, 0.0f, 0.2f, 0.1f);
+    gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
+    gl::clear        (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 }
 
 void Editor_rendering::render()
@@ -146,23 +547,18 @@ void Editor_rendering::render()
     {
         m_scene_root->sort_lights();
         m_shadow_renderer->render(
-            m_scene_root->content_layers(),
-            *m_scene_root->light_layer().get()
+            {
+                .mesh_layers = { m_scene_root->content_layer() },
+                .light_layer = m_scene_root->light_layer()
+            }
         );
         get<Debug_view_window>()->render(*m_pipeline_state_tracker.get());
     }
 
-    if (m_configuration->gui)
-    {
-        render_viewports();
-        m_editor_imgui_windows->imgui_windows();
-    }
-    else if (m_configuration->show_window)
-    {
-        gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
-        clear();
-        render_viewports();
-    }
+    m_viewport_windows->render();
+
+    m_editor_imgui_windows->imgui_windows();
+    m_editor_imgui_windows->end_and_render_imgui_frame();
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_headset_renderer)
@@ -191,6 +587,7 @@ void Editor_rendering::render_viewport(const Render_context& context, const bool
         {
             render_tool_meshes(context);
         }
+        render_gui(context);
     }
 
     m_editor_tools->render_tools(context);
@@ -224,13 +621,15 @@ void Editor_rendering::render_id(const Render_context& context)
     auto pointer = m_pointer_context->position_in_viewport_window().value();
 
     m_id_renderer->render(
-        context.viewport,
-        m_scene_root->content_layers(),
-        m_scene_root->tool_layers(),
-        *context.camera,
-        m_editor_time->time(),
-        static_cast<int>(pointer.x),
-        static_cast<int>(pointer.y)
+        {
+            .viewport            = context.viewport,
+            .camera              = *context.camera,
+            .content_mesh_layers = { m_scene_root->content_layer() },
+            .tool_mesh_layers    = { m_scene_root->tool_layer() },
+            .time                = m_editor_time->time(),
+            .x                   = static_cast<int>(pointer.x),
+            .y                   = static_cast<int>(pointer.y)
+        }
     );
 }
 
@@ -269,15 +668,15 @@ void Editor_rendering::render_content(const Render_context& context)
         //                             render_style.polygon_offset_clamp);
         //}
         m_forward_renderer->render(
-            context.viewport,
-            *context.camera,
-            m_scene_root->content_layers(),
-            *m_scene_root->light_layer().get(),
-            m_scene_root->materials(),
             {
-                Forward_renderer::Pass::polygon_fill
-            },
-            content_not_selected_filter
+                .viewport          = context.viewport,
+                .camera            = *context.camera,
+                .mesh_layers       = { m_scene_root->content_layer(), m_scene_root->controller_layer() },
+                .light_layer       = m_scene_root->light_layer(),
+                .materials         = m_scene_root->materials(),
+                .passes            = { &m_rp_polygon_fill },
+                .visibility_filter = content_not_selected_filter
+            }
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
     }
@@ -290,15 +689,15 @@ void Editor_rendering::render_content(const Render_context& context)
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_size  = render_style.line_width;
         m_forward_renderer->render(
-            context.viewport,
-            *context.camera,
-            m_scene_root->content_fill_layers(),
-            *m_scene_root->light_layer().get(),
-            m_scene_root->materials(),
             {
-                Forward_renderer::Pass::edge_lines
-            },
-            content_not_selected_filter
+                .viewport          = context.viewport,
+                .camera            = *context.camera,
+                .mesh_layers       = { m_scene_root->content_layer() },
+                .light_layer       = m_scene_root->light_layer(),
+                .materials         = m_scene_root->materials(),
+                .passes            = { &m_rp_edge_lines },
+                .visibility_filter = content_not_selected_filter
+            }
         );
         gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
     }
@@ -310,15 +709,15 @@ void Editor_rendering::render_content(const Render_context& context)
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_size  = render_style.point_size;
         m_forward_renderer->render(
-            context.viewport,
-            *context.camera,
-            m_scene_root->content_layers(),
-            *m_scene_root->light_layer().get(),
-            m_scene_root->materials(),
             {
-                Forward_renderer::Pass::polygon_centroids
-            },
-            content_not_selected_filter
+                .viewport          = context.viewport,
+                .camera            = *context.camera,
+                .mesh_layers       = { m_scene_root->content_layer() },
+                .light_layer       = m_scene_root->light_layer(),
+                .materials         = m_scene_root->materials(),
+                .passes            = { &m_rp_polygon_centroids },
+                .visibility_filter = content_not_selected_filter
+            }
         );
     }
 
@@ -329,15 +728,15 @@ void Editor_rendering::render_content(const Render_context& context)
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_size  = render_style.point_size;
         m_forward_renderer->render(
-            context.viewport,
-            *context.camera,
-            m_scene_root->content_layers(),
-            *m_scene_root->light_layer().get(),
-            m_scene_root->materials(),
             {
-                Forward_renderer::Pass::corner_points
-            },
-            content_not_selected_filter
+                .viewport          = context.viewport,
+                .camera            = *context.camera,
+                .mesh_layers       = { m_scene_root->content_layer() },
+                .light_layer       = m_scene_root->light_layer(),
+                .materials         = m_scene_root->materials(),
+                .passes            = { &m_rp_corner_points },
+                .visibility_filter = content_not_selected_filter
+            }
         );
     }
 }
@@ -373,15 +772,15 @@ void Editor_rendering::render_selection(const Render_context& context)
         //m_forward_renderer->primitive_color_source   = Base_renderer::Primitive_color_source::constant_color;
         //m_forward_renderer->primitive_constant_color = render_style.line_color;
         m_forward_renderer->render(
-            context.viewport,
-            *context.camera,
-            m_scene_root->content_layers(),
-            *m_scene_root->light_layer().get(),
-            m_scene_root->materials(),
             {
-                Forward_renderer::Pass::polygon_fill
-            },
-            content_selected_filter
+                .viewport          = context.viewport,
+                .camera            = *context.camera,
+                .mesh_layers       = { m_scene_root->content_layer() },
+                .light_layer       = m_scene_root->light_layer(),
+                .materials         = m_scene_root->materials(),
+                .passes            = { &m_rp_polygon_fill },
+                .visibility_filter = content_selected_filter
+            }
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
     }
@@ -396,16 +795,15 @@ void Editor_rendering::render_selection(const Render_context& context)
         m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
         m_forward_renderer->primitive_constant_size  = render_style.line_width;
         m_forward_renderer->render(
-            context.viewport,
-            *context.camera,
-            m_scene_root->content_layers(),
-            *m_scene_root->light_layer().get(),
-            m_scene_root->materials(),
             {
-                Forward_renderer::Pass::edge_lines,
-                Forward_renderer::Pass::hidden_line_with_blend
-            },
-            content_selected_filter
+                .viewport          = context.viewport,
+                .camera            = *context.camera,
+                .mesh_layers       = { m_scene_root->content_layer() },
+                .light_layer       = m_scene_root->light_layer(),
+                .materials         = m_scene_root->materials(),
+                .passes            = { &m_rp_edge_lines, &m_rp_line_hidden_blend },
+                .visibility_filter = content_selected_filter
+            }
         );
         gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
     }
@@ -420,13 +818,15 @@ void Editor_rendering::render_selection(const Render_context& context)
         m_forward_renderer->primitive_constant_color = render_style.centroid_color;
         m_forward_renderer->primitive_constant_size  = render_style.point_size;
         m_forward_renderer->render(
-            context.viewport,
-            *context.camera,
-            m_scene_root->content_layers(),
-            *m_scene_root->light_layer().get(),
-            m_scene_root->materials(),
-            { Forward_renderer::Pass::polygon_centroids },
-            content_selected_filter
+            {
+                .viewport          = context.viewport,
+                .camera            = *context.camera,
+                .mesh_layers       = { m_scene_root->content_layer() },
+                .light_layer       = m_scene_root->light_layer(),
+                .materials         = m_scene_root->materials(),
+                .passes            = { &m_rp_polygon_centroids },
+                .visibility_filter = content_selected_filter
+            }
         );
     }
     if (render_style.corner_points)
@@ -438,15 +838,15 @@ void Editor_rendering::render_selection(const Render_context& context)
         m_forward_renderer->primitive_constant_color = render_style.corner_color;
         m_forward_renderer->primitive_constant_size  = render_style.point_size;
         m_forward_renderer->render(
-            context.viewport,
-            *context.camera,
-            m_scene_root->content_layers(),
-            *m_scene_root->light_layer().get(),
-            m_scene_root->materials(),
             {
-                Forward_renderer::Pass::corner_points
-            },
-            content_selected_filter
+                .viewport          = context.viewport,
+                .camera            = *context.camera,
+                .mesh_layers       = { m_scene_root->content_layer() },
+                .light_layer       = m_scene_root->light_layer(),
+                .materials         = m_scene_root->materials(),
+                .passes            = { &m_rp_corner_points },
+                .visibility_filter = content_selected_filter
+            }
         );
     }
     gl::disable(gl::Enable_cap::program_point_size);
@@ -462,21 +862,50 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
     }
 
     m_forward_renderer->render(
-        context.viewport,
-        *context.camera,
-        m_scene_root->tool_layers(),
-        *m_scene_root->light_layer().get(),
-        m_scene_root->materials(),
         {
-            Forward_renderer::Pass::tag_depth_hidden_with_stencil,
-            Forward_renderer::Pass::tag_depth_visible_with_stencil,
-            Forward_renderer::Pass::clear_depth,
-            Forward_renderer::Pass::depth_only,
-            Forward_renderer::Pass::require_stencil_tag_depth_visible,
-            Forward_renderer::Pass::require_stencil_tag_depth_hidden_and_blend,
-        },
-        erhe::scene::Visibility_filter{
-            .require_all_bits_set = erhe::scene::Node::c_visibility_tool
+            .viewport    = context.viewport,
+            .camera      = *context.camera,
+            .mesh_layers = { m_scene_root->tool_layer() },
+            .light_layer = m_scene_root->light_layer(),
+            .materials   = m_scene_root->materials(),
+            .passes      =
+            {
+                &m_rp_tool1_hidden_stencil,   // tag_depth_hidden_with_stencil
+                &m_rp_tool2_visible_stencil,  // tag_depth_visible_with_stencil
+                &m_rp_tool3_depth_clear,      // clear_depth
+                &m_rp_tool4_depth,            // depth_only
+                &m_rp_tool5_visible_color,    // require_stencil_tag_depth_visible
+                &m_rp_tool6_hidden_color      // require_stencil_tag_depth_hidden_and_blend,
+            },
+            .visibility_filter =
+            {
+                .require_all_bits_set = erhe::scene::Node::c_visibility_tool
+            }
+        }
+    );
+}
+
+void Editor_rendering::render_gui(const Render_context& context)
+{
+    ERHE_PROFILE_FUNCTION
+
+    if (context.camera == nullptr)
+    {
+        return;
+    }
+
+    m_forward_renderer->render(
+        {
+            .viewport          = context.viewport,
+            .camera            = *context.camera,
+            .mesh_layers       = { m_scene_root->gui_layer() },
+            .light_layer       = m_scene_root->light_layer(),
+            .materials         = m_scene_root->materials(),
+            .passes            = { &m_rp_gui },
+            .visibility_filter =
+            {
+                .require_all_bits_set = erhe::scene::Node::c_visibility_gui
+            }
         }
     );
 }
@@ -490,19 +919,18 @@ void Editor_rendering::render_brush(const Render_context& context)
         return;
     }
 
-
     m_forward_renderer->render(
-        context.viewport,
-        *context.camera,
-        m_scene_root->brush_layers(),
-        *m_scene_root->light_layer().get(),
-        m_scene_root->materials(),
         {
-            Forward_renderer::Pass::brush_back,
-            Forward_renderer::Pass::brush_front
-        },
-        erhe::scene::Visibility_filter{
-            .require_all_bits_set = erhe::scene::Node::c_visibility_brush
+            .viewport          = context.viewport,
+            .camera            = *context.camera,
+            .mesh_layers       = { m_scene_root->brush_layer() },
+            .light_layer       = m_scene_root->light_layer(),
+            .materials         = m_scene_root->materials(),
+            .passes            = { &m_rp_brush_back, &m_rp_brush_front },
+            .visibility_filter =
+            {
+                .require_all_bits_set = erhe::scene::Node::c_visibility_brush
+            }
         }
     );
 }

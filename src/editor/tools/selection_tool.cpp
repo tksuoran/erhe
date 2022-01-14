@@ -79,7 +79,7 @@ auto Selection_tool::delete_selection() -> bool
             std::make_shared<Mesh_insert_remove_operation>(
                 Mesh_insert_remove_operation::Context{
                     .scene          = scene_root->scene(),
-                    .layer          = scene_root->content_layer(),
+                    .layer          = *scene_root->content_layer(),
                     .physics_world  = scene_root->physics_world(),
                     .mesh           = mesh,
                     .node_physics   = get_physics_node(mesh.get()),

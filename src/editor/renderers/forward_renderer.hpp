@@ -8,6 +8,7 @@
 
 #include <glm/glm.hpp>
 
+#include <functional>
 #include <initializer_list>
 #include <memory>
 #include <vector>
@@ -37,6 +38,21 @@ class Configuration;
 class Programs;
 class Mesh_memory;
 class Shadow_renderer;
+
+class Render_pass
+{
+public:
+    //Render_pass(
+    //    erhe::graphics::Pipeline&&            pipeline,
+    //    const erhe::primitive::Primitive_mode primitive_mode
+    //);
+    //
+    const char*                     name{nullptr};
+    erhe::graphics::Pipeline        pipeline;
+    erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
+    std::function<void()>           begin;
+    std::function<void()>           end;
+};
 
 class Forward_renderer
     : public erhe::components::Component
@@ -79,7 +95,7 @@ public:
         "Tag Depth Visible with Stencil 2",
     };
 
-    using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer *>;
+    using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
     static constexpr std::string_view c_name{"Forward_renderer"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
@@ -93,15 +109,19 @@ public:
     void initialize_component() override;
 
     // Public API
-    void render(
-        const erhe::scene::Viewport           viewport,
-        const erhe::scene::ICamera&           camera,
-        const Mesh_layer_collection&          mesh_layers,
-        const erhe::scene::Light_layer&       light_layer,
-        const Material_collection&            materials,
-        const std::initializer_list<Pass>     passes,
-        const erhe::scene::Visibility_filter& visibility_mask
-    );
+    class Render_parameters
+    {
+    public:
+        const erhe::scene::Viewport&                                   viewport;
+        const erhe::scene::ICamera&                                    camera;
+        const std::vector<const erhe::scene::Mesh_layer*>&             mesh_layers;
+        const erhe::scene::Light_layer*                                light_layer;
+        const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials;
+        const std::vector<Render_pass*>                                passes;
+        const erhe::scene::Visibility_filter                           visibility_filter;
+    };
+
+    void render(const Render_parameters& parameters);
 
 private:
     [[nodiscard]] auto select_pipeline      (const Pass pass) const -> const erhe::graphics::Pipeline*;
@@ -113,34 +133,6 @@ private:
     std::shared_ptr<Mesh_memory>                          m_mesh_memory;
     std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
     std::shared_ptr<Programs>                             m_programs;
-
-    erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_set_hidden;
-    erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_set_visible;
-    erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_test_for_hidden;
-    erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_test_for_visible;
-    erhe::graphics::Depth_stencil_state                   m_depth_hidden;
-    erhe::graphics::Color_blend_state                     m_color_blend_constant_point_six;
-    erhe::graphics::Color_blend_state                     m_color_blend_constant_point_two;
-
-    erhe::graphics::Pipeline                              m_pipeline_fill;
-    erhe::graphics::Pipeline                              m_pipeline_gui;
-
-    // Six passes for rendering tools that can be partially occluded
-    erhe::graphics::Pipeline                              m_pipeline_tool_hidden_stencil_pass;
-    erhe::graphics::Pipeline                              m_pipeline_tool_visible_stencil_pass;
-    erhe::graphics::Pipeline                              m_pipeline_tool_depth_clear_pass;
-    erhe::graphics::Pipeline                              m_pipeline_tool_depth_pass;
-    erhe::graphics::Pipeline                              m_pipeline_tool_visible_color_pass;
-    erhe::graphics::Pipeline                              m_pipeline_tool_hidden_color_pass;
-
-    erhe::graphics::Pipeline                              m_pipeline_line_hidden_blend;
-
-    erhe::graphics::Pipeline                              m_pipeline_brush_back;
-    erhe::graphics::Pipeline                              m_pipeline_brush_front;
-
-    erhe::graphics::Pipeline                              m_pipeline_edge_lines;
-    erhe::graphics::Pipeline                              m_pipeline_points;
-    std::unique_ptr<erhe::graphics::Vertex_input_state>   m_vertex_input;
 };
 
 } // namespace editor

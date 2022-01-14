@@ -284,8 +284,8 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
             m_hover_layer       = mesh_primitive.layer;
             m_hover_primitive   = mesh_primitive.mesh_primitive_index;
             m_hover_local_index = mesh_primitive.local_index;
-            m_hover_tool        = m_hover_layer == scene_root->tool_layer().get();
-            m_hover_content     = m_hover_layer == &scene_root->content_layer();
+            m_hover_tool        = m_hover_layer == scene_root->tool_layer();
+            m_hover_content     = m_hover_layer == scene_root->content_layer();
             m_log_window->frame_log(
                 "hover mesh = {} primitive = {} local index {} tool = {} content = {}",
                 m_hover_mesh ? m_hover_mesh->name() : "()",

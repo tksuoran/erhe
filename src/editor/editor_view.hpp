@@ -12,6 +12,7 @@
 namespace editor {
 
 class Configuration;
+class Editor_imgui_windows;
 class Editor_rendering;
 class Editor_time;
 class Editor_tools;
@@ -107,17 +108,18 @@ private:
     void update_active_mouse_command(Command* command);
 
     // Component dependencies
-    std::shared_ptr<Configuration>    m_configuration;
-    std::shared_ptr<Editor_rendering> m_editor_rendering;
-    std::shared_ptr<Editor_time>      m_editor_time;
-    std::shared_ptr<Editor_tools>     m_editor_tools;
-    std::shared_ptr<Fly_camera_tool>  m_fly_camera_tool;
-    std::shared_ptr<Log_window>       m_log_window;
-    std::shared_ptr<Operation_stack>  m_operation_stack;
-    std::shared_ptr<Pointer_context>  m_pointer_context;
-    std::shared_ptr<Scene_root>       m_scene_root;
-    std::shared_ptr<Viewport_windows> m_viewport_windows;
-    std::shared_ptr<Window>           m_window;
+    std::shared_ptr<Configuration>        m_configuration;
+    std::shared_ptr<Editor_imgui_windows> m_editor_imgui_windows;
+    std::shared_ptr<Editor_rendering>     m_editor_rendering;
+    std::shared_ptr<Editor_time>          m_editor_time;
+    std::shared_ptr<Editor_tools>         m_editor_tools;
+    std::shared_ptr<Fly_camera_tool>      m_fly_camera_tool;
+    std::shared_ptr<Log_window>           m_log_window;
+    std::shared_ptr<Operation_stack>      m_operation_stack;
+    std::shared_ptr<Pointer_context>      m_pointer_context;
+    std::shared_ptr<Scene_root>           m_scene_root;
+    std::shared_ptr<Viewport_windows>     m_viewport_windows;
+    std::shared_ptr<Window>               m_window;
 
     Command*                                    m_active_mouse_command{nullptr};
     std::vector<Command*>                       m_commands;

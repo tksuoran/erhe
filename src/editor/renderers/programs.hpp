@@ -42,10 +42,11 @@ public:
 
     // Public members
     std::unique_ptr<erhe::graphics::Shader_resource> default_uniform_block; // containing sampler uniforms
-    int                                              shadow_sampler_location     {-1};
-    int                                              gui_texture_sampler_location{-1};
+    int                                              shadow_sampler_location{-1};
+    int                                              gui_sampler_location   {-1};
     std::unique_ptr<erhe::graphics::Sampler>         nearest_sampler;
     std::unique_ptr<erhe::graphics::Sampler>         linear_sampler;
+    std::unique_ptr<erhe::graphics::Sampler>         linear_mipmap_linear_sampler;
 
     std::unique_ptr<erhe::graphics::Shader_stages> basic;
     std::unique_ptr<erhe::graphics::Shader_stages> brush;

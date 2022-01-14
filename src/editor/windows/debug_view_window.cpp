@@ -5,8 +5,9 @@
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
 
-#include "erhe/graphics/opengl_state_tracker.hpp"
+#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
+#include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/texture.hpp"
 
@@ -54,6 +55,28 @@ void Debug_view_window::bind_resources()
     const unsigned int shadow_texture_name = m_shadow_renderer->texture()->gl_name();
     gl::bind_sampler (shadow_texture_unit, m_programs->nearest_sampler->gl_name());
     gl::bind_textures(shadow_texture_unit, 1, &shadow_texture_name);
+}
+
+void Debug_view_window::render(
+    erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker
+)
+{
+    if (
+        (m_viewport.width < 1) ||
+        (m_viewport.height < 1)
+    )
+    {
+        return;
+    }
+
+    erhe::graphics::Scoped_debug_group pass_scope{m_debug_label};
+
+    pipeline_state_tracker.execute(&m_pipeline);
+
+    bind_resources();
+    bind_framebuffer();
+    gl::draw_arrays     (m_pipeline.input_assembly->primitive_topology, 0, 4);
+    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
 }
 
 } // namespace editor

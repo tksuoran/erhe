@@ -38,18 +38,6 @@ using erhe::graphics::Framebuffer;
 using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
-namespace {
-
-auto to_glm(ImVec2 v) -> glm::vec2
-{
-    return glm::ivec2{
-        static_cast<int>(v[0]),
-        static_cast<int>(v[1])
-    };
-}
-
-}
-
 Viewport_windows::Viewport_windows()
     : erhe::components::Component{c_name}
 {
@@ -59,7 +47,7 @@ Viewport_windows::~Viewport_windows() = default;
 
 void Viewport_windows::connect()
 {
-    m_configuration          = get    <Configuration   >();
+    m_configuration          = require<Configuration   >();
     m_editor_rendering       = get    <Editor_rendering>();
     m_editor_view            = require<Editor_view     >();
     m_pipeline_state_tracker = get    <erhe::graphics::OpenGL_state_tracker>();
@@ -76,17 +64,19 @@ void Viewport_windows::connect()
 
 void Viewport_windows::initialize_component()
 {
-/// #if defined(ERHE_XR_LIBRARY_OPENXR)
-///     auto* camera = m_headset_renderer->root_camera().get();
-///     create_window("Headset Camera", camera);
-/// #else
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    {
+        auto* const headset_camera = m_headset_renderer->root_camera().get();
+        create_window("Headset Camera", headset_camera);
+    }
+#else
     for (auto camera : m_scene_root->scene().cameras)
     {
         auto* icamera = as_icamera(camera.get());
-        std::string name = fmt::format("Scene for Camera {}", icamera->name());
+        const std::string name = fmt::format("Scene for Camera {}", icamera->name());
         create_window(name, icamera);
     }
-/// #endif
+#endif
 }
 
 auto Viewport_windows::create_window(
@@ -103,13 +93,30 @@ auto Viewport_windows::create_window(
     );
 
     m_windows.push_back(new_window);
-    get<Editor_imgui_windows>()->register_imgui_window(new_window.get());
+
+    auto& configuration = *m_configuration.get();
+
+    if (configuration.viewports_hosted_in_imgui_windows)
+    {
+        get<Editor_imgui_windows>()->register_imgui_window(new_window.get());
+    }
     return new_window.get();
 }
 
 void Viewport_windows::update()
 {
     ERHE_PROFILE_FUNCTION
+
+    if (!m_configuration->viewports_hosted_in_imgui_windows)
+    {
+        for (auto window : m_windows)
+        {
+            window->try_hover(
+                static_cast<int>(m_pointer_context->mouse_x()),
+                static_cast<int>(m_pointer_context->mouse_y())
+            );
+        }
+    }
 
     bool any_window{false};
     for (auto window : m_windows)
@@ -134,7 +141,7 @@ void Viewport_windows::update()
 
 void Viewport_windows::render()
 {
-    if (!m_configuration->gui)
+    if (!m_configuration->viewports_hosted_in_imgui_windows)
     {
         const int total_width  = m_editor_view->width();
         const int total_height = m_editor_view->height();
@@ -153,6 +160,10 @@ void Viewport_windows::render()
             );
             ++i;
         }
+
+        m_editor_rendering->bind_default_framebuffer();
+        m_editor_rendering->clear();
+
     }
 
     for (auto window : m_windows)
@@ -179,7 +190,10 @@ Viewport_window::Viewport_window(
 {
 }
 
-Viewport_window::~Viewport_window() = default;
+void Viewport_window::try_hover(const int px, const int py)
+{
+    m_is_hovered = m_viewport.hit_test(px, py);
+}
 
 void Viewport_window::update()
 {
@@ -212,9 +226,10 @@ void Viewport_window::render(
         editor_rendering.render_id(context);
     }
 
-    if (m_configuration->gui)
+    if (m_framebuffer_multisample)
     {
         bind_multisample_framebuffer();
+        clear(pipeline_state_tracker);
     }
     else
     {
@@ -223,12 +238,10 @@ void Viewport_window::render(
             0
         );
     }
-    if (m_configuration->gui)
-    {
-        clear(pipeline_state_tracker);
-    }
+
     editor_rendering.render_viewport(context, m_is_hovered);
-    if (m_configuration->gui)
+
+    if (m_framebuffer_multisample)
     {
         multisample_resolve();
     }
@@ -282,14 +295,14 @@ void Viewport_window::imgui()
             ImVec2{0, 1},
             ImVec2{1, 0}
         );
-        m_content_region_min  = to_glm(ImGui::GetItemRectMin());
-        m_content_region_max  = to_glm(ImGui::GetItemRectMax());
-        m_content_region_size = to_glm(ImGui::GetItemRectSize());
+        m_content_region_min  = glm::vec2{ImGui::GetItemRectMin()};
+        m_content_region_max  = glm::vec2{ImGui::GetItemRectMax()};
+        m_content_region_size = glm::vec2{ImGui::GetItemRectSize()};
         m_is_hovered          = ImGui::IsItemHovered();
     }
     else
     {
-        m_content_region_size = to_glm(size);
+        m_content_region_size = glm::vec2{size};
         m_is_hovered = false;
     }
 
@@ -308,23 +321,16 @@ void Viewport_window::set_viewport(
     const int height
 )
 {
-    m_content_region_min.x = x;
-    m_content_region_min.y = y;
-    m_content_region_max.x = x + width;
-    m_content_region_max.y = y + height;
-    m_viewport.x           = x;
-    m_viewport.y           = y;
-    m_viewport.width       = width;
-    m_viewport.height      = height;
-}
-
-auto Viewport_window::hit_test(int x, int y) const -> bool
-{
-    return
-        (x >= m_content_region_min.x) &&
-        (y >= m_content_region_min.y) &&
-        (x < m_content_region_max.x) &&
-        (y < m_content_region_max.y);
+    m_content_region_min.x  = x;
+    m_content_region_min.y  = y;
+    m_content_region_max.x  = x + width;
+    m_content_region_max.y  = y + height;
+    m_content_region_size.x = width;
+    m_content_region_size.y = height;
+    m_viewport.x            = x;
+    m_viewport.y            = y;
+    m_viewport.width        = width;
+    m_viewport.height       = height;
 }
 
 auto Viewport_window::content_region_size() const -> glm::ivec2
@@ -337,7 +343,7 @@ auto Viewport_window::is_hovered() const -> bool
     return m_is_hovered;
 }
 
-auto Viewport_window::viewport() const -> erhe::scene::Viewport
+auto Viewport_window::viewport() const -> const erhe::scene::Viewport&
 {
     return m_viewport;
 }
@@ -600,7 +606,10 @@ auto Viewport_window::should_render() const -> bool
     return
         (m_viewport.width  > 0) &&
         (m_viewport.height > 0) &&
-        (!m_configuration->gui || is_framebuffer_ready()) &&
+        (
+            !m_configuration->viewports_hosted_in_imgui_windows ||
+            is_framebuffer_ready()
+        ) &&
         (m_camera != nullptr);
 }
 

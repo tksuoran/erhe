@@ -50,6 +50,9 @@ public:
     auto get_size      () const -> glm::vec2 override;
     void bind_resources() override;
 
+    // Public API
+    void render(erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker);
+
 private:
     // Component dependencies
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;

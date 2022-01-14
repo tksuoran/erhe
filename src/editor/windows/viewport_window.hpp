@@ -43,14 +43,14 @@ public:
         const std::shared_ptr<Viewport_config>& viewport_config,
         erhe::scene::ICamera*                   camera
     );
-    ~Viewport_window() override;
 
     // Implements Imgui_window
-    void imgui()    override;
+    void imgui   () override;
     void on_begin() override;
     void on_end  () override;
 
     // Public API
+    void try_hover                   (const int px, const int py);
     void update                      ();
     void bind_multisample_framebuffer();
     void multisample_resolve         ();
@@ -66,9 +66,8 @@ public:
     [[nodiscard]] auto is_framebuffer_ready() const -> bool;
     [[nodiscard]] auto content_region_size () const -> glm::ivec2;
     [[nodiscard]] auto is_hovered          () const -> bool;
-    [[nodiscard]] auto viewport            () const -> erhe::scene::Viewport;
+    [[nodiscard]] auto viewport            () const -> const erhe::scene::Viewport&;
     [[nodiscard]] auto camera              () const -> erhe::scene::ICamera*;
-    [[nodiscard]] auto hit_test            (int x, int y) const -> bool;
 
 private:
     [[nodiscard]] auto should_render() const -> bool;

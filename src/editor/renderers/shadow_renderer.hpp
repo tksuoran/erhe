@@ -45,10 +45,14 @@ public:
     void initialize_component() override;
 
     // Public API
-    void render(
-        const Mesh_layer_collection&    mesh_layers,
-        const erhe::scene::Light_layer& light_layer
-    );
+    class Render_parameters
+    {
+    public:
+        const std::vector<const erhe::scene::Mesh_layer*> mesh_layers;
+        const erhe::scene::Light_layer*                   light_layer;
+    };
+
+    void render(const Render_parameters& parameters);
 
     [[nodiscard]] auto texture () const -> erhe::graphics::Texture*;
     [[nodiscard]] auto viewport() const -> erhe::scene::Viewport;

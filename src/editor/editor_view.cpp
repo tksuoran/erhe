@@ -41,22 +41,22 @@ Editor_view::~Editor_view() = default;
 
 void Editor_view::connect()
 {
-    m_configuration    = get<Configuration   >();
-    m_editor_rendering = get<Editor_rendering>();
-    m_editor_time      = get<Editor_time     >();
-    m_editor_tools     = get<Editor_tools    >();
-    m_fly_camera_tool  = get<Fly_camera_tool >();
-    m_operation_stack  = get<Operation_stack >();
-    m_pointer_context  = get<Pointer_context >();
-    m_scene_root       = get<Scene_root      >();
-    m_viewport_windows = get<Viewport_windows>();
-    m_window           = get<Window          >();
-    require<Editor_imgui_windows>();
+    m_configuration        = get    <Configuration       >();
+    m_editor_imgui_windows = require<Editor_imgui_windows>();
+    m_editor_rendering     = get    <Editor_rendering    >();
+    m_editor_time          = get    <Editor_time         >();
+    m_editor_tools         = get    <Editor_tools        >();
+    m_fly_camera_tool      = get    <Fly_camera_tool     >();
+    m_operation_stack      = get    <Operation_stack     >();
+    m_pointer_context      = get    <Pointer_context     >();
+    m_scene_root           = get    <Scene_root          >();
+    m_viewport_windows     = get    <Viewport_windows    >();
+    m_window               = get    <Window              >();
 }
 
 void Editor_view::initialize_component()
 {
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    m_editor_imgui_windows->register_imgui_window(this);
 }
 
 void Editor_view::register_command(Command* command)
@@ -145,22 +145,16 @@ void Editor_view::on_refresh()
         return;
     }
 
-    if (m_configuration->gui)
+    if (m_configuration->viewports_hosted_in_imgui_windows)
     {
-        ImGui_ImplErhe_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-        ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+        m_editor_imgui_windows->begin_imgui_frame();
     }
 
     m_editor_rendering->render();
 
-    if (m_configuration->show_window && m_configuration->gui)
+    if (m_configuration->show_window && m_configuration->viewports_hosted_in_imgui_windows)
     {
-        ImGui::EndFrame();
-        ImGui::Render();
-        m_editor_rendering->clear();
-        ImGui_ImplErhe_RenderDrawData(ImGui::GetDrawData());
+        m_editor_imgui_windows->end_and_render_imgui_frame();
     }
 
     m_window->get_context_window()->swap_buffers();
@@ -172,15 +166,9 @@ void Editor_view::update()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_configuration->gui)
-    {
-        ImGui_ImplErhe_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-        ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
-    }
+    //const bool viewports_hosted_in_imgui = m_configuration->show_window && m_configuration->viewports_hosted_in_imgui_windows;
 
-    m_editor_time     ->update();
+    m_editor_time->update();
 
     if (m_viewport_windows)
     {
@@ -188,14 +176,6 @@ void Editor_view::update()
     }
 
     m_editor_rendering->render();
-
-    if (m_configuration->show_window && m_configuration->gui)
-    {
-        ImGui::EndFrame();
-        ImGui::Render();
-        m_editor_rendering->clear();
-        ImGui_ImplErhe_RenderDrawData(ImGui::GetDrawData());
-    }
 
     if (m_configuration->show_window)
     {
@@ -323,6 +303,14 @@ void Editor_view::update_active_mouse_command(Command* command)
 
 auto Editor_view::get_imgui_capture_mouse() const -> bool
 {
+    const bool viewports_hosted_in_imgui =
+        m_configuration->show_window &&
+        m_configuration->viewports_hosted_in_imgui_windows;
+    if (!viewports_hosted_in_imgui)
+    {
+        return false;
+    }
+
     const auto& imgui_windows = get<Editor_imgui_windows>();
     if (!imgui_windows)
     {

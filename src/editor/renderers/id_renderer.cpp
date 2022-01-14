@@ -247,17 +247,17 @@ static constexpr std::string_view c_id_renderer_render_content{"Id_renderer::ren
 static constexpr std::string_view c_id_renderer_render_tool   {"Id_renderer::render() tool"   };
 static constexpr std::string_view c_id_renderer_render_read   {"Id_renderer::render() read"   };
 
-void Id_renderer::render(
-    const erhe::scene::Viewport  viewport,
-    const Mesh_layer_collection& content_mesh_layers,
-    const Mesh_layer_collection& tool_mesh_layers,
-    const erhe::scene::ICamera&  camera,
-    const double                 time,
-    const int                    x,
-    const int                    y
-)
+void Id_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION
+
+    const auto& viewport            = parameters.viewport;
+    const auto& camera              = parameters.camera;
+    const auto& content_mesh_layers = parameters.content_mesh_layers;
+    const auto& tool_mesh_layers    = parameters.tool_mesh_layers;
+    const auto  time                = parameters.time;
+    const auto  x                   = parameters.x;
+    const auto  y                   = parameters.y;
 
     m_ranges.clear();
 

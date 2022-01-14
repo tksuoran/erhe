@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tools/pointer_context.hpp"
+#include "renderers/forward_renderer.hpp"
 #include "windows/viewport_window.hpp"
 #include "erhe/components/component.hpp"
 #include "erhe/scene/viewport.hpp"
@@ -30,7 +31,6 @@ class Editor_rendering;
 class Editor_time;
 class Editor_tools;
 class Editor_view;
-class Forward_renderer;
 class Log_window;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 class Headset_renderer;
@@ -71,22 +71,24 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect      () override;
+    void connect             () override;
+    void initialize_component() override;
 
     // Public API
-    void init_state        ();
-    void render            ();
-    void render_viewport   (const Render_context& context, const bool has_pointer);
-    void render_content    (const Render_context& context);
-    void render_selection  (const Render_context& context);
-    void render_tool_meshes(const Render_context& context);
-    void render_brush      (const Render_context& context);
-    void render_id         (const Render_context& context);
-    void clear             ();
+    void init_state              ();
+    void render                  ();
+    void render_viewport         (const Render_context& context, const bool has_pointer);
+    void render_content          (const Render_context& context);
+    void render_selection        (const Render_context& context);
+    void render_tool_meshes      (const Render_context& context);
+    void render_gui              (const Render_context& context);
+    void render_brush            (const Render_context& context);
+    void render_id               (const Render_context& context);
+    void bind_default_framebuffer();
+    void clear                   ();
 
 private:
     void begin_frame     ();
-    void render_viewports();
     [[nodiscard]] auto width () const -> int;
     [[nodiscard]] auto height() const -> int;
 
@@ -112,6 +114,32 @@ private:
     std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
     bool                                                  m_trigger_capture{false};
+
+    erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_set_hidden;
+    erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_set_visible;
+    erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_test_for_hidden;
+    erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_test_for_visible;
+    erhe::graphics::Depth_stencil_state                   m_depth_hidden;
+    erhe::graphics::Color_blend_state                     m_color_blend_constant_point_six;
+    erhe::graphics::Color_blend_state                     m_color_blend_constant_point_two;
+
+    Render_pass m_rp_polygon_fill;
+    Render_pass m_rp_gui;
+
+    // Six passes for rendering tools that can be partially occluded
+    Render_pass m_rp_tool1_hidden_stencil;
+    Render_pass m_rp_tool2_visible_stencil;
+    Render_pass m_rp_tool3_depth_clear;
+    Render_pass m_rp_tool4_depth;
+    Render_pass m_rp_tool5_visible_color;
+    Render_pass m_rp_tool6_hidden_color;
+    Render_pass m_rp_line_hidden_blend;
+    Render_pass m_rp_brush_back;
+    Render_pass m_rp_brush_front;
+    Render_pass m_rp_edge_lines;
+    Render_pass m_rp_corner_points;
+    Render_pass m_rp_polygon_centroids;
+
 };
 
 }

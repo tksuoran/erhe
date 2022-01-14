@@ -100,7 +100,7 @@ void Operations::imgui()
         return Mesh_operation::Context{
             .build_info     = m_mesh_memory->build_info,
             .scene          = m_scene_root->scene(),
-            .layer          = m_scene_root->content_layer(),
+            .layer          = *m_scene_root->content_layer(),
             .physics_world  = m_scene_root->physics_world(),
             .selection_tool = m_selection_tool.get()
         };
@@ -133,7 +133,7 @@ void Operations::imgui()
             std::make_shared<Attach_detach_operation>(
                 Attach_detach_operation::Context{
                     .scene          = m_scene_root->scene(),
-                    .layer          = m_scene_root->content_layer(),
+                    .layer          = *m_scene_root->content_layer(),
                     .attach         = true,
                     .selection_tool = m_selection_tool.get()
                 }
@@ -147,7 +147,7 @@ void Operations::imgui()
             std::make_shared<Attach_detach_operation>(
                 Attach_detach_operation::Context{
                     .scene          = m_scene_root->scene(),
-                    .layer          = m_scene_root->content_layer(),
+                    .layer          = *m_scene_root->content_layer(),
                     .attach         = false,
                     .selection_tool = m_selection_tool.get()
                 }
@@ -160,8 +160,8 @@ void Operations::imgui()
         m_operation_stack->push(
             std::make_shared<Merge_operation>(
                 Merge_operation::Context{
-                    .build_info    = m_mesh_memory->build_info,
-                    .layer          = m_scene_root->content_layer(),
+                    .build_info     = m_mesh_memory->build_info,
+                    .layer          = *m_scene_root->content_layer(),
                     .scene          = m_scene_root->scene(),
                     .physics_world  = m_scene_root->physics_world(),
                     .selection_tool = m_selection_tool.get()

@@ -307,7 +307,7 @@ auto Trs_tool::Visualization::make_mesh(
     {
         parent->attach(mesh);
     }
-    auto* tool_layer = scene_root.tool_layer().get();
+    auto* tool_layer = scene_root.tool_layer();
     scene_root.add(mesh, tool_layer);
     return mesh;
 }
@@ -1094,7 +1094,7 @@ void Trs_tool::end_drag()
         m_operation_stack->push(
             std::make_shared<Node_transform_operation>(
                 Node_transform_operation::Context{
-                    .layer                   = m_scene_root->content_layer(),
+                    .layer                   = *m_scene_root->content_layer(),
                     .scene                   = m_scene_root->scene(),
                     .physics_world           = m_scene_root->physics_world(),
                     .node                    = m_target_node,

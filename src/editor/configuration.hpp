@@ -27,14 +27,15 @@ public:
     // Public API
     [[nodiscard]] auto depth_clear_value_pointer() const -> const float *; // reverse_depth ? 0.0f : 1.0f;
     [[nodiscard]] auto depth_function           (const gl::Depth_function depth_function) const -> gl::Depth_function;
-    bool gui                     {true};
-    bool openxr                  {false};
-    bool show_window             {true};
-    bool parallel_initialization {true};
-    bool reverse_depth           {true};
-    int  window_width            {1920};
-    int  window_height           {1080};
-    int  window_msaa_sample_count{16};
+
+    bool viewports_hosted_in_imgui_windows{false};
+    bool openxr                           {false};
+    bool show_window                      {true};
+    bool parallel_initialization          {true};
+    bool reverse_depth                    {true};
+    int  window_width                     {1024};
+    int  window_height                    {1024};
+    int  window_msaa_sample_count         {8};
     //int  window_width            {256};
     //int  window_height           {256};
     //int  window_msaa_sample_count{0};

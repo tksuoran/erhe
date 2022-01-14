@@ -15,6 +15,7 @@ namespace erhe::graphics
     class Buffer;
     class Buffer_transfer_queue;
     class Vertex_format;
+    class Vertex_input_state;
 }
 
 namespace erhe::primitive
@@ -65,6 +66,7 @@ public:
 
     std::unique_ptr<erhe::graphics::Buffer_transfer_queue> gl_buffer_transfer_queue;
     std::unique_ptr<erhe::primitive::Gl_buffer_sink>       gl_buffer_sink;
+    std::unique_ptr<erhe::graphics::Vertex_input_state>    vertex_input;
     std::shared_ptr<erhe::graphics::Buffer>                gl_vertex_buffer;
     std::shared_ptr<erhe::graphics::Buffer>                gl_index_buffer;
     erhe::primitive::Build_info                            build_info;

@@ -229,10 +229,10 @@ void Scene_builder::make_brushes()
     constexpr bool gltf_files      = false; // WIP
     constexpr bool obj_files       = true;
     constexpr bool platonic_solids = true;
-    constexpr bool sphere          = true;
-    constexpr bool torus           = true;
-    constexpr bool cylinder        = true;
-    constexpr bool cone            = true;
+    constexpr bool sphere          = false;
+    constexpr bool torus           = false;
+    constexpr bool cylinder        = false;
+    constexpr bool cone            = false;
     constexpr bool johnson_solids  = false;
 
     constexpr float object_scale = 1.0f;
@@ -610,7 +610,7 @@ void Scene_builder::add_room()
 
     add_to_scene_layer(
         m_scene_root->scene(),
-        m_scene_root->content_layer(),
+        *m_scene_root->content_layer(),
         floor_instance.mesh
     );
 
@@ -658,7 +658,10 @@ void Scene_builder::make_mesh_nodes()
     std::sort(
         m_scene_brushes.begin(),
         m_scene_brushes.end(),
-        [](const std::shared_ptr<Brush>& lhs, const std::shared_ptr<Brush>& rhs)
+        [](
+            const std::shared_ptr<Brush>& lhs,
+            const std::shared_ptr<Brush>& rhs
+        )
         {
             return lhs->name() < rhs->name();
         }
@@ -687,10 +690,14 @@ void Scene_builder::make_mesh_nodes()
         for (auto& entry : pack_entries)
         {
             const auto* brush = entry.brush;
-            const vec3 size = brush->gl_primitive_geometry.bounding_box_max - brush->gl_primitive_geometry.bounding_box_min;
-            const int width = static_cast<int>(256.0f * (size.x + gap));
-            const int depth = static_cast<int>(256.0f * (size.z + gap));
-            entry.rectangle = packer.Insert(width + 1, depth + 1, rbp::SkylineBinPack::LevelBottomLeft);
+            const vec3  size  = brush->gl_primitive_geometry.bounding_box_max - brush->gl_primitive_geometry.bounding_box_min;
+            const int   width = static_cast<int>(256.0f * (size.x + gap));
+            const int   depth = static_cast<int>(256.0f * (size.z + gap));
+            entry.rectangle = packer.Insert(
+                width + 1,
+                depth + 1,
+                rbp::SkylineBinPack::LevelBottomLeft
+            );
             if (
                 (entry.rectangle.width  == 0) ||
                 (entry.rectangle.height == 0)
@@ -748,7 +755,7 @@ void Scene_builder::make_mesh_nodes()
 
         add_to_scene_layer(
             m_scene_root->scene(),
-            m_scene_root->content_layer(),
+            *m_scene_root->content_layer(),
             instance.mesh
         );
 
@@ -848,7 +855,7 @@ auto Scene_builder::make_directional_light(
 
     add_to_scene_layer(
         m_scene_root->scene(),
-        *m_scene_root->light_layer().get(),
+        *m_scene_root->light_layer(),
         light
     );
 
@@ -882,7 +889,7 @@ auto Scene_builder::make_spot_light(
 
     add_to_scene_layer(
         m_scene_root->scene(),
-        *m_scene_root->light_layer().get(),
+        *m_scene_root->light_layer(),
         light
     );
 
@@ -1000,7 +1007,7 @@ void Scene_builder::animate_lights(const double time_d)
         return;
     }
     const float time        = static_cast<float>(time_d);
-    const auto& light_layer = *m_scene_root->light_layer().get();
+    const auto& light_layer = *m_scene_root->light_layer();
     const auto& lights      = light_layer.lights;
     const int   n_lights    = static_cast<int>(lights.size());
     int         light_index = 0;

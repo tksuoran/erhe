@@ -1,18 +1,29 @@
 #pragma once
 
 #include "erhe/components/component.hpp"
+#include "erhe/graphics/pipeline.hpp"
+#include "erhe/graphics/vertex_format.hpp"
+#include "erhe/graphics/vertex_attribute_mappings.hpp"
+#include "erhe/scene/viewport.hpp"
 
 #include <imgui.h>
 
 #include <gsl/gsl>
 
+namespace erhe::graphics {
+    class Framebuffer;
+    class OpenGL_state_tracker;
+    class Texture;
+}
+
+namespace erhe::scene {
+    class Mesh;
+}
+
 namespace editor {
 
-class Editor_view;
-class Editor_time;
+class Editor_rendering;
 class Imgui_window;
-class Render_context;
-class Tool;
 
 class Editor_imgui_windows
     : public erhe::components::Component
@@ -37,12 +48,23 @@ public:
     void initialize_component() override;
 
     // Public API
-    void imgui_windows        ();
-    void register_imgui_window(Imgui_window* window);
-    void menu                 ();
+    [[nodiscard]] auto texture() const -> std::shared_ptr<erhe::graphics::Texture>;
+    void imgui_windows             ();
+    void register_imgui_window     (Imgui_window* window);
+    void menu                      ();
+    void begin_imgui_frame         ();
+    void end_and_render_imgui_frame();
 
 private:
     void window_menu();
+    void add_scene_node();
+
+    // Component dependencies
+    std::shared_ptr<Editor_rendering>                     m_editor_rendering;
+    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
+    std::shared_ptr<erhe::scene::Mesh>                    m_gui_mesh;
+    std::shared_ptr<erhe::graphics::Texture>              m_texture;
+    std::unique_ptr<erhe::graphics::Framebuffer>          m_framebuffer;
 
     std::mutex                                m_mutex;
     std::vector<gsl::not_null<Imgui_window*>> m_imgui_windows;

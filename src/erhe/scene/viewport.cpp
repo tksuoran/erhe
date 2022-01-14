@@ -43,4 +43,13 @@ auto Viewport::project_to_screen_space(
     );
 }
 
+auto Viewport::hit_test(int px, int py) const -> bool
+{
+    return
+        (px >= x) &&
+        (py >= y) &&
+        (px <= x + width) &&
+        (py <= y + height);
+}
+
 } // namespace erhe::scene

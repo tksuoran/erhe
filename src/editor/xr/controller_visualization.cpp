@@ -37,16 +37,10 @@ Controller_visualization::Controller_visualization(
     };
     m_controller_mesh = std::make_shared<erhe::scene::Mesh>("Controller", primitive);
     view_root->attach(m_controller_mesh);
-    scene_root.add(m_controller_mesh, scene_root.controller_layer().get());
-
-    //m_controller_mesh = scene_root.make_mesh_node(
-    //    "Controller",                           // name
-    //    controller_pg,                          // primitive geometry
-    //    controller_material,                    // material
-    //    *scene_root.controller_layer().get(),   // layer
-    //    view_root,                              // parent
-    //    glm::vec3{-9999.9f, -9999.9f, -9999.9f} // position
-    //);
+    scene_root.add(
+        m_controller_mesh,
+        scene_root.controller_layer()
+    );
 }
 
 void Controller_visualization::update(const erhe::xr::Pose& pose)

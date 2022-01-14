@@ -46,7 +46,7 @@ private:
     // Component dependencies
     std::shared_ptr<Line_renderer_set> m_line_renderer_set;
 
-    bool      m_enable     {true};
+    bool      m_enable     {false};
     float     m_cell_size  {1.0f};
     int       m_cell_div   {10};
     int       m_cell_count {2};

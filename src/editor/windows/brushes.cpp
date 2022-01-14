@@ -197,7 +197,7 @@ void Brushes::remove_brush_mesh()
         log_brush.trace("removing brush mesh\n");
         remove_from_scene_layer(
             m_scene_root->scene(),
-            *m_scene_root->brush_layer().get(),
+            *m_scene_root->brush_layer(),
             m_brush_mesh
         );
         m_brush_mesh->unparent();
@@ -406,7 +406,7 @@ void Brushes::do_insert_operation()
     auto op = std::make_shared<Mesh_insert_remove_operation>(
         Mesh_insert_remove_operation::Context{
             .scene          = m_scene_root->scene(),
-            .layer          = m_scene_root->content_layer(),
+            .layer          = *m_scene_root->content_layer(),
             .physics_world  = m_scene_root->physics_world(),
             .mesh           = instance.mesh,
             .node_physics   = instance.node_physics,
@@ -447,7 +447,7 @@ void Brushes::add_brush_mesh()
             .normal_style          = m_brush->normal_style
         }
     );
-    m_scene_root->add(m_brush_mesh, m_scene_root->brush_layer().get());
+    m_scene_root->add(m_brush_mesh, m_scene_root->brush_layer());
 
     m_brush_mesh->visibility_mask() &= ~(Node::c_visibility_id);
     m_brush_mesh->visibility_mask() |= Node::c_visibility_brush;

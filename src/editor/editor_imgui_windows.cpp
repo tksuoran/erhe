@@ -1,17 +1,28 @@
 ﻿#include "editor_imgui_windows.hpp"
+
 #include "configuration.hpp"
+#include "rendering.hpp"
 #include "window.hpp"
 
+#include "renderers/mesh_memory.hpp"
 #include "graphics/gl_context_provider.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
 
+#include "erhe/geometry/shapes/regular_polygon.hpp"
+#include "erhe/graphics/buffer_transfer_queue.hpp"
+#include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
+#include "erhe/graphics/state/color_blend_state.hpp"
 #include "erhe/imgui/imgui_impl_erhe.hpp"
 
 #include <backends/imgui_impl_glfw.h>
 
 namespace editor {
+
+using erhe::graphics::Framebuffer;
+using erhe::graphics::Texture;
 
 Editor_imgui_windows::Editor_imgui_windows()
     : erhe::components::Component{c_name}
@@ -22,10 +33,15 @@ Editor_imgui_windows::~Editor_imgui_windows() = default;
 
 void Editor_imgui_windows::connect()
 {
+    m_editor_rendering       = get    <Editor_rendering>();
+    m_pipeline_state_tracker = require<erhe::graphics::OpenGL_state_tracker>();
+
+    require<Configuration      >();
     require<Gl_context_provider>();
-    require<erhe::graphics::OpenGL_state_tracker>();
-    require<Window>();
-    require<Configuration>();
+    require<Mesh_memory        >();
+    require<Programs           >();
+    require<Scene_root         >();
+    require<Window             >();
 }
 
 void Editor_imgui_windows::initialize_component()
@@ -39,10 +55,12 @@ void Editor_imgui_windows::initialize_component()
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
 
-    if (get<Configuration>()->gui)
-    {
-        io.Fonts->AddFontFromFileTTF("res/fonts/SourceSansPro-Regular.otf", 17);
-    }
+    io.Fonts->AddFontFromFileTTF(
+        "res/fonts/SourceSansPro-Regular.otf",
+        get<Configuration>()->viewports_hosted_in_imgui_windows
+            ? 17.0f
+            : 22.0f
+    );
 
     ImFontGlyphRangesBuilder builder;
 
@@ -64,12 +82,109 @@ void Editor_imgui_windows::initialize_component()
 
     builder.BuildRanges(&m_glyph_ranges);
 
-    //ImGui::StyleColorsDark();
     auto* const glfw_window = reinterpret_cast<GLFWwindow*>(
         get<Window>()->get_context_window()->get_glfw_window()
     );
     ImGui_ImplGlfw_InitForOther(glfw_window, true);
     ImGui_ImplErhe_Init(get<erhe::graphics::OpenGL_state_tracker>().get());
+
+    if (!get<Configuration>()->viewports_hosted_in_imgui_windows)
+    {
+        m_texture = std::make_shared<Texture>(
+            Texture::Create_info{
+                .target          = gl::Texture_target::texture_2d,
+                .internal_format = gl::Internal_format::rgba8,
+                .sample_count    = 0,
+                .width           = 1024,
+                .height          = 1024
+            }
+        );
+        m_texture->set_debug_label("ImGui Rendertarget");
+        const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
+        gl::clear_tex_image(
+            m_texture->gl_name(),
+            0,
+            gl::Pixel_format::rgba,
+            gl::Pixel_type::float_,
+            &clear_value[0]
+        );
+
+        Framebuffer::Create_info create_info;
+        create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_texture.get());
+        m_framebuffer = std::make_unique<Framebuffer>(create_info);
+        m_framebuffer->set_debug_label("ImGui Rendertarget");
+
+        add_scene_node();
+    }
+}
+
+void Editor_imgui_windows::add_scene_node()
+{
+    auto& mesh_memory = *get<Mesh_memory>().get();
+    auto& scene_root  = *get<Scene_root>().get();
+    auto gui_material = scene_root.make_material("GUI Quad", glm::vec4{0.1f, 0.1f, 0.2f, 1.0f});
+    auto gui_geometry = erhe::geometry::shapes::make_quad(1.0f);
+
+    erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
+    auto gui_primitive = erhe::primitive::make_primitive(
+        gui_geometry,
+        mesh_memory.build_info
+    );
+
+    erhe::primitive::Primitive primitive{
+        .material              = gui_material,
+        .gl_primitive_geometry = gui_primitive
+    };
+    m_gui_mesh = std::make_shared<erhe::scene::Mesh>("GUI Quad", primitive);
+    m_gui_mesh->visibility_mask() = erhe::scene::Node::c_visibility_gui;
+
+    glm::mat4 m = erhe::toolkit::create_translation(0.0f, 1.0f, 1.0f);
+    m_gui_mesh->set_parent_from_node(m);
+
+    scene_root.add(
+        m_gui_mesh,
+        scene_root.gui_layer()
+    );
+}
+
+void Editor_imgui_windows::begin_imgui_frame()
+{
+    ImGui_ImplErhe_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+}
+
+void Editor_imgui_windows::end_and_render_imgui_frame()
+{
+    ImGui::EndFrame();
+    ImGui::Render();
+
+    m_pipeline_state_tracker->shader_stages.reset();
+    m_pipeline_state_tracker->color_blend.execute(
+        &erhe::graphics::Color_blend_state::color_blend_disabled
+    );
+
+    if (m_framebuffer)
+    {
+        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
+        gl::viewport        (0, 0, m_texture->width(), m_texture->height());
+        gl::clear_color     (0.0f, 0.2f, 0.0f, 1.0f);
+        gl::clear           (gl::Clear_buffer_mask::color_buffer_bit);
+    }
+    else
+    {
+        m_editor_rendering->bind_default_framebuffer();
+        m_editor_rendering->clear();
+    }
+
+    ImGui_ImplErhe_RenderDrawData(ImGui::GetDrawData());
+    gl::generate_texture_mipmap(m_texture->gl_name());
+}
+
+auto Editor_imgui_windows::texture() const -> std::shared_ptr<erhe::graphics::Texture>
+{
+    return m_texture;
 }
 
 void Editor_imgui_windows::menu()
@@ -173,9 +288,7 @@ void Editor_imgui_windows::register_imgui_window(Imgui_window* window)
 
 void Editor_imgui_windows::imgui_windows()
 {
-/// #if !defined(ERHE_XR_LIBRARY_OPENXR)
     menu();
-/// #endif
 
     for (auto imgui_window : m_imgui_windows)
     {

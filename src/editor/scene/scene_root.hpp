@@ -109,23 +109,18 @@ public:
         erhe::scene::Mesh_layer*                  layer = nullptr
     );
 
-    [[nodiscard]] auto brush_layer        () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
-    [[nodiscard]] auto content_layer      () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
-    [[nodiscard]] auto controller_layer   () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
-    [[nodiscard]] auto tool_layer         () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
-    [[nodiscard]] auto gui_layer          () const -> std::shared_ptr<erhe::scene::Mesh_layer>;
-    [[nodiscard]] auto light_layer        () const -> std::shared_ptr<erhe::scene::Light_layer>;
-    [[nodiscard]] auto content_fill_layers() -> std::vector<const erhe::scene::Mesh_layer*>& { return m_content_fill_layers; }
-    [[nodiscard]] auto content_layers     () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_content_layers; }
-    [[nodiscard]] auto tool_layers        () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_tool_layers; }
-    [[nodiscard]] auto brush_layers       () -> std::vector<const erhe::scene::Mesh_layer*>& { return m_brush_layers; }
-    [[nodiscard]] auto materials          () -> std::vector<std::shared_ptr<erhe::primitive::Material>>&;
-    [[nodiscard]] auto materials          () const -> const std::vector<std::shared_ptr<erhe::primitive::Material>>&;
-    [[nodiscard]] auto physics_world      () -> erhe::physics::IWorld&;
-    [[nodiscard]] auto raytrace_scene     () -> erhe::raytrace::IScene&;
-    [[nodiscard]] auto scene              () -> erhe::scene::Scene&;
-    [[nodiscard]] auto scene              () const -> const erhe::scene::Scene&;
-    [[nodiscard]] auto content_layer      () -> erhe::scene::Mesh_layer&;
+    [[nodiscard]] auto brush_layer     () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto content_layer   () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto controller_layer() const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto tool_layer      () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto gui_layer       () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto light_layer     () const -> erhe::scene::Light_layer*;
+    [[nodiscard]] auto materials       () -> std::vector<std::shared_ptr<erhe::primitive::Material>>&;
+    [[nodiscard]] auto materials       () const -> const std::vector<std::shared_ptr<erhe::primitive::Material>>&;
+    [[nodiscard]] auto physics_world   () -> erhe::physics::IWorld&;
+    [[nodiscard]] auto raytrace_scene  () -> erhe::raytrace::IScene&;
+    [[nodiscard]] auto scene           () -> erhe::scene::Scene&;
+    [[nodiscard]] auto scene           () const -> const erhe::scene::Scene&;
 
     auto camera_combo(
         const char*            label,
@@ -151,11 +146,6 @@ private:
     std::shared_ptr<erhe::scene::Light_layer> m_light_layer;
     std::shared_ptr<erhe::scene::Camera>      m_camera;
     std::shared_ptr<Frame_controller>         m_camera_controls;
-
-    std::vector<const erhe::scene::Mesh_layer*> m_content_fill_layers;
-    std::vector<const erhe::scene::Mesh_layer*> m_content_layers;
-    std::vector<const erhe::scene::Mesh_layer*> m_tool_layers;
-    std::vector<const erhe::scene::Mesh_layer*> m_brush_layers;
 };
 
 } // namespace editor

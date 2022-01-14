@@ -42,14 +42,15 @@ public:
     // Implements Imgui_window
     void imgui() override;
 
+    // Implements Framebuffer window
     virtual auto get_size      () const -> glm::vec2;
     virtual void bind_resources();
 
     // Public API
-    void render            (erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker);
     void update_framebuffer();
+    void bind_framebuffer();
 
-private:
+protected:
     std::string                                         m_debug_label;
     erhe::scene::Viewport                               m_viewport{0, 0, 0, 0, true};
     erhe::graphics::Vertex_attribute_mappings           m_empty_attribute_mappings;

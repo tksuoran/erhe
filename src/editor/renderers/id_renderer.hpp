@@ -59,15 +59,18 @@ public:
     void initialize_component() override;
 
     // Public API
-    void render(
-        const erhe::scene::Viewport  viewport,
-        const Mesh_layer_collection& content_mesh_layers,
-        const Mesh_layer_collection& tool_mesh_layers,
-        const erhe::scene::ICamera&  camera,
-        const double                 time,
-        const int                    x,
-        const int                    y
-    );
+    class Render_parameters
+    {
+    public:
+        const erhe::scene::Viewport&                      viewport;
+        const erhe::scene::ICamera&                       camera;
+        const std::vector<const erhe::scene::Mesh_layer*> content_mesh_layers;
+        const std::vector<const erhe::scene::Mesh_layer*> tool_mesh_layers;
+        const double                                      time;
+        const int                                         x;
+        const int                                         y;
+    };
+    void render(const Render_parameters& parameters);
 
     [[nodiscard]] auto get(const int x, const int y, uint32_t& id, float& depth) -> bool;
     [[nodiscard]] auto get(const int x, const int y, float& depth) -> Mesh_primitive;

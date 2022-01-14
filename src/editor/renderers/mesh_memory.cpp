@@ -92,6 +92,15 @@ void Mesh_memory::initialize_component()
     format_info.vertex_attribute_mappings = &Component::get<Program_interface>()->shader_resources->attribute_mappings;
 
     erhe::primitive::Primitive_builder::prepare_vertex_format(build_info);
+
+    const auto& shader_resources = *get<Program_interface>()->shader_resources.get();
+    vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
+        shader_resources.attribute_mappings,
+        gl_vertex_format(),
+        gl_vertex_buffer.get(),
+        gl_index_buffer.get()
+    );
+
 }
 
 auto Mesh_memory::gl_vertex_format() const -> erhe::graphics::Vertex_format&

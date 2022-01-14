@@ -21,8 +21,8 @@ Configuration::Configuration(int argc, char** argv)
     cxxopts::Options options("Editor", "Erhe Editor (C) 2021 Timo Suoranta");
 
     options.add_options()
-        ("gui",                        "Enable GUI",                            cxxopts::value<bool>()->default_value(str( gui)))
-        ("no-gui",                     "Disable GUI",                           cxxopts::value<bool>()->default_value(str(!gui)))
+        ("gui",                        "Enable ImGui hosted viewports",         cxxopts::value<bool>()->default_value(str( viewports_hosted_in_imgui_windows)))
+        ("no-gui",                     "Disable ImGui hosted viewports",        cxxopts::value<bool>()->default_value(str(!viewports_hosted_in_imgui_windows)))
         ("openxr",                     "Enable OpenXR HMD support",             cxxopts::value<bool>()->default_value(str( openxr)))
         ("no-openxr",                  "Disable OpenXR HMD support",            cxxopts::value<bool>()->default_value(str(!openxr)))
         ("parallel-initialization",    "Use parallel component initialization", cxxopts::value<bool>()->default_value(str( parallel_initialization)))
@@ -34,10 +34,10 @@ Configuration::Configuration(int argc, char** argv)
     {
         auto arguments = options.parse(argc, argv);
 
-        gui                     = arguments["gui"                    ].as<bool>() && !arguments["no-gui"                    ].as<bool>();
-        openxr                  = arguments["openxr"                 ].as<bool>() && !arguments["no-openxr"                 ].as<bool>();
-        parallel_initialization = arguments["parallel-initialization"].as<bool>() && !arguments["no-parallel-initialization"].as<bool>();
-        reverse_depth           = arguments["reverse-depth"          ].as<bool>() && !arguments["no-reverse-depth"          ].as<bool>();
+        viewports_hosted_in_imgui_windows = arguments["gui"                    ].as<bool>() && !arguments["no-gui"                    ].as<bool>();
+        openxr                            = arguments["openxr"                 ].as<bool>() && !arguments["no-openxr"                 ].as<bool>();
+        parallel_initialization           = arguments["parallel-initialization"].as<bool>() && !arguments["no-parallel-initialization"].as<bool>();
+        reverse_depth                     = arguments["reverse-depth"          ].as<bool>() && !arguments["no-reverse-depth"          ].as<bool>();
     }
     catch (const std::exception& e)
     {

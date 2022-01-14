@@ -65,14 +65,7 @@ void Scene_root::initialize_component()
     m_scene->mesh_layers .push_back(m_brush_layer);
     m_scene->light_layers.push_back(m_light_layer);
 
-    m_content_layers     .push_back(m_content_layer.get());
-    m_content_fill_layers.push_back(m_content_layer.get());
-    m_content_fill_layers.push_back(m_controller_layer.get());
-    m_tool_layers        .push_back(m_tool_layer.get());
-    m_brush_layers       .push_back(m_brush_layer.get());
-
-    m_physics_world = erhe::physics::IWorld::create_unique();
-
+    m_physics_world  = erhe::physics::IWorld::create_unique();
     m_raytrace_scene = erhe::raytrace::IScene::create_unique("root");
 }
 
@@ -110,12 +103,6 @@ auto Scene_root::scene() const -> const erhe::scene::Scene&
     return *m_scene.get();
 }
 
-auto Scene_root::content_layer() -> erhe::scene::Mesh_layer&
-{
-    ERHE_VERIFY(m_content_layer);
-    return *m_content_layer.get();
-}
-
 void Scene_root::add(
     const std::shared_ptr<erhe::scene::Mesh>& mesh,
     Mesh_layer*                               layer
@@ -130,29 +117,34 @@ void Scene_root::add(
     add_to_scene_layer(scene(), *layer, mesh);
 }
 
-auto Scene_root::brush_layer() const -> std::shared_ptr<erhe::scene::Mesh_layer>
+auto Scene_root::brush_layer() const -> erhe::scene::Mesh_layer*
 {
-    return m_brush_layer;
+    return m_brush_layer.get();
 }
 
-auto Scene_root::content_layer() const -> std::shared_ptr<erhe::scene::Mesh_layer>
+auto Scene_root::content_layer() const -> erhe::scene::Mesh_layer*
 {
-    return m_content_layer;
+    return m_content_layer.get();
 }
 
-auto Scene_root::controller_layer() const -> std::shared_ptr<erhe::scene::Mesh_layer>
+auto Scene_root::controller_layer() const -> erhe::scene::Mesh_layer*
 {
-    return m_controller_layer;
+    return m_controller_layer.get();
 }
 
-auto Scene_root::tool_layer() const -> std::shared_ptr<erhe::scene::Mesh_layer>
+auto Scene_root::tool_layer() const -> erhe::scene::Mesh_layer*
 {
-    return m_tool_layer;
+    return m_tool_layer.get();
 }
 
-auto Scene_root::light_layer() const -> std::shared_ptr<erhe::scene::Light_layer>
+auto Scene_root::gui_layer() const -> erhe::scene::Mesh_layer*
 {
-    return m_light_layer;
+    return m_gui_layer.get();
+}
+
+auto Scene_root::light_layer() const -> erhe::scene::Light_layer*
+{
+    return m_light_layer.get();
 }
 
 auto Scene_root::camera_combo(

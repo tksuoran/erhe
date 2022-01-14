@@ -128,10 +128,7 @@ void Shadow_renderer::initialize_component()
 
 static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::render()"};
 
-void Shadow_renderer::render(
-    const Mesh_layer_collection&    mesh_layers,
-    const erhe::scene::Light_layer& light_layer
-)
+void Shadow_renderer::render(const Render_parameters& parameters)
 {
     if constexpr (!s_enable)
     {
@@ -143,6 +140,9 @@ void Shadow_renderer::render(
     ERHE_PROFILE_GPU_SCOPE(c_shadow_renderer_render)
 
     erhe::graphics::Scoped_debug_group debug_group{c_shadow_renderer_render};
+
+    const auto& mesh_layers = parameters.mesh_layers;
+    const auto& light_layer = *parameters.light_layer;
 
     m_pipeline_state_tracker->execute(&m_pipeline);
     gl::viewport(m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);

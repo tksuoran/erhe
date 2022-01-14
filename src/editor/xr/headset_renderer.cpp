@@ -225,12 +225,16 @@ void Headset_renderer::setup_root_camera()
         glm::vec3{0.0f, 1.0f,  0.0f}  // up
     );
     m_root_camera->set_parent_from_node(m);
+    auto& projection = *m_root_camera->projection();
+    projection.fov_y           = glm::radians(35.0f);
+    projection.projection_type = erhe::scene::Projection::Type::perspective_vertical;
+    projection.z_near          = 0.03f;
+    projection.z_far           = 200.0f;
 
     const auto scene_root = get<Scene_root>();
     scene_root->scene().cameras.push_back(m_root_camera);
     scene_root->scene().nodes.emplace_back(m_root_camera);
     scene_root->scene().nodes_sorted = false;
-
 }
 
 auto Headset_renderer::root_camera() -> std::shared_ptr<erhe::scene::Camera>

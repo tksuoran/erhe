@@ -24,5 +24,6 @@ vec4 srgb_to_linear(vec4 v)
 
 void main()
 {
-    out_color = srgb_to_linear(texture(s_gui_texture, v_texcoord));
+    //out_color = srgb_to_linear(texture(s_gui_texture, v_texcoord));
+    out_color = texture(s_gui_texture, v_texcoord);
 }
