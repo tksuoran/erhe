@@ -14,6 +14,10 @@
 
 #pragma once
 
+#include <glm/glm.hpp>
+
+#include <memory>
+
 //---- Define assertion handler. Defaults to calling assert().
 // If your macro uses multiple statements, make sure is enclosed in a 'do { .. } while (0)' block so it can be used as a single statement.
 //#define IM_ASSERT(_EXPR)  MyAssert(_EXPR)
@@ -27,7 +31,7 @@
 //#define IMGUI_API __declspec( dllimport )
 
 //---- Don't define obsolete functions/enums/behaviors. Consider enabling from time to time after updating to avoid using soon-to-be obsolete function/names.
-//#define IMGUI_DISABLE_OBSOLETE_FUNCTIONS
+#define IMGUI_DISABLE_OBSOLETE_FUNCTIONS
 
 //---- Disable all of Dear ImGui or don't implement standard windows.
 // It is very strongly recommended to NOT disable the demo windows during development. Please read comments in imgui_demo.cpp.
@@ -79,15 +83,14 @@
 
 //---- Define constructor and implicit cast operators to convert back<>forth between your math types and ImVec2/ImVec4.
 // This will be inlined as part of ImVec2 and ImVec4 class declarations.
-/*
-#define IM_VEC2_CLASS_EXTRA                                                 \
-        ImVec2(const MyVec2& f) { x = f.x; y = f.y; }                       \
-        operator MyVec2() const { return MyVec2(x,y); }
 
-#define IM_VEC4_CLASS_EXTRA                                                 \
-        ImVec4(const MyVec4& f) { x = f.x; y = f.y; z = f.z; w = f.w; }     \
-        operator MyVec4() const { return MyVec4(x,y,z,w); }
-*/
+#define IM_VEC2_CLASS_EXTRA                                   \
+        ImVec2(const glm::vec2 f) { x = f.x; y = f.y; }      \
+        operator glm::vec2() const { return glm::vec2{x, y}; }
+
+#define IM_VEC4_CLASS_EXTRA                                                \
+        ImVec4(const glm::vec4 f) { x = f.x; y = f.y; z = f.z; w = f.w; } \
+        operator glm::vec4() const { return glm::vec4{x, y, z, w}; }
 
 //---- Use 32-bit vertex indices (default is 16-bit) is one way to allow large meshes with more than 64K vertices.
 // Your renderer backend will need to support it (most example renderer backends support both 16/32-bit indices).
@@ -112,7 +115,7 @@
 //#define IMGUI_DEBUG_TOOL_ITEM_PICKER_EX
 
 //---- Debug Tools: Enable slower asserts
-//#define IMGUI_DEBUG_PARANOID
+#define IMGUI_DEBUG_PARANOID
 
 //---- Tip: You can add extra functions within the ImGui:: namespace, here or in your own headers files.
 /*
@@ -121,3 +124,20 @@ namespace ImGui
     void MyFunction(const char* name, const MyMatrix44& v);
 }
 */
+
+#define IM_ASSERT_USER_ERROR ImGui_ImplErhe_assert_user_error
+void ImGui_ImplErhe_assert_user_error(const bool condition, const char* message);
+
+namespace erhe::graphics {
+    class Texture;
+}
+
+#define ImTextureID std::shared_ptr<erhe::graphics::Texture>
+
+namespace ImGui
+{
+    inline auto GetTextureVoidPtr(const ImTextureID& id) -> void*
+    {
+        return id.get();
+    }
+}

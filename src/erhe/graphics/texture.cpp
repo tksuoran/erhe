@@ -244,7 +244,9 @@ auto Texture::mipmap_dimensions(const gl::Texture_target target) -> int
     }
 }
 
-Texture::~Texture() = default;
+Texture::~Texture()
+{
+}
 
 Texture::Texture(Texture&& other) noexcept
     : m_handle         {std::move(other.m_handle)}
@@ -260,8 +262,7 @@ Texture::Texture(Texture&& other) noexcept
 {
 }
 
-auto Texture::operator=(Texture&& other) noexcept
--> Texture&
+auto Texture::operator=(Texture&& other) noexcept -> Texture&
 {
     m_handle          = std::move(other.m_handle);
     m_debug_label     = other.m_debug_label;

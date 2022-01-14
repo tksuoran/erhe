@@ -60,19 +60,19 @@ void Programs::initialize_component()
 
     m_shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
 
-    /// basic           = make_program("basic");
-    /// brush           = make_program("brush");
+    basic           = make_program("basic");
+    brush           = make_program("brush");
     // Not available on Dell laptop.
     //standard      = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
-    /// standard        = make_program("standard");
-    /// textured        = make_program("textured");
-    /// edge_lines      = make_program("edge_lines");
-    /// wide_lines      = make_program("wide_lines");
-    /// points          = make_program("points");
-    /// depth           = make_program("depth");
-    /// id              = make_program("id");
-    /// tool            = make_program("tool");
-    /// visualize_depth = make_program("visualize_depth");
+    standard        = make_program("standard");
+    textured        = make_program("textured");
+    edge_lines      = make_program("edge_lines");
+    wide_lines      = make_program("wide_lines");
+    points          = make_program("points");
+    depth           = make_program("depth");
+    id              = make_program("id");
+    tool            = make_program("tool");
+    visualize_depth = make_program("visualize_depth");
 }
 
 auto Programs::make_program(std::string_view name)
@@ -147,7 +147,12 @@ auto Programs::make_program(
     create_info.extensions = extensions;
 
     Shader_stages::Prototype prototype{create_info};
-    ERHE_VERIFY(prototype.is_valid());
+    if (!prototype.is_valid())
+    {
+        log_programs.error("Compiling shader program {} failed\n", name);
+        return {};
+    }
+
     auto p = std::make_unique<Shader_stages>(std::move(prototype));
 
     if (m_shader_monitor)

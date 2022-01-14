@@ -2,6 +2,7 @@
 
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
@@ -14,6 +15,7 @@
 
 #include <deque>
 
+using erhe::graphics::Texture;
 using std::shared_ptr;
 using std::unique_ptr;
 using std::make_shared;
@@ -93,8 +95,8 @@ class Texture_unit_cache
 public:
     void create_dummy_texture()
     {
-        const erhe::graphics::Texture::Create_info create_info{};
-        m_dummy_texture = std::make_unique<erhe::graphics::Texture>(create_info);
+        const Texture::Create_info create_info{};
+        m_dummy_texture = make_shared<Texture>(create_info);
         m_dummy_texture->set_debug_label("ImGui Dummy");
         const std::array<uint8_t, 4> dummy_pixel{ 0xee, 0x11, 0xdd, 0xff };
         const gsl::span<const std::byte> image_data{
@@ -125,7 +127,7 @@ public:
     }
 
     auto allocate_texture_unit(
-        const erhe::graphics::Texture* texture
+        const std::shared_ptr<Texture>& texture
     ) -> std::optional<std::size_t>
     {
         for (size_t texture_unit = 0; texture_unit < texture_unit_count; ++texture_unit)
@@ -158,10 +160,10 @@ public:
     }
 
 private:
-    unique_ptr<erhe::graphics::Texture> m_dummy_texture;
+    shared_ptr<Texture> m_dummy_texture;
 
     std::array<
-        const erhe::graphics::Texture*,
+        std::shared_ptr<Texture>,
         texture_unit_count
     > m_textures;
 
@@ -357,7 +359,7 @@ public:
     {
         // Build texture atlas
         ImGuiIO& io = ImGui::GetIO();
-        erhe::graphics::Texture::Create_info create_info{};
+        Texture::Create_info create_info{};
         unsigned char* pixels = nullptr;
         //create_info.internal_format = gl::Internal_format::r8;
         //io.Fonts->GetTexDataAsAlpha8(&pixels, &create_info.width, &create_info.height);
@@ -384,7 +386,7 @@ public:
             post_processed_data[i * 4 + 3] = static_cast<uint8_t>(std::min(255.0f * a, 255.0f));;
         }
 
-        font_texture = std::make_unique<erhe::graphics::Texture>(create_info);
+        font_texture = make_shared<Texture>(create_info);
         font_texture->set_debug_label("ImGui Font");
         const gsl::span<const std::byte> image_data{
             reinterpret_cast<const std::byte*>(post_processed_data.data()),
@@ -398,7 +400,7 @@ public:
         );
 
         // Store our identifier
-        io.Fonts->SetTexID((ImTextureID)(intptr_t)font_texture.get());
+        io.Fonts->SetTexID(font_texture);
     }
 
     void prebind_texture_units()
@@ -473,7 +475,7 @@ public:
 
     erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker{nullptr};
 
-    unique_ptr<erhe::graphics::Texture>         font_texture;
+    shared_ptr<Texture>                         font_texture;
     unique_ptr<erhe::graphics::Shader_stages>   shader_stages;
 
     unique_ptr<erhe::graphics::Shader_resource> projection_block;
@@ -652,12 +654,7 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
         return;
     }
 
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(c_imgui_render.length()),
-        c_imgui_render.data()
-    );
+    erhe::graphics::Scoped_debug_group pass_scope{c_imgui_render};
 
     const auto& frame_resources       = imgui_renderer.current_frame_resources();
     const auto& draw_parameter_buffer = frame_resources.draw_parameter_buffer;
@@ -775,8 +772,7 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
                     draw_parameter_byte_offset += Imgui_renderer::vec4_size;
 
                     // Write texture indices
-                    const auto* texture = reinterpret_cast<erhe::graphics::Texture*>(pcmd->TextureId);
-                    const auto texture_unit = imgui_renderer.texture_unit_cache.allocate_texture_unit(texture);
+                    const auto texture_unit = imgui_renderer.texture_unit_cache.allocate_texture_unit(pcmd->TextureId);
                     ERHE_VERIFY(texture_unit.has_value());
                     const uint32_t texture_indices[4] = { static_cast<uint32_t>(texture_unit.value()), 0, 0, 0 };
                     const gsl::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
@@ -810,7 +806,6 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
 
     if (draw_indirect_count == 0)
     {
-        gl::pop_debug_group();
         return;
     }
 
@@ -860,6 +855,12 @@ void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data)
     gl::disable(gl::Enable_cap::clip_distance1);
     gl::disable(gl::Enable_cap::clip_distance2);
     gl::disable(gl::Enable_cap::clip_distance3);
+}
 
-    gl::pop_debug_group();
+void ImGui_ImplErhe_assert_user_error(const bool condition, const char* message)
+{
+    if (!condition)
+    {
+        log_imgui.error("{}\n", message);
+    }
 }

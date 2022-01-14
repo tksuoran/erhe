@@ -7,6 +7,8 @@ set(source_list
     buffer_transfer_queue.hpp
     configuration.cpp
     configuration.hpp
+    debug.cpp
+    debug.hpp
     fragment_output.cpp
     fragment_output.hpp
     fragment_outputs.cpp

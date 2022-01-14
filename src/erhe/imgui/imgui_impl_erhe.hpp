@@ -10,3 +10,4 @@ bool ImGui_ImplErhe_Init(erhe::graphics::OpenGL_state_tracker* pipeline_state_tr
 void ImGui_ImplErhe_Shutdown();
 void ImGui_ImplErhe_NewFrame();
 void ImGui_ImplErhe_RenderDrawData(const ImDrawData* draw_data);
+void ImGui_ImplErhe_assert_user_error(const bool condition, const char* message);

@@ -7,6 +7,7 @@ using Console_color = erhe::log::Console_color;
 using Level         = erhe::log::Level;
 
 Category log_startup                 {0.9f, 1.0f, 0.9f, Console_color::WHITE,   Level::LEVEL_INFO};
+Category log_svg                     {0.9f, 1.0f, 0.9f, Console_color::WHITE,   Level::LEVEL_INFO};
 Category log_programs                {0.9f, 0.9f, 1.0f, Console_color::WHITE,   Level::LEVEL_INFO};
 Category log_textures                {0.9f, 1.0f, 1.0f, Console_color::WHITE,   Level::LEVEL_INFO};
 Category log_input                   {0.9f, 0.8f, 0.3f, Console_color::YELLOW,  Level::LEVEL_INFO};

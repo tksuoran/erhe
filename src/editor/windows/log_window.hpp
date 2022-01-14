@@ -59,7 +59,7 @@ public:
     void imgui() override;
 
     // Implements erhe::log::ILog_sink
-    void write(const erhe::log::Color color, const std::string_view text) override;
+    void write(const erhe::log::Color& color, const std::string_view text) override;
 
     // Public API
 

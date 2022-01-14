@@ -5,6 +5,7 @@
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/scoped_buffer_mapping.hpp"
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/shader_resource.hpp"
@@ -55,12 +56,7 @@ void Text_renderer::initialize_component()
 
     const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(c_text_renderer_initialize_component.length()),
-        c_text_renderer_initialize_component.data()
-    );
+    erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_initialize_component};
 
     m_projection_block = std::make_unique<erhe::graphics::Shader_resource>("projection", 0, erhe::graphics::Shader_resource::Type::uniform_block);
 
@@ -167,8 +163,6 @@ void Text_renderer::initialize_component()
     m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
 
     create_frame_resources();
-
-    gl::pop_debug_group();
 }
 
 void Text_renderer::create_frame_resources()
@@ -251,12 +245,7 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
 
     ERHE_PROFILE_GPU_SCOPE(c_text_renderer_render)
 
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(c_text_renderer_render.length()),
-        c_text_renderer_render.data()
-    );
+    erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_render};
 
     m_projection_writer.begin(current_frame_resources().projection_buffer.target());
 
@@ -313,11 +302,8 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
     );
     gl::disable(gl::Enable_cap::primitive_restart_fixed_index);
 
-    gl::pop_debug_group();
-
     m_index_range_first += m_index_count;
     m_index_count = 0;
 }
-
 
 }

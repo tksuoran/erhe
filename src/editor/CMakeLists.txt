@@ -98,12 +98,14 @@ set(source_list
     windows/brushes.hpp
     windows/debug_view_window.cpp
     windows/debug_view_window.hpp
-    windows/log_window.cpp
-    windows/log_window.hpp
+    windows/framebuffer_window.cpp
+    windows/framebuffer_window.hpp
     windows/imgui_demo_window.cpp
     windows/imgui_demo_window.hpp
     windows/layers_window.cpp
     windows/layers_window.hpp
+    windows/log_window.cpp
+    windows/log_window.hpp
     windows/materials.cpp
     windows/materials.hpp
     windows/material_properties.cpp

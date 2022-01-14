@@ -7,3 +7,5 @@ exclude_paths:
   - "src/hidapi/**"
   - "src/imgui/**"
   - "src/mikktspace/**"
+  - "src/RectangleBinPack/**"
+  

@@ -7,6 +7,7 @@
 
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/shader_resource.hpp"
@@ -60,20 +61,13 @@ void Line_renderer_set::initialize_component()
 
     const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(c_line_renderer_initialize_component.length()),
-        c_line_renderer_initialize_component.data()
-    );
+    erhe::graphics::Scoped_debug_group line_renderer_initialization{c_line_renderer_initialize_component};
 
     m_pipeline.initialize(get<Shader_monitor>().get());
 
     const Configuration& configuration = *get<Configuration>().get();
     visible.create_frame_resources(&m_pipeline, configuration);
     hidden.create_frame_resources(&m_pipeline, configuration);
-
-    gl::pop_debug_group();
 }
 
 void Line_renderer_pipeline::initialize(Shader_monitor* shader_monitor)
@@ -344,12 +338,7 @@ void Line_renderer::render(
     ERHE_PROFILE_FUNCTION
     ERHE_PROFILE_GPU_SCOPE(c_line_renderer_render)
 
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(c_line_renderer_render.length()),
-        c_line_renderer_render.data()
-    );
+    erhe::graphics::Scoped_debug_group line_renderer_initialization{c_line_renderer_render};
 
     m_view_writer.begin();
 
@@ -420,7 +409,6 @@ void Line_renderer::render(
 
     gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
     gl::disable(gl::Enable_cap::sample_alpha_to_one);
-    gl::pop_debug_group();
 }
 
 

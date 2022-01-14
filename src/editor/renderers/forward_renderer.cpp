@@ -8,6 +8,7 @@
 
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/shader_resource.hpp"
@@ -69,12 +70,7 @@ void Forward_renderer::initialize_component()
 
     const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(c_forward_renderer_initialize_component.length()),
-        c_forward_renderer_initialize_component.data()
-    );
+    erhe::graphics::Scoped_debug_group forward_renderer_initialization{c_forward_renderer_initialize_component};
 
     create_frame_resources(256, 256, 256, 8000, 8000);
 
@@ -376,8 +372,6 @@ void Forward_renderer::initialize_component()
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
         .color_blend    = &Color_blend_state::color_blend_premultiplied
     };
-
-    gl::pop_debug_group();
 }
 
 auto Forward_renderer::select_pipeline(const Pass pass) const -> const erhe::graphics::Pipeline*
@@ -442,12 +436,7 @@ void Forward_renderer::render(
 {
     ERHE_PROFILE_FUNCTION
 
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(c_forward_renderer_render.length()),
-        c_forward_renderer_render.data()
-    );
+    erhe::graphics::Scoped_debug_group forward_renderer_render{c_forward_renderer_render};
 
     const unsigned int shadow_texture_unit = 0;
     if (m_shadow_renderer)
@@ -464,6 +453,10 @@ void Forward_renderer::render(
         {
             return;
         }
+        if (!pipeline->shader_stages)
+        {
+            return;
+        }
 
         const auto primitive_mode = select_primitive_mode(pass);
 
@@ -473,12 +466,7 @@ void Forward_renderer::render(
         }
 
         const auto& pass_name = c_pass_strings[static_cast<size_t>(pass)];
-        gl::push_debug_group(
-            gl::Debug_source::debug_source_application,
-            0,
-            static_cast<GLsizei>(pass_name.length()),
-            pass_name.data()
-        );
+        erhe::graphics::Scoped_debug_group pass_scope{pass_name};
 
         m_pipeline_state_tracker->execute(pipeline);
         gl::program_uniform_1i(
@@ -519,10 +507,7 @@ void Forward_renderer::render(
         {
             gl::depth_range(0.0f, 1.0f);
         }
-
-        gl::pop_debug_group();
     }
-    gl::pop_debug_group();
 
     // state leak insurance
     const unsigned int zero{0};

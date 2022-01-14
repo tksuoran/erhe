@@ -474,11 +474,10 @@ public:
                 {
                     const int src_byte_x = (src_x * src_components) + c;
                     uint8_t   value {0};
-                    size_t    offset{0};
                     if (src_byte_x < src_byte_width)
                     {
-                        offset = src_byte_x + (src_y * src_pitch);
-                        value  = src_buffer[offset];
+                        const size_t offset = src_byte_x + (src_y * src_pitch);
+                        value = src_buffer[offset];
                     }
                     else
                     {
@@ -487,7 +486,10 @@ public:
                     // fmt::print("%c", shades[value / 64]);
                     if (Max)
                     {
-                        value = std::max(value, get(dst_x_, dst_y_, c + dst_component_offset));
+                        value = std::max(
+                            value,
+                            get(dst_x_, dst_y_, c + dst_component_offset)
+                        );
                     }
                     put(dst_x_, dst_y_, c + dst_component_offset, value);
                 }

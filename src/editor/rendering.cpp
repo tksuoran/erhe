@@ -16,6 +16,7 @@
 #include "renderers/shadow_renderer.hpp"
 #include "renderers/text_renderer.hpp"
 #include "scene/scene_root.hpp"
+#include "windows/debug_view_window.hpp"
 #include "windows/log_window.hpp"
 #include "windows/viewport_config.hpp"
 #include "windows/viewport_window.hpp"
@@ -148,6 +149,7 @@ void Editor_rendering::render()
             m_scene_root->content_layers(),
             *m_scene_root->light_layer().get()
         );
+        get<Debug_view_window>()->render(*m_pipeline_state_tracker.get());
     }
 
     if (m_configuration->gui)

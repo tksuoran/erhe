@@ -14,6 +14,7 @@
 #include "xr/headset_renderer.hpp"
 #endif
 
+#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
@@ -276,12 +277,10 @@ void Viewport_window::imgui()
     )
     {
         ImGui::Image(
-            reinterpret_cast<ImTextureID>(
-                m_color_texture_resolved_for_present.get()
-            ),
+            m_color_texture_resolved_for_present,
             size,
-            ImVec2(0, 1),
-            ImVec2(1, 0)
+            ImVec2{0, 1},
+            ImVec2{1, 0}
         );
         m_content_region_min  = to_glm(ImGui::GetItemRectMin());
         m_content_region_max  = to_glm(ImGui::GetItemRectMax());
@@ -387,12 +386,7 @@ void Viewport_window::multisample_resolve()
         return;
     }
 
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(c_multisample_resolve.length()),
-        c_multisample_resolve.data()
-    );
+    erhe::graphics::Scoped_debug_group pass_scope{c_multisample_resolve};
 
     gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_framebuffer_multisample->gl_name());
     if constexpr (true)
@@ -428,8 +422,6 @@ void Viewport_window::multisample_resolve()
         0, 0, m_color_texture_resolved   ->width(), m_color_texture_resolved   ->height(),
         gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
     );
-
-    gl::pop_debug_group();
 
     m_color_texture_resolved_for_present = m_color_texture_resolved;
 }

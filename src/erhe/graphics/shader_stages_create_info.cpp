@@ -124,17 +124,32 @@ auto Shader_stages::Create_info::final_source(
     }
     else if (!shader.path.empty())
     {
-        if (!std::filesystem::exists(shader.path))
+        bool ok_to_read = true;
+        try
         {
-            log_program.warn("Cannot load shader from non-existing file '{}'", shader.path.string());
+            if (!std::filesystem::exists(shader.path))
+            {
+                log_program.warn("Cannot load shader from non-existing file '{}'", shader.path.string());
+                ok_to_read = false;
+            }
+            else
+            {
+                if (!std::filesystem::is_regular_file(shader.path))
+                {
+                    log_program.warn("Cannot load shader from non-regular file '{}'", shader.path.string());
+                    ok_to_read = false;
+                }
+                if (std::filesystem::is_empty(shader.path))
+                {
+                    log_program.warn("Cannot load shader from empty path");
+                    ok_to_read = false;
+                }
+            }
         }
-        if (!std::filesystem::is_regular_file(shader.path))
+        catch (...)
         {
-            log_program.warn("Cannot load shader from non-regular file '{}'", shader.path.string());
-        }
-        if (std::filesystem::is_empty(shader.path))
-        {
-            log_program.warn("Cannot load shader from empty path");
+            log_program.warn("Unspecified exception trying to load shader from empty path");
+            ok_to_read = false;
         }
 
         auto source = erhe::toolkit::read(shader.path);

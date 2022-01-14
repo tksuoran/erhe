@@ -8,6 +8,7 @@
 
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/shader_resource.hpp"
@@ -95,16 +96,9 @@ void Id_renderer::initialize_component()
         .color_blend    = &erhe::graphics::Color_blend_state::color_writes_disabled,
     };
 
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(c_id_renderer_initialize_component.length()),
-       c_id_renderer_initialize_component.data()
-    );
+    erhe::graphics::Scoped_debug_group debug_group{c_id_renderer_initialize_component};
 
     create_id_frame_resources();
-
-    gl::pop_debug_group();
 }
 
 void Id_renderer::create_id_frame_resources()
@@ -275,12 +269,7 @@ void Id_renderer::render(
         return;
     }
 
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(c_id_renderer_render_content.length()),
-        c_id_renderer_render_content.data()
-    );
+    erhe::graphics::Scoped_debug_group debug_group{c_id_renderer_render_content};
 
     update_framebuffer(viewport);
 
@@ -401,7 +390,6 @@ void Id_renderer::render(
     }
 
     gl::enable(gl::Enable_cap::framebuffer_srgb);
-    gl::pop_debug_group();
 }
 
 template<typename T>

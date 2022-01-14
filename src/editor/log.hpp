@@ -5,6 +5,7 @@
 namespace editor {
 
 extern erhe::log::Category log_startup;
+extern erhe::log::Category log_svg;
 extern erhe::log::Category log_programs;
 extern erhe::log::Category log_textures;
 extern erhe::log::Category log_input;

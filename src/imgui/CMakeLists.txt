@@ -11,8 +11,7 @@ set(source_list
 )
 
 if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
-    add_definitions(-DIMGUI_ENABLE_FREETYPE)
-    add_definitions(-DIMGUI_DISABLE_OBSOLETE_FUNCTIONS)
+    add_definitions(-DIMGUI_ENABLE_FREETYPE -DIMGUI_DISABLE_STB_TRUETYPE_IMPLEMENTATION)
     list(APPEND source_list
         misc/freetype/imgui_freetype.cpp
         misc/freetype/imgui_freetype.h
@@ -26,7 +25,7 @@ target_include_directories(imgui
         ${ERHE_INCLUDE_ROOT}/imgui
 )
 
-target_link_libraries(imgui PUBLIC glfw)
+target_link_libraries(imgui PUBLIC glfw glm::glm)
 
 if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
     target_link_libraries(imgui PUBLIC freetype)

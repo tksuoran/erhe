@@ -53,7 +53,7 @@ public:
 class Hand
 {
 public:
-    Hand(XrHandEXT hand);
+    explicit Hand(const XrHandEXT hand);
 
     // Public API
     void update(erhe::xr::Headset& headset);

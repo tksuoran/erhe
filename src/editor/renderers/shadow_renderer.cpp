@@ -6,6 +6,7 @@
 
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/shader_stages.hpp"
@@ -66,12 +67,7 @@ void Shadow_renderer::initialize_component()
 
     const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(c_shadow_renderer_initialize_component.length()),
-        c_shadow_renderer_initialize_component.data()
-    );
+    erhe::graphics::Scoped_debug_group debug_group{c_shadow_renderer_initialize_component};
 
     create_frame_resources(1, 256, 256, 1000, 1000);
 
@@ -128,8 +124,6 @@ void Shadow_renderer::initialize_component()
         .height        = m_texture->height(),
         .reverse_depth = m_configuration->reverse_depth
     };
-
-    gl::pop_debug_group();
 }
 
 static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::render()"};
@@ -148,12 +142,7 @@ void Shadow_renderer::render(
 
     ERHE_PROFILE_GPU_SCOPE(c_shadow_renderer_render)
 
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(c_shadow_renderer_render.length()),
-        c_shadow_renderer_render.data()
-    );
+    erhe::graphics::Scoped_debug_group debug_group{c_shadow_renderer_render};
 
     m_pipeline_state_tracker->execute(&m_pipeline);
     gl::viewport(m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
@@ -196,7 +185,7 @@ void Shadow_renderer::render(
                 continue;
             }
 
-            if (light_index == m_slot)
+            // if (light_index == m_slot)
             {
                 update_camera_buffer(*light.get(), m_viewport);
 
@@ -217,14 +206,11 @@ void Shadow_renderer::render(
         }
     }
 
-    gl::pop_debug_group();
-
     ++m_slot;
     if (m_slot >= light_layer.lights.size())
     {
         m_slot = 0;
     }
-
 }
 
 auto Shadow_renderer::texture() const -> erhe::graphics::Texture*

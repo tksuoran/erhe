@@ -9,10 +9,6 @@ function (erhe_target_settings target)
     target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:NOMINMAX>)
     target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:_CRT_SECURE_NO_WARNINGS>)
 
-    # Defines for Dear ImGui for development purposes
-    target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:IMGUI_DEBUG_PARANOID>)
-    target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:IMGUI_DISABLE_OBSOLETE_FUNCTIONS>)
-
     # Enable Just My Code - which cmake does not seem to set even though
     # Visual Studio has documented it to be enabled by default
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/JMC>)
@@ -34,8 +30,8 @@ function (erhe_disable_incremental_linking)
     #set(CMAKE_STATIC_LINKER_FLAGS_RELWITHDEBINFO "/debug /incremental:no" PARENT_SCOPE)
     #set(CMAKE_SHARED_LINKER_FLAGS_RELEASE        "/debug /incremental:no" PARENT_SCOPE)
     #set(CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO "/debug /incremental:no" PARENT_SCOPE)
-    set(CMAKE_EXE_LINKER_FLAGS_DEBUG             "/debug /incremental:no" PARENT_SCOPE)
-    set(CMAKE_EXE_LINKER_FLAGS_MINSIZEREL        "/debug /incremental:no" PARENT_SCOPE)
-    set(CMAKE_EXE_LINKER_FLAGS_RELEASE           "/debug /incremental:no" PARENT_SCOPE)
-    set(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO    "/debug /incremental:no" PARENT_SCOPE)
+    set(CMAKE_EXE_LINKER_FLAGS_DEBUG             "/DEBUG /INCREMENTAL:NO" PARENT_SCOPE)
+    set(CMAKE_EXE_LINKER_FLAGS_MINSIZEREL        "/DEBUG /INCREMENTAL:NO" PARENT_SCOPE)
+    set(CMAKE_EXE_LINKER_FLAGS_RELEASE           "/DEBUG /INCREMENTAL:NO" PARENT_SCOPE)
+    set(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO    "/DEBUG /INCREMENTAL:NO" PARENT_SCOPE)
 endfunction (erhe_disable_incremental_linking)

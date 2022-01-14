@@ -70,7 +70,10 @@ public:
 class ILog_sink
 {
 public:
-    virtual void write(const Color color, std::string_view text) = 0;
+    virtual void write(
+        const Color&     color,
+        std::string_view text
+    ) = 0;
 };
 
 extern auto timestamp() -> std::string;

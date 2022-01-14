@@ -1,5 +1,6 @@
 #include "icon_set.hpp"
 #include "gl_context_provider.hpp"
+#include "log.hpp"
 
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/light.hpp"
@@ -59,13 +60,19 @@ void Icon_set::initialize_component()
     icons.node              = load(icon_directory / "node.svg");
 }
 
-auto Icon_set::load(const std::filesystem::path& path)
--> ImVec2
+auto Icon_set::load(
+    const std::filesystem::path& path
+) -> ImVec2
 {
     Expects(m_row < m_row_count);
 
     //const auto  current_path = std::filesystem::current_path();
     const auto  document     = lunasvg::Document::loadFromFile(path.string());
+    if (!document)
+    {
+        log_svg.error("Unable to load {}\n", path.string());
+        return ImVec2{0.0f, 0.0f};
+    }
     const auto  bitmap       = document->renderToBitmap(m_icon_width, m_icon_height);
     const int   x_offset     = m_column * m_icon_width;
     const int   y_offset     = m_row    * m_icon_height;
@@ -99,13 +106,16 @@ ImVec4 imvec_from_glm(glm::vec4 v)
     return ImVec4{v.x, v.y, v.z, v.w};
 }
 
-void Icon_set::icon(ImVec2 uv0, glm::vec4 tint_color) const
+void Icon_set::icon(
+    const ImVec2    uv0,
+    const glm::vec4 tint_color
+) const
 {
     const float size      = ImGui::GetTextLineHeight();
     const auto  icon_size = ImVec2(size, size);
 
     ImGui::Image(
-        reinterpret_cast<ImTextureID>(texture.get()),
+        texture,
         icon_size,
         uv0,
         uv1(uv0),

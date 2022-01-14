@@ -211,8 +211,7 @@ void Theremin::set_antenna_distance(const float distance)
     m_frequency = m_antenna_distance_scale / distance;
     if (m_snap_to_note)
     {
-        const int  midi_note = frequency_to_midi_note(m_frequency);
-        const auto note      = from_midi(midi_note);
+        const int midi_note = frequency_to_midi_note(m_frequency);
         m_frequency = midi_note_to_frequency(midi_note);
     }
 }

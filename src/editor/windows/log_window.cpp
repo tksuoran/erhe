@@ -74,7 +74,7 @@ void Log_window::toggle_pause()
 }
 
 void Log_window::write(
-    const erhe::log::Color color,
+    const erhe::log::Color& color,
     const std::string_view text
 )
 {
