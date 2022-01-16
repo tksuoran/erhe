@@ -16,9 +16,9 @@ auto make_triangle(const double r) -> Geometry
         "triangle",
         [=](auto& geometry)
         {
-            geometry.make_point(static_cast<float>(r * -b), static_cast<float>(r *  0.5f), 0.0f, 0.0f, 1.0f);
-            geometry.make_point(static_cast<float>(r *  a), static_cast<float>(r *  0.0f), 0.0f, 1.0f, 1.0f);
-            geometry.make_point(static_cast<float>(r * -b), static_cast<float>(r * -0.5f), 0.0f, 1.0f, 0.0f);
+            geometry.make_point(static_cast<float>(r * -b), static_cast<float>(r *  0.5), 0.0f, 0.0f, 1.0f);
+            geometry.make_point(static_cast<float>(r *  a), static_cast<float>(r *  0.0), 0.0f, 1.0f, 1.0f);
+            geometry.make_point(static_cast<float>(r * -b), static_cast<float>(r * -0.5), 0.0f, 1.0f, 0.0f);
 
             geometry.make_polygon_reverse( {0, 1, 2} );
 
@@ -43,15 +43,45 @@ auto make_quad(const double edge) -> Geometry
         "quad",
         [=](auto& geometry)
         {
-            geometry.make_point(static_cast<float>(edge * -0.5f), static_cast<float>(edge * -0.5f), 0.0f, 0.0f, 0.0f);
-            geometry.make_point(static_cast<float>(edge *  0.5f), static_cast<float>(edge * -0.5f), 0.0f, 1.0f, 0.0f);
-            geometry.make_point(static_cast<float>(edge *  0.5f), static_cast<float>(edge *  0.5f), 0.0f, 1.0f, 1.0f);
-            geometry.make_point(static_cast<float>(edge * -0.5f), static_cast<float>(edge *  0.5f), 0.0f, 0.0f, 1.0f);
+            geometry.make_point(static_cast<float>(edge * -0.5), static_cast<float>(edge * -0.5), 0.0f, 0.0f, 0.0f);
+            geometry.make_point(static_cast<float>(edge *  0.5), static_cast<float>(edge * -0.5), 0.0f, 1.0f, 0.0f);
+            geometry.make_point(static_cast<float>(edge *  0.5), static_cast<float>(edge *  0.5), 0.0f, 1.0f, 1.0f);
+            geometry.make_point(static_cast<float>(edge * -0.5), static_cast<float>(edge *  0.5), 0.0f, 0.0f, 1.0f);
 
             geometry.make_polygon( {0, 1, 2, 3} );
 
             // Double sided
             geometry.make_polygon( {3, 2, 1, 0} );
+
+            geometry.make_point_corners();
+            geometry.build_edges();
+        }
+    };
+}
+
+auto make_rectangle(
+    const double width,
+    const double height,
+    const bool   double_sided
+) -> Geometry
+{
+    ERHE_PROFILE_FUNCTION
+
+    return Geometry{
+        "rectangle",
+        [=](auto& geometry)
+        {
+            geometry.make_point(static_cast<float>(width * -0.5), static_cast<float>(height * -0.5), 0.0f, 0.0f, 0.0f);
+            geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height * -0.5), 0.0f, 1.0f, 0.0f);
+            geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height *  0.5), 0.0f, 1.0f, 1.0f);
+            geometry.make_point(static_cast<float>(width * -0.5), static_cast<float>(height *  0.5), 0.0f, 0.0f, 1.0f);
+
+            geometry.make_polygon( {0, 1, 2, 3} );
+
+            if (double_sided)
+            {
+                geometry.make_polygon( {3, 2, 1, 0} );
+            }
 
             geometry.make_point_corners();
             geometry.build_edges();

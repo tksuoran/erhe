@@ -8,6 +8,7 @@
 #include "tools/trs_tool.hpp"
 
 #include "renderers/line_renderer.hpp"
+#include "renderers/render_context.hpp"
 #include "renderers/text_renderer.hpp"
 
 #include "scene/scene_root.hpp"
@@ -64,7 +65,7 @@ void Hover_tool::connect()
     m_pointer_context   = get    <Pointer_context  >();
     m_scene_root        = require<Scene_root       >();
     m_text_renderer     = get    <Text_renderer    >();
-    require<Editor_tools>();
+    require<Editor_tools        >();
 }
 
 void Hover_tool::initialize_component()

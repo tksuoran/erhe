@@ -36,7 +36,6 @@ public:
 
     // Public API
     void render_tools            (const Render_context& context);
-    void begin_frame             ();
     void register_tool           (Tool* tool);
     void register_background_tool(Tool* tool);
 

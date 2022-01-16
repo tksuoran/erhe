@@ -9,8 +9,6 @@
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/xr/headset.hpp"
 
-#include <imgui.h>
-
 namespace editor
 {
 
@@ -323,7 +321,6 @@ void Hand::draw_joint_line_strip(
 
 Hand_tracker::Hand_tracker()
     : erhe::components::Component{c_name}
-    , Imgui_window               {c_description}
     , m_left_hand                {XR_HAND_LEFT_EXT}
     , m_right_hand               {XR_HAND_RIGHT_EXT}
 {
@@ -401,11 +398,6 @@ void Hand_tracker::tool_render(const Render_context& context)
 
     m_left_hand .draw(line_renderer, transform);
     m_right_hand.draw(line_renderer, transform);
-}
-
-void Hand_tracker::imgui()
-{
-    ImGui::Checkbox("Show Hands", &m_show_hands);
 }
 
 } // namespace editor

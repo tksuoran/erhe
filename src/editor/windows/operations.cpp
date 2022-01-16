@@ -1,5 +1,6 @@
 #include "windows/operations.hpp"
 #include "editor_imgui_windows.hpp"
+#include "imgui_helpers.hpp"
 #include "log.hpp"
 
 #include "operations/attach_detach_operation.hpp"
@@ -12,7 +13,6 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 
-#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
 
@@ -66,9 +66,6 @@ void Operations::register_active_tool(Tool* tool)
 
 void Operations::imgui()
 {
-    using erhe::imgui::make_button;
-    using erhe::imgui::Item_mode;
-
     if (m_selection_tool == nullptr)
     {
         return;
@@ -244,6 +241,19 @@ void Operations::imgui()
                 mesh_context()
             )
         );
+    }
+    if (make_button("GUI Quad", Item_mode::normal, button_size))
+    {
+        auto       rendertarget = get<Editor_imgui_windows>()->create_rendertarget("Gui Quad", 2048, 1024);
+        auto&      mesh_memory  = *get<Mesh_memory>().get();
+        auto&      scene_root   = *get<Scene_root>().get();
+        auto       mesh         = rendertarget->add_scene_node(mesh_memory, scene_root, 1000.0);
+        const auto placement    = erhe::toolkit::create_look_at(
+            glm::vec3{0.0f, 1.0f, 0.0f},
+            glm::vec3{0.0f, 1.0f, 1.0f},
+            glm::vec3{0.0f, 1.0f, 0.0f}
+        );
+        mesh->set_parent_from_node(placement);
     }
 }
 

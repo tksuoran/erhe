@@ -91,8 +91,6 @@ private:
     glm::vec3                                   m_drag_position_end    {0.0f, 0.0f, 0.0f};
     std::unique_ptr<erhe::physics::IConstraint> m_drag_constraint;
 
-    double   m_mouse_x                 { 0.0};
-    double   m_mouse_y                 { 0.0};
     float    m_tau                     { 0.001f};
     float    m_damping                 { 1.00f};
     float    m_impulse_clamp           { 1.00f};

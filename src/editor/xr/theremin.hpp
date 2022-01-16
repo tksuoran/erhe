@@ -33,7 +33,7 @@ class Text_renderer;
 class Theremin
     : public erhe::components::Component
     , public Tool
-    , public Imgui_window
+    , public Rendertarget_imgui_window
 {
 public:
     static constexpr std::string_view c_name       {"Theremin_tool"};
@@ -78,6 +78,7 @@ public:
     void set_antenna_distance(const float distance);
 
 private:
+    void create_gui_quad();
     void update_grid_color() const;
     auto normalized_finger_distance() const -> float;
 
@@ -86,7 +87,7 @@ private:
     std::shared_ptr<Headset_renderer > m_headset_renderer;
     std::shared_ptr<Line_renderer_set> m_line_renderer_set;
 
-    bool                 m_enable_audio          {true};   // master on/off switch
+    bool                 m_enable_audio          {false};   // master on/off switch
     float                m_antenna_distance      {0.0f};   // closest point of right hand to the frequency antenna
     float                m_antenna_distance_scale{100.0f}; // adjusts right hand antenna distance scaling
     std::optional<float> m_left_finger_distance;           // left hand distance between thumb and index finger tips

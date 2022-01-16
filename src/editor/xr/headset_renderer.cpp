@@ -10,6 +10,7 @@
 
 #include "renderers/line_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "renderers/render_context.hpp"
 #include "renderers/text_renderer.hpp"
 #include "scene/scene_root.hpp"
 #include "windows/log_window.hpp"

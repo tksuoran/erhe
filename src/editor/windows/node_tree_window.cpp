@@ -143,10 +143,10 @@ void Node_tree_window::imgui()
         }
     }
 
-    const ImGuiIO& io = ImGui::GetIO();
+    //const ImGuiIO& io = ImGui::GetIO();
     if (m_node_clicked)
     {
-        if (io.KeyShift) // ctrl?
+        if (false) // TODO shift    or maybe ctrl?
         {
             if (m_node_clicked->is_selected())
             {

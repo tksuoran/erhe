@@ -7,131 +7,129 @@ namespace erhe::toolkit
 
 class Context_window;
 
-enum class Keycode : signed int
-{
-    Key_unknown       =  -1,
-    Key_space         =  32,
-    Key_apostrophe    =  39, // '
-    Key_comma         =  44, // ,
-    Key_minus         =  45, // -
-    Key_period        =  46, // .
-    Key_slash         =  47, // /
-    Key_0             =  48,
-    Key_1             =  49,
-    Key_2             =  50,
-    Key_3             =  51,
-    Key_4             =  52,
-    Key_5             =  53,
-    Key_6             =  54,
-    Key_7             =  55,
-    Key_8             =  56,
-    Key_9             =  57,
-    Key_semicolon     =  59, // ;
-    Key_equal         =  61, // =
-    Key_a             =  65,
-    Key_b             =  66,
-    Key_c             =  67,
-    Key_d             =  68,
-    Key_e             =  69,
-    Key_f             =  70,
-    Key_g             =  71,
-    Key_h             =  72,
-    Key_i             =  73,
-    Key_j             =  74,
-    Key_k             =  75,
-    Key_l             =  76,
-    Key_m             =  77,
-    Key_n             =  78,
-    Key_o             =  79,
-    Key_p             =  80,
-    Key_q             =  81,
-    Key_r             =  82,
-    Key_s             =  83,
-    Key_t             =  84,
-    Key_u             =  85,
-    Key_v             =  86,
-    Key_w             =  87,
-    Key_x             =  88,
-    Key_y             =  89,
-    Key_z             =  90,
-    Key_left_bracket  =  91, // [
-    Key_backslash     =  92, // \    .
-    Key_right_bracket =  93, // ]
-    Key_grave_accent  =  96, // `
-    Key_world_1       = 161, // non-US #1
-    Key_world_2       = 162, // non-US #2
-    Key_escape        = 256,
-    Key_enter         = 257,
-    Key_tab           = 258,
-    Key_backspace     = 259,
-    Key_insert        = 260,
-    Key_delete        = 261,
-    Key_right         = 262,
-    Key_left          = 263,
-    Key_down          = 264,
-    Key_up            = 265,
-    Key_page_up       = 266,
-    Key_page_down     = 267,
-    Key_home          = 268,
-    Key_end           = 269,
-    Key_caps_lock     = 280,
-    Key_scroll_lock   = 281,
-    Key_num_lock      = 282,
-    Key_print_screen  = 283,
-    Key_pause         = 284,
-    Key_f1            = 290,
-    Key_f2            = 291,
-    Key_f3            = 292,
-    Key_f4            = 293,
-    Key_f5            = 294,
-    Key_f6            = 295,
-    Key_f7            = 296,
-    Key_f8            = 297,
-    Key_f9            = 298,
-    Key_f10           = 299,
-    Key_f11           = 300,
-    Key_f12           = 301,
-    Key_f13           = 302,
-    Key_f14           = 303,
-    Key_f15           = 304,
-    Key_f16           = 305,
-    Key_f17           = 306,
-    Key_f18           = 307,
-    Key_f19           = 308,
-    Key_f20           = 309,
-    Key_f21           = 310,
-    Key_f22           = 311,
-    Key_f23           = 312,
-    Key_f24           = 313,
-    Key_f25           = 314,
-    Key_kp_0          = 320,
-    Key_kp_1          = 321,
-    Key_kp_2          = 322,
-    Key_kp_3          = 323,
-    Key_kp_4          = 324,
-    Key_kp_5          = 325,
-    Key_kp_6          = 326,
-    Key_kp_7          = 327,
-    Key_kp_8          = 328,
-    Key_kp_9          = 329,
-    Key_kp_decimal    = 330,
-    Key_kp_divide     = 331,
-    Key_kp_multiply   = 332,
-    Key_kp_subtract   = 333,
-    Key_kp_add        = 334,
-    Key_kp_enter      = 335,
-    Key_kp_equal      = 336,
-    Key_left_shift    = 340,
-    Key_left_control  = 341,
-    Key_left_alt      = 342,
-    Key_left_super    = 343,
-    Key_right_shift   = 344,
-    Key_right_control = 345,
-    Key_right_alt     = 346,
-    Key_right_super   = 347,
-    Key_menu          = 348,
-    Key_last          = Key_menu
-};
+using Keycode = signed int;
+constexpr Keycode Key_unknown       =  -1;
+constexpr Keycode Key_space         =  32;
+constexpr Keycode Key_apostrophe    =  39;
+constexpr Keycode Key_comma         =  44;
+constexpr Keycode Key_minus         =  45;
+constexpr Keycode Key_period        =  46;
+constexpr Keycode Key_slash         =  47;
+constexpr Keycode Key_0             =  48;
+constexpr Keycode Key_1             =  49;
+constexpr Keycode Key_2             =  50;
+constexpr Keycode Key_3             =  51;
+constexpr Keycode Key_4             =  52;
+constexpr Keycode Key_5             =  53;
+constexpr Keycode Key_6             =  54;
+constexpr Keycode Key_7             =  55;
+constexpr Keycode Key_8             =  56;
+constexpr Keycode Key_9             =  57;
+constexpr Keycode Key_semicolon     =  59;
+constexpr Keycode Key_equal         =  61;
+constexpr Keycode Key_a             =  65;
+constexpr Keycode Key_b             =  66;
+constexpr Keycode Key_c             =  67;
+constexpr Keycode Key_d             =  68;
+constexpr Keycode Key_e             =  69;
+constexpr Keycode Key_f             =  70;
+constexpr Keycode Key_g             =  71;
+constexpr Keycode Key_h             =  72;
+constexpr Keycode Key_i             =  73;
+constexpr Keycode Key_j             =  74;
+constexpr Keycode Key_k             =  75;
+constexpr Keycode Key_l             =  76;
+constexpr Keycode Key_m             =  77;
+constexpr Keycode Key_n             =  78;
+constexpr Keycode Key_o             =  79;
+constexpr Keycode Key_p             =  80;
+constexpr Keycode Key_q             =  81;
+constexpr Keycode Key_r             =  82;
+constexpr Keycode Key_s             =  83;
+constexpr Keycode Key_t             =  84;
+constexpr Keycode Key_u             =  85;
+constexpr Keycode Key_v             =  86;
+constexpr Keycode Key_w             =  87;
+constexpr Keycode Key_x             =  88;
+constexpr Keycode Key_y             =  89;
+constexpr Keycode Key_z             =  90;
+constexpr Keycode Key_left_bracket  =  91;
+constexpr Keycode Key_backslash     =  92;
+constexpr Keycode Key_right_bracket =  93;
+constexpr Keycode Key_grave_accent  =  96;
+constexpr Keycode Key_world_1       = 161;
+constexpr Keycode Key_world_2       = 162;
+constexpr Keycode Key_escape        = 256;
+constexpr Keycode Key_enter         = 257;
+constexpr Keycode Key_tab           = 258;
+constexpr Keycode Key_backspace     = 259;
+constexpr Keycode Key_insert        = 260;
+constexpr Keycode Key_delete        = 261;
+constexpr Keycode Key_right         = 262;
+constexpr Keycode Key_left          = 263;
+constexpr Keycode Key_down          = 264;
+constexpr Keycode Key_up            = 265;
+constexpr Keycode Key_page_up       = 266;
+constexpr Keycode Key_page_down     = 267;
+constexpr Keycode Key_home          = 268;
+constexpr Keycode Key_end           = 269;
+constexpr Keycode Key_caps_lock     = 280;
+constexpr Keycode Key_scroll_lock   = 281;
+constexpr Keycode Key_num_lock      = 282;
+constexpr Keycode Key_print_screen  = 283;
+constexpr Keycode Key_pause         = 284;
+constexpr Keycode Key_f1            = 290;
+constexpr Keycode Key_f2            = 291;
+constexpr Keycode Key_f3            = 292;
+constexpr Keycode Key_f4            = 293;
+constexpr Keycode Key_f5            = 294;
+constexpr Keycode Key_f6            = 295;
+constexpr Keycode Key_f7            = 296;
+constexpr Keycode Key_f8            = 297;
+constexpr Keycode Key_f9            = 298;
+constexpr Keycode Key_f10           = 299;
+constexpr Keycode Key_f11           = 300;
+constexpr Keycode Key_f12           = 301;
+constexpr Keycode Key_f13           = 302;
+constexpr Keycode Key_f14           = 303;
+constexpr Keycode Key_f15           = 304;
+constexpr Keycode Key_f16           = 305;
+constexpr Keycode Key_f17           = 306;
+constexpr Keycode Key_f18           = 307;
+constexpr Keycode Key_f19           = 308;
+constexpr Keycode Key_f20           = 309;
+constexpr Keycode Key_f21           = 310;
+constexpr Keycode Key_f22           = 311;
+constexpr Keycode Key_f23           = 312;
+constexpr Keycode Key_f24           = 313;
+constexpr Keycode Key_f25           = 314;
+constexpr Keycode Key_kp_0          = 320;
+constexpr Keycode Key_kp_1          = 321;
+constexpr Keycode Key_kp_2          = 322;
+constexpr Keycode Key_kp_3          = 323;
+constexpr Keycode Key_kp_4          = 324;
+constexpr Keycode Key_kp_5          = 325;
+constexpr Keycode Key_kp_6          = 326;
+constexpr Keycode Key_kp_7          = 327;
+constexpr Keycode Key_kp_8          = 328;
+constexpr Keycode Key_kp_9          = 329;
+constexpr Keycode Key_kp_decimal    = 330;
+constexpr Keycode Key_kp_divide     = 331;
+constexpr Keycode Key_kp_multiply   = 332;
+constexpr Keycode Key_kp_subtract   = 333;
+constexpr Keycode Key_kp_add        = 334;
+constexpr Keycode Key_kp_enter      = 335;
+constexpr Keycode Key_kp_equal      = 336;
+constexpr Keycode Key_left_shift    = 340;
+constexpr Keycode Key_left_control  = 341;
+constexpr Keycode Key_left_alt      = 342;
+constexpr Keycode Key_left_super    = 343;
+constexpr Keycode Key_right_shift   = 344;
+constexpr Keycode Key_right_control = 345;
+constexpr Keycode Key_right_alt     = 346;
+constexpr Keycode Key_right_super   = 347;
+constexpr Keycode Key_menu          = 348;
+constexpr Keycode Key_last          = Key_menu;
 
 extern auto c_str(const Keycode code) -> const char*;
 
@@ -168,6 +166,16 @@ public:
 
     virtual void on_close()
     {
+    }
+
+    virtual void on_focus(int focused)
+    {
+        static_cast<void>(focused);
+    }
+
+    virtual void on_cursor_enter(int entered)
+    {
+        static_cast<void>(entered);
     }
 
     virtual void on_refresh()
@@ -225,12 +233,12 @@ public:
         m_height = height;
     }
 
-    [[nodiscard]] auto width() -> int
+    [[nodiscard]] auto width() const -> int
     {
         return m_width;
     }
 
-    [[nodiscard]] auto height() -> int
+    [[nodiscard]] auto height() const -> int
     {
         return m_height;
     }
@@ -251,16 +259,18 @@ class Root_view
 public:
     explicit Root_view(Context_window* window);
 
-    void set_view      (View* view);
-    void reset_view    (View* view);
-    void on_refresh    () override;
-    void on_idle       () override;
-    void on_close      () override;
-    void on_resize     (const int width, const int height) override;
-    void on_key_press  (const Keycode code, const Key_modifier_mask mask) override;
-    void on_key_release(const Keycode code, const Key_modifier_mask mask) override;
-    void on_mouse_move (const double x, const double y) override;
-    void on_mouse_click(const Mouse_button button, const int count) override;
+    void set_view       (View* view);
+    void reset_view     (View* view);
+    void on_focus       (int focused) override;
+    void on_cursor_enter(int entered) override;
+    void on_refresh     () override;
+    void on_idle        () override;
+    void on_close       () override;
+    void on_resize      (const int width, const int height) override;
+    void on_key_press   (const Keycode code, const Key_modifier_mask mask) override;
+    void on_key_release (const Keycode code, const Key_modifier_mask mask) override;
+    void on_mouse_move  (const double x, const double y) override;
+    void on_mouse_click (const Mouse_button button, const int count) override;
 
 private:
     Context_window* m_window   {nullptr};

@@ -23,6 +23,7 @@
 #   include "xr/theremin.hpp"
 #endif
 #include "renderers/id_renderer.hpp"
+#include "renderers/imgui_renderer.hpp"
 #include "renderers/line_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/program_interface.hpp"
@@ -116,6 +117,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Id_renderer         >());
         m_components.add(make_shared<Image_transfer      >());
         m_components.add(make_shared<Imgui_demo_window   >());
+        m_components.add(make_shared<Imgui_renderer      >());
         m_components.add(make_shared<Layers_window       >());
         m_components.add(make_shared<Line_renderer_set   >());
         m_components.add(make_shared<Material_properties >());

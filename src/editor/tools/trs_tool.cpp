@@ -1,14 +1,18 @@
 #include "tools/trs_tool.hpp"
+
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
+#include "imgui_helpers.hpp"
 #include "log.hpp"
+#include "rendering.hpp"
+
 #include "graphics/gl_context_provider.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/line_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "renderers/render_context.hpp"
 #include "renderers/text_renderer.hpp"
-#include "rendering.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
@@ -21,7 +25,6 @@
 #include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/physics/irigid_body.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/camera.hpp"
@@ -384,9 +387,6 @@ void Trs_tool::Visualization::initialize(
 
 void Trs_tool::imgui()
 {
-    using erhe::imgui::make_button;
-    using erhe::imgui::make_combo;
-    using erhe::imgui::Item_mode;
     ERHE_PROFILE_FUNCTION
 
     const bool   show_translate = m_visualization.show_translate;
@@ -930,7 +930,7 @@ void Trs_tool::set_node_world_transform(const dmat4 world_from_node)
     root()->set_parent_from_node(mat4{parent_from_world});
  }
 
-void Trs_tool::begin_frame()
+void Trs_tool::update_once_per_frame(const erhe::components::Time_context&)
 {
     auto* const window = m_pointer_context->window();
     if (window == nullptr)

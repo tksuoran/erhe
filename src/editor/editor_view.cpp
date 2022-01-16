@@ -10,12 +10,12 @@
 
 #include "operations/operation_stack.hpp"
 #include "renderers/id_renderer.hpp"
+#include "renderers/imgui_renderer.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "windows/viewport_window.hpp"
 
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/imgui/imgui_impl_erhe.hpp"
 #include "erhe/raytrace/mesh_intersect.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/camera.hpp"
@@ -51,12 +51,17 @@ void Editor_view::connect()
     m_pointer_context      = get    <Pointer_context     >();
     m_scene_root           = get    <Scene_root          >();
     m_viewport_windows     = get    <Viewport_windows    >();
-    m_window               = get    <Window              >();
+    m_window               = require<Window              >();
 }
 
 void Editor_view::initialize_component()
 {
     m_editor_imgui_windows->register_imgui_window(this);
+
+    double mouse_x;
+    double mouse_y;
+    m_window->get_context_window()->get_cursor_position(mouse_x, mouse_y);
+    m_last_mouse_position = glm::dvec2{mouse_x, mouse_y};
 }
 
 void Editor_view::register_command(Command* command)
@@ -145,17 +150,7 @@ void Editor_view::on_refresh()
         return;
     }
 
-    if (m_configuration->viewports_hosted_in_imgui_windows)
-    {
-        m_editor_imgui_windows->begin_imgui_frame();
-    }
-
     m_editor_rendering->render();
-
-    if (m_configuration->show_window && m_configuration->viewports_hosted_in_imgui_windows)
-    {
-        m_editor_imgui_windows->end_and_render_imgui_frame();
-    }
 
     m_window->get_context_window()->swap_buffers();
 }
@@ -165,8 +160,6 @@ static constexpr std::string_view c_swap_buffers{"swap_buffers" };
 void Editor_view::update()
 {
     ERHE_PROFILE_FUNCTION
-
-    //const bool viewports_hosted_in_imgui = m_configuration->show_window && m_configuration->viewports_hosted_in_imgui_windows;
 
     m_editor_time->update();
 
@@ -193,12 +186,27 @@ void Editor_view::on_enter()
     m_editor_time->start_time();
 }
 
+void Editor_view::on_focus(int focused)
+{
+    m_editor_imgui_windows->on_focus(focused);
+}
+
+void Editor_view::on_cursor_enter(int entered)
+{
+    m_editor_imgui_windows->on_cursor_enter(entered);
+}
+
 void Editor_view::on_key(
     const bool                   pressed,
     const erhe::toolkit::Keycode code,
     const uint32_t               modifier_mask
 )
 {
+    m_editor_imgui_windows->on_key(
+        static_cast<signed int>(code),
+        pressed
+    );
+
     Command_context context{
         *this,
         *m_pointer_context
@@ -317,7 +325,7 @@ auto Editor_view::get_imgui_capture_mouse() const -> bool
         return false;
     }
 
-    return ImGui::GetIO().WantCaptureMouse;
+    return imgui_windows->want_capture_mouse();
 }
 
 void Editor_view::on_mouse_click(
@@ -325,6 +333,8 @@ void Editor_view::on_mouse_click(
     const int                         count
 )
 {
+    m_editor_imgui_windows->on_mouse_click(static_cast<uint32_t>(button), count);
+
     if (!m_pointer_context)
     {
         return;
@@ -392,12 +402,17 @@ void Editor_view::on_mouse_move(const double x, const double y)
 
     log_input_event.trace("mouse move");
 
+    glm::dvec2 new_mouse_position{x, y};
+    const auto mouse_position_delta = m_last_mouse_position - new_mouse_position;
     m_pointer_context->update_mouse(x, y);
 
     Command_context context{
         *this,
-        *m_pointer_context
+        *m_pointer_context,
+        new_mouse_position,
+        mouse_position_delta
     };
+    m_last_mouse_position = new_mouse_position;
 
     for (const auto& binding : m_mouse_bindings)
     {

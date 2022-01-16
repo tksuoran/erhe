@@ -5,6 +5,8 @@
 #include <memory>
 #include <string_view>
 
+typedef int ImGuiWindowFlags;
+
 namespace editor
 {
 
@@ -33,10 +35,22 @@ public:
     virtual void imgui   () = 0;
     virtual void on_begin();
     virtual void on_end  ();
+    virtual auto flags   () -> ImGuiWindowFlags;
 
 protected:
     bool              m_is_visible{true};
     const std::string m_title;
+};
+
+class Rendertarget_imgui_window
+    : public Imgui_window
+{
+public:
+    Rendertarget_imgui_window(const std::string_view title);
+
+    auto flags   () -> ImGuiWindowFlags override;
+    void on_begin()                     override;
+    void on_end  ()                     override;
 };
 
 } // namespace editor

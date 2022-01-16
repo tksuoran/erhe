@@ -53,14 +53,16 @@ public:
     void initialize_component() override;
 
     // Implements View
-    void update        () override;
-    void on_refresh    () override;
-    void on_enter      () override;
-    void on_mouse_move (const double x, const double y) override;
-    void on_mouse_click(const erhe::toolkit::Mouse_button button, const int count) override;
-    void on_key_press  (const erhe::toolkit::Keycode code, const uint32_t modifier_mask) override;
-    void on_key_release(const erhe::toolkit::Keycode code, const uint32_t modifier_mask) override;
-    void on_key        (bool pressed, erhe::toolkit::Keycode code, uint32_t modifier_mask);
+    void update         () override;
+    void on_focus       (int focused) override;
+    void on_cursor_enter(int entered) override;
+    void on_refresh     () override;
+    void on_enter       () override;
+    void on_mouse_move  (const double x, const double y) override;
+    void on_mouse_click (const erhe::toolkit::Mouse_button button, const int count) override;
+    void on_key_press   (const erhe::toolkit::Keycode code, const uint32_t modifier_mask) override;
+    void on_key_release (const erhe::toolkit::Keycode code, const uint32_t modifier_mask) override;
+    void on_key         (bool pressed, erhe::toolkit::Keycode code, uint32_t modifier_mask);
 
     // Implements Imgui_window
     void imgui() override;
@@ -126,6 +128,7 @@ private:
     std::vector<Key_binding>                    m_key_bindings;
     std::vector<std::unique_ptr<Mouse_binding>> m_mouse_bindings;
     bool                                        m_ready{false};
+    glm::dvec2                                  m_last_mouse_position;
 };
 
 }

@@ -104,8 +104,8 @@ auto Fly_camera_turn_command::try_call(Command_context& context) -> bool
         return false;
     }
 
-    ImGuiIO& io = ImGui::GetIO();
-    m_fly_camera_tool.turn_relative(io.MouseDelta.x, io.MouseDelta.y);
+    const auto relative = context.relative_pointer();
+    m_fly_camera_tool.turn_relative(-relative.x, -relative.y);
     return true;
 }
 
@@ -169,19 +169,18 @@ void Fly_camera_tool::initialize_component()
     m_editor_tools->register_tool(this);
     const auto view = get<Editor_view>();
 
-    using Keycode = erhe::toolkit::Keycode;
-    view->bind_command_to_key(&m_move_up_active_command,         Keycode::Key_e, true );
-    view->bind_command_to_key(&m_move_up_inactive_command,       Keycode::Key_e, false);
-    view->bind_command_to_key(&m_move_down_active_command,       Keycode::Key_q, true );
-    view->bind_command_to_key(&m_move_down_inactive_command,     Keycode::Key_q, false);
-    view->bind_command_to_key(&m_move_left_active_command,       Keycode::Key_a, true );
-    view->bind_command_to_key(&m_move_left_inactive_command,     Keycode::Key_a, false);
-    view->bind_command_to_key(&m_move_right_active_command,      Keycode::Key_d, true );
-    view->bind_command_to_key(&m_move_right_inactive_command,    Keycode::Key_d, false);
-    view->bind_command_to_key(&m_move_forward_active_command,    Keycode::Key_w, true );
-    view->bind_command_to_key(&m_move_forward_inactive_command,  Keycode::Key_w, false);
-    view->bind_command_to_key(&m_move_backward_active_command,   Keycode::Key_s, true );
-    view->bind_command_to_key(&m_move_backward_inactive_command, Keycode::Key_s, false);
+    view->bind_command_to_key(&m_move_up_active_command,         erhe::toolkit::Key_e, true );
+    view->bind_command_to_key(&m_move_up_inactive_command,       erhe::toolkit::Key_e, false);
+    view->bind_command_to_key(&m_move_down_active_command,       erhe::toolkit::Key_q, true );
+    view->bind_command_to_key(&m_move_down_inactive_command,     erhe::toolkit::Key_q, false);
+    view->bind_command_to_key(&m_move_left_active_command,       erhe::toolkit::Key_a, true );
+    view->bind_command_to_key(&m_move_left_inactive_command,     erhe::toolkit::Key_a, false);
+    view->bind_command_to_key(&m_move_right_active_command,      erhe::toolkit::Key_d, true );
+    view->bind_command_to_key(&m_move_right_inactive_command,    erhe::toolkit::Key_d, false);
+    view->bind_command_to_key(&m_move_forward_active_command,    erhe::toolkit::Key_w, true );
+    view->bind_command_to_key(&m_move_forward_inactive_command,  erhe::toolkit::Key_w, false);
+    view->bind_command_to_key(&m_move_backward_active_command,   erhe::toolkit::Key_s, true );
+    view->bind_command_to_key(&m_move_backward_inactive_command, erhe::toolkit::Key_s, false);
 
     view->register_command(&m_turn_command);
     view->bind_command_to_mouse_drag(&m_turn_command, erhe::toolkit::Mouse_button_left);

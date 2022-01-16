@@ -70,6 +70,7 @@ private:
 
 class Trs_tool
     : public erhe::components::Component
+    , public erhe::components::IUpdate_once_per_frame
     , public Tool
     , public Imgui_window
 {
@@ -107,10 +108,12 @@ public:
     void connect             () override;
     void initialize_component() override;
 
+    // Implements IUpdate_once_per_frame
+    void update_once_per_frame(const erhe::components::Time_context&) override;
+
     // Implements Tool
     [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
     [[nodiscard]] auto description  () -> const char* override;
-    void begin_frame            ()                              override;
     void tool_render            (const Render_context& context) override;
     void on_enable_state_changed()                              override;
 

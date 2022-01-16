@@ -61,9 +61,8 @@ void Operation_stack::initialize_component()
     const auto view = get<Editor_view>();
     view->register_command(&m_undo_command);
     view->register_command(&m_redo_command);
-    using Keycode = erhe::toolkit::Keycode;
-    view->bind_command_to_key(&m_undo_command, Keycode::Key_z, true, erhe::toolkit::Key_modifier_bit_ctrl);
-    view->bind_command_to_key(&m_redo_command, Keycode::Key_y, true, erhe::toolkit::Key_modifier_bit_ctrl);
+    view->bind_command_to_key(&m_undo_command, erhe::toolkit::Key_z, true, erhe::toolkit::Key_modifier_bit_ctrl);
+    view->bind_command_to_key(&m_redo_command, erhe::toolkit::Key_y, true, erhe::toolkit::Key_modifier_bit_ctrl);
 }
 
 auto Operation_stack::description() -> const char*

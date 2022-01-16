@@ -1,6 +1,7 @@
 #include "windows/brushes.hpp"
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
+#include "imgui_helpers.hpp"
 #include "log.hpp"
 #include "rendering.hpp"
 
@@ -19,7 +20,6 @@
 
 #include "erhe/geometry/operation/clone.hpp"
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -475,9 +475,6 @@ void Brushes::update_mesh()
 
 void Brushes::tool_properties()
 {
-    using erhe::imgui::make_check_box;
-    using erhe::imgui::Item_mode;
-
     ImGui::InputFloat("Hover scale",     &debug_info.hover_frame_scale);
     ImGui::InputFloat("Brush scale",     &debug_info.brush_frame_scale);
     ImGui::InputFloat("Transform scale", &debug_info.transform_scale);
@@ -494,9 +491,6 @@ void Brushes::tool_properties()
 
 void Brushes::imgui()
 {
-    using erhe::imgui::make_button;
-    using erhe::imgui::Item_mode;
-
     const size_t brush_count = m_brushes.size();
 
     {

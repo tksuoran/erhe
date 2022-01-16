@@ -1,7 +1,7 @@
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_impl_erhe.hpp"
+#include "imgui_helpers.hpp"
+//#include "renderers/imgui_renderer.hpp"
 
-namespace erhe::imgui
+namespace editor
 {
 
 const ImVec4 c_color                  = ImVec4{0.30f, 0.40f, 0.80f, 1.0f};
@@ -50,4 +50,5 @@ void make_check_box(const char* label, bool* value, const Item_mode mode)
     }
 }
 
-} // namespace erhe::imgui
+} // namespace editor
+

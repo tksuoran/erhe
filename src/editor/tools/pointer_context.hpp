@@ -70,8 +70,8 @@ public:
         const erhe::toolkit::Keycode code,
         const uint32_t               modifier_mask
     );
-    void update_mouse       (const erhe::toolkit::Mouse_button button, const int count);
-    void update_mouse       (const double x, const double y);
+    void update_mouse(const erhe::toolkit::Mouse_button button, const int count);
+    void update_mouse(const double x, const double y);
 
     void raytrace();
 

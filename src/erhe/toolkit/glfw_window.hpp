@@ -7,9 +7,23 @@
 #include <string>
 
 struct GLFWwindow;
+struct GLFWcursor;
 
 namespace erhe::toolkit
 {
+
+using Mouse_cursor = signed int;
+constexpr Mouse_cursor Mouse_cursor_None       = -1;
+constexpr Mouse_cursor Mouse_cursor_Arrow      = 0;
+constexpr Mouse_cursor Mouse_cursor_TextInput  = 1;   // When hovering over InputText, etc.
+constexpr Mouse_cursor Mouse_cursor_ResizeAll  = 2;   // (Unused by Dear ImGui functions)
+constexpr Mouse_cursor Mouse_cursor_ResizeNS   = 3;   // When hovering over an horizontal border
+constexpr Mouse_cursor Mouse_cursor_ResizeEW   = 4;   // When hovering over a vertical border or a column
+constexpr Mouse_cursor Mouse_cursor_ResizeNESW = 5;   // When hovering over the bottom-left corner of a window
+constexpr Mouse_cursor Mouse_cursor_ResizeNWSE = 6;   // When hovering over the bottom-right corner of a window
+constexpr Mouse_cursor Mouse_cursor_Hand       = 7;   // (Unused by Dear ImGui functions. Use for e.g. hyperlinks)
+constexpr Mouse_cursor Mouse_cursor_NotAllowed = 8;   // When hovering something with disallowed interaction. Usually a crossed circle.
+constexpr Mouse_cursor Mouse_cursor_COUNT      = 9;
 
 class Context_window
 {
@@ -52,7 +66,7 @@ public:
 
     void set_visible(const bool visible);
 
-    void show_ursor(const bool show);
+    void set_cursor(const Mouse_cursor cursor);
 
     void capture_mouse(const bool capture);
 
@@ -73,13 +87,15 @@ public:
 private:
     void get_extensions();
 
-    Root_view   m_root_view;
-    GLFWwindow* m_glfw_window{nullptr};
-    bool        m_is_event_loop_running{false};
-    bool        m_is_mouse_captured{false};
-    bool        m_is_window_visible{false};
-    int         m_opengl_major_version{0};
-    int         m_opengl_minor_version{0};
+    Root_view    m_root_view;
+    GLFWwindow*  m_glfw_window          {nullptr};
+    Mouse_cursor m_current_mouse_cursor {Mouse_cursor_Arrow};
+    bool         m_is_event_loop_running{false};
+    bool         m_is_mouse_captured    {false};
+    bool         m_is_window_visible    {false};
+    int          m_opengl_major_version {0};
+    int          m_opengl_minor_version {0};
+    GLFWcursor*  m_mouse_cursor         [Mouse_cursor_COUNT];
 
     static int s_window_count;
 };

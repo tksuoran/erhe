@@ -67,14 +67,7 @@ public:
             return nullptr;
         }
 
-        for (const auto& component : m_components->components)
-        {
-            if (component->get_type_hash() == T::hash)
-            {
-                return dynamic_pointer_cast<T>(component);
-            }
-        }
-        return {};
+        return m_components->get<T>();
     }
 
     template<typename T>

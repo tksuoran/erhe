@@ -1,7 +1,6 @@
 #pragma once
 
 #include "tools/tool.hpp"
-#include "windows/imgui_window.hpp"
 
 #include "erhe/components/component.hpp"
 #include "erhe/toolkit/math_util.hpp"
@@ -86,7 +85,6 @@ private:
 class Hand_tracker
     : public erhe::components::Component
     , public Tool
-    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name       {"Hand_tracker"};
@@ -109,9 +107,6 @@ public:
     // Implements Tool
     [[nodiscard]] auto description() -> const char* override;
     void tool_render(const Render_context& context) override;
-
-    // Implements Imgui_window
-    void imgui() override;
 
     // Public API
     void update   (erhe::xr::Headset& headset);

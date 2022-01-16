@@ -1,9 +1,9 @@
 #include "windows/materials.hpp"
 #include "editor_imgui_windows.hpp"
+#include "imgui_helpers.hpp"
 
 #include "scene/scene_root.hpp"
 
-#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/primitive/material.hpp"
 
 #include <imgui.h>
@@ -70,8 +70,6 @@ void Materials::initialize_component()
 void Materials::imgui()
 {
     const auto& materials = m_scene_root->materials();
-    using erhe::imgui::make_button;
-    using erhe::imgui::Item_mode;
 
     ImGui::Begin(c_title.data());
     const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};

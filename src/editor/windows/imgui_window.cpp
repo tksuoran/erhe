@@ -39,13 +39,11 @@ auto Imgui_window::title() const -> const std::string_view
 auto Imgui_window::begin() -> bool
 {
     on_begin();
-
     bool keep_visible{true};
-    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse;
     const bool not_collapsed = ImGui::Begin(
         title().data(),
         &keep_visible,
-        flags
+        flags()
     );
     if (!keep_visible)
     {
@@ -60,6 +58,11 @@ void Imgui_window::end()
     ImGui::End();
 }
 
+auto Imgui_window::flags() -> ImGuiWindowFlags
+{
+    return ImGuiWindowFlags_NoCollapse;
+}
+
 void Imgui_window::on_begin()
 {
 }
@@ -68,4 +71,36 @@ void Imgui_window::on_end()
 {
 }
 
+Rendertarget_imgui_window::Rendertarget_imgui_window(
+    const std::string_view title
+)
+    : Imgui_window{title}
+{
 }
+
+auto Rendertarget_imgui_window::flags() -> ImGuiWindowFlags
+{
+    return ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize;
+}
+
+void Rendertarget_imgui_window::on_begin()
+{
+#ifdef IMGUI_HAS_VIEWPORT
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(viewport->WorkSize);
+    ImGui::SetNextWindowViewport(viewport->ID);
+#else
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+    ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
+#endif
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+}
+
+void Rendertarget_imgui_window::on_end()
+{
+    ImGui::PopStyleVar();
+}
+
+} // namespace editor
+

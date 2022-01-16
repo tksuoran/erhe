@@ -75,10 +75,7 @@ void Editor_time::update_fixed_step(
 {
     ERHE_PROFILE_FUNCTION
 
-    for (auto update : m_components->fixed_step_updates)
-    {
-        update->update_fixed_step(time_context);
-    }
+    m_components->update_fixed_step(time_context);
 }
 
 void Editor_time::update_once_per_frame(
@@ -87,10 +84,7 @@ void Editor_time::update_once_per_frame(
 {
     ERHE_PROFILE_FUNCTION
 
-    for (auto update : m_components->once_per_frame_updates)
-    {
-        update->update_once_per_frame(time_context);
-    }
+    m_components->update_once_per_frame(time_context);
     ++m_frame_number;
 }
 

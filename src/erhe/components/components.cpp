@@ -43,7 +43,7 @@ auto Components::add(const shared_ptr<Component>& component)
 {
     ERHE_VERIFY(component);
 
-    for (auto& c : components)
+    for (auto& c : m_components)
     {
         if (c->get_type_hash() == component->get_type_hash())
         {
@@ -56,18 +56,18 @@ auto Components::add(const shared_ptr<Component>& component)
     }
 
     component->register_as_component(this);
-    components.insert(component);
+    m_components.insert(component);
 
     auto* fixed_step_update     = dynamic_cast<IUpdate_fixed_step    *>(component.get());
     auto* once_per_frame_update = dynamic_cast<IUpdate_once_per_frame*>(component.get());
 
     if (fixed_step_update != nullptr)
     {
-        fixed_step_updates.insert(fixed_step_update);
+        m_fixed_step_updates.insert(fixed_step_update);
     }
     if (once_per_frame_update != nullptr)
     {
-        once_per_frame_updates.insert(once_per_frame_update);
+        m_once_per_frame_updates.insert(once_per_frame_update);
     }
 
     return *component.get();
@@ -81,7 +81,7 @@ void Components::deitialize_component(Component* component)
         auto* fixed_step_update = dynamic_cast<IUpdate_fixed_step*>(component);
         if (fixed_step_update != nullptr)
         {
-            const auto erase_count = fixed_step_updates.erase(fixed_step_update);
+            const auto erase_count = m_fixed_step_updates.erase(fixed_step_update);
             if (erase_count == 0)
             {
                 log_components.error("Component/IUpdate_fixed_step {} not found\n", component->name());
@@ -93,7 +93,7 @@ void Components::deitialize_component(Component* component)
         auto* once_per_frame_update = dynamic_cast<IUpdate_once_per_frame*>(component);
         if (once_per_frame_update != nullptr)
         {
-            const auto erase_count = once_per_frame_updates.erase(once_per_frame_update);
+            const auto erase_count = m_once_per_frame_updates.erase(once_per_frame_update);
             if (erase_count == 0)
             {
                 log_components.error("Component/IUpdate_once_per_frame {} not found\n", component->name());
@@ -112,7 +112,7 @@ void Components::deitialize_component(Component* component)
     // This must be last
     {
         const auto erase_count = erase_if(
-            components,
+            m_components,
             [component](const std::shared_ptr<Component>& shared_component)
             {
                 return shared_component.get() == component;
@@ -147,10 +147,10 @@ void Components::cleanup_components()
         log_components.info("Deinitializing {}\n", component->name());
         deitialize_component(component);
     }
-    if (components.size() > 0)
+    if (m_components.size() > 0)
     {
         log_components.error("Not all components were deinitialized\n");
-        components.clear();
+        m_components.clear();
     }
 }
 
@@ -203,7 +203,7 @@ void Serial_execution_queue::wait()
 void Components::show_dependencies() const
 {
     log_components.info("Component dependencies:\n");
-    for (auto const& component : components)
+    for (auto const& component : m_components)
     {
         log_components.info(
             "    {} - {}:\n",
@@ -269,8 +269,8 @@ void Components::initialize_component(const bool in_worker_thread)
 void Components::queue_all_components_to_be_processed()
 {
     std::transform(
-        components.begin(),
-        components.end(),
+        m_components.begin(),
+        m_components.end(),
         std::inserter(m_components_to_process, m_components_to_process.begin()),
         [](const std::shared_ptr<Component>& c) -> Component*
         {
@@ -285,7 +285,7 @@ void Components::launch_component_initialization()
 
     m_initialize_component_count_worker_thread = 0;
     m_initialize_component_count_main_thread   = 0;
-    for (auto const& component : components)
+    for (auto const& component : m_components)
     {
         component->connect();
         component->set_connected();
@@ -419,11 +419,35 @@ void Components::wait_component_initialization_complete()
     m_is_ready = true;
 }
 
+void Components::update_fixed_step(
+    const Time_context& time_context
+)
+{
+    ERHE_PROFILE_FUNCTION
+
+    for (auto update : m_fixed_step_updates)
+    {
+        update->update_fixed_step(time_context);
+    }
+}
+
+void Components::update_once_per_frame(
+    const Time_context& time_context
+)
+{
+    ERHE_PROFILE_FUNCTION
+
+    for (auto update : m_once_per_frame_updates)
+    {
+        update->update_once_per_frame(time_context);
+    }
+}
+
 void Components::on_thread_exit()
 {
     ERHE_PROFILE_FUNCTION
 
-    for (const auto& component : components)
+    for (const auto& component : m_components)
     {
         component->on_thread_exit();
     }
@@ -433,10 +457,11 @@ void Components::on_thread_enter()
 {
     ERHE_PROFILE_FUNCTION
 
-    for (const auto& component : components)
+    for (const auto& component : m_components)
     {
         component->on_thread_enter();
     }
 }
 
 } // namespace erhe::components
+

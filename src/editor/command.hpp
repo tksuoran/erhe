@@ -5,6 +5,8 @@
 #include "erhe/toolkit/unique_id.hpp"
 #include "erhe/toolkit/view.hpp"
 
+#include <glm/glm.hpp>
+
 #include <functional>
 #include <optional>
 
@@ -19,17 +21,23 @@ class Command_context
 {
 public:
     Command_context(
-        Editor_view&     editor_view,
-        Pointer_context& pointer_context
+        Editor_view&      editor_view,
+        Pointer_context&  pointer_context,
+        const glm::dvec2& absolute_pointer = glm::dvec2{0.0, 0.0},
+        const glm::dvec2& relative_pointer = glm::dvec2{0.0, 0.0}
     );
 
     [[nodiscard]] auto viewport_window     () -> Viewport_window*;
     [[nodiscard]] auto hovering_over_tool  () -> bool;
     [[nodiscard]] auto accept_mouse_command(Command* command) -> bool;
+    [[nodiscard]] auto absolute_pointer    () const -> glm::dvec2;
+    [[nodiscard]] auto relative_pointer    () const -> glm::dvec2;
 
 private:
     Editor_view&     m_editor_view;
     Pointer_context& m_pointer_context;
+    glm::dvec2       m_absolute_pointer;
+    glm::dvec2       m_relative_pointer;
 };
 
 class Command
@@ -104,7 +112,7 @@ public:
     ) -> bool;
 
 private:
-    erhe::toolkit::Keycode  m_code         {erhe::toolkit::Keycode::Key_unknown};
+    erhe::toolkit::Keycode  m_code         {erhe::toolkit::Key_unknown};
     bool                    m_pressed      {true};
     std::optional<uint32_t> m_modifier_mask;
 };

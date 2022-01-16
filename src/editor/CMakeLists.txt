@@ -43,6 +43,8 @@ set(source_list
     renderers/frame_resources.hpp
     renderers/id_renderer.cpp
     renderers/id_renderer.hpp
+    renderers/imgui_renderer.cpp
+    renderers/imgui_renderer.hpp
     renderers/light_mesh.cpp
     renderers/light_mesh.hpp
     renderers/line_renderer.cpp
@@ -149,6 +151,8 @@ set(source_list
     editor_tools.hpp
     editor_view.cpp
     editor_view.hpp
+    imgui_helpers.cpp
+    imgui_helpers.hpp
     window.cpp
     window.hpp
 
@@ -229,13 +233,13 @@ target_link_libraries(
     erhe_geometry
     erhe_gl
     erhe_graphics
-    erhe_imgui
     erhe_log
     erhe_physics
     erhe_primitive
     erhe_scene
     erhe_toolkit
     erhe_ui
+    imgui
     lunasvg
     miniaudio
     nlohmann_json::nlohmann_json

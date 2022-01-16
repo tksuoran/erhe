@@ -6,6 +6,7 @@
 #include "log.hpp"
 #include "rendering.hpp"
 
+#include "renderers/render_context.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
@@ -64,19 +65,16 @@ void Viewport_windows::connect()
 
 void Viewport_windows::initialize_component()
 {
-#if defined(ERHE_XR_LIBRARY_OPENXR)
     {
         auto* const headset_camera = m_headset_renderer->root_camera().get();
         create_window("Headset Camera", headset_camera);
     }
-#else
-    for (auto camera : m_scene_root->scene().cameras)
-    {
-        auto* icamera = as_icamera(camera.get());
-        const std::string name = fmt::format("Scene for Camera {}", icamera->name());
-        create_window(name, icamera);
-    }
-#endif
+    //for (auto camera : m_scene_root->scene().cameras)
+    //{
+    //    auto* icamera = as_icamera(camera.get());
+    //    const std::string name = fmt::format("Scene for Camera {}", icamera->name());
+    //    create_window(name, icamera);
+    //}
 }
 
 auto Viewport_windows::create_window(

@@ -1,5 +1,6 @@
 #include "windows/node_properties.hpp"
 #include "editor_imgui_windows.hpp"
+#include "imgui_helpers.hpp"
 
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -8,7 +9,6 @@
 #include "windows/log_window.hpp"
 
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/primitive/material.hpp"
@@ -51,8 +51,6 @@ void Node_properties::initialize_component()
 
 void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
 {
-    using erhe::imgui::make_combo;
-
     auto* const projection = camera.projection();
     if (projection == nullptr)
     {
@@ -169,8 +167,6 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
 
 void Node_properties::light_properties(erhe::scene::Light& light) const
 {
-    using erhe::imgui::make_combo;
-
     const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
 
     ImGui::PushID("##light_properties");

@@ -39,19 +39,11 @@ class Id_renderer;
 class Line_renderer_set;
 class Pointer_context;
 class Mesh_memory;
+class Render_context;
 class Scene_root;
 class Shadow_renderer;
 class Text_renderer;
 class Viewport_windows;
-
-class Render_context
-{
-public:
-    Viewport_window*      window         {nullptr};
-    Viewport_config*      viewport_config{nullptr};
-    erhe::scene::ICamera* camera         {nullptr};
-    erhe::scene::Viewport viewport       {0, 0, 0, 0, true};
-};
 
 class Editor_rendering
     : public erhe::components::Component
@@ -123,22 +115,21 @@ private:
     erhe::graphics::Color_blend_state                     m_color_blend_constant_point_six;
     erhe::graphics::Color_blend_state                     m_color_blend_constant_point_two;
 
-    Render_pass m_rp_polygon_fill;
-    Render_pass m_rp_gui;
+    Renderpass m_rp_polygon_fill;
 
     // Six passes for rendering tools that can be partially occluded
-    Render_pass m_rp_tool1_hidden_stencil;
-    Render_pass m_rp_tool2_visible_stencil;
-    Render_pass m_rp_tool3_depth_clear;
-    Render_pass m_rp_tool4_depth;
-    Render_pass m_rp_tool5_visible_color;
-    Render_pass m_rp_tool6_hidden_color;
-    Render_pass m_rp_line_hidden_blend;
-    Render_pass m_rp_brush_back;
-    Render_pass m_rp_brush_front;
-    Render_pass m_rp_edge_lines;
-    Render_pass m_rp_corner_points;
-    Render_pass m_rp_polygon_centroids;
+    Renderpass m_rp_tool1_hidden_stencil;
+    Renderpass m_rp_tool2_visible_stencil;
+    Renderpass m_rp_tool3_depth_clear;
+    Renderpass m_rp_tool4_depth;
+    Renderpass m_rp_tool5_visible_color;
+    Renderpass m_rp_tool6_hidden_color;
+    Renderpass m_rp_line_hidden_blend;
+    Renderpass m_rp_brush_back;
+    Renderpass m_rp_brush_front;
+    Renderpass m_rp_edge_lines;
+    Renderpass m_rp_corner_points;
+    Renderpass m_rp_polygon_centroids;
 
 };
 

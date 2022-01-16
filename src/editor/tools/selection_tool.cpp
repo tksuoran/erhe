@@ -8,6 +8,7 @@
 #include "operations/compound_operation.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "renderers/render_context.hpp"
 #include "renderers/line_renderer.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"

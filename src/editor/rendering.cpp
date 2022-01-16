@@ -15,6 +15,7 @@
 #endif
 #include "renderers/id_renderer.hpp"
 #include "renderers/line_renderer.hpp"
+#include "renderers/render_context.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "renderers/text_renderer.hpp"
 #include "scene/scene_root.hpp"
@@ -241,7 +242,7 @@ void Editor_rendering::initialize_component()
         },
     };
 
-    m_rp_polygon_fill = Render_pass
+    m_rp_polygon_fill = Renderpass
     {
         .name = "Polygon fill",
         .pipeline =
@@ -255,34 +256,9 @@ void Editor_rendering::initialize_component()
         }
     };
 
-    m_rp_gui = Render_pass
-    {
-        .name = "GUI",
-        .pipeline =
-        {
-            .shader_stages  = programs.textured.get(),
-            .vertex_input   = vertex_input,
-            .input_assembly = &Input_assembly_state::triangles,
-            .rasterization  = &Rasterization_state::cull_mode_none,
-            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
-            .color_blend    = &Color_blend_state::color_blend_premultiplied
-        },
-        .begin = [this, &programs](){
-            const unsigned int gui_texture_unit = 1;
-            const unsigned int gui_texture_name = m_editor_imgui_windows->texture()->gl_name();
-            gl::bind_sampler (gui_texture_unit, programs.linear_mipmap_linear_sampler->gl_name());
-            gl::bind_textures(gui_texture_unit, 1, &gui_texture_name);
-            gl::program_uniform_1i(
-                programs.textured->gl_name(),
-                programs.gui_sampler_location,
-                gui_texture_unit
-            );
-        },
-    };
-
     // Tool pass one: For hidden tool parts, set stencil to 1.
     // Only reads depth buffer, only writes stencil buffer.
-    m_rp_tool1_hidden_stencil = Render_pass
+    m_rp_tool1_hidden_stencil = Renderpass
     {
         .name = "Tool pass 1: Tag depth hidden with stencil = 1",
         .pipeline =
@@ -298,7 +274,7 @@ void Editor_rendering::initialize_component()
 
     // Tool pass two: For visible tool parts, set stencil to 2.
     // Only reads depth buffer, only writes stencil buffer.
-    m_rp_tool2_visible_stencil = Render_pass
+    m_rp_tool2_visible_stencil = Renderpass
     {
         .name = "Tool pass 2: Tag visible tool parts with stencil = 2",
         .pipeline =
@@ -314,7 +290,7 @@ void Editor_rendering::initialize_component()
 
     // Tool pass three: Set depth to fixed value (with depth range)
     // Only writes depth buffer, depth test always.
-    m_rp_tool3_depth_clear = Render_pass
+    m_rp_tool3_depth_clear = Renderpass
     {
         .name = "Tool pass 3: Set depth to fixed value",
         .pipeline =
@@ -332,7 +308,7 @@ void Editor_rendering::initialize_component()
 
     // Tool pass four: Set depth to proper tool depth
     // Normal depth buffer update with depth test.
-    m_rp_tool4_depth = Render_pass
+    m_rp_tool4_depth = Renderpass
     {
         .name = "Tool pass 4: Set depth to proper tool depth",
         .pipeline =
@@ -348,7 +324,7 @@ void Editor_rendering::initialize_component()
 
     // Tool pass five: Render visible tool parts
     // Normal depth test, stencil test require 1, color writes enabled, no blending
-    m_rp_tool5_visible_color = Render_pass
+    m_rp_tool5_visible_color = Renderpass
     {
         .name = "Tool pass 5: Render visible tool parts",
         .pipeline =
@@ -364,7 +340,7 @@ void Editor_rendering::initialize_component()
 
     // Tool pass six: Render hidden tool parts
     // Normal depth test, stencil test requires 2, color writes enabled, blending
-    m_rp_tool6_hidden_color = Render_pass
+    m_rp_tool6_hidden_color = Renderpass
     {
         .name = "Tool pass 6: Render hidden tool parts",
         .pipeline =
@@ -378,7 +354,7 @@ void Editor_rendering::initialize_component()
         }
     };
 
-    m_rp_edge_lines = Render_pass
+    m_rp_edge_lines = Renderpass
     {
         .name = "Edge lines",
         .pipeline =
@@ -393,7 +369,7 @@ void Editor_rendering::initialize_component()
         .primitive_mode = erhe::primitive::Primitive_mode::edge_lines
     };
 
-    m_rp_corner_points = Render_pass
+    m_rp_corner_points = Renderpass
     {
         .name = "Corner Points",
         .pipeline =
@@ -408,7 +384,7 @@ void Editor_rendering::initialize_component()
         .primitive_mode = erhe::primitive::Primitive_mode::corner_points
     };
 
-    m_rp_polygon_centroids = Render_pass
+    m_rp_polygon_centroids = Renderpass
     {
         .name = "Polygon Centroids",
         .pipeline =
@@ -423,7 +399,7 @@ void Editor_rendering::initialize_component()
         .primitive_mode = erhe::primitive::Primitive_mode::polygon_centroids
     };
 
-    m_rp_line_hidden_blend = Render_pass
+    m_rp_line_hidden_blend = Renderpass
     {
         .name = "Hidden lines with blending",
         .pipeline =
@@ -438,7 +414,7 @@ void Editor_rendering::initialize_component()
         .primitive_mode = erhe::primitive::Primitive_mode::edge_lines
     };
 
-    m_rp_brush_back = Render_pass
+    m_rp_brush_back = Renderpass
     {
         .name = "Brush back faces",
         .pipeline =
@@ -452,7 +428,7 @@ void Editor_rendering::initialize_component()
         }
     };
 
-    m_rp_brush_front = Render_pass
+    m_rp_brush_front = Renderpass
     {
         .name = "Brush front faces",
         .pipeline =
@@ -490,18 +466,12 @@ void Editor_rendering::begin_frame()
 {
     ERHE_PROFILE_FUNCTION
 
-    m_editor_imgui_windows->begin_imgui_frame();
-
-    m_editor_imgui_windows->menu();
-
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_headset_renderer)
     {
         m_headset_renderer->begin_frame();
     }
 #endif
-
-    m_editor_tools->begin_frame();
 }
 
 void Editor_rendering::bind_default_framebuffer()
@@ -555,10 +525,11 @@ void Editor_rendering::render()
         get<Debug_view_window>()->render(*m_pipeline_state_tracker.get());
     }
 
+    m_editor_imgui_windows->rendertarget_imgui_windows();
+
     m_viewport_windows->render();
 
     m_editor_imgui_windows->imgui_windows();
-    m_editor_imgui_windows->end_and_render_imgui_frame();
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_headset_renderer)
@@ -894,20 +865,7 @@ void Editor_rendering::render_gui(const Render_context& context)
         return;
     }
 
-    m_forward_renderer->render(
-        {
-            .viewport          = context.viewport,
-            .camera            = *context.camera,
-            .mesh_layers       = { m_scene_root->gui_layer() },
-            .light_layer       = m_scene_root->light_layer(),
-            .materials         = m_scene_root->materials(),
-            .passes            = { &m_rp_gui },
-            .visibility_filter =
-            {
-                .require_all_bits_set = erhe::scene::Node::c_visibility_gui
-            }
-        }
-    );
+    m_editor_imgui_windows->render_rendertarget_gui_meshes(context);
 }
 
 void Editor_rendering::render_brush(const Render_context& context)

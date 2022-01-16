@@ -63,7 +63,7 @@ void Log_window::initialize_component()
 
     const auto view = get<Editor_view>();
     view->register_command   (&m_toggle_pause_command);
-    view->bind_command_to_key(&m_toggle_pause_command, erhe::toolkit::Keycode::Key_escape);
+    view->bind_command_to_key(&m_toggle_pause_command, erhe::toolkit::Key_escape);
 
     //hide();
 }
@@ -113,7 +113,7 @@ void Log_window::tail_write(const char* format, fmt::format_args args)
     }
 
     m_tail_entries.emplace_back(
-        ImGui::GetStyle().Colors[ImGuiCol_Text],
+        ImVec4{0.8f, 0.8f, 0.8f, 1.0f},
         fmt::vformat(format, args)
     );
 }

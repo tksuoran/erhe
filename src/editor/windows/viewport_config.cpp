@@ -2,8 +2,7 @@
 #include "application.hpp"
 #include "configuration.hpp"
 #include "editor_imgui_windows.hpp"
-
-#include "erhe/imgui/imgui_helpers.hpp"
+#include "imgui_helpers.hpp"
 
 #include <imgui.h>
 
@@ -32,8 +31,6 @@ void Viewport_config::initialize_component()
 
 void Viewport_config::render_style_ui(Render_style& render_style)
 {
-    using erhe::imgui::make_combo;
-
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_OpenOnArrow       |
         ImGuiTreeNodeFlags_OpenOnDoubleClick |
@@ -91,7 +88,7 @@ void Viewport_config::render_style_ui(Render_style& render_style)
     {
         ImGui::Checkbox  ("Visible",        &render_style.corner_points);
         ImGui::ColorEdit4("Constant Color", &render_style.corner_color.x,   ImGuiColorEditFlags_Float);
-        erhe::imgui::make_combo(
+        make_combo(
             "Color Source",
             render_style.corner_points_color_source,
             Base_renderer::c_primitive_color_source_strings_data.data(),
@@ -108,8 +105,6 @@ void Viewport_config::render_style_ui(Render_style& render_style)
 
 void Viewport_config::imgui()
 {
-    using erhe::imgui::make_combo;
-
     ImGui::ColorEdit4("Clear Color", &clear_color.x, ImGuiColorEditFlags_Float);
 
     const ImGuiTreeNodeFlags flags{

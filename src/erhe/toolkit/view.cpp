@@ -8,7 +8,6 @@ auto c_str(const Keycode code) -> const char*
 {
     switch (code)
     {
-        using enum Keycode;
         case Key_unknown      : return "unknown";
         case Key_space        : return "space";
         case Key_apostrophe   : return "apostrophe";
@@ -199,6 +198,22 @@ void Root_view::on_close()
     if (m_window != nullptr)
     {
         m_window->break_event_loop();
+    }
+}
+
+void Root_view::on_focus(int focused)
+{
+    if (m_view != nullptr)
+    {
+        m_view->on_focus(focused);
+    }
+}
+
+void Root_view::on_cursor_enter(int entered)
+{
+    if (m_view != nullptr)
+    {
+        m_view->on_cursor_enter(entered);
     }
 }
 

@@ -187,20 +187,12 @@ auto Physics_tool::on_drag_ready() -> bool
     m_drag_node_physics->rigid_body()->begin_move();
     m_scene_root->physics_world().add_constraint(m_drag_constraint.get());
 
-    m_mouse_x = m_pointer_context->mouse_x();
-    m_mouse_y = m_pointer_context->mouse_y();
-
     log_tools.trace("Physics tool drag {} ready\n", m_drag_mesh->name());
     return true;
 }
 
 auto Physics_tool::on_drag() -> bool
 {
-    ImGuiIO& io = ImGui::GetIO();
-
-    m_mouse_x = io.MousePos.x;
-    m_mouse_y = io.MousePos.y;
-
     auto& physics_world = get<Scene_root>()->physics_world();
     if (!physics_world.is_physics_updates_enabled())
     {

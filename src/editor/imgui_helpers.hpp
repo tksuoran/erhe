@@ -2,7 +2,7 @@
 
 #include <imgui.h>
 
-namespace erhe::imgui
+namespace editor
 {
 
 enum class Item_mode : unsigned int
@@ -29,4 +29,4 @@ void make_combo(
     value = static_cast<T>(int_value);
 }
 
-} // namespace erhe::imgui
+} // namespace editor

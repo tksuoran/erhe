@@ -1,9 +1,13 @@
 #include "theremin.hpp"
+#include "editor_imgui_windows.hpp"
 #include "editor_tools.hpp"
 #include "log.hpp"
 #include "rendering.hpp"
 
+#include "graphics/gl_context_provider.hpp"
 #include "renderers/line_renderer.hpp"
+#include "renderers/mesh_memory.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/grid_tool.hpp"
 
 #include "xr/gradients.hpp"
@@ -148,7 +152,7 @@ void miniaudio_data_callback(
 
 Theremin::Theremin()
     : erhe::components::Component{c_name}
-    , Imgui_window               {c_description}
+    , Rendertarget_imgui_window  {c_description}
     , m_audio_config             {}
     , m_audio_device             {}
 {
@@ -169,14 +173,14 @@ void Theremin::connect()
     m_hand_tracker      = require<Hand_tracker     >();
     m_headset_renderer  = get    <Headset_renderer >();
     m_line_renderer_set = get    <Line_renderer_set>();
-    require<Grid_tool>();
+    require<Editor_imgui_windows>();
     require<Editor_tools>();
+    require<Gl_context_provider>();
+    require<Grid_tool>();
 }
 
 void Theremin::initialize_component()
 {
-    get<Editor_tools>()->register_background_tool(this);
-
     m_audio_config = ma_device_config_init(ma_device_type_playback);
     m_audio_config.playback.format   = ma_format_f32;
     m_audio_config.playback.channels = 1;
@@ -202,7 +206,27 @@ void Theremin::initialize_component()
     m_hand_tracker->set_color(Hand_name::Left, Finger_name::ring,   ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
     m_hand_tracker->set_color(Hand_name::Left, Finger_name::little, ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
 
-    hide();
+    create_gui_quad();
+
+    get<Editor_tools>()->register_background_tool(this);
+}
+
+void Theremin::create_gui_quad()
+{
+    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+
+    auto       rendertarget = get<Editor_imgui_windows>()->create_rendertarget("Theremin", 512, 300);
+    auto&      mesh_memory  = *get<Mesh_memory>().get();
+    auto&      scene_root   = *get<Scene_root>().get();
+    auto       mesh         = rendertarget->add_scene_node(mesh_memory, scene_root, 200.0);
+    const auto placement    = erhe::toolkit::create_look_at(
+        glm::vec3{0.0f, 1.0f, 1.0f},
+        glm::vec3{0.0f, 1.0f, 0.0f},
+        glm::vec3{0.0f, 1.0f, 0.0f}
+    );
+    mesh->set_parent_from_node(placement);
+
+    rendertarget->register_imgui_window(this);
 }
 
 void Theremin::set_antenna_distance(const float distance)
@@ -289,7 +313,7 @@ void Theremin::tool_render(const Render_context& context)
 {
     static_cast<void>(context);
 
-    if (!m_headset_renderer)
+    if (!m_headset_renderer || !m_enable_audio)
     {
         return;
     }

@@ -2,6 +2,7 @@
 #include "editor_tools.hpp"
 #include "rendering.hpp"
 
+#include "renderers/render_context.hpp"
 #include "renderers/text_renderer.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"

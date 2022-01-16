@@ -1,6 +1,7 @@
 #pragma once
 
 #include "renderers/base_renderer.hpp"
+#include "renderers/renderpass.hpp"
 
 #include "erhe/components/component.hpp"
 #include "erhe/graphics/pipeline.hpp"
@@ -38,21 +39,6 @@ class Configuration;
 class Programs;
 class Mesh_memory;
 class Shadow_renderer;
-
-class Render_pass
-{
-public:
-    //Render_pass(
-    //    erhe::graphics::Pipeline&&            pipeline,
-    //    const erhe::primitive::Primitive_mode primitive_mode
-    //);
-    //
-    const char*                     name{nullptr};
-    erhe::graphics::Pipeline        pipeline;
-    erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
-    std::function<void()>           begin;
-    std::function<void()>           end;
-};
 
 class Forward_renderer
     : public erhe::components::Component
@@ -117,7 +103,7 @@ public:
         const std::vector<const erhe::scene::Mesh_layer*>&             mesh_layers;
         const erhe::scene::Light_layer*                                light_layer;
         const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials;
-        const std::vector<Render_pass*>                                passes;
+        const std::vector<Renderpass*>                                 passes;
         const erhe::scene::Visibility_filter                           visibility_filter;
     };
 

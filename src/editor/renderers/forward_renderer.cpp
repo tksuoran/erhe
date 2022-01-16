@@ -85,7 +85,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     const auto& viewport          = parameters.viewport;
     const auto& camera            = parameters.camera;
     const auto& mesh_layers       = parameters.mesh_layers;
-    const auto& light_layer       = parameters.light_layer;
+    const auto* light_layer       = parameters.light_layer;
     const auto& materials         = parameters.materials;
     const auto& passes            = parameters.passes;
     const auto& visibility_filter = parameters.visibility_filter;
@@ -127,7 +127,10 @@ void Forward_renderer::render(const Render_parameters& parameters)
         update_camera_buffer  (camera, viewport);
         bind_material_buffer  ();
         bind_camera_buffer    ();
-        update_light_buffer   (*light_layer, m_shadow_renderer->viewport());
+        if (light_layer != nullptr)
+        {
+            update_light_buffer(*light_layer, m_shadow_renderer->viewport());
+        }
         for (auto mesh_layer : mesh_layers)
         {
             ERHE_PROFILE_GPU_SCOPE(c_forward_renderer_render);
@@ -139,7 +142,10 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 continue;
             }
 
-            bind_light_buffer();
+            if (light_layer != nullptr)
+            {
+                bind_light_buffer();
+            }
             bind_primitive_buffer();
             bind_draw_indirect_buffer();
 

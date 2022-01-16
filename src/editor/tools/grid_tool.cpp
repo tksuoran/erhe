@@ -1,4 +1,5 @@
 #include "tools/grid_tool.hpp"
+#include "editor_imgui_windows.hpp"
 #include "editor_tools.hpp"
 #include "rendering.hpp"
 
@@ -24,11 +25,14 @@ Grid_tool::~Grid_tool() = default;
 void Grid_tool::connect()
 {
     m_line_renderer_set = get<Line_renderer_set>();
+    require<Editor_tools>();
+    require<Editor_imgui_windows>();
 }
 
 void Grid_tool::initialize_component()
 {
-    get<Editor_tools>()->register_background_tool(this);
+    get<Editor_tools        >()->register_background_tool(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 }
 
 auto Grid_tool::description() -> const char*
