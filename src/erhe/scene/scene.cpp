@@ -11,8 +11,12 @@
 namespace erhe::scene
 {
 
-Mesh_layer::Mesh_layer(const std::string_view name)
-    : name{name}
+Mesh_layer::Mesh_layer(
+    const std::string_view name,
+    const uint64_t         flags
+)
+    : name {name}
+    , flags{flags}
 {
 }
 

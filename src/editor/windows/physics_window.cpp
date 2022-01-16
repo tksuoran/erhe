@@ -1,7 +1,12 @@
 #include "windows/physics_window.hpp"
+
+#include "editor_imgui_windows.hpp"
 #include "editor_tools.hpp"
 #include "log.hpp"
+#include "renderers/mesh_memory.hpp"
+#include "renderers/programs.hpp"
 
+#include "graphics/gl_context_provider.hpp"
 #include "scene/debug_draw.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
@@ -20,7 +25,7 @@ namespace editor
 
 Physics_window::Physics_window()
     : erhe::components::Component{c_name}
-    , Imgui_window               {c_title}
+    , Rendertarget_imgui_window  {c_title} // Imgui_window               {c_title}
 {
 }
 
@@ -30,11 +35,32 @@ void Physics_window::connect()
 {
     m_selection_tool  = get    <Selection_tool>();
     m_scene_root      = require<Scene_root    >();
+
+    require<Mesh_memory>();
+    require<Programs   >();
+    require<Gl_context_provider>();
 }
 
 void Physics_window::initialize_component()
 {
     get<Editor_tools>()->register_tool(this);
+
+    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+
+    auto rendertarget = get<Editor_imgui_windows>()->create_rendertarget(
+        "Physics",
+        1000,
+        1000,
+        1000.0
+    );
+    const auto placement = erhe::toolkit::create_look_at(
+        glm::vec3{-0.5f, 1.0f, 1.0f},
+        glm::vec3{0.0f, 1.0f, 0.0f},
+        glm::vec3{0.0f, 1.0f, 0.0f}
+    );
+    rendertarget->mesh_node()->set_parent_from_node(placement);
+
+    rendertarget->register_imgui_window(this);
 }
 
 auto Physics_window::description() -> const char*

@@ -595,7 +595,7 @@ void Editor_rendering::render_id(const Render_context& context)
         {
             .viewport            = context.viewport,
             .camera              = *context.camera,
-            .content_mesh_layers = { m_scene_root->content_layer() },
+            .content_mesh_layers = { m_scene_root->content_layer(), m_scene_root->gui_layer() },
             .tool_mesh_layers    = { m_scene_root->tool_layer() },
             .time                = m_editor_time->time(),
             .x                   = static_cast<int>(pointer.x),

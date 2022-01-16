@@ -17,7 +17,7 @@ class Scene_root;
 class Physics_window
     : public erhe::components::Component
     , public Tool
-    , public Imgui_window
+    , public Rendertarget_imgui_window // Imgui_window
 {
 public:
     static constexpr std::string_view c_name {"Physics_window"};
@@ -28,8 +28,7 @@ public:
     ~Physics_window() override;
 
     // Implements Component
-    [[nodiscard]]
-    auto get_type_hash       () const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 

@@ -33,8 +33,8 @@ public:
     bool show_window                      {true};
     bool parallel_initialization          {true};
     bool reverse_depth                    {true};
-    int  window_width                     {1920};
-    int  window_height                    {1080};
+    int  window_width                     {1280}; // {1920};
+    int  window_height                    {720}; // {1080};
     int  window_msaa_sample_count         {0};
     //int  window_width            {256};
     //int  window_height           {256};

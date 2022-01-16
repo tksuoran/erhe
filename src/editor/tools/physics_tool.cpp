@@ -1,4 +1,5 @@
 #include "tools/physics_tool.hpp"
+#include "editor_imgui_windows.hpp"
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
 #include "log.hpp"
@@ -84,6 +85,7 @@ void Physics_tool::connect()
 void Physics_tool::initialize_component()
 {
     get<Editor_tools>()->register_tool(this);
+
     require<Scene_root>();
 
     const auto view = get<Editor_view>();

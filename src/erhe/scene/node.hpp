@@ -52,6 +52,7 @@ public:
     static constexpr uint64_t c_visibility_brush       = (1u << 4);
     static constexpr uint64_t c_visibility_selected    = (1u << 5);
     static constexpr uint64_t c_visibility_gui         = (1u << 6);
+    static constexpr uint64_t c_visibility_controller  = (1u << 7);
 
     static constexpr uint64_t c_flag_bit_none         = 0u;
     static constexpr uint64_t c_flag_bit_is_transform = (1u << 0);

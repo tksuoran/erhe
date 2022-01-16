@@ -94,7 +94,10 @@ Node_raytrace::Node_raytrace(
 {
     m_flag_bits |= INode_attachment::c_flag_bit_is_raytrace;
 
-    m_geometry = erhe::raytrace::IGeometry::create_unique(primitive->geometry->name + "_triangle_geometry");
+    m_geometry = erhe::raytrace::IGeometry::create_unique(
+        primitive->geometry->name + "_triangle_geometry",
+        erhe::raytrace::Geometry_type::GEOMETRY_TYPE_TRIANGLE
+    );
 
     const auto& vertex_buffer_range   = primitive->primitive_geometry.vertex_buffer_range;
     const auto& index_buffer_range    = primitive->primitive_geometry.index_buffer_range;

@@ -50,11 +50,12 @@ void Scene_root::initialize_component()
     // Layer configuration
     using std::make_shared;
     using std::make_unique;
-    m_content_layer    = make_shared<Mesh_layer>("content");
-    m_controller_layer = make_shared<Mesh_layer>("controller");
-    m_tool_layer       = make_shared<Mesh_layer>("tool");
-    m_gui_layer        = make_shared<Mesh_layer>("gui");
-    m_brush_layer      = make_shared<Mesh_layer>("brush");
+    using erhe::scene::Node;
+    m_content_layer    = make_shared<Mesh_layer>("content",    Node::c_visibility_content);
+    m_controller_layer = make_shared<Mesh_layer>("controller", Node::c_visibility_controller);
+    m_tool_layer       = make_shared<Mesh_layer>("tool",       Node::c_visibility_tool);
+    m_gui_layer        = make_shared<Mesh_layer>("gui",        Node::c_visibility_gui);
+    m_brush_layer      = make_shared<Mesh_layer>("brush",      Node::c_visibility_brush);
     m_light_layer      = make_shared<Light_layer>("lights");
 
     m_scene            = std::make_unique<Scene>();

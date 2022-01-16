@@ -8,27 +8,39 @@
 namespace erhe::raytrace
 {
 
-auto IGeometry::create(const std::string_view debug_label) -> IGeometry*
+auto IGeometry::create(
+    const std::string_view debug_label,
+    const Geometry_type    geometry_type
+) -> IGeometry*
 {
-    return new Embree_geometry(debug_label);
+    return new Embree_geometry(debug_label, geometry_type);
 }
 
-auto IGeometry::create_shared(const std::string_view debug_label) -> std::shared_ptr<IGeometry>
+auto IGeometry::create_shared(
+    const std::string_view debug_label,
+    const Geometry_type    geometry_type
+) -> std::shared_ptr<IGeometry>
 {
-    return std::make_shared<Embree_geometry>(debug_label);
+    return std::make_shared<Embree_geometry>(debug_label, geometry_type);
 }
 
-auto IGeometry::create_unique(const std::string_view debug_label) -> std::unique_ptr<IGeometry>
+auto IGeometry::create_unique(
+    const std::string_view debug_label,
+    const Geometry_type    geometry_type
+) -> std::unique_ptr<IGeometry>
 {
-    return std::make_unique<Embree_geometry>(debug_label);
+    return std::make_unique<Embree_geometry>(debug_label, geometry_type);
 }
 
-Embree_geometry::Embree_geometry(const std::string_view debug_label)
+Embree_geometry::Embree_geometry(
+    const std::string_view debug_label,
+    const Geometry_type    geometry_type
+)
     : m_debug_label{debug_label}
 {
     m_geometry = rtcNewGeometry(
         Embree_device::get_instance().get_rtc_device(),
-        RTC_GEOMETRY_TYPE_TRIANGLE
+        static_cast<RTCGeometryType>(geometry_type)
     );
     log_embree.trace("rtcNewGeometry() = {} {}\n", debug_label, fmt::ptr(m_geometry));
     if (m_geometry != nullptr)

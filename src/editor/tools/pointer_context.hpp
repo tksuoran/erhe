@@ -44,6 +44,7 @@ namespace editor
 
 class Editor_rendering;
 class Log_window;
+class Node_raytrace;
 class Scene_root;
 class Viewport_window;
 class Viewport_windows;
@@ -80,6 +81,7 @@ public:
     [[nodiscard]] auto position_in_world          (const double viewport_depth) const -> std::optional<glm::dvec3>;
     [[nodiscard]] auto near_position_in_world     () const -> std::optional<glm::vec3>;
     [[nodiscard]] auto far_position_in_world      () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto raytrace_node              () const -> Node_raytrace*;
     [[nodiscard]] auto raytrace_hit_position      () const -> std::optional<glm::vec3>;
     [[nodiscard]] auto pointer_in_content_area    () const -> bool;
     [[nodiscard]] auto shift_key_down             () const -> bool;
@@ -91,6 +93,7 @@ public:
     [[nodiscard]] auto mouse_y                    () const -> double;
     [[nodiscard]] auto hovering_over_tool         () const -> bool;
     [[nodiscard]] auto hovering_over_content      () const -> bool;
+    [[nodiscard]] auto hovering_over_gui          () const -> bool;
     [[nodiscard]] auto hover_normal               () const -> std::optional<glm::vec3>;
     [[nodiscard]] auto hover_mesh                 () const -> std::shared_ptr<erhe::scene::Mesh>;
     [[nodiscard]] auto hover_primitive            () const -> size_t;
@@ -138,12 +141,14 @@ private:
     size_t                             m_hover_local_index    {0};
     bool                               m_hover_tool           {false};
     bool                               m_hover_content        {false};
+    bool                               m_hover_gui            {false};
     erhe::geometry::Geometry*          m_hover_geometry       {nullptr};
 
     uint64_t                           m_frame_number         {0};
 
     std::optional<glm::vec3>           m_raytrace_hit_position;
     glm::vec3                          m_raytrace_hit_normal  {0.0f};
+    Node_raytrace*                     m_raytrace_node        {nullptr};
     //size_t                             m_raytrace_primitive   {0};
     //size_t                             m_raytrace_local_index {0};
 };

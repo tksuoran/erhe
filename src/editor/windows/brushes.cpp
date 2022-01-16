@@ -1,4 +1,6 @@
 #include "windows/brushes.hpp"
+
+#include "editor_imgui_windows.hpp"
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
 #include "imgui_helpers.hpp"
@@ -97,6 +99,7 @@ void Brushes::initialize_component()
     m_selected_brush_index = 0;
 
     get<Editor_tools>()->register_tool(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 
     const auto view = get<Editor_view>();
     view->register_command(&m_preview_command);

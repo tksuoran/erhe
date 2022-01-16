@@ -176,6 +176,8 @@ void Theremin::connect()
     require<Editor_imgui_windows>();
     require<Editor_tools>();
     require<Gl_context_provider>();
+    require<Mesh_memory>();
+    require<Programs>();
     require<Grid_tool>();
 }
 
@@ -215,16 +217,18 @@ void Theremin::create_gui_quad()
 {
     const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
-    auto       rendertarget = get<Editor_imgui_windows>()->create_rendertarget("Theremin", 512, 300);
-    auto&      mesh_memory  = *get<Mesh_memory>().get();
-    auto&      scene_root   = *get<Scene_root>().get();
-    auto       mesh         = rendertarget->add_scene_node(mesh_memory, scene_root, 200.0);
-    const auto placement    = erhe::toolkit::create_look_at(
-        glm::vec3{0.0f, 1.0f, 1.0f},
+    auto rendertarget = get<Editor_imgui_windows>()->create_rendertarget(
+        "Theremin",
+        1000,
+        1000,
+        1000.0
+    );
+    const auto placement = erhe::toolkit::create_look_at(
+        glm::vec3{0.5f, 1.0f, 1.0f},
         glm::vec3{0.0f, 1.0f, 0.0f},
         glm::vec3{0.0f, 1.0f, 0.0f}
     );
-    mesh->set_parent_from_node(placement);
+    rendertarget->mesh_node()->set_parent_from_node(placement);
 
     rendertarget->register_imgui_window(this);
 }

@@ -29,6 +29,7 @@ public:
 
     [[nodiscard]] auto viewport_window     () -> Viewport_window*;
     [[nodiscard]] auto hovering_over_tool  () -> bool;
+    [[nodiscard]] auto hovering_over_gui   () -> bool;
     [[nodiscard]] auto accept_mouse_command(Command* command) -> bool;
     [[nodiscard]] auto absolute_pointer    () const -> glm::dvec2;
     [[nodiscard]] auto relative_pointer    () const -> glm::dvec2;

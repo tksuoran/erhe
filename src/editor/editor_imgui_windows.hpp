@@ -32,6 +32,8 @@ class Forward_renderer;
 class Imgui_window;
 class Imgui_renderer;
 class Mesh_memory;
+class Node_raytrace;
+class Pointer_context;
 class Programs;
 class Render_context;
 class Scene_root;
@@ -51,7 +53,8 @@ public:
         const std::string_view              name,
         const erhe::components::Components& components,
         const int                           width,
-        const int                           height
+        const int                           height,
+        const double                        dots_per_meter
     );
     ~Rendertarget_imgui_windows();
 
@@ -60,18 +63,17 @@ public:
     void imgui_windows        () override;
 
     // Public API
-    [[nodiscard]] auto add_scene_node(
-        Mesh_memory& mesh_memory,
-        Scene_root&  scene_root,
-        const double dots_per_meter
-    ) -> std::shared_ptr<erhe::scene::Mesh>;
-
-    [[nodiscard]] auto texture() const -> std::shared_ptr<erhe::graphics::Texture>;
+    [[nodiscard]] auto mesh_node() -> std::shared_ptr<erhe::scene::Mesh>;
+    [[nodiscard]] auto texture  () const -> std::shared_ptr<erhe::graphics::Texture>;
 
     void render_mesh_layer(
         Forward_renderer&     forward_renderer,
         const Render_context& context
     );
+
+    void mouse_button  (const uint32_t button, bool pressed);
+    void on_key        (const signed int keycode, const bool pressed);
+    void on_mouse_wheel(const double x, const double y);
 
 private:
     void init_context              (const erhe::components::Components& components);
@@ -79,17 +81,25 @@ private:
     void init_renderpass           (const erhe::components::Components& components);
     void begin_imgui_frame         ();
     void end_and_render_imgui_frame();
+    void add_scene_node            (const erhe::components::Components& components);
 
     // Component dependencies
     std::shared_ptr<Imgui_renderer>                       m_renderer;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
+    std::shared_ptr<Pointer_context>                      m_pointer_context;
 
     std::string                                  m_name;
     erhe::scene::Mesh_layer                      m_mesh_layer;
     std::mutex                                   m_mutex;
-    ImGuiContext*                                m_imgui_context{nullptr};
+    const int                                    m_width;
+    const int                                    m_height;
+    double                                       m_dots_per_meter{0.0};
+    bool                                         m_has_focus     {false};
+    double                                       m_time          {0.0};
+    ImGuiContext*                                m_imgui_context {nullptr};
     std::vector<gsl::not_null<Imgui_window*>>    m_imgui_windows;
     std::shared_ptr<erhe::scene::Mesh>           m_gui_mesh;
+    std::shared_ptr<Node_raytrace>               m_node_raytrace;
     std::shared_ptr<erhe::graphics::Texture>     m_texture;
     std::unique_ptr<erhe::graphics::Framebuffer> m_framebuffer;
     Renderpass                                   m_renderpass;
@@ -130,7 +140,8 @@ public:
     auto create_rendertarget(
         const std::string_view name,
         const int              width,
-        const int              height
+        const int              height,
+        const double           dots_per_meter
     ) -> std::shared_ptr<Rendertarget_imgui_windows>;
 
     void destroy_rendertarget(const std::shared_ptr<Rendertarget_imgui_windows>& rendertarget);

@@ -1,5 +1,6 @@
 #include "tools/fly_camera_tool.hpp"
 #include "log.hpp"
+#include "editor_imgui_windows.hpp"
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
 #include "scene/scene_root.hpp"
@@ -59,7 +60,8 @@ void Fly_camera_turn_command::try_ready(Command_context& context)
     if (
         (state() != State::Inactive) ||
         (context.viewport_window() == nullptr) ||
-        context.hovering_over_tool()
+        context.hovering_over_tool() ||
+        context.hovering_over_gui()
     )
     {
         return;
@@ -149,10 +151,12 @@ Fly_camera_tool::~Fly_camera_tool()
 
 void Fly_camera_tool::connect()
 {
-    m_editor_tools    = get    <Editor_tools>();
+    m_editor_tools    = require<Editor_tools>();
     m_pointer_context = get    <Pointer_context>();
     m_scene_root      = require<Scene_root>();
     m_trs_tool        = get    <Trs_tool>();
+
+    require<Editor_imgui_windows>();
 }
 
 auto Fly_camera_tool::can_use_keyboard() const -> bool
@@ -167,6 +171,8 @@ void Fly_camera_tool::initialize_component()
 #endif
 
     m_editor_tools->register_tool(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
+
     const auto view = get<Editor_view>();
 
     view->bind_command_to_key(&m_move_up_active_command,         erhe::toolkit::Key_e, true );
@@ -233,21 +239,38 @@ auto Fly_camera_tool::description() -> const char*
     return c_description.data();
 }
 
-void Fly_camera_tool::translation(const int tx, const int ty, const int tz)
+void Fly_camera_tool::translation(
+    const int tx,
+    const int ty,
+    const int tz
+)
 {
+    if (!m_camera_controller)
+    {
+        return;
+    }
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
-    constexpr float scale = 16384.0f;
+    constexpr float scale = 65536.0f;
     m_camera_controller->translate_x.adjust(tx / scale);
     m_camera_controller->translate_y.adjust(ty / scale);
     m_camera_controller->translate_z.adjust(tz / scale);
 }
 
-void Fly_camera_tool::rotation(const int rx, const int ry, const int rz)
+void Fly_camera_tool::rotation(
+    const int rx,
+    const int ry,
+    const int rz
+)
 {
+    if (!m_camera_controller)
+    {
+        return;
+    }
+
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
-    constexpr float scale = 16384.0f;
+    constexpr float scale = 65536.0f;
     m_camera_controller->rotate_x.adjust(rx / scale);
     m_camera_controller->rotate_y.adjust(ry / scale);
     m_camera_controller->rotate_z.adjust(rz / scale);

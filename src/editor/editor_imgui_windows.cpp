@@ -3,6 +3,7 @@
 #include "configuration.hpp"
 #include "editor_view.hpp"
 #include "editor_time.hpp"
+#include "log.hpp"
 #include "rendering.hpp"
 #include "window.hpp"
 
@@ -10,6 +11,8 @@
 #include "renderers/imgui_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
+#include "scene/helpers.hpp"
+#include "scene/node_raytrace.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/tool.hpp"
@@ -53,15 +56,21 @@ Rendertarget_imgui_windows::Rendertarget_imgui_windows(
     const std::string_view              name,
     const erhe::components::Components& components,
     const int                           width,
-    const int                           height
+    const int                           height,
+    const double                        dots_per_meter
 )
     : m_pipeline_state_tracker{components.get<erhe::graphics::OpenGL_state_tracker>()}
+    , m_pointer_context       {components.get<Pointer_context>()}
     , m_name                  {name}
-    , m_mesh_layer            {"GUI Layer"}
+    , m_mesh_layer            {"GUI Layer", erhe::scene::Node::c_visibility_gui}
+    , m_width                 {width}
+    , m_height                {height}
+    , m_dots_per_meter        {dots_per_meter}
 {
     init_rendertarget(width, height);
     init_renderpass  (components);
     init_context     (components);
+    add_scene_node   (components);
 }
 
 Rendertarget_imgui_windows::~Rendertarget_imgui_windows()
@@ -187,21 +196,33 @@ void Rendertarget_imgui_windows::register_imgui_window(Imgui_window* window)
     m_imgui_windows.push_back(window);
 }
 
-auto Rendertarget_imgui_windows::add_scene_node(
-    Mesh_memory& mesh_memory,
-    Scene_root&  scene_root,
-    const double dots_per_meter
-) -> std::shared_ptr<erhe::scene::Mesh>
+void Rendertarget_imgui_windows::add_scene_node(
+    const erhe::components::Components& components
+)
 {
-    auto gui_material = scene_root.make_material("GUI Quad", glm::vec4{0.1f, 0.1f, 0.2f, 1.0f});
+    auto& mesh_memory = *components.get<Mesh_memory>().get();
+    auto& scene_root  = *components.get<Scene_root >().get();
+
+    auto gui_material = scene_root.make_material(
+        "GUI Quad",
+        glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
+    );
+
+    const auto local_width  = static_cast<double>(m_texture->width ()) / m_dots_per_meter;
+    const auto local_height = static_cast<double>(m_texture->height()) / m_dots_per_meter;
+
     auto gui_geometry = erhe::geometry::shapes::make_rectangle(
-        static_cast<double>(m_texture->width()) / dots_per_meter,
-        static_cast<double>(m_texture->height()) / dots_per_meter
+        local_width,
+        local_height
+    );
+
+    const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
+        std::move(gui_geometry)
     );
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
     auto gui_primitive = erhe::primitive::make_primitive(
-        gui_geometry,
+        *shared_geometry.get(),
         mesh_memory.build_info
     );
 
@@ -209,20 +230,29 @@ auto Rendertarget_imgui_windows::add_scene_node(
         .material              = gui_material,
         .gl_primitive_geometry = gui_primitive
     };
-    auto gui_mesh = std::make_shared<erhe::scene::Mesh>("GUI Quad", primitive);
-    gui_mesh->visibility_mask() = erhe::scene::Node::c_visibility_gui;
+    m_gui_mesh = std::make_shared<erhe::scene::Mesh>("GUI Quad", primitive);
+    m_gui_mesh->visibility_mask() =
+        erhe::scene::Node::c_visibility_id |
+        erhe::scene::Node::c_visibility_gui;
 
-    //glm::mat4 m = erhe::toolkit::create_translation(0.0f, 1.0f, 1.0f);
-    //gui_mesh->set_parent_from_node(m);
+    auto rt_primitive = std::make_shared<Raytrace_primitive>(shared_geometry);
+
+    m_node_raytrace = std::make_shared<Node_raytrace>(rt_primitive);
+
+    add_to_raytrace_scene(scene_root.raytrace_scene(), m_node_raytrace);
+    m_gui_mesh->attach(m_node_raytrace);
 
     scene_root.add( // TODO Remove scene_root.gui_layer()?
-        gui_mesh,
+        m_gui_mesh,
         scene_root.gui_layer()
     );
 
-    m_mesh_layer.meshes.push_back(gui_mesh);
+    m_mesh_layer.meshes.push_back(m_gui_mesh);
+}
 
-    return gui_mesh;
+auto Rendertarget_imgui_windows::mesh_node() -> std::shared_ptr<erhe::scene::Mesh>
+{
+    return m_gui_mesh;
 }
 
 auto Rendertarget_imgui_windows::texture() const -> std::shared_ptr<erhe::graphics::Texture>
@@ -272,15 +302,99 @@ void Rendertarget_imgui_windows::imgui_windows()
     end_and_render_imgui_frame();
 }
 
+void Rendertarget_imgui_windows::mouse_button(const uint32_t button, bool pressed)
+{
+    ImGuiIO& io = ImGui::GetIO(m_imgui_context);
+    io.MouseDown[button] = pressed;
+}
+
+void Rendertarget_imgui_windows::on_key(const signed int keycode, const bool pressed)
+{
+    using erhe::toolkit::Keycode;
+
+    ImGuiIO& io = ImGui::GetIO(m_imgui_context);
+    if (
+        (keycode >= 0) &&
+        (keycode < IM_ARRAYSIZE(io.KeysDown))
+    )
+    {
+        if (pressed)
+        {
+            io.KeysDown[keycode] = true;
+        }
+        else
+        {
+            io.KeysDown[keycode] = false;
+        }
+    }
+
+    // Modifiers are not reliable across systems
+    const signed int left_control  = static_cast<signed int>(erhe::toolkit::Key_left_control);
+    const signed int right_control = static_cast<signed int>(erhe::toolkit::Key_right_control);
+    const signed int left_shift    = static_cast<signed int>(erhe::toolkit::Key_left_shift);
+    const signed int right_shift   = static_cast<signed int>(erhe::toolkit::Key_right_shift);
+    const signed int left_alt      = static_cast<signed int>(erhe::toolkit::Key_left_alt);
+    const signed int right_alt     = static_cast<signed int>(erhe::toolkit::Key_right_alt);
+
+    io.KeyCtrl  = io.KeysDown[left_control] || io.KeysDown[right_control];
+    io.KeyShift = io.KeysDown[left_shift  ] || io.KeysDown[right_shift  ];
+    io.KeyAlt   = io.KeysDown[left_alt    ] || io.KeysDown[right_alt    ];
+#ifdef _WIN32
+    io.KeySuper = false;
+#else
+    const signed int left_super  = static_cast<signed int>(erhe::toolkit::Key_left_super);
+    const signed int right_super = static_cast<signed int>(erhe::toolkit::Key_right_super);
+    io.KeySuper = io.KeysDown[left_super] || io.KeysDown[right_super];
+#endif
+}
+
+void Rendertarget_imgui_windows::on_mouse_wheel(const double x, const double y)
+{
+    ImGuiIO& io = ImGui::GetIO(m_imgui_context);
+    io.MouseWheelH += static_cast<float>(x);
+    io.MouseWheel  += static_cast<float>(y);
+}
+
 void Rendertarget_imgui_windows::begin_imgui_frame()
 {
     ImGuiIO& io = ImGui::GetIO(m_imgui_context);
-    io.DeltaTime = 1.0f / 60.0f; // TODO
-    //io.MousePos  = ImVec2{-FLT_MAX, -FLT_MAX};;
-    //for (int i = 0; i < IM_ARRAYSIZE(io.MouseDown); i++)
-    //{
-    //    io.MouseDown[i] = 0;
-    //}
+
+    // Setup time step
+    const auto current_time = glfwGetTime();
+    io.DeltaTime = m_time > 0.0
+        ? static_cast<float>(current_time - m_time)
+        : static_cast<float>(1.0 / 60.0);
+    m_time = current_time;
+
+    if (
+        m_pointer_context->raytrace_node() == m_node_raytrace.get() &&
+        m_pointer_context->raytrace_hit_position().has_value()
+    )
+    {
+        const auto width    = static_cast<float>(m_texture->width());
+        const auto height   = static_cast<float>(m_texture->height());
+        const auto p_world  = m_pointer_context->raytrace_hit_position().value();
+        const auto p_local  = glm::vec3{m_gui_mesh->node_from_world() * glm::vec4{p_world, 1.0f}};
+        const auto p_window = static_cast<float>(m_dots_per_meter) * p_local;
+        io.MousePos = ImVec2{
+            p_window.x + 0.5f * width,
+            height - (p_window.y + 0.5f * height)
+        };
+        if (!m_has_focus)
+        {
+            m_has_focus = true;
+            io.AddFocusEvent(true);
+        }
+    }
+    else
+    {
+        io.MousePos = ImVec2{-FLT_MAX, -FLT_MAX};
+        if (m_has_focus)
+        {
+            io.AddFocusEvent(false);
+            m_has_focus = false;
+        }
+    }
 
     ImGui::NewFrame();
     ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
@@ -399,7 +513,6 @@ void Editor_imgui_windows::init_context()
 void Editor_imgui_windows::begin_imgui_frame()
 {
     const auto& editor_view    = *get<Editor_view>().get();
-    const auto& editor_time    = *get<Editor_time>().get();
     const auto& window         = *get<Window     >().get();
     const auto& context_window = window.get_context_window();
     auto*       glfw_window    = context_window->get_glfw_window();
@@ -408,16 +521,17 @@ void Editor_imgui_windows::begin_imgui_frame()
     const auto h = editor_view.height();
 
     ImGuiIO& io = ImGui::GetIO(m_imgui_context);
-    io.DisplaySize = ImVec2{static_cast<float>(w), static_cast<float>(h)};
+    io.DisplaySize = ImVec2{
+        static_cast<float>(w),
+        static_cast<float>(h)
+    };
 
     // Setup time step
-    const auto frame        = editor_time.frame_number();
     const auto current_time = glfwGetTime();
     io.DeltaTime = m_time > 0.0
         ? static_cast<float>(current_time - m_time)
         : static_cast<float>(1.0 / 60.0);
     m_time = current_time;
-    m_frame = frame;
 
     // ImGui_ImplGlfw_UpdateMousePosAndButtons();
     io.MousePos = ImVec2{-FLT_MAX, -FLT_MAX};
@@ -425,19 +539,24 @@ void Editor_imgui_windows::begin_imgui_frame()
     {
         io.MouseDown[i] = m_mouse_just_pressed[i] || glfwGetMouseButton(glfw_window, i) != 0;
         m_mouse_just_pressed[i] = false;
+        for (const auto& rendertarget : m_rendertarget_imgui_windows)
+        {
+            rendertarget->mouse_button(i, io.MouseDown[i]);
+        }
     }
     if (m_has_cursor)
     {
         double mouse_x;
         double mouse_y;
         glfwGetCursorPos(glfw_window, &mouse_x, &mouse_y);
-        io.MousePos = ImVec2{static_cast<float>(mouse_x), static_cast<float>(mouse_y)};
+        io.MousePos = ImVec2{
+            static_cast<float>(mouse_x),
+            static_cast<float>(mouse_y)
+        };
     }
 
     // ImGui_ImplGlfw_UpdateMouseCursor
-    const auto cursor = io.MouseDrawCursor
-        ? erhe::toolkit::Mouse_cursor_None
-        : static_cast<erhe::toolkit::Mouse_cursor>(ImGui::GetMouseCursor());
+    const auto cursor = static_cast<erhe::toolkit::Mouse_cursor>(ImGui::GetMouseCursor());
     context_window->set_cursor(cursor);
 
     ImGui::NewFrame();
@@ -461,14 +580,16 @@ void Editor_imgui_windows::end_and_render_imgui_frame()
 auto Editor_imgui_windows::create_rendertarget(
     const std::string_view name,
     const int              width,
-    const int              height
+    const int              height,
+    const double           dots_per_meter
 ) -> std::shared_ptr<Rendertarget_imgui_windows>
 {
     auto new_rendertarget = std::make_shared<Rendertarget_imgui_windows>(
         name,
         *m_components,
         width,
-        height
+        height,
+        dots_per_meter
     );
     m_rendertarget_imgui_windows.push_back(new_rendertarget);
     return new_rendertarget;
@@ -673,19 +794,33 @@ void Editor_imgui_windows::on_cursor_enter(int entered)
     m_has_cursor = (entered != 0);
 }
 
-void Editor_imgui_windows::on_mouse_click(const uint32_t button, const int count)
+void Editor_imgui_windows::on_mouse_click(
+    const uint32_t button,
+    const int      count
+)
 {
-    if (button < ImGuiMouseButton_COUNT && count > 0)
+    if (
+        (button < ImGuiMouseButton_COUNT) &&
+        (count > 0)
+    )
     {
         m_mouse_just_pressed[button] = true;
     }
 }
 
-void Editor_imgui_windows::on_mouse_wheel(const double x, const double y)
+void Editor_imgui_windows::on_mouse_wheel(
+    const double x,
+    const double y
+)
 {
     ImGuiIO& io = ImGui::GetIO(m_imgui_context);
     io.MouseWheelH += static_cast<float>(x);
     io.MouseWheel  += static_cast<float>(y);
+
+    for (const auto& rendertarget : m_rendertarget_imgui_windows)
+    {
+        rendertarget->on_mouse_wheel(x, y);
+    }
 }
 
 void Editor_imgui_windows::on_key(
@@ -693,20 +828,26 @@ void Editor_imgui_windows::on_key(
     const bool       pressed
 )
 {
+    for (const auto& rendertarget : m_rendertarget_imgui_windows)
+    {
+        rendertarget->on_key(keycode, pressed);
+    }
+
     using erhe::toolkit::Keycode;
-    Scoped_imgui_context scoped_context{m_imgui_context};
 
     ImGuiIO& io = ImGui::GetIO(m_imgui_context);
-    if (keycode >= 0 && keycode < IM_ARRAYSIZE(io.KeysDown))
+    if (
+        (keycode >= 0) &&
+        (keycode < IM_ARRAYSIZE(io.KeysDown))
+    )
     {
         if (pressed)
         {
             io.KeysDown[keycode] = true;
-            //bd->KeyOwnerWindows[key] = window;
         }
         else
         {
-             io.KeysDown[keycode] = false;
+            io.KeysDown[keycode] = false;
         }
     }
 
@@ -724,11 +865,10 @@ void Editor_imgui_windows::on_key(
 #ifdef _WIN32
     io.KeySuper = false;
 #else
-    const signed int left_super  = static_cast<signed int>(Keycode::Key_left_super);
-    const signed int right_super = static_cast<signed int>(Keycode::Key_right_super);
+    const signed int left_super  = static_cast<signed int>(erhe::toolkit::Key_left_super);
+    const signed int right_super = static_cast<signed int>(erhe::toolkit::Key_right_super);
     io.KeySuper = io.KeysDown[left_super] || io.KeysDown[right_super];
 #endif
-
 }
 
 }  // namespace editor

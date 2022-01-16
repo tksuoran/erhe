@@ -19,7 +19,10 @@ class Light;
 class Mesh_layer
 {
 public:
-    explicit Mesh_layer(const std::string_view name);
+    Mesh_layer(
+        const std::string_view name,
+        const uint64_t         flags
+    );
 
     [[nodiscard]] auto get_mesh_by_id(
         const erhe::toolkit::Unique_id<Node>::id_type id
@@ -27,6 +30,7 @@ public:
 
     std::vector<std::shared_ptr<Mesh>> meshes;
     std::string                        name;
+    uint64_t                           flags{0};
 };
 
 class Light_layer

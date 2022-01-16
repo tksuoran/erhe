@@ -8,10 +8,12 @@
 #include "renderers/id_renderer.hpp"
 #include "windows/log_window.hpp"
 
+#include "erhe/log/log_glm.hpp"
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/igeometry.hpp"
 #include "erhe/raytrace/iinstance.hpp"
 #include "erhe/scene/camera.hpp"
+#include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 #include <gsl/gsl>
@@ -131,6 +133,9 @@ void Pointer_context::raytrace()
         //log->frame_log("Hit instance: {}", hit.instance->debug_label());
         void* user_data     = hit.instance->get_user_data();
         auto* node_raytrace = reinterpret_cast<Node_raytrace*>(user_data);
+        m_raytrace_node         = node_raytrace;
+        m_raytrace_hit_position = ray.origin + ray.t_far * ray.direction;
+        log->frame_log("Hit position: {}", m_raytrace_hit_position.value());
         if (node_raytrace != nullptr)
         {
             auto* primitive = node_raytrace->raytrace_primitive();
@@ -149,8 +154,11 @@ void Pointer_context::raytrace()
             }
         }
     }
-
-    m_raytrace_hit_position = ray.origin + ray.t_far * ray.direction;
+    else
+    {
+        m_raytrace_node = nullptr;
+        m_raytrace_hit_position.reset();
+    }
 
 #if 0
     erhe::scene::Mesh*         hit_mesh      {nullptr};
@@ -229,6 +237,7 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
     m_hover_local_index = 0;
     m_hover_tool        = false;
     m_hover_content     = false;
+    m_hover_gui         = false;
     m_hover_valid       = false;
     m_update_window     = nullptr;
     m_raytrace_hit_position.reset();
@@ -278,21 +287,23 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
         m_far_position_in_world  = position_in_world(1.0f);
         m_hover_valid = mesh_primitive.valid;
         //m_log_window->frame_log("position in world = {}", m_position_in_world.value());
-        if (m_hover_valid)
+        if (m_hover_valid && (mesh_primitive.layer != nullptr))
         {
             m_hover_mesh        = mesh_primitive.mesh;
             m_hover_layer       = mesh_primitive.layer;
             m_hover_primitive   = mesh_primitive.mesh_primitive_index;
             m_hover_local_index = mesh_primitive.local_index;
-            m_hover_tool        = m_hover_layer == scene_root->tool_layer();
-            m_hover_content     = m_hover_layer == scene_root->content_layer();
+            m_hover_tool        = (m_hover_layer->flags & erhe::scene::Node::c_visibility_tool   ) == erhe::scene::Node::c_visibility_tool;
+            m_hover_content     = (m_hover_layer->flags & erhe::scene::Node::c_visibility_content) == erhe::scene::Node::c_visibility_content;
+            m_hover_gui         = (m_hover_layer->flags & erhe::scene::Node::c_visibility_gui    ) == erhe::scene::Node::c_visibility_gui;
             m_log_window->frame_log(
-                "hover mesh = {} primitive = {} local index {} tool = {} content = {}",
+                "hover mesh = {} primitive = {} local index {} tool = {} content = {} gui = {}",
                 m_hover_mesh ? m_hover_mesh->name() : "()",
                 m_hover_primitive,
                 m_hover_local_index,
                 m_hover_tool,
-                m_hover_content
+                m_hover_content,
+                m_hover_gui
             );
             if (m_hover_mesh)
             {
@@ -353,6 +364,11 @@ auto Pointer_context::near_position_in_world() const -> std::optional<glm::vec3>
 auto Pointer_context::far_position_in_world() const -> std::optional<glm::vec3>
 {
     return m_far_position_in_world;
+}
+
+auto Pointer_context::raytrace_node() const -> Node_raytrace*
+{
+    return m_raytrace_node;
 }
 
 auto Pointer_context::raytrace_hit_position() const -> std::optional<glm::vec3>
@@ -446,6 +462,11 @@ auto Pointer_context::hovering_over_tool() const -> bool
 auto Pointer_context::hovering_over_content() const -> bool
 {
     return m_hover_valid && m_hover_content;
+}
+
+auto Pointer_context::hovering_over_gui() const -> bool
+{
+    return m_hover_valid && m_hover_gui;
 }
 
 auto Pointer_context::hover_normal() const -> std::optional<glm::vec3>

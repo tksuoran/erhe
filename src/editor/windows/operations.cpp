@@ -244,16 +244,18 @@ void Operations::imgui()
     }
     if (make_button("GUI Quad", Item_mode::normal, button_size))
     {
-        auto       rendertarget = get<Editor_imgui_windows>()->create_rendertarget("Gui Quad", 2048, 1024);
-        auto&      mesh_memory  = *get<Mesh_memory>().get();
-        auto&      scene_root   = *get<Scene_root>().get();
-        auto       mesh         = rendertarget->add_scene_node(mesh_memory, scene_root, 1000.0);
-        const auto placement    = erhe::toolkit::create_look_at(
+        auto rendertarget = get<Editor_imgui_windows>()->create_rendertarget(
+            "Gui Quad",
+            2048,
+            1024,
+            200.0
+        );
+        const auto placement = erhe::toolkit::create_look_at(
             glm::vec3{0.0f, 1.0f, 0.0f},
             glm::vec3{0.0f, 1.0f, 1.0f},
             glm::vec3{0.0f, 1.0f, 0.0f}
         );
-        mesh->set_parent_from_node(placement);
+        rendertarget->mesh_node()->set_parent_from_node(placement);
     }
 }
 

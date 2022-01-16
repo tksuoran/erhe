@@ -123,6 +123,13 @@ enum class Format : int
     FORMAT_GRID = 0xA001
 };
 
+enum class Geometry_type : int
+{
+    GEOMETRY_TYPE_TRIANGLE    = 0, // triangle mesh
+    GEOMETRY_TYPE_QUAD        = 1, // quad (triangle pair) mesh
+    GEOMETRY_TYPE_SUBDIVISION = 8, // Catmull-Clark subdivision surface
+};
+
 class IBuffer;
 
 class IGeometry
@@ -147,9 +154,9 @@ public:
     [[nodiscard]] virtual auto get_user_data() -> void* = 0;
     [[nodiscard]] virtual auto debug_label() const -> std::string_view = 0;
 
-    [[nodiscard]] static auto create       (const std::string_view debug_label) -> IGeometry*;
-    [[nodiscard]] static auto create_shared(const std::string_view debug_label) -> std::shared_ptr<IGeometry>;
-    [[nodiscard]] static auto create_unique(const std::string_view debug_label) -> std::unique_ptr<IGeometry>;
+    [[nodiscard]] static auto create       (const std::string_view debug_label, const Geometry_type geometry_type) -> IGeometry*;
+    [[nodiscard]] static auto create_shared(const std::string_view debug_label, const Geometry_type geometry_type) -> std::shared_ptr<IGeometry>;
+    [[nodiscard]] static auto create_unique(const std::string_view debug_label, const Geometry_type geometry_type) -> std::unique_ptr<IGeometry>;
 };
 
 } // namespace erhe::raytrace

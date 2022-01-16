@@ -1,5 +1,6 @@
 #include "tools/trs_tool.hpp"
 
+#include "editor_imgui_windows.hpp"
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
 #include "imgui_helpers.hpp"
@@ -160,6 +161,7 @@ void Trs_tool::initialize_component()
     }
 
     get<Editor_tools>()->register_tool(this);
+    get<Editor_imgui_windows>()->register_imgui_window(this);
 
     const auto view = get<Editor_view>();
     view->register_command(&m_drag_command);

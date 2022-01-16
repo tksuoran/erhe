@@ -13,29 +13,23 @@ class Embree_geometry
     : public IGeometry
 {
 public:
-    explicit Embree_geometry(const std::string_view debug_label); // rtcNewGeometry()
-    ~Embree_geometry() override; // rtcReleaseGeometry()
-
-    // rtcRetainGeometry()
+    explicit Embree_geometry(
+        const std::string_view debug_label,
+        const Geometry_type    geometry_type
+    );
+    ~Embree_geometry() override;
 
     // Implements IGeometry
-    void commit () override; // rtcCommitGeometry()
-    void enable () override; // rtcEnableGeometry()
-    void disable() override; // rtcDisableGeometry()
+    void commit () override;
+    void enable () override;
+    void disable() override;
     void set_user_data(void* ptr) override;
     [[nodiscard]] auto get_user_data() -> void* override;
     [[nodiscard]] auto debug_label() const -> std::string_view override;
 
-    // rtcSetGeometryTransformQuaternion()
-    // rtcGetGeometryTransform()
-    // rtcSetGeometryTimeStepCount()
-    // rtcSetGeometryTimeRange()
-    void set_vertex_attribute_count(const unsigned int count) override; // rtcSetGeometryVertexAttributeCount()
+    void set_vertex_attribute_count(const unsigned int count) override;
 
-    // rtcSetGeometryMask()
-    // rtcSetGeometryBuildQuality()
-
-    void set_buffer( // rtcSetGeometryBuffer()
+    void set_buffer(
         const Buffer_type  type,
         const unsigned int slot,
         const Format       format,
@@ -44,42 +38,6 @@ public:
         const size_t       byte_stride,
         const size_t       item_count
     ) override;
-
-    // rtcSetSharedGeometryBuffer()
-    // rtcSetNewGeometryBuffer()
-    // rtcGetGeometryBufferData()
-    // rtcUpdateGeometryBuffer()
-    // rtcSetGeometryIntersectFilterFunction()
-    // rtcSetGeometryOccludedFilterFunction()
-    // rtcFilterIntersection()
-    // rtcFilterOcclusion()
-    // rtcSetGeometryUserData()
-    // rtcGetGeometryUserData()
-    // rtcSetGeometryUserPrimitiveCount()
-    // rtcSetGeometryBoundsFunction()
-    // rtcSetGeometryIntersectFunction()
-    // rtcSetGeometryOccludedFunction()
-    // rtcSetGeometryPointQueryFunction()
-    // rtcSetGeometryInstancedScene()
-
-    // Subdivision
-    //
-    // rtcSetGeometryTessellationRate()
-    // rtcSetGeometryTopologyCount()
-    // rtcSetGeometrySubdivisionMode()
-    // rtcSetGeometryVertexAttributeTopology()
-    // rtcSetGeometryDisplacementFunction()
-
-    // Half edge
-    //
-    // rtcGetGeometryFirstHalfEdge()
-    // rtcGetGeometryFace()
-    // rtcGetGeometryNextHalfEdge()
-    // rtcGetGeometryPreviousHalfEdge()
-    // rtcGetGeometryOppositeHalfEdge()
-
-    // rtcInterpolate()
-    // rtcInterpolateN()
 
     auto get_rtc_geometry() -> RTCGeometry;
 

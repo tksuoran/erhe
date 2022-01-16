@@ -31,6 +31,11 @@ auto Command_context::hovering_over_tool() -> bool
     return m_pointer_context.hovering_over_tool();
 }
 
+auto Command_context::hovering_over_gui() -> bool
+{
+    return m_pointer_context.hovering_over_gui();
+}
+
 auto Command_context::accept_mouse_command(Command* command) -> bool
 {
     return m_editor_view.accept_mouse_command(command);

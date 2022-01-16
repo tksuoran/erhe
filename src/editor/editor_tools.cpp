@@ -23,11 +23,11 @@ void Editor_tools::register_tool(Tool* tool)
     const std::lock_guard<std::mutex> lock{m_mutex};
 
     m_tools.emplace_back(tool);
-    auto* const imgui_window = dynamic_cast<Imgui_window*>(tool);
-    if (imgui_window != nullptr)
-    {
-        m_editor_imgui_windows->register_imgui_window(imgui_window);
-    }
+    //auto* const imgui_window = dynamic_cast<Imgui_window*>(tool);
+    //if (imgui_window != nullptr)
+    //{
+    //    m_editor_imgui_windows->register_imgui_window(imgui_window);
+    //}
 }
 
 void Editor_tools::register_background_tool(Tool* tool)
