@@ -141,6 +141,7 @@ public:
     void on_focus       (int focused);
     void on_cursor_enter(int entered);
     void on_mouse_click (const uint32_t button, const int count);
+    void on_mouse_wheel (const double x, const double y);
 
 private:
     void init_context              ();

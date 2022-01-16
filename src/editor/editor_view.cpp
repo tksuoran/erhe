@@ -378,6 +378,11 @@ void Editor_view::on_mouse_click(
     }
 }
 
+void Editor_view::on_mouse_wheel(const double x, const double y)
+{
+    m_editor_imgui_windows->on_mouse_wheel(x, y);
+}
+
 void Editor_view::on_mouse_move(const double x, const double y)
 {
     if (!m_pointer_context)

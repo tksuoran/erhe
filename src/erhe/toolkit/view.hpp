@@ -211,6 +211,12 @@ public:
         static_cast<void>(button);
         static_cast<void>(count);
     }
+
+    virtual void on_mouse_wheel(const double x, const double y)
+    {
+        static_cast<void>(x);
+        static_cast<void>(y);
+    }
 };
 
 // View is the currently active EventHandler.
@@ -271,6 +277,7 @@ public:
     void on_key_release (const Keycode code, const Key_modifier_mask mask) override;
     void on_mouse_move  (const double x, const double y) override;
     void on_mouse_click (const Mouse_button button, const int count) override;
+    void on_mouse_wheel (const double x, const double y) override;
 
 private:
     Context_window* m_window   {nullptr};

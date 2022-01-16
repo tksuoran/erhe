@@ -257,11 +257,7 @@ void mouse_wheel_event_callback(GLFWwindow* glfw_window, const double x, const d
     auto* const event_handler = get_event_handler(glfw_window);
     if (event_handler)
     {
-        // TODO mouse wheel API
-        event_handler->on_mouse_click(
-            Mouse_button_wheel,
-            static_cast<int>(x + y)
-        );
+        event_handler->on_mouse_wheel(x, y);
     }
 }
 

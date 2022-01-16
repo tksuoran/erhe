@@ -265,4 +265,13 @@ void Root_view::on_mouse_click(const Mouse_button button, const int count)
     }
 }
 
+void Root_view::on_mouse_wheel(const double x, const double y)
+{
+    if (m_view != nullptr)
+    {
+        m_view->on_mouse_wheel(x, y);
+    }
+}
+
+
 } // namespace erhe::toolkit

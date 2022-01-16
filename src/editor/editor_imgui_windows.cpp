@@ -681,6 +681,13 @@ void Editor_imgui_windows::on_mouse_click(const uint32_t button, const int count
     }
 }
 
+void Editor_imgui_windows::on_mouse_wheel(const double x, const double y)
+{
+    ImGuiIO& io = ImGui::GetIO(m_imgui_context);
+    io.MouseWheelH += static_cast<float>(x);
+    io.MouseWheel  += static_cast<float>(y);
+}
+
 void Editor_imgui_windows::on_key(
     const signed int keycode,
     const bool       pressed
