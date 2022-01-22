@@ -119,26 +119,26 @@ auto Fly_camera_move_command::try_call(Command_context& context) -> bool
 }
 
 Fly_camera_tool::Fly_camera_tool()
-    : erhe::components::Component     {c_name}
-    , Imgui_window                    {c_description}
-    , m_turn_command                  {*this}
-    , m_move_up_active_command        {*this, Control::translate_y, Controller_item::more, true}
-    , m_move_up_inactive_command      {*this, Control::translate_y, Controller_item::more, false}
-    , m_move_down_active_command      {*this, Control::translate_y, Controller_item::less, true}
-    , m_move_down_inactive_command    {*this, Control::translate_y, Controller_item::less, false}
-    , m_move_left_active_command      {*this, Control::translate_x, Controller_item::less, true}
-    , m_move_left_inactive_command    {*this, Control::translate_x, Controller_item::less, false}
-    , m_move_right_active_command     {*this, Control::translate_x, Controller_item::more, true}
-    , m_move_right_inactive_command   {*this, Control::translate_x, Controller_item::more, false}
-    , m_move_forward_active_command   {*this, Control::translate_z, Controller_item::less, true}
-    , m_move_forward_inactive_command {*this, Control::translate_z, Controller_item::less, false}
-    , m_move_backward_active_command  {*this, Control::translate_z, Controller_item::more, true}
-    , m_move_backward_inactive_command{*this, Control::translate_z, Controller_item::more, false}
-
+    : erhe::components::Component{c_name}
+    , Imgui_window               {c_description}
 #ifdef _WIN32
     , m_space_mouse_listener     {*this}
     , m_space_mouse_controller   {m_space_mouse_listener}
 #endif
+    , m_turn_command                  {*this}
+    , m_move_up_active_command        {*this, Control::translate_y, Controller_item::more, true }
+    , m_move_up_inactive_command      {*this, Control::translate_y, Controller_item::more, false}
+    , m_move_down_active_command      {*this, Control::translate_y, Controller_item::less, true }
+    , m_move_down_inactive_command    {*this, Control::translate_y, Controller_item::less, false}
+    , m_move_left_active_command      {*this, Control::translate_x, Controller_item::less, true }
+    , m_move_left_inactive_command    {*this, Control::translate_x, Controller_item::less, false}
+    , m_move_right_active_command     {*this, Control::translate_x, Controller_item::more, true }
+    , m_move_right_inactive_command   {*this, Control::translate_x, Controller_item::more, false}
+    , m_move_forward_active_command   {*this, Control::translate_z, Controller_item::less, true }
+    , m_move_forward_inactive_command {*this, Control::translate_z, Controller_item::less, false}
+    , m_move_backward_active_command  {*this, Control::translate_z, Controller_item::more, true }
+    , m_move_backward_inactive_command{*this, Control::translate_z, Controller_item::more, false}
+
 {
 }
 

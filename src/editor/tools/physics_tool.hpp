@@ -76,7 +76,7 @@ public:
     void end_drag     ();
 
 private:
-    Physics_tool_drag_command                   m_drag_command;
+    Physics_tool_drag_command  m_drag_command;
 
     // Component dependencies
     std::shared_ptr<Line_renderer_set>          m_line_renderer_set;

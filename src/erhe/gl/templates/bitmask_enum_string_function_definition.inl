@@ -1,8 +1,8 @@
-std::string to_string({WRAPPER_ENUM_TYPE_NAME} value) // {GROUP_NAME}
+auto to_string(const {WRAPPER_ENUM_TYPE_NAME} value) -> std::string// {GROUP_NAME}
 {{
     std::stringstream ss;
     bool is_empty = true;
-    auto ui_value = static_cast<unsigned int>(value);
+    const auto ui_value = static_cast<unsigned int>(value);
 
 {GROUP_ENUM_STRING_ENTRIES}
 

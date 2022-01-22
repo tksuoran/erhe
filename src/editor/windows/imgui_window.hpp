@@ -46,7 +46,7 @@ class Rendertarget_imgui_window
     : public Imgui_window
 {
 public:
-    Rendertarget_imgui_window(const std::string_view title);
+    explicit Rendertarget_imgui_window(const std::string_view title);
 
     auto flags   () -> ImGuiWindowFlags override;
     void on_begin()                     override;

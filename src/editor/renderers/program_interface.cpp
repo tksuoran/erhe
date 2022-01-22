@@ -31,16 +31,118 @@ Program_interface::Shader_resources::Shader_resources()
 {
     fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 
-    attribute_mappings.add(gl::Attribute_type::float_vec4, "a_position_texcoord", {Vertex_attribute::Usage_type::position | Vertex_attribute::Usage_type::tex_coord, 0}, 0);
-    attribute_mappings.add(gl::Attribute_type::float_vec3, "a_position",          {Vertex_attribute::Usage_type::position,  0}, 0);
-    attribute_mappings.add(gl::Attribute_type::float_vec3, "a_normal",            {Vertex_attribute::Usage_type::normal,    0}, 1);
-    attribute_mappings.add(gl::Attribute_type::float_vec3, "a_normal_flat",       {Vertex_attribute::Usage_type::normal,    1}, 2);
-    attribute_mappings.add(gl::Attribute_type::float_vec3, "a_normal_smooth",     {Vertex_attribute::Usage_type::normal,    2}, 3);
-    attribute_mappings.add(gl::Attribute_type::float_vec4, "a_tangent",           {Vertex_attribute::Usage_type::tangent,   0}, 4);
-    attribute_mappings.add(gl::Attribute_type::float_vec4, "a_bitangent",         {Vertex_attribute::Usage_type::bitangent, 0}, 5);
-    attribute_mappings.add(gl::Attribute_type::float_vec4, "a_color",             {Vertex_attribute::Usage_type::color,     0}, 6);
-    attribute_mappings.add(gl::Attribute_type::float_vec2, "a_texcoord",          {Vertex_attribute::Usage_type::tex_coord, 0}, 7);
-    attribute_mappings.add(gl::Attribute_type::float_vec4, "a_id",                {Vertex_attribute::Usage_type::id,        0}, 8);
+    attribute_mappings.add(
+        {
+            .layout_location = 0,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_position_texcoord",
+            .src_usage       =
+            {
+                .type = Vertex_attribute::Usage_type::position | Vertex_attribute::Usage_type::tex_coord
+            }
+        }
+    );
+    attribute_mappings.add(
+        {
+            .layout_location = 0,
+            .shader_type     = gl::Attribute_type::float_vec3,
+            .name            = "a_position",
+            .src_usage       =
+            {
+                .type = Vertex_attribute::Usage_type::position
+            }
+        }
+    );
+    attribute_mappings.add(
+        {
+            .layout_location = 1,
+            .shader_type     = gl::Attribute_type::float_vec3,
+            .name            = "a_normal",
+            .src_usage       =
+            {
+                .type = Vertex_attribute::Usage_type::normal
+            }
+        }
+    );
+    attribute_mappings.add(
+        {
+            .layout_location = 2,
+            .shader_type     = gl::Attribute_type::float_vec3,
+            .name            = "a_normal_flat",
+            .src_usage       =
+            {
+                .type  = Vertex_attribute::Usage_type::normal,
+                .index = 1
+            }
+        }
+    );
+    attribute_mappings.add(
+        {
+            .layout_location = 3,
+            .shader_type     = gl::Attribute_type::float_vec3,
+            .name            = "a_normal_smooth",
+            .src_usage       =
+            {
+                .type  = Vertex_attribute::Usage_type::normal,
+                .index = 2
+            }
+        }
+    );
+    attribute_mappings.add(
+        {
+            .layout_location = 4,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_tangent",
+            .src_usage       =
+            {
+                .type  = Vertex_attribute::Usage_type::tangent,
+            }
+        }
+    );
+    attribute_mappings.add(
+        {
+            .layout_location = 5,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_bitangent",
+            .src_usage       =
+            {
+                .type  = Vertex_attribute::Usage_type::bitangent,
+            }
+        }
+    );
+    attribute_mappings.add(
+        {
+            .layout_location = 6,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_color",
+            .src_usage       =
+            {
+                .type  = Vertex_attribute::Usage_type::color,
+            }
+        }
+    );
+    attribute_mappings.add(
+        {
+            .layout_location = 7,
+            .shader_type     = gl::Attribute_type::float_vec2,
+            .name            = "a_texcoord",
+            .src_usage       =
+            {
+                .type  = Vertex_attribute::Usage_type::tex_coord,
+            }
+        }
+    );
+    attribute_mappings.add(
+        {
+            .layout_location = 8,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_id",
+            .src_usage       =
+            {
+                .type  = Vertex_attribute::Usage_type::id,
+            }
+        }
+    );
 
     material_block_offsets = {
         .metallic     = material_struct.add_float("metallic"    )->offset_in_parent(),

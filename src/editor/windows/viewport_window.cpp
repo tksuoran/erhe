@@ -252,7 +252,7 @@ void Viewport_window::clear(
     ERHE_PROFILE_FUNCTION
 
     pipeline_state_tracker.shader_stages.reset();
-    pipeline_state_tracker.color_blend.execute(&Color_blend_state::color_blend_disabled);
+    pipeline_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
     gl::clear_color(
         m_viewport_config->clear_color[0],
         m_viewport_config->clear_color[1],
@@ -260,7 +260,10 @@ void Viewport_window::clear(
         m_viewport_config->clear_color[3]
     );
     gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
-    gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
+    gl::clear(
+        gl::Clear_buffer_mask::color_buffer_bit |
+        gl::Clear_buffer_mask::depth_buffer_bit
+    );
 }
 
 void Viewport_window::on_begin()

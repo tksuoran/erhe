@@ -98,46 +98,16 @@ private:
             erhe::graphics::Vertex_format&            vertex_format,
             erhe::graphics::Buffer*                   index_buffer,
             const size_t                              slot
-        )
-            : vertex_buffer{
-                gl::Buffer_target::array_buffer,
-                vertex_format.stride() * vertex_count,
-                storage_mask,
-                access_mask
-            }
-            , projection_buffer{
-                gl::Buffer_target::uniform_buffer,
-                1024, // TODO
-                storage_mask,
-                access_mask
-            }
-            , vertex_input_state{
-                attribute_mappings,
-                vertex_format,
-                &vertex_buffer,
-                index_buffer
-            }
-            , pipeline{
-                .shader_stages  = shader_stages,
-                .vertex_input   = &vertex_input_state,
-                .input_assembly = &erhe::graphics::Input_assembly_state::triangle_fan,
-                .rasterization  = &erhe::graphics::Rasterization_state::cull_mode_none,
-                .depth_stencil  = &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                .color_blend    = &erhe::graphics::Color_blend_state::color_blend_premultiplied,
-            }
-        {
-            vertex_buffer    .set_debug_label(fmt::format("Text Renderer Vertex {}", slot));
-            projection_buffer.set_debug_label(fmt::format("Text Renderer Projection {}", slot));
-        }
+        );
 
         Frame_resources(const Frame_resources&) = delete;
-        auto operator= (const Frame_resources&) -> Frame_resources& = delete;
+        auto operator= (const Frame_resources&) = delete;
         Frame_resources(Frame_resources&&) = delete;
         auto operator= (Frame_resources&&) = delete;
 
         erhe::graphics::Buffer             vertex_buffer;
         erhe::graphics::Buffer             projection_buffer;
-        erhe::graphics::Vertex_input_state vertex_input_state;
+        erhe::graphics::Vertex_input_state vertex_input;
         erhe::graphics::Pipeline           pipeline;
     };
 

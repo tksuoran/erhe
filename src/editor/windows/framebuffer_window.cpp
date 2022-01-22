@@ -33,24 +33,25 @@ void Framebuffer_window::initialize(
     erhe::graphics::Shader_stages*              shader_stages
 )
 {
+    using erhe::graphics::Input_assembly_state;
+    using erhe::graphics::Rasterization_state;
+    using erhe::graphics::Depth_stencil_state;
+    using erhe::graphics::Color_blend_state;
     const Scoped_gl_context gl_context{context_provider};
 
     editor_imgui_windows.register_imgui_window(this);
 
-    m_empty_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
-        m_empty_attribute_mappings,
-        m_empty_vertex_format,
-        nullptr,
-        nullptr
+    m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
+        erhe::graphics::Vertex_input_state_data{}
     );
 
-    m_pipeline = {
+    m_pipeline.data = {
         .shader_stages  = shader_stages,
-        .vertex_input   = m_empty_vertex_input.get(),
-        .input_assembly = &erhe::graphics::Input_assembly_state::triangle_fan,
-        .rasterization  = &erhe::graphics::Rasterization_state::cull_mode_none,
-        .depth_stencil  = &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-        .color_blend    = &erhe::graphics::Color_blend_state::color_blend_disabled
+        .vertex_input   = m_vertex_input.get(),
+        .input_assembly = Input_assembly_state::triangle_fan,
+        .rasterization  = Rasterization_state::cull_mode_none,
+        .depth_stencil  = Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+        .color_blend    = Color_blend_state::color_blend_disabled
     };
 }
 

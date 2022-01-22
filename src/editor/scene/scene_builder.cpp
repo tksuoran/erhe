@@ -88,7 +88,7 @@ Scene_builder::~Scene_builder() = default;
 void Scene_builder::connect()
 {
     require<Gl_context_provider>();
-
+    require<Fly_camera_tool>();
     require<Materials>();
     m_brushes     = require<Brushes>();
     m_mesh_memory = require<Mesh_memory>();

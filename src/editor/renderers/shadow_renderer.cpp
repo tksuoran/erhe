@@ -73,19 +73,22 @@ void Shadow_renderer::initialize_component()
 
     const auto& shader_resources = *get<Program_interface>()->shader_resources.get();
     m_vertex_input = std::make_unique<Vertex_input_state>(
-        shader_resources.attribute_mappings,
-        m_mesh_memory->gl_vertex_format(),
-        m_mesh_memory->gl_vertex_buffer.get(),
-        m_mesh_memory->gl_index_buffer.get()
+        erhe::graphics::Vertex_input_state_data::make(
+            shader_resources.attribute_mappings,
+            m_mesh_memory->gl_vertex_format(),
+            m_mesh_memory->gl_vertex_buffer.get(),
+            m_mesh_memory->gl_index_buffer.get()
+        )
     );
 
-    m_pipeline = {
+    m_pipeline.data = {
+        .name           = "Shadow Renderer",
         .shader_stages  = get<Programs>()->depth.get(),
         .vertex_input   = m_vertex_input.get(),
-        .input_assembly = &Input_assembly_state::triangles,
-        .rasterization  = &Rasterization_state::cull_mode_none,
-        .depth_stencil  =  Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
-        .color_blend    = &Color_blend_state::color_writes_disabled
+        .input_assembly = Input_assembly_state::triangles,
+        .rasterization  = Rasterization_state::cull_mode_none,
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+        .color_blend    = Color_blend_state::color_writes_disabled
     };
 
     {
@@ -124,6 +127,8 @@ void Shadow_renderer::initialize_component()
         .height        = m_texture->height(),
         .reverse_depth = m_configuration->reverse_depth
     };
+
+    m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>();
 }
 
 static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::render()"};
@@ -140,11 +145,12 @@ void Shadow_renderer::render(const Render_parameters& parameters)
     ERHE_PROFILE_GPU_SCOPE(c_shadow_renderer_render)
 
     erhe::graphics::Scoped_debug_group debug_group{c_shadow_renderer_render};
+    erhe::graphics::Scoped_gpu_timer   timer      {*m_gpu_timer.get()};
 
     const auto& mesh_layers = parameters.mesh_layers;
     const auto& light_layer = *parameters.light_layer;
 
-    m_pipeline_state_tracker->execute(&m_pipeline);
+    m_pipeline_state_tracker->execute(m_pipeline);
     gl::viewport(m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
 
     erhe::scene::Visibility_filter shadow_filter{
@@ -195,7 +201,7 @@ void Shadow_renderer::render(const Render_parameters& parameters)
                 bind_camera_buffer();
 
                 gl::multi_draw_elements_indirect(
-                    m_pipeline.input_assembly->primitive_topology,
+                    m_pipeline.data.input_assembly.primitive_topology,
                     m_mesh_memory->gl_index_type(),
                     reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
                     static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
@@ -221,6 +227,12 @@ auto Shadow_renderer::texture() const -> erhe::graphics::Texture*
 auto Shadow_renderer::viewport() const -> erhe::scene::Viewport
 {
     return m_viewport;
+}
+
+auto Shadow_renderer::gpu_time() const -> double
+{
+    const auto time_elapsed = static_cast<double>(m_gpu_timer->last_result());
+    return time_elapsed / 1000000.0;
 }
 
 } // namespace editor

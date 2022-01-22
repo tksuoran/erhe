@@ -37,10 +37,38 @@ auto Window::create_gl_window() -> bool
 
     const auto& configuration = *get<Configuration>();
 
+    const char* month_name[] = {
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December"
+    };
+
+    const time_t now = time(0);
+    tm* l = localtime(&now);
+    std::string title = fmt::format(
+        "erhe by Timo Suoranta {} {}. {}",
+        month_name[l->tm_mon],
+        l->tm_mday,
+        1900 + l->tm_year
+    );
+
     m_context_window = std::make_unique<erhe::toolkit::Context_window>(
-        configuration.window_width,
-        configuration.window_height,
-        configuration.window_msaa_sample_count
+        erhe::toolkit::Window_configuration{
+            .fullscreen        = configuration.fullscreen,
+            .width             = configuration.window_width,
+            .height            = configuration.window_height,
+            .msaa_sample_count = configuration.window_msaa_sample_count,
+            .title             = title.c_str()
+        }
     );
 
 #if defined(ERHE_WINDOW_LIBRARY_GLFW)

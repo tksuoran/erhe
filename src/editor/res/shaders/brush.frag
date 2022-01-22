@@ -5,9 +5,10 @@ in flat uint v_material_index;
 in float     v_tangent_scale;
 in vec4      v_color;
 
-float sample_light_visibility(vec4  position,
-                              uint  light_index,
-                              float NdotL)
+float sample_light_visibility(
+    vec4  position,
+    uint  light_index,
+    float NdotL)
 {
     Light light = light_block.lights[light_index];
     vec4  position_in_light_texture_homogeneous = light.texture_from_world * position;
@@ -55,9 +56,11 @@ float srgb_to_linear(float x)
 
 vec3 srgb_to_linear(vec3 v)
 {
-    return vec3(srgb_to_linear(v.r),
-                srgb_to_linear(v.g),
-                srgb_to_linear(v.b));
+    return vec3(
+        srgb_to_linear(v.r),
+        srgb_to_linear(v.g),
+        srgb_to_linear(v.b)
+    );
 }
 
 vec2 srgb_to_linear(vec2 v)
@@ -108,7 +111,8 @@ vec3 F_Schlick(vec3 f0, vec3 f90, float VdotH)
 float V_GGX(
     float NdotL,
     float NdotV,
-    float alphaRoughness)
+    float alphaRoughness
+)
 {
     float alphaRoughnessSq = alphaRoughness * alphaRoughness;
     float GGXV             = NdotL * sqrt(NdotV * NdotV * (1.0 - alphaRoughnessSq) + alphaRoughnessSq);
@@ -130,7 +134,8 @@ float V_GGX_anisotropic(
     float BdotL,
     float anisotropy,
     float at,
-    float ab)
+    float ab
+)
 {
     float GGXV = NdotL * length(vec3(at * TdotV, ab * BdotV, NdotV));
     float GGXL = NdotV * length(vec3(at * TdotL, ab * BdotL, NdotL));
@@ -161,26 +166,24 @@ vec3 BRDF_specularGGX(vec3 f0, vec3 f90, float alphaRoughness, float VdotH, floa
     return F * Vis * D;
 }
 
-vec3 BRDF_specularAnisotropicGGX(vec3 f0, vec3 f90, float alphaRoughness,
-                                 float VdotH, float NdotL, float NdotV, float NdotH, float BdotV, float TdotV,
-                                 float TdotL, float BdotL, float TdotH, float BdotH, float anisotropy)
+vec3 BRDF_specularAnisotropicGGX(
+    vec3 f0, vec3 f90, float alphaRoughness,
+    float VdotH, float NdotL, float NdotV, float NdotH, float BdotV, float TdotV,
+    float TdotL, float BdotL, float TdotH, float BdotH, float anisotropy
+)
 {
     vec3  F  = F_Schlick(f0, f90, VdotH);
 
     float  i_V = V_GGX(NdotL, NdotV, alphaRoughness);
     float  i_D = D_GGX(NdotH, alphaRoughness);
-    //return F * Vis * D;
 
     float at = max(alphaRoughness * (1.0 + anisotropy), 0.00001);
     float ab = max(alphaRoughness * (1.0 - anisotropy), 0.00001);
     float a_V  = V_GGX_anisotropic(NdotL, NdotV, BdotV, TdotV, TdotL, BdotL, anisotropy, at, ab);
     float a_D  = D_GGX_anisotropic(NdotH, TdotH, BdotH, anisotropy, at, ab);
 
-  //vec3  iggx = BRDF_specularGGX(f0, f90, alphaRoughness, VdotH, NdotL, NdotV, NdotH);
-  //vec3  iggx = F * i_V * i_D;
-  //vec3  aggx = F * a_V * a_D;
-    vec3  iggx = F * i_V * i_D; // vec3(0.1) * i_D;
-    vec3  aggx = F * a_V * a_D; // vec3(0.1) * a_D;
+    vec3  iggx = F * i_V * i_D;
+    vec3  aggx = F * a_V * a_D;
     return mix(iggx, aggx, 0.0);
 }
 
@@ -234,10 +237,7 @@ vec3 getBaseColor()
 
 MaterialInfo getSpecularGlossinessInfo(MaterialInfo info)
 {
-    //info.f0                  = material.materials[v_material_index].specular_and_roughness.rgb;
-    //info.perceptualRoughness = material.materials[v_material_index].glossiness;
-    //info.perceptualRoughness = 1.0 - info.perceptualRoughness; // 1 - glossiness
-    info.albedoColor         = v_color.rgb * info.baseColor.rgb * (1.0 - max(max(info.f0.r, info.f0.g), info.f0.b));
+    info.albedoColor = v_color.rgb * info.baseColor.rgb * (1.0 - max(max(info.f0.r, info.f0.g), info.f0.b));
     return info;
 }
 
@@ -361,93 +361,13 @@ void main()
     }
 
     color = f_emissive + f_diffuse + f_specular;
-    //color = light_block.ambient_light.rgb;
 
     out_color.rgb = color;
     out_color.a = 1.0;
 
-    if (false)
-    {
-        uint  light_index      = directional_light_offset + 0;
-        Light light            = light_block.lights[light_index];
-        vec3  pointToLight     = light.direction_and_outer_spot_cos.xyz;
-        vec3  l                = normalize(pointToLight);   // Direction from surface point to light
-        float NdotL            = clampedDot(n, l);
-        //float NdotV           = clampedDot(n, v);
-        //out_color.rgb = srgb_to_linear(vec3(NdotL));
-        //out_color.rgb = srgb_to_linear(vec3(NdotV))
-        //vec3 B_ = normalize(cross(N, T)) * v_tangent_scale;
 
-        //out_color.rgb = srgb_to_linear(0.5 * n + vec3(0.5));
-        //out_color.rgb = v_tangent_scale < 0.0 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
-        //  out_color.r = srgb_to_linear(v_texcoord.x * 1.0);
-        //  out_color.g = srgb_to_linear(v_texcoord.y * 1.0);
-        //  out_color.b = 0.0;
-    }
-    //vec3 t  = normalize(v_TBN[0]);
-    //vec3 b  = normalize(v_TBN[1]);
-    //vec3 ng = normalize(v_TBN[2]);
-
-    //out_color.rgb = srgb_to_linear(0.5 * n + vec3(0.5));
-    //out_color.rgb = srgb_to_linear(0.5 * normalize(v_TBN[1]) + vec3(0.5));
-    //out_color.rgb = srgb_to_linear(0.5 * b + vec3(0.5));
-    //out_color.rgb = vec3(v_tangent_scale * 0.5 + 0.5);
-    //out_color.r = srgb_to_linear(v_texcoord.x * 1.0);
-    //out_color.g = srgb_to_linear(v_texcoord.y * 1.0);
-
-    if (false)
-    {
-        uint  light_index  = directional_light_offset + 0;
-        Light light        = light_block.lights[light_index];
-        vec3  pointToLight = light.direction_and_outer_spot_cos.xyz;
-        vec3  l            = normalize(pointToLight);   // Direction from surface point to light
-
-        vec3  C   = v_color.rgb * material.base_color.rgb;
-        //vec3  C_i = vec3(1.0) - C;
-        float r   = material.roughness * material.roughness;
-        float p0  = 1.0 - material.anisotropy;
-        float p   = p0 * p0;
-        float p2  = p * p;
-        vec3  L   = l;
-        vec3  N   = n;
-        vec3  T   = b;
-        vec3  V   = normalize(view_position_in_world - v_position.xyz);
-        vec3  H   = normalize(l + v);
-
-        float hn  = max(0.0, dot(H, N));                          // t Figure 1
-        float hv  = max(0.0, dot(H, V));                          // u
-        float vn  = max(0.0, dot(V, N));                          // v
-        float ln  = max(0.0, dot(L, N));                          // v'
-        float ht  = dot(H - hn * N, T);                 // w
-        vec3  S   = C + (vec3(1.0) - C) * pow(1.0 - vn, 5.0); // Equation 24
-        float Gvn = vn / (r - r * vn + vn);             // Equation 31
-        float Gln = ln / (r - r * ln + vn);             // Equation 31
-        float hn2 = hn * hn;
-        float ht2 = ht * ht;
-        float Zhn = r / (1.0 + r * hn2 - hn2);          // Equation 28
-        float Aht = sqrt(p / (p2 - p2 * ht2 + ht2));    // Equation 28
-        float G   = Gvn * Gln;
-        float den = 4.0 * M_PI * vn * ln;
-        float D   = G / den * Zhn * Aht; // + (1.0 - G) / den;
-
-        float a;
-        float b = 4.0 * r * (1.0 - r);
-        if (r < 0.5)
-        {
-            a = 0.0;
-        }
-        else
-        {
-            a = 1.0 - b;
-        }
-
-        out_color.rgb = ln * S * Zhn * Aht;
-        //out_color.rgb = vec3(Aht * 0.4); // * Zhn * Aht;
-        //out_color.rgb = vec3(pow(1.0 - vn, 5.0));
-    }
-    //out_color.r = 0.1;
     out_color.a = 0.4;
-    out_color.rgb = 0.8 * out_color.rgb + 0.2 * v_color.rgb;
+    //out_color.rgb = 0.8 * out_color.rgb + 0.2 * v_color.rgb;
     out_color.rgb *= out_color.a;
 
 }

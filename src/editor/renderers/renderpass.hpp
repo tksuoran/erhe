@@ -11,7 +11,6 @@ namespace editor
 class Renderpass
 {
 public:
-    const char*                     name{nullptr};
     erhe::graphics::Pipeline        pipeline;
     erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
     std::function<void()>           begin;

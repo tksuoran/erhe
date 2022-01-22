@@ -107,17 +107,7 @@ private:
 
     bool                                                  m_trigger_capture{false};
 
-    erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_set_hidden;
-    erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_set_visible;
-    erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_test_for_hidden;
-    erhe::graphics::Depth_stencil_state                   m_depth_stencil_tool_test_for_visible;
-    erhe::graphics::Depth_stencil_state                   m_depth_hidden;
-    erhe::graphics::Color_blend_state                     m_color_blend_constant_point_six;
-    erhe::graphics::Color_blend_state                     m_color_blend_constant_point_two;
-
     Renderpass m_rp_polygon_fill;
-
-    // Six passes for rendering tools that can be partially occluded
     Renderpass m_rp_tool1_hidden_stencil;
     Renderpass m_rp_tool2_visible_stencil;
     Renderpass m_rp_tool3_depth_clear;

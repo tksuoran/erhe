@@ -1,7 +1,8 @@
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
+#include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/log.hpp"
-#include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
+#include "erhe/graphics/vertex_format.hpp"
 
 namespace erhe::graphics
 {
@@ -10,79 +11,75 @@ using erhe::log::Log;
 using std::string;
 using std::string_view;
 
-Vertex_attribute_mappings::Vertex_attribute_mappings() = default;
-
-Vertex_attribute_mappings::~Vertex_attribute_mappings() = default;
-
 void Vertex_attribute_mappings::add(
-    const gl::Attribute_type      shader_type,
-    const string_view             name,
-    const Vertex_attribute::Usage usage,
-    const size_t                  layout_location
+    const Vertex_attribute_mapping& attribute
 )
 {
-    auto mapping = std::make_shared<Vertex_attribute_mapping>(
-        shader_type,
-        name,
-        usage,
-        layout_location
-    );
-    mappings.emplace_back(mapping);
+    mappings.push_back(attribute);
 }
 
-void Vertex_attribute_mappings::add(
-    const gl::Attribute_type           shader_type,
-    const string_view                  name,
-    const Vertex_attribute::Usage      src_usage,
-    const Vertex_attribute::Usage_type dst_usage_type,
-    const size_t                       layout_location
-)
-{
-    auto mapping = std::make_shared<Vertex_attribute_mapping>(
-        shader_type,
-        name,
-        src_usage,
-        dst_usage_type,
-        layout_location
-    );
-    mappings.emplace_back(mapping);
-}
-
-void Vertex_attribute_mappings::apply_to_vertex_input_state(
-    Vertex_input_state&  vertex_input_state,
-    const Buffer*        vertex_buffer,
-    const Vertex_format& vertex_format
+void Vertex_attribute_mappings::collect_attributes(
+    std::vector<Vertex_input_attribute>& attributes,
+    const Buffer*                        vertex_buffer,
+    const Vertex_format&                 vertex_format
 ) const
 {
-    Expects(vertex_input_state.bindings().empty());
+    const unsigned int max_attribute_count = std::min(
+        MAX_ATTRIBUTE_COUNT,
+        erhe::graphics::Instance::limits.max_vertex_attribs
+    );
 
-    log_vertex_attribute_mappings.trace("Vertex_attribute_mappings::apply_to_vertex_input_state()\n");
-    const log::Indenter log_indent;
+    if (vertex_buffer == nullptr)
+    {
+        log_vertex_attribute_mappings.error("error: vertex buffer == nullptr");
+        return;
+    }
 
-    for (auto mapping : mappings)
+    for (const auto& mapping : mappings)
     {
         if (
             vertex_format.has_attribute(
-                mapping->src_usage.type,
-                static_cast<unsigned int>(mapping->src_usage.index)
+                mapping.src_usage.type,
+                static_cast<unsigned int>(mapping.src_usage.index)
             )
         )
         {
             auto attribute = vertex_format.find_attribute(
-                mapping->src_usage.type,
-                static_cast<unsigned int>(mapping->src_usage.index)
+                mapping.src_usage.type,
+                static_cast<unsigned int>(mapping.src_usage.index)
             );
             log_vertex_attribute_mappings.trace(
                 "vertex attribute: shader type = {}, name = {}, usage = {}, data_type = {}, dimension = {}, index = {}\n",
-                gl::c_str(mapping->shader_type),
-                mapping->name,
+                gl::c_str(mapping.shader_type),
+                mapping.name,
                 Vertex_attribute::desc(attribute->usage.type),
                 gl::c_str(attribute->data_type.type),
-                static_cast<unsigned int>(attribute->data_type.dimension),
-                static_cast<unsigned int>(attribute->usage.index)
+                attribute->data_type.dimension,
+                attribute->usage.index
             );
 
-            vertex_input_state.emplace_back(vertex_buffer, mapping, attribute, vertex_format.stride());
+                if (attribute == nullptr)
+            {
+                log_vertex_attribute_mappings.error("bad vertex input state: attribute == nullptr");
+                continue;
+            }
+            if (mapping.layout_location >= max_attribute_count)
+            {
+                log_vertex_attribute_mappings.error("bad vertex input state: layout location >= max attribute count");
+                continue;
+            }
+
+            attributes.emplace_back(
+                static_cast<GLuint>(mapping.layout_location),       // layout_location
+                vertex_buffer,                                      // vertex buffer
+                static_cast<GLsizei>(vertex_format.stride()),       // stride
+                static_cast<GLint>(attribute->data_type.dimension), // dimension
+                attribute->shader_type,                             // shader type
+                attribute->data_type.type,                          // data type
+                attribute->data_type.normalized,                    // normalized
+                static_cast<GLuint>(attribute->offset),             // offset
+                attribute->divisor                                  // divisor
+            );
         }
     }
 }

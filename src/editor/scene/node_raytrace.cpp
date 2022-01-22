@@ -27,16 +27,18 @@ Raytrace_primitive::Raytrace_primitive(
 {
     // Just float vec3 position
     auto vertex_format = std::make_shared<erhe::graphics::Vertex_format>();
-    vertex_format->make_attribute(
+    vertex_format->add(
         {
-            erhe::graphics::Vertex_attribute::Usage_type::position,
-            0
-        },
-        gl::Attribute_type::float_vec3,
-        {
-            gl::Vertex_attrib_type::float_,
-            false,
-            3
+            .usage =
+            {
+                .type      = erhe::graphics::Vertex_attribute::Usage_type::position
+            },
+            .shader_type   = gl::Attribute_type::float_vec3,
+            .data_type =
+            {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 3
+            }
         }
     );
 

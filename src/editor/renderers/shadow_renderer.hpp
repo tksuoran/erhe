@@ -9,6 +9,7 @@
 namespace erhe::graphics
 {
     class Framebuffer;
+    class Gpu_timer;
     class OpenGL_state_tracker;
     class Texture;
     class Vertex_input_state;
@@ -56,6 +57,7 @@ public:
 
     [[nodiscard]] auto texture () const -> erhe::graphics::Texture*;
     [[nodiscard]] auto viewport() const -> erhe::scene::Viewport;
+    [[nodiscard]] auto gpu_time() const -> double;
 
     static constexpr size_t s_max_light_count    = 6;
     static constexpr size_t s_texture_resolution = 4 * 1024;
@@ -70,6 +72,7 @@ private:
     erhe::graphics::Pipeline                                  m_pipeline;
     std::unique_ptr<erhe::graphics::Vertex_input_state>       m_vertex_input;
     std::unique_ptr<erhe::graphics::Texture>                  m_texture;
+    std::unique_ptr<erhe::graphics::Gpu_timer>                m_gpu_timer;
     std::vector<std::unique_ptr<erhe::graphics::Framebuffer>> m_framebuffers;
     erhe::scene::Viewport                                     m_viewport{0, 0, 0, 0, true};
     size_t                                                    m_slot{0};

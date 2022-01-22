@@ -99,6 +99,65 @@ const std::string_view c_fragment_shader_source =
 
 } // anonymous namespace
 
+Imgui_renderer::Frame_resources::Frame_resources(
+    const size_t                               slot,
+    erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
+    erhe::graphics::Vertex_format&             vertex_format,
+    erhe::graphics::Shader_stages*             shader_stages,
+    size_t          vertex_count, size_t vertex_stride,
+    size_t          index_count,  size_t index_stride,
+    size_t          draw_count,   size_t draw_stride
+)
+    : vertex_buffer{
+        gl::Buffer_target::array_buffer,
+        vertex_count * vertex_stride,
+        storage_mask,
+        access_mask
+    }
+    , index_buffer{
+        gl::Buffer_target::element_array_buffer,
+        index_count * index_stride,
+        storage_mask,
+        access_mask
+    }
+    , draw_parameter_buffer{
+        gl::Buffer_target::shader_storage_buffer,
+        draw_count * draw_stride,
+        storage_mask,
+        access_mask
+    }
+    , draw_indirect_buffer{
+        gl::Buffer_target::draw_indirect_buffer,
+        draw_count * sizeof(gl::Draw_elements_indirect_command),
+        storage_mask,
+        access_mask
+    }
+    , vertex_input{
+        erhe::graphics::Vertex_input_state_data::make(
+            attribute_mappings,
+            vertex_format,
+            &vertex_buffer,
+            &index_buffer
+        )
+    }
+    , pipeline {
+        {
+            .name           = "ImGui Renderer",
+            .shader_stages  = shader_stages,
+            .vertex_input   = &vertex_input,
+            .input_assembly = erhe::graphics::Input_assembly_state::triangles,
+            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+            .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied
+        }
+    }
+{
+    vertex_buffer        .set_debug_label(fmt::format("ImGui Renderer Vertex {}",         slot));
+    index_buffer         .set_debug_label(fmt::format("ImGui Renderer Index {}",          slot));
+    draw_parameter_buffer.set_debug_label(fmt::format("ImGui Renderer Draw Parameter {}", slot));
+    draw_indirect_buffer .set_debug_label(fmt::format("ImGui Renderer Draw Indirect {}",  slot));
+}
+
 Texture_unit_cache::Texture_unit_cache(size_t texture_unit_count)
 {
     m_textures.resize(texture_unit_count);
@@ -200,24 +259,75 @@ void Imgui_renderer::initialize_component()
 
 void Imgui_renderer::create_attribute_mappings_and_vertex_format()
 {
-    m_attribute_mappings.add(gl::Attribute_type::float_vec2, "a_position", {erhe::graphics::Vertex_attribute::Usage_type::position,  0}, 0);
-    m_attribute_mappings.add(gl::Attribute_type::float_vec2, "a_texcoord", {erhe::graphics::Vertex_attribute::Usage_type::tex_coord, 0}, 1);
-    m_attribute_mappings.add(gl::Attribute_type::float_vec4, "a_color",    {erhe::graphics::Vertex_attribute::Usage_type::color,     0}, 2);
+    using erhe::graphics::Vertex_attribute;
 
-    m_vertex_format.make_attribute(
-        {erhe::graphics::Vertex_attribute::Usage_type::position, 0},
-        gl::Attribute_type::float_vec2,
-        {gl::Vertex_attrib_type::float_, false, 2}
+    m_attribute_mappings.add(
+        {
+            .layout_location = 0,
+            .shader_type     = gl::Attribute_type::float_vec2,
+            .name            = "a_position",
+            .src_usage = {
+                .type        = Vertex_attribute::Usage_type::position,
+            }
+        }
     );
-    m_vertex_format.make_attribute(
-        {erhe::graphics::Vertex_attribute::Usage_type::tex_coord, 0},
-        gl::Attribute_type::float_vec2,
-        {gl::Vertex_attrib_type::float_, false, 2}
+    m_attribute_mappings.add(
+        {
+            .layout_location = 1,
+            .shader_type     = gl::Attribute_type::float_vec2,
+            .name            = "a_texcoord",
+            .src_usage = {
+                .type        = Vertex_attribute::Usage_type::tex_coord,
+            }
+        }
     );
-    m_vertex_format.make_attribute(
-        {erhe::graphics::Vertex_attribute::Usage_type::color, 0},
-        gl::Attribute_type::float_vec4,
-        {gl::Vertex_attrib_type::unsigned_byte, true, 4}
+    m_attribute_mappings.add(
+        {
+            .layout_location = 2,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_color",
+            .src_usage = {
+                .type        = Vertex_attribute::Usage_type::color,
+            }
+        }
+    );
+
+    m_vertex_format.add(
+        {
+            .usage = {
+                .type      = Vertex_attribute::Usage_type::position
+            },
+            .shader_type   = gl::Attribute_type::float_vec2,
+            .data_type = {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 2
+            }
+        }
+    );
+    m_vertex_format.add(
+        {
+            .usage = {
+                .type      = Vertex_attribute::Usage_type::tex_coord
+            },
+            .shader_type   = gl::Attribute_type::float_vec2,
+            .data_type = {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 2
+            }
+        }
+    );
+    m_vertex_format.add(
+        {
+            .usage = {
+                .type       = Vertex_attribute::Usage_type::color
+            },
+            .shader_type    = gl::Attribute_type::float_vec4,
+            .data_type = {
+                .type       = gl::Vertex_attrib_type::unsigned_byte,
+                .normalized = true,
+                .dimension  = 4
+            }
+        }
     );
 }
 
@@ -282,12 +392,11 @@ void Imgui_renderer::create_shader_stages()
 
 void Imgui_renderer::create_font_texture()
 {
-    m_font_atlas.AddFontFromFileTTF("res/fonts/SourceSansPro-Regular.otf", 22.0f);
+    m_font_atlas.AddFontFromFileTTF("res/fonts/SourceSansPro-Regular.otf", 17.0f);
 
     // Build texture atlas
     Texture::Create_info create_info{};
     unsigned char* pixels = nullptr;
-    //create_info.internal_format = gl::Internal_format::r8;
     m_font_atlas.GetTexDataAsAlpha8(&pixels, &create_info.width, &create_info.height);
     create_info.internal_format = gl::Internal_format::rgba8;
     m_font_atlas.GetTexDataAsRGBA32(&pixels, &create_info.width, &create_info.height);
@@ -390,7 +499,6 @@ void Imgui_renderer::create_frame_resources()
             m_attribute_mappings,
             m_vertex_format,
             m_shader_stages.get(),
-            &m_color_blend_state,
             s_max_vertex_count, m_vertex_format.stride(),
             s_max_index_count,  sizeof(uint16_t),
             s_max_draw_count,   m_draw_parameter_block->size_bytes()
@@ -680,7 +788,7 @@ void Imgui_renderer::render_draw_data()
 
     // This binds vertex input states (VAO) and shader stages (shader program)
     // and most other state
-    m_pipeline_state_tracker->execute(&pipeline);
+    m_pipeline_state_tracker->execute(pipeline);
 
     // TODO viewport states is not currently in pipeline
     gl::viewport(0, 0, static_cast<GLsizei>(fb_width), static_cast<GLsizei>(fb_height));
@@ -711,7 +819,7 @@ void Imgui_renderer::render_draw_data()
     );
 
     gl::multi_draw_elements_indirect(
-        pipeline.input_assembly->primitive_topology,
+        pipeline.data.input_assembly.primitive_topology,
         gl::Draw_elements_type::unsigned_short,
         nullptr,
         static_cast<GLsizei>(draw_indirect_count),

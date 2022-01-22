@@ -45,8 +45,6 @@ set(source_list
     vertex_attribute.hpp
     vertex_format.cpp
     vertex_format.hpp
-    vertex_stream_binding.cpp
-    vertex_stream_binding.hpp
     state/color_blend_state.cpp
     state/color_blend_state.hpp
     state/depth_stencil_state.cpp

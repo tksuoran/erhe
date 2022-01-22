@@ -155,7 +155,7 @@ private:
         int                  handle;
     };
 
-    Selection_tool_select_command      m_select_command;
+    Selection_tool_select_command m_select_command;
 
     // Component dependencies
     std::shared_ptr<Line_renderer_set> m_line_renderer_set;

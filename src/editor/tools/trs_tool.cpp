@@ -97,6 +97,7 @@ Trs_tool::Trs_tool()
     : erhe::components::Component{c_name}
     , Imgui_window               {c_description}
     , m_drag_command             {*this}
+
 {
 }
 

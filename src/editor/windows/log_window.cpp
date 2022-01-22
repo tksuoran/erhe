@@ -1,8 +1,12 @@
 #include "windows/log_window.hpp"
+
 #include "editor_imgui_windows.hpp"
 #include "editor_view.hpp"
 #include "log.hpp"
 
+#include "renderers/shadow_renderer.hpp"
+
+#include "erhe/graphics/debug.hpp"
 #include "erhe/raytrace/log.hpp"
 
 #include <imgui.h>
@@ -23,7 +27,7 @@ auto Log_window_toggle_pause_command::try_call(Command_context& context) -> bool
 Log_window::Log_window()
     : erhe::components::Component{c_name }
     , Imgui_window               {c_title}
-    , m_toggle_pause_command     {*this  }
+    , m_toggle_pause_command     {*this}
 {
 }
 
@@ -141,6 +145,9 @@ void Log_window::tail_write(const ImVec4 color, const char* format, fmt::format_
 
 void Log_window::imgui()
 {
+    const auto shadow_map_time = get<Shadow_renderer>()->gpu_time();
+    ImGui::Text("Shadow renderer: %g", shadow_map_time);
+
     if (ImGui::TreeNodeEx("Tail", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
     {
         ImGui::SetNextItemWidth(100.0f);

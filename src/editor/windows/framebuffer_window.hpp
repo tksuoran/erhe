@@ -55,7 +55,7 @@ protected:
     erhe::scene::Viewport                               m_viewport{0, 0, 0, 0, true};
     erhe::graphics::Vertex_attribute_mappings           m_empty_attribute_mappings;
     erhe::graphics::Vertex_format                       m_empty_vertex_format;
-    std::unique_ptr<erhe::graphics::Vertex_input_state> m_empty_vertex_input;
+    std::unique_ptr<erhe::graphics::Vertex_input_state> m_vertex_input;
     erhe::graphics::Pipeline                            m_pipeline;
     std::shared_ptr<erhe::graphics::Texture>            m_texture;
     std::unique_ptr<erhe::graphics::Framebuffer>        m_framebuffer;

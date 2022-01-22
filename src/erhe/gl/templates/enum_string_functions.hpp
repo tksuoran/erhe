@@ -9,11 +9,10 @@ namespace gl
 {{
 
 typedef unsigned char GLboolean;
-const char* c_str(GLboolean value);
 
-const char* enum_string(unsigned int value);
-
-unsigned int enum_value(const std::string& name);
+auto c_str      (const GLboolean value) -> const char*;
+auto enum_string(const unsigned int value) -> const char*;
+auto enum_value (const std::string& name) -> unsigned int;
 
 {ENUM_STRING_FUNCTION_DECLARATIONS}
 

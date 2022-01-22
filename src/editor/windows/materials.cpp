@@ -18,8 +18,6 @@ Materials::Materials()
 {
 }
 
-Materials::~Materials() = default;
-
 auto Materials::selected_material() const -> std::shared_ptr<erhe::primitive::Material>
 {
     return m_selected_material;
@@ -71,7 +69,6 @@ void Materials::imgui()
 {
     const auto& materials = m_scene_root->materials();
 
-    ImGui::Begin(c_title.data());
     const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
     for (const auto& material : materials)
     {
@@ -90,7 +87,6 @@ void Materials::imgui()
             m_selected_material = material;
         }
     }
-    ImGui::End();
 }
 
 }

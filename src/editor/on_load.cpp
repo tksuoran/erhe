@@ -52,6 +52,7 @@
 #include "windows/node_tree_window.hpp"
 #include "windows/operations.hpp"
 #include "windows/physics_window.hpp"
+#include "windows/pipelines.hpp"
 #include "windows/viewport_config.hpp"
 #include "windows/viewport_window.hpp"
 
@@ -131,6 +132,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Operations          >());
         m_components.add(make_shared<Physics_tool        >());
         m_components.add(make_shared<Physics_window      >());
+        m_components.add(make_shared<Pipelines           >());
         m_components.add(make_shared<Pointer_context     >());
         m_components.add(make_shared<Program_interface   >());
         m_components.add(make_shared<Programs            >());

@@ -10,26 +10,22 @@
 namespace erhe::graphics
 {
 
-Vertex_format::Vertex_format() = default;
-
-Vertex_format::~Vertex_format() = default;
-
-
 void Vertex_format::clear()
 {
     m_attributes.clear();
     m_stride = 0;
 }
 
-void Vertex_format::make_attribute(
-    const Vertex_attribute::Usage     usage,
-    const gl::Attribute_type          shader_type,
-    const Vertex_attribute::Data_type data_type
+void Vertex_format::add(
+    const Vertex_attribute& attribute
 )
 {
-    Expects((data_type.dimension >= 1) && (data_type.dimension <= 4));
+    Expects(
+        (attribute.data_type.dimension >= 1) &&
+        (attribute.data_type.dimension <= 4)
+    );
 
-    const size_t stride = data_type.dimension * size_of_type(data_type.type);
+    const size_t stride = attribute.data_type.dimension * size_of_type(attribute.data_type.type);
 
     // Align attributes to their type
     switch (stride)
@@ -59,10 +55,10 @@ void Vertex_format::make_attribute(
         }
     }
 
-    m_attributes.emplace_back(usage, shader_type, data_type, m_stride, 0);
+    auto& new_attribute = m_attributes.emplace_back(attribute);
+    new_attribute.offset = m_stride;
     assert(stride == m_attributes.back().stride());
     m_stride += stride;
-    //return attribute;
 }
 
 auto Vertex_format::match(const Vertex_format& other) const -> bool

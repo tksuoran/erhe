@@ -45,7 +45,7 @@ auto Brush_tool_preview_command::try_call(Command_context& context) -> bool
     static_cast<void>(context);
 
     if (
-        (state() != State::Ready) ||
+        (state() != State::Active) ||
         !m_brushes.is_enabled()
     )
     {
@@ -231,12 +231,18 @@ auto Brushes::try_insert() -> bool
 
 void Brushes::on_enable_state_changed()
 {
+    Command_context context{
+        *get<Editor_view    >().get(),
+        *get<Pointer_context>().get()
+    };
     if (is_enabled())
     {
+        m_preview_command.set_active(context);
         on_motion();
     }
     else
     {
+        m_preview_command.set_inactive(context);
         m_hover_content     = false;
         m_hover_tool        = false;
         m_hover_mesh    .reset();
@@ -270,15 +276,17 @@ void Brushes::on_motion()
     {
         m_hover_position = m_hover_mesh->transform_direction_from_world_to_local(m_hover_position.value());
     }
+
+    update_mesh();
 }
 
 // Returns transform which places brush in parent (hover) mesh space.
 auto Brushes::get_brush_transform() -> mat4
 {
     if (
-        (m_hover_mesh == nullptr) ||
+        (m_hover_mesh     == nullptr) ||
         (m_hover_geometry == nullptr) ||
-        (m_brush == nullptr)
+        (m_brush          == nullptr)
     )
     {
         return mat4{1};

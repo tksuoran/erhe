@@ -70,32 +70,32 @@ public:
 
     // Public API
 
-    void register_command(Command* command);
+    void register_command(Command* const command);
 
     auto bind_command_to_key(
-        Command*                      command,
+        Command* const                command,
         const erhe::toolkit::Keycode  code,
         const bool                    pressed       = true,
         const std::optional<uint32_t> modifier_mask = {}
     ) -> erhe::toolkit::Unique_id<Key_binding>::id_type;
 
     auto bind_command_to_mouse_click(
-        Command*                          command,
+        Command* const                    command,
         const erhe::toolkit::Mouse_button button
     ) -> erhe::toolkit::Unique_id<Mouse_click_binding>::id_type;
 
     auto bind_command_to_mouse_motion(
-        Command* command
+        Command* const command
     ) -> erhe::toolkit::Unique_id<Mouse_motion_binding>::id_type;
 
     auto bind_command_to_mouse_drag(
-        Command*                          command,
+        Command* const                    command,
         const erhe::toolkit::Mouse_button button
     ) -> erhe::toolkit::Unique_id<Mouse_motion_binding>::id_type;
 
     void remove_command_binding(const erhe::toolkit::Unique_id<Command_binding>::id_type binding_id);
 
-    [[nodiscard]] auto accept_mouse_command(Command* command) const -> bool
+    [[nodiscard]] auto accept_mouse_command(Command* const command) const -> bool
     {
         return
             (m_active_mouse_command == nullptr) ||
@@ -103,12 +103,12 @@ public:
     }
 
 private:
-    [[nodiscard]] auto get_command_priority   (Command* command) const -> int;
+    [[nodiscard]] auto get_command_priority   (Command* const command) const -> int;
     [[nodiscard]] auto get_imgui_capture_mouse() const -> bool;
 
     void sort_mouse_bindings        ();
     void inactivate_ready_commands  ();
-    void update_active_mouse_command(Command* command);
+    void update_active_mouse_command(Command* const command);
 
     // Component dependencies
     std::shared_ptr<Configuration>        m_configuration;

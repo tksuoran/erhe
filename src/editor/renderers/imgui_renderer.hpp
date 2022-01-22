@@ -35,7 +35,7 @@ namespace editor {
 class Texture_unit_cache
 {
 public:
-    Texture_unit_cache(const size_t texture_unit_count);
+    explicit Texture_unit_cache(const size_t texture_unit_count);
 
     void create_dummy_texture();
     void reset();
@@ -71,61 +71,14 @@ public:
         };
 
         Frame_resources(
-            //Imgui_renderer&                            imgui_renderer,
             const size_t                               slot,
             erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
             erhe::graphics::Vertex_format&             vertex_format,
             erhe::graphics::Shader_stages*             shader_stages,
-            erhe::graphics::Color_blend_state*         color_blend_state,
             size_t          vertex_count, size_t vertex_stride,
             size_t          index_count,  size_t index_stride,
             size_t          draw_count,   size_t draw_stride
-        )
-            : vertex_buffer{
-                gl::Buffer_target::array_buffer,
-                vertex_count * vertex_stride,
-                storage_mask,
-                access_mask
-            }
-            , index_buffer{
-                gl::Buffer_target::element_array_buffer,
-                index_count * index_stride,
-                storage_mask,
-                access_mask
-            }
-            , draw_parameter_buffer{
-                gl::Buffer_target::shader_storage_buffer,
-                draw_count * draw_stride,
-                storage_mask,
-                access_mask
-            }
-            , draw_indirect_buffer{
-                gl::Buffer_target::draw_indirect_buffer,
-                draw_count * sizeof(gl::Draw_elements_indirect_command),
-                storage_mask,
-                access_mask
-            }
-            , vertex_input_state{
-                attribute_mappings,
-                vertex_format,
-                &vertex_buffer,
-                &index_buffer
-            }
-            , pipeline{
-                shader_stages,
-                &vertex_input_state,
-                &erhe::graphics::Input_assembly_state::triangles,
-                &erhe::graphics::Rasterization_state::cull_mode_none,
-                &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                color_blend_state,
-                nullptr
-            }
-        {
-            vertex_buffer        .set_debug_label(fmt::format("ImGui Renderer Vertex {}",         slot));
-            index_buffer         .set_debug_label(fmt::format("ImGui Renderer Index {}",          slot));
-            draw_parameter_buffer.set_debug_label(fmt::format("ImGui Renderer Draw Parameter {}", slot));
-            draw_indirect_buffer .set_debug_label(fmt::format("ImGui Renderer Draw Indirect {}",  slot));
-        }
+        );
 
         Frame_resources(const Frame_resources&) = delete;
         void operator= (const Frame_resources&) = delete;
@@ -136,7 +89,7 @@ public:
         erhe::graphics::Buffer             index_buffer;
         erhe::graphics::Buffer             draw_parameter_buffer;
         erhe::graphics::Buffer             draw_indirect_buffer;
-        erhe::graphics::Vertex_input_state vertex_input_state;
+        erhe::graphics::Vertex_input_state vertex_input;
         erhe::graphics::Pipeline           pipeline;
     };
 
@@ -198,21 +151,6 @@ private:
     size_t                                                m_index_offset         {0};
     size_t                                                m_draw_parameter_offset{0};
     size_t                                                m_draw_indirect_offset {0};
-
-    erhe::graphics::Color_blend_state                     m_color_blend_state
-    {
-        true,                                           // enabled
-        {
-            gl::Blend_equation_mode::func_add,          // rgb.equation_mode
-            gl::Blending_factor::one,                   // rgb.source_factor
-            gl::Blending_factor::one_minus_src_alpha    // rgb.destination_factor
-        },
-        {
-            gl::Blend_equation_mode::func_add,          // alpha.equation_mode
-            gl::Blending_factor::one,                   // alpha.source_factor
-            gl::Blending_factor::one_minus_src_alpha    // alpha.destination_factor
-        }
-    };
 
     Texture_unit_cache          m_texture_unit_cache{s_texture_unit_count};
 

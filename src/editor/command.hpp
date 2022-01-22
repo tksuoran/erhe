@@ -30,7 +30,7 @@ public:
     [[nodiscard]] auto viewport_window     () -> Viewport_window*;
     [[nodiscard]] auto hovering_over_tool  () -> bool;
     [[nodiscard]] auto hovering_over_gui   () -> bool;
-    [[nodiscard]] auto accept_mouse_command(Command* command) -> bool;
+    [[nodiscard]] auto accept_mouse_command(Command* const command) -> bool;
     [[nodiscard]] auto absolute_pointer    () const -> glm::dvec2;
     [[nodiscard]] auto relative_pointer    () const -> glm::dvec2;
 
@@ -46,6 +46,11 @@ class Command
 public:
     explicit Command(const char* name);
     virtual ~Command();
+
+    Command(const Command&) = delete;
+    Command(Command&&) = delete;
+    Command& operator=(const Command&) = delete;
+    Command& operator=(Command&&) = delete;
 
     // Virtual interface
     [[nodiscard]] virtual auto try_call(Command_context& context) -> bool;
@@ -67,7 +72,7 @@ private:
 class Command_binding
 {
 public:
-    explicit Command_binding(Command* command);
+    explicit Command_binding(Command* const command);
     virtual ~Command_binding();
 
     Command_binding();
@@ -99,7 +104,7 @@ class Key_binding
 {
 public:
     Key_binding(
-        Command*                      command,
+        Command* const                command,
         const erhe::toolkit::Keycode  code,
         const bool                    pressed,
         const std::optional<uint32_t> modifier_mask
@@ -122,7 +127,7 @@ class Mouse_binding
     : public Command_binding
 {
 public:
-    explicit Mouse_binding(Command* command);
+    explicit Mouse_binding(Command* const command);
 
     virtual auto on_button(
         Command_context&                  context,
@@ -139,7 +144,7 @@ class Mouse_click_binding
 {
 public:
     Mouse_click_binding(
-        Command*                          command,
+        Command* const                    command,
         const erhe::toolkit::Mouse_button button
     );
 
@@ -160,7 +165,7 @@ class Mouse_motion_binding
     : public Mouse_binding
 {
 public:
-    explicit Mouse_motion_binding(Command* command);
+    explicit Mouse_motion_binding(Command* const command);
 
     auto on_motion(Command_context& context) -> bool override;
 };
@@ -171,7 +176,7 @@ class Mouse_drag_binding
 {
 public:
     Mouse_drag_binding(
-        Command*                          command,
+        Command* const                    command,
         const erhe::toolkit::Mouse_button button
     );
 

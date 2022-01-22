@@ -68,32 +68,26 @@ void Id_renderer::initialize_component()
 
     create_frame_resources(1, 1, 1, 1000, 1000);
 
-    const auto  reverse_depth    = erhe::components::Component::get<Configuration>()->reverse_depth;
-    const auto& shader_resources = *Component::get<Program_interface>()->shader_resources.get();
+    const auto reverse_depth = erhe::components::Component::get<Configuration>()->reverse_depth;
 
-    m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
-        shader_resources.attribute_mappings,
-        m_mesh_memory->gl_vertex_format(),
-        m_mesh_memory->gl_vertex_buffer.get(),
-        m_mesh_memory->gl_index_buffer.get()
-    );
-
-    m_pipeline = {
+    m_pipeline.data = {
+        .name           = "ID Renderer",
         .shader_stages  = m_programs->id.get(),
-        .vertex_input   = m_vertex_input.get(),
-        .input_assembly = &erhe::graphics::Input_assembly_state::triangles,
+        .vertex_input   = m_mesh_memory->vertex_input.get(),
+        .input_assembly = erhe::graphics::Input_assembly_state::triangles,
         .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-        .color_blend    = &erhe::graphics::Color_blend_state::color_blend_disabled
+        .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
     };
 
-    m_selective_depth_clear_pipeline = {
+    m_selective_depth_clear_pipeline.data = {
+        .name           = "ID Renderer selective depth clear",
         .shader_stages  = m_programs->id.get(),
-        .vertex_input   = m_vertex_input.get(),
-        .input_assembly = &erhe::graphics::Input_assembly_state::triangles,
+        .vertex_input   = m_mesh_memory->vertex_input.get(),
+        .input_assembly = erhe::graphics::Input_assembly_state::triangles,
         .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw(reverse_depth),
-        .depth_stencil  = &erhe::graphics::Depth_stencil_state::depth_test_always_stencil_test_disabled,
-        .color_blend    = &erhe::graphics::Color_blend_state::color_writes_disabled,
+        .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_always_stencil_test_disabled,
+        .color_blend    = erhe::graphics::Color_blend_state::color_writes_disabled,
     };
 
     erhe::graphics::Scoped_debug_group debug_group{c_id_renderer_initialize_component};
@@ -232,7 +226,7 @@ void Id_renderer::render_layer(
     bind_draw_indirect_buffer();
 
     gl::multi_draw_elements_indirect(
-        m_pipeline.input_assembly->primitive_topology,
+        m_pipeline.data.input_assembly.primitive_topology,
         m_mesh_memory->gl_index_type(),
         reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
         static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
@@ -291,7 +285,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_clear)
 
         m_pipeline_state_tracker->shader_stages.reset();
-        m_pipeline_state_tracker->color_blend.execute(&erhe::graphics::Color_blend_state::color_blend_disabled);
+        m_pipeline_state_tracker->color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
         {
             gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
             const auto status = gl::check_named_framebuffer_status(m_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
@@ -325,7 +319,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     reset_id_ranges();
     m_layer_ranges.clear();
 
-    m_pipeline_state_tracker->execute(&m_pipeline);
+    m_pipeline_state_tracker->execute(m_pipeline);
     for (auto layer : content_mesh_layers)
     {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_content)
@@ -335,7 +329,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     // Clear depth for tool pixels
     {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
-        m_pipeline_state_tracker->execute(&m_selective_depth_clear_pipeline);
+        m_pipeline_state_tracker->execute(m_selective_depth_clear_pipeline);
         gl::depth_range(0.0f, 0.0f);
         for (auto layer : tool_mesh_layers)
         {
@@ -347,7 +341,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
 
-        m_pipeline_state_tracker->execute(&m_pipeline);
+        m_pipeline_state_tracker->execute(m_pipeline);
         gl::depth_range(0.0f, 1.0f);
 
         for (auto layer : tool_mesh_layers)

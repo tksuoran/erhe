@@ -8,36 +8,22 @@ namespace erhe::graphics
 class Rasterization_state
 {
 public:
-    Rasterization_state();
-    Rasterization_state(
-        bool                     enabled,
-        gl::Cull_face_mode       cull_face_mode,
-        gl::Front_face_direction front_face_direction,
-        gl::Polygon_mode         polygon_mode
-    );
-
-    void touch();
-
     // depth_clamp_enable
     // rasterizer_discard_enable
     // depth bias
     // line width
 
-    size_t                   serial;
-    bool                     enabled             {false};
+    bool                     face_cull_enable    {true};
     gl::Cull_face_mode       cull_face_mode      {gl::Cull_face_mode::back};
     gl::Front_face_direction front_face_direction{gl::Front_face_direction::ccw};
     gl::Polygon_mode         polygon_mode        {gl::Polygon_mode::fill};
     // not implementing separate front and back polygon modes for now
 
-    static auto get_next_serial() -> size_t;
+    static auto cull_mode_front_cw (const bool reverse_depth) -> const Rasterization_state&;
+    static auto cull_mode_front_ccw(const bool reverse_depth) -> const Rasterization_state&;
+    static auto cull_mode_back_cw  (const bool reverse_depth) -> const Rasterization_state&;
+    static auto cull_mode_back_ccw (const bool reverse_depth) -> const Rasterization_state&;
 
-    static auto cull_mode_front_cw (const bool reverse_depth) -> Rasterization_state*;
-    static auto cull_mode_front_ccw(const bool reverse_depth) -> Rasterization_state*;
-    static auto cull_mode_back_cw  (const bool reverse_depth) -> Rasterization_state*;
-    static auto cull_mode_back_ccw (const bool reverse_depth) -> Rasterization_state*;
-
-    static size_t              s_serial;
     static Rasterization_state cull_mode_none;
     static Rasterization_state s_cull_mode_front_cw;
     static Rasterization_state s_cull_mode_front_ccw;
@@ -69,7 +55,7 @@ class Rasterization_state_tracker
 {
 public:
     void reset  ();
-    void execute(const Rasterization_state* state);
+    void execute(const Rasterization_state& state);
 
 private:
     size_t              m_last{0};

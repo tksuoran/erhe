@@ -208,7 +208,7 @@ void Theremin::initialize_component()
     m_hand_tracker->set_color(Hand_name::Left, Finger_name::ring,   ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
     m_hand_tracker->set_color(Hand_name::Left, Finger_name::little, ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
 
-    create_gui_quad();
+    //create_gui_quad();
 
     get<Editor_tools>()->register_background_tool(this);
 }

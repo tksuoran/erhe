@@ -98,14 +98,14 @@ void Component::set_deinitializing()
     m_state = Component_state::Initializing;
 }
 
-auto Component::get_state() const
--> Component_state
+auto Component::get_state() const -> Component_state
 {
     return m_state;
 }
 
-auto Component::is_ready_to_initialize(const bool in_worker_thread) const
--> bool
+auto Component::is_ready_to_initialize(
+    const bool in_worker_thread
+) const -> bool
 {
     if (m_state != Component_state::Connected)
     {

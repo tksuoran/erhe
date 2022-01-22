@@ -19,8 +19,7 @@ public:
 class Blend_state_component_hash
 {
 public:
-    [[nodiscard]]
-    auto operator()(
+    [[nodiscard]] auto operator()(
         const Blend_state_component& blend_state_component
     ) const noexcept -> size_t
     {
@@ -41,35 +40,24 @@ public:
     const Blend_state_component& rhs
 ) noexcept -> bool;
 
+class Color_write_mask
+{
+public:
+    bool red  {true};
+    bool green{true};
+    bool blue {true};
+    bool alpha{true};
+};
+
 class Color_blend_state
 {
 public:
-    Color_blend_state();
-    Color_blend_state(
-        bool                  enabled,
-        Blend_state_component rgb,
-        Blend_state_component alpha,
-        glm::vec4             color                  = {},
-        bool                  color_write_mask_red   = true,
-        bool                  color_write_mask_green = true,
-        bool                  color_write_mask_blue  = true,
-        bool                  color_write_mask_alpha = true
-    );
-    void touch();
-
-    static auto get_next_serial() -> size_t;
-
-    size_t                serial;
     bool                  enabled{false};
     Blend_state_component rgb;
     Blend_state_component alpha;
-    glm::vec4             color{0.0f, 0.0f, 0.0f, 0.0f};
-    bool                  color_write_mask_red  {true};
-    bool                  color_write_mask_green{true};
-    bool                  color_write_mask_blue {true};
-    bool                  color_write_mask_alpha{true};
+    float                 constant[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    Color_write_mask      write_mask;
 
-    static size_t            s_serial;
     static Color_blend_state color_blend_disabled;
     static Color_blend_state color_blend_premultiplied;
     static Color_blend_state color_writes_disabled;
@@ -95,7 +83,7 @@ class Color_blend_state_tracker
 {
 public:
     void reset  ();
-    void execute(const Color_blend_state* state) noexcept;
+    void execute(const Color_blend_state& state) noexcept;
 
 private:
     size_t            m_last{0};

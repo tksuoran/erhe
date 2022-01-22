@@ -18,39 +18,88 @@ namespace erhe::graphics
 {
 
 std::mutex                       Vertex_input_state::s_mutex;
-size_t                           Vertex_input_state::s_serial{0};
 std::vector<Vertex_input_state*> Vertex_input_state::s_all_vertex_input_states;
 
-Vertex_input_state::Vertex_input_state()
-    : m_serial{get_next_serial()}
+void Vertex_input_state::on_thread_enter()
 {
-    std::lock_guard lock{s_mutex};
+    const std::lock_guard lock{s_mutex};
+
+    for (auto* vertex_input_state : s_all_vertex_input_states)
+    {
+        log_threads.trace(
+            "{}: on thread enter: vertex input state @ {} owned by thread {}\n",
+            std::this_thread::get_id(),
+            fmt::ptr(vertex_input_state),
+            vertex_input_state->m_owner_thread
+        );
+        if (vertex_input_state->m_owner_thread == std::thread::id{})
+        {
+            vertex_input_state->create();
+        }
+    }
+}
+
+void Vertex_input_state::on_thread_exit()
+{
+    const std::lock_guard lock{s_mutex};
+
+    gl::bind_vertex_array(0);
+    auto this_thread_id = std::this_thread::get_id();
+    for (auto* vertex_input_state : s_all_vertex_input_states)
+    {
+        log_threads.trace(
+            "{}: on thread exit: vertex input state @ {} owned by thread {}\n",
+            std::this_thread::get_id(),
+            fmt::ptr(vertex_input_state),
+            vertex_input_state->m_owner_thread
+        );
+        if (vertex_input_state->m_owner_thread == this_thread_id)
+        {
+            vertex_input_state->reset();
+        }
+    }
+}
+
+auto Vertex_input_state_data::make(
+    const Vertex_attribute_mappings& mappings,
+    const Vertex_format&             vertex_format,
+    Buffer* const                    vertex_buffer,
+    Buffer* const                    index_buffer
+) -> Vertex_input_state_data
+{
+    Vertex_input_state_data result;
+    result.index_buffer = index_buffer;
+    mappings.collect_attributes(
+        result.attributes,
+        vertex_buffer,
+        vertex_format
+    );
+    return result;
+}
+
+Vertex_input_state::Vertex_input_state()
+{
+    const std::lock_guard lock{s_mutex};
 
     s_all_vertex_input_states.push_back(this);
 }
 
-Vertex_input_state::Vertex_input_state(
-    const Vertex_attribute_mappings& attribute_mappings,
-    const Vertex_format&             vertex_format,
-    const Buffer*                    vertex_buffer,
-    const Buffer*                    index_buffer
-)
-    : m_index_buffer{index_buffer}
-    , m_serial      {get_next_serial()}
+Vertex_input_state::Vertex_input_state(Vertex_input_state_data&& create_info)
+    : m_data{std::move(create_info)}
 {
-    {
-        std::lock_guard lock{s_mutex};
+    const std::lock_guard lock{s_mutex};
 
-        s_all_vertex_input_states.push_back(this);
-    }
-
-    attribute_mappings.apply_to_vertex_input_state(*this, vertex_buffer, vertex_format);
-    create();
+    s_all_vertex_input_states.push_back(this);
 }
 
 Vertex_input_state::~Vertex_input_state()
 {
-    std::lock_guard lock{s_mutex};
+    if (!m_gl_vertex_array.has_value())
+    {
+        return;
+    }
+
+    const std::lock_guard lock{s_mutex};
 
     s_all_vertex_input_states.erase(
         std::remove(
@@ -62,21 +111,10 @@ Vertex_input_state::~Vertex_input_state()
     );
 }
 
-void Vertex_input_state::emplace_back(
-    gsl::not_null<const Buffer*>                     vertex_buffer,
-    const std::shared_ptr<Vertex_attribute_mapping>& mapping,
-    const Vertex_attribute*                          attribute,
-    const size_t                                     stride
-)
+void Vertex_input_state::set(const Vertex_input_state_data& data)
 {
-    m_bindings.push_back(
-        std::make_shared<Vertex_input_state::Binding>(
-            vertex_buffer,
-            mapping,
-            attribute,
-            stride
-        )
-    );
+    m_data = data;
+    update();
 }
 
 void Vertex_input_state::reset()
@@ -87,13 +125,6 @@ void Vertex_input_state::reset()
     m_gl_vertex_array.reset();
 
     Ensures(!m_gl_vertex_array.has_value());
-}
-
-void Vertex_input_state::set_index_buffer(const Buffer* buffer)
-{
-    Expects(m_index_buffer == nullptr);
-
-    m_index_buffer = buffer;
 }
 
 void Vertex_input_state::create()
@@ -125,31 +156,20 @@ void Vertex_input_state::update()
     );
 
     {
-        auto ibo_gl_name = (m_index_buffer != nullptr)
-            ? m_index_buffer->gl_name()
+        auto ibo_gl_name = (m_data.index_buffer != nullptr)
+            ? m_data.index_buffer->gl_name()
             : 0;
         gl::vertex_array_element_buffer(gl_name(), ibo_gl_name);
     }
 
-    std::bitset<MAX_ATTRIBUTE_COUNT> enabled_attributes;
-
-    for (auto binding : m_bindings)
+    for (const auto& attribute : m_data.attributes)
     {
-        const auto*       vbo       = binding->vertex_buffer;
-        const auto* const attribute = binding->vertex_attribute;
-        const auto&       mapping   = binding->vertex_attribute_mapping;
-
-        if (vbo == nullptr)
+        if (attribute.vertex_buffer == nullptr)
         {
             log_vertex_attribute_mappings.error("bad vertex input state: vbo == nullptr");
             continue;
         }
-        if (attribute == nullptr)
-        {
-            log_vertex_attribute_mappings.error("bad vertex input state: attribute == nullptr");
-            continue;
-        }
-        if (mapping->layout_location >= max_attribute_count)
+        if (attribute.layout_location >= max_attribute_count)
         {
             log_vertex_attribute_mappings.error("bad vertex input state: layout location >= max attribute count");
             continue;
@@ -157,13 +177,13 @@ void Vertex_input_state::update()
 
         gl::vertex_array_vertex_buffer(
             gl_name(),
-            static_cast<GLuint>(mapping->layout_location),
-            vbo->gl_name(),
+            attribute.layout_location,
+            attribute.vertex_buffer->gl_name(),
             intptr_t{0},
-            static_cast<int>(binding->stride)
+            attribute.stride
         );
 
-        switch (attribute->shader_type)
+        switch (attribute.shader_type)
         {
             using enum gl::Attribute_type;
             case bool_:
@@ -181,10 +201,10 @@ void Vertex_input_state::update()
             {
                 gl::vertex_array_attrib_i_format(
                     gl_name(),
-                    static_cast<GLuint>(mapping->layout_location),
-                    static_cast<GLint>(attribute->data_type.dimension),
-                    static_cast<gl::Vertex_attrib_i_type>(attribute->data_type.type),
-                    static_cast<unsigned int>(attribute->offset)
+                    attribute.layout_location,
+                    attribute.dimension,
+                    static_cast<gl::Vertex_attrib_i_type>(attribute.data_type),
+                    attribute.offset
                 );
                 break;
             }
@@ -205,11 +225,11 @@ void Vertex_input_state::update()
             {
                 gl::vertex_array_attrib_format(
                     gl_name(),
-                    static_cast<GLuint>(mapping->layout_location),
-                    static_cast<GLint>(attribute->data_type.dimension),
-                    attribute->data_type.type,
-                    attribute->data_type.normalized ? GL_TRUE : GL_FALSE,
-                    static_cast<unsigned int>(attribute->offset)
+                    attribute.layout_location,
+                    attribute.dimension,
+                    attribute.data_type,
+                    attribute.normalized ? GL_TRUE : GL_FALSE,
+                    attribute.offset
                 );
                 break;
             }
@@ -230,10 +250,10 @@ void Vertex_input_state::update()
             {
                 gl::vertex_array_attrib_l_format(
                     gl_name(),
-                    static_cast<GLuint>(mapping->layout_location),
-                    static_cast<GLint>(attribute->data_type.dimension),
-                    static_cast<gl::Vertex_attrib_l_type>(attribute->data_type.type),
-                    static_cast<unsigned int>(attribute->offset)
+                    attribute.layout_location,
+                    attribute.dimension,
+                    static_cast<gl::Vertex_attrib_l_type>(attribute.data_type),
+                    attribute.offset
                 );
                 break;
             }
@@ -244,9 +264,8 @@ void Vertex_input_state::update()
             }
         }
 
-        enabled_attributes.set(mapping->layout_location);
-        gl::enable_vertex_array_attrib(gl_name(), static_cast<GLuint>(mapping->layout_location));
-        gl::vertex_array_binding_divisor(gl_name(), static_cast<GLuint>(mapping->layout_location), attribute->divisor);
+        gl::enable_vertex_array_attrib(gl_name(), attribute.layout_location);
+        gl::vertex_array_binding_divisor(gl_name(), attribute.layout_location, attribute.divisor);
     }
 }
 

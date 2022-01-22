@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <registry>
     <groups>
+        <group name="QueryTarget">
+            <enum name="GL_TIMESTAMP"/>
+        </group>
         <group name="BufferPNameARB">
             <enum name="GL_BUFFER_SIZE"/>
             <enum name="GL_BUFFER_USAGE"/>

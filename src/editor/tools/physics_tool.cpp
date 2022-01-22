@@ -63,7 +63,7 @@ void Physics_tool_drag_command::on_inactive(Command_context& context)
 
 Physics_tool::Physics_tool()
     : erhe::components::Component{c_name}
-    , m_drag_command             {*this}
+    , m_drag_command{*this}
 {
 }
 

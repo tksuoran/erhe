@@ -171,42 +171,6 @@ private:
     class Frame_resources
     {
     public:
-        static inline const erhe::graphics::Color_blend_state color_blend_visible_lines{
-            true, // enabled
-            { // rgb
-                gl::Blend_equation_mode::func_add,
-                gl::Blending_factor::src_alpha,
-                gl::Blending_factor::one_minus_src_alpha
-            },
-            { // alpha
-                gl::Blend_equation_mode::func_add,
-                gl::Blending_factor::src_alpha,
-                gl::Blending_factor::one_minus_src_alpha
-            },
-            glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}, // constant
-            true,
-            true,
-            true,
-            true
-        };
-        static inline const erhe::graphics::Color_blend_state color_blend_hidden_lines{
-            true, // enabled
-            { // rgb
-                gl::Blend_equation_mode::func_add,
-                gl::Blending_factor::constant_alpha,
-                gl::Blending_factor::one_minus_constant_alpha
-            },
-            { // alpha
-                gl::Blend_equation_mode::func_add,
-                gl::Blending_factor::constant_alpha,
-                gl::Blending_factor::one_minus_constant_alpha
-            },
-            glm::vec4{0.0f, 0.0f, 0.0f, 0.1f}, // constant
-            true,
-            true,
-            true,
-            true
-        };
         static constexpr gl::Buffer_storage_mask storage_mask{
             gl::Buffer_storage_mask::map_coherent_bit   |
             gl::Buffer_storage_mask::map_persistent_bit |
@@ -223,7 +187,7 @@ private:
             const size_t                              view_stride,
             const size_t                              view_count,
             const size_t                              vertex_count,
-            erhe::graphics::Shader_stages*            shader_stages,
+            erhe::graphics::Shader_stages* const      shader_stages,
             erhe::graphics::Vertex_attribute_mappings attribute_mappings,
             erhe::graphics::Vertex_format&            vertex_format,
             const std::string&                        style_name,
@@ -241,30 +205,48 @@ private:
                 storage_mask,
                 access_mask
             }
-            , vertex_input_state{
-                attribute_mappings,
-                vertex_format,
-                &vertex_buffer,
-                nullptr
+            , vertex_input{
+                erhe::graphics::Vertex_input_state_data::make(
+                    attribute_mappings,
+                    vertex_format,
+                    &vertex_buffer,
+                    nullptr
+                )
             }
-
             , pipeline_depth_pass{
-                shader_stages,
-                &vertex_input_state,
-                &erhe::graphics::Input_assembly_state::lines,
-                &erhe::graphics::Rasterization_state::cull_mode_none,
-                erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-                &erhe::graphics::Color_blend_state::color_blend_premultiplied,
-                nullptr
+                {
+                    .name           = "Line Renderer depth pass",
+                    .shader_stages  = shader_stages,
+                    .vertex_input   = &vertex_input,
+                    .input_assembly = erhe::graphics::Input_assembly_state::lines,
+                    .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+                    .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+                    .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
+                }
             }
             , pipeline_depth_fail{
-                shader_stages,
-                &vertex_input_state,
-                &erhe::graphics::Input_assembly_state::lines,
-                &erhe::graphics::Rasterization_state::cull_mode_none,
-                &erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                &color_blend_hidden_lines,
-                nullptr
+                {
+                    .name           = "Line Renderer depth fail",
+                    .shader_stages  = shader_stages,
+                    .vertex_input   = &vertex_input,
+                    .input_assembly = erhe::graphics::Input_assembly_state::lines,
+                    .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+                    .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+                    .color_blend    = {
+                        .enabled = true,
+                        .rgb = {
+                            .equation_mode      = gl::Blend_equation_mode::func_add,
+                            .source_factor      = gl::Blending_factor::constant_alpha,
+                            .destination_factor = gl::Blending_factor::one_minus_constant_alpha
+                        },
+                        .alpha = {
+                            .equation_mode      = gl::Blend_equation_mode::func_add,
+                            .source_factor      = gl::Blending_factor::constant_alpha,
+                            .destination_factor = gl::Blending_factor::one_minus_constant_alpha
+                        },
+                        .constant = { 0.0f, 0.0f, 0.0f, 0.1f },
+                    }
+                }
             }
         {
             vertex_buffer.set_debug_label(fmt::format("Line Renderer {} Vertex {}", style_name, slot));
@@ -278,7 +260,7 @@ private:
 
         erhe::graphics::Buffer             vertex_buffer;
         erhe::graphics::Buffer             view_buffer;
-        erhe::graphics::Vertex_input_state vertex_input_state;
+        erhe::graphics::Vertex_input_state vertex_input;
         erhe::graphics::Pipeline           pipeline_depth_pass;
         erhe::graphics::Pipeline           pipeline_depth_fail;
     };

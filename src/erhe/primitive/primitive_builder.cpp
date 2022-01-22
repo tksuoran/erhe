@@ -82,91 +82,161 @@ void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 
     if (features.position)
     {
-        vf->make_attribute(
-            {Vertex_attribute::Usage_type::position, 0},
-            gl::Attribute_type::float_vec3,
-            {format_info.position_type, false, 3}
+        vf->add(
+            {
+                .usage       = { Vertex_attribute::Usage_type::position },
+                .shader_type = gl::Attribute_type::float_vec3,
+                .data_type   = {
+                    .type      = format_info.position_type,
+                    .dimension = 3
+                }
+            }
         );
     }
 
     if (features.normal)
     {
-        vf->make_attribute(
-            {Vertex_attribute::Usage_type::normal, 0},
-            gl::Attribute_type::float_vec3,
-            {format_info.normal_type, false, 3}
+        vf->add(
+            {
+                .usage = {
+                    .type      = Vertex_attribute::Usage_type::normal
+                },
+                .shader_type   = gl::Attribute_type::float_vec3,
+                .data_type = {
+                    .type      = format_info.normal_type,
+                    .dimension = 3
+                }
+            }
         );
     }
 
     if (features.normal_flat)
     {
-        vf->make_attribute(
-            {Vertex_attribute::Usage_type::normal, 1},
-            gl::Attribute_type::float_vec3,
-            {format_info.normal_flat_type, false, 3}
+        vf->add(
+            {
+                .usage = {
+                    .type      = Vertex_attribute::Usage_type::normal,
+                    .index     = 1
+                },
+                .shader_type   = gl::Attribute_type::float_vec3,
+                .data_type = {
+                    .type      = format_info.normal_flat_type,
+                    .dimension = 3
+                }
+            }
         );
     }
 
     if (features.normal_smooth)
     {
-        vf->make_attribute(
-            {Vertex_attribute::Usage_type::normal, 2},
-            gl::Attribute_type::float_vec3,
-            {format_info.normal_smooth_type, false, 3}
+        vf->add(
+            {
+                .usage = {
+                    .type      = Vertex_attribute::Usage_type::normal,
+                    .index     = 2
+                },
+                .shader_type   = gl::Attribute_type::float_vec3,
+                .data_type = {
+                    .type      = format_info.normal_smooth_type,
+                    .dimension = 3
+                }
+            }
         );
     }
 
     if (features.tangent)
     {
-        vf->make_attribute(
-            {Vertex_attribute::Usage_type::tangent, 0},
-            gl::Attribute_type::float_vec4,
-            {format_info.tangent_type, false, 4}
+        vf->add(
+            {
+                .usage = {
+                    .type      = Vertex_attribute::Usage_type::tangent
+                },
+                .shader_type   = gl::Attribute_type::float_vec4,
+                .data_type = {
+                    .type      = format_info.tangent_type,
+                    .dimension = 4
+                }
+            }
         );
     }
 
     if (features.bitangent)
     {
-        vf->make_attribute(
-            {Vertex_attribute::Usage_type::bitangent, 0},
-            gl::Attribute_type::float_vec4,
-            {format_info.bitangent_type, false, 4}
+        vf->add(
+            {
+                .usage = {
+                    .type      = Vertex_attribute::Usage_type::bitangent
+                },
+                .shader_type   = gl::Attribute_type::float_vec4,
+                .data_type = {
+                    .type      = format_info.bitangent_type,
+                    .dimension = 4
+                }
+            }
         );
     }
 
     if (features.color)
     {
-        vf->make_attribute(
-            {Vertex_attribute::Usage_type::color, 0},
-            gl::Attribute_type::float_vec4,
-            {format_info.color_type, false, 4}
+        vf->add(
+            {
+                .usage = {
+                    .type      = Vertex_attribute::Usage_type::color
+                },
+                .shader_type   = gl::Attribute_type::float_vec4,
+                .data_type = {
+                    .type      = format_info.color_type,
+                    .dimension = 4
+                }
+            }
         );
     }
 
     if (features.id)
     {
-        vf->make_attribute(
-            {Vertex_attribute::Usage_type::id, 0},
-            gl::Attribute_type::float_vec3,
-            {format_info.id_vec3_type, false, 3}
+        vf->add(
+            {
+                .usage = {
+                    .type      = Vertex_attribute::Usage_type::id
+                },
+                .shader_type   = gl::Attribute_type::float_vec3,
+                .data_type = {
+                    .type      = format_info.id_vec3_type,
+                    .dimension = 3
+                }
+            }
         );
 
         if (erhe::graphics::Instance::info.use_integer_polygon_ids)
         {
-            vf->make_attribute(
-                {Vertex_attribute::Usage_type::id, 0},
-                gl::Attribute_type::unsigned_int,
-                {gl::Vertex_attrib_type::unsigned_int, false, 1}
+            vf->add(
+                {
+                    .usage = {
+                        .type      = Vertex_attribute::Usage_type::id
+                    },
+                    .shader_type   = gl::Attribute_type::unsigned_int,
+                    .data_type = {
+                        .type      = gl::Vertex_attrib_type::unsigned_int,
+                        .dimension = 1
+                    }
+                }
             );
         }
     }
 
     if (features.texcoord)
     {
-        vf->make_attribute(
-            {Vertex_attribute::Usage_type::tex_coord, 0},
-            gl::Attribute_type::float_vec2,
-            {gl::Vertex_attrib_type::float_, false, 2}
+        vf->add(
+            {
+                .usage = {
+                    .type      = Vertex_attribute::Usage_type::tex_coord
+                },
+                .shader_type   = gl::Attribute_type::float_vec2,
+                .data_type = {
+                    .type      = gl::Vertex_attrib_type::float_,
+                    .dimension = 2
+                }
+            }
         );
     }
 }

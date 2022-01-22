@@ -17,6 +17,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
+#include "windows/pipelines.hpp"
 
 #include "erhe/geometry/shapes/regular_polygon.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
@@ -37,7 +38,7 @@ using erhe::graphics::Texture;
 class Scoped_imgui_context
 {
 public:
-    Scoped_imgui_context(ImGuiContext* context)
+    explicit Scoped_imgui_context(ImGuiContext* context)
     {
         m_old_context = ImGui::GetCurrentContext();
         Expects(m_old_context == nullptr);
@@ -123,19 +124,17 @@ void Rendertarget_imgui_windows::init_renderpass(
     const auto& mesh_memory   = *components.get<Mesh_memory  >().get();
     auto* vertex_input = mesh_memory.vertex_input.get();
 
-    m_renderpass = Renderpass
-    {
-        .name = "GUI",
-        .pipeline =
+    m_renderpass.pipeline.data =
         {
+            .name           = "GUI",
             .shader_stages  = programs.textured.get(),
             .vertex_input   = vertex_input,
-            .input_assembly = &Input_assembly_state::triangles,
-            .rasterization  = &Rasterization_state::cull_mode_none,
+            .input_assembly = Input_assembly_state::triangles,
+            .rasterization  = Rasterization_state::cull_mode_none,
             .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(configuration.reverse_depth),
-            .color_blend    = &Color_blend_state::color_blend_premultiplied
-        },
-        .begin = [this, &programs]()
+            .color_blend    = Color_blend_state::color_blend_premultiplied
+        };
+    m_renderpass.begin = [this, &programs]()
         {
             const unsigned int gui_texture_unit = 1;
             const unsigned int gui_texture_name = m_texture->gl_name();
@@ -146,10 +145,8 @@ void Rendertarget_imgui_windows::init_renderpass(
                 programs.gui_sampler_location,
                 gui_texture_unit
             );
-        },
-    };
+        };
 }
-
 
 void Rendertarget_imgui_windows::init_context(
     const erhe::components::Components& components
@@ -407,7 +404,7 @@ void Rendertarget_imgui_windows::end_and_render_imgui_frame()
 
     m_pipeline_state_tracker->shader_stages.reset();
     m_pipeline_state_tracker->color_blend.execute(
-        &erhe::graphics::Color_blend_state::color_blend_disabled
+        erhe::graphics::Color_blend_state::color_blend_disabled
     );
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
@@ -422,6 +419,11 @@ void Rendertarget_imgui_windows::end_and_render_imgui_frame()
 Editor_imgui_windows::Editor_imgui_windows()
     : erhe::components::Component{c_name}
 {
+    std::fill(
+        std::begin(m_mouse_just_pressed),
+        std::end(m_mouse_just_pressed),
+        false
+    );
 }
 
 Editor_imgui_windows::~Editor_imgui_windows()

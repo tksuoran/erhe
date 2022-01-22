@@ -163,7 +163,7 @@ void Headset_renderer::render()
             gl::viewport(0, 0, render_view.width, render_view.height);
 
             context.pipeline_state_tracker->shader_stages.reset();
-            context.pipeline_state_tracker->color_blend.execute(&Color_blend_state::color_blend_disabled);
+            context.pipeline_state_tracker->color_blend.execute(Color_blend_state::color_blend_disabled);
             gl::viewport(
                 viewport.x,
                 viewport.y,

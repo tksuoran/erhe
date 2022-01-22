@@ -124,6 +124,7 @@ void Selection_tool::initialize_component()
     get<Editor_tools>()->register_tool(this);
 
     const auto view = get<Editor_view>();
+
     view->register_command           (&m_select_command);
     view->bind_command_to_mouse_click(&m_select_command, erhe::toolkit::Mouse_button_left);
 }

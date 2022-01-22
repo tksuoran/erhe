@@ -239,7 +239,8 @@ class GLGenerator:
         self.enum_string_function_definitions          = []
         self.untyped_enum_string_function_declarations = []
         self.untyped_enum_string_function_definitions  = []
-        self.enum_base_zero_function_declarations      = []
+        self.enum_to_base_zero_function_declarations   = []
+        self.base_zero_to_enum_function_declarations   = []
         self.enum_base_zero_function_definitions       = []
         self.get_proc_address_calls                    = []
         self.group_to_enum_list                        = defaultdict(list)
@@ -782,7 +783,8 @@ class GLGenerator:
                     group_max_len = len(wrapper_enum_value_name)
 
             group_enum_string_entries            = []
-            group_enum_base_zero_entries         = []
+            group_enum_to_base_zero_entries      = []
+            base_zero_to_group_enum_entries      = []
             group_wrapper_enum_value_definitions = []
             base_zero_value = 0
 
@@ -793,10 +795,12 @@ class GLGenerator:
                     wrapper_enum_value_name = wrapper_enum_value_name + '_'
 
                 formatting = {
-                    'ENUM_VALUE':           enum_info[1],
-                    'ENUM_STRING':          enum_info[2],
-                    'ENUM_BASE_ZERO_VALUE': base_zero_value,
-                    'ENUM_VERSION':         self._enum_version(enum_info[2])
+                    'ENUM_VALUE':              enum_info[1],
+                    'ENUM_STRING':             enum_info[2],
+                    'ENUM_BASE_ZERO_VALUE':    base_zero_value,
+                    'ENUM_VERSION':            self._enum_version(enum_info[2]),
+                    'WRAPPER_ENUM_TYPE_NAME':  self.to_type_name(group),
+                    'WRAPPER_ENUM_VALUE_NAME': wrapper_enum_value_name,
                 }
 
                 string_entry = templates.ENUM_STRING_MAKE_ENTRY[group_type].format(**formatting)
@@ -809,8 +813,10 @@ class GLGenerator:
                         self._enum_version(enum_info[2])))
 
                 if group_type == 'basic':
-                    base_zero_make_entry = templates.ENUM_BASE_ZERO_MAKE_ENTRY.format(**formatting)
-                    group_enum_base_zero_entries.append(base_zero_make_entry)
+                    group_enum_to_base_zero_make_entry = templates.ENUM_TO_BASE_ZERO_MAKE_ENTRY.format(**formatting)
+                    base_zero_to_group_enum_make_entry = templates.BASE_ZERO_TO_ENUM_MAKE_ENTRY.format(**formatting)
+                    group_enum_to_base_zero_entries.append(group_enum_to_base_zero_make_entry)
+                    base_zero_to_group_enum_entries.append(base_zero_to_group_enum_make_entry)
                     base_zero_value = base_zero_value + 1
 
             if enum_tuple_list:
@@ -818,17 +824,21 @@ class GLGenerator:
                 definitions       = ',\n'.join(sorted(group_wrapper_enum_value_definitions))
                 string_entries    = '\n'.join(sorted(group_enum_string_entries))
                 formatting = {
-                    'WRAPPER_ENUM_TYPE_NAME':         wrapper_enum_name,
-                    'WRAPPER_ENUM_STRING_FN_NAME':    self.split_to_body_and_ext(group)[0],
-                    'GROUP_NAME':                     group,
-                    'WRAPPER_ENUM_VALUE_DEFINITIONS': definitions,
-                    'GROUP_ENUM_STRING_ENTRIES':      string_entries,
-                    'GROUP_ENUM_BASE_ZERO_ENTRIES':   '\n'.join(group_enum_base_zero_entries),
+                    'WRAPPER_ENUM_TYPE_NAME':          wrapper_enum_name,
+                    'WRAPPER_ENUM_STRING_FN_NAME':     self.split_to_body_and_ext(group)[0],
+                    'GROUP_NAME':                      group,
+                    'WRAPPER_ENUM_VALUE_DEFINITIONS':  definitions,
+                    'GROUP_ENUM_STRING_ENTRIES':       string_entries,
+                    'GROUP_ENUM_TO_BASE_ZERO_ENTRIES': '\n'.join(group_enum_to_base_zero_entries),
+                    'BASE_ZERO_TO_GROUP_ENUM_ENTRIES': '\n'.join(base_zero_to_group_enum_entries),
                 }
 
                 if group_type == 'basic':
-                    self.enum_base_zero_function_declarations.append(
-                        templates.ENUM_BASE_ZERO_FUNCTION_DECLARATION.format(**formatting)
+                    self.enum_to_base_zero_function_declarations.append(
+                        templates.ENUM_TO_BASE_ZERO_FUNCTION_DECLARATION.format(**formatting)
+                    )
+                    self.base_zero_to_enum_function_declarations.append(
+                        templates.BASE_ZERO_TO_ENUM_FUNCTION_DECLARATION.format(**formatting)
                     )
                     self.enum_base_zero_function_definitions.append(
                         templates.ENUM_BASE_ZERO_FUNCTION_DEFINITION.format(**formatting)
@@ -866,7 +876,8 @@ class GLGenerator:
             'ENUM_STRING_FUNCTION_DEFINITIONS':          util.sjoin(self.enum_string_function_definitions),
             'UNTYPED_ENUM_STRING_FUNCTION_DECLARATIONS': util.sjoin(self.untyped_enum_string_function_declarations),
             'UNTYPED_ENUM_STRING_FUNCTION_DEFINITIONS':  util.sjoin(self.untyped_enum_string_function_definitions),
-            'ENUM_BASE_ZERO_FUNCTION_DECLARATIONS':      util.sjoin(self.enum_base_zero_function_declarations),
+            'ENUM_TO_BASE_ZERO_FUNCTION_DECLARATIONS':   util.sjoin(self.enum_to_base_zero_function_declarations),
+            'BASE_ZERO_TO_ENUM_FUNCTION_DECLARATIONS':   util.sjoin(self.base_zero_to_enum_function_declarations),
             'ENUM_BASE_ZERO_FUNCTION_DEFINITIONS':       util.sjoin(self.enum_base_zero_function_definitions),
             'ENUM_HELPER_DEFINITIONS':                   util.sjoin(self.enum_helper_definitions),
             'ALL_ENUM_STRING_CASES':                     util.sjoin(self.all_enum_string_cases),

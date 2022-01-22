@@ -15,26 +15,22 @@ public:
     enum class Usage_type : unsigned int
     {
         none           =   0,
-        position       =   1,
-        tangent        =   2,
-        normal         =   4,
-        bitangent      =   8,
-        color          =  16,
-        weights        =  32,
-        matrix_indices =  64,
-        tex_coord      = 128,
-        id             = 256
+        automatic      =   1,
+        position       =   2,
+        tangent        =   4,
+        normal         =   8,
+        bitangent      =  16,
+        color          =  32,
+        weights        =  64,
+        matrix_indices = 128,
+        tex_coord      = 256,
+        id             = 512
     };
 
+    // for example tex_coord 0
     class Usage
     {
     public:
-        Usage(const Usage_type type, const size_t index)
-            : type {type}
-            , index{index}
-        {
-        }
-
         [[nodiscard]] auto operator==(const Usage& other) const -> bool
         {
             // TODO index is not compared. Is this a bug or design?
@@ -50,27 +46,16 @@ public:
         size_t     index{0};
     };
 
+    // type, normalized, dimension -> dvec3 for example is double, false, 3
     class Data_type
     {
     public:
-        Data_type(
-            const gl::Vertex_attrib_type type,
-            const bool                   normalized,
-            const size_t                 dimension
-        )
-            : type      {type}
-            , normalized{normalized}
-            , dimension {dimension}
-        {
-        }
-
-        [[nodiscard]] 
-        auto operator==(const Data_type& other) const -> bool
+        [[nodiscard]] auto operator==(const Data_type& other) const -> bool
         {
             return
-                (type == other.type)             &&
+                (type       == other.type)       &&
                 (normalized == other.normalized) &&
-                (dimension == other.dimension);
+                (dimension  == other.dimension);
         }
 
         [[nodiscard]] auto operator!=(const Data_type& other) const -> bool
@@ -84,21 +69,6 @@ public:
     };
 
     [[nodiscard]] static auto desc(const Usage_type usage) -> const char*;
-
-    Vertex_attribute(
-        const Usage              usage,
-        const gl::Attribute_type shader_type,
-        const Data_type          data_type,
-        const size_t             offset  = 0,
-        const unsigned int       divisor = 0
-    )
-        : usage      {usage}
-        , shader_type{shader_type}
-        , data_type  {data_type}
-        , offset     {offset}
-        , divisor    {divisor}
-    {
-    }
 
     [[nodiscard]] auto stride() const -> size_t
     {
@@ -138,9 +108,10 @@ struct Enable_bit_mask_operators
 };
 
 template<typename Enum>
-constexpr auto
-operator |(Enum lhs, Enum rhs)
--> typename std::enable_if<Enable_bit_mask_operators<Enum>::enable, Enum>::type
+constexpr auto operator |(
+    const Enum lhs,
+    const Enum rhs
+) -> typename std::enable_if<Enable_bit_mask_operators<Enum>::enable, Enum>::type
 {
     using underlying = typename std::underlying_type<Enum>::type;
     return static_cast<Enum>(static_cast<underlying>(lhs) | static_cast<underlying>(rhs));

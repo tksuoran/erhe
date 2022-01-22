@@ -13,7 +13,7 @@ namespace gl {{
 
 extern void check_error();
 
-::GLbitfield glbitfield(::GLbitfield value)
+auto glbitfield(const ::GLbitfield value) -> ::GLbitfield
 {{
     return value;
 }}

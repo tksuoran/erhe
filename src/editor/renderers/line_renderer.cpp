@@ -75,46 +75,55 @@ void Line_renderer_pipeline::initialize(Shader_monitor* shader_monitor)
     fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 
     attribute_mappings.add(
-        gl::Attribute_type::float_vec4,
-        "a_position",
         {
-            erhe::graphics::Vertex_attribute::Usage_type::position,
-            0
-        },
-        0
-    );
-    attribute_mappings.add(
-        gl::Attribute_type::float_vec4,
-        "a_color",
-        {
-            erhe::graphics::Vertex_attribute::Usage_type::color,
-            0
-        },
-        1
-    );
-
-    vertex_format.make_attribute(
-        {
-            erhe::graphics::Vertex_attribute::Usage_type::position,
-            0
-        },
-        gl::Attribute_type::float_vec4,
-        {
-            gl::Vertex_attrib_type::float_,
-            false,
-            4
+            .layout_location = 0,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_position",
+            .src_usage =
+            {
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::position
+            },
         }
     );
-    vertex_format.make_attribute(
+    attribute_mappings.add(
         {
-            erhe::graphics::Vertex_attribute::Usage_type::color,
-            0
-        },
-        gl::Attribute_type::float_vec4,
+            .layout_location = 1,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_color",
+            .src_usage =
+            {
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::color
+            }
+        }
+    );
+
+    vertex_format.add(
         {
-            gl::Vertex_attrib_type::unsigned_byte,
-            true,
-            4
+            .usage =
+            {
+                .type      = erhe::graphics::Vertex_attribute::Usage_type::position
+            },
+            .shader_type   = gl::Attribute_type::float_vec4,
+            .data_type =
+            {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 4
+            }
+        }
+    );
+    vertex_format.add(
+        {
+            .usage =
+            {
+                .type       = erhe::graphics::Vertex_attribute::Usage_type::color,
+            },
+            .shader_type    = gl::Attribute_type::float_vec4,
+            .data_type =
+            {
+                .type       = gl::Vertex_attrib_type::unsigned_byte,
+                .normalized = true,
+                .dimension  = 4
+            }
         }
     );
 
@@ -386,10 +395,10 @@ void Line_renderer::render(
     if (show_hidden_lines)
     {
         const auto& pipeline = current_frame_resources().pipeline_depth_fail;
-        pipeline_state_tracker.execute(&pipeline);
+        pipeline_state_tracker.execute(pipeline);
 
         gl::draw_arrays(
-            pipeline.input_assembly->primitive_topology,
+            pipeline.data.input_assembly.primitive_topology,
             0,
             static_cast<GLsizei>(m_line_count * 2)
         );
@@ -398,10 +407,10 @@ void Line_renderer::render(
     if (show_visible_lines)
     {
         const auto& pipeline = current_frame_resources().pipeline_depth_pass;
-        pipeline_state_tracker.execute(&pipeline);
+        pipeline_state_tracker.execute(pipeline);
 
         gl::draw_arrays(
-            pipeline.input_assembly->primitive_topology,
+            pipeline.data.input_assembly.primitive_topology,
             0,
             static_cast<GLsizei>(m_line_count * 2)
         );

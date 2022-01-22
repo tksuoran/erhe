@@ -35,13 +35,12 @@ public:
     void operator=       (const OpenGL_state_tracker&) = delete;
 
     // Implements Component
-    [[nodiscard]]
-    auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
 
     void on_thread_exit () override;
     void on_thread_enter() override;
     void reset          ();
-    void execute        (gsl::not_null<const Pipeline*> pipeline);
+    void execute        (const Pipeline& pipeline);
 
     Shader_stages_tracker        shader_stages;
     Vertex_input_state_tracker   vertex_input;

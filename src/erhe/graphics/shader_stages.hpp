@@ -151,22 +151,24 @@ public:
     void reset()
     {
         gl::use_program(0);
-        m_last = nullptr;
+        m_last = 0;
     }
 
     void execute(const Shader_stages* state)
     {
-        if (m_last == state)
+        unsigned int name = (state != nullptr)
+            ? state->gl_name()
+            : 0;
+        if (m_last == name)
         {
             return;
         }
-        unsigned int name = (state != nullptr) ? state->gl_name() : 0;
         gl::use_program(name);
-        m_last = state;
+        m_last = name;
     }
 
 private:
-    const Shader_stages* m_last{nullptr};
+    unsigned int m_last{0};
 };
 
 } // namespace erhe::graphics

@@ -10,18 +10,14 @@
 namespace erhe::graphics
 {
 
+/// Describes vertex data layout in buffer / memory
 class Vertex_format final
 {
 public:
-    Vertex_format();
-    ~Vertex_format();
-
     void clear();
 
-    void make_attribute(
-        const Vertex_attribute::Usage     usage,
-        const gl::Attribute_type          shader_type,
-        const Vertex_attribute::Data_type data_type
+    void add(
+        const Vertex_attribute& attribute
     );
 
     [[nodiscard]] auto has_attribute(

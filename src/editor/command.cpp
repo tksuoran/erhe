@@ -109,7 +109,7 @@ Command_binding::Command_binding()
 {
 }
 
-Command_binding::Command_binding(Command* command)
+Command_binding::Command_binding(Command* const command)
     : m_command{command}
 {
 }
@@ -127,7 +127,7 @@ auto Command_binding::get_command() const -> Command*
 }
 
 Key_binding::Key_binding(
-    Command*                      command,
+    Command* const                command,
     const erhe::toolkit::Keycode  code,
     const bool                    pressed,
     const std::optional<uint32_t> modifier_mask
@@ -154,7 +154,7 @@ auto Key_binding::on_key(
         return false;
     }
 
-    auto* command = get_command();
+    auto* const command = get_command();
 
     if (
         m_modifier_mask.has_value() &&
@@ -187,7 +187,7 @@ auto Key_binding::on_key(
     return consumed && pressed;
 }
 
-Mouse_binding::Mouse_binding(Command* command)
+Mouse_binding::Mouse_binding(Command* const command)
     : Command_binding{command}
 {
 }
@@ -211,7 +211,7 @@ auto Mouse_binding::on_motion(Command_context& context) -> bool
 }
 
 Mouse_click_binding::Mouse_click_binding(
-    Command*                          command,
+    Command* const                    command,
     const erhe::toolkit::Mouse_button button
 )
     : Mouse_binding{command}
@@ -230,7 +230,7 @@ auto Mouse_click_binding::on_button(
         return false;
     }
 
-    auto* command = get_command();
+    auto* const command = get_command();
 
     if (command->state() == State::Disabled)
     {
@@ -275,7 +275,7 @@ auto Mouse_click_binding::on_button(
 
 auto Mouse_click_binding::on_motion(Command_context& context) -> bool
 {
-    auto* command = get_command();
+    auto* const command = get_command();
 
     if (command->state() == State::Disabled)
     {
@@ -291,14 +291,14 @@ auto Mouse_click_binding::on_motion(Command_context& context) -> bool
     return false;
 }
 
-Mouse_motion_binding::Mouse_motion_binding(Command* command)
+Mouse_motion_binding::Mouse_motion_binding(Command* const command)
     : Mouse_binding{command}
 {
 }
 
 auto Mouse_motion_binding::on_motion(Command_context& context) -> bool
 {
-    auto* command = get_command();
+    auto* const command = get_command();
 
     if (command->state() == State::Disabled)
     {
@@ -312,7 +312,7 @@ auto Mouse_motion_binding::on_motion(Command_context& context) -> bool
 }
 
 Mouse_drag_binding::Mouse_drag_binding(
-    Command*                          command,
+    Command* const                    command,
     const erhe::toolkit::Mouse_button button
 )
     : Mouse_binding{command}
@@ -331,7 +331,7 @@ auto Mouse_drag_binding::on_button(
         return false;
     }
 
-    auto* command = get_command();
+    auto* const command = get_command();
 
     if (command->state() == State::Disabled)
     {
@@ -378,7 +378,7 @@ auto Mouse_drag_binding::on_button(
 
 auto Mouse_drag_binding::on_motion(Command_context& context) -> bool
 {
-    auto* command = get_command();
+    auto* const command = get_command();
 
     if (command->state() == State::Ready)
     {

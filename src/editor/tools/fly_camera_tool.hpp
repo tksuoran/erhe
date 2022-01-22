@@ -149,20 +149,20 @@ private:
     void update_camera   ();
     auto can_use_keyboard() const -> bool;
 
-    Fly_camera_turn_command               m_turn_command;
-    Fly_camera_move_command               m_move_up_active_command;
-    Fly_camera_move_command               m_move_up_inactive_command;
-    Fly_camera_move_command               m_move_down_active_command;
-    Fly_camera_move_command               m_move_down_inactive_command;
-    Fly_camera_move_command               m_move_left_active_command;
-    Fly_camera_move_command               m_move_left_inactive_command;
-    Fly_camera_move_command               m_move_right_active_command;
-    Fly_camera_move_command               m_move_right_inactive_command;
-    Fly_camera_move_command               m_move_forward_active_command;
-    Fly_camera_move_command               m_move_forward_inactive_command;
-    Fly_camera_move_command               m_move_backward_active_command;
-    Fly_camera_move_command               m_move_backward_inactive_command;
-    std::shared_ptr<Frame_controller>     m_camera_controller;
+    Fly_camera_turn_command m_turn_command;
+    Fly_camera_move_command m_move_up_active_command;
+    Fly_camera_move_command m_move_up_inactive_command;
+    Fly_camera_move_command m_move_down_active_command;
+    Fly_camera_move_command m_move_down_inactive_command;
+    Fly_camera_move_command m_move_left_active_command;
+    Fly_camera_move_command m_move_left_inactive_command;
+    Fly_camera_move_command m_move_right_active_command;
+    Fly_camera_move_command m_move_right_inactive_command;
+    Fly_camera_move_command m_move_forward_active_command;
+    Fly_camera_move_command m_move_forward_inactive_command;
+    Fly_camera_move_command m_move_backward_active_command;
+    Fly_camera_move_command m_move_backward_inactive_command;
+    std::shared_ptr<Frame_controller>       m_camera_controller;
 
     // Component dependencies
     std::shared_ptr<Editor_tools>         m_editor_tools;

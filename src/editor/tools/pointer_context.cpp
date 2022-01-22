@@ -272,7 +272,7 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
 #endif
 
     const auto id_renderer     = get<Id_renderer>();
-    const auto scene_root      = get<Scene_root>();
+    //const auto scene_root      = get<Scene_root>();
     const bool in_content_area = pointer_in_content_area();
     //m_log_window->frame_log("in_content_area = {}", in_content_area);
     if (in_content_area && id_renderer)

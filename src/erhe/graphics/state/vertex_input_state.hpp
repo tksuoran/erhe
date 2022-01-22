@@ -3,7 +3,6 @@
 #include "erhe/graphics/gl_objects.hpp"
 #include "erhe/graphics/log.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
-#include "erhe/graphics/vertex_stream_binding.hpp"
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 
@@ -28,163 +27,56 @@ class Vertex_format;
 
 static constexpr int MAX_ATTRIBUTE_COUNT { 16 }; // TODO(tksuoran@gmail.com): Get rid of this kind of constant?
 
-class Vertex_input_state final
+class Vertex_input_attribute
 {
 public:
-    class Binding
-    {
-    public:
-        Binding(
-            const Buffer*                                    vertex_buffer,
-            const std::shared_ptr<Vertex_attribute_mapping>& mapping,
-            const Vertex_attribute*                          attribute,
-            size_t                                           stride
-        )
-            : vertex_buffer           {vertex_buffer}
-            , vertex_attribute_mapping{mapping}
-            , vertex_attribute        {attribute}
-            , stride                  {stride}
-        {
-        }
+    GLuint                 layout_location{0};
+    const Buffer*          vertex_buffer;
+    GLsizei                stride;
+    GLint                  dimension;
+    gl::Attribute_type     shader_type;
+    gl::Vertex_attrib_type data_type;
+    bool                   normalized;
+    GLuint                 offset;
+    GLuint                 divisor;
+};
 
-        explicit Binding(const Vertex_stream_binding& other)
-            : vertex_buffer           {other.vertex_buffer}
-            , vertex_attribute_mapping{other.vertex_attribute_mapping}
-            , vertex_attribute        {other.vertex_attribute}
-            , stride                  {other.stride}
-        {
-        }
+class Vertex_input_state_data
+{
+public:
+    const Buffer*                       index_buffer;
+    std::vector<Vertex_input_attribute> attributes;
 
-        void operator=(const Binding&) = delete;
-
-        const Buffer*                             vertex_buffer   {nullptr};
-        std::shared_ptr<Vertex_attribute_mapping> vertex_attribute_mapping;
-        const Vertex_attribute*                   vertex_attribute{nullptr};
-        size_t                                    stride          {0};
-    };
-
-    using Binding_collection = std::vector<std::shared_ptr<Binding>>;
-
-    Vertex_input_state();
-
-    Vertex_input_state(
-        const Vertex_attribute_mappings& attribute_mappings,
+    static auto make(
+        const Vertex_attribute_mappings& mappings,
         const Vertex_format&             vertex_format,
-        const Buffer*                    vertex_buffer,
-        const Buffer*                    index_buffer
-    );
+        Buffer* const                    vertex_buffer,
+        Buffer* const                    index_buffer
+    ) -> Vertex_input_state_data;
+};
 
-    void touch()
-    {
-        m_serial = get_next_serial();
-    }
-
+class Vertex_input_state
+{
+public:
+    Vertex_input_state();
+    Vertex_input_state(Vertex_input_state_data&& create_info);
     ~Vertex_input_state();
 
-    Vertex_input_state(const Vertex_input_state&) = delete;
-
-    auto operator=(const Vertex_input_state&) -> Vertex_input_state& = delete;
-
-    Vertex_input_state(Vertex_input_state&& other) = delete; //noexcept
-
-    auto operator=(Vertex_input_state&& other) = delete; //noexcept
-
-    void emplace_back(
-        gsl::not_null<const Buffer*>                     vertex_buffer,
-        const std::shared_ptr<Vertex_attribute_mapping>& vertex_attribute_mapping,
-        const Vertex_attribute*                          attribute,
-        const size_t                                     stride
-    );
-
-    void use() const;
-
-    void set_index_buffer(const Buffer* buffer);
-
-    [[nodiscard]] auto index_buffer() -> const Buffer*
-    {
-        return m_index_buffer;
-    }
-
+    void set    (const Vertex_input_state_data& data);
     auto gl_name() const -> unsigned int;
+    void create ();
+    void reset  ();
+    void update ();
 
-    void create();
-
-    void reset();
-
-    void update();
-
-    [[nodiscard]] auto bindings() const -> const Binding_collection&
-    {
-        return m_bindings;
-    }
-
-    static void on_thread_enter()
-    {
-        const std::lock_guard lock{s_mutex};
-
-        for (auto* vertex_input_state : s_all_vertex_input_states)
-        {
-            log_threads.trace(
-                "{}: on thread enter: vertex input state @ {} owned by thread {}\n",
-                std::this_thread::get_id(),
-                fmt::ptr(vertex_input_state),
-                vertex_input_state->m_owner_thread
-            );
-            if (vertex_input_state->m_owner_thread == std::thread::id{})
-            {
-                vertex_input_state->create();
-            }
-        }
-    }
-
-    static void on_thread_exit()
-    {
-        const std::lock_guard lock{s_mutex};
-
-        gl::bind_vertex_array(0);
-        auto this_thread_id = std::this_thread::get_id();
-        for (auto* vertex_input_state : s_all_vertex_input_states)
-        {
-            log_threads.trace(
-                "{}: on thread exit: vertex input state @ {} owned by thread {}\n",
-                std::this_thread::get_id(),
-                fmt::ptr(vertex_input_state),
-                vertex_input_state->m_owner_thread
-            );
-            if (vertex_input_state->m_owner_thread == this_thread_id)
-            {
-                vertex_input_state->reset();
-            }
-        }
-    }
-
-    [[nodiscard]] auto serial() const -> size_t
-    {
-        return m_serial;
-    }
-
-    [[nodiscard]] static auto get_next_serial() -> size_t
-    {
-        const std::lock_guard lock{s_mutex};
-
-        do
-        {
-            s_serial++;
-        }
-        while (s_serial == 0);
-
-        return s_serial;
-    }
+    static void on_thread_enter();
+    static void on_thread_exit();
 
 private:
-    Binding_collection             m_bindings;
-    const Buffer*                  m_index_buffer{nullptr};
     std::optional<Gl_vertex_array> m_gl_vertex_array;
-    size_t                         m_serial;
     std::thread::id                m_owner_thread;
+    Vertex_input_state_data        m_data;
 
     static std::mutex                       s_mutex;
-    static size_t                           s_serial;
     static std::vector<Vertex_input_state*> s_all_vertex_input_states;
 };
 
@@ -197,24 +89,21 @@ public:
         m_last = 0;
     }
 
-    void execute(const Vertex_input_state* state)
+    void execute(const Vertex_input_state* const state)
     {
-        if (
-            (state != nullptr) &&
-            (m_last == state->serial())
-        )
+        const unsigned int name = (state != nullptr)
+            ? state->gl_name()
+            : 0;
+        if (m_last == name)
         {
             return;
         }
-        const unsigned int name = (state != nullptr) ? state->gl_name() : 0;
         gl::bind_vertex_array(name);
-        m_last = (state != nullptr)
-            ? state->serial()
-            : 0;
+        m_last = name;
     }
 
 private:
-    size_t m_last{0};
+    unsigned int m_last{0};
 };
 
 } // namespace erhe::graphics

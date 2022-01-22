@@ -59,11 +59,11 @@ auto Shader_stages::Create_info::final_source(
         if (vertex_attribute_mappings->mappings.size() > 0)
         {
             sb << "// Attributes\n";
-            for (auto mapping : vertex_attribute_mappings->mappings)
+            for (const auto& mapping : vertex_attribute_mappings->mappings)
             {
-                sb << "in layout(location = " << mapping->layout_location << ") ";
-                sb << glsl_token(mapping->shader_type) << " ";
-                sb << mapping->name,
+                sb << "in layout(location = " << mapping.layout_location << ") ";
+                sb << glsl_token(mapping.shader_type) << " ";
+                sb << mapping.name,
                 sb << ";\n";
             }
             sb << "\n";
@@ -124,32 +124,27 @@ auto Shader_stages::Create_info::final_source(
     }
     else if (!shader.path.empty())
     {
-        bool ok_to_read = true;
         try
         {
             if (!std::filesystem::exists(shader.path))
             {
                 log_program.warn("Cannot load shader from non-existing file '{}'", shader.path.string());
-                ok_to_read = false;
             }
             else
             {
                 if (!std::filesystem::is_regular_file(shader.path))
                 {
                     log_program.warn("Cannot load shader from non-regular file '{}'", shader.path.string());
-                    ok_to_read = false;
                 }
                 if (std::filesystem::is_empty(shader.path))
                 {
                     log_program.warn("Cannot load shader from empty path");
-                    ok_to_read = false;
                 }
             }
         }
         catch (...)
         {
             log_program.warn("Unspecified exception trying to load shader from empty path");
-            ok_to_read = false;
         }
 
         auto source = erhe::toolkit::read(shader.path);

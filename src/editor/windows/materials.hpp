@@ -26,8 +26,7 @@ public:
     static constexpr std::string_view c_title{"Materials"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
-    Materials ();
-    ~Materials() override;
+    Materials();
 
     // Implements Component
     [[nodiscard]]

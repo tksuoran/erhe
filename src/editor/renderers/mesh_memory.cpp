@@ -33,8 +33,8 @@ void Mesh_memory::initialize_component()
 
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 
-    constexpr size_t vertex_byte_count  = 256 * 1024 * 1024;
-    constexpr size_t index_byte_count   =  64 * 1024 * 1024;
+    constexpr size_t vertex_byte_count = 256 * 1024 * 1024;
+    constexpr size_t index_byte_count  =  64 * 1024 * 1024;
 
     gl_buffer_transfer_queue = std::make_unique<erhe::graphics::Buffer_transfer_queue>();
 
@@ -95,12 +95,13 @@ void Mesh_memory::initialize_component()
 
     const auto& shader_resources = *get<Program_interface>()->shader_resources.get();
     vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
-        shader_resources.attribute_mappings,
-        gl_vertex_format(),
-        gl_vertex_buffer.get(),
-        gl_index_buffer.get()
+        erhe::graphics::Vertex_input_state_data::make(
+            shader_resources.attribute_mappings,
+            gl_vertex_format(),
+            gl_vertex_buffer.get(),
+            gl_index_buffer.get()
+        )
     );
-
 }
 
 auto Mesh_memory::gl_vertex_format() const -> erhe::graphics::Vertex_format&

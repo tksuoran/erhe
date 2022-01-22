@@ -8,21 +8,9 @@ namespace erhe::graphics
 class Input_assembly_state
 {
 public:
-    Input_assembly_state();
-    Input_assembly_state(
-        gl::Primitive_type primitive_topology,
-        bool               primitive_restart
-    );
-
-    void touch();
-
-    size_t             serial;
     gl::Primitive_type primitive_topology{gl::Primitive_type::points};
     bool               primitive_restart {false};
 
-    [[nodiscard]] static auto get_next_serial() -> size_t;
-
-    static size_t               s_serial;
     static Input_assembly_state points;
     static Input_assembly_state lines;
     static Input_assembly_state line_loop;
@@ -45,10 +33,7 @@ class Input_assembly_state_tracker
 {
 public:
     void reset  ();
-    void execute(const Input_assembly_state* state);
-
-private:
-    const Input_assembly_state* m_last{nullptr};
+    void execute(const Input_assembly_state& state);
 };
 
 } // namespace erhe::graphics

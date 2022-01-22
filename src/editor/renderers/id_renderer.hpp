@@ -166,7 +166,6 @@ private:
 
     erhe::graphics::Pipeline                              m_pipeline;
     erhe::graphics::Pipeline                              m_selective_depth_clear_pipeline;
-    std::unique_ptr<erhe::graphics::Vertex_input_state>   m_vertex_input;
     std::unique_ptr<erhe::graphics::Renderbuffer>         m_color_renderbuffer;
     std::unique_ptr<erhe::graphics::Renderbuffer>         m_depth_renderbuffer;
     std::unique_ptr<erhe::graphics::Texture>              m_color_texture;

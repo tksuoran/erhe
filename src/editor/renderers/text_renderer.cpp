@@ -34,6 +34,50 @@ using glm::mat4;
 using glm::vec3;
 using glm::vec4;
 
+Text_renderer::Frame_resources::Frame_resources(
+    const size_t                              vertex_count,
+    erhe::graphics::Shader_stages*            shader_stages,
+    erhe::graphics::Vertex_attribute_mappings attribute_mappings,
+    erhe::graphics::Vertex_format&            vertex_format,
+    erhe::graphics::Buffer*                   index_buffer,
+    const size_t                              slot
+)
+    : vertex_buffer{
+        gl::Buffer_target::array_buffer,
+        vertex_format.stride() * vertex_count,
+        storage_mask,
+        access_mask
+    }
+    , projection_buffer{
+        gl::Buffer_target::uniform_buffer,
+        1024, // TODO
+        storage_mask,
+        access_mask
+    }
+    , vertex_input{
+        erhe::graphics::Vertex_input_state_data::make(
+            attribute_mappings,
+            vertex_format,
+            &vertex_buffer,
+            index_buffer
+        )
+    }
+    , pipeline{
+        {
+            .name           = "Text renderer",
+            .shader_stages  = shader_stages,
+            .vertex_input   = &vertex_input,
+            .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+            .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
+        }
+    }
+{
+    vertex_buffer    .set_debug_label(fmt::format("Text Renderer Vertex {}", slot));
+    projection_buffer.set_debug_label(fmt::format("Text Renderer Projection {}", slot));
+}
+
 Text_renderer::Text_renderer()
     : Component{c_name}
 {
@@ -95,44 +139,82 @@ void Text_renderer::initialize_component()
 
     m_fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 
-    m_attribute_mappings.add(gl::Attribute_type::float_vec3, "a_position", {erhe::graphics::Vertex_attribute::Usage_type::position,  0}, 0);
-    m_attribute_mappings.add(gl::Attribute_type::float_vec4, "a_color",    {erhe::graphics::Vertex_attribute::Usage_type::color,     0}, 1);
-    m_attribute_mappings.add(gl::Attribute_type::float_vec2, "a_texcoord", {erhe::graphics::Vertex_attribute::Usage_type::tex_coord, 0}, 2);
+    m_attribute_mappings.add(
+        {
+            .layout_location = 0,
+            .shader_type     = gl::Attribute_type::float_vec3,
+            .name            = "a_position",
+            .src_usage =
+            {
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::position
+            }
+        }
+    );
+    m_attribute_mappings.add(
+        {
+            .layout_location = 1,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_color",
+            .src_usage =
+            {
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::color
+            }
+        }
+    );
 
-    m_vertex_format.make_attribute(
+    m_attribute_mappings.add(
         {
-            erhe::graphics::Vertex_attribute::Usage_type::position,
-            0
-        },
-        gl::Attribute_type::float_vec3,
-        {
-            gl::Vertex_attrib_type::float_,
-            false,
-            3
+            .layout_location = 2,
+            .shader_type     = gl::Attribute_type::float_vec2,
+            .name            = "a_texcoord",
+            .src_usage =
+            {
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::tex_coord
+            }
         }
     );
-    m_vertex_format.make_attribute(
+
+    m_vertex_format.add(
         {
-            erhe::graphics::Vertex_attribute::Usage_type::color,
-            0
-        },
-        gl::Attribute_type::float_vec4,
-        {
-            gl::Vertex_attrib_type::unsigned_byte,
-            true,
-            4
+            .usage =
+            {
+                .type     = erhe::graphics::Vertex_attribute::Usage_type::position
+            },
+            .shader_type   = gl::Attribute_type::float_vec3,
+            .data_type =
+            {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 3
+            }
         }
     );
-    m_vertex_format.make_attribute(
+    m_vertex_format.add(
         {
-            erhe::graphics::Vertex_attribute::Usage_type::tex_coord,
-            0
-        },
-        gl::Attribute_type::float_vec2,
+            .usage =
+            {
+                .type       = erhe::graphics::Vertex_attribute::Usage_type::color
+            },
+            .shader_type    = gl::Attribute_type::float_vec4,
+            .data_type =
+            {
+                .type       = gl::Vertex_attrib_type::unsigned_byte,
+                .normalized = true,
+                .dimension  = 4
+            }
+        }
+    );
+    m_vertex_format.add(
         {
-            gl::Vertex_attrib_type::float_,
-            false,
-            2
+            .usage =
+            {
+                .type      = erhe::graphics::Vertex_attribute::Usage_type::tex_coord
+            },
+            .shader_type   = gl::Attribute_type::float_vec2,
+            .data_type =
+            {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 2
+            }
         }
     );
 
@@ -271,15 +353,15 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
     const auto& pipeline = current_frame_resources().pipeline;
 
     m_pipeline_state_tracker->shader_stages.reset();
-    m_pipeline_state_tracker->color_blend.execute(&erhe::graphics::Color_blend_state::color_blend_disabled);
+    m_pipeline_state_tracker->color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-    m_pipeline_state_tracker->execute(&pipeline);
+    m_pipeline_state_tracker->execute(pipeline);
 
     const unsigned int font_texture_unit = 0;
     const unsigned int font_texture_name = m_font->texture()->gl_name();
     gl::program_uniform_1i(
-        pipeline.shader_stages->gl_name(),
+        pipeline.data.shader_stages->gl_name(),
         m_font_sampler_location,
         font_texture_unit
     );
@@ -295,7 +377,7 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
     );
 
     gl::draw_elements(
-        pipeline.input_assembly->primitive_topology,
+        pipeline.data.input_assembly.primitive_topology,
         static_cast<GLsizei>(m_index_count),
         gl::Draw_elements_type::unsigned_short,
         reinterpret_cast<const void*>(m_index_range_first * 2)

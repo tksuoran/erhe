@@ -103,7 +103,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     for (auto& pass : passes)
     {
         const auto& pipeline = pass->pipeline;
-        if (!pipeline.shader_stages)
+        if (!pipeline.data.shader_stages)
         {
             return;
         }
@@ -115,11 +115,11 @@ void Forward_renderer::render(const Render_parameters& parameters)
             pass->begin();
         }
 
-        erhe::graphics::Scoped_debug_group pass_scope{pass->name};
+        erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
 
-        m_pipeline_state_tracker->execute(&pipeline);
+        m_pipeline_state_tracker->execute(pipeline);
         gl::program_uniform_1i(
-            pipeline.shader_stages->gl_name(),
+            pipeline.data.shader_stages->gl_name(),
             m_programs->shadow_sampler_location,
             shadow_texture_unit
         );
@@ -150,7 +150,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
             bind_draw_indirect_buffer();
 
             gl::multi_draw_elements_indirect(
-                pipeline.input_assembly->primitive_topology,
+                pipeline.data.input_assembly.primitive_topology,
                 m_mesh_memory->gl_index_type(),
                 reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
                 static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),

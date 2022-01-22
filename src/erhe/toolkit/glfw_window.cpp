@@ -315,33 +315,10 @@ auto Context_window::get_glfw_window() const -> GLFWwindow*
 
 int Context_window::s_window_count{0};
 
-const char* month_name[] = {
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December"
-};
-
-Context_window::Context_window(const int width, const int height, const int msaa_sample_count)
+Context_window::Context_window(const Window_configuration& configuration)
     : m_root_view{this}
 {
-    const time_t now = time(0);
-    tm* l = localtime(&now);
-    std::string title = fmt::format(
-        "erhe by Timo Suoranta {} {}. {}",
-        month_name[l->tm_mon],
-        l->tm_mday,
-        1900 + l->tm_year
-    );
-    const bool ok = open(width, height, msaa_sample_count, title, 4, 6, nullptr);
+    const bool ok = open(configuration);
 
     ERHE_VERIFY(ok);
 }
@@ -351,7 +328,16 @@ Context_window::Context_window(Context_window* share)
 {
     Expects(share != nullptr);
 
-    const bool ok = open(64, 64, 0, "erhe share context", share->get_opengl_major_version(), share->get_opengl_minor_version(), share);
+    const bool ok = open(
+        {
+            .fullscreen        = false,
+            .width             = 64,
+            .height            = 64,
+            .msaa_sample_count = 0,
+            .title             = "erhe share context",
+            .share             = share
+        }
+    );
 
     ERHE_VERIFY(ok);
 }
@@ -359,13 +345,7 @@ Context_window::Context_window(Context_window* share)
 // Currently this is not thread safe.
 // For now, only call this from main thread.
 auto Context_window::open(
-    const int          width,
-    const int          height,
-    const int          msaa_sample_count,
-    const std::string& title,
-    const int          opengl_major_version,
-    const int          opengl_minor_version,
-    Context_window*    share
+    const Window_configuration& configuration
 ) -> bool
 {
     if (s_window_count == 0)
@@ -377,32 +357,59 @@ auto Context_window::open(
         }
     }
 
-    const bool primary = (share == nullptr);
+    const bool primary = (configuration.share == nullptr);
 
-    glfwWindowHint(GLFW_CLIENT_API,            GLFW_OPENGL_API);
-    glfwWindowHint(GLFW_RED_BITS,               8);
-    glfwWindowHint(GLFW_GREEN_BITS,             8);
-    glfwWindowHint(GLFW_BLUE_BITS,              8);
+    glfwWindowHint(GLFW_CLIENT_API,    GLFW_OPENGL_API);
+    glfwWindowHint(GLFW_RED_BITS,      8);
+    glfwWindowHint(GLFW_GREEN_BITS,    8);
+    glfwWindowHint(GLFW_BLUE_BITS,     8);
     //glfwWindowHint(GLFW_DEPTH_BITS,            24);
-    glfwWindowHint(GLFW_SRGB_CAPABLE,          GLFW_TRUE);
-    if (msaa_sample_count > 0)
+    glfwWindowHint(GLFW_SRGB_CAPABLE,  GLFW_TRUE);
+    glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_TRUE); // Fullscreen only
+    //glfwWindowHint(GLFW_CONTEXT_NO_ERROR, GLFW_TRUE); // Release only
+    if (configuration.msaa_sample_count > 0)
     {
-        glfwWindowHint(GLFW_SAMPLES, msaa_sample_count);
+        glfwWindowHint(GLFW_SAMPLES, configuration.msaa_sample_count);
     }
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, opengl_major_version);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, opengl_minor_version);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE,        GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_VISIBLE,               primary ? GLFW_TRUE : GLFW_FALSE);
 
     GLFWwindow* const share_window = !primary
-        ? reinterpret_cast<GLFWwindow*>(share->get_glfw_window())
+        ? reinterpret_cast<GLFWwindow*>(configuration.share->get_glfw_window())
         : nullptr;
 
-    GLFWmonitor* monitor{nullptr};
-    m_glfw_window = glfwCreateWindow(width, height, title.c_str(), monitor, share_window);
+    GLFWmonitor* monitor = configuration.fullscreen ? glfwGetPrimaryMonitor() : nullptr;
+
+    if (
+        configuration.fullscreen &&
+        (monitor != nullptr)
+    )
+    {
+        const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+        m_glfw_window = glfwCreateWindow(
+            mode->width,
+            mode->height,
+            configuration.title,
+            monitor,
+            share_window
+        );
+    }
+    else
+    {
+        m_glfw_window = glfwCreateWindow(
+            configuration.width,
+            configuration.height,
+            configuration.title,
+            monitor,
+            share_window
+        );
+    }
+
     if (m_glfw_window == nullptr)
     {
-        fmt::printf("Failed to open GLFW window for GL {}, {}\n", opengl_major_version, opengl_minor_version);
+        printf("Failed to open GLFW window for GL 4.6\n");
         if (s_window_count == 0)
         {
             glfwTerminate();
@@ -411,8 +418,6 @@ auto Context_window::open(
     }
 
     s_window_count++;
-    m_opengl_major_version = opengl_major_version;
-    m_opengl_minor_version = opengl_minor_version;
     m_is_event_loop_running = false;
     m_is_mouse_captured = false;
 
@@ -643,6 +648,11 @@ auto Context_window::get_height() const -> int
         glfwGetWindowSize(window, &width, &height);
     }
     return height;
+}
+
+auto Context_window::get_root_view() -> Root_view&
+{
+    return m_root_view;
 }
 
 void Context_window::get_extensions()

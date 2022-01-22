@@ -38,7 +38,7 @@ using PFN_generic          = void (*) ();
 // Pointer to getProcAddress() function
 using PFN_get_proc_address = PFN_generic (*) (const char*);
 
-extern void dynamic_load_init(PFN_get_proc_address get_proc_address);
+void dynamic_load_init(const PFN_get_proc_address get_proc_address);
 
 {DYNAMIC_FUNCTION_DECLARATIONS}
 

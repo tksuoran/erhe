@@ -24,31 +24,31 @@ std::map<std::string, Command> g_command_map {{
 {COMMAND_MAP_ENTRIES}
 }};
 
-void enable(Extension extension)
+void enable(const Extension extension)
 {{
-    auto index = static_cast<std::size_t>(extension);
+    const auto index = static_cast<std::size_t>(extension);
     g_extension_support.set(index);
 }}
 
-void enable(Command command)
+void enable(const Command command)
 {{
-    auto index = static_cast<std::size_t>(command);
+    const auto index = static_cast<std::size_t>(command);
     g_command_support.set(index);
 }}
 
-bool is_enabled(Extension extension)
+auto is_enabled(const Extension extension) -> bool
 {{
-    auto index = static_cast<std::size_t>(extension);
+    const auto index = static_cast<std::size_t>(extension);
     return g_extension_support.test(index);
 }}
 
-bool is_enabled(Command command)
+auto is_enabled(const Command command) -> bool
 {{
-    auto index = static_cast<std::size_t>(command);
+    const auto index = static_cast<std::size_t>(command);
     return g_command_support.test(index);
 }}
 
-void check_version(Command command, int min_version)
+void check_version(const Command command, const int min_version)
 {{
     if (g_version >= min_version)
     {{
@@ -57,7 +57,7 @@ void check_version(Command command, int min_version)
     }}
 }}
 
-void check_extension(Command command, Extension extension)
+void check_extension(const Command command, const Extension extension)
 {{
     if (is_enabled(extension))
     {{
@@ -77,7 +77,7 @@ void check_extension(Command command, Extension extension)
 
 }} // anonymous namespace
 
-const char* c_str(Extension extension)
+auto c_str(const Extension extension) -> const char*
 {{
     switch (extension)
     {{
@@ -86,7 +86,7 @@ const char* c_str(Extension extension)
     }}
 }}
 
-const char* c_str(Command command)
+auto c_str(const Command command) -> const char*
 {{
     switch (command)
     {{
@@ -95,9 +95,9 @@ const char* c_str(Command command)
     }}
 }}
 
-Extension parse_extension(const char* extension_name)
+auto parse_extension(const char* extension_name) -> Extension
 {{
-    auto i = g_extension_map.find(extension_name);
+    const auto i = g_extension_map.find(extension_name);
     if (i != g_extension_map.end())
     {{
         return i->second;
@@ -105,9 +105,9 @@ Extension parse_extension(const char* extension_name)
     return Extension::Extension_None;
 }}
 
-Command parse_command(const char* command_name)
+auto parse_command(const char* command_name) -> Command
 {{
-    auto i = g_command_map.find(command_name);
+    const auto i = g_command_map.find(command_name);
     if (i != g_command_map.end())
     {{
         return i->second;
@@ -115,12 +115,15 @@ Command parse_command(const char* command_name)
     return Command::Command_None;
 }}
 
-void command_info_init(int version, const std::vector<std::string>& extensions)
+void command_info_init(
+    const int                       version,
+    const std::vector<std::string>& extensions
+)
 {{
     g_version = version;
     for (auto extension_str : extensions)
     {{
-        auto extension = parse_extension(extension_str.c_str());
+        const auto extension = parse_extension(extension_str.c_str());
         enable(extension);
     }}
 {COMMAND_INFO_ENTRIES}
@@ -132,12 +135,12 @@ void command_info_init_all()
     g_command_support.set();
 }}
 
-bool is_extension_supported(Extension extension)
+auto is_extension_supported(const Extension extension) -> bool
 {{
     return is_enabled(extension);
 }}
 
-bool is_command_supported(Command command)
+auto is_command_supported(const Command command) -> bool
 {{
     return is_enabled(command);
 }}

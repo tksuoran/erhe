@@ -122,6 +122,8 @@ set(source_list
     windows/operations.hpp
     windows/physics_window.cpp
     windows/physics_window.hpp
+    windows/pipelines.cpp
+    windows/pipelines.hpp
     windows/viewport_config.cpp
     windows/viewport_config.hpp
     windows/viewport_window.cpp

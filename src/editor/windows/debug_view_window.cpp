@@ -71,11 +71,11 @@ void Debug_view_window::render(
 
     erhe::graphics::Scoped_debug_group pass_scope{m_debug_label};
 
-    pipeline_state_tracker.execute(&m_pipeline);
+    pipeline_state_tracker.execute(m_pipeline);
 
     bind_resources();
     bind_framebuffer();
-    gl::draw_arrays     (m_pipeline.input_assembly->primitive_topology, 0, 4);
+    gl::draw_arrays     (m_pipeline.data.input_assembly.primitive_topology, 0, 4);
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
 }
 

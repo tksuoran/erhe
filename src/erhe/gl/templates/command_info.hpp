@@ -17,20 +17,13 @@ enum class Command : unsigned int {{
 {COMMAND_ENUM_DECLARATIONS}
 }};
 
-const char* c_str(Extension extension);
-
-const char* c_str(Command command);
-
-Extension parse_extension(const char* extension_name);
-
-Command parse_command(const char* command_name);
-
-void command_info_init(int version, const std::vector<std::string>& extensions);
-
-void command_info_init_all();
-
-bool is_extension_supported(Extension extension);
-
-bool is_command_supported(Command command);
+auto c_str                 (const Extension extension) -> const char*;
+auto c_str                 (const Command command) -> const char*;
+auto parse_extension       (const char* extension_name) -> Extension;
+auto parse_command         (const char* command_name) -> Command;
+void command_info_init     (const int version, const std::vector<std::string>& extensions);
+void command_info_init_all ();
+auto is_extension_supported(const Extension extension) -> bool;
+auto is_command_supported  (const Command command) -> bool;
 
 }} // namespace gl
