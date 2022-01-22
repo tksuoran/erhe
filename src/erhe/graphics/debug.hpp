@@ -63,7 +63,7 @@ private:
 class Scoped_gpu_timer
 {
 public:
-    Scoped_gpu_timer(Gpu_timer& timer);
+    explicit Scoped_gpu_timer(Gpu_timer& timer);
     ~Scoped_gpu_timer();
 
 private:

@@ -59,7 +59,7 @@ class Vertex_input_state
 {
 public:
     Vertex_input_state();
-    Vertex_input_state(Vertex_input_state_data&& create_info);
+    explicit Vertex_input_state(Vertex_input_state_data&& create_info);
     ~Vertex_input_state();
 
     void set    (const Vertex_input_state_data& data);

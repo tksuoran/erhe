@@ -39,7 +39,7 @@ public:
 class Context_window
 {
 public:
-    Context_window(const Window_configuration& configuration);
+    explicit Context_window(const Window_configuration& configuration);
 
     explicit Context_window(Context_window* share);
     virtual ~Context_window();
