@@ -52,8 +52,9 @@ gl::Internal_format to_gl(erhe::graphics::Image_format format)
     // std::unreachable() return gl::Internal_format::rgba8;
 }
 
-auto Textures::load(const std::filesystem::path& path)
--> shared_ptr<Texture>
+auto Textures::load(
+    const std::filesystem::path& path
+) -> shared_ptr<Texture>
 {
     if (
         !std::filesystem::exists(path) ||

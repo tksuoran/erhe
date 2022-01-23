@@ -230,8 +230,9 @@ auto Geometry_operation::make_new_point_from_point(
     return new_point;
 }
 
-auto Geometry_operation::make_new_point_from_point(const Point_id old_point)
--> Point_id
+auto Geometry_operation::make_new_point_from_point(
+    const Point_id old_point
+) -> Point_id
 {
     const auto new_point = destination.make_point();
     // log_operation.trace(
@@ -249,8 +250,9 @@ auto Geometry_operation::make_new_point_from_point(const Point_id old_point)
     return new_point;
 }
 
-auto Geometry_operation::make_new_point_from_polygon_centroid(const Polygon_id old_polygon)
--> Point_id
+auto Geometry_operation::make_new_point_from_polygon_centroid(
+    const Polygon_id old_polygon
+) -> Point_id
 {
     const auto new_point = destination.make_point();
     // log_operation.trace(
@@ -310,8 +312,9 @@ void Geometry_operation::add_point_ring(
     });
 }
 
-auto Geometry_operation::make_new_polygon_from_polygon(const Polygon_id old_polygon_id)
--> Polygon_id
+auto Geometry_operation::make_new_polygon_from_polygon(
+    const Polygon_id old_polygon_id
+) -> Polygon_id
 {
     const auto new_polygon_id = destination.make_polygon();
     // log_operation.trace(

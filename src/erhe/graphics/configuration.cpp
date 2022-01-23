@@ -183,11 +183,11 @@ void Instance::initialize()
     gl::get_integer_v(gl::Get_p_name::max_vertex_attribs, &limits.max_vertex_attribs);
     log_configuration.trace("max vertex attribs: {}\n", limits.max_vertex_attribs);
 
+    log_configuration.trace("GL Extensions:\n");
     {
-        // GL 3 introduced a new way to access extension strings
         int num_extensions{0};
 
-        gl::get_integer_v(gl::Get_p_name::major_version, &num_extensions);
+        gl::get_integer_v(gl::Get_p_name::num_extensions, &num_extensions);
         if (num_extensions > 0)
         {
             extensions.reserve(num_extensions);
@@ -197,6 +197,7 @@ void Instance::initialize()
                 auto e = std::string(reinterpret_cast<const char*>(extension));
 
                 extensions.push_back(e);
+                log_configuration.trace("    {}\n", e);
             }
         }
     }

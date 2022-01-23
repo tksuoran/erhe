@@ -89,8 +89,7 @@ Geometry::Geometry(Geometry&& other) noexcept
 {
 }
 
-auto Geometry::count_polygon_triangles() const
--> size_t
+auto Geometry::count_polygon_triangles() const -> size_t
 {
     ERHE_PROFILE_FUNCTION
 
@@ -429,8 +428,7 @@ void Geometry::debug_trace() const
     });
 }
 
-auto Geometry::compute_point_normal(const Point_id point_id)
--> vec3
+auto Geometry::compute_point_normal(const Point_id point_id) -> vec3
 {
     ERHE_PROFILE_FUNCTION
 

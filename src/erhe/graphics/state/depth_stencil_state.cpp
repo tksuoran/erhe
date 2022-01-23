@@ -38,8 +38,9 @@ auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function
 //        depth_stencil_state.back};
 //}
 
-auto Stencil_state_component_hash::operator()(const Stencil_op_state& stencil_state_component) const noexcept
--> size_t
+auto Stencil_state_component_hash::operator()(
+    const Stencil_op_state& stencil_state_component
+) const noexcept -> size_t
 {
     static_assert(sizeof(size_t) >= 5u);
     return

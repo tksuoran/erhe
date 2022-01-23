@@ -128,8 +128,7 @@ public:
     unsigned int       sampler_mask     {0};
 };
 
-auto get_type_details(const gl::Uniform_type type)
--> Type_details
+auto get_type_details(const gl::Uniform_type type) -> Type_details
 {
     switch (type)
     {
@@ -438,40 +437,34 @@ Shader_resource::Shader_resource()
 
 Shader_resource::~Shader_resource() = default;
 
-auto Shader_resource::is_array() const
--> bool
+auto Shader_resource::is_array() const -> bool
 {
     return m_array_size.has_value();
 }
 
-auto Shader_resource::dedicated_texture_unit_index() const
--> std::optional<int>
+auto Shader_resource::dedicated_texture_unit_index() const -> std::optional<int>
 {
     Expects(m_type == Type::sampler);
 
     return m_dedicated_texture_unit_index;
 }
 
-auto Shader_resource::type() const
--> Shader_resource::Type
+auto Shader_resource::type() const -> Shader_resource::Type
 {
     return m_type;
 }
 
-auto Shader_resource::name() const
--> const std::string&
+auto Shader_resource::name() const -> const std::string&
 {
     return m_name;
 }
 
-auto Shader_resource::array_size() const
--> std::optional<size_t>
+auto Shader_resource::array_size() const -> std::optional<size_t>
 {
     return m_array_size;
 }
 
-auto Shader_resource::basic_type() const
--> gl::Uniform_type
+auto Shader_resource::basic_type() const -> gl::Uniform_type
 {
     Expects(is_basic(m_type));
 
@@ -705,8 +698,9 @@ auto Shader_resource::layout_string() const -> std::string
     return ss.str();
 }
 
-auto Shader_resource::source(const int indent_level /* = 0 */) const
--> std::string
+auto Shader_resource::source(
+    const int indent_level /* = 0 */
+) const -> std::string
 {
     std::stringstream ss;
 

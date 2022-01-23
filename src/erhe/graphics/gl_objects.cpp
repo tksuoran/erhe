@@ -282,8 +282,7 @@ auto Gl_transform_feedback::operator=(Gl_transform_feedback&& other) noexcept ->
     return *this;
 }
 
-auto Gl_transform_feedback::gl_name() const
--> GLuint
+auto Gl_transform_feedback::gl_name() const -> GLuint
 {
     return m_gl_name;
 }

@@ -997,8 +997,8 @@ void Build_context_root::allocate_index_range(
 auto make_primitive(
     const erhe::geometry::Geometry& geometry,
     Build_info&                     build_info,
-    const Normal_style              normal_style)
--> Primitive_geometry
+    const Normal_style              normal_style
+) -> Primitive_geometry
 {
     Primitive_builder builder{geometry, build_info, normal_style};
     return builder.build();

@@ -142,8 +142,7 @@ auto Component::is_ready_to_initialize(
     return is_ready;
 }
 
-auto Component::is_ready_to_deinitialize() const
--> bool
+auto Component::is_ready_to_deinitialize() const -> bool
 {
     if (m_state != Component_state::Ready)
     {

@@ -73,8 +73,9 @@ Property_map_collection<Key_type>::contains(const std::string& name) const
 
 template <typename Key_type>
 inline auto
-Property_map_collection<Key_type>::find_base(const Property_map_descriptor& descriptor) const
--> Property_map_base<Key_type>*
+Property_map_collection<Key_type>::find_base(
+    const Property_map_descriptor& descriptor
+) const -> Property_map_base<Key_type>*
 {
     ERHE_PROFILE_FUNCTION
 
@@ -236,8 +237,7 @@ Property_map_collection<Key_type>::merge_to(
 
 template <typename Key_type>
 inline auto
-Property_map_collection<Key_type>::clone()
--> Property_map_collection<Key_type>
+Property_map_collection<Key_type>::clone() -> Property_map_collection<Key_type>
 {
     Property_map_collection<Key_type> result;
     for (auto& entry : m_entries)

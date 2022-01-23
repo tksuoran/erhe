@@ -27,8 +27,7 @@ void Image_transfer::initialize_component()
     m_slots = std::make_unique<std::array<Slot, 4>>();
 }
 
-auto Image_transfer::get_slot()
--> Slot&
+auto Image_transfer::get_slot() -> Slot&
 {
     m_index = (m_index + 1) % m_slots->size();
     return m_slots->at(m_index);

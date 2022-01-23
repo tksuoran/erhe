@@ -109,8 +109,7 @@ auto make_box(
     };
 }
 
-auto make_box(const double r)
--> Geometry
+auto make_box(const double r) -> Geometry
 {
     const double sq3 = std::sqrt(3.0);
     return make_box(2.0 * r / sq3, 2.0 * r / sq3, 2.0 * r / sq3);

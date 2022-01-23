@@ -80,8 +80,9 @@ void Programs::initialize_component()
     visualize_depth = make_program("visualize_depth");
 }
 
-auto Programs::make_program(std::string_view name)
--> std::unique_ptr<erhe::graphics::Shader_stages>
+auto Programs::make_program(
+    const std::string_view name
+) -> std::unique_ptr<erhe::graphics::Shader_stages>
 {
     const std::vector<std::string> no_defines;
     return make_program(name, no_defines);
@@ -101,8 +102,7 @@ auto Programs::make_program(
     const std::string_view                                      name,
     const std::vector<std::string>&                             defines,
     const std::vector<std::pair<gl::Shader_type, std::string>>& extensions
-)
--> std::unique_ptr<erhe::graphics::Shader_stages>
+) -> std::unique_ptr<erhe::graphics::Shader_stages>
 {
     ERHE_PROFILE_FUNCTION
 

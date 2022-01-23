@@ -63,38 +63,34 @@ void Renderbuffer::set_debug_label(const std::string& label)
     );
 }
 
-auto Renderbuffer::internal_format() const
--> gl::Internal_format
+auto Renderbuffer::internal_format() const -> gl::Internal_format
 {
     return m_internal_format;
 }
 
-auto Renderbuffer::sample_count() const
--> unsigned int
+auto Renderbuffer::sample_count() const -> unsigned int
 {
     return m_sample_count;
 }
 
-auto Renderbuffer::width() const
--> unsigned int
+auto Renderbuffer::width() const -> unsigned int
 {
     return m_width;
 }
 
-auto Renderbuffer::height() const
--> unsigned int
+auto Renderbuffer::height() const -> unsigned int
 {
     return m_height;
 }
 
-auto Renderbuffer::gl_name() const
--> unsigned int
+auto Renderbuffer::gl_name() const -> unsigned int
 {
     return m_handle.gl_name();
 }
 
-auto Renderbuffer_hash::operator()(const Renderbuffer& renderbuffer) const noexcept
--> size_t
+auto Renderbuffer_hash::operator()(
+    const Renderbuffer& renderbuffer
+) const noexcept -> size_t
 {
     Expects(renderbuffer.gl_name() != 0);
 

@@ -124,7 +124,7 @@ class Node:
 
         elif parsed.node_type == 'GLboolean':
             format_entry = 'gl::c_str({})'
-        elif     parsed.node_type == 'GLbitfield':
+        elif parsed.node_type == 'GLbitfield':
             format_entry = "{}"
         elif parsed.ptype == 'GLenum':
             format_entry = 'gl::enum_string({})'
@@ -212,6 +212,7 @@ class GLGenerator:
 
     def __init__(self, outpath):
         """Constructor for GLGenerator."""
+        self.extensions_to_collect                     = [ 'GL_ARB_bindless_texture' ]
         self.script_path = os.path.dirname(os.path.realpath(__file__))
         self.outpath     = outpath
         self.func_prefix = 'gl'
@@ -405,6 +406,7 @@ class GLGenerator:
             for extensions in root.iter('extensions'):
                 for extension in extensions.iter('extension'):
                     extension_name = extension.attrib.get('name', '')
+                    #print(f'Extension: {extension_name}')
                     self.extensions.append(extension_name)
 
                     extension_apis = extension.attrib.get('supported', '')
@@ -455,11 +457,12 @@ class GLGenerator:
     def _collect_command(self, command_element):
         """Collect GL command information."""
         command_name = GLGenerator.get_command_name(command_element)
+        #print(f'Command: {command_name}')
 
         if command_name not in self.command_list:
             return
 
-        if not self._command_version_check(command_name):
+        if not self._command_should_collect(command_name):
             return
 
         func_prefix_len = len(self.func_prefix)
@@ -625,8 +628,8 @@ class GLGenerator:
         self.command_map_entries       = ',\n'.join(map_entries)
         self.command_case_entries      = '\n'.join(case_entries)
 
-    def _enum_version_check(self, enum):
-        """Check if GL enum is required and not removed."""
+    def _enum_should_collect(self, enum):
+        """Check if GL enum should be collected. Is required and not removed."""
         last_require_version = 0
         for feature in self.enum_required_by_feature[enum]:
             last_require_version = max(last_require_version, feature['number'])
@@ -634,6 +637,12 @@ class GLGenerator:
         last_remove_version = 0
         for feature in self.enum_removed_by_feature[enum]:
             last_remove_version = max(last_remove_version, feature['number'])
+
+        for extension in self.enum_required_by_extension[enum]:
+            extension_name = extension['name']
+            if extension_name in self.extensions_to_collect:
+                #print(f'Collecting enum {enum} because it is required by {extension_name}')
+                return True
 
         # filter by command not required by core profile
         if last_require_version == 0:
@@ -660,7 +669,12 @@ class GLGenerator:
                     earliest_non_remove_version_number = number
                     version = feature['name']
 
-        return version
+        for extension in self.enum_required_by_extension[name]:
+            extension_name = extension['name']
+            if extension_name in self.extensions_to_collect:
+                return extension_name
+
+        return '?'
 
     def _command_version(self, name):
         """Get GL command version."""
@@ -669,19 +683,23 @@ class GLGenerator:
             last_remove_version = max(last_remove_version, feature['number'])
 
         earliest_non_remove_version_number = 9999
-        version = ''
 
         for feature in self.command_required_by_feature[name]:
             number = feature['number']
             if number > last_remove_version:
                 if number < earliest_non_remove_version_number:
                     earliest_non_remove_version_number = number
-                    version = feature['name']
+                    return feature['name']
 
-        return version
+        for extension in self.command_required_by_extension[name]:
+            extension_name = extension['name']
+            if extension_name in self.extensions_to_collect:
+                return extension_name
 
-    def _command_version_check(self, command_name):
-        """Check if GL command is required and not removed."""
+        return '?'
+
+    def _command_should_collect(self, command_name):
+        """Check if GL command should be collected: required and not removed."""
         last_require_version = 0
         for feature in self.command_required_by_feature[command_name]:
             last_require_version = max(last_require_version, feature['number'])
@@ -689,6 +707,12 @@ class GLGenerator:
         last_remove_version = 0
         for feature in self.command_removed_by_feature[command_name]:
             last_remove_version = max(last_remove_version, feature['number'])
+
+        for extension in self.command_required_by_extension[command_name]:
+            extension_name = extension['name']
+            if extension_name in self.extensions_to_collect:
+                #print(f'Collecting command {command_name} because it is required by {extension_name}')
+                return True
 
         # filter by command not required by core profile
         if last_require_version == 0:
@@ -710,10 +734,10 @@ class GLGenerator:
                 continue
 
             if enum not in self.enum_name_to_value:
-                print(f'Warning: enum {enum} has no value')
+                print(f'Notice: enum {enum} has no value')
                 continue
 
-            if not self._enum_version_check(enum):
+            if not self._enum_should_collect(enum):
                 continue
 
             value = self.enum_name_to_value[enum]
@@ -760,7 +784,7 @@ class GLGenerator:
                     print(f'Warning: enum {enum_name} has no value')
                     continue
 
-                if not self._enum_version_check(enum_name):
+                if not self._enum_should_collect(enum_name):
                     continue
 
                 enum_value = self.enum_name_to_value[enum_name]

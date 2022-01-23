@@ -38,8 +38,9 @@ Components::Components()
 
 Components::~Components() = default;
 
-auto Components::add(const shared_ptr<Component>& component)
--> Component&
+auto Components::add(
+    const shared_ptr<Component>& component
+) -> Component&
 {
     ERHE_VERIFY(component);
 
