@@ -37,7 +37,22 @@ void opengl_callback(
     const void*   /*userParam*/
 )
 {
-    if (id == 0x020071 || id == 0x020061)
+    // Intel:
+    // source:   GL_DEBUG_SOURCE_API
+    // type:     GL_DEBUG_TYPE_PERFORMANCE
+    // id:       0x000008
+    // severity: GL_DEBUG_SEVERITY_LOW:
+    //
+    // API_ID_REDUNDANT_FBO performance warning has been generated.
+    // Redundant state change in glBindFramebuffer API call, FBO 0, "", already bound.
+    //
+    // GL debug messsage:
+    // source:   GL_DEBUG_SOURCE_API
+    // type:     GL_DEBUG_TYPE_PERFORMANCE
+    // id:       0x000002
+    // severity: GL_DEBUG_SEVERITY_MEDIUM
+    // API_ID_RECOMPILE_FRAGMENT_SHADER performance warning has been generated. Fragment shader recompiled due to state change.
+    if (id == 0x020071 || id == 0x020061 || id == 0x000008 || 0x000002)
     {
         return;
     }
@@ -49,9 +64,13 @@ void opengl_callback(
         return;
     }
 
-    log_configuration.
-    info(
-        "GL: source: {} type: {} id: {:#08x} severity: {} : {}\n",
+    log_configuration.info(
+        "GL debug messsage:\n"
+        "source:   {}\n"
+        "type:     {}\n"
+        "id:       {:#08x}\n"
+        "severity: {}\n"
+        "{}\n",
         gl::c_str(source),
         gl::c_str(type),
         id,

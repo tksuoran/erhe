@@ -43,6 +43,11 @@ void Debug_view_window::initialize_component()
 
 auto Debug_view_window::get_size() const -> glm::vec2
 {
+    if (!m_shadow_renderer)
+    {
+        return {};
+    }
+
     return glm::vec2{
         static_cast<float>(m_shadow_renderer->texture()->width()),
         static_cast<float>(m_shadow_renderer->texture()->height()),

@@ -156,10 +156,13 @@ void Vertex_input_state::update()
     );
 
     {
-        auto ibo_gl_name = (m_data.index_buffer != nullptr)
+        const auto ibo_gl_name = (m_data.index_buffer != nullptr)
             ? m_data.index_buffer->gl_name()
             : 0;
-        gl::vertex_array_element_buffer(gl_name(), ibo_gl_name);
+        if (ibo_gl_name != 0)
+        {
+            gl::vertex_array_element_buffer(gl_name(), ibo_gl_name);
+        }
     }
 
     for (const auto& attribute : m_data.attributes)

@@ -96,6 +96,13 @@ void Framebuffer_window::update_framebuffer()
     };
 
     const glm::vec2 source_size = get_size();
+    if (
+        (source_size.x == 0) ||
+        (source_size.y == 0)
+    )
+    {
+        return;
+    }
 
     const float ratio_x   = available_size.x / source_size.x;
     const float ratio_y   = available_size.y / source_size.y;

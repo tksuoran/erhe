@@ -61,7 +61,7 @@ void Mesh_properties::tool_render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_text_renderer == nullptr)
+    if (!m_text_renderer || !m_selection_tool)
     {
         return;
     }

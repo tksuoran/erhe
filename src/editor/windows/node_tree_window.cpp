@@ -36,7 +36,7 @@ void Node_tree_window::connect()
     m_icon_set       = get<Icon_set>();
     require<Editor_imgui_windows>();
     Expects(m_scene_root     != nullptr);
-    Expects(m_selection_tool != nullptr);
+    //Expects(m_selection_tool != nullptr);
     Expects(m_icon_set       != nullptr);
 }
 
@@ -144,7 +144,7 @@ void Node_tree_window::imgui()
     }
 
     //const ImGuiIO& io = ImGui::GetIO();
-    if (m_node_clicked)
+    if (m_node_clicked && m_selection_tool)
     {
         if (false) // TODO shift    or maybe ctrl?
         {

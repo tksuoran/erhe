@@ -449,6 +449,11 @@ void Node_properties::on_end()
 
 void Node_properties::imgui()
 {
+    if (!m_selection_tool)
+    {
+        return;
+    }
+
     const auto& selection = m_selection_tool->selection();
     for (const auto& node : selection)
     {

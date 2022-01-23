@@ -127,7 +127,10 @@ void Forward_renderer::render(const Render_parameters& parameters)
         update_camera_buffer  (camera, viewport);
         bind_material_buffer  ();
         bind_camera_buffer    ();
-        if (light_layer != nullptr)
+        if (
+            m_shadow_renderer &&
+            (light_layer != nullptr)
+        )
         {
             update_light_buffer(*light_layer, m_shadow_renderer->viewport());
         }

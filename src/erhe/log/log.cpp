@@ -302,14 +302,13 @@ void Category::write(const bool indent, const std::string& text)
                     }
                     else if (c == '\n')
                     {
-                        if (span_len > 0)
                         {
-                            fwrite(span, 1, span_len, stdout);
+                            fwrite(span, 1, span_len + 1, stdout);
                             //fflush(stdout);
                         }
-                        span = p;
                         ++p;
-                        span_len = 1;
+                        span = p;
+                        span_len = 0;
                         Log::set_text_color(m_color.console);
                         m_newline = true;
                     }

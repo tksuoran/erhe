@@ -145,8 +145,12 @@ void Log_window::tail_write(const ImVec4 color, const char* format, fmt::format_
 
 void Log_window::imgui()
 {
-    const auto shadow_map_time = get<Shadow_renderer>()->gpu_time();
-    ImGui::Text("Shadow renderer: %g", shadow_map_time);
+    const auto& shadow_renderer = get<Shadow_renderer>();
+    if (shadow_renderer)
+    {
+        const auto shadow_map_time = shadow_renderer->gpu_time();
+        ImGui::Text("Shadow renderer: %g", shadow_map_time);
+    }
 
     if (ImGui::TreeNodeEx("Tail", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
     {
