@@ -23,6 +23,7 @@
 #include <vector>
 
 namespace erhe::graphics {
+    class Gpu_timer;
     class OpenGL_state_tracker;
     class Sampler;
     class Shader_stages;
@@ -31,25 +32,6 @@ namespace erhe::graphics {
 }
 
 namespace editor {
-
-class Texture_unit_cache
-{
-public:
-    explicit Texture_unit_cache(const size_t texture_unit_count);
-
-    void create_dummy_texture();
-    void reset();
-    auto allocate_texture_unit(
-        const std::shared_ptr<erhe::graphics::Texture>& texture
-    ) -> std::optional<std::size_t>;
-
-    void bind();
-
-private:
-    std::vector<std::shared_ptr<erhe::graphics::Texture>> m_textures;
-    std::vector<unsigned int>                             m_used_textures;
-    std::shared_ptr<erhe::graphics::Texture>              m_dummy_texture;
-};
 
 class Imgui_renderer
     : public erhe::components::Component
@@ -104,29 +86,43 @@ public:
     void initialize_component() override;
 
     //static constexpr size_t vec2_size   = 2 * sizeof(float);
-    static constexpr size_t s_uivec4_size = 4 * sizeof(uint32_t);
-    static constexpr size_t s_vec4_size   = 4 * sizeof(float);
+    static constexpr size_t s_uvec2_size = 2 * sizeof(uint32_t);
+    static constexpr size_t s_vec4_size  = 4 * sizeof(float);
 
     // scale, translation, clip rectangle, texture indices
     //static constexpr size_t draw_parameters_block_size = vec2_size + vec2_size + vec4_size + uivec4_size;
-    static constexpr size_t s_max_draw_count     =   6'000;
-    static constexpr size_t s_max_index_count    = 300'000;
-    static constexpr size_t s_max_vertex_count   = 800'000;
-    static constexpr size_t s_texture_unit_count = 16;
+    static constexpr size_t s_max_draw_count   =   6'000;
+    static constexpr size_t s_max_index_count  = 300'000;
+    static constexpr size_t s_max_vertex_count = 800'000;
 
     // Public API
+    [[nodiscard]] auto get_font_atlas() -> ImFontAtlas*;
+    [[nodiscard]] auto gpu_time      () const -> double;
     void use_as_backend_renderer_on_context(ImGuiContext* imgui_context);
+
+    void image(
+        const std::shared_ptr<erhe::graphics::Texture>& texture,
+        const int                                       width,
+        const int                                       height,
+        const glm::vec2                                 uv0        = {0.0f, 1.0f},
+        const glm::vec2                                 uv1        = {1.0f, 0.0f},
+        const glm::vec4                                 tint_color = {1.0f, 1.0f, 1.0f, 1.0f}
+    );
+
+    void use(
+        const std::shared_ptr<erhe::graphics::Texture>& texture,
+        const uint64_t                                  handle
+    );
     void render_draw_data();
-    auto get_font_atlas  () -> ImFontAtlas*;
 
 private:
     void create_attribute_mappings_and_vertex_format();
     void create_blocks                              ();
     void create_shader_stages                       ();
+    void create_samplers                            ();
     void create_font_texture                        ();
     void create_frame_resources                     ();
     auto current_frame_resources                    () -> Frame_resources&;
-    void prebind_texture_units                      ();
     void next_frame                                 ();
 
     ImFontAtlas                                           m_font_atlas;
@@ -135,24 +131,26 @@ private:
     std::unique_ptr<erhe::graphics::Shader_stages>        m_shader_stages;
     std::unique_ptr<erhe::graphics::Shader_resource>      m_projection_block;
     std::unique_ptr<erhe::graphics::Shader_resource>      m_draw_parameter_block;
-    erhe::graphics::Shader_resource                       m_default_uniform_block; // containing sampler uniforms
-    erhe::graphics::Shader_resource                       m_draw_parameter_struct{"Draw_parameters"}; // struct Draw_parameters
-    const erhe::graphics::Shader_resource*                m_samplers{nullptr};
+    erhe::graphics::Shader_resource                       m_draw_parameter_struct{"Draw_parameters"};
     erhe::graphics::Vertex_attribute_mappings             m_attribute_mappings;
     erhe::graphics::Vertex_format                         m_vertex_format;
     std::unique_ptr<erhe::graphics::Sampler>              m_nearest_sampler;
     std::unique_ptr<erhe::graphics::Sampler>              m_linear_sampler;
-    size_t                                                m_u_scale_offset          {0};
-    size_t                                                m_u_translate_offset      {0};
-    size_t                                                m_u_clip_rect_offset      {0};
-    size_t                                                m_u_texture_indices_offset{0};
+    std::unique_ptr<erhe::graphics::Sampler>              m_linear_mipmap_linear_sampler;
+    size_t                                                m_u_scale_offset       {0};
+    size_t                                                m_u_translate_offset   {0};
+    size_t                                                m_u_clip_rect_offset   {0};
+    size_t                                                m_u_texture_offset     {0};
+    size_t                                                m_u_extra_offset       {0};
     erhe::graphics::Fragment_outputs                      m_fragment_outputs;
     size_t                                                m_vertex_offset        {0};
     size_t                                                m_index_offset         {0};
     size_t                                                m_draw_parameter_offset{0};
     size_t                                                m_draw_indirect_offset {0};
+    std::vector<std::shared_ptr<erhe::graphics::Texture>> m_used_textures;
+    std::vector<uint64_t>                                 m_used_texture_handles;
 
-    Texture_unit_cache          m_texture_unit_cache{s_texture_unit_count};
+    std::unique_ptr<erhe::graphics::Gpu_timer>            m_gpu_timer;
 
     std::deque<Frame_resources> m_frame_resources;
     size_t                      m_current_frame_resource_slot{0};

@@ -25,8 +25,6 @@ FetchContent_Declare(
     concurrentqueue
     GIT_REPOSITORY https://github.com/cameron314/concurrentqueue.git
     GIT_TAG        master
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
 )
 
 FetchContent_Declare(
@@ -118,21 +116,21 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     harfbuzz
+    GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz.git
+    GIT_TAG        main
     #GIT_REPOSITORY https://github.com/tksuoran/harfbuzz.git
-    #GIT_TAG        fixes
-    GIT_REPOSITORY https://github.com/tksuoran/harfbuzz.git
-    GIT_TAG        cmake
+    #GIT_TAG        cmake
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
 
-FetchContent_Declare(
-    ImGui
-    GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG        master # v1.81
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
+#FetchContent_Declare(
+#    ImGui
+#    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+#    GIT_TAG        master # v1.81
+#    GIT_SHALLOW    TRUE
+#    GIT_PROGRESS   TRUE
+#)
 
 # Not yet in use
 FetchContent_Declare(

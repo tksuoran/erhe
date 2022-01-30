@@ -5,6 +5,8 @@ if (NOT ${Python3_FOUND})
     message(FATAL_ERROR "Python3 is needed to generate sources.")
 endif ()
 
+add_library(${_target})
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS True)
 set(GENERATED_SOURCES
     command_info.cpp
@@ -61,18 +63,20 @@ add_custom_command(
     OUTPUT  ${GENERATED_SOURCES}
 )
 
-set(source_list
+erhe_target_sources_grouped(
+    ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     gl.cpp
     gl.hpp
     strong_gl_enums.hpp
-    generate_sources.Pyt
+    generate_sources.py
+    ${GEN_DEPENDS}
 )
 
-list(APPEND source_list ${GEN_DEPENDS})
+set_source_files_properties(${GEN_DEPENDS} PROPERTIES HEADER_FILE_ONLY TRUE)
 
-add_library(${_target}
+erhe_target_sources_grouped(
+    ${_target} Generated FILES
     ${GENERATED_SOURCES}
-    gl.cpp
 )
 
 target_include_directories(${_target}
@@ -102,9 +106,3 @@ endif ()
 target_compile_definitions(${_target} PUBLIC -DERHE_TRACY_GL)
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
-
-foreach (source IN LISTS source_list)
-    get_filename_component(source_path "${source}" PATH)
-    string(REPLACE "/" "\\" source_path_msvc "${source_path}")
-    source_group("${source_path_msvc}" FILES "${source}")
-endforeach ()

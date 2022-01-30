@@ -8,8 +8,11 @@ in vec4      v_color;
 float sample_light_visibility(
     vec4  position,
     uint  light_index,
-    float NdotL)
+    float NdotL
+)
 {
+    sampler2DArray s_shadow = sampler2DArray(light_block.shadow_texture);
+
     Light light = light_block.lights[light_index];
     vec4  position_in_light_texture_homogeneous = light.texture_from_world * position;
 

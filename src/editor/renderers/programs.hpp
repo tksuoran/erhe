@@ -48,9 +48,8 @@ public:
     std::unique_ptr<erhe::graphics::Sampler>         linear_sampler;
     std::unique_ptr<erhe::graphics::Sampler>         linear_mipmap_linear_sampler;
 
-    std::unique_ptr<erhe::graphics::Shader_stages> basic;
     std::unique_ptr<erhe::graphics::Shader_stages> brush;
-    std::unique_ptr<erhe::graphics::Shader_stages> standard;    // standard material, polygon fill
+    std::unique_ptr<erhe::graphics::Shader_stages> standard;
     std::unique_ptr<erhe::graphics::Shader_stages> textured;
     std::unique_ptr<erhe::graphics::Shader_stages> edge_lines;
     std::unique_ptr<erhe::graphics::Shader_stages> wide_lines;
@@ -77,6 +76,7 @@ private:
     // Component dependencies
     std::shared_ptr<Program_interface> m_program_interface;
     std::shared_ptr<Shader_monitor>    m_shader_monitor;
+    bool                               m_dump_reflection{false};
 
     std::filesystem::path m_shader_path;
 };

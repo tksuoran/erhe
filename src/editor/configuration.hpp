@@ -32,7 +32,7 @@ public:
     //bool viewports_hosted_in_imgui_windows{false};
     bool openxr                           {false};
     bool show_window                      {true};
-    bool parallel_initialization          {true};
+    bool parallel_initialization          {false};
     bool reverse_depth                    {true};
     //bool fullscreen                       {true};
     bool fullscreen                       {false};

@@ -56,7 +56,10 @@ auto Shader_stages::Create_info::final_source(
     if (shader.type == gl::Shader_type::vertex_shader)
     {
         // Apply attrib location bindings
-        if (vertex_attribute_mappings->mappings.size() > 0)
+        if (
+            (vertex_attribute_mappings != nullptr) &&
+            (vertex_attribute_mappings->mappings.size() > 0)
+        )
         {
             sb << "// Attributes\n";
             for (const auto& mapping : vertex_attribute_mappings->mappings)
@@ -96,6 +99,7 @@ auto Shader_stages::Create_info::final_source(
         {
             ERHE_VERIFY(struct_type != nullptr);
             sb << struct_type->source();
+            sb << "\n";
         }
         sb << "\n";
     }
@@ -107,6 +111,7 @@ auto Shader_stages::Create_info::final_source(
         {
             auto block = i.second;
             sb << block->source();
+            sb << "\n";
         }
         sb << "\n";
     }

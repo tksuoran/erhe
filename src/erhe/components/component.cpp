@@ -120,7 +120,8 @@ auto Component::is_ready_to_initialize(
     const bool is_ready =
         m_dependencies.empty() &&
         (
-            Components::serial_component_initialization() ||
+            //Components::serial_component_initialization() ||
+            !processing_requires_main_thread() ||
             (in_worker_thread != processing_requires_main_thread())
         );
     if (!is_ready)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "windows/framebuffer_window.hpp"
+#include "renderers/renderpass.hpp"
 
 #include "erhe/components/component.hpp"
 #include "erhe/graphics/pipeline.hpp"
@@ -20,7 +21,9 @@ namespace erhe::graphics
 namespace editor
 {
 
+class Forward_renderer;
 class Programs;
+class Scene_root;
 class Shadow_renderer;
 
 class Debug_view_window
@@ -47,17 +50,22 @@ public:
     void initialize_component() override;
 
     // Implements Framebuffer_window
-    auto get_size      () const -> glm::vec2 override;
-    void bind_resources() override;
+    auto get_size() const -> glm::vec2 override;
 
     // Public API
-    void render(erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker);
+    void render();
 
 private:
     // Component dependencies
+    std::shared_ptr<Forward_renderer>                     m_forward_renderer;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Programs>                             m_programs;
+    std::shared_ptr<Scene_root>                           m_scene_root;
     std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
+
+    std::unique_ptr<erhe::graphics::Vertex_input_state>   m_empty_vertex_input;
+    Renderpass                                            m_renderpass;
+
 };
 
 } // namespace editor

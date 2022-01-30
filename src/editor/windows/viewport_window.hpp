@@ -26,6 +26,7 @@ class Configuration;
 class Editor_rendering;
 class Editor_view;
 class Pointer_context;
+class Post_processing;
 class Render_context;
 class Scene_root;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -37,11 +38,9 @@ class Viewport_window
 {
 public:
     Viewport_window(
-        const std::string_view                  name,
-        const std::shared_ptr<Configuration>&   configuration,
-        const std::shared_ptr<Scene_root>&      scene_root,
-        const std::shared_ptr<Viewport_config>& viewport_config,
-        erhe::scene::ICamera*                   camera
+        const std::string_view              name,
+        const erhe::components::Components& components,
+        erhe::scene::ICamera*               camera
     );
 
     // Implements Imgui_window
@@ -84,6 +83,7 @@ private:
     std::shared_ptr<Configuration>                m_configuration;
     std::shared_ptr<Scene_root>                   m_scene_root;
     std::shared_ptr<Viewport_config>              m_viewport_config;
+    std::shared_ptr<Post_processing>              m_post_processing;
 
     erhe::scene::Viewport                         m_viewport           {0, 0, 0, 0, true};
     erhe::scene::ICamera*                         m_camera             {nullptr};

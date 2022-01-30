@@ -2,6 +2,9 @@
 #include "gl_context_provider.hpp"
 #include "log.hpp"
 
+#include "renderers/imgui_renderer.hpp"
+#include "renderers/programs.hpp"
+
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/light.hpp"
 
@@ -106,23 +109,28 @@ ImVec4 imvec_from_glm(glm::vec4 v)
     return ImVec4{v.x, v.y, v.z, v.w};
 }
 
-void Icon_set::icon(
-    const ImVec2    uv0,
-    const glm::vec4 tint_color
-) const
-{
-    const float size      = ImGui::GetTextLineHeight();
-    const auto  icon_size = ImVec2(size, size);
-
-    ImGui::Image(
-        texture,
-        icon_size,
-        uv0,
-        uv1(uv0),
-        imvec_from_glm(tint_color)
-    );
-    ImGui::SameLine();
-}
+//void Icon_set::icon(
+//    const ImVec2    uv0,
+//    const glm::vec4 tint_color
+//) const
+//{
+//    const float size      = ImGui::GetTextLineHeight();
+//    const auto  icon_size = ImVec2(size, size);
+//
+//    const uint64_t handle = erhe::graphics::get_handle(
+//        *texture.get(),
+//        *get<Programs>()->linear_sampler.get()
+//    );
+//    ImGui::Image(
+//        handle,
+//        icon_size,
+//        uv0,
+//        uv1(uv0),
+//        imvec_from_glm(tint_color)
+//    );
+//    get<Imgui_renderer>()->use(texture, handle);
+//    ImGui::SameLine();
+//}
 
 auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const ImVec2
 {
@@ -136,25 +144,25 @@ auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const ImVec
     }
 }
 
-void Icon_set::icon(const erhe::scene::Camera&) const
-{
-    icon(icons.camera);
-}
-
-void Icon_set::icon(const erhe::scene::Light& light) const
-{
-    icon(get_icon(light.type), glm::vec4{light.color, 1.0f});
-}
-
-void Icon_set::icon(const erhe::scene::Mesh&) const
-{
-    icon(icons.mesh);
-}
-
-void Icon_set::icon(const erhe::scene::Node&) const
-{
-    icon(icons.node);
-}
+//void Icon_set::icon(const erhe::scene::Camera&) const
+//{
+//    icon(icons.camera);
+//}
+//
+//void Icon_set::icon(const erhe::scene::Light& light) const
+//{
+//    icon(get_icon(light.type), glm::vec4{light.color, 1.0f});
+//}
+//
+//void Icon_set::icon(const erhe::scene::Mesh&) const
+//{
+//    icon(icons.mesh);
+//}
+//
+//void Icon_set::icon(const erhe::scene::Node&) const
+//{
+//    icon(icons.node);
+//}
 
 
 }

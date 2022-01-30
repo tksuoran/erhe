@@ -58,21 +58,21 @@ void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
     if (is_empty(node))
     {
         //log_tools.info("E {} ({})\n", node->name());
-        m_icon_set->icon(*node);
+        //m_icon_set->icon(*node);
     }
     else if (is_mesh(node))
     {
         //log_tools.info("M {} ({})\n", node->name(), mesh->m_id.get_id());
-        m_icon_set->icon(*as_mesh(node));
+        //m_icon_set->icon(*as_mesh(node));
     }
     else if (is_light(node)) // note light is before camera - light is also camera
     {
-        m_icon_set->icon(*as_light(node));
+        //m_icon_set->icon(*as_light(node));
     }
     else if (is_camera(node))
     {
         //log_tools.info("C {}\n", node->name());
-        m_icon_set->icon(*as_camera(node));
+        //m_icon_set->icon(*as_camera(node));
     }
     //else if (is_physics(node))
     //{
@@ -82,7 +82,7 @@ void Node_tree_window::imgui_tree_node(erhe::scene::Node* node)
     else
     {
         //log_tools.info("? {} ({})\n", node->name());
-        m_icon_set->icon(*node);
+        //m_icon_set->icon(*node);
     }
 
     const auto child_count = node->child_count();

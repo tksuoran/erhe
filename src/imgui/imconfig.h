@@ -132,7 +132,7 @@ namespace erhe::graphics {
     class Texture;
 }
 
-#define ImTextureID std::shared_ptr<erhe::graphics::Texture>
+#define ImTextureID uint64_t
 
 struct ImGuiIO;
 struct ImGuiContext;
@@ -141,7 +141,7 @@ namespace ImGui
 {
     inline auto GetTextureVoidPtr(const ImTextureID& id) -> void*
     {
-        return id.get();
+        return (void*)((intptr_t)(id));
     }
 
     ImGuiIO& GetIO(ImGuiContext* context);

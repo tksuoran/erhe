@@ -31,7 +31,9 @@ public:
 
     [[nodiscard]] virtual auto projection           () -> Projection* = 0;
     [[nodiscard]] virtual auto projection           () const -> const Projection* = 0;
-    [[nodiscard]] virtual auto projection_transforms(Viewport viewport) const -> Projection_transforms = 0;
+    [[nodiscard]] virtual auto projection_transforms(const Viewport& viewport) const -> Projection_transforms = 0;
+    [[nodiscard]] virtual auto get_exposure         () const -> float = 0;
+    virtual void set_exposure(const float value) = 0;
 };
 
 class Camera
@@ -44,12 +46,15 @@ public:
     [[nodiscard]] auto node_type() const -> const char* override;
 
     // Implements ICamera
-    [[nodiscard]] auto projection           () -> Projection*                                  override;
-    [[nodiscard]] auto projection           () const -> const Projection*                      override;
-    [[nodiscard]] auto projection_transforms(Viewport viewport) const -> Projection_transforms override;
+    [[nodiscard]] auto projection           () -> Projection*                                         override;
+    [[nodiscard]] auto projection           () const -> const Projection*                             override;
+    [[nodiscard]] auto projection_transforms(const Viewport& viewport) const -> Projection_transforms override;
+    [[nodiscard]] auto get_exposure         () const -> float                                         override;
+    void set_exposure(const float value)                                                              override;
 
 private:
     Projection m_projection;
+    float      m_exposure{1.0f};
 };
 
 [[nodiscard]] auto is_icamera(const Node* const node) -> bool;

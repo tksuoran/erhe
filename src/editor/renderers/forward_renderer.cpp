@@ -82,24 +82,45 @@ void Forward_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& viewport          = parameters.viewport;
-    const auto& camera            = parameters.camera;
-    const auto& mesh_layers       = parameters.mesh_layers;
-    const auto* light_layer       = parameters.light_layer;
-    const auto& materials         = parameters.materials;
-    const auto& passes            = parameters.passes;
-    const auto& visibility_filter = parameters.visibility_filter;
+    const auto&    viewport              = parameters.viewport;
+    const auto*    camera                = parameters.camera;
+    const auto&    mesh_layers           = parameters.mesh_layers;
+    const auto*    light_layer           = parameters.light_layer;
+    const auto&    materials             = parameters.materials;
+    const auto&    passes                = parameters.passes;
+    const auto&    visibility_filter     = parameters.visibility_filter;
+    const bool     enable_shadows        = m_shadow_renderer && (light_layer != nullptr);
+    const uint64_t shadow_texture_handle = enable_shadows
+        ?
+            erhe::graphics::get_handle(
+                *m_shadow_renderer->texture(),
+                *m_programs->nearest_sampler.get()
+            )
+        : 0;
 
     erhe::graphics::Scoped_debug_group forward_renderer_render{c_forward_renderer_render};
 
-    const unsigned int shadow_texture_unit = 0;
-    if (m_shadow_renderer)
-    {
-        const unsigned int shadow_texture_name = m_shadow_renderer->texture()->gl_name();
-        gl::bind_sampler (shadow_texture_unit, m_programs->nearest_sampler->gl_name());
-        gl::bind_textures(shadow_texture_unit, 1, &shadow_texture_name);
-    }
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+    if (camera != nullptr)
+    {
+        update_camera_buffer(*camera, viewport);
+        bind_camera_buffer  ();
+    }
+    update_material_buffer(materials);
+    bind_material_buffer();
+    if (light_layer != nullptr)
+    {
+        update_light_buffer(
+            *light_layer,
+            m_shadow_renderer->viewport(),
+            shadow_texture_handle
+        );
+        bind_light_buffer();
+    }
+    if (enable_shadows)
+    {
+        gl::make_texture_handle_resident_arb(shadow_texture_handle);
+    }
     for (auto& pass : passes)
     {
         const auto& pipeline = pass->pipeline;
@@ -118,22 +139,6 @@ void Forward_renderer::render(const Render_parameters& parameters)
         erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
 
         m_pipeline_state_tracker->execute(pipeline);
-        gl::program_uniform_1i(
-            pipeline.data.shader_stages->gl_name(),
-            m_programs->shadow_sampler_location,
-            shadow_texture_unit
-        );
-        update_material_buffer(materials);
-        update_camera_buffer  (camera, viewport);
-        bind_material_buffer  ();
-        bind_camera_buffer    ();
-        if (
-            m_shadow_renderer &&
-            (light_layer != nullptr)
-        )
-        {
-            update_light_buffer(*light_layer, m_shadow_renderer->viewport());
-        }
         for (auto mesh_layer : mesh_layers)
         {
             ERHE_PROFILE_GPU_SCOPE(c_forward_renderer_render);
@@ -143,11 +148,6 @@ void Forward_renderer::render(const Render_parameters& parameters)
             if (draw_indirect_buffer_range.draw_indirect_count == 0)
             {
                 continue;
-            }
-
-            if (light_layer != nullptr)
-            {
-                bind_light_buffer();
             }
             bind_primitive_buffer();
             bind_draw_indirect_buffer();
@@ -166,11 +166,79 @@ void Forward_renderer::render(const Render_parameters& parameters)
             pass->end();
         }
     }
+    if (enable_shadows)
+    {
+        gl::make_texture_handle_non_resident_arb(shadow_texture_handle);
+    }
+}
 
-    // state leak insurance
-    const unsigned int zero{0};
-    gl::bind_sampler(shadow_texture_unit, 0);
-    gl::bind_textures(shadow_texture_unit, 1, &zero);
+void Forward_renderer::render_fullscreen(
+    const Render_parameters& parameters
+)
+{
+    ERHE_PROFILE_FUNCTION
+
+    const auto&    viewport              = parameters.viewport;
+    const auto*    camera                = parameters.camera;
+    const auto*    light_layer           = parameters.light_layer;
+    const auto&    passes                = parameters.passes;
+    const bool     enable_shadows        = m_shadow_renderer && (light_layer != nullptr);
+    const uint64_t shadow_texture_handle = enable_shadows
+        ?
+            erhe::graphics::get_handle(
+                *m_shadow_renderer->texture(),
+                *m_programs->nearest_sampler.get()
+            )
+        : 0;
+
+    erhe::graphics::Scoped_debug_group forward_renderer_render{c_forward_renderer_render};
+
+    gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+    if (camera != nullptr)
+    {
+        update_camera_buffer(*camera, viewport);
+        bind_camera_buffer  ();
+    }
+    if (light_layer != nullptr)
+    {
+        update_light_buffer(
+            *light_layer,
+            m_shadow_renderer->viewport(),
+            shadow_texture_handle
+        );
+        bind_light_buffer();
+    }
+    if (enable_shadows)
+    {
+        gl::make_texture_handle_resident_arb(shadow_texture_handle);
+    }
+    for (auto& pass : passes)
+    {
+        const auto& pipeline = pass->pipeline;
+        if (!pipeline.data.shader_stages)
+        {
+            return;
+        }
+
+        if (pass->begin)
+        {
+            pass->begin();
+        }
+
+        erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
+
+        m_pipeline_state_tracker->execute(pipeline);
+        gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, 4);
+
+        if (pass->end)
+        {
+            pass->end();
+        }
+    }
+    if (enable_shadows)
+    {
+        gl::make_texture_handle_non_resident_arb(shadow_texture_handle);
+    }
 }
 
 } // namespace editor

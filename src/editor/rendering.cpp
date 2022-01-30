@@ -6,13 +6,12 @@
 #include "editor_time.hpp"
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
+#include "graphics/gl_context_provider.hpp"
 #include "window.hpp"
 #include "renderers/forward_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "renderers/post_processing.hpp"
 #include "renderers/programs.hpp"
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "xr/headset_renderer.hpp"
-#endif
 #include "renderers/id_renderer.hpp"
 #include "renderers/line_renderer.hpp"
 #include "renderers/render_context.hpp"
@@ -23,7 +22,11 @@
 #include "windows/log_window.hpp"
 #include "windows/viewport_config.hpp"
 #include "windows/viewport_window.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "xr/headset_renderer.hpp"
+#endif
 
+#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/scene/scene.hpp"
@@ -44,7 +47,6 @@ Editor_rendering::~Editor_rendering()
 
 void Editor_rendering::connect()
 {
-    m_application            = get<Application         >();
     m_configuration          = get<Configuration       >();
     m_editor_imgui_windows   = get<Editor_imgui_windows>();
     m_editor_view            = get<Editor_view         >();
@@ -59,6 +61,7 @@ void Editor_rendering::connect()
     m_line_renderer_set      = get<Line_renderer_set   >();
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
     m_pointer_context        = get<Pointer_context     >();
+    m_post_processing        = get<Post_processing     >();
     m_scene_root             = get<Scene_root          >();
     m_shadow_renderer        = get<Shadow_renderer     >();
     m_text_renderer          = get<Text_renderer       >();
@@ -66,10 +69,13 @@ void Editor_rendering::connect()
 
     require<Programs   >();
     require<Mesh_memory>();
+    require<Gl_context_provider>();
 }
 
 void Editor_rendering::initialize_component()
 {
+    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+
     using erhe::graphics::Vertex_input_state;
     using erhe::graphics::Input_assembly_state;
     using erhe::graphics::Rasterization_state;
@@ -349,6 +355,12 @@ void Editor_rendering::initialize_component()
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     };
+
+    m_content_timer   = std::make_unique<erhe::graphics::Gpu_timer>();
+    m_selection_timer = std::make_unique<erhe::graphics::Gpu_timer>();
+    m_gui_timer       = std::make_unique<erhe::graphics::Gpu_timer>();
+    m_brush_timer     = std::make_unique<erhe::graphics::Gpu_timer>();
+    m_tools_timer     = std::make_unique<erhe::graphics::Gpu_timer>();
 }
 
 void Editor_rendering::init_state()
@@ -407,7 +419,6 @@ void Editor_rendering::render()
 {
     ERHE_PROFILE_FUNCTION
 
-    Expects(m_application);
     Expects(m_editor_view);
 
     if (m_trigger_capture)
@@ -430,7 +441,7 @@ void Editor_rendering::render()
                 .light_layer = m_scene_root->light_layer()
             }
         );
-        get<Debug_view_window>()->render(*m_pipeline_state_tracker.get());
+        get<Debug_view_window>()->render();
     }
 
     m_editor_imgui_windows->rendertarget_imgui_windows();
@@ -446,11 +457,12 @@ void Editor_rendering::render()
     }
 #endif
 
-    if (m_shadow_renderer)   m_shadow_renderer  ->next_frame();
-    if (m_id_renderer)       m_id_renderer      ->next_frame();
-    if (m_forward_renderer)  m_forward_renderer ->next_frame();
-    if (m_text_renderer)     m_text_renderer    ->next_frame();
+    if (m_forward_renderer ) m_forward_renderer ->next_frame();
+    if (m_id_renderer      ) m_id_renderer      ->next_frame();
     if (m_line_renderer_set) m_line_renderer_set->next_frame();
+    if (m_post_processing  ) m_post_processing  ->next_frame();
+    if (m_shadow_renderer  ) m_shadow_renderer  ->next_frame();
+    if (m_text_renderer    ) m_text_renderer    ->next_frame();
 }
 
 void Editor_rendering::render_viewport(const Render_context& context, const bool has_pointer)
@@ -497,12 +509,12 @@ void Editor_rendering::render_id(const Render_context& context)
         return;
     }
 
-    auto pointer = m_pointer_context->position_in_viewport_window().value();
+    const auto& pointer = m_pointer_context->position_in_viewport_window().value();
 
     m_id_renderer->render(
         {
             .viewport            = context.viewport,
-            .camera              = *context.camera,
+            .camera              = context.camera,
             .content_mesh_layers = { m_scene_root->content_layer(), m_scene_root->gui_layer() },
             .tool_mesh_layers    = { m_scene_root->tool_layer() },
             .time                = m_editor_time->time(),
@@ -530,6 +542,8 @@ void Editor_rendering::render_content(const Render_context& context)
         return;
     }
 
+    erhe::graphics::Scoped_gpu_timer timer{*m_content_timer.get()};
+
     auto& render_style = context.viewport_config->render_style_not_selected;
 
     constexpr erhe::scene::Visibility_filter content_not_selected_filter{
@@ -549,7 +563,7 @@ void Editor_rendering::render_content(const Render_context& context)
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
-                .camera            = *context.camera,
+                .camera            = context.camera,
                 .mesh_layers       = { m_scene_root->content_layer(), m_scene_root->controller_layer() },
                 .light_layer       = m_scene_root->light_layer(),
                 .materials         = m_scene_root->materials(),
@@ -570,7 +584,7 @@ void Editor_rendering::render_content(const Render_context& context)
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
-                .camera            = *context.camera,
+                .camera            = context.camera,
                 .mesh_layers       = { m_scene_root->content_layer() },
                 .light_layer       = m_scene_root->light_layer(),
                 .materials         = m_scene_root->materials(),
@@ -590,7 +604,7 @@ void Editor_rendering::render_content(const Render_context& context)
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
-                .camera            = *context.camera,
+                .camera            = context.camera,
                 .mesh_layers       = { m_scene_root->content_layer() },
                 .light_layer       = m_scene_root->light_layer(),
                 .materials         = m_scene_root->materials(),
@@ -609,7 +623,7 @@ void Editor_rendering::render_content(const Render_context& context)
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
-                .camera            = *context.camera,
+                .camera            = context.camera,
                 .mesh_layers       = { m_scene_root->content_layer() },
                 .light_layer       = m_scene_root->light_layer(),
                 .materials         = m_scene_root->materials(),
@@ -630,6 +644,8 @@ void Editor_rendering::render_selection(const Render_context& context)
     {
         return;
     }
+
+    erhe::graphics::Scoped_gpu_timer timer{*m_selection_timer.get()};
 
     const auto& render_style = context.viewport_config->render_style_selected;
 
@@ -653,7 +669,7 @@ void Editor_rendering::render_selection(const Render_context& context)
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
-                .camera            = *context.camera,
+                .camera            = context.camera,
                 .mesh_layers       = { m_scene_root->content_layer() },
                 .light_layer       = m_scene_root->light_layer(),
                 .materials         = m_scene_root->materials(),
@@ -676,7 +692,7 @@ void Editor_rendering::render_selection(const Render_context& context)
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
-                .camera            = *context.camera,
+                .camera            = context.camera,
                 .mesh_layers       = { m_scene_root->content_layer() },
                 .light_layer       = m_scene_root->light_layer(),
                 .materials         = m_scene_root->materials(),
@@ -699,7 +715,7 @@ void Editor_rendering::render_selection(const Render_context& context)
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
-                .camera            = *context.camera,
+                .camera            = context.camera,
                 .mesh_layers       = { m_scene_root->content_layer() },
                 .light_layer       = m_scene_root->light_layer(),
                 .materials         = m_scene_root->materials(),
@@ -719,7 +735,7 @@ void Editor_rendering::render_selection(const Render_context& context)
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
-                .camera            = *context.camera,
+                .camera            = context.camera,
                 .mesh_layers       = { m_scene_root->content_layer() },
                 .light_layer       = m_scene_root->light_layer(),
                 .materials         = m_scene_root->materials(),
@@ -740,10 +756,12 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
         return;
     }
 
+    erhe::graphics::Scoped_gpu_timer timer{*m_tools_timer.get()};
+
     m_forward_renderer->render(
         {
             .viewport    = context.viewport,
-            .camera      = *context.camera,
+            .camera      = context.camera,
             .mesh_layers = { m_scene_root->tool_layer() },
             .light_layer = m_scene_root->light_layer(),
             .materials   = m_scene_root->materials(),
@@ -773,6 +791,8 @@ void Editor_rendering::render_gui(const Render_context& context)
         return;
     }
 
+    erhe::graphics::Scoped_gpu_timer timer{*m_gui_timer.get()};
+
     m_editor_imgui_windows->render_rendertarget_gui_meshes(context);
 }
 
@@ -785,10 +805,12 @@ void Editor_rendering::render_brush(const Render_context& context)
         return;
     }
 
+    erhe::graphics::Scoped_gpu_timer timer{*m_brush_timer.get()};
+
     m_forward_renderer->render(
         {
             .viewport          = context.viewport,
-            .camera            = *context.camera,
+            .camera            = context.camera,
             .mesh_layers       = { m_scene_root->brush_layer() },
             .light_layer       = m_scene_root->light_layer(),
             .materials         = m_scene_root->materials(),
@@ -799,6 +821,36 @@ void Editor_rendering::render_brush(const Render_context& context)
             }
         }
     );
+}
+
+auto Editor_rendering::gpu_time_content() const -> double
+{
+    const auto time_elapsed = static_cast<double>(m_content_timer->last_result());
+    return time_elapsed / 1000000.0;
+}
+
+auto Editor_rendering::gpu_time_selection() const -> double
+{
+    const auto time_elapsed = static_cast<double>(m_selection_timer->last_result());
+    return time_elapsed / 1000000.0;
+}
+
+auto Editor_rendering::gpu_time_gui() const -> double
+{
+    const auto time_elapsed = static_cast<double>(m_gui_timer->last_result());
+    return time_elapsed / 1000000.0;
+}
+
+auto Editor_rendering::gpu_time_brush() const -> double
+{
+    const auto time_elapsed = static_cast<double>(m_brush_timer->last_result());
+    return time_elapsed / 1000000.0;
+}
+
+auto Editor_rendering::gpu_time_tools() const -> double
+{
+    const auto time_elapsed = static_cast<double>(m_tools_timer->last_result());
+    return time_elapsed / 1000000.0;
 }
 
 }  // namespace editor

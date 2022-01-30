@@ -160,8 +160,6 @@ public:
 protected:
     void write(const bool indent, const std::string& text);
 
-    static std::mutex s_mutex;
-
     Color      m_color;
     int        m_level    {Level::LEVEL_ALL};
     Colorizer  m_colorizer{Colorizer::default_};
@@ -173,7 +171,9 @@ protected:
 class Log
 {
 public:
-    static int s_indent;
+    static int        s_indent;
+    static std::mutex s_mutex;
+
     static bool print_color   ();
     static void indent        (const int indent_amount);
     static void set_text_color(const int c);
@@ -183,16 +183,8 @@ public:
 class Indenter final
 {
 public:
-    Indenter(int amount = 3)
-        : m_amount{amount}
-    {
-        Log::indent(m_amount);
-    }
-
-    ~Indenter()
-    {
-        Log::indent(-m_amount);
-    }
+    Indenter(const int amount = 3);
+    ~Indenter();
 
 private:
     int m_amount{0};

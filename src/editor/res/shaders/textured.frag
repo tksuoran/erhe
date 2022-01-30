@@ -1,4 +1,5 @@
-in vec2 v_texcoord;
+in      vec2  v_texcoord;
+in flat uvec2 v_texture;
 
 float srgb_to_linear(float x)
 {
@@ -24,6 +25,7 @@ vec4 srgb_to_linear(vec4 v)
 
 void main()
 {
-    //out_color = srgb_to_linear(texture(s_gui_texture, v_texcoord));
-    out_color = texture(s_gui_texture, v_texcoord);
+    sampler2D s_texture = sampler2D(v_texture);
+    //out_color = srgb_to_linear(texture(s_texture, v_texcoord));
+    out_color = texture(s_texture, v_texcoord);
 }

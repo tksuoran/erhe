@@ -51,6 +51,8 @@ void Node_properties::initialize_component()
 
 void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
 {
+    const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
+
     auto* const projection = camera.projection();
     if (projection == nullptr)
     {
@@ -60,7 +62,6 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
     ImGui::PushID("##icamera_properties");
     if (ImGui::TreeNodeEx("Projection", ImGuiTreeNodeFlags_Framed))
     {
-        const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
         ImGui::SetNextItemWidth(200);
         make_combo(
             "Type",
@@ -159,6 +160,15 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
                 // TODO(tksuoran@gmail.com): Implement
                 break;
             }
+        }
+        ImGui::TreePop();
+    }
+    if (ImGui::TreeNodeEx("Camera", ImGuiTreeNodeFlags_Framed))
+    {
+        float exposure = camera.get_exposure();
+        if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 1000.0f, "%.3f", logarithmic))
+        {
+            camera.set_exposure(exposure);
         }
         ImGui::TreePop();
     }

@@ -1,4 +1,9 @@
-set(source_list
+set(_target "imgui")
+
+add_library(${_target})
+
+erhe_target_sources_grouped(
+    ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     imconfig.h
     imgui_demo.cpp
     imgui_draw.cpp
@@ -7,32 +12,22 @@ set(source_list
     imgui.cpp
     misc/cpp/imgui_stdlib.cpp
     misc/cpp/imgui_stdlib.h
-    backends/imgui_impl_glfw.cpp
+    #backends/imgui_impl_glfw.cpp
 )
 
 if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
     add_definitions(-DIMGUI_ENABLE_FREETYPE -DIMGUI_DISABLE_STB_TRUETYPE_IMPLEMENTATION)
-    list(APPEND source_list
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         misc/freetype/imgui_freetype.cpp
         misc/freetype/imgui_freetype.h
     )
 endif()
 
-add_library(imgui ${source_list})
+target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT}/imgui)
 
-target_include_directories(imgui
-    PUBLIC
-        ${ERHE_INCLUDE_ROOT}/imgui
-)
-
-target_link_libraries(imgui PUBLIC glfw glm::glm)
+target_link_libraries(${_target} PUBLIC glfw glm::glm)
 
 if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
-    target_link_libraries(imgui PUBLIC freetype)
+    target_link_libraries(${_target} PUBLIC freetype)
 endif()
-
-foreach(source IN LISTS source_list)
-    get_filename_component(source_path "${source}" PATH)
-    string(REPLACE "/" "\\" source_path_msvc "${source_path}")
-    source_group("${source_path_msvc}" FILES "${source}")
-endforeach()

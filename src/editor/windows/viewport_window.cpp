@@ -6,13 +6,14 @@
 #include "log.hpp"
 #include "rendering.hpp"
 
+#include "renderers/post_processing.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "windows/log_window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-#include "xr/headset_renderer.hpp"
+#   include "xr/headset_renderer.hpp"
 #endif
 
 #include "erhe/graphics/debug.hpp"
@@ -65,16 +66,19 @@ void Viewport_windows::connect()
 
 void Viewport_windows::initialize_component()
 {
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     {
         auto* const headset_camera = m_headset_renderer->root_camera().get();
         create_window("Headset Camera", headset_camera);
     }
-    //for (auto camera : m_scene_root->scene().cameras)
-    //{
-    //    auto* icamera = as_icamera(camera.get());
-    //    const std::string name = fmt::format("Scene for Camera {}", icamera->name());
-    //    create_window(name, icamera);
-    //}
+#else
+    for (const auto& camera : m_scene_root->scene().cameras)
+    {
+        auto* icamera = as_icamera(camera.get());
+        const std::string name = fmt::format("Scene for Camera {}", icamera->name());
+        create_window(name, icamera);
+    }
+#endif
 }
 
 auto Viewport_windows::create_window(
@@ -84,9 +88,7 @@ auto Viewport_windows::create_window(
 {
     const auto new_window = std::make_shared<Viewport_window>(
         name,
-        m_configuration,
-        m_scene_root,
-        m_viewport_config,
+        *m_components,
         camera
     );
 
@@ -107,7 +109,7 @@ void Viewport_windows::update()
 
     if (!m_configuration->viewports_hosted_in_imgui_windows)
     {
-        for (auto window : m_windows)
+        for (const auto& window : m_windows)
         {
             window->try_hover(
                 static_cast<int>(m_pointer_context->mouse_x()),
@@ -117,7 +119,7 @@ void Viewport_windows::update()
     }
 
     bool any_window{false};
-    for (auto window : m_windows)
+    for (const auto& window : m_windows)
     {
         window->update();
         if (window->is_hovered())
@@ -141,11 +143,11 @@ void Viewport_windows::render()
 {
     if (!m_configuration->viewports_hosted_in_imgui_windows)
     {
-        const int total_width  = m_editor_view->width();
-        const int total_height = m_editor_view->height();
+        const int   total_width  = m_editor_view->width();
+        const int   total_height = m_editor_view->height();
+        const float count        = static_cast<float>(m_windows.size());
         size_t i = 0;
-        float count = static_cast<float>(m_windows.size());
-        for (auto window : m_windows)
+        for (const auto& window : m_windows)
         {
             const float start_rel = static_cast<float>(i) / count;
             const float width     = static_cast<float>(total_width) / count;
@@ -164,7 +166,7 @@ void Viewport_windows::render()
 
     }
 
-    for (auto window : m_windows)
+    for (const auto& window : m_windows)
     {
         window->render(
             *m_editor_rendering.get(),
@@ -174,16 +176,15 @@ void Viewport_windows::render()
 }
 
 Viewport_window::Viewport_window(
-    const std::string_view                  name,
-    const std::shared_ptr<Configuration>&   configuration,
-    const std::shared_ptr<Scene_root>&      scene_root,
-    const std::shared_ptr<Viewport_config>& viewport_config,
-    erhe::scene::ICamera*                   camera
+    const std::string_view              name,
+    const erhe::components::Components& components,
+    erhe::scene::ICamera*               camera
 )
     : Imgui_window     {name}
-    , m_configuration  {configuration}
-    , m_scene_root     {scene_root}
-    , m_viewport_config{viewport_config}
+    , m_configuration  {components.get<Configuration  >()}
+    , m_scene_root     {components.get<Scene_root     >()}
+    , m_viewport_config{components.get<Viewport_config>()}
+    , m_post_processing{components.get<Post_processing>()}
     , m_camera         {camera}
 {
 }
@@ -281,6 +282,16 @@ void Viewport_window::imgui()
     ImGui::SetNextItemWidth(150.0f);
     m_scene_root->camera_combo("Camera", m_camera);
 
+    //if (ImGui::Button("Post Process"))
+    {
+        if (m_post_processing)
+        {
+            m_post_processing->post_process(
+                m_color_texture_resolved_for_present.get()
+            );
+        }
+    }
+
     const auto size = ImGui::GetContentRegionAvail();
 
     if (
@@ -290,11 +301,12 @@ void Viewport_window::imgui()
         (m_color_texture_resolved_for_present->height() > 0)
     )
     {
-        ImGui::Image(
+        image(
             m_color_texture_resolved_for_present,
-            size,
-            ImVec2{0, 1},
-            ImVec2{1, 0}
+            static_cast<int>(size.x),
+            static_cast<int>(size.y)
+            //ImVec2{0, 1},
+            //ImVec2{1, 0}
         );
         m_content_region_min  = glm::vec2{ImGui::GetItemRectMin()};
         m_content_region_max  = glm::vec2{ImGui::GetItemRectMax()};
@@ -464,7 +476,7 @@ void Viewport_window::update_framebuffer()
                 .target = (s_sample_count > 0)
                     ? gl::Texture_target::texture_2d_multisample
                     : gl::Texture_target::texture_2d,
-                .internal_format = gl::Internal_format::srgb8_alpha8,
+                .internal_format = gl::Internal_format::rgba16f,
                 .sample_count    = s_sample_count,
                 .width           = m_content_region_size.x,
                 .height          = m_content_region_size.y
@@ -485,7 +497,7 @@ void Viewport_window::update_framebuffer()
         m_color_texture_resolved = std::make_shared<Texture>(
             Texture::Create_info{
                 .target          = gl::Texture_target::texture_2d,
-                .internal_format = gl::Internal_format::rgba8,
+                .internal_format = gl::Internal_format::rgba16f,
                 .width           = m_content_region_size.x,
                 .height          = m_content_region_size.y
             }

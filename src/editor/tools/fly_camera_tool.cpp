@@ -18,7 +18,7 @@
 namespace editor
 {
 
-#ifdef _WIN32
+#if defined(_WIN32) && 0
 Fly_camera_space_mouse_listener::Fly_camera_space_mouse_listener(
     Fly_camera_tool& fly_camera_tool
 )
@@ -121,7 +121,7 @@ auto Fly_camera_move_command::try_call(Command_context& context) -> bool
 Fly_camera_tool::Fly_camera_tool()
     : erhe::components::Component{c_name}
     , Imgui_window               {c_description}
-#ifdef _WIN32
+#if defined(_WIN32) && 0
     , m_space_mouse_listener     {*this}
     , m_space_mouse_controller   {m_space_mouse_listener}
 #endif
@@ -144,7 +144,7 @@ Fly_camera_tool::Fly_camera_tool()
 
 Fly_camera_tool::~Fly_camera_tool()
 {
-#ifdef _WIN32
+#if defined(_WIN32) && 0
     m_space_mouse_listener.set_active(false);
 #endif
 }
@@ -166,7 +166,7 @@ auto Fly_camera_tool::can_use_keyboard() const -> bool
 
 void Fly_camera_tool::initialize_component()
 {
-#ifdef _WIN32
+#if defined(_WIN32) && 0
     m_space_mouse_listener.set_active(true);
 #endif
 

@@ -39,9 +39,9 @@ namespace {
 
 constexpr std::string_view c_vertex_shader_source =
     "\n"
-    "out      vec4 v_color;\n"
-    "out      vec2 v_texcoord;\n"
-    "out flat uint v_texture_id;\n"
+    "out      vec4  v_color;\n"
+    "out      vec2  v_texcoord;\n"
+    "out flat uvec2 v_texture;\n"
     "\n"
     "out gl_PerVertex {\n"
     "    vec4  gl_Position;\n"
@@ -80,19 +80,20 @@ constexpr std::string_view c_vertex_shader_source =
     "    gl_ClipDistance[1] = a_position.y - clip_rect[1];\n"
     "    gl_ClipDistance[2] = clip_rect[2] - a_position.x;\n"
     "    gl_ClipDistance[3] = clip_rect[3] - a_position.y;\n"
-    "    v_texture_id       = draw.draw_parameters[gl_DrawID].u_texture_indices[0];\n"
     "    v_texcoord         = a_texcoord;\n"
+    "    v_texture          = draw.draw_parameters[gl_DrawID].u_texture;"
     "    v_color            = vec4(srgb_to_linear(a_color.rgb), a_color.a);\n"
     "}\n";
 
 const std::string_view c_fragment_shader_source =
-    "in vec4      v_color;\n"
-    "in vec2      v_texcoord;\n"
-    "in flat uint v_texture_id;\n"
+    "in      vec4  v_color;\n"
+    "in      vec2  v_texcoord;\n"
+    "in flat uvec2 v_texture;\n"
     "\n"
     "void main()\n"
     "{\n"
-    "    vec4 texture_sample = texture(s_textures[v_texture_id], v_texcoord.st);\n"
+    "    sampler2D s_texture = sampler2D(v_texture);\n"
+    "    vec4 texture_sample = texture(s_texture, v_texcoord.st);\n"
     "    out_color.rgb       = v_color.rgb * texture_sample.rgb * v_color.a;\n"
     "    out_color.a         = texture_sample.a * v_color.a;\n"
     "}\n";
@@ -158,78 +159,6 @@ Imgui_renderer::Frame_resources::Frame_resources(
     draw_indirect_buffer .set_debug_label(fmt::format("ImGui Renderer Draw Indirect {}",  slot));
 }
 
-Texture_unit_cache::Texture_unit_cache(size_t texture_unit_count)
-{
-    m_textures.resize(texture_unit_count);
-    m_used_textures.resize(texture_unit_count);
-}
-
-void Texture_unit_cache::create_dummy_texture()
-{
-    const erhe::graphics::Texture::Create_info create_info{};
-    m_dummy_texture = make_shared<Texture>(create_info);
-    m_dummy_texture->set_debug_label("ImGui Dummy");
-    const std::array<uint8_t, 4> dummy_pixel{ 0xee, 0x11, 0xdd, 0xff };
-    const gsl::span<const std::byte> image_data{
-        reinterpret_cast<const std::byte*>(&dummy_pixel[0]),
-        dummy_pixel.size()
-    };
-
-    m_dummy_texture->upload(
-        create_info.internal_format,
-        image_data,
-        create_info.width,
-        create_info.height
-    );
-}
-
-void Texture_unit_cache::reset()
-{
-    std::fill(
-        m_textures.begin(),
-        m_textures.end(),
-        nullptr
-    );
-    std::fill(
-        m_used_textures.begin(),
-        m_used_textures.end(),
-        m_dummy_texture->gl_name()
-    );
-}
-
-auto Texture_unit_cache::allocate_texture_unit(
-    const std::shared_ptr<erhe::graphics::Texture>& texture
-) -> std::optional<std::size_t>
-{
-    for (size_t texture_unit = 0, end = m_textures.size(); texture_unit < end; ++texture_unit)
-    {
-        if (m_textures[texture_unit] == texture)
-        {
-            return texture_unit;
-        }
-    }
-    for (size_t texture_unit = 0, end = m_textures.size(); texture_unit < end; ++texture_unit)
-    {
-        if (m_textures[texture_unit] == nullptr)
-        {
-            m_used_textures[texture_unit] = texture->gl_name();
-            m_textures[texture_unit] = texture;
-            return texture_unit;
-        }
-    }
-    return {};
-}
-
-void Texture_unit_cache::bind()
-{
-    // Assign textures to texture units
-    gl::bind_textures(
-        0,
-        static_cast<GLsizei>(m_used_textures.size()),
-        reinterpret_cast<const GLuint *>(m_used_textures.data())
-    );
-}
-
 Imgui_renderer::Imgui_renderer()
     : erhe::components::Component{c_name}
 {
@@ -247,14 +176,14 @@ void Imgui_renderer::initialize_component()
 
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 
-    m_texture_unit_cache.create_dummy_texture();
-
     create_attribute_mappings_and_vertex_format();
     create_blocks                              ();
     create_shader_stages                       ();
-    prebind_texture_units                      ();
+    create_samplers                            ();
     create_frame_resources                     ();
     create_font_texture                        ();
+
+    m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>();
 }
 
 void Imgui_renderer::create_attribute_mappings_and_vertex_format()
@@ -334,8 +263,9 @@ void Imgui_renderer::create_attribute_mappings_and_vertex_format()
 void Imgui_renderer::create_blocks()
 {
     // Draw parameter struct
-    m_u_clip_rect_offset       = m_draw_parameter_struct.add_vec4("u_clip_rect"         )->offset_in_parent();
-    m_u_texture_indices_offset = m_draw_parameter_struct.add_uint("u_texture_indices", 4)->offset_in_parent();
+    m_u_clip_rect_offset = m_draw_parameter_struct.add_vec4 ("u_clip_rect")->offset_in_parent();
+    m_u_texture_offset   = m_draw_parameter_struct.add_uvec2("u_texture"  )->offset_in_parent();
+    m_u_extra_offset     = m_draw_parameter_struct.add_uvec2("u_extra"    )->offset_in_parent();
 
     // Create uniform block for per draw data
     m_projection_block = make_unique<erhe::graphics::Shader_resource>(
@@ -366,21 +296,14 @@ void Imgui_renderer::create_shader_stages()
 {
     m_fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 
-    // sampler2d textures[16];
-    m_samplers = m_default_uniform_block.add_sampler(
-        "s_textures",
-        gl::Uniform_type::sampler_2d,
-        s_texture_unit_count
-    );
-
     erhe::graphics::Shader_stages::Create_info create_info{
         .name                      = "ImGui Renderer",
         .vertex_attribute_mappings = &m_attribute_mappings,
-        .fragment_outputs          = &m_fragment_outputs,
-        .default_uniform_block     = &m_default_uniform_block
+        .fragment_outputs          = &m_fragment_outputs
     };
     create_info.add_interface_block(m_projection_block.get());
     create_info.add_interface_block(m_draw_parameter_block.get());
+    create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     create_info.struct_types.push_back(&m_draw_parameter_struct);
     create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   c_vertex_shader_source);
     create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, c_fragment_shader_source);
@@ -388,6 +311,24 @@ void Imgui_renderer::create_shader_stages()
     erhe::graphics::Shader_stages::Prototype prototype{create_info};
     ERHE_VERIFY(prototype.is_valid());
     m_shader_stages = make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
+}
+
+void Imgui_renderer::create_samplers()
+{
+    m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
+        gl::Texture_min_filter::nearest,
+        gl::Texture_mag_filter::nearest
+    );
+
+    m_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
+        gl::Texture_min_filter::linear,
+        gl::Texture_mag_filter::linear
+    );
+
+    m_linear_mipmap_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
+        gl::Texture_min_filter::linear_mipmap_linear,
+        gl::Texture_mag_filter::linear
+    );
 }
 
 void Imgui_renderer::create_font_texture()
@@ -435,59 +376,11 @@ void Imgui_renderer::create_font_texture()
     );
 
     // Store our identifier
-    m_font_atlas.SetTexID(m_font_texture);
-}
-
-void Imgui_renderer::prebind_texture_units()
-{
-    Expects(m_shader_stages->gl_name() != 0);
-
-    m_nearest_sampler = make_unique<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::nearest,
-        gl::Texture_mag_filter::nearest
+    const uint64_t handle = get_handle(
+        *m_font_texture.get(),
+        *m_linear_sampler.get()
     );
-
-    m_linear_sampler = make_unique<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::linear,
-        gl::Texture_mag_filter::linear
-    );
-
-    // Point shader uniforms to texture units.
-    // Also apply nearest filter, non-mipmapped sampler.
-    const int location = m_samplers->location();
-    int texture_unit = 0;
-    for (
-        texture_unit = 0;
-        texture_unit < static_cast<int>(m_samplers->array_size().value());
-        ++texture_unit
-    )
-    {
-        gl::program_uniform_1i(
-            m_shader_stages->gl_name(),
-            location + texture_unit,
-            texture_unit
-        );
-        gl::bind_sampler(
-            texture_unit,
-            m_nearest_sampler->gl_name()
-        );
-    }
-    for (
-        ;
-        static_cast<size_t>(texture_unit) < s_texture_unit_count;
-        ++texture_unit
-    )
-    {
-        gl::program_uniform_1i(
-            m_shader_stages->gl_name(),
-            location + texture_unit,
-            texture_unit
-        );
-        gl::bind_sampler(
-            texture_unit,
-            m_nearest_sampler->gl_name()
-        );
-    }
+    m_font_atlas.SetTexID(handle);
 }
 
 void Imgui_renderer::create_frame_resources()
@@ -514,6 +407,8 @@ auto Imgui_renderer::current_frame_resources() -> Frame_resources&
 void Imgui_renderer::next_frame()
 {
     m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % frame_resources_count;
+    m_used_textures.clear();
+    m_used_texture_handles.clear();
 }
 
 static constexpr std::string_view c_imgui_render{"ImGui_ImplErhe_RenderDrawData()"};
@@ -616,8 +511,52 @@ auto Imgui_renderer::get_font_atlas() -> ImFontAtlas*
     return &m_font_atlas;
 }
 
+void Imgui_renderer::image(
+    const std::shared_ptr<erhe::graphics::Texture>& texture,
+    const int                                        width,
+    const int                                        height,
+    const glm::vec2                                  uv0,
+    const glm::vec2                                  uv1,
+    const glm::vec4                                  tint_color
+)
+{
+    const uint64_t handle = erhe::graphics::get_handle(
+        *texture.get(),
+        *m_linear_sampler.get()
+    );
+    ImGui::Image(
+        handle,
+        ImVec2{
+            static_cast<float>(width),
+            static_cast<float>(height)
+        },
+        uv0,
+        uv1,
+        tint_color
+    );
+    use(texture, handle);
+}
+
+void Imgui_renderer::use(
+    const std::shared_ptr<erhe::graphics::Texture>& texture,
+    const uint64_t                                  handle
+)
+{
+    m_used_textures.push_back(texture);
+    m_used_texture_handles.push_back(handle);
+}
+
 void Imgui_renderer::render_draw_data()
 {
+    // Also make font texture handle resident
+    {
+        const uint64_t handle = get_handle(
+            *m_font_texture.get(),
+            *m_linear_sampler.get()
+        );
+        m_used_texture_handles.push_back(handle);
+    };
+
     const ImDrawData* draw_data = ImGui::GetDrawData();
     if (draw_data == nullptr)
     {
@@ -632,6 +571,7 @@ void Imgui_renderer::render_draw_data()
     }
 
     erhe::graphics::Scoped_debug_group pass_scope{c_imgui_render};
+    erhe::graphics::Scoped_gpu_timer   timer     {*m_gpu_timer.get()};
 
     const auto& frame_resources       = current_frame_resources();
     const auto& draw_parameter_buffer = frame_resources.draw_parameter_buffer;
@@ -680,18 +620,11 @@ void Imgui_renderer::render_draw_data()
         ++draw_parameter_byte_offset;
     }
 
-    m_texture_unit_cache.reset();
-
     const size_t start_of_draw_parameter_block = draw_parameter_byte_offset;
 
     const ImVec2 clip_off   = draw_data->DisplayPos;
     const ImVec2 clip_scale = draw_data->FramebufferScale;
-    Expects(m_samplers->array_size().value() <= s_texture_unit_count);
 
-    gl::enable(gl::Enable_cap::clip_distance0);
-    gl::enable(gl::Enable_cap::clip_distance1);
-    gl::enable(gl::Enable_cap::clip_distance2);
-    gl::enable(gl::Enable_cap::clip_distance3);
     for (int n = 0; n < draw_data->CmdListsCount; n++)
     {
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
@@ -749,12 +682,26 @@ void Imgui_renderer::render_draw_data()
                     draw_parameter_byte_offset += s_vec4_size;
 
                     // Write texture indices
-                    const auto texture_unit = m_texture_unit_cache.allocate_texture_unit(pcmd->TextureId);
-                    ERHE_VERIFY(texture_unit.has_value());
-                    const uint32_t texture_indices[4] = { static_cast<uint32_t>(texture_unit.value()), 0, 0, 0 };
-                    const gsl::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
-                    erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, texture_indices_cpu_data);
-                    draw_parameter_byte_offset += s_uivec4_size;
+                    //const auto texture_unit = m_texture_unit_cache.allocate_texture_unit(pcmd->TextureId);
+                    //ERHE_VERIFY(texture_unit.has_value());
+                    const uint64_t handle = pcmd->TextureId;
+                    const uint32_t texture_handle[2] =
+                    {
+                        static_cast<uint32_t>((handle & 0xffffffffu)),
+                        static_cast<uint32_t>(handle >> 32u)
+                    };
+                    const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
+                    erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, texture_handle_cpu_data);
+                    draw_parameter_byte_offset += s_uvec2_size;
+
+                    const uint32_t extra[2] =
+                    {
+                        0u,
+                        0u
+                    };
+                    const gsl::span<const uint32_t> extra_cpu_data{&extra[0], 2};
+                    erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, extra_cpu_data);
+                    draw_parameter_byte_offset += s_uvec2_size;
 
                     const auto draw_command = gl::Draw_elements_indirect_command{
                         pcmd->ElemCount,
@@ -781,57 +728,73 @@ void Imgui_renderer::render_draw_data()
         list_index_offset += cmd_list->IdxBuffer.size();
     }
 
-    if (draw_indirect_count == 0)
+    if (draw_indirect_count > 0)
     {
-        return;
+        gl::enable(gl::Enable_cap::clip_distance0);
+        gl::enable(gl::Enable_cap::clip_distance1);
+        gl::enable(gl::Enable_cap::clip_distance2);
+        gl::enable(gl::Enable_cap::clip_distance3);
+
+        // This binds vertex input states (VAO) and shader stages (shader program)
+        // and most other state
+        m_pipeline_state_tracker->execute(pipeline);
+
+        // TODO viewport states is not currently in pipeline
+        gl::viewport(0, 0, static_cast<GLsizei>(fb_width), static_cast<GLsizei>(fb_height));
+
+        for (const auto handle : m_used_texture_handles)
+        {
+            gl::make_texture_handle_resident_arb(handle);
+        }
+
+        ERHE_VERIFY(draw_parameter_byte_offset > 0);
+
+        gl::bind_buffer_range(
+            gl::Buffer_target::uniform_buffer,
+            static_cast<GLuint>    (m_projection_block->binding_point()),
+            static_cast<GLuint>    (draw_parameter_buffer.gl_name()),
+            static_cast<GLintptr>  (start_of_projection_block),
+            static_cast<GLsizeiptr>(draw_parameter_byte_offset)
+        );
+
+        gl::bind_buffer_range(
+            gl::Buffer_target::shader_storage_buffer,
+            static_cast<GLuint>    (m_draw_parameter_block->binding_point()),
+            static_cast<GLuint>    (draw_parameter_buffer.gl_name()),
+            static_cast<GLintptr>  (start_of_draw_parameter_block),
+            static_cast<GLsizeiptr>(draw_parameter_byte_offset)
+        );
+
+        gl::bind_buffer(
+            gl::Buffer_target::draw_indirect_buffer,
+            static_cast<GLuint>(draw_indirect_buffer.gl_name())
+        );
+
+        gl::multi_draw_elements_indirect(
+            pipeline.data.input_assembly.primitive_topology,
+            gl::Draw_elements_type::unsigned_short,
+            nullptr,
+            static_cast<GLsizei>(draw_indirect_count),
+            static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
+        );
+
+        for (const auto handle : m_used_texture_handles)
+        {
+            gl::make_texture_handle_non_resident_arb(handle);
+        }
+
+        next_frame();
+        gl::disable(gl::Enable_cap::clip_distance0);
+        gl::disable(gl::Enable_cap::clip_distance1);
+        gl::disable(gl::Enable_cap::clip_distance2);
+        gl::disable(gl::Enable_cap::clip_distance3);
     }
+}
 
-    // This binds vertex input states (VAO) and shader stages (shader program)
-    // and most other state
-    m_pipeline_state_tracker->execute(pipeline);
-
-    // TODO viewport states is not currently in pipeline
-    gl::viewport(0, 0, static_cast<GLsizei>(fb_width), static_cast<GLsizei>(fb_height));
-
-    m_texture_unit_cache.bind();
-
-    ERHE_VERIFY(draw_parameter_byte_offset > 0);
-
-    gl::bind_buffer_range(
-        gl::Buffer_target::uniform_buffer,
-        static_cast<GLuint>    (m_projection_block->binding_point()),
-        static_cast<GLuint>    (draw_parameter_buffer.gl_name()),
-        static_cast<GLintptr>  (start_of_projection_block),
-        static_cast<GLsizeiptr>(draw_parameter_byte_offset)
-    );
-
-    gl::bind_buffer_range(
-        gl::Buffer_target::shader_storage_buffer,
-        static_cast<GLuint>    (m_draw_parameter_block->binding_point()),
-        static_cast<GLuint>    (draw_parameter_buffer.gl_name()),
-        static_cast<GLintptr>  (start_of_draw_parameter_block),
-        static_cast<GLsizeiptr>(draw_parameter_byte_offset)
-    );
-
-    gl::bind_buffer(
-        gl::Buffer_target::draw_indirect_buffer,
-        static_cast<GLuint>(draw_indirect_buffer.gl_name())
-    );
-
-    gl::multi_draw_elements_indirect(
-        pipeline.data.input_assembly.primitive_topology,
-        gl::Draw_elements_type::unsigned_short,
-        nullptr,
-        static_cast<GLsizei>(draw_indirect_count),
-        static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
-    );
-
-    next_frame();
-
-    gl::disable(gl::Enable_cap::clip_distance0);
-    gl::disable(gl::Enable_cap::clip_distance1);
-    gl::disable(gl::Enable_cap::clip_distance2);
-    gl::disable(gl::Enable_cap::clip_distance3);
+auto Imgui_renderer::gpu_time() const -> double
+{
+    const auto time_elapsed = static_cast<double>(m_gpu_timer->last_result());
+    return time_elapsed / 1000000.0;
 }
 
 } // namespace editor

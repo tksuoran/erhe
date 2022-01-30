@@ -2,7 +2,6 @@
 
 #include "erhe/components/component.hpp"
 #include "erhe/graphics/buffer.hpp"
-//#include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/shader_resource.hpp"
@@ -81,7 +80,6 @@ public:
     erhe::graphics::Vertex_format                    vertex_format;
     std::unique_ptr<erhe::graphics::Shader_resource> view_block;
     std::unique_ptr<erhe::graphics::Shader_stages>   shader_stages;
-    erhe::graphics::Shader_resource                  default_uniform_block; // containing sampler uniforms
     size_t                                           clip_from_world_offset       {0};
     size_t                                           view_position_in_world_offset{0};
     size_t                                           viewport_offset              {0};
@@ -341,10 +339,10 @@ public:
     );
 
 private:
-    Line_renderer_pipeline m_pipeline;
-
     // Component dependencies
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
+
+    Line_renderer_pipeline m_pipeline;
 
 public:
     Line_renderer visible;

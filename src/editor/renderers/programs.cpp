@@ -51,25 +51,16 @@ void Programs::initialize_component()
         gl::Texture_mag_filter::linear
     );
 
-    default_uniform_block = std::make_unique<erhe::graphics::Shader_resource>();
-
-    gui_sampler_location = default_uniform_block->add_sampler(
-        "s_gui_texture",
-        gl::Uniform_type::sampler_2d
-    )->location();
-
-    shadow_sampler_location = default_uniform_block->add_sampler(
-        "s_shadow",
-        gl::Uniform_type::sampler_2d_array
-    )->location();
-
     m_shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
 
-    basic           = make_program("basic");
     brush           = make_program("brush");
     // Not available on Dell laptop.
     //standard      = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
+
+    //m_dump_reflection = true;
     standard        = make_program("standard");
+    //m_dump_reflection = false;
+
     textured        = make_program("textured");
     edge_lines      = make_program("edge_lines");
     wide_lines      = make_program("wide_lines");
@@ -123,7 +114,8 @@ auto Programs::make_program(
         .name                      = std::string{name},
         .vertex_attribute_mappings = &shader_resources.attribute_mappings,
         .fragment_outputs          = &shader_resources.fragment_outputs,
-        .default_uniform_block     = default_uniform_block.get()
+        .default_uniform_block     = default_uniform_block.get(),
+        .dump_reflection           = m_dump_reflection
     };
     create_info.add_interface_block(&shader_resources.material_block);
     create_info.add_interface_block(&shader_resources.light_block);
@@ -150,6 +142,9 @@ auto Programs::make_program(
         create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
     }
     create_info.extensions = extensions;
+
+    // Always require bindless
+    create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
 
     Shader_stages::Prototype prototype{create_info};
     if (!prototype.is_valid())

@@ -26,6 +26,7 @@
 #include "renderers/imgui_renderer.hpp"
 #include "renderers/line_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "renderers/post_processing.hpp"
 #include "renderers/program_interface.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
@@ -51,6 +52,7 @@
 #include "windows/node_properties.hpp"
 #include "windows/node_tree_window.hpp"
 #include "windows/operations.hpp"
+#include "windows/performance_window.hpp"
 #include "windows/physics_window.hpp"
 #include "windows/pipelines.hpp"
 #include "windows/viewport_config.hpp"
@@ -78,7 +80,6 @@ using std::make_shared;
 void Application::run()
 {
     get<Window>()->get_context_window()->enter_event_loop();
-    m_components.cleanup_components();
 }
 
 auto Application::initialize_components(int argc, char** argv) -> bool
@@ -130,10 +131,12 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<OpenGL_state_tracker>());
         m_components.add(make_shared<Operation_stack     >());
         m_components.add(make_shared<Operations          >());
+        m_components.add(make_shared<Performance_window  >());
         m_components.add(make_shared<Physics_tool        >());
         m_components.add(make_shared<Physics_window      >());
         m_components.add(make_shared<Pipelines           >());
         m_components.add(make_shared<Pointer_context     >());
+        m_components.add(make_shared<Post_processing     >());
         m_components.add(make_shared<Program_interface   >());
         m_components.add(make_shared<Programs            >());
         m_components.add(make_shared<Scene_builder       >());
@@ -157,15 +160,18 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         return false;
     }
 
-    m_components.launch_component_initialization();
+    m_components.launch_component_initialization(configuration->parallel_initialization);
 
-    gl_context_provider->provide_worker_contexts(
-        opengl_state_tracker,
-        window->get_context_window(),
-        [this]() -> bool {
-            return !m_components.is_component_initialization_complete();
-        }
-    );
+    if (configuration->parallel_initialization)
+    {
+        gl_context_provider->provide_worker_contexts(
+            opengl_state_tracker,
+            window->get_context_window(),
+            [this]() -> bool {
+                return !m_components.is_component_initialization_complete();
+            }
+        );
+    }
 
     m_components.wait_component_initialization_complete();
 

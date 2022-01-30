@@ -612,8 +612,8 @@ class GLGenerator:
         case_entries = []
         for command in commands:
             declaration = f'    Command_{command:{command_name_max_len}} = {enum_value:>6}'
-            map_entry   = '    {{ "{0:{1}}", Command::Command_{0:{1}} }}'.format(
-                command, command_name_max_len
+            map_entry   = '    {{ "{0:{1}}, Command::Command_{2:{1}} }}'.format(
+                command + '"', command_name_max_len, command
             )
             case_entry  = '        case Command::Command_{0:{1}}: return "{0}";'.format(
                 command, command_name_max_len
@@ -667,7 +667,7 @@ class GLGenerator:
             if number > last_remove_version:
                 if number < earliest_non_remove_version_number:
                     earliest_non_remove_version_number = number
-                    version = feature['name']
+                    return feature['name']
 
         for extension in self.enum_required_by_extension[name]:
             extension_name = extension['name']

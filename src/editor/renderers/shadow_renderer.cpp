@@ -160,7 +160,14 @@ void Shadow_renderer::render(const Render_parameters& parameters)
         .require_at_least_one_bit_clear = 0u
     };
 
-    update_light_buffer(light_layer, m_viewport);
+    update_light_buffer(
+        light_layer,
+        m_viewport,
+        erhe::graphics::get_handle(
+            *m_texture.get(),
+            *get<Programs>()->nearest_sampler.get()
+        )
+    );
     for (auto mesh_layer : mesh_layers)
     {
         update_primitive_buffer(*mesh_layer, shadow_filter);
@@ -179,7 +186,7 @@ void Shadow_renderer::render(const Render_parameters& parameters)
         bind_draw_indirect_buffer();
 
         size_t light_index = 0;
-        for (auto light : light_layer.lights)
+        for (const auto& light : light_layer.lights)
         {
             if (light_index >= s_max_light_count)
             {

@@ -3,6 +3,7 @@
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/log.hpp"
+#include "erhe/graphics/sampler.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <algorithm>
@@ -280,6 +281,22 @@ auto Texture::operator=(Texture&& other) noexcept -> Texture&
 auto Texture::gl_name() const -> GLuint
 {
     return m_handle.gl_name();
+}
+
+auto Texture::get_handle() const -> uint64_t
+{
+    return gl::get_texture_handle_arb(m_handle.gl_name());
+}
+
+auto get_handle(
+    const Texture& texture,
+    const Sampler& sampler
+) -> uint64_t
+{
+    return gl::get_texture_sampler_handle_arb(
+        texture.gl_name(),
+        sampler.gl_name()
+    );
 }
 
 auto Texture::size_level_count(int size) -> int

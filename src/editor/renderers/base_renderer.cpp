@@ -1,5 +1,6 @@
 #include "renderers/base_renderer.hpp"
 #include "renderers/program_interface.hpp"
+#include "renderers/programs.hpp"
 #include "log.hpp"
 
 #include "erhe/gl/gl.hpp"
@@ -8,6 +9,7 @@
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/span.hpp"
+#include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/material.hpp"
@@ -41,6 +43,7 @@ Base_renderer::~Base_renderer() = default;
 
 void Base_renderer::base_connect(const erhe::components::Component* component)
 {
+    m_programs          = component->get<Programs>();
     m_program_interface = component->get<Program_interface>();
 }
 
@@ -119,7 +122,7 @@ auto Base_renderer::update_primitive_buffer(
     const auto   primitive_gpu_data = current_frame_resources().primitive_buffer.map();
     const auto&  offsets            = shader_resources.primitive_block_offsets;
     size_t       primitive_index    = 0;
-    for (auto mesh : mesh_layer.meshes)
+    for (const auto& mesh : mesh_layer.meshes)
     {
         ERHE_VERIFY(mesh);
         if (!visibility_filter(mesh->visibility_mask()))
@@ -130,7 +133,7 @@ auto Base_renderer::update_primitive_buffer(
         const auto& mesh_data = mesh->data;
 
         size_t mesh_primitive_index{0};
-        for (auto& primitive : mesh_data.primitives)
+        for (const auto& primitive : mesh_data.primitives)
         {
             const auto& primitive_geometry = primitive.gl_primitive_geometry;
             //log_render.trace("primitive_index = {}\n", primitive_index);
@@ -171,6 +174,7 @@ auto Base_renderer::update_primitive_buffer(
                 write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.size,            size_span               );
                 write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.extra2,          as_span(extra2         ));
                 write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.extra3,          as_span(extra3         ));
+
             }
             m_primitive_writer.write_offset += entry_size;
 
@@ -199,21 +203,30 @@ auto Base_renderer::update_primitive_buffer(
 
 auto Base_renderer::update_light_buffer(
     const erhe::scene::Light_layer& light_layer,
-    const erhe::scene::Viewport     light_texture_viewport
+    const erhe::scene::Viewport     light_texture_viewport,
+    const uint64_t                  shadow_map_texture_handle
 ) -> Buffer_range
 {
     ERHE_PROFILE_FUNCTION
 
     log_render.trace("{}(lights.size() = {})\n", __func__, light_layer.lights.size());
 
-    const auto&  shader_resources = *m_program_interface->shader_resources.get();
-    const size_t entry_size       = shader_resources.light_struct.size_bytes();
-    const auto&  offsets          = shader_resources.light_block_offsets;
-    const auto   light_gpu_data   = current_frame_resources().light_buffer.map();
-    int          light_index      = 0;
-    uint32_t     directional_light_count{0};
-    uint32_t     spot_light_count       {0};
-    uint32_t     point_light_count      {0};
+    const auto&    shader_resources = *m_program_interface->shader_resources.get();
+    const size_t   entry_size       = shader_resources.light_struct.size_bytes();
+    const auto&    offsets          = shader_resources.light_block_offsets;
+    const auto     light_gpu_data   = current_frame_resources().light_buffer.map();
+    int            light_index      = 0;
+    uint32_t       directional_light_count{0u};
+    uint32_t       spot_light_count       {0u};
+    uint32_t       point_light_count      {0u};
+    const uint32_t uint32_zero            {0u};
+    const uint32_t uvec2_zero[2]          {0u, 0u};
+    const uint32_t uvec4_zero[4]          {0u, 0u, 0u, 0u};
+    const uint32_t shadow_map_texture_handle_uvec2[2] =
+    {
+        static_cast<uint32_t>((shadow_map_texture_handle & 0xffffffffu)),
+        static_cast<uint32_t>(shadow_map_texture_handle >> 32u)
+    };
 
     m_light_writer.begin(current_frame_resources().light_buffer.target());
 
@@ -221,7 +234,7 @@ auto Base_renderer::update_light_buffer(
 
     using erhe::graphics::as_span;
     using erhe::graphics::write;
-    for (auto light : light_layer.lights)
+    for (const auto& light : light_layer.lights)
     {
         ERHE_VERIFY(light);
 
@@ -251,10 +264,14 @@ auto Base_renderer::update_light_buffer(
         m_light_writer.write_offset += entry_size;
         ++light_index;
     }
+    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.shadow_texture,          as_span(shadow_map_texture_handle_uvec2));
+    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.reserved_1,              as_span(uvec2_zero)               );
     write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.directional_light_count, as_span(directional_light_count)  );
-    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.point_light_count,       as_span(point_light_count)        );
     write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.spot_light_count,        as_span(spot_light_count)         );
+    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.point_light_count,       as_span(point_light_count)        );
+    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.reserved_0,              as_span(uint32_zero)              );
     write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.ambient_light,           as_span(light_layer.ambient_light));
+    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.reserved_2,              as_span(uvec4_zero)               );
 
     m_light_writer.end();
 
@@ -275,18 +292,28 @@ auto Base_renderer::update_material_buffer(
     const auto   material_gpu_data = current_frame_resources().material_buffer.map();
     size_t       material_index    = 0;
     m_material_writer.begin(current_frame_resources().material_buffer.target());
-    for (auto material : materials)
+    for (const auto& material : materials)
     {
         log_render.trace("material_index = {}\n", material_index);
         memset(reinterpret_cast<uint8_t*>(material_gpu_data.data()) + m_material_writer.write_offset, 0, entry_size);
         using erhe::graphics::as_span;
         using erhe::graphics::write;
+
+        const uint64_t handle = material->texture
+            ?
+                erhe::graphics::get_handle(
+                    *material->texture.get(),
+                    *m_programs->linear_sampler.get()
+                )
+            : 0;
         write(material_gpu_data, m_material_writer.write_offset + offsets.metallic    , as_span(material->metallic    ));
         write(material_gpu_data, m_material_writer.write_offset + offsets.roughness   , as_span(material->roughness   ));
         write(material_gpu_data, m_material_writer.write_offset + offsets.anisotropy  , as_span(material->anisotropy  ));
         write(material_gpu_data, m_material_writer.write_offset + offsets.transparency, as_span(material->transparency));
         write(material_gpu_data, m_material_writer.write_offset + offsets.base_color  , as_span(material->base_color  ));
         write(material_gpu_data, m_material_writer.write_offset + offsets.emissive    , as_span(material->emissive    ));
+        write(material_gpu_data, m_material_writer.write_offset + offsets.base_texture, as_span(handle                ));
+
         m_material_writer.write_offset += entry_size;
         ++material_index;
     }
@@ -309,7 +336,7 @@ auto Base_renderer::update_camera_buffer(
     const mat4  world_from_node       = camera.world_from_node();
     const mat4  world_from_clip       = projection_transforms.clip_from_world.inverse_matrix();
     const mat4  clip_from_world       = projection_transforms.clip_from_world.matrix();
-    const float exposure              = 1.0f;
+    const float exposure              = camera.get_exposure();
 
     m_camera_writer.begin(current_frame_resources().camera_buffer.target());
     const float viewport_floats[4] {
@@ -344,7 +371,6 @@ auto Base_renderer::update_camera_buffer(
 
     return m_camera_writer.range;
 }
-
 
 auto Base_renderer::update_draw_indirect_buffer(
     const erhe::scene::Mesh_layer&        mesh_layer,

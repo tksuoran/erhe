@@ -11,6 +11,8 @@ float sample_light_visibility(
     uint  light_index,
     float NdotL)
 {
+    sampler2DArray s_shadow = sampler2DArray(light_block.shadow_texture);
+
     Light light = light_block.lights[light_index];
     vec4  position_in_light_texture_homogeneous = light.texture_from_world * position;
 
@@ -70,6 +72,11 @@ vec2 srgb_to_linear(vec2 v)
         srgb_to_linear(v.r),
         srgb_to_linear(v.g)
     );
+}
+
+vec3 tonemap_reinhard(vec3 color)
+{
+    return color / (color + vec3(1.0));
 }
 
 const float M_PI = 3.141592653589793;
@@ -363,94 +370,10 @@ void main()
     }
 
     color = f_emissive + f_diffuse + f_specular;
-    //color = light_block.ambient_light.rgb;
 
-    out_color.rgb = color;
+    float exposure = camera.cameras[0].exposure;
+    out_color.rgb = tonemap_reinhard(color * exposure);
     out_color.a = 1.0;
-
-    if (false)
-    {
-        uint  light_index      = directional_light_offset + 0;
-        Light light            = light_block.lights[light_index];
-        vec3  pointToLight     = light.direction_and_outer_spot_cos.xyz;
-        vec3  l                = normalize(pointToLight);   // Direction from surface point to light
-        float NdotL            = clampedDot(n, l);
-        //float NdotV           = clampedDot(n, v);
-        //out_color.rgb = srgb_to_linear(vec3(NdotL));
-        //out_color.rgb = srgb_to_linear(vec3(NdotV))
-        //vec3 B_ = normalize(cross(N, T)) * v_tangent_scale;
-
-        //out_color.rgb = srgb_to_linear(0.5 * n + vec3(0.5));
-        //out_color.rgb = v_tangent_scale < 0.0 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
-        //  out_color.r = srgb_to_linear(v_texcoord.x * 1.0);
-        //  out_color.g = srgb_to_linear(v_texcoord.y * 1.0);
-        //  out_color.b = 0.0;
-    }
-    //vec3 t  = normalize(v_TBN[0]);
-    //vec3 b  = normalize(v_TBN[1]);
-    //vec3 ng = normalize(v_TBN[2]);
-
-    //out_color.rgb = srgb_to_linear(0.5 * n + vec3(0.5));
-    //out_color.rgb = srgb_to_linear(0.5 * normalize(v_TBN[0]) + vec3(0.5));
-    //out_color.rgb = srgb_to_linear(0.5 * b + vec3(0.5));
-    //out_color.rgb = vec3(v_tangent_scale * 0.5 + 0.5);
-    //out_color.r = srgb_to_linear(v_texcoord.x * 1.0);
-    //out_color.g = srgb_to_linear(v_texcoord.y * 1.0);
-    //out_color.b = 0.0;
-
-    if (false)
-    {
-        uint  light_index  = directional_light_offset + 0;
-        Light light        = light_block.lights[light_index];
-        vec3  pointToLight = light.direction_and_outer_spot_cos.xyz;
-        vec3  l            = normalize(pointToLight);   // Direction from surface point to light
-
-        vec3  C   = material.base_color.rgb;
-        //vec3  C_i = vec3(1.0) - C;
-        float r   = material.roughness * material.roughness;
-        float p0  = 1.0 - material.anisotropy;
-        float p   = p0 * p0;
-        float p2  = p * p;
-        vec3  L   = l;
-        vec3  N   = n;
-        vec3  T   = b;
-        vec3  V   = normalize(view_position_in_world - v_position.xyz);
-        vec3  H   = normalize(l + v);
-
-        float hn  = max(0.0, dot(H, N));                          // t Figure 1
-        float hv  = max(0.0, dot(H, V));                          // u
-        float vn  = max(0.0, dot(V, N));                          // v
-        float ln  = max(0.0, dot(L, N));                          // v'
-        float ht  = dot(H - hn * N, T);                 // w
-        vec3  S   = C + (vec3(1.0) - C) * pow(1.0 - vn, 5.0); // Equation 24
-        float Gvn = vn / (r - r * vn + vn);             // Equation 31
-        float Gln = ln / (r - r * ln + vn);             // Equation 31
-        float hn2 = hn * hn;
-        float ht2 = ht * ht;
-        float Zhn = r / (1.0 + r * hn2 - hn2);          // Equation 28
-        float Aht = sqrt(p / (p2 - p2 * ht2 + ht2));    // Equation 28
-        float G   = Gvn * Gln;
-        float den = 4.0 * M_PI * vn * ln;
-        float D   = G / den * Zhn * Aht; // + (1.0 - G) / den;
-
-        float a;
-        float b = 4.0 * r * (1.0 - r);
-        if (r < 0.5)
-        {
-            a = 0.0;
-        }
-        else
-        {
-            a = 1.0 - b;
-        }
-
-        out_color.rgb = ln * S * Zhn * Aht;
-        //out_color.rgb = vec3(Aht * 0.4); // * Zhn * Aht;
-        //out_color.rgb = vec3(pow(1.0 - vn, 5.0));
-    }
-    //out_color.r = 0.1;
-
-    //out_color.rgb = v_color.rgb;
 }
 
 //float edge_factor()

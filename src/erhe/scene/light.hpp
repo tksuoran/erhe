@@ -39,10 +39,13 @@ public:
     [[nodiscard]] auto node_type() const -> const char* override;
 
     // Implements ICamera
-    [[nodiscard]] auto projection() -> Projection*             override;
-    [[nodiscard]] auto projection() const -> const Projection* override;
-    [[nodiscard]] auto projection_transforms(Viewport viewport) const -> Projection_transforms override;
-    [[nodiscard]] auto texture_transform    (const Transform& clip_from_world) const -> Transform;
+    [[nodiscard]] auto projection           () -> Projection*             override;
+    [[nodiscard]] auto projection           () const -> const Projection* override;
+    [[nodiscard]] auto projection_transforms(const Viewport& viewport) const -> Projection_transforms override;
+    [[nodiscard]] auto get_exposure         () const -> float                                         override;
+    void set_exposure(const float value)                                                              override;
+
+    [[nodiscard]] auto texture_transform(const Transform& clip_from_world) const -> Transform;
 
     Type      type            {Type::directional};
     glm::vec3 color           {1.0f, 1.0f, 1.0f};

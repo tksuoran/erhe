@@ -4,24 +4,37 @@
 namespace erhe::raytrace
 {
 
-auto IGeometry::create(const std::string_view debug_label) -> IGeometry*
+auto IGeometry::create(
+    const std::string_view debug_label,
+    const Geometry_type    geometry_type
+) -> IGeometry*
 {
-    return new Null_geometry(debug_label);
+    return new Null_geometry(debug_label, geometry_type);
 }
 
-auto IGeometry::create_shared(const std::string_view debug_label) -> std::shared_ptr<IGeometry>
+auto IGeometry::create_shared(
+    const std::string_view debug_label,
+    const Geometry_type    geometry_type
+) -> std::shared_ptr<IGeometry>
 {
-    return std::make_shared<Null_geometry>(debug_label);
+    return std::make_shared<Null_geometry>(debug_label, geometry_type);
 }
 
-auto IGeometry::create_unique(const std::string_view debug_label) -> std::unique_ptr<IGeometry>
+auto IGeometry::create_unique(
+    const std::string_view debug_label,
+    const Geometry_type    geometry_type
+) -> std::unique_ptr<IGeometry>
 {
-    return std::make_unique<Null_geometry>(debug_label);
+    return std::make_unique<Null_geometry>(debug_label, geometry_type);
 }
 
-Null_geometry::Null_geometry(const std::string_view debug_label)
+Null_geometry::Null_geometry(
+    const std::string_view debug_label,
+    const Geometry_type    geometry_type
+)
     : m_debug_label{debug_label}
 {
+    static_cast<void>(geometry_type);
 }
 
 Null_geometry::~Null_geometry() = default;

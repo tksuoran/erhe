@@ -60,10 +60,6 @@ auto Framebuffer_window::get_size() const -> glm::vec2
     return glm::vec2{256.0f, 256.0f};
 }
 
-void Framebuffer_window::bind_resources()
-{
-}
-
 void Framebuffer_window::bind_framebuffer()
 {
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
@@ -157,14 +153,13 @@ void Framebuffer_window::imgui()
     )
     {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
-        ImGui::Image(
+        image(
             m_texture,
-            ImVec2{
-                static_cast<float>(m_viewport.width),
-                static_cast<float>(m_viewport.height)
-            },
-            ImVec2{0, 1},
-            ImVec2{1, 0}
+            m_viewport.width,
+            m_viewport.height
+            //},
+            //ImVec2{0, 1},
+            //ImVec2{1, 0}
         );
         ImGui::PopStyleVar();
     }

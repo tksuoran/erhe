@@ -79,7 +79,7 @@ vec3 temperature(float x)
 //			   vec3(0.06 * pow(max(1.0 - abs(t - 0.35), 0.0), 5.0)));
 //}
 //
-//	
+//
 //vec3 desertGradient(float t) {
 //	float s = sqrt(clamp(1.0 - (t - 0.4) / 0.6, 0.0, 1.0));
 //	vec3 sky = sqrt(mix(vec3(1, 1, 1), vec3(0, 0.8, 1.0), smoothstep(0.4, 0.9, t)) * vec3(s, s, 1.0));
@@ -89,7 +89,7 @@ vec3 temperature(float x)
 //
 //
 //vec3 electricGradient(float t) {
-//	return clamp( vec3(t * 8.0 - 6.3, square(smoothstep(0.6, 0.9, t)), pow(t, 3.0) * 1.7), 0.0, 1.0);	
+//	return clamp( vec3(t * 8.0 - 6.3, square(smoothstep(0.6, 0.9, t)), pow(t, 3.0) * 1.7), 0.0, 1.0);
 //}
 //
 //
@@ -134,6 +134,8 @@ vec3 temperature(float x)
 
 void main(void)
 {
+    sampler2DArray s_shadow = sampler2DArray(light_block.shadow_texture);
+
     float sampled_depth = texture(
         s_shadow,
         vec3(
@@ -143,6 +145,7 @@ void main(void)
     ).x;
 
     out_color = vec4(temperature(sampled_depth), 1.0);
+    //out_color = vec4(temperature(sampled_depth), 1.0);
     //out_color = vec4(temperature(v_texcoord.x), 1.0);
-    //out_color = vec4(0.0, 0.125, 0.0, 1.0);
+    //out_color = vec4(0.0, 1.0, 0.0, 1.0);
 }

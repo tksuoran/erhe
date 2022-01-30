@@ -9,6 +9,7 @@
 namespace erhe::graphics
 {
     class Framebuffer;
+    class Gpu_timer;
     class OpenGL_state_tracker;
     class Renderbuffer;
     class Texture;
@@ -31,14 +32,15 @@ class Editor_rendering;
 class Editor_time;
 class Editor_tools;
 class Editor_view;
-class Log_window;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 class Headset_renderer;
 #endif
 class Id_renderer;
+class Log_window;
 class Line_renderer_set;
-class Pointer_context;
 class Mesh_memory;
+class Pointer_context;
+class Post_processing;
 class Render_context;
 class Scene_root;
 class Shadow_renderer;
@@ -79,8 +81,14 @@ public:
     void bind_default_framebuffer();
     void clear                   ();
 
+    [[nodiscard]] auto gpu_time_content  () const -> double;
+    [[nodiscard]] auto gpu_time_selection() const -> double;
+    [[nodiscard]] auto gpu_time_gui      () const -> double;
+    [[nodiscard]] auto gpu_time_brush    () const -> double;
+    [[nodiscard]] auto gpu_time_tools    () const -> double;
+
 private:
-    void begin_frame     ();
+    void begin_frame();
     [[nodiscard]] auto width () const -> int;
     [[nodiscard]] auto height() const -> int;
 
@@ -100,6 +108,7 @@ private:
     std::shared_ptr<Line_renderer_set>                    m_line_renderer_set;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Pointer_context>                      m_pointer_context;
+    std::shared_ptr<Post_processing>                      m_post_processing;
     std::shared_ptr<Scene_root>                           m_scene_root;
     std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
     std::shared_ptr<Text_renderer>                        m_text_renderer;
@@ -121,6 +130,11 @@ private:
     Renderpass m_rp_corner_points;
     Renderpass m_rp_polygon_centroids;
 
+    std::unique_ptr<erhe::graphics::Gpu_timer> m_content_timer;
+    std::unique_ptr<erhe::graphics::Gpu_timer> m_selection_timer;
+    std::unique_ptr<erhe::graphics::Gpu_timer> m_gui_timer;
+    std::unique_ptr<erhe::graphics::Gpu_timer> m_brush_timer;
+    std::unique_ptr<erhe::graphics::Gpu_timer> m_tools_timer;
 };
 
 }

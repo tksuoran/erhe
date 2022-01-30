@@ -56,7 +56,7 @@ public:
     auto add                                   (const std::shared_ptr<Component>& component) -> Component&;
     void show_dependencies                     () const;
     void cleanup_components                    ();
-    void launch_component_initialization       ();
+    void launch_component_initialization       (const bool parallel);
     void wait_component_initialization_complete();
     void on_thread_exit                        ();
     void on_thread_enter                       ();
@@ -76,9 +76,6 @@ public:
         return {};
     }
 
-    static auto parallel_component_initialization() -> bool;
-    static auto serial_component_initialization  () -> bool;
-
 private:
     [[nodiscard]] auto get_component_to_initialize(const bool in_worker_thread) -> Component*;
     void queue_all_components_to_be_processed();
@@ -89,7 +86,8 @@ private:
     std::set<std::shared_ptr<Component>> m_components;
     std::set<IUpdate_fixed_step    *>    m_fixed_step_updates;
     std::set<IUpdate_once_per_frame*>    m_once_per_frame_updates;
-    bool                                 m_is_ready{false};
+    bool                                 m_parallel_initialization{false};
+    bool                                 m_is_ready               {false};
     std::condition_variable              m_component_processed;
     std::set<Component*>                 m_components_to_process;
     std::unique_ptr<IExecution_queue>    m_execution_queue;

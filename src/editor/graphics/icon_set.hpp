@@ -47,14 +47,14 @@ public:
     [[nodiscard]] auto load    (const std::filesystem::path& path) -> ImVec2;
     [[nodiscard]] auto uv1     (const ImVec2& uv0) const -> ImVec2;
     [[nodiscard]] auto get_icon(const erhe::scene::Light_type type) const -> const ImVec2;
-    void               icon    (const ImVec2 uv0, const glm::vec4 tint_color = glm::vec4{1.0f}) const;
+    //void               icon    (const ImVec2 uv0, const glm::vec4 tint_color = glm::vec4{1.0f}) const;
 
     std::shared_ptr<erhe::graphics::Texture> texture;
 
-    void icon(const erhe::scene::Camera& camera) const;
-    void icon(const erhe::scene::Light& light) const;
-    void icon(const erhe::scene::Mesh& mesh) const;
-    void icon(const erhe::scene::Node& node) const;
+    //void icon(const erhe::scene::Camera& camera) const;
+    //void icon(const erhe::scene::Light& light) const;
+    //void icon(const erhe::scene::Mesh& mesh) const;
+    //void icon(const erhe::scene::Node& node) const;
 
     struct Icons
     {

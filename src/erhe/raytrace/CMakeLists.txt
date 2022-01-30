@@ -1,8 +1,10 @@
 set(_target "erhe_raytrace")
 
+add_library(${_target})
+
 if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
-    message("erhe_raytrace using embree backend")
-    set(impl_source_list
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         embree/embree_buffer.cpp
         embree/embree_buffer.hpp
         embree/embree_device.cpp
@@ -18,8 +20,8 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
 endif ()
 
 if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "none")
-    message("erhe_raytrace using null backend")
-    set(impl_source_list
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         null/null_buffer.cpp
         null/null_buffer.hpp
         null/null_geometry.cpp
@@ -31,7 +33,8 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "none")
     )
 endif ()
 
-set(source_list
+erhe_target_sources_grouped(
+    ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     ibuffer.hpp
     igeometry.hpp
     iinstance.hpp
@@ -42,11 +45,8 @@ set(source_list
     mesh_intersect.hpp
 )
 
-add_library(${_target} ${source_list} ${impl_source_list})
-
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
-message("impl_link_libraries = ${impl_link_libraries}")
 target_link_libraries(${_target}
     PRIVATE
         ${impl_link_libraries}
@@ -69,10 +69,3 @@ endif ()
 
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
-
-foreach(source IN LISTS source_list impl_source_list)
-    get_filename_component(source_path "${source}" PATH)
-    string(REPLACE "/" "\\" source_path_msvc "${source_path}")
-    source_group("${source_path_msvc}" FILES "${source}")
-endforeach()
-

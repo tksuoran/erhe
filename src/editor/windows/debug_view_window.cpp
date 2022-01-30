@@ -1,7 +1,8 @@
 #include "windows/debug_view_window.hpp"
 #include "editor_imgui_windows.hpp"
-
+#include "scene/scene_root.hpp"
 #include "graphics/gl_context_provider.hpp"
+#include "renderers/forward_renderer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
 
@@ -24,9 +25,11 @@ Debug_view_window::~Debug_view_window() = default;
 
 void Debug_view_window::connect()
 {
+    m_forward_renderer       = get    <Forward_renderer                    >();
     m_pipeline_state_tracker = get    <erhe::graphics::OpenGL_state_tracker>();
-    m_programs               = require<Programs>();
-    m_shadow_renderer        = get    <Shadow_renderer>();
+    m_programs               = require<Programs                            >();
+    m_scene_root             = get    <Scene_root                          >();
+    m_shadow_renderer        = get    <Shadow_renderer                     >();
 
     require<Editor_imgui_windows>();
     require<Gl_context_provider >();
@@ -39,6 +42,19 @@ void Debug_view_window::initialize_component()
         get<Gl_context_provider>(),
         get<Programs>()->visualize_depth.get()
     );
+
+    m_empty_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>();
+
+    m_renderpass.pipeline.data = {
+        .name           = "Debug_view",
+        .shader_stages  = m_programs->visualize_depth.get(),
+        .vertex_input   = m_empty_vertex_input.get(),
+        .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+        .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+        .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+        .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+    };
+
 }
 
 auto Debug_view_window::get_size() const -> glm::vec2
@@ -54,17 +70,7 @@ auto Debug_view_window::get_size() const -> glm::vec2
     };
 }
 
-void Debug_view_window::bind_resources()
-{
-    const unsigned int shadow_texture_unit = 0;
-    const unsigned int shadow_texture_name = m_shadow_renderer->texture()->gl_name();
-    gl::bind_sampler (shadow_texture_unit, m_programs->nearest_sampler->gl_name());
-    gl::bind_textures(shadow_texture_unit, 1, &shadow_texture_name);
-}
-
-void Debug_view_window::render(
-    erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker
-)
+void Debug_view_window::render()
 {
     if (
         (m_viewport.width < 1) ||
@@ -76,11 +82,17 @@ void Debug_view_window::render(
 
     erhe::graphics::Scoped_debug_group pass_scope{m_debug_label};
 
-    pipeline_state_tracker.execute(m_pipeline);
+    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
+    m_forward_renderer->render_fullscreen(
+        Forward_renderer::Render_parameters{
+            .viewport    = m_viewport,
+            .mesh_layers = {},
+            .light_layer = m_scene_root->light_layer(),
+            .materials   = m_scene_root->materials(),
+            .passes      = { &m_renderpass }
+        }
+    );
 
-    bind_resources();
-    bind_framebuffer();
-    gl::draw_arrays     (m_pipeline.data.input_assembly.primitive_topology, 0, 4);
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
 }
 

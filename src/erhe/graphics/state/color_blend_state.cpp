@@ -89,10 +89,10 @@ Color_blend_state Color_blend_state::color_writes_disabled {
     },
     .constant = {0.0f, 0.0f, 0.0f, 0.0f},
     .write_mask = {
-        .red   = true,
-        .green = true,
-        .blue  = true,
-        .alpha = true
+        .red   = false,
+        .green = false,
+        .blue  = false,
+        .alpha = false
     }
 };
 

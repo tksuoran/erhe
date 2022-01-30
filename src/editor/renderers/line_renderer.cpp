@@ -146,7 +146,6 @@ void Line_renderer_pipeline::initialize(Shader_monitor* shader_monitor)
         .name                      = "line",
         .vertex_attribute_mappings = &attribute_mappings,
         .fragment_outputs          = &fragment_outputs,
-        .default_uniform_block     = &default_uniform_block
     };
     create_info.defines.push_back({"ERHE_LINE_SHADER_SHOW_DEBUG_LINES",        "0"});
     create_info.defines.push_back({"ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES", "0"});

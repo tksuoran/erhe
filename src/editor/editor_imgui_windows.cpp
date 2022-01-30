@@ -134,18 +134,6 @@ void Rendertarget_imgui_windows::init_renderpass(
             .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(configuration.reverse_depth),
             .color_blend    = Color_blend_state::color_blend_premultiplied
         };
-    m_renderpass.begin = [this, &programs]()
-        {
-            const unsigned int gui_texture_unit = 1;
-            const unsigned int gui_texture_name = m_texture->gl_name();
-            gl::bind_sampler (gui_texture_unit, programs.linear_mipmap_linear_sampler->gl_name());
-            gl::bind_textures(gui_texture_unit, 1, &gui_texture_name);
-            gl::program_uniform_1i(
-                programs.textured->gl_name(),
-                programs.gui_sampler_location,
-                gui_texture_unit
-            );
-        };
 }
 
 void Rendertarget_imgui_windows::init_context(
@@ -265,7 +253,7 @@ void Rendertarget_imgui_windows::render_mesh_layer(
     forward_renderer.render(
         {
             .viewport          = context.viewport,
-            .camera            = *context.camera,
+            .camera            = context.camera,
             .mesh_layers       = { &m_mesh_layer },
             .light_layer       = nullptr, // m_scene_root->light_layer(),
             .materials         = { }, //m_scene_root->materials(),
@@ -710,6 +698,8 @@ auto Editor_imgui_windows::want_capture_mouse() const -> bool
 void Editor_imgui_windows::register_imgui_window(Imgui_window* window)
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
+
+    window->initialize(*m_components);
 
     m_imgui_windows.emplace_back(window);
 }

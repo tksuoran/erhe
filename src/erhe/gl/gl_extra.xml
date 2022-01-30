@@ -47,6 +47,26 @@
             <enum name="GL_SAMPLE_POSITION"/>
         </group>
 
+        <group name="UniformType" comment="Deprecated, use the group attributes instead.">
+			<enum name="GL_UNSIGNED_INT64_ARB"/>
+		</group>
+
+		<group name="VertexAttribLType" comment="Deprecated, use the group attributes instead.">
+            <enum name="GL_UNSIGNED_INT64_ARB"/>
+            <enum name="GL_DOUBLE_VEC2"/>
+            <enum name="GL_DOUBLE_VEC3"/>
+            <enum name="GL_DOUBLE_VEC4"/>
+            <enum name="GL_DOUBLE_MAT2"/>
+            <enum name="GL_DOUBLE_MAT2X3"/>
+            <enum name="GL_DOUBLE_MAT2X4"/>
+            <enum name="GL_DOUBLE_MAT3"/>
+            <enum name="GL_DOUBLE_MAT3X2"/>
+            <enum name="GL_DOUBLE_MAT3X4"/>
+            <enum name="GL_DOUBLE_MAT4"/>
+            <enum name="GL_DOUBLE_MAT4X2"/>
+            <enum name="GL_DOUBLE_MAT4X3"/>
+        </group>
+
         <group name="VertexAttribPointerPropertyARB">
             <enum name="GL_VERTEX_ATTRIB_ARRAY_POINTER"/>
         </group>

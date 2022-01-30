@@ -99,7 +99,7 @@ public:
     {
     public:
         const erhe::scene::Viewport&                                   viewport;
-        const erhe::scene::ICamera&                                    camera;
+        const erhe::scene::ICamera*                                    camera{nullptr};
         const std::vector<const erhe::scene::Mesh_layer*>&             mesh_layers;
         const erhe::scene::Light_layer*                                light_layer;
         const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials;
@@ -109,10 +109,9 @@ public:
 
     void render(const Render_parameters& parameters);
 
-private:
-    [[nodiscard]] auto select_pipeline      (const Pass pass) const -> const erhe::graphics::Pipeline*;
-    [[nodiscard]] auto select_primitive_mode(const Pass pass) const -> erhe::primitive::Primitive_mode;
+    void render_fullscreen(const Render_parameters& parameters);
 
+private:
     // Component dependencies
     std::shared_ptr<Configuration>                        m_configuration;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;

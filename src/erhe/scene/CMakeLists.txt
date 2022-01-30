@@ -1,6 +1,9 @@
 set(_target "erhe_scene")
 
-set(source_list
+add_library(${_target})
+
+erhe_target_sources_grouped(
+    ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     camera.cpp
     camera.hpp
     node.cpp
@@ -20,8 +23,6 @@ set(source_list
     viewport.cpp
     viewport.hpp
 )
-
-add_library(${_target} ${source_list})
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
@@ -46,9 +47,3 @@ endif ()
 
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
-
-foreach(source IN LISTS source_list)
-    get_filename_component(source_path "${source}" PATH)
-    string(REPLACE "/" "\\" source_path_msvc "${source_path}")
-    source_group("${source_path_msvc}" FILES "${source}")
-endforeach()

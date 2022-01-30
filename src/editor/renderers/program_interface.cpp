@@ -150,16 +150,21 @@ Program_interface::Shader_resources::Shader_resources()
         .anisotropy   = material_struct.add_float("anisotropy"  )->offset_in_parent(),
         .transparency = material_struct.add_float("transparency")->offset_in_parent(),
         .base_color   = material_struct.add_vec4 ("base_color"  )->offset_in_parent(),
-        .emissive     = material_struct.add_vec4 ("emissive"    )->offset_in_parent()
+        .emissive     = material_struct.add_vec4 ("emissive"    )->offset_in_parent(),
+        .base_texture = material_struct.add_uvec2("texture"     )->offset_in_parent(),
+        .reserved     = material_struct.add_uvec2("reserved"    )->offset_in_parent()
     };
     material_block.add_struct("materials", &material_struct, 200);
 
     light_block_offsets = {
-        .directional_light_count = light_block.add_uint("directional_light_count"     )->offset_in_parent(),
-        .spot_light_count        = light_block.add_uint("spot_light_count"            )->offset_in_parent(),
-        .point_light_count       = light_block.add_uint("point_light_count"           )->offset_in_parent(),
-        .reserved                = light_block.add_uint("reserved"                    )->offset_in_parent(),
-        .ambient_light           = light_block.add_vec4("ambient_light"               )->offset_in_parent(),
+        .shadow_texture          = light_block.add_uvec2("shadow_texture"         )->offset_in_parent(),
+        .reserved_1              = light_block.add_uvec2("reserved_1"             )->offset_in_parent(),
+        .directional_light_count = light_block.add_uint ("directional_light_count")->offset_in_parent(),
+        .spot_light_count        = light_block.add_uint ("spot_light_count"       )->offset_in_parent(),
+        .point_light_count       = light_block.add_uint ("point_light_count"      )->offset_in_parent(),
+        .reserved_0              = light_block.add_uint ("reserved_0"             )->offset_in_parent(),
+        .ambient_light           = light_block.add_vec4 ("ambient_light"          )->offset_in_parent(),
+        .reserved_2              = light_block.add_uvec4("reserved_2"             )->offset_in_parent(),
         .light = {
             .texture_from_world           = light_struct.add_mat4("texture_from_world"          )->offset_in_parent(),
             .position_and_inner_spot_cos  = light_struct.add_vec4("position_and_inner_spot_cos" )->offset_in_parent(),

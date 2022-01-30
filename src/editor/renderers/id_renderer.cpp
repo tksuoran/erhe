@@ -93,6 +93,8 @@ void Id_renderer::initialize_component()
     erhe::graphics::Scoped_debug_group debug_group{c_id_renderer_initialize_component};
 
     create_id_frame_resources();
+
+    m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>();
 }
 
 void Id_renderer::create_id_frame_resources()
@@ -246,7 +248,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     ERHE_PROFILE_FUNCTION
 
     const auto& viewport            = parameters.viewport;
-    const auto& camera              = parameters.camera;
+    const auto* camera              = parameters.camera;
     const auto& content_mesh_layers = parameters.content_mesh_layers;
     const auto& tool_mesh_layers    = parameters.tool_mesh_layers;
     const auto  time                = parameters.time;
@@ -264,10 +266,11 @@ void Id_renderer::render(const Render_parameters& parameters)
     }
 
     erhe::graphics::Scoped_debug_group debug_group{c_id_renderer_render_content};
+    erhe::graphics::Scoped_gpu_timer   timer      {*m_gpu_timer.get()};
 
     update_framebuffer(viewport);
 
-    const auto projection_transforms = camera.projection_transforms(viewport);
+    const auto projection_transforms = camera->projection_transforms(viewport);
     const mat4 clip_from_world       = projection_transforms.clip_from_world.matrix();
 
     auto& idr = current_id_frame_resources();
@@ -278,8 +281,11 @@ void Id_renderer::render(const Render_parameters& parameters)
 
     primitive_color_source = Primitive_color_source::id_offset;
 
-    update_camera_buffer(camera, viewport);
-    bind_camera_buffer();
+    if (camera != nullptr)
+    {
+        update_camera_buffer(*camera, viewport);
+        bind_camera_buffer();
+    }
 
     {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_clear)
@@ -487,6 +493,12 @@ auto Id_renderer::get(
     }
 
     return result;
+}
+
+auto Id_renderer::gpu_time() const -> double
+{
+    const auto time_elapsed = static_cast<double>(m_gpu_timer->last_result());
+    return time_elapsed / 1000000.0;
 }
 
 }

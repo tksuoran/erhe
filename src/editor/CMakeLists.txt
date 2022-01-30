@@ -1,8 +1,13 @@
 set(_target "editor")
 
-set(source_list
+add_executable(${_target})
+
+erhe_target_sources_grouped(
+    ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     graphics/gl_context_provider.cpp
     graphics/gl_context_provider.hpp
+    graphics/gradients.cpp
+    graphics/gradients.hpp
     graphics/icon_set.cpp
     graphics/icon_set.hpp
     graphics/image_transfer.cpp
@@ -51,6 +56,8 @@ set(source_list
     renderers/line_renderer.hpp
     renderers/mesh_memory.cpp
     renderers/mesh_memory.hpp
+    renderers/post_processing.cpp
+    renderers/post_processing.hpp
     renderers/program_interface.cpp
     renderers/program_interface.hpp
     renderers/programs.cpp
@@ -120,6 +127,8 @@ set(source_list
     windows/node_tree_window.hpp
     windows/operations.cpp
     windows/operations.hpp
+    windows/performance_window.cpp
+    windows/performance_window.hpp
     windows/physics_window.cpp
     windows/physics_window.hpp
     windows/pipelines.cpp
@@ -165,14 +174,8 @@ set(source_list
     res/icons/point_light.svg
     res/icons/spot_light.svg
 
-    res/shaders/anisotropic.vert
-    res/shaders/anisotropic.frag
-    res/shaders/basic.vert
-    res/shaders/basic.frag
     res/shaders/brush.vert
     res/shaders/brush.frag
-    res/shaders/color.vert
-    res/shaders/color.frag
     res/shaders/depth.vert
     res/shaders/depth.frag
     res/shaders/edge_lines.vert
@@ -200,7 +203,8 @@ set(source_list
 )
 
 if (${ERHE_GLTF_LIBRARY} STREQUAL "glTF-SDK")
-    set(gltf_source_list
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         parsers/gltf.cpp
         parsers/gltf.hpp
     )
@@ -208,11 +212,10 @@ endif ()
 
 
 if (${ERHE_XR_LIBRARY} STREQUAL "OpenXR")
-    set(xr_source_list
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         xr/controller_visualization.cpp
         xr/controller_visualization.hpp
-        xr/gradients.cpp
-        xr/gradients.hpp
         xr/hand_tracker.cpp
         xr/hand_tracker.hpp
         xr/headset_renderer.cpp
@@ -223,8 +226,6 @@ if (${ERHE_XR_LIBRARY} STREQUAL "OpenXR")
         xr/theremin.hpp
     )
 endif ()
-
-add_executable(${_target} ${source_list} ${xr_source_list} ${gltf_source_list})
 
 target_link_libraries(
     ${_target}
@@ -275,9 +276,3 @@ set_target_properties(
 
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
-
-foreach(source IN LISTS source_list xr_source_list gltf_source_list)
-    get_filename_component(source_path "${source}" PATH)
-    string(REPLACE "/" "\\" source_path_msvc "${source_path}")
-    source_group("${source_path_msvc}" FILES "${source}")
-endforeach()

@@ -1,10 +1,10 @@
 set(_target "erhe_physics")
 
-message("physics library = ${ERHE_PHYSICS_LIBRARY}")
+add_library(${_target})
 
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "bullet")
-    message("using bullet")
-    set(impl_source_list
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         bullet/bullet_collision_shape.cpp
         bullet/bullet_collision_shape.hpp
         bullet/bullet_compound_shape.cpp
@@ -34,8 +34,8 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "bullet")
 endif ()
 
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "none")
-    message("using none")
-    set(impl_source_list
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         null/null_collision_shape.cpp
         null/null_collision_shape.hpp
         null/null_compound_shape.cpp
@@ -53,7 +53,8 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "none")
     )
 endif ()
 
-set(source_list
+erhe_target_sources_grouped(
+    ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     log.cpp
     log.hpp
     icollision_shape.hpp
@@ -63,8 +64,6 @@ set(source_list
     irigid_body.hpp
     iworld.hpp
 )
-
-add_library(${_target} ${source_list} ${impl_source_list})
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
@@ -91,9 +90,3 @@ endif ()
 
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
-
-foreach(source IN LISTS source_list impl_source_list)
-    get_filename_component(source_path "${source}" PATH)
-    string(REPLACE "/" "\\" source_path_msvc "${source_path}")
-    source_group("${source_path_msvc}" FILES "${source}")
-endforeach()

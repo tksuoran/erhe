@@ -1,4 +1,5 @@
 #include "scene/scene_builder.hpp"
+#include "configuration.hpp"
 #include "log.hpp"
 
 #include "graphics/gl_context_provider.hpp"
@@ -87,12 +88,13 @@ Scene_builder::~Scene_builder() = default;
 
 void Scene_builder::connect()
 {
+    require<Configuration      >();
     require<Gl_context_provider>();
-    require<Fly_camera_tool>();
-    require<Materials>();
-    m_brushes     = require<Brushes>();
+    require<Fly_camera_tool    >();
+    require<Materials          >();
+    m_brushes     = require<Brushes    >();
     m_mesh_memory = require<Mesh_memory>();
-    m_scene_root  = require<Scene_root>();
+    m_scene_root  = require<Scene_root >();
 }
 
 void Scene_builder::initialize_component()
@@ -140,10 +142,10 @@ void Scene_builder::setup_cameras()
         vec3{0.0f, 4.0f, 10.0f},
         vec3{0.0f, 0.5f, 0.0f}
     );
-    make_camera(
-        "Camera B",
-        vec3{-1.0f, 1.65f,  4.0f}
-    );
+    //make_camera(
+    //    "Camera B",
+    //    vec3{-1.0f, 1.65f,  4.0f}
+    //);
 
     get<Fly_camera_tool>()->set_camera(camera_a.get());
 }
@@ -153,13 +155,46 @@ auto Scene_builder::build_info() -> erhe::primitive::Build_info&
     return m_mesh_memory->build_info;
 };
 
+class Task_queue
+{
+public:
+    Task_queue(const bool parallel)
+        : m_parallel{parallel}
+    {
+    }
+
+    void enqueue(std::function<void()>&& func)
+    {
+        if (m_parallel)
+        {
+            m_queue.enqueue(func);
+        }
+        else
+        {
+            func();
+        }
+    }
+
+    void wait()
+    {
+        if (m_parallel)
+        {
+            m_queue.wait();
+        }
+    }
+
+private:
+    bool                                m_parallel;
+    erhe::concurrency::Concurrent_queue m_queue;
+};
+
 void Scene_builder::make_brushes()
 {
     ERHE_PROFILE_FUNCTION
 
     const Brush_create_context brush_create_context{build_info()};
-    erhe::concurrency::Concurrent_queue execution_queue;
-    //erhe::concurrency::Serial_queue execution_queue;
+
+    Task_queue execution_queue{get<Configuration>()->parallel_initialization};
 
     constexpr float floor_size = 20.0f;
 

@@ -54,11 +54,14 @@ public:
 class Light_block
 {
 public:
+    size_t       shadow_texture;
+    size_t       reserved_1;
     size_t       directional_light_count;
     size_t       spot_light_count;
     size_t       point_light_count;
-    size_t       reserved;
+    size_t       reserved_0;
     size_t       ambient_light;
+    size_t       reserved_2;
     Light_struct light;
     size_t       light_struct;
 };
@@ -72,6 +75,8 @@ public:
     size_t transparency; // float
     size_t base_color;   // vec4
     size_t emissive;     // vec4
+    size_t base_texture; // uvec2
+    size_t reserved;     // uvec2
 };
 
 class Program_interface
@@ -101,9 +106,6 @@ public:
 
         erhe::graphics::Vertex_attribute_mappings attribute_mappings;
         erhe::graphics::Fragment_outputs          fragment_outputs;
-
-        erhe::graphics::Shader_resource           default_uniform_block; // containing sampler uniforms
-        int                                       shadow_sampler_location{0};
 
         Material_struct  material_block_offsets {};
         Light_block      light_block_offsets    {};

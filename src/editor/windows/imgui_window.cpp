@@ -1,5 +1,9 @@
 #include "windows/imgui_window.hpp"
 
+#include "renderers/imgui_renderer.hpp"
+
+#include "erhe/components/components.hpp"
+
 #include <imgui.h>
 
 namespace editor {
@@ -10,6 +14,22 @@ Imgui_window::Imgui_window(const std::string_view title)
 }
 
 Imgui_window::~Imgui_window() = default;
+
+void Imgui_window::initialize(
+    const erhe::components::Components& components
+)
+{
+    m_imgui_renderer = components.get<Imgui_renderer>();
+}
+
+void Imgui_window::image(
+    const std::shared_ptr<erhe::graphics::Texture>& texture,
+    const int                                       width,
+    const int                                       height
+)
+{
+    m_imgui_renderer->image(texture, width, height);
+}
 
 void Imgui_window::show()
 {

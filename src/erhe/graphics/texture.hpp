@@ -10,6 +10,7 @@ namespace erhe::graphics
 {
 
 class Buffer;
+class Sampler;
 
 
 class Texture_create_info
@@ -82,6 +83,7 @@ public:
     [[nodiscard]] auto target      () const -> gl::Texture_target;
     [[nodiscard]] auto is_layered  () const -> bool;
     [[nodiscard]] auto gl_name     () const -> GLuint;
+    [[nodiscard]] auto get_handle  () const -> uint64_t;
 
 private:
     Gl_texture          m_handle;
@@ -96,6 +98,11 @@ private:
     int                 m_depth                 {0};
     Buffer*             m_buffer                {nullptr};
 };
+
+[[nodiscard]] auto get_handle(
+    const Texture& texture,
+    const Sampler& sampler
+) -> uint64_t;
 
 class Texture_hash
 {

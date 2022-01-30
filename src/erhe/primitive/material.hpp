@@ -2,8 +2,14 @@
 
 #include <glm/glm.hpp>
 
+#include <memory>
 #include <string>
 #include <string_view>
+
+namespace erhe::graphics
+{
+    class Texture;
+}
 
 namespace erhe::primitive
 {
@@ -22,15 +28,16 @@ public:
     );
     ~Material();
 
-    size_t      index{0};
-    std::string name;
-    float       metallic    {0.0f};
-    float       roughness   {0.0f};
-    float       anisotropy  {0.0f};
-    float       transparency{0.0f};
-    glm::vec4   base_color  {1.0f, 1.0f, 1.0f, 1.0f};
-    glm::vec4   emissive    {0.0f, 0.0f, 0.0f, 0.0f};
-    bool        visible     {false};
+    size_t                                   index{0};
+    std::string                              name;
+    float                                    metallic    {0.0f};
+    float                                    roughness   {0.0f};
+    float                                    anisotropy  {0.0f};
+    float                                    transparency{0.0f};
+    glm::vec4                                base_color  {1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec4                                emissive    {0.0f, 0.0f, 0.0f, 0.0f};
+    std::shared_ptr<erhe::graphics::Texture> texture;
+    bool                                     visible     {false};
 };
 
 } // namespace erhe::primitive

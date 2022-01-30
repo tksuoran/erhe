@@ -43,8 +43,7 @@ public:
     void imgui() override;
 
     // Implements Framebuffer window
-    virtual auto get_size      () const -> glm::vec2;
-    virtual void bind_resources();
+    virtual auto get_size() const -> glm::vec2;
 
     // Public API
     void update_framebuffer();

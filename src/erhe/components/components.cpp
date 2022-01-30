@@ -16,21 +16,6 @@ namespace erhe::components
 using std::set;
 using std::shared_ptr;
 
-namespace {
-
-constexpr bool s_parallel_component_initialization{true};
-
-}
-
-auto Components::parallel_component_initialization() -> bool
-{
-    return s_parallel_component_initialization;
-}
-
-auto Components::serial_component_initialization() -> bool
-{
-    return !parallel_component_initialization();
-}
 
 Components::Components()
 {
@@ -162,7 +147,9 @@ class Concurrent_execution_queue
     : public IExecution_queue
 {
 public:
-    ~Concurrent_execution_queue() override = default;
+    ~Concurrent_execution_queue() override
+    {
+    }
 
     void enqueue(std::function<void()> task) override;
     void wait   () override;
@@ -280,17 +267,21 @@ void Components::queue_all_components_to_be_processed()
     );
 }
 
-void Components::launch_component_initialization()
+void Components::launch_component_initialization(const bool parallel)
 {
     ERHE_PROFILE_FUNCTION
 
+    m_parallel_initialization                  = parallel;
     m_initialize_component_count_worker_thread = 0;
     m_initialize_component_count_main_thread   = 0;
     for (auto const& component : m_components)
     {
         component->connect();
         component->set_connected();
-        if (component->processing_requires_main_thread())
+        if (
+            !parallel ||
+            component->processing_requires_main_thread()
+        )
         {
             ++m_initialize_component_count_main_thread;
         }
@@ -305,7 +296,7 @@ void Components::launch_component_initialization()
 
     log_components.info("Initializing {} Components:\n", m_components_to_process.size());
 
-    if (parallel_component_initialization())
+    if (parallel)
     {
         m_execution_queue = std::make_unique<Concurrent_execution_queue>();
     }
@@ -314,7 +305,7 @@ void Components::launch_component_initialization()
         m_execution_queue = std::make_unique<Serial_execution_queue>();
     }
 
-    const bool in_worker_thread = parallel_component_initialization();
+    const bool in_worker_thread = parallel;
     for (size_t i = 0; i < m_initialize_component_count_worker_thread; ++i)
     {
         m_execution_queue->enqueue(
@@ -358,7 +349,7 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
             }
         }
 
-        if (serial_component_initialization())
+        if (!m_parallel_initialization)
         {
             log_components.error("no component to initialize\n");
             abort();

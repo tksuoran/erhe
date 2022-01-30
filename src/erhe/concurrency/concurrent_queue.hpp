@@ -28,7 +28,6 @@ namespace erhe::concurrency {
     q.wait(); // cooperative, blocking (helps pool until all tasks are complete)
 
 */
-
 class Concurrent_queue
 {
 protected:

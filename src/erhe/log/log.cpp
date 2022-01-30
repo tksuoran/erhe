@@ -154,11 +154,25 @@ void Log::console_init()
 }
 #endif
 
-int Log::s_indent{0};
+int        Log::s_indent{0};
+std::mutex Log::s_mutex;
 
 void Log::indent(const int indent_amount)
 {
     s_indent += indent_amount;
+}
+
+Indenter::Indenter(const int amount)
+    : m_amount{amount}
+{
+    const std::lock_guard<std::mutex> lock{Log::s_mutex};
+    Log::indent(m_amount);
+}
+
+Indenter::~Indenter()
+{
+    const std::lock_guard<std::mutex> lock{Log::s_mutex};
+    Log::indent(-m_amount);
 }
 
 void Category::set_sink(ILog_sink* sink)
@@ -195,8 +209,6 @@ void Category::write(const bool indent, const int level, const std::string& text
     write(indent, text);
 }
 
-std::mutex Category::s_mutex;
-
 //          111111111122
 // 123456789012345678901
 // 20211022 14:17:01.337
@@ -227,7 +239,7 @@ auto timestamp() -> std::string
 
 void Category::write(const bool indent, const std::string& text)
 {
-    const std::lock_guard<std::mutex> lock{s_mutex};
+    const std::lock_guard<std::mutex> lock{Log::s_mutex};
 
     // Log to console
     if (Log::print_color())

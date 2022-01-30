@@ -1,6 +1,9 @@
 set(_target "erhe_graphics")
 
-set(source_list
+add_library(${_target})
+
+erhe_target_sources_grouped(
+    ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     buffer.cpp
     buffer.hpp
     buffer_transfer_queue.cpp
@@ -60,18 +63,18 @@ set(source_list
 )
 
 if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
-    list(APPEND source_list
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
          png_loader_mango.cpp
          png_loader_mango.hpp
     )
 else()
-    list(APPEND source_list
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         png_loader_none.cpp
         png_loader_none.hpp
     )
 endif()
-
-add_library(${_target} ${source_list})
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
@@ -99,9 +102,3 @@ endif()
 
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
-
-foreach(source IN LISTS source_list)
-    get_filename_component(source_path "${source}" PATH)
-    string(REPLACE "/" "\\" source_path_msvc "${source_path}")
-    source_group("${source_path_msvc}" FILES "${source}")
-endforeach()

@@ -44,7 +44,7 @@ public:
 class Vertex_input_state_data
 {
 public:
-    const Buffer*                       index_buffer;
+    const Buffer*                       index_buffer{nullptr};
     std::vector<Vertex_input_attribute> attributes;
 
     static auto make(

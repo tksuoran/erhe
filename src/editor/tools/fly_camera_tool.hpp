@@ -9,7 +9,7 @@
 #include "erhe/components/component.hpp"
 #include "erhe/toolkit/view.hpp" // keycode
 
-#ifdef _WIN32
+#if defined(_WIN32) && 0
 #   include "erhe/toolkit/space_mouse.hpp"
 #endif
 
@@ -31,7 +31,7 @@ class Scene_root;
 class Trs_tool;
 
 
-#ifdef _WIN32
+#if defined(_WIN32) && 0
 class Fly_camera_space_mouse_listener
     : public erhe::toolkit::Space_mouse_listener
 {
@@ -172,7 +172,7 @@ private:
 
     std::mutex                            m_mutex;
 
-#ifdef _WIN32
+#if defined(_WIN32) && 0
     Fly_camera_space_mouse_listener       m_space_mouse_listener;
     erhe::toolkit::Space_mouse_controller m_space_mouse_controller;
 #endif

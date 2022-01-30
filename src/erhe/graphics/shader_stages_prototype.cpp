@@ -491,7 +491,53 @@ Shader_stages::Prototype::Prototype(
             log_glsl.trace("\n{}\n", f_source);
         }
         m_link_succeeded = true;
+        if (create_info.dump_reflection)
+        {
+            dump_reflection();
+        }
     }
+}
+
+auto is_array_and_nonzero(const std::string& name)
+{
+    const size_t open_bracket_pos = name.find_first_of('[');
+    if (open_bracket_pos == std::string::npos)
+    {
+        return false;
+    }
+
+    const size_t digit_pos = name.find_first_of("0123456789", open_bracket_pos + 1);
+    if (digit_pos != open_bracket_pos + 1)
+    {
+        return false;
+    }
+
+    const size_t non_digit_pos = name.find_first_not_of("0123456789", digit_pos + 1);
+    if (non_digit_pos == std::string::npos)
+    {
+        return false;
+    }
+
+    if (name.at(non_digit_pos) != ']')
+    {
+        return false;
+    }
+
+    const size_t close_bracket_pos = non_digit_pos;
+    const char   digit             = name.at(digit_pos);
+
+    if (
+        (close_bracket_pos == (open_bracket_pos + 2)) &&
+        (
+            (digit == '0') ||
+            (digit == '1')
+        )
+    )
+    {
+        return false;
+    }
+
+    return true;
 }
 
 void Shader_stages::Prototype::dump_reflection() const
@@ -584,6 +630,10 @@ void Shader_stages::Prototype::dump_reflection() const
                     name_buffer.data()
                 );
                 name = std::string(name_buffer.data(), name_length);
+                if (is_array_and_nonzero(name))
+                {
+                    continue;
+                }
                 log_program.trace("\t{:<40} : {}\n", i, name);
             }
             else
@@ -593,8 +643,10 @@ void Shader_stages::Prototype::dump_reflection() const
 
             gl::Program_resource_property property_num_active_variables = gl::Program_resource_property::num_active_variables;
             gl::Program_resource_property property_active_variables     = gl::Program_resource_property::active_variables;
-            if (is_program_interface_allowed(property_num_active_variables, interface) &&
-                is_program_interface_allowed(property_active_variables,     interface))
+            if (
+                is_program_interface_allowed(property_num_active_variables, interface) &&
+                is_program_interface_allowed(property_active_variables,     interface)
+            )
             {
                 GLsizei length{0};
                 GLint num_active_variables{0};
@@ -629,12 +681,10 @@ void Shader_stages::Prototype::dump_reflection() const
                         indices.data()
                     );
                     log_program.trace("\t\t{:<40} = [ ", c_str(property_active_variables));
+                    bool first{true};
+                    bool skipped{false};
                     for (int j = 0; j < num_active_variables; ++j)
                     {
-                        if (j > 0)
-                        {
-                            log_program.trace(", ");
-                        }
                         const auto member_interface_ = member_interface(interface);
                         if (member_interface_.has_value())
                         {
@@ -648,7 +698,22 @@ void Shader_stages::Prototype::dump_reflection() const
                                 name_buffer.data()
                             );
                             name = std::string(name_buffer.data(), name_length);
+                            if (is_array_and_nonzero(name))
+                            {
+                                skipped = true;
+                                continue;
+                            }
+                            if (skipped)
+                            {
+                                log_program.trace(" ... ");
+                                skipped = false;
+                            }
+                            if (!first)
+                            {
+                                log_program.trace(", ");
+                            }
                             log_program.trace("{} {}", indices[j], name);
+                            first = false;
                         }
                         else
                         {

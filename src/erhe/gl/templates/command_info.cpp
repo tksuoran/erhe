@@ -16,11 +16,11 @@ int g_version;
 std::bitset<static_cast<size_t>(Extension::Extension_Count)> g_extension_support;
 std::bitset<static_cast<size_t>(Command::Command_Count)> g_command_support;
 
-std::map<std::string, Extension> g_extension_map {{
+const std::map<const char*, Extension> g_extension_map {{
 {EXTENSION_MAP_ENTRIES}
 }};
 
-std::map<std::string, Command> g_command_map {{
+const std::map<const char*, Command> g_command_map {{
 {COMMAND_MAP_ENTRIES}
 }};
 

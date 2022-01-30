@@ -1,6 +1,9 @@
 set(_target "erhe_toolkit")
 
-set(source_list
+add_library(${_target})
+
+erhe_target_sources_grouped(
+    ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     file.cpp
     file.hpp
     math_util.cpp
@@ -13,27 +16,28 @@ set(source_list
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "(Windows|MSYS)")
-    list(APPEND source_list
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         space_mouse.cpp
         space_mouse.hpp
     )
 endif ()
 
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
-    list(APPEND source_list
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
          glfw_window.cpp
          glfw_window.hpp
     )
 endif()
 
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
-    list(APPEND source_list
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
          mango_window.cpp
          mango_window.hpp
     )
 endif()
-
-add_library(${_target} ${source_list})
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
@@ -72,9 +76,3 @@ endif ()
 
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
-
-foreach(source IN LISTS source_list)
-    get_filename_component(source_path "${source}" PATH)
-    string(REPLACE "/" "\\" source_path_msvc "${source_path}")
-    source_group("${source_path_msvc}" FILES "${source}")
-endforeach()

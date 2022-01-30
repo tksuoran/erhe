@@ -14,6 +14,7 @@
 namespace erhe::graphics
 {
     class Framebuffer;
+    class Gpu_timer;
     class OpenGL_state_tracker;
     class Renderbuffer;
     class Texture;
@@ -63,7 +64,7 @@ public:
     {
     public:
         const erhe::scene::Viewport&                      viewport;
-        const erhe::scene::ICamera&                       camera;
+        const erhe::scene::ICamera*                       camera;
         const std::vector<const erhe::scene::Mesh_layer*> content_mesh_layers;
         const std::vector<const erhe::scene::Mesh_layer*> tool_mesh_layers;
         const double                                      time;
@@ -72,8 +73,9 @@ public:
     };
     void render(const Render_parameters& parameters);
 
-    [[nodiscard]] auto get(const int x, const int y, uint32_t& id, float& depth) -> bool;
-    [[nodiscard]] auto get(const int x, const int y, float& depth) -> Mesh_primitive;
+    [[nodiscard]] auto gpu_time() const -> double;
+    [[nodiscard]] auto get     (const int x, const int y, uint32_t& id, float& depth) -> bool;
+    [[nodiscard]] auto get     (const int x, const int y, float& depth) -> Mesh_primitive;
 
     void next_frame();
 
@@ -173,6 +175,7 @@ private:
     std::unique_ptr<erhe::graphics::Framebuffer>          m_framebuffer;
     std::vector<Id_frame_resources>                       m_id_frame_resources;
     size_t                                                m_current_id_frame_resource_slot{0};
+    std::unique_ptr<erhe::graphics::Gpu_timer>            m_gpu_timer;
 
     class Range
     {

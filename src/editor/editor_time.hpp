@@ -37,8 +37,7 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Application> m_application;
-    std::shared_ptr<Scene_root>  m_scene_root;
+    std::shared_ptr<Scene_root> m_scene_root;
 
     std::chrono::steady_clock::time_point m_current_time;
     double                                m_time_accumulator{0.0};

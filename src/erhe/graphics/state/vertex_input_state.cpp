@@ -237,6 +237,7 @@ void Vertex_input_state::update()
                 break;
             }
 
+            case unsigned_int64_arb:
             case double_:
             case double_vec2:
             case double_vec3:

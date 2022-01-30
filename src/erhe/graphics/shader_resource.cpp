@@ -15,19 +15,25 @@ auto glsl_token(const gl::Uniform_type type) -> const char*
     switch (type)
     {
         using enum gl::Uniform_type;
-        case int_:              return "int   ";
-        case int_vec2:          return "ivec2 ";
-        case int_vec3:          return "ivec3 ";
-        case int_vec4:          return "ivec4 ";
-        case unsigned_int:      return "uint  ";
-        case unsigned_int_vec2: return "uvec2 ";
-        case unsigned_int_vec3: return "uvec3 ";
-        case unsigned_int_vec4: return "uvec4 ";
-        case float_:            return "float ";
-        case float_vec2:        return "vec2  ";
-        case float_vec3:        return "vec3  ";
-        case float_vec4:        return "vec4  ";
-        case float_mat4:        return "mat4  ";
+        case int_:               return "int      ";
+        case int_vec2:           return "ivec2    ";
+        case int_vec3:           return "ivec3    ";
+        case int_vec4:           return "ivec4    ";
+        case unsigned_int:       return "uint     ";
+        case unsigned_int_vec2:  return "uvec2    ";
+        case unsigned_int_vec3:  return "uvec3    ";
+        case unsigned_int_vec4:  return "uvec4    ";
+        case unsigned_int64_arb: return "uint64_t ";
+        case float_:             return "float    ";
+        case float_vec2:         return "vec2     ";
+        case float_vec3:         return "vec3     ";
+        case float_vec4:         return "vec4     ";
+        case float_mat4:         return "mat4     ";
+        case double_:            return "double   ";
+        case double_vec2:        return "dvec2    ";
+        case double_vec3:        return "dvec3    ";
+        case double_vec4:        return "dvec4    ";
+        case double_mat4:        return "dmat4    ";
 
         case sampler_1d:                                  return "sampler1D";
         case sampler_2d:                                  return "sampler2D";
@@ -133,19 +139,25 @@ auto get_type_details(const gl::Uniform_type type) -> Type_details
     switch (type)
     {
         using enum gl::Uniform_type;
-        case int_:              return Type_details(type, gl::Uniform_type::int_,         1);
-        case int_vec2:          return Type_details(type, gl::Uniform_type::int_,         2);
-        case int_vec3:          return Type_details(type, gl::Uniform_type::int_,         3);
-        case int_vec4:          return Type_details(type, gl::Uniform_type::int_,         4);
-        case unsigned_int:      return Type_details(type, gl::Uniform_type::unsigned_int, 1);
-        case unsigned_int_vec2: return Type_details(type, gl::Uniform_type::unsigned_int, 2);
-        case unsigned_int_vec3: return Type_details(type, gl::Uniform_type::unsigned_int, 3);
-        case unsigned_int_vec4: return Type_details(type, gl::Uniform_type::unsigned_int, 4);
-        case float_:            return Type_details(type, gl::Uniform_type::float_,       1);
-        case float_vec2:        return Type_details(type, gl::Uniform_type::float_,       2);
-        case float_vec3:        return Type_details(type, gl::Uniform_type::float_,       3);
-        case float_vec4:        return Type_details(type, gl::Uniform_type::float_,       4);
-        case float_mat4:        return Type_details(type, gl::Uniform_type::float_vec4,   4);
+        case int_:                                        return Type_details(type, gl::Uniform_type::int_,               1);
+        case int_vec2:                                    return Type_details(type, gl::Uniform_type::int_,               2);
+        case int_vec3:                                    return Type_details(type, gl::Uniform_type::int_,               3);
+        case int_vec4:                                    return Type_details(type, gl::Uniform_type::int_,               4);
+        case unsigned_int:                                return Type_details(type, gl::Uniform_type::unsigned_int,       1);
+        case unsigned_int_vec2:                           return Type_details(type, gl::Uniform_type::unsigned_int,       2);
+        case unsigned_int_vec3:                           return Type_details(type, gl::Uniform_type::unsigned_int,       3);
+        case unsigned_int_vec4:                           return Type_details(type, gl::Uniform_type::unsigned_int,       4);
+        case unsigned_int64_arb:                          return Type_details(type, gl::Uniform_type::unsigned_int64_arb, 1);
+        case float_:                                      return Type_details(type, gl::Uniform_type::float_,             1);
+        case float_vec2:                                  return Type_details(type, gl::Uniform_type::float_,             2);
+        case float_vec3:                                  return Type_details(type, gl::Uniform_type::float_,             3);
+        case float_vec4:                                  return Type_details(type, gl::Uniform_type::float_,             4);
+        case float_mat4:                                  return Type_details(type, gl::Uniform_type::float_vec4,         4);
+        case double_:                                     return Type_details(type, gl::Uniform_type::double_,            1);
+        case double_vec2:                                 return Type_details(type, gl::Uniform_type::double_,            2);
+        case double_vec3:                                 return Type_details(type, gl::Uniform_type::double_,            3);
+        case double_vec4:                                 return Type_details(type, gl::Uniform_type::double_,            4);
+        case double_mat4:                                 return Type_details(type, gl::Uniform_type::double_vec4,        4);
 
         case sampler_1d:                                  return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_1d,        1, 0);
         case sampler_2d:                                  return Type_details(type, gl::Uniform_type::float_, gl::Texture_target::texture_2d,        2, 0);
@@ -207,9 +219,11 @@ auto get_type_size(const gl::Uniform_type type) -> size_t
     switch (type)
     {
         using enum gl::Uniform_type;
-        case int_:         return sizeof(int32_t);
-        case unsigned_int: return sizeof(uint32_t);
-        case float_:       return sizeof(float);
+        case int_:               return 4;
+        case unsigned_int:       return 4;
+        case unsigned_int64_arb: return 8;
+        case float_:             return 4;
+        case double_:            return 8;
         default:
         {
             auto type_details = get_type_details(type);
@@ -934,6 +948,82 @@ auto Shader_resource::add_uint(
         std::make_unique<Shader_resource>(
             name,
             gl::Uniform_type::unsigned_int,
+            array_size,
+            this
+        )
+    ).get();
+    m_offset += new_member->size_bytes();
+    return new_member;
+}
+
+auto Shader_resource::add_uvec2(
+    const std::string_view      name,
+    const std::optional<size_t> array_size /* = {} */
+) -> Shader_resource*
+{
+    Expects(is_aggregate(m_type));
+    align_offset_to(2 * 4); // align by 2 * 4 bytes
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(
+            name,
+            gl::Uniform_type::unsigned_int_vec2,
+            array_size,
+            this
+        )
+    ).get();
+    m_offset += new_member->size_bytes();
+    return new_member;
+}
+
+auto Shader_resource::add_uvec3(
+    const std::string_view      name,
+    const std::optional<size_t> array_size /* = {} */
+) -> Shader_resource*
+{
+    Expects(is_aggregate(m_type));
+    align_offset_to(4 * 4); // align by 4 * 4 bytes
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(
+            name,
+            gl::Uniform_type::unsigned_int_vec3,
+            array_size,
+            this
+        )
+    ).get();
+    m_offset += new_member->size_bytes();
+    return new_member;
+}
+
+auto Shader_resource::add_uvec4(
+    const std::string_view      name,
+    const std::optional<size_t> array_size /* = {} */
+) -> Shader_resource*
+{
+    Expects(is_aggregate(m_type));
+    align_offset_to(4 * 4); // align by 4 * 4 bytes
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(
+            name,
+            gl::Uniform_type::unsigned_int_vec4,
+            array_size,
+            this
+        )
+    ).get();
+    m_offset += new_member->size_bytes();
+    return new_member;
+}
+
+auto Shader_resource::add_uint64(
+    const std::string_view      name,
+    const std::optional<size_t> array_size /* = {} */
+) -> Shader_resource*
+{
+    Expects(is_aggregate(m_type));
+    align_offset_to(8); // align by 8 bytes
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(
+            name,
+            gl::Uniform_type::unsigned_int64_arb,
             array_size,
             this
         )

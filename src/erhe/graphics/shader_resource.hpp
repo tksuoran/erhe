@@ -176,12 +176,32 @@ public:
     ) -> Shader_resource*;
 
     auto add_int(
-        const std::string_view name,
+        const std::string_view      name,
         const std::optional<size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uint(
-        const std::string_view name,
+        const std::string_view      name,
+        const std::optional<size_t> array_size = {}
+    ) -> Shader_resource*;
+
+    auto add_uvec2(
+        const std::string_view      name,
+        const std::optional<size_t> array_size = {}
+    ) -> Shader_resource*;
+
+    auto add_uvec3(
+        const std::string_view      name,
+        const std::optional<size_t> array_size = {}
+    ) -> Shader_resource*;
+
+    auto add_uvec4(
+        const std::string_view      name,
+        const std::optional<size_t> array_size = {}
+    ) -> Shader_resource*;
+
+    auto add_uint64(
+        const std::string_view      name,
         const std::optional<size_t> array_size = {}
     ) -> Shader_resource*;
 

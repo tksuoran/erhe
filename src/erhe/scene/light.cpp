@@ -19,7 +19,7 @@ auto Light::node_type() const -> const char*
     return "Light";
 }
 
-auto Light::projection_transforms(Viewport viewport) const -> Projection_transforms
+auto Light::projection_transforms(const Viewport& viewport) const -> Projection_transforms
 {
     const auto clip_from_node = m_projection.clip_from_node_transform(viewport);
     return Projection_transforms{
@@ -29,6 +29,16 @@ auto Light::projection_transforms(Viewport viewport) const -> Projection_transfo
             world_from_node() * clip_from_node.inverse_matrix()
         }
     };
+}
+
+auto Light::get_exposure() const -> float
+{
+    return 1.0f;
+}
+
+void Light::set_exposure(const float value)
+{
+    static_cast<void>(value);
 }
 
 auto Light::texture_transform(const Transform& clip_from_world) const -> Transform

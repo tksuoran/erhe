@@ -106,7 +106,7 @@ Camera::Camera(const std::string_view name)
 
 Camera::~Camera() = default;
 
-auto Camera::projection_transforms(Viewport viewport) const -> Projection_transforms
+auto Camera::projection_transforms(const Viewport& viewport) const -> Projection_transforms
 {
     const auto clip_from_node = m_projection.clip_from_node_transform(viewport);
     return Projection_transforms{
@@ -116,6 +116,16 @@ auto Camera::projection_transforms(Viewport viewport) const -> Projection_transf
             world_from_node() * clip_from_node.inverse_matrix()
         }
     };
+}
+
+auto Camera::get_exposure() const -> float
+{
+    return m_exposure;
+}
+
+void Camera::set_exposure(const float value)
+{
+    m_exposure = value;
 }
 
 auto Camera::projection() -> Projection*

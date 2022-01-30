@@ -70,6 +70,7 @@ public:
         std::vector<std::string>                             transform_feedback_varyings;
         gl::Transform_feedback_buffer_mode                   transform_feedback_buffer_mode{gl::Transform_feedback_buffer_mode::separate_attribs};
         std::vector<Shader_stage>                            shaders;
+        bool                                                 dump_reflection{false};
     };
 
     class Prototype final
