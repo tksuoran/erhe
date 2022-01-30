@@ -178,6 +178,10 @@ erhe_target_sources_grouped(
     res/shaders/brush.frag
     res/shaders/depth.vert
     res/shaders/depth.frag
+    res/shaders/compose.frag
+    res/shaders/downsample_x.frag
+    res/shaders/downsample_y.frag
+    res/shaders/post_processing.vert
     res/shaders/edge_lines.vert
     res/shaders/edge_lines.frag
     res/shaders/id.vert

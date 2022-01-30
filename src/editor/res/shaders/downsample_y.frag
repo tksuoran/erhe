@@ -7,10 +7,10 @@ void main()
     float offset_1 = 1.46153846 * post_processing.texel_scale;
     float offset_2 = 3.30769231 * post_processing.texel_scale;
     float offset_3 = 5.15384615 * post_processing.texel_scale;
-    float weight_0 = 0.19345383 * post_processing.texel_scale;
-    float weight_1 = 0.41914998 * post_processing.texel_scale;
-    float weight_2 = 0.17464582 * post_processing.texel_scale;
-    float weight_3 = 0.01905227 * post_processing.texel_scale;
+    float weight_0 = 0.19345383;
+    float weight_1 = 0.41914998;
+    float weight_2 = 0.17464582;
+    float weight_3 = 0.01905227;
     vec3  prev_3   = weight_3 * texture(s_source, v_texcoord - vec2(0.0, offset_3)).rgb;
     vec3  prev_2   = weight_2 * texture(s_source, v_texcoord - vec2(0.0, offset_2)).rgb;
     vec3  prev_1   = weight_1 * texture(s_source, v_texcoord - vec2(0.0, offset_1)).rgb;
@@ -25,6 +25,8 @@ void main()
     vec3  sum_e    = sum_c + center;
     vec3  sum      = sum_d + sum_e;
     out_color      = vec4(sum_d + sum_e, 1.0);
+    //out_color      = vec4(center, 1.0);
+    //out_color      = vec4(v_texcoord, 0.0, 1.0);
     //out_color      = vec4(v_texcoord, 0.0, 1.0);
     //out_color      = texture(s_source, v_texcoord);
 }

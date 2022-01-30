@@ -349,10 +349,14 @@ void Post_processing::downsample(
     gpu_uint_data [word_offset++] = 16;
     gpu_float_data[word_offset++] = 2.0f;
     gpu_float_data[word_offset++] = 3.0f;
+    //gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
+    //gpu_uint_data[word_offset++] = handle >> 32u;
     for (size_t i = 0; i < 16; ++i)
     {
         gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
         gpu_uint_data[word_offset++] = handle >> 32u;
+        gpu_uint_data[word_offset++] = 0; // padding in uvec2 array in uniform buffer (std140)
+        gpu_uint_data[word_offset++] = 0;
     }
     m_parameter_writer.write_offset += m_parameter_block->size_bytes();
     m_parameter_writer.end();
