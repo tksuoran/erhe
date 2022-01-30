@@ -263,8 +263,8 @@ void Scene_builder::make_brushes()
 
     constexpr bool gltf_files      = false; // WIP
     constexpr bool obj_files       = true;
-    constexpr bool platonic_solids = true;
-    constexpr bool sphere          = false;
+    constexpr bool platonic_solids = false;
+    constexpr bool sphere          = true;
     constexpr bool torus           = false;
     constexpr bool cylinder        = false;
     constexpr bool cone            = false;
@@ -617,6 +617,7 @@ void Scene_builder::add_room()
         0.5f,
         0.8f
     );
+    floor_material->visible = true;
     //auto table_material = m_scene_root->make_material(
     //    "Table",
     //    vec4{0.2f, 0.2f, 0.2f, 1.0f},
@@ -775,7 +776,7 @@ void Scene_builder::make_mesh_nodes()
         float y     = bottom_y_pos - brush->gl_primitive_geometry.bounding_box_min.y;
         //x -= 0.5f * static_cast<float>(group_width);
         //z -= 0.5f * static_cast<float>(group_depth);
-        auto material = m_scene_root->materials().at(material_index);
+        const auto& material = m_scene_root->materials().at(material_index);
         auto instance = brush->make_instance(
             erhe::toolkit::create_translation<float>(
                 vec3{x, y, z}
@@ -810,7 +811,10 @@ void Scene_builder::make_mesh_nodes()
             );
         }
 
-        material_index = (material_index + 1) % m_scene_root->materials().size();
+        do {
+            material_index = (material_index + 1) % m_scene_root->materials().size();
+        }
+        while (!m_scene_root->materials().at(material_index)->visible);
 
         m_scene_root->scene().sanity_check();
     }

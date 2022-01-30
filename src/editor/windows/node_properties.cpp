@@ -166,7 +166,7 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
     if (ImGui::TreeNodeEx("Camera", ImGuiTreeNodeFlags_Framed))
     {
         float exposure = camera.get_exposure();
-        if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 1000.0f, "%.3f", logarithmic))
+        if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 2000.0f, "%.3f", logarithmic))
         {
             camera.set_exposure(exposure);
         }
@@ -193,8 +193,8 @@ void Node_properties::light_properties(erhe::scene::Light& light) const
             ImGui::SliderFloat("Inner Spot", &light.inner_spot_angle, 0.0f, glm::pi<float>());
             ImGui::SliderFloat("Outer Spot", &light.outer_spot_angle, 0.0f, glm::pi<float>());
         }
-        ImGui::SliderFloat("Range",     &light.range,     1.00f, 2000.0f, "%.3f", logarithmic);
-        ImGui::SliderFloat("Intensity", &light.intensity, 0.01f, 2000.0f, "%.3f", logarithmic);
+        ImGui::SliderFloat("Range",     &light.range,     1.00f, 20000.0f, "%.3f", logarithmic);
+        ImGui::SliderFloat("Intensity", &light.intensity, 0.01f, 20000.0f, "%.3f", logarithmic);
         ImGui::ColorEdit3 ("Color",     &light.color.x,   ImGuiColorEditFlags_Float);
 
         if (m_scene_root != nullptr)

@@ -74,11 +74,6 @@ vec2 srgb_to_linear(vec2 v)
     );
 }
 
-vec3 tonemap_reinhard(vec3 color)
-{
-    return color / (color + vec3(1.0));
-}
-
 const float M_PI = 3.141592653589793;
 
 struct NormalInfo
@@ -372,7 +367,7 @@ void main()
     color = f_emissive + f_diffuse + f_specular;
 
     float exposure = camera.cameras[0].exposure;
-    out_color.rgb = tonemap_reinhard(color * exposure);
+    out_color.rgb = color * exposure;
     out_color.a = 1.0;
 }
 

@@ -12,6 +12,8 @@
 
 #include <imgui.h>
 
+#include <algorithm>
+
 namespace editor
 {
 
@@ -54,7 +56,7 @@ void Post_processing::initialize_component()
     m_texture_count_offset  = m_parameter_block->add_uint ("texture_count"     )->offset_in_parent();
     m_reserved0_offset      = m_parameter_block->add_float("reserved0"         )->offset_in_parent();
     m_reserved1_offset      = m_parameter_block->add_float("reserver1"         )->offset_in_parent();
-    m_source_texture_offset = m_parameter_block->add_uvec2("source_texture", 16)->offset_in_parent();
+    m_source_texture_offset = m_parameter_block->add_uvec2("source_texture", 32)->offset_in_parent();
 
     const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
     const std::filesystem::path vs_path         = shader_path / std::filesystem::path("post_processing.vert");
@@ -147,7 +149,8 @@ Rendertarget::Rendertarget(
     texture = std::make_shared<Texture>(
         Texture::Create_info{
             .target          = gl::Texture_target::texture_2d,
-            .internal_format = gl::Internal_format::rgba16f,
+            //.internal_format = gl::Internal_format::rgba16f,
+            .internal_format = gl::Internal_format::rgba32f,
             .sample_count    = 0,
             .width           = width,
             .height          = height
@@ -263,12 +266,13 @@ void Post_processing::post_process(
         m_rendertargets.clear();
         int width  = source_texture->width ();
         int height = source_texture->height();
+        m_rendertargets.emplace_back("Post Processing Compose", width, height);
         for (;;)
         {
             if (width > 1)
             {
                 width = width / 2;
-                m_rendertargets.emplace_back("Post Processing", width, height);
+                m_rendertargets.emplace_back("Post Processing Downsample X", width, height);
                 if ((width + height) == 2)
                 {
                     break;
@@ -277,7 +281,7 @@ void Post_processing::post_process(
             if (height > 1)
             {
                 height = height / 2;
-                m_rendertargets.emplace_back("Post Processing", width, height);
+                m_rendertargets.emplace_back("Post Processing Downsample Y", width, height);
                 if ((width + height) == 2)
                 {
                     break;
@@ -287,7 +291,7 @@ void Post_processing::post_process(
     }
 
     {
-        size_t i      = 0;
+        size_t i      = 1;
         int    width  = source_texture->width ();
         int    height = source_texture->height();
         const erhe::graphics::Texture* source = source_texture;
@@ -320,6 +324,7 @@ void Post_processing::post_process(
             }
         }
     }
+    compose(source_texture);
 }
 
 void Post_processing::downsample(
@@ -346,29 +351,15 @@ void Post_processing::downsample(
 
     size_t word_offset = 0;
     gpu_float_data[word_offset++] = 1.0f / source_texture->width();
-    gpu_uint_data [word_offset++] = 16;
-    gpu_float_data[word_offset++] = 2.0f;
-    gpu_float_data[word_offset++] = 3.0f;
-    //gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
-    //gpu_uint_data[word_offset++] = handle >> 32u;
-    for (size_t i = 0; i < 16; ++i)
-    {
-        gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
-        gpu_uint_data[word_offset++] = handle >> 32u;
-        gpu_uint_data[word_offset++] = 0; // padding in uvec2 array in uniform buffer (std140)
-        gpu_uint_data[word_offset++] = 0;
-    }
+    gpu_uint_data [word_offset++] = 1;
+    gpu_float_data[word_offset++] = 0.0f;
+    gpu_float_data[word_offset++] = 0.0f;
+    gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
+    gpu_uint_data[word_offset++] = handle >> 32u;
     m_parameter_writer.write_offset += m_parameter_block->size_bytes();
     m_parameter_writer.end();
 
     rendertarget.bind_framebuffer();
-
-    //m_pipeline_state_tracker->shader_stages.reset();
-    //m_pipeline_state_tracker->color_blend.execute(
-    //    erhe::graphics::Color_blend_state::color_blend_disabled
-    //);
-    //gl::clear_color(0.3f, 0.2f, 0.0f, 1.0f);
-    //gl::clear      (gl::Clear_buffer_mask::color_buffer_bit);
 
     m_pipeline_state_tracker->execute(pipeline);
 
@@ -384,6 +375,95 @@ void Post_processing::downsample(
     gl::draw_arrays     (pipeline.data.input_assembly.primitive_topology, 0, 4);
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     gl::make_texture_handle_non_resident_arb(handle);
+}
+
+void Post_processing::compose(const erhe::graphics::Texture* source_texture)
+{
+    auto& parameter_buffer   = current_frame_resources().parameter_buffer;
+    auto  parameter_gpu_data = parameter_buffer.map();
+
+    m_parameter_writer.begin(parameter_buffer.target());
+
+    std::byte* const          start      = parameter_gpu_data.data() + m_parameter_writer.write_offset;
+    const size_t              byte_count = parameter_gpu_data.size_bytes();
+    const size_t              word_count = byte_count / sizeof(float);
+    const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
+    const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
+
+    size_t word_offset = 0;
+    gpu_float_data[word_offset++] = 0.0f;
+    gpu_uint_data [word_offset++] = static_cast<uint32_t>(m_rendertargets.size());
+    gpu_float_data[word_offset++] = 0.0f;
+    gpu_float_data[word_offset++] = 0.0f;
+
+    {
+        const uint64_t handle = erhe::graphics::get_handle(
+            *source_texture,
+            *m_programs->linear_sampler.get()
+        );
+
+        gl::make_texture_handle_resident_arb(handle);
+
+        gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
+        gpu_uint_data[word_offset++] = handle >> 32u;
+        gpu_uint_data[word_offset++] = 0; // padding in uvec2 array in uniform buffer (std140)
+        gpu_uint_data[word_offset++] = 0;
+    }
+
+    for (
+        size_t i = 1, end = std::min(m_rendertargets.size(), size_t{31});
+        i < end;
+        ++i
+    )
+    {
+        const auto&    source = m_rendertargets.at(i);
+        const uint64_t handle = erhe::graphics::get_handle(
+            *source.texture.get(),
+            *m_programs->linear_sampler.get()
+        );
+
+        gl::make_texture_handle_resident_arb(handle);
+
+        gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
+        gpu_uint_data[word_offset++] = handle >> 32u;
+        gpu_uint_data[word_offset++] = 0; // padding in uvec2 array in uniform buffer (std140)
+        gpu_uint_data[word_offset++] = 0;
+    }
+    m_parameter_writer.write_offset += m_parameter_block->size_bytes();
+    m_parameter_writer.end();
+
+    auto&       rendertarget = m_rendertargets.at(0);
+    const auto& pipeline     = m_compose_pipeline;
+
+    rendertarget.bind_framebuffer();
+
+    m_pipeline_state_tracker->execute(pipeline);
+
+    gl::bind_buffer_range(
+        parameter_buffer.target(),
+        static_cast<GLuint>    (m_parameter_block->binding_point()),
+        static_cast<GLuint>    (parameter_buffer.gl_name()),
+        static_cast<GLintptr>  (m_parameter_writer.range.first_byte_offset),
+        static_cast<GLsizeiptr>(m_parameter_writer.range.byte_count)
+    );
+
+    gl::draw_arrays     (pipeline.data.input_assembly.primitive_topology, 0, 4);
+    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+
+    for (
+        size_t i = 1, end = std::min(m_rendertargets.size(), size_t{32});
+        i < end;
+        ++i
+    )
+    {
+        const auto&    source = m_rendertargets.at(i);
+        const uint64_t handle = erhe::graphics::get_handle(
+            *source.texture.get(),
+            *m_programs->linear_sampler.get()
+        );
+
+        gl::make_texture_handle_non_resident_arb (handle);
+    }
 }
 
 } // namespace editor

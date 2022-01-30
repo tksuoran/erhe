@@ -71,6 +71,7 @@ private:
         Rendertarget&                  rendertarget,
         const auto&                    pipeline
     );
+    void compose(const erhe::graphics::Texture* source_texture);
     void create_frame_resources();
 
     // Component dependencies

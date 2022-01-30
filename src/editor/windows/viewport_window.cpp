@@ -476,7 +476,8 @@ void Viewport_window::update_framebuffer()
                 .target = (s_sample_count > 0)
                     ? gl::Texture_target::texture_2d_multisample
                     : gl::Texture_target::texture_2d,
-                .internal_format = gl::Internal_format::rgba16f,
+                //.internal_format = gl::Internal_format::rgba16f,
+                .internal_format = gl::Internal_format::rgba32f,
                 .sample_count    = s_sample_count,
                 .width           = m_content_region_size.x,
                 .height          = m_content_region_size.y
@@ -497,7 +498,8 @@ void Viewport_window::update_framebuffer()
         m_color_texture_resolved = std::make_shared<Texture>(
             Texture::Create_info{
                 .target          = gl::Texture_target::texture_2d,
-                .internal_format = gl::Internal_format::rgba16f,
+                //.internal_format = gl::Internal_format::rgba16f,
+                .internal_format = gl::Internal_format::rgba32f,
                 .width           = m_content_region_size.x,
                 .height          = m_content_region_size.y
             }
