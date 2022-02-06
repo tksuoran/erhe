@@ -258,6 +258,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     m_ranges.clear();
 
     if (
+        (camera == nullptr)   ||
         (viewport.width == 0) ||
         (viewport.height == 0)
     )
@@ -281,11 +282,8 @@ void Id_renderer::render(const Render_parameters& parameters)
 
     primitive_color_source = Primitive_color_source::id_offset;
 
-    if (camera != nullptr)
-    {
-        update_camera_buffer(*camera, viewport);
-        bind_camera_buffer();
-    }
+    update_camera_buffer(*camera, viewport);
+    bind_camera_buffer();
 
     {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_clear)
