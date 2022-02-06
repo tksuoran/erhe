@@ -435,13 +435,13 @@ auto Pointer_context::alt_key_down() const -> bool
 
 auto Pointer_context::mouse_button_pressed(const erhe::toolkit::Mouse_button button) const -> bool
 {
-    Expects(button < erhe::toolkit::Mouse_button_count && button >= 0);
+    Expects(button < erhe::toolkit::Mouse_button_count);
     return m_mouse_button[static_cast<int>(button)].pressed;
 }
 
 auto Pointer_context::mouse_button_released(const erhe::toolkit::Mouse_button button) const -> bool
 {
-    Expects(button < erhe::toolkit::Mouse_button_count && button >= 0);
+    Expects(button < erhe::toolkit::Mouse_button_count);
     return m_mouse_button[static_cast<int>(button)].released;
 }
 

@@ -185,7 +185,7 @@ private:
         glm::dvec3                   normal              {0.0}; // also rotation axis
         glm::dvec3                   reference_direction {0.0};
         glm::dvec3                   center_of_rotation  {0.0};
-        nonstd::optional<glm::dvec3> intersection;
+        nonstd::optional<glm::dvec3> intersection        {};
         double                       start_rotation_angle{0.0};
         double                       current_angle       {0.0};
         erhe::scene::Transform       world_from_node;

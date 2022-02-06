@@ -158,7 +158,7 @@ auto Scene_builder::build_info() -> erhe::primitive::Build_info&
 class Task_queue
 {
 public:
-    Task_queue(const bool parallel)
+    explicit Task_queue(const bool parallel)
         : m_parallel{parallel}
     {
     }

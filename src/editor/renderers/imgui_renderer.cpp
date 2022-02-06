@@ -706,8 +706,8 @@ void Imgui_renderer::render_draw_data()
                     const auto draw_command = gl::Draw_elements_indirect_command{
                         pcmd->ElemCount,
                         1,
-                        pcmd->IdxOffset + static_cast<const uint32_t>(list_index_offset),
-                        pcmd->VtxOffset + static_cast<const uint32_t>(list_vertex_offset),
+                        pcmd->IdxOffset + static_cast<uint32_t>(list_index_offset),
+                        pcmd->VtxOffset + static_cast<uint32_t>(list_vertex_offset),
                         0
                     };
 

@@ -285,7 +285,7 @@ void Plot::imgui()
             const float  t0    = clamp((io.MousePos.x - inner_bb.Min.x) / (inner_bb.Max.x - inner_bb.Min.x), 0.0f, 0.9999f);
             const float  idx   = t0 * m_values.size();
             const size_t v_idx = (size_t)(idx);
-            IM_ASSERT(v_idx >= 0 && v_idx < m_values.size());
+            IM_ASSERT(v_idx < m_values.size());
 
             const float v0 = m_values.at((v_idx + m_offset) % m_values.size());
             const float v1 = m_values.at((v_idx + 1 + m_offset) % m_values.size());

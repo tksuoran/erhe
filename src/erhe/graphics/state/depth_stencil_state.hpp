@@ -48,8 +48,8 @@ public:
     bool               depth_write_enable {true}; // OpenGL depth mask
     gl::Depth_function depth_compare_op   {gl::Depth_function::less}; // Not Maybe_reversed::less, this has to match default OpenGL state
     bool               stencil_test_enable{false};
-    Stencil_op_state   stencil_front;
-    Stencil_op_state   stencil_back;
+    Stencil_op_state   stencil_front      {};
+    Stencil_op_state   stencil_back       {};
 
     static Depth_stencil_state depth_test_disabled_stencil_test_disabled;
     static Depth_stencil_state depth_test_always_stencil_test_disabled;

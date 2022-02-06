@@ -72,8 +72,8 @@ public:
     float                                            density{1.0f};
     float                                            volume {1.0f};
     std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
-    Collision_volume_calculator                      collision_volume_calculator;
-    Collision_shape_generator                        collision_shape_generator;
+    Collision_volume_calculator                      collision_volume_calculator{};
+    Collision_shape_generator                        collision_shape_generator  {};
 };
 
 class Instance

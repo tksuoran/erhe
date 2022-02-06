@@ -293,8 +293,8 @@ void Text_renderer::print(
     std::byte* const          start           = vertex_gpu_data.data()       + m_vertex_writer.write_offset;
     const size_t              byte_count      = vertex_gpu_data.size_bytes() - m_vertex_writer.write_offset;
     const size_t              word_count      = byte_count / sizeof(float);
-    const gsl::span<float>    gpu_float_data{reinterpret_cast<float* const   >(start), word_count};
-    const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t* const>(start), word_count};
+    const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
+    const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
     erhe::ui::Rectangle bounding_box;
     const vec3          snapped_position{
@@ -336,7 +336,7 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
     std::byte* const       start               = projection_gpu_data.data()       + m_projection_writer.write_offset;
     const size_t           byte_count          = projection_gpu_data.size_bytes() - m_projection_writer.write_offset;
     const size_t           word_count          = byte_count / sizeof(float);
-    const gsl::span<float> gpu_float_data{reinterpret_cast<float* const>(start), word_count};
+    const gsl::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
 
     const mat4 clip_from_window = erhe::toolkit::create_orthographic(
         static_cast<float>(viewport.x), static_cast<float>(viewport.width),

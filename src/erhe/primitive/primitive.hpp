@@ -26,13 +26,13 @@ class Material;
 class Primitive
 {
 public:
-    std::shared_ptr<Material>                 material;
-    Primitive_geometry                        gl_primitive_geometry;
-    Primitive_geometry                        rt_primitive_geometry;
-    std::shared_ptr<erhe::raytrace::IBuffer>  rt_vertex_buffer;
-    std::shared_ptr<erhe::raytrace::IBuffer>  rt_index_buffer;
-    std::shared_ptr<erhe::geometry::Geometry> source_geometry;
-    Normal_style                              normal_style{Normal_style::none};
+    std::shared_ptr<Material>                 material             {};
+    Primitive_geometry                        gl_primitive_geometry{};
+    Primitive_geometry                        rt_primitive_geometry{};
+    std::shared_ptr<erhe::raytrace::IBuffer>  rt_vertex_buffer     {};
+    std::shared_ptr<erhe::raytrace::IBuffer>  rt_index_buffer      {};
+    std::shared_ptr<erhe::geometry::Geometry> source_geometry      {};
+    Normal_style                              normal_style         {Normal_style::none};
 };
 
 auto primitive_type(

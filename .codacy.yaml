@@ -8,4 +8,5 @@ exclude_paths:
   - "src/imgui/**"
   - "src/mikktspace/**"
   - "src/RectangleBinPack/**"
-  
+  - "src/miniaudio/**"
+  - "src/optional_lite/**"

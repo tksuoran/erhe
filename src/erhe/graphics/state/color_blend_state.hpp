@@ -52,11 +52,11 @@ public:
 class Color_blend_state
 {
 public:
-    bool                  enabled{false};
-    Blend_state_component rgb;
-    Blend_state_component alpha;
+    bool                  enabled       {false};
+    Blend_state_component rgb           {};
+    Blend_state_component alpha         {};
     float                 constant[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-    Color_write_mask      write_mask;
+    Color_write_mask      write_mask    {};
 
     static Color_blend_state color_blend_disabled;
     static Color_blend_state color_blend_premultiplied;

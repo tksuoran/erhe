@@ -292,7 +292,7 @@ auto Brushes::get_brush_transform() -> mat4
         return mat4{1};
     }
 
-    const Polygon_id polygon_id = static_cast<const Polygon_id>(m_hover_local_index);
+    const Polygon_id polygon_id = static_cast<Polygon_id>(m_hover_local_index);
     const Polygon&   polygon    = m_hover_geometry->polygons[polygon_id];
     Reference_frame  hover_frame(*m_hover_geometry, polygon_id);
     Reference_frame  brush_frame = m_brush->get_reference_frame(polygon.corner_count);

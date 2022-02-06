@@ -428,6 +428,8 @@ auto Geometry::compute_tangents(
             fvTexcOut[1] = g_texcoord[1];
         },
 
+        .m_setTSpaceBasic = nullptr,
+
 	    .m_setTSpace = [](
             const SMikkTSpaceContext* pContext,
             const float               fvTangent[],
