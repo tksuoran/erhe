@@ -41,13 +41,16 @@ Property_map_collection<Key_type>::remove(const std::string& name)
 {
     ERHE_PROFILE_FUNCTION
 
-    std::erase_if(
-        m_entries.begin(),
-        m_entries.end(),
-        [name](const Entry& entry)
-        {
-            return entry.key == name;
-        }
+    m_entries.erase(
+        std::remove_if(
+            m_entries.begin(),
+            m_entries.end(),
+            [name](const Entry& entry)
+            {
+                return entry.key == name;
+            }
+        ),
+        m_entries.end()
     );
 }
 

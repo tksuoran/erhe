@@ -1,10 +1,11 @@
 #pragma once
 
+#include "erhe/toolkit/optional.hpp"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
 #include <cstdint>
-#include <optional>
 #include <tuple>
 
 namespace erhe::toolkit
@@ -211,7 +212,7 @@ template <typename T>
     const T                              viewport_y,
     const T                              viewport_width,
     const T                              viewport_height
-) -> std::optional<typename vector_types<T>::vec3>
+) -> nonstd::optional<typename vector_types<T>::vec3>
 {
     using vec3 = typename vector_types<T>::vec3;
     using vec4 = typename vector_types<T>::vec4;
@@ -531,14 +532,11 @@ template <typename T>
     const typename vector_types<T>::vec3 P1,
     const typename vector_types<T>::vec3 Q0,
     const typename vector_types<T>::vec3 Q1
-    //typename vector_types<T>::vec3&      out_PC,
-    //typename vector_types<T>::vec3&      out_QC
-) -> std::optional<
+) -> nonstd::optional<
     Closest_points<T>
 >
 {
     using vec3 = typename vector_types<T>::vec3;
-    //using vec4 = typename vector_types<T>::vec4;
 
     const vec3 u  = P1 - P0;
     const vec3 v  = Q1 - Q0;
@@ -557,8 +555,6 @@ template <typename T>
 
     const auto sC = ((b * e) - (c * d)) / denominator;
     const auto tC = ((a * e) - (b * d)) / denominator;
-    //out_PC = P0 + sC * u;
-    //out_QC = Q0 + tC * v;
 
     return Closest_points<T>{
         .P = P0 + sC * u,
@@ -571,8 +567,7 @@ template <typename T>
     const typename vector_types<T>::vec2 P0,
     const typename vector_types<T>::vec2 P1,
     const typename vector_types<T>::vec2 Q
-    //typename vector_types<T>::vec2& out_PC
-) -> std::optional<typename vector_types<T>::vec2>
+) -> nonstd::optional<typename vector_types<T>::vec2>
 {
     const auto u = P1 - P0;
     if (glm::dot(u, u) < std::numeric_limits<T>::epsilon())
@@ -580,7 +575,6 @@ template <typename T>
         return {};
     }
     const auto t = glm::dot(u, Q - P0) / dot(u, u);
-    //out_PC = P0 + t * u;
     return P0 + t * u;
 }
 
@@ -589,8 +583,7 @@ template <typename T>
     const typename vector_types<T>::vec3 P0,
     const typename vector_types<T>::vec3 P1,
     const typename vector_types<T>::vec3 Q
-    //typename vector_types<T>::vec3&      out_PC
-) -> std::optional<typename vector_types<T>::vec3>
+) -> nonstd::optional<typename vector_types<T>::vec3>
 {
     const auto u = P1 - P0;
     if (dot(u, u) < std::numeric_limits<T>::epsilon())
@@ -598,7 +591,6 @@ template <typename T>
         return {};
     }
     const auto t = glm::dot(u, Q - P0) / dot(u, u);
-    //out_PC = P0 + t * u;
     return {
         P0 + t * u
     };
@@ -609,15 +601,13 @@ template <typename T>
     const typename vector_types<T>::vec2 P0,
     const typename vector_types<T>::vec2 P1,
     const typename vector_types<T>::vec2 Q
-    //T&                                   distance
-) -> std::optional<T>
+) -> nonstd::optional<T>
 {
     typename vector_types<T>::vec2 PC;
     if (!closest_point<T>(P0, P1, Q, PC))
     {
         return {};
     }
-    //distance = glm::distance(Q, PC);
     return glm::distance(Q, PC);
 }
 
@@ -626,8 +616,7 @@ template <typename T>
     const typename vector_types<T>::vec3 P0,
     const typename vector_types<T>::vec3 P1,
     const typename vector_types<T>::vec3 Q
-    //T&                                   distance
-) -> std::optional<T>
+) -> nonstd::optional<T>
 {
     typename vector_types<T>::vec3 PC;
     if (!closest_point<T>(P0, P1, Q, PC))
@@ -644,7 +633,7 @@ template <typename T>
     const typename vector_types<T>::vec3 point_on_plane,
     const typename vector_types<T>::vec3 ray_origin,
     const typename vector_types<T>::vec3 ray_direction
-) -> std::optional<T>
+) -> nonstd::optional<T>
 {
     const T denominator = glm::dot(plane_normal, ray_direction);
     if (std::abs(denominator) < std::numeric_limits<T>::epsilon())
@@ -659,15 +648,11 @@ template <typename T>
     const typename vector_types<T>::vec3 plane_normal,
     const typename vector_types<T>::vec3 point_on_plane,
     typename vector_types<T>::vec3       point_to_project
-) -> std::optional<typename vector_types<T>::vec3>
+) -> nonstd::optional<typename vector_types<T>::vec3>
 {
     const auto n = plane_normal;
     const auto p = point_on_plane;
     const auto q = point_to_project;
-    // Q = P - Pn_v
-    // v = P - S
-    // Pn_v = dot(v, n) / dot(n, n)
-    //glm::vec3 v           = q - p;
     const T nominator   = dot(n, q - p);
     const T denominator = dot(n, n);
     if (std::abs(denominator) < std::numeric_limits<T>::epsilon())
@@ -678,7 +663,6 @@ template <typename T>
     const typename vector_types<T>::vec3 Pn_v         = t * n;
     const typename vector_types<T>::vec3 projected_q1 = q - Pn_v;
 
-    //in_out_q = projected_q1;
     return projected_q1;
 }
 

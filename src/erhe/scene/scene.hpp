@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 

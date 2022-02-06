@@ -51,7 +51,7 @@ void Programs::initialize_component()
         gl::Texture_mag_filter::linear
     );
 
-    m_shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
+    m_shader_path = fs::path("res") / fs::path("shaders");
 
     brush           = make_program("brush");
     // Not available on Dell laptop.
@@ -98,15 +98,15 @@ auto Programs::make_program(
     ERHE_PROFILE_FUNCTION
 
     log_programs.trace("Programs::make_program({})\n", name);
-    log_programs.trace("current directory is {}\n", std::filesystem::current_path().string());
+    log_programs.trace("current directory is {}\n", fs::current_path().string());
 
-    const std::filesystem::path vs_path = m_shader_path / std::filesystem::path(std::string(name) + ".vert");
-    const std::filesystem::path gs_path = m_shader_path / std::filesystem::path(std::string(name) + ".geom");
-    const std::filesystem::path fs_path = m_shader_path / std::filesystem::path(std::string(name) + ".frag");
+    const fs::path vs_path = m_shader_path / fs::path(std::string(name) + ".vert");
+    const fs::path gs_path = m_shader_path / fs::path(std::string(name) + ".geom");
+    const fs::path fs_path = m_shader_path / fs::path(std::string(name) + ".frag");
 
-    const bool vs_exists = std::filesystem::exists(vs_path);
-    const bool gs_exists = std::filesystem::exists(gs_path);
-    const bool fs_exists = std::filesystem::exists(fs_path);
+    const bool vs_exists = fs::exists(vs_path);
+    const bool gs_exists = fs::exists(gs_path);
+    const bool fs_exists = fs::exists(fs_path);
 
     const auto& shader_resources = *m_program_interface->shader_resources.get();
 

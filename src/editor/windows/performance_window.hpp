@@ -1,7 +1,7 @@
 #pragma once
 
 #include "windows/imgui_window.hpp"
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 
 #include <imgui.h>
 #include <glm/glm.hpp>

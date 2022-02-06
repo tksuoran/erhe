@@ -6,6 +6,8 @@
 #include <fmt/ostream.h>
 #include <gsl/gsl>
 
+#include <thread>
+
 namespace erhe::graphics
 {
 

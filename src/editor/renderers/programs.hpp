@@ -1,9 +1,9 @@
 #pragma once
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
+#include "erhe/toolkit/filesystem.hpp"
 
-#include <filesystem>
 #include <string_view>
 #include <vector>
 
@@ -78,7 +78,7 @@ private:
     std::shared_ptr<Shader_monitor>    m_shader_monitor;
     bool                               m_dump_reflection{false};
 
-    std::filesystem::path m_shader_path;
+    fs::path m_shader_path;
 };
 
 }

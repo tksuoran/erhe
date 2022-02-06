@@ -485,8 +485,8 @@ auto Geometry::compute_tangents(
                 continue;
             }
 
-            std::optional<vec4> T;
-            std::optional<vec4> B;
+            nonstd::optional<vec4> T;
+            nonstd::optional<vec4> B;
             std::vector<vec4>   tangents;
             std::vector<vec4>   bitangents;
             for (uint32_t i = 0; i < polygon.corner_count; ++i)

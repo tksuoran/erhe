@@ -1,5 +1,4 @@
 #include "erhe/components/components.hpp"
-#include "erhe/components/component.hpp"
 #include "erhe/concurrency/concurrent_queue.hpp"
 #include "erhe/components/log.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -42,7 +41,7 @@ auto Components::add(
     }
 
     component->register_as_component(this);
-    m_components.insert(component);
+    m_components.push_back(component);
 
     auto* fixed_step_update     = dynamic_cast<IUpdate_fixed_step    *>(component.get());
     auto* once_per_frame_update = dynamic_cast<IUpdate_once_per_frame*>(component.get());
@@ -97,13 +96,16 @@ void Components::deitialize_component(Component* component)
 
     // This must be last
     {
-        const auto erase_count = erase_if(
-            m_components,
-            [component](const std::shared_ptr<Component>& shared_component)
+        const auto erase_it = remove_if(
+            m_components.begin(),
+            m_components.end(),
+            [component](std::shared_ptr<Component> shared_component)
             {
                 return shared_component.get() == component;
             }
         );
+        const auto erase_count = std::distance(erase_it, m_components.end());
+        m_components.erase(erase_it, m_components.end());
         if (erase_count == 0)
         {
             log_components.error("Component {} not found\n", component->name());

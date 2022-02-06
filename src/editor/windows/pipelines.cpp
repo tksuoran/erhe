@@ -407,7 +407,7 @@ void Pipelines::color_blend(erhe::graphics::Color_blend_state& color_blend)
 void Pipelines::imgui()
 {
     ImGui::Begin(c_title.data());
-    const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
+    //const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
     auto pipelines = erhe::graphics::Pipeline::get_pipelines();
     for (size_t i = 0, end = pipelines.size(); i < end; ++i)
     {

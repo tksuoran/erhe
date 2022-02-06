@@ -5,14 +5,14 @@
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/primitive/enums.hpp"
+#include "erhe/toolkit/optional.hpp"
 
 #include <glm/glm.hpp>
 
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <vector>
 
 namespace erhe::geometry
@@ -181,8 +181,8 @@ private:
     bool                                m_snap_to_grid         {false};
     bool                                m_hover_content        {false};
     bool                                m_hover_tool           {false};
-    std::optional<glm::vec3>            m_hover_position;
-    std::optional<glm::vec3>            m_hover_normal;
+    nonstd::optional<glm::vec3>         m_hover_position;
+    nonstd::optional<glm::vec3>         m_hover_normal;
     std::shared_ptr<erhe::scene::Mesh>  m_hover_mesh;
     erhe::geometry::Geometry*           m_hover_geometry   {nullptr};
     size_t                              m_hover_primitive  {0};

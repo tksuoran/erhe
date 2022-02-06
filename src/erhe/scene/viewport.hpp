@@ -1,8 +1,8 @@
 #pragma once
 
-#include <glm/glm.hpp>
+#include "erhe/toolkit/optional.hpp"
 
-#include <optional>
+#include <glm/glm.hpp>
 
 namespace erhe::scene
 {
@@ -22,7 +22,7 @@ public:
         const glm::vec3 window,
         const float     depth_range_near,
         const float     depth_range_far
-    ) const -> std::optional<glm::vec3>;
+    ) const -> nonstd::optional<glm::vec3>;
 
     [[nodiscard]] auto project_to_screen_space(
         const glm::mat4 clip_from_world,

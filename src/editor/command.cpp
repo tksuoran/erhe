@@ -127,10 +127,10 @@ auto Command_binding::get_command() const -> Command*
 }
 
 Key_binding::Key_binding(
-    Command* const                command,
-    const erhe::toolkit::Keycode  code,
-    const bool                    pressed,
-    const std::optional<uint32_t> modifier_mask
+    Command* const                   command,
+    const erhe::toolkit::Keycode     code,
+    const bool                       pressed,
+    const nonstd::optional<uint32_t> modifier_mask
 )
     : Command_binding{command      }
     , m_code         {code         }

@@ -1,4 +1,4 @@
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/components/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -10,13 +10,13 @@ auto c_str(const Component_state state) -> const char*
 {
     switch (state)
     {
-        using enum Component_state;
-        case Constructed:    return "Constructed";
-        case Connected:      return "Connected";
-        case Initializing:   return "Initializing";
-        case Ready:          return "Ready";
-        case Deinitializing: return "Deinitializing";
-        case Deinitialized:  return "Deinitialized";
+        // using enum Component_state;
+        case Component_state::Constructed:    return "Constructed";
+        case Component_state::Connected:      return "Connected";
+        case Component_state::Initializing:   return "Initializing";
+        case Component_state::Ready:          return "Ready";
+        case Component_state::Deinitializing: return "Deinitializing";
+        case Component_state::Deinitialized:  return "Deinitialized";
         default: return "?";
     }
 }
@@ -57,7 +57,7 @@ void Component::unregister()
     m_components = nullptr;
 }
 
-auto Component::dependencies() -> const std::set<std::shared_ptr<Component>>&
+auto Component::dependencies() -> const std::vector<std::shared_ptr<Component>>&
 {
     return m_dependencies;
 }
@@ -75,7 +75,7 @@ void Component::depends_on(const std::shared_ptr<Component>& dependency)
         );
         ERHE_FATAL("Dependency has not been registered");
     }
-    m_dependencies.insert(dependency);
+    m_dependencies.push_back(dependency);
 }
 
 void Component::set_connected()
@@ -160,12 +160,20 @@ auto Component::is_ready_to_deinitialize() const -> bool
 
 void Component::component_initialized(Component* component)
 {
-    std::erase_if(
-        m_dependencies,
-        [component](const auto& entry)
+    const auto remove_it = std::remove_if(
+        m_dependencies.begin(),
+        m_dependencies.end(),
+        [component](auto entry)
         {
             return entry.get() == component;
         }
+    );
+
+    //auto r = std::distance(remove_it, m_dependencies.end());
+
+    m_dependencies.erase(
+        remove_it,
+        m_dependencies.end()
     );
 }
 

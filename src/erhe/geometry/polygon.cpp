@@ -126,7 +126,7 @@ void Polygon::compute_centroid(
 
 auto Polygon::corner(const Geometry& geometry, const Point_id point) const -> Corner_id
 {
-    std::optional<Corner_id> result;
+    nonstd::optional<Corner_id> result;
     for_each_corner_const(geometry, [&](auto& i)
     {
         if (point == i.corner.point_id)

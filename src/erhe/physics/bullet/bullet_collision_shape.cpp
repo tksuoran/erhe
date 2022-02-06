@@ -27,11 +27,11 @@ auto ICollision_shape::create_capsule_shape(
 {
     switch (axis)
     {
-        using enum Axis;
-        case X:  return new Bullet_capsule_x_shape(radius, length);
-        case Y:  return new Bullet_capsule_y_shape(radius, length);
-        case Z:  return new Bullet_capsule_z_shape(radius, length);
-        default: return nullptr;
+        //using enum Axis;
+        case Axis::X: return new Bullet_capsule_x_shape(radius, length);
+        case Axis::Y: return new Bullet_capsule_y_shape(radius, length);
+        case Axis::Z: return new Bullet_capsule_z_shape(radius, length);
+        default:      return nullptr;
     }
 }
 
@@ -43,11 +43,11 @@ auto ICollision_shape::create_capsule_shape_shared(
 {
     switch (axis)
     {
-        using enum Axis;
-        case X:  return std::make_shared<Bullet_capsule_x_shape>(radius, length);
-        case Y:  return std::make_shared<Bullet_capsule_y_shape>(radius, length);
-        case Z:  return std::make_shared<Bullet_capsule_z_shape>(radius, length);
-        default: return {};
+        //using enum Axis;
+        case Axis::X: return std::make_shared<Bullet_capsule_x_shape>(radius, length);
+        case Axis::Y: return std::make_shared<Bullet_capsule_y_shape>(radius, length);
+        case Axis::Z: return std::make_shared<Bullet_capsule_z_shape>(radius, length);
+        default:      return {};
     }
 }
 
@@ -59,11 +59,11 @@ auto ICollision_shape::create_cone_shape(
 {
     switch (axis)
     {
-        using enum Axis;
-        case X:  return new Bullet_cone_x_shape(base_radius, height);
-        case Y:  return new Bullet_cone_y_shape(base_radius, height);
-        case Z:  return new Bullet_cone_z_shape(base_radius, height);
-        default: return nullptr;
+        //using enum Axis;
+        case Axis::X: return new Bullet_cone_x_shape(base_radius, height);
+        case Axis::Y: return new Bullet_cone_y_shape(base_radius, height);
+        case Axis::Z: return new Bullet_cone_z_shape(base_radius, height);
+        default:      return nullptr;
     }
 }
 
@@ -75,11 +75,11 @@ auto ICollision_shape::create_cone_shape_shared(
 {
     switch (axis)
     {
-        using enum Axis;
-        case X:  return std::make_shared<Bullet_cone_x_shape>(base_radius, height);
-        case Y:  return std::make_shared<Bullet_cone_y_shape>(base_radius, height);
-        case Z:  return std::make_shared<Bullet_cone_z_shape>(base_radius, height);
-        default: return {};
+        //using enum Axis;
+        case Axis::X: return std::make_shared<Bullet_cone_x_shape>(base_radius, height);
+        case Axis::Y: return std::make_shared<Bullet_cone_y_shape>(base_radius, height);
+        case Axis::Z: return std::make_shared<Bullet_cone_z_shape>(base_radius, height);
+        default:      return {};
     }
 }
 
@@ -90,11 +90,11 @@ auto ICollision_shape::create_cylinder_shape(
 {
     switch (axis)
     {
-        using enum Axis;
-        case X:  return new Bullet_cylinder_x_shape(half_extents);
-        case Y:  return new Bullet_cylinder_y_shape(half_extents);
-        case Z:  return new Bullet_cylinder_z_shape(half_extents);
-        default: return nullptr;
+        //using enum Axis;
+        case Axis::X: return new Bullet_cylinder_x_shape(half_extents);
+        case Axis::Y: return new Bullet_cylinder_y_shape(half_extents);
+        case Axis::Z: return new Bullet_cylinder_z_shape(half_extents);
+        default:      return nullptr;
     }
 }
 
@@ -105,11 +105,11 @@ auto ICollision_shape::create_cylinder_shape_shared(
 {
     switch (axis)
     {
-        using enum Axis;
-        case X:  return std::make_shared<Bullet_cylinder_x_shape>(half_extents);
-        case Y:  return std::make_shared<Bullet_cylinder_y_shape>(half_extents);
-        case Z:  return std::make_shared<Bullet_cylinder_z_shape>(half_extents);
-        default: return nullptr;
+        //using enum Axis;
+        case Axis::X: return std::make_shared<Bullet_cylinder_x_shape>(half_extents);
+        case Axis::Y: return std::make_shared<Bullet_cylinder_y_shape>(half_extents);
+        case Axis::Z: return std::make_shared<Bullet_cylinder_z_shape>(half_extents);
+        default:      return nullptr;
     }
 }
 

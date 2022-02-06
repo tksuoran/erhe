@@ -247,6 +247,8 @@ target_link_libraries(
     erhe_toolkit
     erhe_ui
     imgui
+    ghc_filesystem
+    optional_lite
     lunasvg
     miniaudio
     nlohmann_json::nlohmann_json

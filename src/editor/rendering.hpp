@@ -3,7 +3,8 @@
 #include "tools/pointer_context.hpp"
 #include "renderers/forward_renderer.hpp"
 #include "windows/viewport_window.hpp"
-#include "erhe/components/component.hpp"
+
+#include "erhe/components/components.hpp"
 #include "erhe/scene/viewport.hpp"
 
 namespace erhe::graphics

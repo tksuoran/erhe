@@ -34,16 +34,16 @@ void Textures::initialize_component()
 
     const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
-    background = load(std::filesystem::path("res") / "images" / "background.png");
+    background = load(fs::path("res") / "images" / "background.png");
 }
 
 gl::Internal_format to_gl(erhe::graphics::Image_format format)
 {
     switch (format)
     {
-        using enum erhe::graphics::Image_format;
-        case rgb8:  return gl::Internal_format::rgb8;
-        case rgba8: return gl::Internal_format::rgba8;
+        //using enum erhe::graphics::Image_format;
+        case erhe::graphics::Image_format::rgb8:  return gl::Internal_format::rgb8;
+        case erhe::graphics::Image_format::rgba8: return gl::Internal_format::rgba8;
         default:
         {
             ERHE_FATAL("Bad image format %04x\n", static_cast<unsigned int>(format));
@@ -53,12 +53,12 @@ gl::Internal_format to_gl(erhe::graphics::Image_format format)
 }
 
 auto Textures::load(
-    const std::filesystem::path& path
+    const fs::path& path
 ) -> shared_ptr<Texture>
 {
     if (
-        !std::filesystem::exists(path) ||
-        std::filesystem::is_empty(path)
+        !fs::exists(path) ||
+        fs::is_empty(path)
     )
     {
         return {};

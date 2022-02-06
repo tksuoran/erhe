@@ -31,6 +31,10 @@
 namespace editor
 {
 
+namespace {
+    const int s_sample_count = 4;
+}
+
 using erhe::graphics::Vertex_input_state;
 using erhe::graphics::Input_assembly_state;
 using erhe::graphics::Rasterization_state;
@@ -476,8 +480,8 @@ void Viewport_window::update_framebuffer()
                 .target = (s_sample_count > 0)
                     ? gl::Texture_target::texture_2d_multisample
                     : gl::Texture_target::texture_2d,
-                //.internal_format = gl::Internal_format::rgba16f,
-                .internal_format = gl::Internal_format::rgba32f,
+                .internal_format = gl::Internal_format::rgba16f,
+                //.internal_format = gl::Internal_format::rgba32f,
                 .sample_count    = s_sample_count,
                 .width           = m_content_region_size.x,
                 .height          = m_content_region_size.y
@@ -498,8 +502,8 @@ void Viewport_window::update_framebuffer()
         m_color_texture_resolved = std::make_shared<Texture>(
             Texture::Create_info{
                 .target          = gl::Texture_target::texture_2d,
-                //.internal_format = gl::Internal_format::rgba16f,
-                .internal_format = gl::Internal_format::rgba32f,
+                .internal_format = gl::Internal_format::rgba16f,
+                //.internal_format = gl::Internal_format::rgba32f,
                 .width           = m_content_region_size.x,
                 .height          = m_content_region_size.y
             }
@@ -600,7 +604,7 @@ auto Viewport_window::project_to_viewport(
 
 auto Viewport_window::unproject_to_world(
     const glm::dvec3 position_in_window
-) const -> std::optional<glm::dvec3>
+) const -> nonstd::optional<glm::dvec3>
 {
     constexpr double depth_range_near = 0.0;
     constexpr double depth_range_far  = 1.0;

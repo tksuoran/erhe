@@ -1,7 +1,7 @@
 #pragma once
 
 #include "concurrentqueue.h"
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 
 #include <condition_variable>
 #include <functional>

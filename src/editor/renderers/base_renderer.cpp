@@ -241,10 +241,10 @@ auto Base_renderer::update_light_buffer(
         log_render.trace("light_index = {}\n", light_index);
         switch (light->type)
         {
-            using enum erhe::scene::Light::Type;
-            case directional: ++directional_light_count; break;
-            case point:       ++point_light_count; break;
-            case spot:        ++spot_light_count; break;
+            //using enum erhe::scene::Light_type;
+            case erhe::scene::Light_type::directional: ++directional_light_count; break;
+            case erhe::scene::Light_type::point:       ++point_light_count; break;
+            case erhe::scene::Light_type::spot:        ++spot_light_count; break;
             default: break;
         }
 

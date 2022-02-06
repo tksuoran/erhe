@@ -2,7 +2,7 @@
 
 #include "renderers/base_renderer.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/scene/viewport.hpp"
 

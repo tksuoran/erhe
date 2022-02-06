@@ -13,23 +13,23 @@ static auto gl_fragment_output_type_name(
 {
     switch (type)
     {
-        using enum gl::Fragment_shader_output_type;
-        case int_:              return "int    ";
-        case int_vec2:          return "ivec2  ";
-        case int_vec3:          return "ivec3  ";
-        case int_vec4:          return "ivec4  ";
-        case unsigned_int:      return "uint   ";
-        case unsigned_int_vec2: return "uvec2  ";
-        case unsigned_int_vec3: return "uvec3  ";
-        case unsigned_int_vec4: return "uvec4  ";
-        case float_:            return "float  ";
-        case float_vec2:        return "vec2   ";
-        case float_vec3:        return "vec3   ";
-        case float_vec4:        return "vec4   ";
-        case double_:           return "double ";
-        case double_vec2:       return "dvec2  ";
-        case double_vec3:       return "dvec3  ";
-        case double_vec4:       return "dvec4  ";
+        //using enum gl::Fragment_shader_output_type;
+        case gl::Fragment_shader_output_type::int_:              return "int    ";
+        case gl::Fragment_shader_output_type::int_vec2:          return "ivec2  ";
+        case gl::Fragment_shader_output_type::int_vec3:          return "ivec3  ";
+        case gl::Fragment_shader_output_type::int_vec4:          return "ivec4  ";
+        case gl::Fragment_shader_output_type::unsigned_int:      return "uint   ";
+        case gl::Fragment_shader_output_type::unsigned_int_vec2: return "uvec2  ";
+        case gl::Fragment_shader_output_type::unsigned_int_vec3: return "uvec3  ";
+        case gl::Fragment_shader_output_type::unsigned_int_vec4: return "uvec4  ";
+        case gl::Fragment_shader_output_type::float_:            return "float  ";
+        case gl::Fragment_shader_output_type::float_vec2:        return "vec2   ";
+        case gl::Fragment_shader_output_type::float_vec3:        return "vec3   ";
+        case gl::Fragment_shader_output_type::float_vec4:        return "vec4   ";
+        case gl::Fragment_shader_output_type::double_:           return "double ";
+        case gl::Fragment_shader_output_type::double_vec2:       return "dvec2  ";
+        case gl::Fragment_shader_output_type::double_vec3:       return "dvec3  ";
+        case gl::Fragment_shader_output_type::double_vec4:       return "dvec4  ";
         default:
         {
             ERHE_FATAL("Bad fragment outout type\n");

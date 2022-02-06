@@ -4,7 +4,7 @@
 
 #include "xr/headset_view_resources.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 
 #include <array>
 

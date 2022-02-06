@@ -3,9 +3,9 @@
 #include "erhe/primitive/index_range.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/primitive/enums.hpp"
+#include "erhe/toolkit/optional.hpp"
 
 #include <memory>
-#include <optional>
 
 namespace erhe::geometry
 {
@@ -37,6 +37,6 @@ public:
 
 auto primitive_type(
     const Primitive_mode primitive_mode
-) -> std::optional<gl::Primitive_type>;
+) -> nonstd::optional<gl::Primitive_type>;
 
 } // namespace erhe::primitive

@@ -3,7 +3,7 @@
 #include "scene/collision_generator.hpp"
 #include "scene/frame_controller.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/buffer_info.hpp"
 #include "erhe/primitive/material.hpp"

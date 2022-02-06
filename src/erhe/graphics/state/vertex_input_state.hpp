@@ -5,6 +5,7 @@
 #include "erhe/graphics/vertex_attribute.hpp"
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
+#include "erhe/toolkit/optional.hpp"
 
 #include <fmt/ostream.h>
 #include <gsl/gsl>
@@ -13,7 +14,6 @@
 #include <deque>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <thread>
 #include <vector>
 
@@ -72,9 +72,9 @@ public:
     static void on_thread_exit();
 
 private:
-    std::optional<Gl_vertex_array> m_gl_vertex_array;
-    std::thread::id                m_owner_thread;
-    Vertex_input_state_data        m_data;
+    nonstd::optional<Gl_vertex_array> m_gl_vertex_array;
+    std::thread::id                   m_owner_thread;
+    Vertex_input_state_data           m_data;
 
     static std::mutex                       s_mutex;
     static std::vector<Vertex_input_state*> s_all_vertex_input_states;

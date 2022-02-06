@@ -196,10 +196,10 @@ namespace
 {
     switch (light_type)
     {
-        using enum Light::Type;
-        case directional: return 0;
-        case point:       return 1;
-        case spot:        return 2;
+        //using enum erhe::scene::Light_type;
+        case erhe::scene::Light_type::directional: return 0;
+        case erhe::scene::Light_type::point:       return 1;
+        case erhe::scene::Light_type::spot:        return 2;
         default: return 3;
     }
 }

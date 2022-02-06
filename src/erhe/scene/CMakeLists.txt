@@ -34,6 +34,7 @@ target_link_libraries(
     Microsoft.GSL::GSL
     PUBLIC
     erhe_primitive
+    optional_lite
     glm::glm
 )
 

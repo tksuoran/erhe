@@ -1,14 +1,14 @@
 #pragma once
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/scene/viewport.hpp"
+#include "erhe/toolkit/optional.hpp"
 #include "erhe/toolkit/view.hpp"
 
 #include <glm/glm.hpp>
 
 #include <array>
 #include <memory>
-#include <optional>
 #include <string_view>
 
 namespace erhe::geometry
@@ -76,13 +76,13 @@ public:
 
     void raytrace();
 
-    [[nodiscard]] auto position_in_viewport_window() const -> std::optional<glm::vec3>;
-    [[nodiscard]] auto position_in_world          () const -> std::optional<glm::vec3>;
-    [[nodiscard]] auto position_in_world          (const double viewport_depth) const -> std::optional<glm::dvec3>;
-    [[nodiscard]] auto near_position_in_world     () const -> std::optional<glm::vec3>;
-    [[nodiscard]] auto far_position_in_world      () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto position_in_viewport_window() const -> nonstd::optional<glm::vec3>;
+    [[nodiscard]] auto position_in_world          () const -> nonstd::optional<glm::vec3>;
+    [[nodiscard]] auto position_in_world          (const double viewport_depth) const -> nonstd::optional<glm::dvec3>;
+    [[nodiscard]] auto near_position_in_world     () const -> nonstd::optional<glm::vec3>;
+    [[nodiscard]] auto far_position_in_world      () const -> nonstd::optional<glm::vec3>;
     [[nodiscard]] auto raytrace_node              () const -> Node_raytrace*;
-    [[nodiscard]] auto raytrace_hit_position      () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto raytrace_hit_position      () const -> nonstd::optional<glm::vec3>;
     [[nodiscard]] auto pointer_in_content_area    () const -> bool;
     [[nodiscard]] auto shift_key_down             () const -> bool;
     [[nodiscard]] auto control_key_down           () const -> bool;
@@ -94,7 +94,7 @@ public:
     [[nodiscard]] auto hovering_over_tool         () const -> bool;
     [[nodiscard]] auto hovering_over_content      () const -> bool;
     [[nodiscard]] auto hovering_over_gui          () const -> bool;
-    [[nodiscard]] auto hover_normal               () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto hover_normal               () const -> nonstd::optional<glm::vec3>;
     [[nodiscard]] auto hover_mesh                 () const -> std::shared_ptr<erhe::scene::Mesh>;
     [[nodiscard]] auto hover_primitive            () const -> size_t;
     [[nodiscard]] auto hover_local_index          () const -> size_t;
@@ -117,10 +117,10 @@ private:
     std::shared_ptr<Scene_root>        m_scene_root;
     std::shared_ptr<Viewport_windows>  m_viewport_windows;
 
-    std::optional<glm::vec3>           m_position_in_window;
-    std::optional<glm::vec3>           m_position_in_world;
-    std::optional<glm::vec3>           m_near_position_in_world;
-    std::optional<glm::vec3>           m_far_position_in_world;
+    nonstd::optional<glm::vec3>        m_position_in_window;
+    nonstd::optional<glm::vec3>        m_position_in_world;
+    nonstd::optional<glm::vec3>        m_near_position_in_world;
+    nonstd::optional<glm::vec3>        m_far_position_in_world;
     bool                               m_shift               {false};
     bool                               m_control             {false};
     bool                               m_alt                 {false};
@@ -135,7 +135,7 @@ private:
 
     bool                               m_hover_valid         {false};
     std::shared_ptr<erhe::scene::Mesh> m_hover_mesh;
-    std::optional<glm::vec3>           m_hover_normal;
+    nonstd::optional<glm::vec3>        m_hover_normal;
     const erhe::scene::Mesh_layer*     m_hover_layer          {nullptr};
     size_t                             m_hover_primitive      {0};
     size_t                             m_hover_local_index    {0};
@@ -146,7 +146,7 @@ private:
 
     uint64_t                           m_frame_number         {0};
 
-    std::optional<glm::vec3>           m_raytrace_hit_position;
+    nonstd::optional<glm::vec3>        m_raytrace_hit_position;
     glm::vec3                          m_raytrace_hit_normal  {0.0f};
     Node_raytrace*                     m_raytrace_node        {nullptr};
     //size_t                             m_raytrace_primitive   {0};

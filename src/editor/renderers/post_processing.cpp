@@ -58,11 +58,11 @@ void Post_processing::initialize_component()
     m_reserved1_offset      = m_parameter_block->add_float("reserver1"         )->offset_in_parent();
     m_source_texture_offset = m_parameter_block->add_uvec2("source_texture", 32)->offset_in_parent();
 
-    const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
-    const std::filesystem::path vs_path         = shader_path / std::filesystem::path("post_processing.vert");
-    const std::filesystem::path x_fs_path       = shader_path / std::filesystem::path("downsample_x.frag");
-    const std::filesystem::path y_fs_path       = shader_path / std::filesystem::path("downsample_y.frag");
-    const std::filesystem::path compose_fs_path = shader_path / std::filesystem::path("compose.frag");
+    const auto shader_path = fs::path("res") / fs::path("shaders");
+    const fs::path vs_path         = shader_path / fs::path("post_processing.vert");
+    const fs::path x_fs_path       = shader_path / fs::path("downsample_x.frag");
+    const fs::path y_fs_path       = shader_path / fs::path("downsample_y.frag");
+    const fs::path compose_fs_path = shader_path / fs::path("compose.frag");
     Shader_stages::Create_info x_create_info{
         .name             = "downsample_x",
         .fragment_outputs = &m_fragment_outputs,
@@ -149,8 +149,8 @@ Rendertarget::Rendertarget(
     texture = std::make_shared<Texture>(
         Texture::Create_info{
             .target          = gl::Texture_target::texture_2d,
-            //.internal_format = gl::Internal_format::rgba16f,
-            .internal_format = gl::Internal_format::rgba32f,
+            .internal_format = gl::Internal_format::rgba16f,
+            //.internal_format = gl::Internal_format::rgba32f,
             .sample_count    = 0,
             .width           = width,
             .height          = height
@@ -328,9 +328,9 @@ void Post_processing::post_process(
 }
 
 void Post_processing::downsample(
-    const erhe::graphics::Texture* source_texture,
-    Rendertarget&                  rendertarget,
-    const auto&                    pipeline
+    const erhe::graphics::Texture*  source_texture,
+    Rendertarget&                   rendertarget,
+    const erhe::graphics::Pipeline& pipeline
 )
 {
     auto& parameter_buffer   = current_frame_resources().parameter_buffer;
@@ -450,6 +450,15 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
     gl::draw_arrays     (pipeline.data.input_assembly.primitive_topology, 0, 4);
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
 
+    {
+        const uint64_t handle = erhe::graphics::get_handle(
+            *source_texture,
+            *m_programs->linear_sampler.get()
+        );
+
+        gl::make_texture_handle_non_resident_arb(handle);
+    }
+
     for (
         size_t i = 1, end = std::min(m_rendertargets.size(), size_t{32});
         i < end;
@@ -462,7 +471,7 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
             *m_programs->linear_sampler.get()
         );
 
-        gl::make_texture_handle_non_resident_arb (handle);
+        gl::make_texture_handle_non_resident_arb(handle);
     }
 }
 

@@ -3,14 +3,14 @@
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
+#include "erhe/toolkit/optional.hpp"
 
 #include <glm/glm.hpp>
 #include <miniaudio.h>
 
 #include <chrono>
 #include <memory>
-#include <optional>
 
 namespace erhe::scene {
     class Mesh;
@@ -87,23 +87,23 @@ private:
     std::shared_ptr<Headset_renderer > m_headset_renderer;
     std::shared_ptr<Line_renderer_set> m_line_renderer_set;
 
-    bool                 m_enable_audio          {false};   // master on/off switch
-    float                m_antenna_distance      {0.0f};   // closest point of right hand to the frequency antenna
-    float                m_antenna_distance_scale{100.0f}; // adjusts right hand antenna distance scaling
-    std::optional<float> m_left_finger_distance;           // left hand distance between thumb and index finger tips
-    std::optional<float> m_right_finger_distance;          // right hand distance between thumb and index finger tips
-    float                m_finger_distance_min  {1.0f};    // minimum distance for thumb and index finger tips
-    float                m_finger_distance_max  {7.0f};    // maximum distance for thumb and index finger tips
-    float                m_volume               {1.0f};
-    float                m_frequency            {440.0f};
-    bool                 m_snap_to_note         {true}; // snap frequency to nearest note
-    float                m_phase                {0.0f};
-    bool                 m_audio_ok             {false};
-    ma_device_config     m_audio_config;
-    ma_device            m_audio_device;
-    std::vector<float>   m_wavetable; // for visualization
+    bool                    m_enable_audio          {false};   // master on/off switch
+    float                   m_antenna_distance      {0.0f};   // closest point of right hand to the frequency antenna
+    float                   m_antenna_distance_scale{100.0f}; // adjusts right hand antenna distance scaling
+    nonstd::optional<float> m_left_finger_distance;           // left hand distance between thumb and index finger tips
+    nonstd::optional<float> m_right_finger_distance;          // right hand distance between thumb and index finger tips
+    float                   m_finger_distance_min  {1.0f};    // minimum distance for thumb and index finger tips
+    float                   m_finger_distance_max  {7.0f};    // maximum distance for thumb and index finger tips
+    float                   m_volume               {1.0f};
+    float                   m_frequency            {440.0f};
+    bool                    m_snap_to_note         {true}; // snap frequency to nearest note
+    float                   m_phase                {0.0f};
+    bool                    m_audio_ok             {false};
+    ma_device_config        m_audio_config;
+    ma_device               m_audio_device;
+    std::vector<float>      m_wavetable; // for visualization
 
-    std::optional<
+    nonstd::optional<
         std::chrono::steady_clock::time_point
     >                    m_right_hold_start_time;
     bool                 m_right_click{false};

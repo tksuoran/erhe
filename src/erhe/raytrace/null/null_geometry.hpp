@@ -4,6 +4,8 @@
 
 #include <glm/glm.hpp>
 
+#include <string>
+
 namespace erhe::raytrace
 {
 

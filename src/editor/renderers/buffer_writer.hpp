@@ -4,7 +4,7 @@
 #include "renderers/frame_resources.hpp"
 #include "renderers/light_mesh.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/graphics/configuration.hpp"
 
@@ -71,13 +71,13 @@ public:
     {
         switch (buffer_target)
         {
-            using enum gl::Buffer_target;
-            case shader_storage_buffer:
+            //using enum gl::Buffer_target;
+            case gl::Buffer_target::shader_storage_buffer:
             {
                 shader_storage_align();
                 break;
             }
-            case uniform_buffer:
+            case gl::Buffer_target::uniform_buffer:
             {
                 uniform_align();
                 break;

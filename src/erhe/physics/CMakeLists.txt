@@ -77,6 +77,7 @@ target_link_libraries(
     erhe_primitive
     fmt::fmt
     glm::glm
+    optional_lite
     Microsoft.GSL::GSL
 )
 

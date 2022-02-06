@@ -5,15 +5,15 @@
 #include "tools/selection_tool.hpp"
 #include "windows/imgui_window.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/toolkit/optional.hpp"
 
 #include <glm/glm.hpp>
 
 #include <array>
 #include <map>
 #include <memory>
-#include <optional>
 #include <string_view>
 
 namespace erhe::physics
@@ -182,13 +182,13 @@ private:
     class Rotation_context
     {
     public:
-        glm::dvec3                normal              {0.0}; // also rotation axis
-        glm::dvec3                reference_direction {0.0};
-        glm::dvec3                center_of_rotation  {0.0};
-        std::optional<glm::dvec3> intersection;
-        double                    start_rotation_angle{0.0};
-        double                    current_angle       {0.0};
-        erhe::scene::Transform    world_from_node;
+        glm::dvec3                   normal              {0.0}; // also rotation axis
+        glm::dvec3                   reference_direction {0.0};
+        glm::dvec3                   center_of_rotation  {0.0};
+        nonstd::optional<glm::dvec3> intersection;
+        double                       start_rotation_angle{0.0};
+        double                       current_angle       {0.0};
+        erhe::scene::Transform       world_from_node;
     };
 
     class Visualization
@@ -235,7 +235,7 @@ private:
         std::shared_ptr<erhe::scene::Mesh>         z_rotate_ring_mesh;
     };
 
-    [[nodiscard]] auto project_pointer_to_plane(const glm::dvec3 n, const glm::dvec3 p) -> std::optional<glm::dvec3>;
+    [[nodiscard]] auto project_pointer_to_plane(const glm::dvec3 n, const glm::dvec3 p) -> nonstd::optional<glm::dvec3>;
     [[nodiscard]] auto root                    () -> erhe::scene::Node*;
     [[nodiscard]] auto snap_translate          (const glm::dvec3 translation) const -> glm::dvec3;
     [[nodiscard]] auto snap_rotate             (const double angle_radians) const -> double;
@@ -276,22 +276,22 @@ private:
     std::shared_ptr<Selection_tool>            m_selection_tool;
     std::shared_ptr<Text_renderer>             m_text_renderer;
 
-    bool                                       m_local          {true};
-    bool                                       m_touched        {false};
-    Handle                                     m_active_handle  {Handle::e_handle_none};
-    std::optional<Selection_tool::Subcription> m_selection_subscription;
-    std::map<erhe::scene::Mesh*, Handle>       m_handles;
-    std::shared_ptr<erhe::scene::Node>         m_target_node;
-    std::shared_ptr<Node_physics>              m_node_physics;
-    std::shared_ptr<erhe::scene::Node>         m_tool_node;
-    std::optional<erhe::physics::Motion_mode>  m_original_motion_mode;
-    bool                                       m_translate_snap_enable{false};
-    bool                                       m_rotate_snap_enable   {false};
-    int                                        m_translate_snap_index {2};
-    float                                      m_translate_snap       {0.1f};
-    int                                        m_rotate_snap_index    {2};
-    float                                      m_rotate_snap          {15.0f};
-    erhe::scene::Transform                     m_parent_from_node_before;
+    bool                                          m_local          {true};
+    bool                                          m_touched        {false};
+    Handle                                        m_active_handle  {Handle::e_handle_none};
+    nonstd::optional<Selection_tool::Subcription> m_selection_subscription;
+    std::map<erhe::scene::Mesh*, Handle>          m_handles;
+    std::shared_ptr<erhe::scene::Node>            m_target_node;
+    std::shared_ptr<Node_physics>                 m_node_physics;
+    std::shared_ptr<erhe::scene::Node>            m_tool_node;
+    nonstd::optional<erhe::physics::Motion_mode>  m_original_motion_mode;
+    bool                                          m_translate_snap_enable{false};
+    bool                                          m_rotate_snap_enable   {false};
+    int                                           m_translate_snap_index {2};
+    float                                         m_translate_snap       {0.1f};
+    int                                           m_rotate_snap_index    {2};
+    float                                         m_rotate_snap          {15.0f};
+    erhe::scene::Transform                        m_parent_from_node_before;
 
     Debug_rendering  m_debug_rendering;
     Drag             m_drag;

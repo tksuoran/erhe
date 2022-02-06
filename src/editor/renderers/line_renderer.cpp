@@ -138,10 +138,10 @@ void Line_renderer_pipeline::initialize(Shader_monitor* shader_monitor)
     viewport_offset               = view_block->add_vec4("viewport"              )->offset_in_parent();
     fov_offset                    = view_block->add_vec4("fov"                   )->offset_in_parent();
 
-    const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
-    const std::filesystem::path vs_path = shader_path / std::filesystem::path("line.vert");
-    const std::filesystem::path gs_path = shader_path / std::filesystem::path("line.geom");
-    const std::filesystem::path fs_path = shader_path / std::filesystem::path("line.frag");
+    const auto shader_path = fs::path("res") / fs::path("shaders");
+    const fs::path vs_path = shader_path / fs::path("line.vert");
+    const fs::path gs_path = shader_path / fs::path("line.geom");
+    const fs::path fs_path = shader_path / fs::path("line.frag");
     Shader_stages::Create_info create_info{
         .name                      = "line",
         .vertex_attribute_mappings = &attribute_mappings,

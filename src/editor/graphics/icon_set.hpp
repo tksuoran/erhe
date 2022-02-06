@@ -1,11 +1,11 @@
 #pragma once
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 
 #include <imgui.h>
 #include <glm/glm.hpp>
 
-#include <filesystem>
+#include "erhe/toolkit/filesystem.hpp"
 
 namespace erhe::graphics
 {
@@ -44,7 +44,7 @@ public:
     void connect             () override;
     void initialize_component() override;
 
-    [[nodiscard]] auto load    (const std::filesystem::path& path) -> ImVec2;
+    [[nodiscard]] auto load    (const fs::path& path) -> ImVec2;
     [[nodiscard]] auto uv1     (const ImVec2& uv0) const -> ImVec2;
     [[nodiscard]] auto get_icon(const erhe::scene::Light_type type) const -> const ImVec2;
     //void               icon    (const ImVec2 uv0, const glm::vec4 tint_color = glm::vec4{1.0f}) const;

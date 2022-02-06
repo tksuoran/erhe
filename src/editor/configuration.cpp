@@ -17,6 +17,15 @@ auto str(const bool value) -> const char*
 
 Configuration::Configuration(int argc, char** argv)
     : erhe::components::Component{c_name}
+    , viewports_hosted_in_imgui_windows{true}
+    , openxr                           {false}
+    , show_window                      {true}
+    , parallel_initialization          {false}
+    , reverse_depth                    {true}
+    , fullscreen                       {false}
+    , window_width                     {1920}
+    , window_height                    {1080}
+    , window_msaa_sample_count         {0}
 {
     cxxopts::Options options("Editor", "Erhe Editor (C) 2021 Timo Suoranta");
 

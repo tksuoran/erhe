@@ -1,8 +1,9 @@
 #pragma once
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 
 #include "erhe/graphics/buffer.hpp"
+#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
@@ -13,17 +14,16 @@
 #include "erhe/graphics/state/rasterization_state.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/graphics/pipeline.hpp"
+#include "erhe/toolkit/optional.hpp"
 
 #include <imgui.h>
 
 #include <deque>
 #include <memory>
-#include <optional>
 #include <string_view>
 #include <vector>
 
 namespace erhe::graphics {
-    class Gpu_timer;
     class OpenGL_state_tracker;
     class Sampler;
     class Shader_stages;
@@ -143,10 +143,6 @@ private:
     size_t                                                m_u_texture_offset     {0};
     size_t                                                m_u_extra_offset       {0};
     erhe::graphics::Fragment_outputs                      m_fragment_outputs;
-    size_t                                                m_vertex_offset        {0};
-    size_t                                                m_index_offset         {0};
-    size_t                                                m_draw_parameter_offset{0};
-    size_t                                                m_draw_indirect_offset {0};
     std::vector<std::shared_ptr<erhe::graphics::Texture>> m_used_textures;
     std::vector<uint64_t>                                 m_used_texture_handles;
 

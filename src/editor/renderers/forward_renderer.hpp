@@ -3,7 +3,7 @@
 #include "renderers/base_renderer.hpp"
 #include "renderers/renderpass.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/primitive/primitive.hpp"
 

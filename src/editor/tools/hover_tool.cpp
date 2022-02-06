@@ -88,8 +88,8 @@ auto Hover_tool::try_call() -> bool
 {
     m_hover_content        = m_pointer_context->hovering_over_content();
     m_hover_tool           = m_pointer_context->hovering_over_tool();
-    m_hover_position_world = m_hover_content ? m_pointer_context->position_in_world() : std::optional<vec3>{};
-    m_hover_normal         = m_hover_content ? m_pointer_context->hover_normal()      : std::optional<vec3>{};
+    m_hover_position_world = m_hover_content ? m_pointer_context->position_in_world() : nonstd::optional<vec3>{};
+    m_hover_normal         = m_hover_content ? m_pointer_context->hover_normal()      : nonstd::optional<vec3>{};
     if (
         (m_pointer_context->hover_mesh()      != m_hover_mesh) ||
         (m_pointer_context->hover_primitive() != m_hover_primitive_index)

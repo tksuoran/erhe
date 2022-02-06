@@ -351,17 +351,17 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
     m_frame_number = get<Editor_time>()->frame_number();
 }
 
-auto Pointer_context::position_in_world() const -> std::optional<glm::vec3>
+auto Pointer_context::position_in_world() const -> nonstd::optional<glm::vec3>
 {
     return m_position_in_world;
 }
 
-auto Pointer_context::near_position_in_world() const -> std::optional<glm::vec3>
+auto Pointer_context::near_position_in_world() const -> nonstd::optional<glm::vec3>
 {
     return m_near_position_in_world;
 }
 
-auto Pointer_context::far_position_in_world() const -> std::optional<glm::vec3>
+auto Pointer_context::far_position_in_world() const -> nonstd::optional<glm::vec3>
 {
     return m_far_position_in_world;
 }
@@ -371,12 +371,12 @@ auto Pointer_context::raytrace_node() const -> Node_raytrace*
     return m_raytrace_node;
 }
 
-auto Pointer_context::raytrace_hit_position() const -> std::optional<glm::vec3>
+auto Pointer_context::raytrace_hit_position() const -> nonstd::optional<glm::vec3>
 {
     return m_raytrace_hit_position;
 }
 
-auto Pointer_context::position_in_world(const double viewport_depth) const -> std::optional<glm::dvec3>
+auto Pointer_context::position_in_world(const double viewport_depth) const -> nonstd::optional<glm::dvec3>
 {
     if (!m_position_in_window.has_value())
     {
@@ -469,7 +469,7 @@ auto Pointer_context::hovering_over_gui() const -> bool
     return m_hover_valid && m_hover_gui;
 }
 
-auto Pointer_context::hover_normal() const -> std::optional<glm::vec3>
+auto Pointer_context::hover_normal() const -> nonstd::optional<glm::vec3>
 {
     return m_hover_normal;
 }
@@ -504,7 +504,7 @@ auto Pointer_context::last_window() const -> Viewport_window*
     return m_last_window;
 }
 
-auto Pointer_context::position_in_viewport_window() const -> std::optional<glm::vec3>
+auto Pointer_context::position_in_viewport_window() const -> nonstd::optional<glm::vec3>
 {
     return m_position_in_window;
 }

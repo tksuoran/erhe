@@ -201,11 +201,14 @@ void Geometry::sort_point_corners()
             const Corner& prev_corner = corners[prev_corner_id];
             const Corner& next_corner = corners[next_corner_id];
 
-            point_corner_infos.emplace_back(
-                j.point_corner_id,
-                middle_corner_id,
-                prev_corner.point_id,
-                next_corner.point_id
+            point_corner_infos.push_back(
+                {
+                    .point_corner_id = j.point_corner_id,
+                    .corner_id       = middle_corner_id,
+                    .prev_point_id   = prev_corner.point_id,
+                    .next_point_id   = next_corner.point_id,
+                    .used            = false
+                }
             );
         });
 

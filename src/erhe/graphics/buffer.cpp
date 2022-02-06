@@ -4,6 +4,8 @@
 
 #include <fmt/format.h>
 
+#include <vector>
+
 namespace erhe::graphics
 {
 

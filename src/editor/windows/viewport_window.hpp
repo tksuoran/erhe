@@ -3,7 +3,7 @@
 #include "windows/imgui_window.hpp"
 #include "windows/viewport_config.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/viewport.hpp"
 
@@ -61,7 +61,7 @@ public:
 
     [[nodiscard]] auto to_scene_content    (const glm::vec2 position_in_root) const -> glm::vec2;
     [[nodiscard]] auto project_to_viewport (const glm::dvec3 position_in_world) const -> glm::dvec3;
-    [[nodiscard]] auto unproject_to_world  (const glm::dvec3 position_in_window) const -> std::optional<glm::dvec3>;
+    [[nodiscard]] auto unproject_to_world  (const glm::dvec3 position_in_window) const -> nonstd::optional<glm::dvec3>;
     [[nodiscard]] auto is_framebuffer_ready() const -> bool;
     [[nodiscard]] auto content_region_size () const -> glm::ivec2;
     [[nodiscard]] auto is_hovered          () const -> bool;
@@ -74,8 +74,6 @@ private:
     void update_framebuffer();
 
     void clear(erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker) const;
-
-    static constexpr int                          s_sample_count{16};
 
     std::string                                   m_name;
 

@@ -84,18 +84,18 @@ auto Light_mesh::get_light_transform(const erhe::scene::Light& light) -> glm::ma
 {
     switch (light.type)
     {
-        using enum erhe::scene::Light::Type;
-        case directional:
+        //using enum erhe::scene::Light_type;
+        case erhe::scene::Light_type::directional:
         {
             return mat4{1.0f};
         }
 
-        case point:
+        case erhe::scene::Light_type::point:
         {
             return mat4{1.0f};
         }
 
-        case spot:
+        case erhe::scene::Light_type::spot:
         {
             //           Side:                     Bottom:              .
             //             .                    ______________          .
@@ -163,18 +163,18 @@ auto Light_mesh::get_light_mesh(
 {
     switch (light.type)
     {
-        using enum erhe::scene::Light::Type;
-        case directional:
+        //using enum erhe::scene::Light_type;
+        case erhe::scene::Light_type::directional:
         {
             return &m_quad_mesh;
         }
 
-        case point:
+        case erhe::scene::Light_type::point:
         {
             return nullptr;
         }
 
-        case spot:
+        case erhe::scene::Light_type::spot:
         {
             return &m_cone_mesh;
         }

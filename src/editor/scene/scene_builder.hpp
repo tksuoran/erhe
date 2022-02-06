@@ -4,7 +4,7 @@
 #include "scene/frame_controller.hpp"
 #include "windows/brushes.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 
 #include <memory>
 #include <mutex>

@@ -1,10 +1,10 @@
 #pragma once
 
 #include "erhe/geometry/geometry.hpp"
+#include "erhe/toolkit/filesystem.hpp"
 
 #include <nlohmann/json.hpp>
 
-#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -24,7 +24,7 @@ public:
         std::vector<std::string> key_names;
     };
 
-    explicit Json_library(const std::filesystem::path& path);
+    explicit Json_library(const fs::path& path);
 
     [[nodiscard]] auto make_geometry(
         const std::string& key_name
@@ -38,8 +38,8 @@ private:
 };
 
 auto make_json_polyhedron(
-    const std::filesystem::path& path,
-    const std::string&           entry
+    const fs::path&    path,
+    const std::string& entry
 ) -> erhe::geometry::Geometry;
 
 }

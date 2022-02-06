@@ -1,3 +1,5 @@
+// https://github.com/Cyan4973/xxHash/issues/496#issuecomment-772434891
+
 // C++20 Compile-time XXH32()
 //
 // g++-10 (10.2.0)          g++-10 -std=c++20 -DINCLUDE_XXHASH ./cxx20_ct_xxhash.cpp
@@ -7,14 +9,22 @@
 // Result at Compiler Explorer
 // https://godbolt.org/z/bGv7Mh
 
-#include <stdio.h>  // printf()
-#include <stdint.h> // uint8_t, uint32_t
-#include <bit>      // std::rotl() ( https://en.cppreference.com/w/cpp/numeric/rotl )
+#include <cstdio>  // printf()
+#include <cstdint> // uint8_t, uint32_t
+#include <limits.h>
+#include <limits>
+//#include <bit>      // std::rotl() ( https://en.cppreference.com/w/cpp/numeric/rotl )
 
 // "private" utility functions
 namespace compiletime_xxhash::detail {
-    constexpr uint32_t rotl(uint32_t v, int x) {
-        return std::rotl(v, x);
+
+    constexpr std::uint32_t rotl(std::uint32_t n, unsigned int c)
+    {
+        const unsigned int mask = (CHAR_BIT * sizeof(n) - 1);  // assumes width is a power of 2.
+
+        // assert ( (c<=mask) &&"rotate by type width or more");
+        c &= mask;
+        return (n << c) | (n >> ((-c) & mask));
     }
 
     constexpr uint8_t read_u8(const char* input, int pos) {

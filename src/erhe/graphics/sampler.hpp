@@ -36,9 +36,9 @@ public:
     gl::Texture_mag_filter               mag_filter    {gl::Texture_mag_filter::nearest};
 
     std::array<gl::Texture_wrap_mode, 3> wrap_mode{
-        gl::Texture_wrap_mode::clamp_to_edge,
-        gl::Texture_wrap_mode::clamp_to_edge,
-        gl::Texture_wrap_mode::clamp_to_edge
+        gl::Texture_wrap_mode::clamp_to_border,
+        gl::Texture_wrap_mode::clamp_to_border,
+        gl::Texture_wrap_mode::clamp_to_border
     };
     gl::Texture_compare_mode             compare_mode  {gl::Texture_compare_mode::none};
     gl::Texture_compare_func             compare_func  {gl::Texture_compare_func::lequal};

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/graphics/gl_objects.hpp"
 
 #include <gsl/span>

@@ -37,10 +37,10 @@ void Materials::initialize_component()
     {
         auto m = m_scene_root->make_material(
             "Default Material",
-            glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-            0.50f,
+            glm::vec4{0.5f, 0.5f, 0.5f, 1.0f},
+            0.02f,
             0.00f,
-            0.50f
+            0.97f
         );
         m->visible = true;
     }
@@ -50,15 +50,15 @@ void Materials::initialize_component()
         const float rel        = static_cast<float>(i) / static_cast<float>(end);
         const float hue        = rel * 360.0f;
         const float saturation = 0.9f;
-        const float value      = 1.0f;
+        const float value      = 0.5f;
         float R, G, B;
         erhe::toolkit::hsv_to_rgb(hue, saturation, value, R, G, B);
         auto m = m_scene_root->make_material(
             fmt::format("Hue {}", static_cast<int>(hue)),
             glm::vec4{R, G, B, 1.0f},
-            0.444f,
-            0.95f,
-            0.70f
+            0.02f,
+            0.00f,
+            0.97f
         );
         m->visible = true;
     }

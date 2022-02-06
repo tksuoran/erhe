@@ -64,8 +64,6 @@ Rendertarget_imgui_windows::Rendertarget_imgui_windows(
     , m_pointer_context       {components.get<Pointer_context>()}
     , m_name                  {name}
     , m_mesh_layer            {"GUI Layer", erhe::scene::Node::c_visibility_gui}
-    , m_width                 {width}
-    , m_height                {height}
     , m_dots_per_meter        {dots_per_meter}
 {
     init_rendertarget(width, height);
@@ -589,12 +587,16 @@ void Editor_imgui_windows::destroy_rendertarget(
     const std::shared_ptr<Rendertarget_imgui_windows>& rendertarget
 )
 {
-    std::erase_if(
-        m_rendertarget_imgui_windows,
-        [&rendertarget](const auto& entry)
-        {
-            return entry == rendertarget;
-        }
+    m_rendertarget_imgui_windows.erase(
+        std::remove_if(
+            m_rendertarget_imgui_windows.begin(),
+            m_rendertarget_imgui_windows.end(),
+            [&rendertarget](const auto& entry)
+            {
+                return entry == rendertarget;
+            }
+        ),
+        m_rendertarget_imgui_windows.end()
     );
 }
 

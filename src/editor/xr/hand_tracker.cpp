@@ -138,14 +138,14 @@ auto Hand::get_closest_point_to_line(
     const glm::mat4 transform,
     const glm::vec3 p0,
     const glm::vec3 p1
-) const -> std::optional<Closest_finger>
+) const -> nonstd::optional<Closest_finger>
 {
     if (!m_is_active)
     {
         return {};
     }
 
-    std::optional<Closest_finger> result;
+    nonstd::optional<Closest_finger> result;
     float min_distance = std::numeric_limits<float>::max();
     for (size_t i = 0; i < XR_HAND_JOINT_COUNT_EXT; ++i)
     {
@@ -184,7 +184,7 @@ auto Hand::get_closest_point_to_line(
 auto Hand::distance(
     const XrHandJointEXT lhs,
     const XrHandJointEXT rhs
-) const -> std::optional<float>
+) const -> nonstd::optional<float>
 {
     const auto lhs_joint = static_cast<XrHandJointEXT>(lhs);
     const auto rhs_joint = static_cast<XrHandJointEXT>(rhs);
@@ -353,9 +353,9 @@ auto Hand_tracker::get_hand(const Hand_name hand_name) -> Hand&
 {
     switch (hand_name)
     {
-        using enum Hand_name;
-        case Left: return m_left_hand;
-        case Right: return m_right_hand;
+        //using enum Hand_name;
+        case Hand_name::Left:  return m_left_hand;
+        case Hand_name::Right: return m_right_hand;
         default: ERHE_FATAL("bad hand name %x", static_cast<unsigned int>(hand_name));
     }
 }

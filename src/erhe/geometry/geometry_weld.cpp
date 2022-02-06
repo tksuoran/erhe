@@ -882,11 +882,11 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 if ((attribute_maps.bitangents != nullptr) && attribute_maps.bitangents->has(old_id)) bitangent = attribute_maps.bitangents->get(old_id);
                 if ((attribute_maps.texcoords  != nullptr) && attribute_maps.texcoords ->has(old_id)) texcoord  = attribute_maps.texcoords ->get(old_id);
             }
-            std::optional<vec3> position;
-            std::optional<vec3> normal;
-            std::optional<vec3> tangent;
-            std::optional<vec3> bitangent;
-            std::optional<vec2> texcoord;
+            nonstd::optional<vec3> position;
+            nonstd::optional<vec3> normal;
+            nonstd::optional<vec3> tangent;
+            nonstd::optional<vec3> bitangent;
+            nonstd::optional<vec2> texcoord;
         };
 
         for (Point_id primary_new_id = 0; primary_new_id < m_next_point_id; ++primary_new_id)

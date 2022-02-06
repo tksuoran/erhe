@@ -86,7 +86,6 @@ public:
     void execute(const Color_blend_state& state) noexcept;
 
 private:
-    size_t            m_last{0};
     Color_blend_state m_cache;
 };
 

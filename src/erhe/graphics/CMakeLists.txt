@@ -84,7 +84,9 @@ target_link_libraries(${_target}
         erhe_gl
         erhe_log
         fmt::fmt
+        ghc_filesystem
         glm::glm
+        optional_lite
         Microsoft.GSL::GSL
 )
 

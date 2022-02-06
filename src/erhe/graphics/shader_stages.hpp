@@ -2,10 +2,10 @@
 
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/gl_objects.hpp"
+#include "erhe/toolkit/filesystem.hpp"
+#include "erhe/toolkit/optional.hpp"
 
-#include <filesystem>
 #include <map>
-#include <optional>
 
 namespace erhe::graphics
 {
@@ -38,16 +38,16 @@ public:
 
             Shader_stage(
                 const gl::Shader_type type,
-                const std::filesystem::path path
+                const fs::path        path
             )
                 : type{type}
                 , path{path}
             {
             }
 
-            gl::Shader_type       type;
-            std::string           source;
-            std::filesystem::path path;
+            gl::Shader_type type;
+            std::string     source;
+            fs::path        path;
         };
 
         // Adds #version, #extensions, #defines, fragment outputs, uniform blocks, samplers,
@@ -92,7 +92,7 @@ public:
         [[nodiscard]] static auto try_compile_shader(
             const Shader_stages::Create_info&               create_info,
             const Shader_stages::Create_info::Shader_stage& shader
-        ) -> std::optional<Gl_shader>;
+        ) -> nonstd::optional<Gl_shader>;
 
         friend class Shader_stages;
 

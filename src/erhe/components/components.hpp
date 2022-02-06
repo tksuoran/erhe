@@ -1,11 +1,16 @@
 #pragma once
 
+#include "erhe/toolkit/optional.hpp"
+#include "erhe/toolkit/verify.hpp"
+#include "erhe/toolkit/xxhash.hpp"
+
 #include <condition_variable>
 #include <functional>
 #include <mutex>
 #include <memory>
-#include <optional>
 #include <set>
+#include <string_view>
+#include <vector>
 
 namespace mango {
 
@@ -15,6 +20,94 @@ class ConcurrentQueue;
 
 namespace erhe::components
 {
+
+class Components;
+
+class Time_context
+{
+public:
+    double   dt;
+    double   time;
+    uint64_t frame_number;
+};
+
+class IUpdate_fixed_step
+{
+public:
+    virtual void update_fixed_step(const Time_context&) = 0;
+};
+
+class IUpdate_once_per_frame
+{
+public:
+    virtual void update_once_per_frame(const Time_context&) = 0;
+};
+
+enum class Component_state : unsigned int
+{
+    Constructed,
+    Connected,
+    Initializing,
+    Ready,
+    Deinitializing,
+    Deinitialized
+};
+
+auto c_str(const Component_state state) -> const char*;
+
+
+class Component
+{
+protected:
+    Component     (const Component&) = delete;
+    Component     (Component&&)      = delete;
+    void operator=(const Component&) = delete;
+    void operator=(Component&&)      = delete;
+
+    explicit Component(const std::string_view name);
+    virtual ~Component();
+
+public:
+    virtual void connect() {};
+
+    template<typename T>
+    [[nodiscard]] auto get() const -> std::shared_ptr<T>;
+
+    template<typename T>
+    auto require() -> std::shared_ptr<T>;
+
+    // Public interface
+    [[nodiscard]] virtual auto get_type_hash                  () const -> uint32_t = 0;
+    [[nodiscard]] virtual auto processing_requires_main_thread() const -> bool;
+    virtual void initialize_component() {}
+    virtual void on_thread_exit      () {}
+    virtual void on_thread_enter     () {}
+
+    // Public non-virtual API
+    [[nodiscard]] auto name                    () const -> std::string_view;
+    [[nodiscard]] auto get_state               () const -> Component_state;
+    [[nodiscard]] auto is_registered           () const -> bool;
+    [[nodiscard]] auto is_ready_to_initialize  (const bool in_worker_thread) const -> bool;
+    [[nodiscard]] auto is_ready_to_deinitialize() const -> bool;
+    [[nodiscard]] auto dependencies            () -> const std::vector<std::shared_ptr<Component>>&;
+    void register_as_component(Components* components);
+    void component_initialized(Component* component);
+    void depends_on           (const std::shared_ptr<Component>& dependency);
+    void set_connected        ();
+    void set_initializing     ();
+    void set_ready            ();
+    void set_deinitializing   ();
+
+protected:
+    Components* m_components{nullptr};
+
+private:
+    void unregister();
+
+    std::string_view                        m_name;
+    Component_state                         m_state{Component_state::Constructed};
+    std::vector<std::shared_ptr<Component>> m_dependencies;
+};
 
 /// Components is a collection of Components.
 /// Typically you have only one instance of Components in your application.
@@ -64,17 +157,7 @@ public:
     void update_once_per_frame                 (const Time_context& time_context);
 
     template<typename T>
-    [[nodiscard]] auto get() const -> std::shared_ptr<T>
-    {
-        for (const auto& component : m_components)
-        {
-            if (component->get_type_hash() == T::hash)
-            {
-                return dynamic_pointer_cast<T>(component);
-            }
-        }
-        return {};
-    }
+    [[nodiscard]] auto get() const -> std::shared_ptr<T>;
 
 private:
     [[nodiscard]] auto get_component_to_initialize(const bool in_worker_thread) -> Component*;
@@ -82,17 +165,54 @@ private:
     void initialize_component                (const bool in_worker_thread);
     void deitialize_component                (Component* component);
 
-    std::mutex                           m_mutex;
-    std::set<std::shared_ptr<Component>> m_components;
-    std::set<IUpdate_fixed_step    *>    m_fixed_step_updates;
-    std::set<IUpdate_once_per_frame*>    m_once_per_frame_updates;
-    bool                                 m_parallel_initialization{false};
-    bool                                 m_is_ready               {false};
-    std::condition_variable              m_component_processed;
-    std::set<Component*>                 m_components_to_process;
-    std::unique_ptr<IExecution_queue>    m_execution_queue;
-    size_t                               m_initialize_component_count_worker_thread{0};
-    size_t                               m_initialize_component_count_main_thread  {0};
+    std::mutex                              m_mutex;
+    std::vector<std::shared_ptr<Component>> m_components;
+    std::set<IUpdate_fixed_step    *>       m_fixed_step_updates;
+    std::set<IUpdate_once_per_frame*>       m_once_per_frame_updates;
+    bool                                    m_parallel_initialization{false};
+    bool                                    m_is_ready               {false};
+    std::condition_variable                 m_component_processed;
+    std::set<Component*>                    m_components_to_process;
+    std::unique_ptr<IExecution_queue>       m_execution_queue;
+    size_t                                  m_initialize_component_count_worker_thread{0};
+    size_t                                  m_initialize_component_count_main_thread  {0};
 };
+
+template<typename T>
+[[nodiscard]] auto Component::get() const -> std::shared_ptr<T>
+{
+    if (m_components == nullptr)
+    {
+        return nullptr;
+    }
+
+    return m_components->get<T>();
+}
+
+template<typename T>
+auto Component::require() -> std::shared_ptr<T>
+{
+    const auto component = get<T>();
+    //ERHE_VERIFY(component != nullptr);
+    if (component != nullptr)
+    {
+        depends_on(component);
+    }
+    return component;
+}
+
+template<typename T>
+[[nodiscard]] auto Components::get() const -> std::shared_ptr<T>
+{
+    for (const auto& component : m_components)
+    {
+        if (component->get_type_hash() == T::hash)
+        {
+            //return dynamic_pointer_cast<T>(component);
+            return std::dynamic_pointer_cast<T>(component);
+        }
+    }
+    return {};
+}
 
 } // namespace erhe::components

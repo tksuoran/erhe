@@ -2,10 +2,9 @@
 
 #include "command.hpp" // state
 #include "erhe/toolkit/view.hpp" // keycode
+#include "erhe/toolkit/optional.hpp"
 
 #include <glm/glm.hpp>
-
-#include <optional>
 
 namespace editor
 {

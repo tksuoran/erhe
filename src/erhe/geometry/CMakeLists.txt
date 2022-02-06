@@ -70,6 +70,7 @@ target_link_libraries(${_target}
         erhe_toolkit
         fmt::fmt
         glm::glm
+        optional_lite
         #gtmathematics
         Microsoft.GSL::GSL
         mikktspace

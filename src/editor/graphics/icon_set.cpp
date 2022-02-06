@@ -53,7 +53,7 @@ void Icon_set::initialize_component()
     m_icon_uv_width  = static_cast<float>(m_icon_width ) / static_cast<float>(texture->width());
     m_icon_uv_height = static_cast<float>(m_icon_height) / static_cast<float>(texture->height());
 
-    const auto icon_directory = std::filesystem::path("res") / "icons";
+    const auto icon_directory = fs::path("res") / "icons";
 
     icons.camera            = load(icon_directory / "camera.svg");
     icons.directional_light = load(icon_directory / "directional_light.svg");
@@ -64,12 +64,12 @@ void Icon_set::initialize_component()
 }
 
 auto Icon_set::load(
-    const std::filesystem::path& path
+    const fs::path& path
 ) -> ImVec2
 {
     Expects(m_row < m_row_count);
 
-    //const auto  current_path = std::filesystem::current_path();
+    //const auto  current_path = fs::current_path();
     const auto  document     = lunasvg::Document::loadFromFile(path.string());
     if (!document)
     {
@@ -136,10 +136,10 @@ auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const ImVec
 {
     switch (type)
     {
-        using enum erhe::scene::Light_type;
-        case spot:        return icons.spot_light;
-        case directional: return icons.directional_light;
-        case point:       return icons.point_light;
+        //using enum erhe::scene::Light_type;
+        case erhe::scene::Light_type::spot:        return icons.spot_light;
+        case erhe::scene::Light_type::directional: return icons.directional_light;
+        case erhe::scene::Light_type::point:       return icons.point_light;
         default: return {};
     }
 }

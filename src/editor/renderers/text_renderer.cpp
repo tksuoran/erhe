@@ -229,9 +229,9 @@ void Text_renderer::initialize_component()
 
     m_font = std::make_unique<erhe::ui::Font>("res/fonts/SourceSansPro-Regular.otf", 12, 0.4f);
 
-    const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
-    const std::filesystem::path vs_path = shader_path / std::filesystem::path("text.vert");
-    const std::filesystem::path fs_path = shader_path / std::filesystem::path("text.frag");
+    const auto shader_path = fs::path("res") / fs::path("shaders");
+    const fs::path vs_path = shader_path / fs::path("text.vert");
+    const fs::path fs_path = shader_path / fs::path("text.frag");
     Shader_stages::Create_info create_info{
         .name                      = "stream",
         .vertex_attribute_mappings = &m_attribute_mappings,

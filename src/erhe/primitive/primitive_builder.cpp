@@ -577,28 +577,28 @@ void Build_context::build_vertex_normal()
     {
         switch (normal_style)
         {
-            using enum Normal_style;
-            case none:
+            //using enum Normal_style;
+            case Normal_style::none:
             {
                 // NOTE Was fallthrough to corner_normals
                 break;
             }
 
-            case corner_normals:
+            case Normal_style::corner_normals:
             {
                 vertex_writer.write(root.attributes.normal, normal);
                 log_primitive_builder.trace("point {} corner {} normal {}\n", point_id, corner_id, normal);
                 break;
             }
 
-            case point_normals:
+            case Normal_style::point_normals:
             {
                 vertex_writer.write(root.attributes.normal, point_normal);
                 log_primitive_builder.trace("point {} corner {} point normal {}\n", point_id, corner_id, point_normal);
                 break;
             }
 
-            case polygon_normals:
+            case Normal_style::polygon_normals:
             {
                 vertex_writer.write(root.attributes.normal, polygon_normal);
                 log_primitive_builder.trace("point {} corner {} polygon normal {}\n", point_id, corner_id, polygon_normal);

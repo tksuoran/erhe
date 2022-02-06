@@ -2,8 +2,9 @@
 
 #include "renderers/buffer_writer.hpp"
 #include "windows/imgui_window.hpp"
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
+#include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
@@ -13,7 +14,6 @@
 
 namespace erhe::graphics
 {
-    class Framebuffer;
     class OpenGL_state_tracker;
     class Shader_resource;
     class Shader_stages;
@@ -67,9 +67,9 @@ public:
 
 private:
     void downsample(
-        const erhe::graphics::Texture* source_texture,
-        Rendertarget&                  rendertarget,
-        const auto&                    pipeline
+        const erhe::graphics::Texture*  source_texture,
+        Rendertarget&                   rendertarget,
+        const erhe::graphics::Pipeline& pipeline
     );
     void compose(const erhe::graphics::Texture* source_texture);
     void create_frame_resources();

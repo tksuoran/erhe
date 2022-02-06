@@ -9,8 +9,8 @@ namespace erhe::graphics
 
 namespace
 {
-auto shuffle(
 
+auto shuffle(
     const size_t x,
     const size_t m,
     const size_t shift

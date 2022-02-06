@@ -109,7 +109,10 @@
         "util": "cpp",
         "stop_token": "cpp",
         "charconv": "cpp",
-        "any": "cpp"
+        "any": "cpp",
+        "hash_map": "cpp",
+        "hash_set": "cpp",
+        "source_location": "cpp"
     },
     "C_Cpp.errorSquiggles": "Disabled",
     "C_Cpp.dimInactiveRegions": false,

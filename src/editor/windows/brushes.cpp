@@ -266,11 +266,11 @@ void Brushes::on_motion()
 
     m_hover_position = m_hover_content
         ? m_pointer_context->position_in_world()
-        : std::optional<vec3>{};
+        : nonstd::optional<vec3>{};
 
     m_hover_normal = m_hover_content
         ? m_pointer_context->hover_normal()
-        : std::optional<vec3>{};
+        : nonstd::optional<vec3>{};
 
     if (m_hover_mesh && m_hover_position.has_value())
     {

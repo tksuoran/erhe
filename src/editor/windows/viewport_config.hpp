@@ -3,7 +3,7 @@
 #include "renderers/base_renderer.hpp"
 #include "windows/imgui_window.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/graphics/configuration.hpp"
 
 #include <glm/glm.hpp>

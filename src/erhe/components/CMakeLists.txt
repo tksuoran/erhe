@@ -7,7 +7,6 @@ erhe_target_sources_grouped(
     log.cpp
     log.hpp
     component.cpp
-    component.hpp
     components.cpp
     components.hpp
 )
@@ -20,6 +19,7 @@ target_link_libraries(${_target}
         erhe_concurrency
         erhe_log
         #mango
+        optional_lite
         Microsoft.GSL::GSL
 )
 

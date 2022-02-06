@@ -1,7 +1,7 @@
 #pragma once
 
 #include "renderers/renderpass.hpp"
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
@@ -56,7 +56,7 @@ public:
         const int                           height,
         const double                        dots_per_meter
     );
-    ~Rendertarget_imgui_windows();
+    virtual ~Rendertarget_imgui_windows();
 
     // Implements IImgui_windows
     void register_imgui_window(Imgui_window* window) override;
@@ -91,8 +91,6 @@ private:
     std::string                                  m_name;
     erhe::scene::Mesh_layer                      m_mesh_layer;
     std::mutex                                   m_mutex;
-    const int                                    m_width;
-    const int                                    m_height;
     double                                       m_dots_per_meter{0.0};
     bool                                         m_has_focus     {false};
     double                                       m_time          {0.0};
@@ -174,9 +172,7 @@ private:
     bool                                                     m_show_tool_properties{true};
     bool                                                     m_show_style_editor   {false};
 
-    uint64_t                                                 m_frame               {0};
     double                                                   m_time                {0.0};
-    bool                                                     m_has_focus           {false};
     bool                                                     m_has_cursor          {false};
     bool                                                     m_mouse_just_pressed[ImGuiMouseButton_COUNT];
 

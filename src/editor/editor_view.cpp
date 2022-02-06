@@ -71,10 +71,10 @@ void Editor_view::register_command(Command* const command)
 }
 
 auto Editor_view::bind_command_to_key(
-    Command* const                command,
-    const erhe::toolkit::Keycode  code,
-    const bool                    pressed,
-    const std::optional<uint32_t> modifier_mask
+    Command* const                   command,
+    const erhe::toolkit::Keycode     code,
+    const bool                       pressed,
+    const nonstd::optional<uint32_t> modifier_mask
 ) -> erhe::toolkit::Unique_id<Key_binding>::id_type
 {
     auto& binding = m_key_bindings.emplace_back(command, code, pressed, modifier_mask);
@@ -117,19 +117,27 @@ void Editor_view::remove_command_binding(
     const erhe::toolkit::Unique_id<Command_binding>::id_type binding_id
 )
 {
-    std::erase_if(
-        m_key_bindings,
-        [binding_id](const Key_binding& binding)
-        {
-            return binding.get_id() == binding_id;
-        }
+    m_key_bindings.erase(
+        std::remove_if(
+            m_key_bindings.begin(),
+            m_key_bindings.end(),
+            [binding_id](const Key_binding& binding)
+            {
+                return binding.get_id() == binding_id;
+            }
+        ),
+        m_key_bindings.end()
     );
-    std::erase_if(
-        m_mouse_bindings,
-        [binding_id](const std::unique_ptr<Mouse_binding>& binding)
-        {
-            return binding.get()->get_id() == binding_id;
-        }
+    m_mouse_bindings.erase(
+        std::remove_if(
+            m_mouse_bindings.begin(),
+            m_mouse_bindings.end(),
+            [binding_id](const std::unique_ptr<Mouse_binding>& binding)
+            {
+                return binding.get()->get_id() == binding_id;
+            }
+        ),
+        m_mouse_bindings.end()
     );
 }
 
@@ -237,11 +245,11 @@ namespace {
 {
     switch (state)
     {
-        using enum State;
-        case Active:   return 1;
-        case Ready:    return 2;
-        case Inactive: return 3;
-        case Disabled: return 4;
+        //using enum State;
+        case State::Active:   return 1;
+        case State::Ready:    return 2;
+        case State::Inactive: return 3;
+        case State::Disabled: return 4;
     }
     return 999;
 }

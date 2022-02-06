@@ -69,16 +69,18 @@ void Vertex_attribute_mappings::collect_attributes(
                 continue;
             }
 
-            attributes.emplace_back(
-                static_cast<GLuint>(mapping.layout_location),       // layout_location
-                vertex_buffer,                                      // vertex buffer
-                static_cast<GLsizei>(vertex_format.stride()),       // stride
-                static_cast<GLint>(attribute->data_type.dimension), // dimension
-                attribute->shader_type,                             // shader type
-                attribute->data_type.type,                          // data type
-                attribute->data_type.normalized,                    // normalized
-                static_cast<GLuint>(attribute->offset),             // offset
-                attribute->divisor                                  // divisor
+            attributes.push_back(
+                {
+                    .layout_location = static_cast<GLuint>(mapping.layout_location),       // layout_location
+                    .vertex_buffer   = vertex_buffer,                                      // vertex buffer
+                    .stride          = static_cast<GLsizei>(vertex_format.stride()),       // stride
+                    .dimension       = static_cast<GLint>(attribute->data_type.dimension), // dimension
+                    .shader_type     = attribute->shader_type,                             // shader type
+                    .data_type       = attribute->data_type.type,                          // data type
+                    .normalized      = attribute->data_type.normalized,                    // normalized
+                    .offset          = static_cast<GLuint>(attribute->offset),             // offset
+                    .divisor         = attribute->divisor                                  // divisor
+                }
             );
         }
     }

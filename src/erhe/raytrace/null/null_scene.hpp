@@ -2,6 +2,7 @@
 
 #include "erhe/raytrace/iscene.hpp"
 
+#include <string>
 #include <vector>
 
 namespace erhe::raytrace

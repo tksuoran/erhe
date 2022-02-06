@@ -2,7 +2,7 @@
 
 #include "windows/imgui_window.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/scene/transform.hpp"
 
 #include <vector>

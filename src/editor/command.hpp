@@ -4,11 +4,11 @@
 
 #include "erhe/toolkit/unique_id.hpp"
 #include "erhe/toolkit/view.hpp"
+#include "erhe/toolkit/optional.hpp"
 
 #include <glm/glm.hpp>
 
 #include <functional>
-#include <optional>
 
 namespace editor {
 
@@ -104,10 +104,10 @@ class Key_binding
 {
 public:
     Key_binding(
-        Command* const                command,
-        const erhe::toolkit::Keycode  code,
-        const bool                    pressed,
-        const std::optional<uint32_t> modifier_mask
+        Command* const                   command,
+        const erhe::toolkit::Keycode     code,
+        const bool                       pressed,
+        const nonstd::optional<uint32_t> modifier_mask
     );
 
     auto on_key(
@@ -118,9 +118,9 @@ public:
     ) -> bool;
 
 private:
-    erhe::toolkit::Keycode  m_code         {erhe::toolkit::Key_unknown};
-    bool                    m_pressed      {true};
-    std::optional<uint32_t> m_modifier_mask;
+    erhe::toolkit::Keycode     m_code         {erhe::toolkit::Key_unknown};
+    bool                       m_pressed      {true};
+    nonstd::optional<uint32_t> m_modifier_mask;
 };
 
 class Mouse_binding

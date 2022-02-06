@@ -7,6 +7,8 @@
 #include <gsl/pointers>
 #include <gsl/span>
 
+#include <vector>
+
 namespace erhe::geometry
 {
     class Geometry;

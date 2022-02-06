@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/primitive/build_info.hpp"
 #include "erhe/primitive/enums.hpp"

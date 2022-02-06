@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/graphics/state/color_blend_state.hpp"
 #include "erhe/graphics/state/depth_stencil_state.hpp"
 #include "erhe/graphics/state/viewport_state.hpp"

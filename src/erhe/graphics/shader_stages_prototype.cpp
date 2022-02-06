@@ -41,19 +41,19 @@ gl::Program_interface program_interfaces[]
 
 [[nodiscard]] auto member_interface(
     const gl::Program_interface interface
-) -> std::optional<gl::Program_interface>
+) -> nonstd::optional<gl::Program_interface>
 {
     switch (interface)
     {
-        using enum gl::Program_interface;
-        case uniform_block:
+        //using enum gl::Program_interface;
+        case gl::Program_interface::uniform_block:
         {
-            return uniform;
+            return gl::Program_interface::uniform;
         }
 
-        case shader_storage_block:
+        case gl::Program_interface::shader_storage_block:
         {
-            return buffer_variable;
+            return gl::Program_interface::buffer_variable;
         }
 
         default:
@@ -119,10 +119,10 @@ template <typename T>
 {
     switch (property)
     {
-        using enum gl::Program_resource_property;
-        case active_variables:
-        case buffer_binding:
-        case num_active_variables:
+        //using enum gl::Program_resource_property;
+        case gl::Program_resource_property::active_variables:
+        case gl::Program_resource_property::buffer_binding:
+        case gl::Program_resource_property::num_active_variables:
         {
             return is_in_list<gl::Program_interface>(
                 interface,
@@ -135,7 +135,7 @@ template <typename T>
             );
         }
 
-        case array_size:
+        case gl::Program_resource_property::array_size:
         {
             return is_in_list<gl::Program_interface>(
                 interface,
@@ -155,10 +155,10 @@ template <typename T>
             );
         }
 
-        case array_stride:
-        case block_index:
-        case is_row_major:
-        case matrix_stride:
+        case gl::Program_resource_property::array_stride:
+        case gl::Program_resource_property::block_index:
+        case gl::Program_resource_property::is_row_major:
+        case gl::Program_resource_property::matrix_stride:
         {
             return is_in_list<gl::Program_interface>(
                 interface,
@@ -169,12 +169,12 @@ template <typename T>
             );
         }
 
-        case atomic_counter_buffer_index:
+        case gl::Program_resource_property::atomic_counter_buffer_index:
         {
             return interface == gl::Program_interface::uniform;
         }
 
-        case buffer_data_size:
+        case gl::Program_resource_property::buffer_data_size:
         {
             return is_in_list<gl::Program_interface>(
                 interface,
@@ -186,8 +186,8 @@ template <typename T>
             );
         }
 
-        case num_compatible_subroutines:
-        case compatible_subroutines:
+        case gl::Program_resource_property::num_compatible_subroutines:
+        case gl::Program_resource_property::compatible_subroutines:
         {
             return is_in_list<gl::Program_interface>(
                 interface,
@@ -357,7 +357,7 @@ template <typename T>
 [[nodiscard]] auto Shader_stages::Prototype::try_compile_shader(
     const Shader_stages::Create_info&               create_info,
     const Shader_stages::Create_info::Shader_stage& shader
-) -> std::optional<Gl_shader>
+) -> nonstd::optional<Gl_shader>
 {
     Gl_shader gl_shader{shader.type};
     const auto gl_name = gl_shader.gl_name();

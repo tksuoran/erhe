@@ -2,14 +2,13 @@
 
 #include "tools/tool.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/toolkit/math_util.hpp"
+#include "erhe/toolkit/optional.hpp"
 #include "erhe/xr/xr.hpp"
 
 #include <glm/glm.hpp>
 #include <imgui.h>
-
-#include <optional>
 
 namespace erhe::xr
 {
@@ -61,9 +60,9 @@ public:
         const glm::mat4 transform,
         const glm::vec3 p0,
         const glm::vec3 p1
-    ) const -> std::optional<Closest_finger>;
+    ) const -> nonstd::optional<Closest_finger>;
 
-    auto distance (const XrHandJointEXT lhs, const XrHandJointEXT rhs) const -> std::optional<float>;
+    auto distance (const XrHandJointEXT lhs, const XrHandJointEXT rhs) const -> nonstd::optional<float>;
     auto is_active() const -> bool;
     auto is_valid (const XrHandJointEXT joint) const -> bool;
     void draw     (Line_renderer& line_renderer, const glm::mat4 transform);

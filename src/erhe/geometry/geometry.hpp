@@ -3,12 +3,12 @@
 #include "erhe/geometry/property_map.hpp"
 #include "erhe/geometry/property_map_collection.hpp"
 #include "erhe/geometry/types.hpp"
+#include "erhe/toolkit/optional.hpp"
 
 #include <glm/glm.hpp>
 #include <gsl/assert>
 
 #include <functional>
-#include <optional>
 #include <set>
 #include <string_view>
 #include <vector>
@@ -502,7 +502,7 @@ public:
     auto get_polygon_corner_count() const -> uint32_t { return m_next_polygon_corner_id; }
     auto get_edge_count          () const -> uint32_t { return m_next_edge_id; }
 
-    [[nodiscard]] auto find_edge(Point_id a, Point_id b) -> std::optional<Edge>
+    [[nodiscard]] auto find_edge(Point_id a, Point_id b) -> nonstd::optional<Edge>
     {
         if (b < a)
         {

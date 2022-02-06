@@ -57,20 +57,20 @@ auto from_midi(const int midi_note) -> Note_and_octave
 
     switch (note)
     {
-        using enum Note;
-        case  0: return { c,       octave };
-        case  1: return { c_sharp, octave };
-        case  2: return { d,       octave };
-        case  3: return { d_sharp, octave };
-        case  4: return { e,       octave };
-        case  5: return { f,       octave };
-        case  6: return { f_sharp, octave };
-        case  7: return { g,       octave };
-        case  8: return { g_sharp, octave };
-        case  9: return { a,       octave };
-        case 10: return { a_sharp, octave };
-        case 11: return { b,       octave };
-        default: return { a,       octave };
+        //using enum Note;
+        case  0: return { Note::c,       octave };
+        case  1: return { Note::c_sharp, octave };
+        case  2: return { Note::d,       octave };
+        case  3: return { Note::d_sharp, octave };
+        case  4: return { Note::e,       octave };
+        case  5: return { Note::f,       octave };
+        case  6: return { Note::f_sharp, octave };
+        case  7: return { Note::g,       octave };
+        case  8: return { Note::g_sharp, octave };
+        case  9: return { Note::a,       octave };
+        case 10: return { Note::a_sharp, octave };
+        case 11: return { Note::b,       octave };
+        default: return { Note::a,       octave };
     }
 }
 
@@ -101,19 +101,19 @@ auto c_str(const Note note) -> const char*
 {
     switch (note)
     {
-        using enum Note;
-        case c:       return "C";
-        case c_sharp: return "C#";
-        case d:       return "D";
-        case d_sharp: return "D#";
-        case e:       return "E";
-        case f:       return "F";
-        case f_sharp: return "F#";
-        case g:       return "G";
-        case g_sharp: return "G#";
-        case a:       return "A";
-        case a_sharp: return "A#";
-        case b:       return "B";
+        //using enum Note;
+        case Note::c:       return "C";
+        case Note::c_sharp: return "C#";
+        case Note::d:       return "D";
+        case Note::d_sharp: return "D#";
+        case Note::e:       return "E";
+        case Note::f:       return "F";
+        case Note::f_sharp: return "F#";
+        case Note::g:       return "G";
+        case Note::g_sharp: return "G#";
+        case Note::a:       return "A";
+        case Note::a_sharp: return "A#";
+        case Note::b:       return "B";
         default: return "?";
     }
 }

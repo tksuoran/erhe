@@ -6,8 +6,10 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     file.cpp
     file.hpp
+    filesystem.hpp
     math_util.cpp
     math_util.hpp
+    optional.hpp
     profile.hpp
     verify.hpp
     view.cpp
@@ -43,11 +45,14 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(
     ${_target}
+    PUBLIC
+        ghc_filesystem
+        optional_lite
     PRIVATE
-    erhe_gl
-    fmt::fmt
-    glm::glm
-    Microsoft.GSL::GSL
+        erhe_gl
+        fmt::fmt
+        glm::glm
+        Microsoft.GSL::GSL
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "(Windows|MSYS)")

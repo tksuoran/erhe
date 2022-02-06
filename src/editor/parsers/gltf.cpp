@@ -36,9 +36,9 @@ auto c_str(BufferViewTarget value) -> const char*
 {
     switch (value)
     {
-        using enum BufferViewTarget;
-        case ARRAY_BUFFER:         return "array_buffer";
-        case ELEMENT_ARRAY_BUFFER: return "element_array_buffer";
+        //using enum BufferViewTarget;
+        case BufferViewTarget::ARRAY_BUFFER:         return "array_buffer";
+        case BufferViewTarget::ELEMENT_ARRAY_BUFFER: return "element_array_buffer";
         default:                   return "?";
     }
 };
@@ -47,14 +47,14 @@ auto c_str(ComponentType value) -> const char*
 {
     switch (value)
     {
-        using enum ComponentType;
-        case COMPONENT_UNKNOWN       : return "unknown";
-        case COMPONENT_BYTE          : return "byte";
-        case COMPONENT_UNSIGNED_BYTE : return "unsigned_byte";
-        case COMPONENT_SHORT         : return "short";
-        case COMPONENT_UNSIGNED_SHORT: return "unsigned_short"; 
-        case COMPONENT_UNSIGNED_INT  : return "unsigned_int";
-        case COMPONENT_FLOAT         : return "float";
+        //using enum ComponentType;
+        case ComponentType::COMPONENT_UNKNOWN       : return "unknown";
+        case ComponentType::COMPONENT_BYTE          : return "byte";
+        case ComponentType::COMPONENT_UNSIGNED_BYTE : return "unsigned_byte";
+        case ComponentType::COMPONENT_SHORT         : return "short";
+        case ComponentType::COMPONENT_UNSIGNED_SHORT: return "unsigned_short";
+        case ComponentType::COMPONENT_UNSIGNED_INT  : return "unsigned_int";
+        case ComponentType::COMPONENT_FLOAT         : return "float";
         default:                       return "?";
     }
 };
@@ -63,15 +63,15 @@ auto c_str(AccessorType value) -> const char*
 {
     switch (value)
     {
-        using enum AccessorType;
-        case TYPE_UNKNOWN: return "unknown";
-        case TYPE_SCALAR:  return "scalar";
-        case TYPE_VEC2:    return "vec2";
-        case TYPE_VEC3:    return "vec3";
-        case TYPE_VEC4:    return "vec4";
-        case TYPE_MAT2:    return "mat2";
-        case TYPE_MAT3:    return "mat3";
-        case TYPE_MAT4:    return "mat4";
+        //using enum AccessorType;
+        case AccessorType::TYPE_UNKNOWN: return "unknown";
+        case AccessorType::TYPE_SCALAR:  return "scalar";
+        case AccessorType::TYPE_VEC2:    return "vec2";
+        case AccessorType::TYPE_VEC3:    return "vec3";
+        case AccessorType::TYPE_VEC4:    return "vec4";
+        case AccessorType::TYPE_MAT2:    return "mat2";
+        case AccessorType::TYPE_MAT3:    return "mat3";
+        case AccessorType::TYPE_MAT4:    return "mat4";
         default:           return "?";
     }
 };
@@ -80,14 +80,14 @@ auto c_str(MeshMode value) -> const char*
 {
     switch (value)
     {
-        using enum MeshMode;
-        case MESH_POINTS:         return "points";
-        case MESH_LINES:          return "lines";
-        case MESH_LINE_LOOP:      return "line_loop";
-        case MESH_LINE_STRIP:     return "line_strip";
-        case MESH_TRIANGLES:      return "triangles";
-        case MESH_TRIANGLE_STRIP: return "triangle_strip";
-        case MESH_TRIANGLE_FAN:   return "triangle_fan";
+        //using enum MeshMode;
+        case MeshMode::MESH_POINTS:         return "points";
+        case MeshMode::MESH_LINES:          return "lines";
+        case MeshMode::MESH_LINE_LOOP:      return "line_loop";
+        case MeshMode::MESH_LINE_STRIP:     return "line_strip";
+        case MeshMode::MESH_TRIANGLES:      return "triangles";
+        case MeshMode::MESH_TRIANGLE_STRIP: return "triangle_strip";
+        case MeshMode::MESH_TRIANGLE_FAN:   return "triangle_fan";
         default:                  return "?";
     }
 };
@@ -96,11 +96,11 @@ auto c_str(AlphaMode value) -> const char*
 {
     switch (value)
     {
-        using enum AlphaMode;
-        case ALPHA_UNKNOWN: return "unknown";
-        case ALPHA_OPAQUE:  return "opaque";
-        case ALPHA_BLEND:   return "blend";
-        case ALPHA_MASK:    return "mask";
+        //using enum AlphaMode;
+        case AlphaMode::ALPHA_UNKNOWN: return "unknown";
+        case AlphaMode::ALPHA_OPAQUE:  return "opaque";
+        case AlphaMode::ALPHA_BLEND:   return "blend";
+        case AlphaMode::ALPHA_MASK:    return "mask";
         default:            return "?";
     }
 };
@@ -109,12 +109,12 @@ auto c_str(TargetPath value) -> const char*
 {
     switch (value)
     {
-        using enum TargetPath;
-        case TARGET_UNKNOWN:     return "unknown";
-        case TARGET_TRANSLATION: return "translation";
-        case TARGET_ROTATION:    return "rotation";
-        case TARGET_SCALE:       return "scale";
-        case TARGET_WEIGHTS:     return "weights";
+        //using enum TargetPath;
+        case TargetPath::TARGET_UNKNOWN:     return "unknown";
+        case TargetPath::TARGET_TRANSLATION: return "translation";
+        case TargetPath::TARGET_ROTATION:    return "rotation";
+        case TargetPath::TARGET_SCALE:       return "scale";
+        case TargetPath::TARGET_WEIGHTS:     return "weights";
         default:                 return "?";
     }
 };
@@ -123,11 +123,11 @@ auto c_str(InterpolationType value) -> const char*
 {
     switch (value)
     {
-        using enum InterpolationType;
-        case INTERPOLATION_UNKNOWN:     return "unknown";
-        case INTERPOLATION_LINEAR:      return "linear";
-        case INTERPOLATION_STEP:        return "step";
-        case INTERPOLATION_CUBICSPLINE: return "cubicspline";
+        //using enum InterpolationType;
+        case InterpolationType::INTERPOLATION_UNKNOWN:     return "unknown";
+        case InterpolationType::INTERPOLATION_LINEAR:      return "linear";
+        case InterpolationType::INTERPOLATION_STEP:        return "step";
+        case InterpolationType::INTERPOLATION_CUBICSPLINE: return "cubicspline";
         default:                        return "?";
     }
 };
@@ -136,10 +136,10 @@ auto c_str(TransformationType value) -> const char*
 {
     switch (value)
     {
-        using enum TransformationType;
-        case TRANSFORMATION_IDENTITY: return "identity";
-        case TRANSFORMATION_MATRIX:   return "matrix";
-        case TRANSFORMATION_TRS:      return "trs";
+        //using enum TransformationType;
+        case TransformationType::TRANSFORMATION_IDENTITY: return "identity";
+        case TransformationType::TRANSFORMATION_MATRIX:   return "matrix";
+        case TransformationType::TRANSFORMATION_TRS:      return "trs";
         default:                      return "?";
     }
 };
@@ -148,9 +148,9 @@ auto c_str(ProjectionType value) -> const char*
 {
     switch (value)
     {
-        using enum ProjectionType;
-        case PROJECTION_PERSPECTIVE:  return "perspective";
-        case PROJECTION_ORTHOGRAPHIC: return "orthographic";
+        //using enum ProjectionType;
+        case ProjectionType::PROJECTION_PERSPECTIVE:  return "perspective";
+        case ProjectionType::PROJECTION_ORTHOGRAPHIC: return "orthographic";
         default:                      return "?";
     }
 };
@@ -169,7 +169,7 @@ class Stream_reader
     : public Microsoft::glTF::IStreamReader
 {
 public:
-    explicit Stream_reader(const std::filesystem::path& path_base) 
+    explicit Stream_reader(const fs::path& path_base)
         : m_path_base{path_base}
     {
         Expects(m_path_base.has_root_path());
@@ -179,7 +179,7 @@ public:
     {
         //using namespace Microsoft::glTF;
 
-        auto stream_path = m_path_base / std::filesystem::path(filename);
+        auto stream_path = m_path_base / fs::path(filename);
         auto stream = std::make_shared<std::ifstream>(stream_path, std::ios_base::binary);
 
         // Check if the stream has no errors and is ready for I/O operations
@@ -200,7 +200,7 @@ public:
     }
 
 private:
-    std::filesystem::path m_path_base;
+    fs::path m_path_base;
 };
 
 using namespace glm;
@@ -209,19 +209,19 @@ using namespace erhe::geometry;
 
 auto parse_gltf(
     const std::shared_ptr<Scene_root>& scene_root,
-    const std::filesystem::path&       relative_path
+    const fs::path&                    relative_path
 ) -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    std::filesystem::path canonical_path = std::filesystem::canonical(relative_path);
-    std::filesystem::path path = std::filesystem::current_path() / canonical_path;
+    fs::path canonical_path = fs::canonical(relative_path);
+    fs::path path = fs::current_path() / canonical_path;
     log_parsers.trace("path = {}\n", path.generic_string());
     // Pass the absolute path, without the filename, to the stream reader
     auto stream_reader = std::make_unique<Stream_reader>(path.parent_path());
 
-    const std::filesystem::path path_file     = path.filename();
-    const std::filesystem::path path_file_ext = path_file.extension();
+    const fs::path path_file     = path.filename();
+    const fs::path path_file_ext = path_file.extension();
 
     std::string manifest;
 

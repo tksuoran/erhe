@@ -1,7 +1,7 @@
 #pragma once
 
+#include "erhe/components/components.hpp"
 #include "erhe/graphics/shader_stages.hpp"
-#include "erhe/components/component.hpp"
 
 #include <condition_variable>
 #include <mutex>
@@ -48,7 +48,7 @@ private:
     void poll_thread();
 
     void add(
-        const std::filesystem::path&                      path,
+        const fs::path&                                   path,
         const erhe::graphics::Shader_stages::Create_info& create_info,
         gsl::not_null<erhe::graphics::Shader_stages*>     program
     );
@@ -84,16 +84,16 @@ private:
     class File
     {
     public:
-        std::filesystem::file_time_type        last_time;
-        std::filesystem::path                  path;
+        fs::file_time_type                     last_time;
+        fs::path                               path;
         std::set<Reload_entry, Compare_object> reload_entries;
     };
 
-    std::map<std::filesystem::path, File> m_files;
-    std::mutex                            m_mutex;
-    std::thread                           m_poll_filesystem_thread;
-    std::vector<File*>                    m_reload_list;
-    bool                                  m_run{false};
+    std::map<fs::path, File> m_files;
+    std::mutex               m_mutex;
+    std::thread              m_poll_filesystem_thread;
+    std::vector<File*>       m_reload_list;
+    bool                     m_run{false};
 };
 
 } // namespace editor

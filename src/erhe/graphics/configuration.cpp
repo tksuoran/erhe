@@ -6,6 +6,8 @@
 # include <csignal>
 #endif
 
+#include <vector>
+
 #define LOG_CATEGORY log_configuration
 
 namespace erhe::graphics

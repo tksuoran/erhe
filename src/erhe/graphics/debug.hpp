@@ -1,10 +1,12 @@
 #pragma once
 
 #include "erhe/graphics/gl_objects.hpp"
+#include "erhe/toolkit/optional.hpp"
 
 #include <array>
 #include <mutex>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 namespace erhe::graphics
@@ -43,10 +45,10 @@ private:
     class Query
     {
     public:
-        std::optional<Gl_query> query_object{};
-        bool                    begin       {false};
-        bool                    end         {false};
-        bool                    pending     {false};
+        nonstd::optional<Gl_query> query_object{};
+        bool                       begin       {false};
+        bool                       end         {false};
+        bool                       pending     {false};
     };
 
     static constexpr size_t        s_count = 4;

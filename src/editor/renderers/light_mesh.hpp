@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 
 #include <glm/glm.hpp>

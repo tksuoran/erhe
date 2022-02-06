@@ -149,20 +149,20 @@ void Bullet_rigid_body::set_motion_mode(const Motion_mode motion_mode)
 
     switch (motion_mode)
     {
-        using enum Motion_mode;
-        case e_static:
+        //using enum Motion_mode;
+        case Motion_mode::e_static:
         {
             flags |=  btCollisionObject::CF_STATIC_OBJECT;
             flags &= ~btCollisionObject::CF_KINEMATIC_OBJECT;
             break;
         }
-        case e_kinematic:
+        case Motion_mode::e_kinematic:
         {
             flags &= ~btCollisionObject::CF_STATIC_OBJECT;
             flags |=  btCollisionObject::CF_KINEMATIC_OBJECT;
             break;
         }
-        case e_dynamic:
+        case Motion_mode::e_dynamic:
         {
             flags &= ~btCollisionObject::CF_STATIC_OBJECT;
             flags &= ~btCollisionObject::CF_KINEMATIC_OBJECT;

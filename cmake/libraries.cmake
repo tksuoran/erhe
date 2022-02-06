@@ -54,7 +54,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     fmt
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-    GIT_TAG        8.0.1
+    GIT_TAG        8.1.1
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -116,10 +116,10 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     harfbuzz
-    GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz.git
-    GIT_TAG        main
-    #GIT_REPOSITORY https://github.com/tksuoran/harfbuzz.git
-    #GIT_TAG        cmake
+    #GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz.git
+    #GIT_TAG        main
+    GIT_REPOSITORY https://github.com/tksuoran/harfbuzz.git
+    GIT_TAG        cmake-fix
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

@@ -1,7 +1,7 @@
 #include "erhe/toolkit/file.hpp"
 #include "erhe/log/log.hpp"
+#include "erhe/toolkit/filesystem.hpp"
 
-#include <filesystem>
 #include <fstream>
 
 namespace erhe::toolkit
@@ -13,16 +13,18 @@ using Level         = erhe::log::Level;
 
 Category log{1.0f, 1.0f, 0.5f, Console_color::YELLOW, Level::LEVEL_INFO};
 
-auto read(const std::filesystem::path& path) -> std::optional<std::string>
+auto read(const fs::path& path) -> nonstd::optional<std::string>
 {
     // Watch out for fio
     try
     {
-        if (std::filesystem::exists(path) &&
-            std::filesystem::is_regular_file(path) &&
-            !std::filesystem::is_empty(path))
+        if (
+            fs::exists(path) &&
+            fs::is_regular_file(path) &&
+            !fs::is_empty(path)
+        )
         {
-            const size_t file_length = std::filesystem::file_size(path);
+            const size_t file_length = fs::file_size(path);
             std::FILE* file =
 #ifdef _MSC_VER
                 _wfopen(path.c_str(), L"rb");
@@ -53,7 +55,7 @@ auto read(const std::filesystem::path& path) -> std::optional<std::string>
 
             std::fclose(file);
 
-            return std::optional<std::string>(result);
+            return nonstd::optional<std::string>(result);
         }
     }
     catch (...)

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 
 #include <gsl/gsl>
 
@@ -46,8 +46,6 @@ private:
     std::mutex                        m_mutex;
     std::vector<gsl::not_null<Tool*>> m_tools;
     std::vector<gsl::not_null<Tool*>> m_background_tools;
-    bool                              m_show_tool_properties{true};
-    bool                              m_show_style_editor   {false};
 };
 
 }

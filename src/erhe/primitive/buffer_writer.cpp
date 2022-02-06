@@ -24,8 +24,8 @@ inline void write_low(
 {
     switch (type)
     {
-        using enum gl::Draw_elements_type;
-        case unsigned_byte:
+        //using enum gl::Draw_elements_type;
+        case gl::Draw_elements_type::unsigned_byte:
         {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             Expects(value <= 0xffU);
@@ -33,7 +33,7 @@ inline void write_low(
             break;
         }
 
-        case unsigned_short:
+        case gl::Draw_elements_type::unsigned_short:
         {
             auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
             Expects(value <= 0xffffU);
@@ -41,7 +41,7 @@ inline void write_low(
             break;
         }
 
-        case unsigned_int:
+        case gl::Draw_elements_type::unsigned_int:
         {
             auto* const ptr = reinterpret_cast<uint32_t*>(destination.data());
             ptr[0] = value & 0xffffffffu;
@@ -62,8 +62,8 @@ inline void write_low(
 {
     switch (type)
     {
-        using enum gl::Vertex_attrib_type;
-        case unsigned_byte:
+        //using enum gl::Vertex_attrib_type;
+        case gl::Vertex_attrib_type::unsigned_byte:
         {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             Expects(value <= 0xffU);
@@ -71,7 +71,7 @@ inline void write_low(
             break;
         }
 
-        case unsigned_short:
+        case gl::Vertex_attrib_type::unsigned_short:
         {
             auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
             Expects(value <= 0xffffU);
@@ -79,7 +79,7 @@ inline void write_low(
             break;
         }
 
-        case unsigned_int:
+        case gl::Vertex_attrib_type::unsigned_int:
         {
             auto* ptr = reinterpret_cast<uint32_t*>(destination.data());
             ptr[0] = value;

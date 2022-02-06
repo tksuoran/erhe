@@ -25,6 +25,7 @@ target_link_libraries(
     erhe_graphics
     erhe_primitive
     fmt::fmt
+    ghc_filesystem
     glm::glm
     glfw
     Microsoft.GSL::GSL

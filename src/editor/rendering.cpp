@@ -509,7 +509,7 @@ void Editor_rendering::render_id(const Render_context& context)
         return;
     }
 
-    const auto& pointer = m_pointer_context->position_in_viewport_window().value();
+    const auto pointer = m_pointer_context->position_in_viewport_window().value();
 
     m_id_renderer->render(
         {

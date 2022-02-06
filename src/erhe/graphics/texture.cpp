@@ -23,27 +23,27 @@ auto component_count(const gl::Pixel_format pixel_format) -> size_t
 {
     switch (pixel_format)
     {
-        using enum gl::Pixel_format;
-        case red:
-        case red_integer:
+        //using enum gl::Pixel_format;
+        case gl::Pixel_format::red:
+        case gl::Pixel_format::red_integer:
         {
             return 1;
         }
 
-        case rg:
-        case rg_integer:
+        case gl::Pixel_format::rg:
+        case gl::Pixel_format::rg_integer:
         {
             return 2;
         }
 
-        case rgb:
-        case rgb_integer:
+        case gl::Pixel_format::rgb:
+        case gl::Pixel_format::rgb_integer:
         {
             return 3;
         }
 
-        case rgba:
-        case rgba_integer:
+        case gl::Pixel_format::rgba:
+        case gl::Pixel_format::rgba_integer:
         {
             return 4;
         }
@@ -59,22 +59,22 @@ auto byte_count(const gl::Pixel_type pixel_type) -> size_t
 {
     switch (pixel_type)
     {
-        using enum gl::Pixel_type;
-        case unsigned_byte:
-        case byte:
+        //using enum gl::Pixel_type;
+        case gl::Pixel_type::unsigned_byte:
+        case gl::Pixel_type::byte:
         {
             return 1;
         }
 
-        case unsigned_short:
-        case short_:
+        case gl::Pixel_type::unsigned_short:
+        case gl::Pixel_type::short_:
         {
             return 2;
         }
 
-        case unsigned_int:
-        case int_:
-        case float_:
+        case gl::Pixel_type::unsigned_int:
+        case gl::Pixel_type::int_:
+        case gl::Pixel_type::float_:
         {
             return 4;
         }
@@ -171,30 +171,30 @@ auto Texture::storage_dimensions(const gl::Texture_target target) -> int
 {
     switch (target)
     {
-        using enum gl::Texture_target;
-        case texture_buffer:
+        //using enum gl::Texture_target;
+        case gl::Texture_target::texture_buffer:
         {
             return 0;
         }
 
-        case texture_1d:
+        case gl::Texture_target::texture_1d:
         {
             return 1;
         }
 
-        case texture_1d_array:
-        case texture_2d:
-        case texture_2d_multisample:
-        case texture_rectangle:
-        case texture_cube_map:
+        case gl::Texture_target::texture_1d_array:
+        case gl::Texture_target::texture_2d:
+        case gl::Texture_target::texture_2d_multisample:
+        case gl::Texture_target::texture_rectangle:
+        case gl::Texture_target::texture_cube_map:
         {
             return 2;
         }
 
-        case texture_2d_array:
-        case texture_2d_multisample_array:
-        case texture_3d:
-        case texture_cube_map_array:
+        case gl::Texture_target::texture_2d_array:
+        case gl::Texture_target::texture_2d_multisample_array:
+        case gl::Texture_target::texture_3d:
+        case gl::Texture_target::texture_cube_map_array:
         {
             return 3;
         }
@@ -210,30 +210,30 @@ auto Texture::mipmap_dimensions(const gl::Texture_target target) -> int
 {
     switch (target)
     {
-        using enum gl::Texture_target;
-        case texture_buffer:
+        //using enum gl::Texture_target;
+        case gl::Texture_target::texture_buffer:
         {
             return 0;
         }
 
-        case texture_1d:
-        case texture_1d_array:
+        case gl::Texture_target::texture_1d:
+        case gl::Texture_target::texture_1d_array:
         {
             return 1;
         }
 
-        case texture_rectangle:
-        case texture_cube_map:
-        case texture_2d:
-        case texture_2d_multisample:
-        case texture_2d_array:
-        case texture_2d_multisample_array:
+        case gl::Texture_target::texture_rectangle:
+        case gl::Texture_target::texture_cube_map:
+        case gl::Texture_target::texture_2d:
+        case gl::Texture_target::texture_2d_multisample:
+        case gl::Texture_target::texture_2d_array:
+        case gl::Texture_target::texture_2d_multisample_array:
         {
             return 2;
         }
 
-        case texture_3d:
-        case texture_cube_map_array:
+        case gl::Texture_target::texture_3d:
+        case gl::Texture_target::texture_cube_map_array:
         {
             return 3;
         }
@@ -618,22 +618,22 @@ auto Texture::is_layered() const -> bool
 {
     switch (m_target)
     {
-        using enum gl::Texture_target;
-        case texture_buffer:
-        case texture_1d:
-        case texture_2d:
-        case texture_2d_multisample:
-        case texture_rectangle:
-        case texture_cube_map:
-        case texture_3d:
+        //using enum gl::Texture_target;
+        case gl::Texture_target::texture_buffer:
+        case gl::Texture_target::texture_1d:
+        case gl::Texture_target::texture_2d:
+        case gl::Texture_target::texture_2d_multisample:
+        case gl::Texture_target::texture_rectangle:
+        case gl::Texture_target::texture_cube_map:
+        case gl::Texture_target::texture_3d:
         {
             return false;
         }
 
-        case texture_1d_array:
-        case texture_2d_array:
-        case texture_2d_multisample_array:
-        case texture_cube_map_array:
+        case gl::Texture_target::texture_1d_array:
+        case gl::Texture_target::texture_2d_array:
+        case gl::Texture_target::texture_2d_multisample_array:
+        case gl::Texture_target::texture_cube_map_array:
         {
             return true;
         }

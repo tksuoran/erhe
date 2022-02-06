@@ -1,11 +1,11 @@
 #pragma once
 
 #include "erhe/gl/wrapper_enums.hpp"
+#include "erhe/toolkit/optional.hpp"
 
 #include <gsl/pointers>
 
 #include <deque>
-#include <optional>
 #include <sstream>
 #include <string_view>
 #include <vector>
@@ -71,24 +71,24 @@ public:
     Shader_resource(
         const std::string_view          struct_member_name,
         gsl::not_null<Shader_resource*> struct_type,
-        const std::optional<size_t>     array_size = {},
+        const nonstd::optional<size_t>  array_size = {},
         Shader_resource*                parent = nullptr
     );
 
     // Block (uniform block or shader storage block)
     Shader_resource(
-        const std::string_view      block_name,
-        const int                   binding_point,
-        const Type                  block_type,
-        const std::optional<size_t> array_size = {}
+        const std::string_view         block_name,
+        const int                      binding_point,
+        const Type                     block_type,
+        const nonstd::optional<size_t> array_size = {}
     );
 
     // Basic type
     Shader_resource(
-        std::string_view            basic_name,
-        const gl::Uniform_type      basic_type,
-        const std::optional<size_t> array_size = {},
-        Shader_resource*            parent = nullptr
+        std::string_view               basic_name,
+        const gl::Uniform_type         basic_type,
+        const nonstd::optional<size_t> array_size = {},
+        Shader_resource*               parent = nullptr
     );
 
     // Sampler
@@ -97,8 +97,8 @@ public:
         gsl::not_null<Shader_resource*> parent,
         const int                       location,
         const gl::Uniform_type          sampler_type,
-        const std::optional<size_t>     array_size = {},
-        const std::optional<int>        dedicated_texture_unit = {}
+        const nonstd::optional<size_t>  array_size = {},
+        const nonstd::optional<int>     dedicated_texture_unit = {}
     );
 
     // Constructor with no arguments creates default uniform block
@@ -111,10 +111,10 @@ public:
     Shader_resource(Shader_resource&& other) = default;
 
     [[nodiscard]] auto is_array                    () const -> bool;
-    [[nodiscard]] auto dedicated_texture_unit_index() const -> std::optional<int>;
+    [[nodiscard]] auto dedicated_texture_unit_index() const -> nonstd::optional<int>;
     [[nodiscard]] auto type                        () const -> Type;
     [[nodiscard]] auto name                        () const -> const std::string&;
-    [[nodiscard]] auto array_size                  () const -> std::optional<size_t>;
+    [[nodiscard]] auto array_size                  () const -> nonstd::optional<size_t>;
     [[nodiscard]] auto basic_type                  () const -> gl::Uniform_type;
 
     // Only? for uniforms in default uniform block
@@ -140,69 +140,69 @@ public:
     auto add_struct(
         const std::string_view          name,
         gsl::not_null<Shader_resource*> struct_type,
-        const std::optional<size_t>     array_size = {}
+        const nonstd::optional<size_t>  array_size = {}
     ) -> Shader_resource*;
 
     auto add_sampler(
-        const std::string_view      name,
-        const gl::Uniform_type      sampler_type,
-        const std::optional<size_t> array_size = {},
-        const std::optional<int>    dedicated_texture_unit = {}
+        const std::string_view         name,
+        const gl::Uniform_type         sampler_type,
+        const nonstd::optional<size_t> array_size = {},
+        const nonstd::optional<int>    dedicated_texture_unit = {}
     ) -> Shader_resource*;
 
     auto add_float(
-        const std::string_view      name,
-        const std::optional<size_t> array_size = {}
+        const std::string_view         name,
+        const nonstd::optional<size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_vec2(
-        const std::string_view      name,
-        const std::optional<size_t> array_size = {}
+        const std::string_view         name,
+        const nonstd::optional<size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_vec3(
-        const std::string_view      name,
-        const std::optional<size_t> array_size = {}
+        const std::string_view         name,
+        const nonstd::optional<size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_vec4(
-        const std::string_view      name,
-        const std::optional<size_t> array_size = {}
+        const std::string_view         name,
+        const nonstd::optional<size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_mat4(
-        const std::string_view      name,
-        const std::optional<size_t> array_size = {}
+        const std::string_view         name,
+        const nonstd::optional<size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_int(
-        const std::string_view      name,
-        const std::optional<size_t> array_size = {}
+        const std::string_view         name,
+        const nonstd::optional<size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uint(
-        const std::string_view      name,
-        const std::optional<size_t> array_size = {}
+        const std::string_view         name,
+        const nonstd::optional<size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uvec2(
-        const std::string_view      name,
-        const std::optional<size_t> array_size = {}
+        const std::string_view         name,
+        const nonstd::optional<size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uvec3(
-        const std::string_view      name,
-        const std::optional<size_t> array_size = {}
+        const std::string_view         name,
+        const nonstd::optional<size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uvec4(
-        const std::string_view      name,
-        const std::optional<size_t> array_size = {}
+        const std::string_view         name,
+        const nonstd::optional<size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uint64(
-        const std::string_view      name,
-        const std::optional<size_t> array_size = {}
+        const std::string_view         name,
+        const nonstd::optional<size_t> array_size = {}
     ) -> Shader_resource*;
 
 private:
@@ -211,12 +211,12 @@ private:
     void indent(std::stringstream& ss, const int indent_level) const;
 
     // Any shader type declaration
-    Type                  m_type{Type::default_uniform_block};
-    std::string           m_name;
-    std::optional<size_t> m_array_size; // 0 means unsized
-    Shader_resource*      m_parent          {nullptr};
-    size_t                m_index_in_parent {0};
-    size_t                m_offset_in_parent{0};
+    Type                     m_type{Type::default_uniform_block};
+    std::string              m_name;
+    nonstd::optional<size_t> m_array_size; // 0 means unsized
+    Shader_resource*         m_parent          {nullptr};
+    size_t                   m_index_in_parent {0};
+    size_t                   m_offset_in_parent{0};
 
     // Basic type declaration
     //Precision              m_precision{Precision::highp};
@@ -224,21 +224,21 @@ private:
 
     // Uniforms in default uniform block - TODO plus some others?
     // For default uniform block, this is next available location (initialized to 0)
-    int                m_location{-1};
+    int                   m_location{-1};
 
     // Struct instance
-    Shader_resource*   m_struct_type{nullptr};
+    Shader_resource*      m_struct_type{nullptr};
 
     // Samplers, in default uniform block
-    std::optional<int> m_dedicated_texture_unit_index;
+    nonstd::optional<int> m_dedicated_texture_unit_index;
 
     // Aggregate type declation
-    Member_collection  m_members;
-    size_t             m_offset{0}; // where next member will be placed
+    Member_collection     m_members;
+    size_t                m_offset{0}; // where next member will be placed
 
     // Interface blocks (aggregate type declaration)
-    std::string        m_block_name;
-    int                m_binding_point{-1};
+    std::string           m_block_name;
+    int                   m_binding_point{-1};
 
     // Only used for uniforms in program
 };

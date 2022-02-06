@@ -3,7 +3,7 @@
 #include "renderers/buffer_writer.hpp"
 #include "renderers/frame_resources.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 
 #include <glm/glm.hpp>

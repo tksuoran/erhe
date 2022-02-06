@@ -192,8 +192,6 @@ void Scene_builder::make_brushes()
 {
     ERHE_PROFILE_FUNCTION
 
-    const Brush_create_context brush_create_context{build_info()};
-
     Task_queue execution_queue{get<Configuration>()->parallel_initialization};
 
     constexpr float floor_size = 20.0f;
@@ -263,11 +261,11 @@ void Scene_builder::make_brushes()
 
     constexpr bool gltf_files      = false; // WIP
     constexpr bool obj_files       = true;
-    constexpr bool platonic_solids = false;
+    constexpr bool platonic_solids = true;
     constexpr bool sphere          = true;
-    constexpr bool torus           = false;
-    constexpr bool cylinder        = false;
-    constexpr bool cone            = false;
+    constexpr bool torus           = true;
+    constexpr bool cylinder        = true;
+    constexpr bool cone            = true;
     constexpr bool johnson_solids  = false;
 
     constexpr float object_scale = 1.0f;
@@ -613,9 +611,11 @@ void Scene_builder::add_room()
 
     auto floor_material = m_scene_root->make_material(
         "Floor",
-        vec4{0.02f, 0.02f, 0.02f, 1.0f},
-        0.5f,
-        0.8f
+        //vec4{0.02f, 0.02f, 0.02f, 1.0f},
+        vec4{0.00f, 0.00f, 0.00f, 1.0f},
+        0.001f,
+        0.0f,
+        0.998f
     );
     floor_material->visible = true;
     //auto table_material = m_scene_root->make_material(
@@ -978,7 +978,9 @@ void Scene_builder::setup_lights()
             erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
 
             const vec3        color     = vec3{r, g, b};
-            const float       intensity = 8.0f / static_cast<float>(directional_light_count);
+            const float       intensity = i == 0
+                ? 5000.0f
+                : 8.0f / static_cast<float>(directional_light_count);
             const std::string name      = fmt::format("Directional light {}", i);
             const float       x_pos     = R * sin(rel * glm::two_pi<float>());
             const float       z_pos     = R * cos(rel * glm::two_pi<float>());

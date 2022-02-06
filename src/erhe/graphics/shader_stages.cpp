@@ -18,10 +18,7 @@ auto Shader_stages::format(const string& source) -> string
     const char* head = source.c_str();
 
     std::stringstream sb;
-    sb
-        << std::setw(3)
-        << std::setfill(' ')
-        << line << ": ";
+    sb << fmt::format("{:>3}", line);
 
     for (;;)
     {
@@ -39,12 +36,7 @@ auto Shader_stages::format(const string& source) -> string
         if (c == '\n')
         {
             ++line;
-            sb
-                << '\n'
-                << std::setw(3)
-                << std::setfill(' ')
-                << line
-                << ": ";
+            sb << fmt::format("\n{:>3}: ", line);
             continue;
         }
         sb << c;

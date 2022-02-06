@@ -16,17 +16,17 @@ auto Vertex_attribute::desc(
 
     switch (usage)
     {
-        using enum Usage_type;
-        case none:           return "none";
-        case position:       return "position";
-        case tangent:        return "tangent";
-        case normal:         return "normal";
-        case bitangent:      return "bitangent";
-        case color:          return "color";
-        case weights:        return "weights";
-        case matrix_indices: return "matrix_indices";
-        case tex_coord:      return "tex_coord";
-        case id:             return "id";
+        //using enum Usage_type;
+        case Usage_type::none:           return "none";
+        case Usage_type::position:       return "position";
+        case Usage_type::tangent:        return "tangent";
+        case Usage_type::normal:         return "normal";
+        case Usage_type::bitangent:      return "bitangent";
+        case Usage_type::color:          return "color";
+        case Usage_type::weights:        return "weights";
+        case Usage_type::matrix_indices: return "matrix_indices";
+        case Usage_type::tex_coord:      return "tex_coord";
+        case Usage_type::id:             return "id";
         default:
         {
             ERHE_FATAL("Bad vertex attribute usage\n");

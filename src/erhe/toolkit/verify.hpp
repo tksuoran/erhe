@@ -32,7 +32,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-#define ERHE_FATAL(format, ...) do { printf("%s:%d " format, std::source_location::current().file_name(), std::source_location::current().line(), ##__VA_ARGS__); __builtin_trap(); __builtin_unreachable(); abort(); } while (1)
+#define ERHE_FATAL(format, ...) do { printf("%s:%d " format, __FILE__, __LINE__, ##__VA_ARGS__); __builtin_trap(); __builtin_unreachable(); abort(); } while (1)
 #define ERHE_VERIFY(expression) do { if (!(expression)) { ERHE_FATAL("assert %s failed in %s", #expression, __func__); } } while (0)
 
 #endif

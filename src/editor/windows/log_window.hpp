@@ -3,7 +3,7 @@
 #include "command.hpp"
 #include "windows/imgui_window.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/log/log.hpp"
 
 #include <imgui.h>

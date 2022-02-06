@@ -2,10 +2,10 @@
 #include "erhe/graphics/log.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/verify.hpp"
+#include "erhe/toolkit/filesystem.hpp"
 
 #include <mango/mango.hpp>
 
-#include <filesystem>
 #include <fstream>
 
 namespace erhe::graphics
@@ -34,9 +34,9 @@ namespace erhe::graphics
 
     switch (format)
     {
-        using enum gl::Internal_format;
-        case rgb8:  return Format{24, Format::UNORM, Format::RGB,  8, 8, 8, 0};
-        case rgba8: return Format{32, Format::UNORM, Format::RGBA, 8, 8, 8, 8};
+        //using enum gl::Internal_format;
+        case gl::Internal_format::rgb8:  return Format{24, Format::UNORM, Format::RGB,  8, 8, 8, 0};
+        case gl::Internal_format::rgba8: return Format{32, Format::UNORM, Format::RGBA, 8, 8, 8, 8};
         default: break;
     }
 
@@ -49,9 +49,9 @@ namespace erhe::graphics
 
     switch (format)
     {
-        using enum Image_format;
-        case rgb8:  return Format{24, Format::UNORM, Format::RGB,  8, 8, 8, 0};
-        case rgba8: return Format{32, Format::UNORM, Format::RGBA, 8, 8, 8, 8};
+        //using enum Image_format;
+        case Image_format::rgb8:  return Format{24, Format::UNORM, Format::RGB,  8, 8, 8, 0};
+        case Image_format::rgba8: return Format{32, Format::UNORM, Format::RGBA, 8, 8, 8, 8};
         default: break;
     }
 
@@ -69,8 +69,8 @@ void PNG_loader::close()
 }
 
 auto PNG_loader::open(
-    const std::filesystem::path& path,
-    Image_info&                  info
+    const fs::path& path,
+    Image_info&     info
 ) -> bool
 {
     m_file = std::make_unique<mango::filesystem::File>(path.string());
@@ -118,9 +118,9 @@ PNG_writer::PNG_writer() = default;
 PNG_writer::~PNG_writer() = default;
 
 auto PNG_writer::write(
-    const std::filesystem::path& path,
-    const Image_info&            info,
-    gsl::span<std::byte>         data
+    const fs::path&      path,
+    const Image_info&    info,
+    gsl::span<std::byte> data
 ) -> bool
 {
     m_image_encoder = std::make_unique<mango::image::ImageEncoder>(".png");

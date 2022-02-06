@@ -14,7 +14,7 @@ namespace editor {
 
 using json = nlohmann::json;
 
-Json_library::Json_library(const std::filesystem::path& path)
+Json_library::Json_library(const fs::path& path)
 {
     const auto opt_text = erhe::toolkit::read(path);
     if (!opt_text.has_value())

@@ -71,9 +71,9 @@ public:
     {
         switch (mode)
         {
-            using enum Mode;
-            case insert: return Mode::remove;
-            case remove: return Mode::insert;
+            //using enum Mode;
+            case Mode::insert: return Mode::remove;
+            case Mode::remove: return Mode::insert;
             default:
             {
                 ERHE_FATAL("Bad Context::Mode %04x\n", static_cast<unsigned int>(mode));

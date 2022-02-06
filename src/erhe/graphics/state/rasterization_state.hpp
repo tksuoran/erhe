@@ -58,7 +58,6 @@ public:
     void execute(const Rasterization_state& state);
 
 private:
-    size_t              m_last{0};
     Rasterization_state m_cache;
 };
 

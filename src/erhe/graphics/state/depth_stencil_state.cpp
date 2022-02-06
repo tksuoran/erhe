@@ -11,32 +11,21 @@ auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function
 {
     switch (depth_function)
     {
-        using enum gl::Depth_function;
-        case always  : return gl::Depth_function::always  ;
-        case equal   : return gl::Depth_function::equal   ;
-        case gequal  : return gl::Depth_function::lequal  ;
-        case greater : return gl::Depth_function::less    ;
-        case lequal  : return gl::Depth_function::gequal  ;
-        case less    : return gl::Depth_function::greater ;
-        case never   : return gl::Depth_function::never   ;
-        case notequal: return gl::Depth_function::notequal;
+        //using enum gl::Depth_function;
+        case gl::Depth_function::always  : return gl::Depth_function::always  ;
+        case gl::Depth_function::equal   : return gl::Depth_function::equal   ;
+        case gl::Depth_function::gequal  : return gl::Depth_function::lequal  ;
+        case gl::Depth_function::greater : return gl::Depth_function::less    ;
+        case gl::Depth_function::lequal  : return gl::Depth_function::gequal  ;
+        case gl::Depth_function::less    : return gl::Depth_function::greater ;
+        case gl::Depth_function::never   : return gl::Depth_function::never   ;
+        case gl::Depth_function::notequal: return gl::Depth_function::notequal;
         default:
         {
             ERHE_FATAL("bad gl::Depth_function\n");
         }
     }
 }
-
-//auto reverse(const Depth_stencil_state& depth_stencil_state) -> Depth_stencil_state
-//{
-//    return Depth_stencil_state{
-//        depth_stencil_state.depth_test_enable,
-//        depth_stencil_state.depth_write_enable,
-//        reverse(depth_stencil_state.depth_compare_op),
-//        depth_stencil_state.stencil_test_enable,
-//        depth_stencil_state.front,
-//        depth_stencil_state.back};
-//}
 
 auto Stencil_state_component_hash::operator()(
     const Stencil_op_state& stencil_state_component

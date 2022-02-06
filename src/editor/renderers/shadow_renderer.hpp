@@ -4,7 +4,7 @@
 
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/scene/viewport.hpp"
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 
 namespace erhe::graphics
 {

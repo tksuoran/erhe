@@ -1,11 +1,12 @@
 #pragma once
 
+#include "erhe/toolkit/optional.hpp"
+
 #include <glm/glm.hpp>
 
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
-#include <optional>
 #include <typeinfo>
 #include <vector>
 

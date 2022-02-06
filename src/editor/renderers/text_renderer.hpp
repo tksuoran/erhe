@@ -2,7 +2,7 @@
 
 #include "renderers/buffer_writer.hpp"
 
-#include "erhe/components/component.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/shader_resource.hpp"

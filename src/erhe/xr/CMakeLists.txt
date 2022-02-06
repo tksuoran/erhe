@@ -25,6 +25,7 @@ target_link_libraries(${_target}
         fmt::fmt
         glm::glm
         Microsoft.GSL::GSL
+        optional_lite
         openxr_loader
 )
 

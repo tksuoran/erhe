@@ -1,8 +1,7 @@
 #pragma once
 
-#include "erhe/components/component.hpp"
-
-#include <filesystem>
+#include "erhe/components/components.hpp"
+#include "erhe/toolkit/filesystem.hpp"
 
 namespace erhe::graphics {
     class Texture;
@@ -34,7 +33,7 @@ public:
     void initialize_component() override;
 
     // Public API
-    [[nodiscard]] auto load(const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>;
+    [[nodiscard]] auto load(const fs::path& path) -> std::shared_ptr<erhe::graphics::Texture>;
 
     std::shared_ptr<erhe::graphics::Texture> background;
 
