@@ -59,10 +59,6 @@ public:
     [[nodiscard]] auto viewport() const -> erhe::scene::Viewport;
     [[nodiscard]] auto gpu_time() const -> double;
 
-    static constexpr size_t s_max_light_count    = 6;
-    static constexpr size_t s_texture_resolution = 4 * 1024;
-    static constexpr bool   s_enable             = true;
-
 private:
     // Component dependencies
     std::shared_ptr<Configuration>                        m_configuration;

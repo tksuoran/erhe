@@ -40,10 +40,11 @@
             "externalConsole": false
         },
         {
-            "name": "editor Ninja (Linux)",
-            "type": "cppdbg",
+            "name": "editor Ninja (Linux) LLDB",
+            //"type": "cppdbg",
+            "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/src/editor/editor",
+            "program": "${workspaceFolder}/out/build/Linux_Debug_Ninja_GCC_11_Embree/src/editor/editor",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/src/editor",

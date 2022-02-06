@@ -65,8 +65,14 @@ erhe_target_sources_grouped(
 if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-         png_loader_mango.cpp
-         png_loader_mango.hpp
+        png_loader_mango.cpp
+        png_loader_mango.hpp
+    )
+elseif (${ERHE_PNG_LIBRARY} STREQUAL "fpng")
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        png_loader_fpng.cpp
+        png_loader_fpng.hpp
     )
 else()
     erhe_target_sources_grouped(
@@ -100,6 +106,9 @@ endif ()
 
 if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
     target_link_libraries(${_target} PUBLIC mango)
+endif()
+if (${ERHE_PNG_LIBRARY} STREQUAL "fpng")
+    target_link_libraries(${_target} PUBLIC fpng)
 endif()
 
 erhe_target_settings(${_target})

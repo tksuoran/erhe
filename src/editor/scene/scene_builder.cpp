@@ -194,7 +194,7 @@ void Scene_builder::make_brushes()
 
     Task_queue execution_queue{get<Configuration>()->parallel_initialization};
 
-    constexpr float floor_size = 20.0f;
+    constexpr float floor_size = 40.0f;
 
     auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
         0.5f * vec3{floor_size, 1.0f, floor_size}
@@ -612,10 +612,10 @@ void Scene_builder::add_room()
     auto floor_material = m_scene_root->make_material(
         "Floor",
         //vec4{0.02f, 0.02f, 0.02f, 1.0f},
-        vec4{0.00f, 0.00f, 0.00f, 1.0f},
-        0.001f,
-        0.0f,
-        0.998f
+        vec4{0.01f, 0.01f, 0.01f, 1.0f},
+        0.90f,
+        0.00f,
+        0.01f
     );
     floor_material->visible = true;
     //auto table_material = m_scene_root->make_material(
@@ -937,7 +937,7 @@ auto Scene_builder::make_spot_light(
 
 void Scene_builder::setup_lights()
 {
-    m_scene_root->light_layer()->ambient_light = vec4{0.033f, 0.055f, 0.077f, 0.0f};
+    m_scene_root->light_layer()->ambient_light = vec4{0.042f, 0.044f, 0.049f, 0.0f};
 
     //make_directional_light(
     //    "Key",
@@ -963,24 +963,22 @@ void Scene_builder::setup_lights()
     //    }
     //);
 
-    constexpr int directional_light_count = 3;
+    constexpr int directional_light_count = 9;
     if constexpr (directional_light_count > 0)
     {
         for (int i = 0; i < directional_light_count; ++i)
         {
             const float rel = static_cast<float>(i) / static_cast<float>(directional_light_count);
-            const float R   = 4.0f;
+            const float R   = 6.0f;
             const float h   = rel * 360.0f;
-            const float s   = 0.2f;
+            const float s   = 0.5f;
             const float v   = 1.0f;
             float r, g, b;
 
             erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
 
             const vec3        color     = vec3{r, g, b};
-            const float       intensity = i == 0
-                ? 5000.0f
-                : 8.0f / static_cast<float>(directional_light_count);
+            const float       intensity = 20.0f / static_cast<float>(directional_light_count);
             const std::string name      = fmt::format("Directional light {}", i);
             const float       x_pos     = R * sin(rel * glm::two_pi<float>());
             const float       z_pos     = R * cos(rel * glm::two_pi<float>());

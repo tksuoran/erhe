@@ -112,7 +112,9 @@
         "any": "cpp",
         "hash_map": "cpp",
         "hash_set": "cpp",
-        "source_location": "cpp"
+        "source_location": "cpp",
+        "numbers": "cpp",
+        "semaphore": "cpp"
     },
     "C_Cpp.errorSquiggles": "Disabled",
     "C_Cpp.dimInactiveRegions": false,

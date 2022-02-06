@@ -354,8 +354,8 @@ void Post_processing::downsample(
     gpu_uint_data [word_offset++] = 1;
     gpu_float_data[word_offset++] = 0.0f;
     gpu_float_data[word_offset++] = 0.0f;
-    gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
-    gpu_uint_data[word_offset++] = handle >> 32u;
+    gpu_uint_data [word_offset++] = (handle & 0xffffffffu);
+    gpu_uint_data [word_offset++] = handle >> 32u;
     m_parameter_writer.write_offset += m_parameter_block->size_bytes();
     m_parameter_writer.end();
 

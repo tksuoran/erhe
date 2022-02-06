@@ -8,17 +8,17 @@
 namespace erhe::physics
 {
 
-inline [[nodiscard]] auto from_bullet(const btVector3 v) -> glm::vec3
+[[nodiscard]] inline auto from_bullet(const btVector3 v) -> glm::vec3
 {
     return glm::vec3{v.x(), v.y(), v.z()};
 }
 
-inline [[nodiscard]] auto to_bullet(const glm::vec3 v) -> btVector3
+[[nodiscard]] inline auto to_bullet(const glm::vec3 v) -> btVector3
 {
     return btVector3{v.x, v.y, v.z};
 }
 
-inline [[nodiscard]] auto from_bullet(const btMatrix3x3 m) -> glm::mat3
+[[nodiscard]] inline auto from_bullet(const btMatrix3x3 m) -> glm::mat3
 {
     return glm::mat3{
         m.getColumn(0).x(), m.getColumn(0).y(), m.getColumn(0).z(),
@@ -27,7 +27,7 @@ inline [[nodiscard]] auto from_bullet(const btMatrix3x3 m) -> glm::mat3
     };
 }
 
-inline [[nodiscard]] auto to_bullet(const glm::mat3 m) -> btMatrix3x3
+[[nodiscard]] inline auto to_bullet(const glm::mat3 m) -> btMatrix3x3
 {
     return btMatrix3x3{
         m[0][0], m[1][0], m[2][0],
@@ -36,7 +36,7 @@ inline [[nodiscard]] auto to_bullet(const glm::mat3 m) -> btMatrix3x3
     };
 }
 
-inline [[nodiscard]] auto from_bullet(const btTransform t) -> Transform
+[[nodiscard]] inline auto from_bullet(const btTransform t) -> Transform
 {
     return Transform{
         from_bullet(t.getBasis()),
@@ -44,7 +44,7 @@ inline [[nodiscard]] auto from_bullet(const btTransform t) -> Transform
     };
 }
 
-inline [[nodiscard]] auto to_bullet(const Transform t) -> btTransform
+[[nodiscard]] inline auto to_bullet(const Transform t) -> btTransform
 {
     return btTransform{
         to_bullet(t.basis),

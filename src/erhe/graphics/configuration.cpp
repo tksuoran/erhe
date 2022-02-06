@@ -67,7 +67,7 @@ void opengl_callback(
     }
 
     log_configuration.info(
-        "GL debug messsage:\n"
+        "GL debug message:\n"
         "source:   {}\n"
         "type:     {}\n"
         "id:       {:#08x}\n"

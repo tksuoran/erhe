@@ -1,0 +1,6 @@
+[
+    {
+        "name": "Linux x86_64 GCC 11",
+        "toolchainFile": "${workspaceFolder}/cmake/toolchain/x86_64-linux-gnu-gcc-11.cmake"
+    }
+]

@@ -59,6 +59,14 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 
+#FetchContent_Declare(
+#    fpng
+#    GIT_REPOSITORY https://github.com/richgel999/fpng.git
+#    GIT_TAG        main
+#    GIT_SHALLOW    TRUE
+#    GIT_PROGRESS   TRUE
+#)
+
 FetchContent_Declare(
     freetype
     GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype.git

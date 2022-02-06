@@ -24,4 +24,19 @@ Material::Material(
 {
 }
 
+Material::Material(
+    const std::string_view name,
+    const glm::vec3        base_color
+)
+    : name      {name}
+    , metallic  {0.99f}
+    , roughness {0.15f}
+    , anisotropy{0.0f}
+    , base_color{glm::vec4{base_color, 1.0f}}
+    , emissive  {0.0f, 0.0f, 0.0f, 0.0f}
+    , visible   {true}
+{
+}
+
+
 }

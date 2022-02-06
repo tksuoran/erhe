@@ -26,6 +26,10 @@ public:
         const float            anisotropy = 0.0f,
         const float            metallic   = 0.6f
     );
+    Material(
+        const std::string_view name,
+        const glm::vec3        base_color
+    );
     ~Material();
 
     size_t                                   index{0};

@@ -26,8 +26,8 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "bullet")
         Bullet3Common
         Bullet3Dynamics
         Bullet3Geometry
-        BulletCollision
         BulletDynamics
+        BulletCollision
         LinearMath
     )
 

@@ -23,7 +23,7 @@ class Text_renderer;
 class Plot
 {
 public:
-    Plot(const std::string_view label, const size_t width = 256);
+    explicit Plot(const std::string_view label, const size_t width = 256);
     void imgui();
 
     void clear();

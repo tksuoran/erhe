@@ -99,7 +99,7 @@ auto kernel_binom_linear(const Kernel& discrete_data) -> Kernel
     const auto& wd = discrete_data.weights;
     const auto& od = discrete_data.offsets;
 
-    const auto w_count = wd.size();
+    const int w_count = static_cast<int>(wd.size());
 
     // sanity checks
     const auto pairs = w_count - 1;
@@ -250,7 +250,11 @@ void Plot::imgui()
     {
         //m_scale_min = std::numeric_limits<float>::max();
         m_scale_max = std::numeric_limits<float>::lowest();
-        for (int i = 0; i < m_values.size(); i++)
+        for (
+            int i = 0, end = static_cast<int>(m_values.size());
+            i < end;
+            i++
+        )
         {
             const float v = m_values.at(i);
             if (v != v) // Ignore NaN values

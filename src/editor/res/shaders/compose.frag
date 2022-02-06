@@ -64,24 +64,40 @@ vec3 tonemap_reinhard(vec3 color)
 }
 
 
+vec3 tonemap_simple(vec3 x) {
+
+	// Reinhard with toe.
+	vec3 a = vec3(
+        pow(x.r, 1.25),
+        pow(x.g, 1.25),
+        pow(x.b, 1.25)
+    ); // toe
+	return a / (a + vec3(1.0)); // Shoulder
+}
+
+vec3 tonemap_ue3(vec3 x) {
+
+	// Used in Unreal Engine 3 up to 4.14. (I think, might be wrong).
+	// They've since moved to ACES for output on a larger variety of devices.
+	// Very simple and intented for use with color-lut afterwards.
+	return x / (x + vec3(0.187)) * vec3(1.035);
+}
+
+
 void main()
 {
-    vec3 sum = texture(sampler2D(post_processing.source_texture[0]), v_texcoord).rgb;
+    vec3 sum = 0.1 * texture(sampler2D(post_processing.source_texture[0]), v_texcoord).rgb;
     for (uint i = 1; i < post_processing.texture_count; ++i)
-    //for (uint i = 1; i < 8; ++i)
     {
-        float scale = 0.005 / float(i + 1);
+        float scale = 0.001 / float(i + 1);
         vec3 source = texture(sampler2D(post_processing.source_texture[i]), v_texcoord).rgb;
         sum += fix(scale * source);
     }
 
     vec3 color = sum;
 
-    out_color.rgb = tonemap_reinhard(color);
-    //out_color.rgb = 0.5 * tonemap(color) + 0.5 * tonemap_reinhard(color);
-    //out_color.rgb = tonemap_with_weight(color, 0.1);
-
-    out_color.a    = 1.0;
-
-    //out_color = texture(sampler2D(post_processing.source_texture[2]), v_texcoord);
+    //out_color.rgb = tonemap_reinhard(color);
+    //out_color.rgb = tonemap_simple(color);
+    out_color.rgb = tonemap_ue3(color);
+    out_color.a   = 1.0;
 }

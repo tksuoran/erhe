@@ -18,8 +18,8 @@ class Bullet_constraint
 public:
     ~Bullet_constraint() override;
 
-    virtual [[nodiscard]] auto get_bullet_constraint()       ->       btTypedConstraint* = 0;
-    virtual [[nodiscard]] auto get_bullet_constraint() const -> const btTypedConstraint* = 0;
+    [[nodiscard]] virtual auto get_bullet_constraint()       ->       btTypedConstraint* = 0;
+    [[nodiscard]] virtual auto get_bullet_constraint() const -> const btTypedConstraint* = 0;
 };
 
 class Bullet_point_to_point_constraint
