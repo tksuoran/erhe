@@ -259,7 +259,7 @@ void Scene_builder::make_brushes()
         }
     );
 
-    constexpr bool gltf_files      = false; // WIP
+    constexpr bool gltf_files      = true; // WIP
     constexpr bool obj_files       = true;
     constexpr bool platonic_solids = true;
     constexpr bool sphere          = true;

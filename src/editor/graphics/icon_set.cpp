@@ -8,7 +8,9 @@
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/light.hpp"
 
-#include <lunasvg.h>
+#if defined(ERHE_SVG_LIBRARY_LUNASVG)
+#   include <lunasvg.h>
+#endif
 
 namespace editor {
 
@@ -63,10 +65,9 @@ void Icon_set::initialize_component()
     icons.node              = load(icon_directory / "node.svg");
 }
 
-auto Icon_set::load(
-    const fs::path& path
-) -> ImVec2
+auto Icon_set::load(const fs::path& path) -> ImVec2
 {
+#if defined(ERHE_SVG_LIBRARY_LUNASVG)
     Expects(m_row < m_row_count);
 
     //const auto  current_path = fs::current_path();
@@ -96,7 +97,11 @@ auto Icon_set::load(
         m_row++;
     }
 
-    return ImVec2(u, v);
+    return ImVec2{u, v};
+#else
+    static_cast<void>(path);
+    return ImVec2{};
+#endif
 }
 
 auto Icon_set::uv1(const ImVec2& uv0) const -> ImVec2

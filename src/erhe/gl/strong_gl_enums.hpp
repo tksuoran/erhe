@@ -1,5 +1,4 @@
-#ifndef strong_gl_enums_hpp_erhe_gl
-#define strong_gl_enums_hpp_erhe_gl
+#pragma once
 
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
@@ -61,8 +60,6 @@ template<> struct Enable_bit_mask_operators<Sync_object_mask      > { static con
 template<> struct Enable_bit_mask_operators<Use_program_stage_mask> { static const bool enable = true; };
 
 }
-
-#endif
 
 #if 0
 

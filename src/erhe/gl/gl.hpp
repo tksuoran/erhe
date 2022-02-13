@@ -1,5 +1,4 @@
-#ifndef gl_hpp_erhe_gl
-#define gl_hpp_erhe_gl
+#pragma once
 
 #if defined(_WIN32)
 #   ifndef _CRT_SECURE_NO_WARNINGS
@@ -36,4 +35,3 @@ void check_error       ();
 
 } // namespace gl
 
-#endif

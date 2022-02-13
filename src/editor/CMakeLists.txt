@@ -257,10 +257,16 @@ target_link_libraries(
     imgui
     ghc_filesystem
     optional_lite
-    lunasvg
-    miniaudio
     nlohmann_json::nlohmann_json
 )
+
+if (${ERHE_SVG_LIBRARY} STREQUAL "lunasvg")
+    target_link_libraries(${_target} PRIVATE lunasvg)
+endif ()
+
+if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
+    target_link_libraries(${_target} PRIVATE miniaudio)
+endif ()
 
 if (${ERHE_XR_LIBRARY} STREQUAL "OpenXR")
     target_link_libraries(${_target} PRIVATE erhe_xr openxr_loader)
@@ -279,7 +285,7 @@ if (${ERHE_GLTF_LIBRARY} STREQUAL "glTF-SDK")
 endif ()
 
 if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
-target_link_libraries(${_target} PRIVATE cgltf)
+    target_link_libraries(${_target} PRIVATE cgltf)
 endif ()
 
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

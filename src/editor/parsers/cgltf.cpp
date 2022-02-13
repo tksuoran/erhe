@@ -13,11 +13,7 @@
 
 #include <gsl/gsl>
 
-#include <GLTFSDK/GLTF.h>
-#include <GLTFSDK/GLTFResourceReader.h>
-#include <GLTFSDK/GLBResourceReader.h>
-#include <GLTFSDK/Deserialize.h>
-#include <GLTFSDK/MeshPrimitiveUtils.h>
+#include "cgltf.h"
 
 #include <algorithm>
 #include <cctype>
@@ -30,178 +26,144 @@ namespace editor {
 
 namespace {
 
-using namespace Microsoft::glTF;
-
-auto c_str(BufferViewTarget value) -> const char*
+auto c_str(const cgltf_result value) -> const char*
 {
     switch (value)
     {
-        //using enum BufferViewTarget;
-        case BufferViewTarget::ARRAY_BUFFER:         return "array_buffer";
-        case BufferViewTarget::ELEMENT_ARRAY_BUFFER: return "element_array_buffer";
-        default:                   return "?";
+	    case cgltf_result::cgltf_result_success:         return "sucess";
+	    case cgltf_result::cgltf_result_data_too_short:  return "data too short";
+	    case cgltf_result::cgltf_result_unknown_format:  return "unknown format";
+	    case cgltf_result::cgltf_result_invalid_json:    return "invalid json";
+	    case cgltf_result::cgltf_result_invalid_gltf:    return "invalid gltf";
+	    case cgltf_result::cgltf_result_invalid_options: return "invalid options";
+	    case cgltf_result::cgltf_result_file_not_found:  return "file not found";
+	    case cgltf_result::cgltf_result_io_error:        return "io error";
+	    case cgltf_result::cgltf_result_out_of_memory:   return "out of memory";
+        case cgltf_result::cgltf_result_legacy_gltf:     return "legacy gltf";
+        default:                                         return "?";
+    }
+}
+
+auto c_str(const cgltf_attribute_type value) -> const char*
+{
+    switch (value)
+    {
+	    case cgltf_attribute_type::cgltf_attribute_type_invalid:  return "invalid";
+	    case cgltf_attribute_type::cgltf_attribute_type_position: return "position";
+	    case cgltf_attribute_type::cgltf_attribute_type_normal:   return "normal";
+	    case cgltf_attribute_type::cgltf_attribute_type_tangent:  return "tangent";
+	    case cgltf_attribute_type::cgltf_attribute_type_texcoord: return "texcoord";
+	    case cgltf_attribute_type::cgltf_attribute_type_color:    return "color";
+	    case cgltf_attribute_type::cgltf_attribute_type_joints:   return "joints";
+        case cgltf_attribute_type::cgltf_attribute_type_weights:  return "weights";
+        default:                                                  return "?";
+    }
+}
+
+auto c_str(const cgltf_buffer_view_type value) -> const char*
+{
+    switch (value)
+    {
+        case cgltf_buffer_view_type::cgltf_buffer_view_type_invalid:  return "invalid";
+        case cgltf_buffer_view_type::cgltf_buffer_view_type_vertices: return "vertices";
+        case cgltf_buffer_view_type::cgltf_buffer_view_type_indices:  return "indices";
+        default:                                                      return "?";
     }
 };
 
-auto c_str(ComponentType value) -> const char*
+auto c_str(const cgltf_component_type value) -> const char*
 {
     switch (value)
     {
-        //using enum ComponentType;
-        case ComponentType::COMPONENT_UNKNOWN       : return "unknown";
-        case ComponentType::COMPONENT_BYTE          : return "byte";
-        case ComponentType::COMPONENT_UNSIGNED_BYTE : return "unsigned_byte";
-        case ComponentType::COMPONENT_SHORT         : return "short";
-        case ComponentType::COMPONENT_UNSIGNED_SHORT: return "unsigned_short";
-        case ComponentType::COMPONENT_UNSIGNED_INT  : return "unsigned_int";
-        case ComponentType::COMPONENT_FLOAT         : return "float";
-        default:                       return "?";
+        case cgltf_component_type::cgltf_component_type_invalid : return "invalid";
+        case cgltf_component_type::cgltf_component_type_r_8     : return "r_8";
+        case cgltf_component_type::cgltf_component_type_r_8u    : return "r_8u";
+        case cgltf_component_type::cgltf_component_type_r_16    : return "r_16";
+        case cgltf_component_type::cgltf_component_type_r_16u   : return "r_16u";
+        case cgltf_component_type::cgltf_component_type_r_32u   : return "r_32u";
+        case cgltf_component_type::cgltf_component_type_r_32f   : return "r_32f";
+        default:                                                  return "?";
     }
 };
 
-auto c_str(AccessorType value) -> const char*
+auto c_str(const cgltf_type value) -> const char*
 {
     switch (value)
     {
-        //using enum AccessorType;
-        case AccessorType::TYPE_UNKNOWN: return "unknown";
-        case AccessorType::TYPE_SCALAR:  return "scalar";
-        case AccessorType::TYPE_VEC2:    return "vec2";
-        case AccessorType::TYPE_VEC3:    return "vec3";
-        case AccessorType::TYPE_VEC4:    return "vec4";
-        case AccessorType::TYPE_MAT2:    return "mat2";
-        case AccessorType::TYPE_MAT3:    return "mat3";
-        case AccessorType::TYPE_MAT4:    return "mat4";
-        default:           return "?";
+        case cgltf_type::cgltf_type_invalid: return "invalid";
+        case cgltf_type::cgltf_type_scalar:  return "scalar";
+        case cgltf_type::cgltf_type_vec2:    return "vec2";
+        case cgltf_type::cgltf_type_vec3:    return "vec3";
+        case cgltf_type::cgltf_type_vec4:    return "vec4";
+        case cgltf_type::cgltf_type_mat2:    return "mat2";
+        case cgltf_type::cgltf_type_mat3:    return "mat3";
+        case cgltf_type::cgltf_type_mat4:    return "mat4";
+        default:                             return "?";
     }
 };
 
-auto c_str(MeshMode value) -> const char*
+auto c_str(const cgltf_primitive_type value) -> const char*
 {
     switch (value)
     {
-        //using enum MeshMode;
-        case MeshMode::MESH_POINTS:         return "points";
-        case MeshMode::MESH_LINES:          return "lines";
-        case MeshMode::MESH_LINE_LOOP:      return "line_loop";
-        case MeshMode::MESH_LINE_STRIP:     return "line_strip";
-        case MeshMode::MESH_TRIANGLES:      return "triangles";
-        case MeshMode::MESH_TRIANGLE_STRIP: return "triangle_strip";
-        case MeshMode::MESH_TRIANGLE_FAN:   return "triangle_fan";
-        default:                  return "?";
+        case cgltf_primitive_type::cgltf_primitive_type_points:         return "points";
+        case cgltf_primitive_type::cgltf_primitive_type_lines:          return "lines";
+        case cgltf_primitive_type::cgltf_primitive_type_line_loop:      return "line_loop";
+        case cgltf_primitive_type::cgltf_primitive_type_line_strip:     return "line_strip";
+        case cgltf_primitive_type::cgltf_primitive_type_triangles:      return "triangles";
+        case cgltf_primitive_type::cgltf_primitive_type_triangle_strip: return "triangle_strip";
+        case cgltf_primitive_type::cgltf_primitive_type_triangle_fan:   return "triangle_fan";
+        default:                                                        return "?";
     }
 };
 
-auto c_str(AlphaMode value) -> const char*
+auto c_str(const cgltf_alpha_mode value) -> const char*
 {
     switch (value)
     {
-        //using enum AlphaMode;
-        case AlphaMode::ALPHA_UNKNOWN: return "unknown";
-        case AlphaMode::ALPHA_OPAQUE:  return "opaque";
-        case AlphaMode::ALPHA_BLEND:   return "blend";
-        case AlphaMode::ALPHA_MASK:    return "mask";
-        default:            return "?";
+        case cgltf_alpha_mode::cgltf_alpha_mode_opaque: return "opaque";
+        case cgltf_alpha_mode::cgltf_alpha_mode_mask:   return "blend";
+        case cgltf_alpha_mode::cgltf_alpha_mode_blend:  return "mask";
+        default:                                        return "?";
     }
 };
 
-auto c_str(TargetPath value) -> const char*
+auto c_str(const cgltf_animation_path_type value) -> const char*
 {
     switch (value)
     {
-        //using enum TargetPath;
-        case TargetPath::TARGET_UNKNOWN:     return "unknown";
-        case TargetPath::TARGET_TRANSLATION: return "translation";
-        case TargetPath::TARGET_ROTATION:    return "rotation";
-        case TargetPath::TARGET_SCALE:       return "scale";
-        case TargetPath::TARGET_WEIGHTS:     return "weights";
+        case cgltf_animation_path_type::cgltf_animation_path_type_invalid:     return "invalid";
+        case cgltf_animation_path_type::cgltf_animation_path_type_translation: return "translation";
+        case cgltf_animation_path_type::cgltf_animation_path_type_rotation:    return "rotation";
+        case cgltf_animation_path_type::cgltf_animation_path_type_scale:       return "scale";
+        case cgltf_animation_path_type::cgltf_animation_path_type_weights:     return "weights";
         default:                 return "?";
     }
 };
 
-auto c_str(InterpolationType value) -> const char*
+auto c_str(const cgltf_interpolation_type value) -> const char*
 {
     switch (value)
     {
-        //using enum InterpolationType;
-        case InterpolationType::INTERPOLATION_UNKNOWN:     return "unknown";
-        case InterpolationType::INTERPOLATION_LINEAR:      return "linear";
-        case InterpolationType::INTERPOLATION_STEP:        return "step";
-        case InterpolationType::INTERPOLATION_CUBICSPLINE: return "cubicspline";
-        default:                        return "?";
+        case cgltf_interpolation_type::cgltf_interpolation_type_linear:       return "linear";
+        case cgltf_interpolation_type::cgltf_interpolation_type_step:         return "step";
+        case cgltf_interpolation_type::cgltf_interpolation_type_cubic_spline: return "cubicspline";
+        default:                                                              return "?";
     }
 };
 
-auto c_str(TransformationType value) -> const char*
+auto c_str(const cgltf_camera_type value) -> const char*
 {
     switch (value)
     {
-        //using enum TransformationType;
-        case TransformationType::TRANSFORMATION_IDENTITY: return "identity";
-        case TransformationType::TRANSFORMATION_MATRIX:   return "matrix";
-        case TransformationType::TRANSFORMATION_TRS:      return "trs";
-        default:                      return "?";
+        case cgltf_camera_type::cgltf_camera_type_invalid:      return "invalid";
+        case cgltf_camera_type::cgltf_camera_type_perspective:  return "perspective";
+        case cgltf_camera_type::cgltf_camera_type_orthographic: return "orthographic";
+        default:                                                return "?";
     }
 };
 
-auto c_str(ProjectionType value) -> const char*
-{
-    switch (value)
-    {
-        //using enum ProjectionType;
-        case ProjectionType::PROJECTION_PERSPECTIVE:  return "perspective";
-        case ProjectionType::PROJECTION_ORTHOGRAPHIC: return "orthographic";
-        default:                      return "?";
-    }
-};
-
-//constexpr const char* ACCESSOR_POSITION   = "POSITION";
-//constexpr const char* ACCESSOR_NORMAL     = "NORMAL";
-//constexpr const char* ACCESSOR_TANGENT    = "TANGENT";
-//constexpr const char* ACCESSOR_TEXCOORD_0 = "TEXCOORD_0";
-//constexpr const char* ACCESSOR_TEXCOORD_1 = "TEXCOORD_1";
-//constexpr const char* ACCESSOR_COLOR_0    = "COLOR_0";
-//constexpr const char* ACCESSOR_JOINTS_0   = "JOINTS_0";
-//constexpr const char* ACCESSOR_WEIGHTS_0  = "WEIGHTS_0";
 }
-
-class Stream_reader
-    : public Microsoft::glTF::IStreamReader
-{
-public:
-    explicit Stream_reader(const fs::path& path_base)
-        : m_path_base{path_base}
-    {
-        Expects(m_path_base.has_root_path());
-    }
-
-    auto GetInputStream(const std::string& filename) const -> std::shared_ptr<std::istream> override
-    {
-        //using namespace Microsoft::glTF;
-
-        auto stream_path = m_path_base / fs::path(filename);
-        auto stream = std::make_shared<std::ifstream>(stream_path, std::ios_base::binary);
-
-        // Check if the stream has no errors and is ready for I/O operations
-        if (!stream || !(*stream))
-        {
-            log_parsers.error(
-                "Unable to create a valid input stream for uri: {}\n"
-                "stream_path: {}\n"
-                "Base path: {}\n",
-                filename,
-                stream_path.string(),
-                m_path_base.string()
-            );
-            return {};
-        }
-
-        return stream;
-    }
-
-private:
-    fs::path m_path_base;
-};
 
 using namespace glm;
 using namespace erhe::geometry;
@@ -209,312 +171,320 @@ using namespace erhe::geometry;
 
 auto parse_gltf(
     const std::shared_ptr<Scene_root>& scene_root,
-    const fs::path&                    relative_path
+    const fs::path&                    path
 ) -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    fs::path canonical_path = fs::canonical(relative_path);
-    fs::path path = fs::current_path() / canonical_path;
-    log_parsers.trace("path = {}\n", path.generic_string());
-    // Pass the absolute path, without the filename, to the stream reader
-    auto stream_reader = std::make_unique<Stream_reader>(path.parent_path());
+    //try
+    //{
+    //    fs::path canonical_path = fs::canonical(relative_path);
+    //    fs::path path           = fs::current_path() / canonical_path;
+    //    log_parsers.trace("path = {}\n", path.generic_string());
+    //}
+    //catch (...)
+    //{
+    //    log_parsers.trace("invalid path = {}\n", relative_path.string());
+    //    return {};
+    //}
 
-    const fs::path path_file     = path.filename();
-    const fs::path path_file_ext = path_file.extension();
-
-    std::string manifest;
-
-    auto make_path_ext = [](const std::string& ext)
+    cgltf_options parse_options
     {
-        return "." + ext;
+	    .type             = cgltf_file_type_invalid, // auto
+	    .json_token_count = 0, // 0 == auto
+	    .memory = {
+            .alloc     = nullptr,
+            .free      = nullptr,
+            .user_data = nullptr
+        },
+        .file = {
+            .read      = nullptr,
+            .release   = nullptr,
+            .user_data = nullptr
+        }
     };
 
-    std::unique_ptr<Microsoft::glTF::GLTFResourceReader> resource_reader;
+    cgltf_data* gltf_data{nullptr};
+    cgltf_result result = cgltf_parse_file(
+        &parse_options,
+        path.string().c_str(),
+        &gltf_data
+    );
 
-    // If the file has a '.gltf' extension then create a GLTFResourceReader
-    if (path_file_ext == make_path_ext(Microsoft::glTF::GLTF_EXTENSION))
+    if (result != cgltf_result::cgltf_result_success)
     {
-        auto gltf_stream = stream_reader->GetInputStream(path_file.string()); // Pass a UTF-8 encoded filename to GetInputString
-        auto gltf_resource_reader = std::make_unique<Microsoft::glTF::GLTFResourceReader>(std::move(stream_reader));
-
-        std::stringstream manifest_stream;
-
-        // Read the contents of the glTF file into a string using a std::stringstream
-        manifest_stream << gltf_stream->rdbuf();
-        manifest = manifest_stream.str();
-
-        resource_reader = std::move(gltf_resource_reader);
-    }
-    else
-
-    // If the file has a '.glb' extension then create a GLBResourceReader. This class derives
-    // from GLTFResourceReader and adds support for reading manifests from a GLB container's
-    // JSON chunk and resource data from the binary chunk.
-    if (path_file_ext == make_path_ext(Microsoft::glTF::GLB_EXTENSION))
-    {
-        auto glb_stream = stream_reader->GetInputStream(path_file.string());
-        auto glb_resource_reader = std::make_unique<Microsoft::glTF::GLBResourceReader>(
-            std::move(stream_reader),
-            std::move(glb_stream)
-        );
-
-        manifest = glb_resource_reader->GetJson(); // Get the manifest from the JSON chunk
-
-        resource_reader = std::move(glb_resource_reader);
-    }
-
-    if (!resource_reader)
-    {
-        log_parsers.error("Command line argument path filename extension must be .gltf or .glb");
+        log_parsers.error("glTF parse error: {}\n", c_str(result));
         return {};
     }
 
-    Microsoft::glTF::Document document;
-
-    try
+    if (gltf_data->asset.version != nullptr)
     {
-        document = Microsoft::glTF::Deserialize(manifest);
+        log_parsers.info("Asset Version:    {}\n", gltf_data->asset.version);
     }
-    catch (const Microsoft::glTF::GLTFException& ex)
+    if (gltf_data->asset.min_version != nullptr)
     {
-        std::stringstream ss;
-
-        ss << "Microsoft::glTF::Deserialize failed: ";
-        ss << ex.what();
-
-        throw std::runtime_error(ss.str());
+        log_parsers.info("Asset MinVersion: {}\n", gltf_data->asset.min_version);
+    }
+    if (gltf_data->asset.generator != nullptr)
+    {
+        log_parsers.info("Asset Generator:  {}\n", gltf_data->asset.generator);
+    }
+    if (gltf_data->asset.copyright != nullptr)
+    {
+        log_parsers.info("Asset Copyright:  {}\n", gltf_data->asset.copyright);
     }
 
-    log_parsers.info("Asset Version:    {}\n", document.asset.version);
-    log_parsers.info("Asset MinVersion: {}\n", document.asset.minVersion);
-    log_parsers.info("Asset Generator:  {}\n", document.asset.generator);
-    log_parsers.info("Asset Copyright:  {}\n", document.asset.copyright);
+    // TODO asset extras and extensions
 
     // Scene Info
-    log_parsers.info("Scene Count: {}\n", document.scenes.Size());
-
-    if (document.scenes.Size() > 0U)
-    {
-        log_parsers.info("Default Scene Index: {}\n", document.GetDefaultScene().id);
-    }
+    log_parsers.info("Scene Count: {}\n", gltf_data->scenes_count);
 
     // Entity Info
-    log_parsers.info("Node Count:       {}\n", document.nodes.Size());
-    log_parsers.info("Camera Count:     {}\n", document.cameras.Size());
-    log_parsers.info("Material Count:   {}\n", document.materials.Size());
-    log_parsers.info("Mesh Count:       {}\n", document.meshes.Size());
-    log_parsers.info("Skin Count:       {}\n", document.skins.Size());
-    log_parsers.info("Image Count:      {}\n", document.images.Size());
-    log_parsers.info("Texture Count:    {}\n", document.textures.Size());
-    log_parsers.info("Sampler Count:    {}\n", document.samplers.Size());
-    log_parsers.info("Buffer Count:     {}\n", document.buffers.Size());
-    log_parsers.info("BufferView Count: {}\n", document.bufferViews.Size());
-    log_parsers.info("Accessor Count:   {}\n", document.accessors.Size());
-    log_parsers.info("Animation Count:  {}\n", document.animations.Size());
+    log_parsers.info("Node Count:       {}\n", gltf_data->nodes_count);
+    log_parsers.info("Camera Count:     {}\n", gltf_data->cameras_count);
+    log_parsers.info("Light Count:      {}\n", gltf_data->lights_count);
+    log_parsers.info("Material Count:   {}\n", gltf_data->materials_count);
+    log_parsers.info("Mesh Count:       {}\n", gltf_data->meshes_count);
+    log_parsers.info("Skin Count:       {}\n", gltf_data->skins_count);
+    log_parsers.info("Image Count:      {}\n", gltf_data->images_count);
+    log_parsers.info("Texture Count:    {}\n", gltf_data->textures_count);
+    log_parsers.info("Sampler Count:    {}\n", gltf_data->samplers_count);
+    log_parsers.info("Buffer Count:     {}\n", gltf_data->buffers_count);
+    log_parsers.info("BufferView Count: {}\n", gltf_data->buffer_views_count);
+    log_parsers.info("Accessor Count:   {}\n", gltf_data->accessors_count);
+    log_parsers.info("Animation Count:  {}\n", gltf_data->animations_count);
 
-    for (const auto& extension : document.extensionsUsed)
+    for (cgltf_size i = 0; i < gltf_data->extensions_used_count; ++i)
     {
-        log_parsers.info("Extension Used: {}\n", extension);
+        log_parsers.info("Extension Used: {}\n", gltf_data->extensions_used[i]);
     }
 
-    for (const auto& extension : document.extensionsRequired)
+    for (cgltf_size i = 0; i < gltf_data->extensions_required_count; ++i)
     {
-        log_parsers.info("Extension Required: {}\n", extension);
+        log_parsers.info("Extension Required: {}\n", gltf_data->extensions_required[i]);
     }
 
-    if (document.scenes.Size() != 1)
-    {
-        log_parsers.warn("Warning: document.scenes.Size() = {}", document.scenes.Size());
-    }
+    log_parsers.info("scene count = {}", gltf_data->scenes_count);
 
     auto& root_scene = scene_root->scene();
-    for (const auto& src_scene : document.scenes.Elements())
+    for (cgltf_size scene_index = 0; scene_index < gltf_data->scenes_count; ++scene_index)
     {
-        for (const auto& node_id : src_scene.nodes)
+        const cgltf_scene* scene = &gltf_data->scenes[scene_index];
+        for (cgltf_size node_index = 0; node_index < scene->nodes_count; ++node_index)
         {
-            const auto& node = document.nodes.Get(node_id);
-            if (!node.cameraId.empty())
+            const cgltf_node* node = scene->nodes[node_index];
+            log_parsers.info("Node {}: - {}\n", node_index, node->name);
+
+            if (node->parent != nullptr)
             {
-                log_parsers.info("Camera: {} - {}\n", node_id, node.cameraId);
-                const auto& src_camera = document.cameras.Get(node.cameraId);
-                auto camera = std::make_shared<erhe::scene::Camera>(node.name);
-                if (src_camera.projection)
+                const cgltf_node* parent    = node->parent;
+                const intptr_t    parent_id = parent - gltf_data->nodes;
+                log_parsers.info("Node parent: id = {}, name = {}\n", parent_id, parent->name);
+            }
+
+            log_parsers.info("Node children count: - {}\n", node->children_count);
+
+            if (node->camera != nullptr)
+            {
+                const cgltf_camera* camera    = node->camera;
+                const intptr_t      camera_id = camera - gltf_data->cameras;
+                log_parsers.info("Camera: {} - {}\n", camera_id, camera->name);
+
+                auto new_camera = std::make_shared<erhe::scene::Camera>(camera->name);
+                switch (camera->type)
                 {
-                    const auto& projection = *src_camera.projection.get();
-                    log_parsers.info("Camera.ZNear: {}\n", projection.znear);
-
-                    camera->projection()->z_near = projection.znear;
-
-                    //log_parsers.info("Camera IsFinite: {}\n", projection.IsFinite());
-                    log_parsers.info("Camera.Projection.ProjectionType: {}\n", c_str(projection.GetProjectionType()));
-                    switch (projection.GetProjectionType())
+                    case cgltf_camera_type::cgltf_camera_type_perspective:
                     {
-                        using enum Microsoft::glTF::ProjectionType;
-                        case PROJECTION_ORTHOGRAPHIC:
-                        {
-                            const auto& ortho = reinterpret_cast<const Microsoft::glTF::Orthographic&>(projection);
-                            log_parsers.info("Camera.Projection.Ortho.XMag: {}\n", ortho.xmag);
-                            log_parsers.info("Camera.Projection.Ortho.YMag: {}\n", ortho.ymag);
-                            log_parsers.info("Camera.Projection.Ortho.ZFar: {}\n", ortho.zfar);
+                        const cgltf_camera_perspective& perspective = camera->data.perspective;
+                        log_parsers.info("Camera.has_aspect_ration: {}\n", perspective.has_aspect_ratio);
+                        log_parsers.info("Camera.aspect_ratio:      {}\n", perspective.aspect_ratio);
+                        log_parsers.info("Camera.yfov:              {}\n", perspective.yfov);
+                        log_parsers.info("Camera.has_zfar:          {}\n", perspective.has_zfar);
+                        log_parsers.info("Camera.zfar:              {}\n", perspective.zfar);
+                        log_parsers.info("Camera.znear:             {}\n", perspective.znear);
+                        new_camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
+                        new_camera->projection()->fov_y           = perspective.yfov;
+                        new_camera->projection()->z_far           = (perspective.has_zfar != 0)
+                            ? perspective.zfar
+                            : 0.0f;
+                        break;
+                    }
 
-                            camera->projection()->projection_type = erhe::scene::Projection::Type::orthogonal;
-                            camera->projection()->ortho_width     = ortho.xmag;
-                            camera->projection()->ortho_height    = ortho.ymag;
-                            camera->projection()->z_far           = ortho.zfar;
-                            break;
-                        }
+                    case cgltf_camera_type::cgltf_camera_type_orthographic:
+                    {
+                        const cgltf_camera_orthographic& orthographic = camera->data.orthographic;
+                        log_parsers.info("Camera.xmag:              {}\n", orthographic.xmag);
+                        log_parsers.info("Camera.ymag:              {}\n", orthographic.ymag);
+                        log_parsers.info("Camera.zfar:              {}\n", orthographic.zfar);
+                        log_parsers.info("Camera.znear:             {}\n", orthographic.znear);
+                        new_camera->projection()->projection_type = erhe::scene::Projection::Type::orthogonal;
+                        new_camera->projection()->ortho_width     = orthographic.xmag;
+                        new_camera->projection()->ortho_height    = orthographic.ymag;
+                        new_camera->projection()->z_far           = orthographic.zfar;
+                        new_camera->projection()->z_near          = orthographic.znear;
+                        break;
+                    }
 
-                        case PROJECTION_PERSPECTIVE:
-                        {
-                            const auto& perspective = reinterpret_cast<const Microsoft::glTF::Perspective&>(projection);
-                            log_parsers.info(
-                                "Camera.Projection.Perspective.AspectRatio: {}\n",
-                                perspective.aspectRatio.HasValue()
-                                    ? perspective.aspectRatio.Get()
-                                    : 0.0f
-                            );
-                            log_parsers.info("Camera.Projection.Ortho.YFov: {}\n", perspective.yfov);
-                            log_parsers.info(
-                                "Camera.Projection.Ortho.ZFar: {}\n",
-                                perspective.zfar.HasValue()
-                                    ? perspective.zfar.Get()
-                                    : 0.0f
-                            );
-
-                            camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
-                            camera->projection()->fov_y           = perspective.yfov;
-                            camera->projection()->z_far           = perspective.zfar.HasValue()
-                                    ? perspective.zfar.Get()
-                                    : 0.0f;
-                            break;
-                        }
-                        default:
-                        {
-                            log_parsers.warn("Camera.Projection: unknown projection type {}\n");
-                            break;
-                        }
+                    default:
+                    {
+                        log_parsers.warn("Camera.Projection: unknown projection type {}\n");
+                        break;
                     }
                 }
 
-                scene_root->scene().cameras.push_back(camera);
+                scene_root->scene().cameras.push_back(new_camera);
 
-                root_scene.nodes.emplace_back(camera);
+                root_scene.nodes.emplace_back(new_camera);
                 root_scene.nodes_sorted = false;
             }
-            else if (!node.meshId.empty())
+
+            if (node->mesh != nullptr)
             {
-                log_parsers.info("Mesh: {} - {}\n", node_id, node.meshId);
+                const cgltf_mesh* mesh    = node->mesh;
+                const intptr_t    mesh_id = mesh - gltf_data->meshes;
+                log_parsers.info("Mesh: {} - {}\n", mesh_id, mesh->name);
 
-                const auto& src_mesh = document.meshes.Get(node.meshId);
-                auto mesh = std::make_shared<erhe::scene::Mesh>(node.name);
-
-                for (const auto src_primitive : src_mesh.primitives)
+                for (cgltf_size primitive_index = 0; primitive_index < mesh->primitives_count; ++primitive_index)
                 {
-                    std::string accessor_id;
-
-                    for (const auto& attribute : src_primitive.attributes)
+                    const cgltf_primitive* primitive = &mesh->primitives[primitive_index];
+                    log_parsers.error("Primitive: attribute count = {}\n", primitive->attributes_count);
+                    for (cgltf_size attribute_index = 0; attribute_index < primitive->attributes_count; ++attribute_index)
                     {
-                        const auto accessor         = document.accessors.Get(attribute.second);
-                        const auto buffer_view      = document.bufferViews.Get(accessor.bufferViewId);
-                        const auto data             = resource_reader->ReadBinaryData<float>(document, accessor);
-                        const auto data_byte_length = data.size() * sizeof(float);
+                        const cgltf_attribute* attribute = &primitive->attributes[attribute_index];
+                        const cgltf_accessor*  accessor  = attribute->data;
+                        if (accessor == nullptr)
+                        {
+                            log_parsers.error("Primitive attribute {} has null accessor", attribute_index);
+                            continue;
+                        }
+                        const cgltf_buffer_view* buffer_view = accessor->buffer_view;
+                        if (buffer_view == nullptr)
+                        {
+                            log_parsers.error("Primitive attribute {} has null buffer view", attribute_index);
+                            continue;
+                        }
+
+                        const intptr_t accessor_id    = accessor    - gltf_data->accessors;
+                        const intptr_t buffer_view_id = buffer_view - gltf_data->buffer_views;
 
                         log_parsers.info(
-                            "Primitive attribute: {}\n",
-                            attribute.first
-                            //attribute.second
+                            "Primitive attribute {}: Index = {}, name = {}, type = {}\n",
+                            attribute_index,
+                            attribute->index,
+                            attribute->name,
+                            c_str(attribute->type)
                         );
 
                         log_parsers.info(
-                            "    Accessor: buffer view = {}, offset = {}, component type = {}, normalized = {}, count = {}, type = {}\n",
-                            accessor.bufferViewId,
-                            accessor.byteOffset,
-                            c_str(accessor.componentType),
-                            accessor.normalized,
-                            accessor.count,
-                            c_str(accessor.type)
+                            "    Accessor: id = {}, normalized = {}, type = {}, offset = {}, count = {}, stride = {}\n",
+                            accessor_id,
+                            accessor->normalized,
+                            c_str(accessor->type),
+                            accessor->offset,
+                            accessor->count,
+                            accessor->stride
                         );
 
                         log_parsers.info(
-                            "    Buffer view: buffer id = {}, offset = {}, length = {}, stride = {}, target = {}, byte count = {}\n",
-                            buffer_view.bufferId,
-                            buffer_view.byteOffset,
-                            buffer_view.byteLength,
-                            (buffer_view.byteStride.HasValue() ? buffer_view.byteStride.Get() : 0),
-                            (buffer_view.target.HasValue() ? c_str(buffer_view.target.Get()) : "(empty)"),
-                            data_byte_length
+                            "    Buffer view: id = {}, offset = {}, size = {}, stride = {}, type = {}\n",
+                            buffer_view_id,
+                            buffer_view->offset,
+                            buffer_view->size,
+                            buffer_view->stride,
+                            c_str(buffer_view->type)
                         );
                     }
+                    //log_parsers.error("Primitive: mappings count  = {}\n", primitive->mappings_count);
+                    //for (cgltf_size mapping_index = 0; mapping_index < primitive->mappings_count; ++mapping_index)
+                    //{
+                    //}
 
-                    if (!src_primitive.materialId.empty())
+                    if (primitive->material != nullptr)
                     {
-                        const auto& src_material = document.materials.Get(src_primitive.materialId);
+                        const cgltf_material* material    = primitive->material;
+                        const intptr_t        material_id = material - gltf_data->materials;
+
                         log_parsers.info(
-                            "Primitive material: {} = {}\n",
-                            src_primitive.materialId,
-                            src_material.name
+                            "Primitive material: id = {}, name = {}\n",
+                            material_id,
+                            material->name
                         );
-                        log_parsers.info(
-                            "Material BaseColor = {}, {}, {}, {}\n",
-                            src_material.metallicRoughness.baseColorFactor.r,
-                            src_material.metallicRoughness.baseColorFactor.g,
-                            src_material.metallicRoughness.baseColorFactor.b,
-                            src_material.metallicRoughness.baseColorFactor.a
-                        );
-                        log_parsers.info(
-                            "Material Metallic = {}\n",
-                            src_material.metallicRoughness.metallicFactor
-                        );
-                        log_parsers.info(
-                            "Material Roughness = {}\n",
-                            src_material.metallicRoughness.metallicFactor
-                        );
+
+                        if (material->has_pbr_metallic_roughness)
+                        {
+                            const cgltf_pbr_metallic_roughness& pbr_metallic_roughness = material->pbr_metallic_roughness;
+                            log_parsers.info(
+                                "Material PBR metallic roughness base color factor = {}, {}, {}, {}\n",
+                                pbr_metallic_roughness.base_color_factor[0],
+                                pbr_metallic_roughness.base_color_factor[1],
+                                pbr_metallic_roughness.base_color_factor[2],
+                                pbr_metallic_roughness.base_color_factor[3]
+                            );
+                            log_parsers.info(
+                                "Material PBR metallic roughness metallic factor = {}\n",
+                                pbr_metallic_roughness.metallic_factor
+                            );
+                            log_parsers.info(
+                                "Material PBR metallic roughness roughness factor = {}\n",
+                                pbr_metallic_roughness.roughness_factor
+                            );
+                        }
+                        if (material->has_pbr_specular_glossiness)
+                        {
+                            const cgltf_pbr_specular_glossiness& pbr_specular_glossiness = material->pbr_specular_glossiness;
+                            log_parsers.info(
+                                "Material PBR specular glossiness diffuse factor = {}, {}, {}, {}\n",
+                                pbr_specular_glossiness.diffuse_factor[0],
+                                pbr_specular_glossiness.diffuse_factor[1],
+                                pbr_specular_glossiness.diffuse_factor[2],
+                                pbr_specular_glossiness.diffuse_factor[3]
+                            );
+                            log_parsers.info(
+                                "Material PBR specular glossiness specular factor = {}, {}, {}\n",
+                                pbr_specular_glossiness.specular_factor[0],
+                                pbr_specular_glossiness.specular_factor[1],
+                                pbr_specular_glossiness.specular_factor[2]
+                            );
+                            log_parsers.info(
+                                "Material PBR specular glossiness glossiness factor = {}\n",
+                                pbr_specular_glossiness.glossiness_factor
+                            );
+                        }
                     }
 
                     {
-                        const Microsoft::glTF::Accessor& accessor = document.accessors.Get(src_primitive.indicesAccessorId);
-                        //const auto data             = resource_reader->ReadBinaryData<float>(document, accessor);
-                        //const auto data_byte_length = data.size() * sizeof(float);
+                        const cgltf_accessor* accessor = primitive->indices;
+                        assert(accessor != nullptr);
+
+                        const cgltf_buffer_view* buffer_view = accessor->buffer_view;
+                        assert(buffer_view != nullptr);
+
+                        const intptr_t accessor_id    = accessor - gltf_data->accessors;
+                        const intptr_t buffer_view_id = buffer_view - gltf_data->buffer_views;
+
+                        log_parsers.info("Primitive indices:\n");
+
                         log_parsers.info(
-                            "Indices: offset = {}, component type = {}, normalized = {}, count = {}, type = {}\n",
-                           // data_byte_length,
-                            accessor.byteOffset,
-                            c_str(accessor.componentType),
-                            accessor.normalized,
-                            accessor.count,
-                            c_str(accessor.type)
+                            "    Accessor: id = {}, normalized = {}, type = {}, offset = {}, count = {}, stride = {}\n",
+                            accessor_id,
+                            accessor->normalized,
+                            c_str(accessor->type),
+                            accessor->offset,
+                            accessor->count,
+                            accessor->stride
                         );
-                    }
-
-                    if (
-                        src_primitive.TryGetAttributeAccessorId(
-                            Microsoft::glTF::ACCESSOR_POSITION,
-                            accessor_id
-                        )
-                    )
-                    {
-                        const Microsoft::glTF::Accessor& accessor = document.accessors.Get(accessor_id);
-                                                
-                        const auto data             = resource_reader->ReadBinaryData<float>(document, accessor);
-                        const auto data_byte_length = data.size() * sizeof(float);
 
                         log_parsers.info(
-                            "Primitive: {} bytes of position data\n",
-                            data_byte_length
+                            "    Buffer view: id = {}, offset = {}, size = {}, stride = {}, type = {}\n",
+                            buffer_view_id,
+                            buffer_view->offset,
+                            buffer_view->size,
+                            buffer_view->stride,
+                            c_str(buffer_view->type)
                         );
                     }
                 }
-
             }
-            else
-            {
-                log_parsers.info("Node: {} - {}\n", node_id, node.id);
-            }
-
-            const auto& src_node = document.nodes.Get(node.id);
-
-            log_parsers.info("Node.TransformationType = {}\n", c_str(src_node.GetTransformationType()));
         }
     }
 
