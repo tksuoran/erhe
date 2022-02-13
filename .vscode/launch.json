@@ -23,7 +23,7 @@
             "name": "editor MSVC",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/editor/Debug/editor",
+            "program": "${workspaceFolder}/out/build/Windows_VisualStudio_17_2022_Embree/src/editor/Debug/editor.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/src/editor",

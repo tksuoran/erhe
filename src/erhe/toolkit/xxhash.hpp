@@ -13,11 +13,20 @@
 #include <cstdint> // uint8_t, uint32_t
 #include <limits.h>
 #include <limits>
-//#include <bit>      // std::rotl() ( https://en.cppreference.com/w/cpp/numeric/rotl )
+
+#if !defined(__GNUC__) || (__GNUC__ > 8)
+#   include <bit>      // std::rotl() ( https://en.cppreference.com/w/cpp/numeric/rotl )
+#endif
 
 // "private" utility functions
 namespace compiletime_xxhash::detail {
 
+#if !defined(__GNUC__) || (__GNUC__ > 8)
+    constexpr std::uint32_t rotl(std::uint32_t n, unsigned int c)
+    {
+        return std::rotl(n, c);
+    }
+#else
     constexpr std::uint32_t rotl(std::uint32_t n, unsigned int c)
     {
         const unsigned int mask = (CHAR_BIT * sizeof(n) - 1);  // assumes width is a power of 2.
@@ -26,6 +35,7 @@ namespace compiletime_xxhash::detail {
         c &= mask;
         return (n << c) | (n >> ((-c) & mask));
     }
+#endif
 
     constexpr uint8_t read_u8(const char* input, int pos) {
         return static_cast<uint8_t>(input[pos]);

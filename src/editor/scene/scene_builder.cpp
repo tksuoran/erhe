@@ -963,7 +963,7 @@ void Scene_builder::setup_lights()
     //    }
     //);
 
-    constexpr int directional_light_count = 9;
+    constexpr int directional_light_count = 3;
     if constexpr (directional_light_count > 0)
     {
         for (int i = 0; i < directional_light_count; ++i)

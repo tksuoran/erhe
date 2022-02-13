@@ -214,6 +214,14 @@ if (${ERHE_GLTF_LIBRARY} STREQUAL "glTF-SDK")
     )
 endif ()
 
+if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        parsers/cgltf.cpp
+        parsers/cgltf.hpp
+    )
+endif ()
+
 
 if (${ERHE_XR_LIBRARY} STREQUAL "OpenXR")
     erhe_target_sources_grouped(
@@ -268,6 +276,10 @@ endif ()
 
 if (${ERHE_GLTF_LIBRARY} STREQUAL "glTF-SDK")
     target_link_libraries(${_target} PRIVATE GLTFSDK)
+endif ()
+
+if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
+target_link_libraries(${_target} PRIVATE cgltf)
 endif ()
 
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

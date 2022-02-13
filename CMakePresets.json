@@ -24,6 +24,12 @@
             "generator": "Ninja"
         },
         {
+            "hidden":    true,
+            "name":      "visual_studio_17",
+            "generator": "Visual Studio 17 2022",
+            "architecture": { "value": "x86_64" }
+        },
+        {
             "hidden": true,
             "name":   "debug",
             "cacheVariables": {
@@ -54,6 +60,23 @@
                 "EMBREE_ISA_AVX":              "OFF",
                 "EMBREE_ISA_AVX2":             "OFF",
                 "EMBREE_ISA_AVX512":           "OFF"
+            }
+        },
+        {
+            "name":        "Windows_VisualStudio_17_2022_Embree",
+            "inherits":    ["global", "debug", "visual_studio_17", "embree"],
+            "displayName": "Windows Debug Visual Studio 17 2022 Embree",
+            "binaryDir":   "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
+                "ERHE_PNG_LIBRARY":                "mango",
+                "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
+                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
+                "ERHE_WINDOW_LIBRARY":             "glfw",
+                "ERHE_PHYSICS_LIBRARY":            "bullet",
+                "ERHE_PROFILE_LIBRARY":            "none",
+                "ERHE_GLTF_LIBRARY":               "none",
+                "ERHE_XR_LIBRARY":                 "none"
             }
         },
         {
