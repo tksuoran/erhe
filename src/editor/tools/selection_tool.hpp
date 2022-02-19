@@ -156,6 +156,7 @@ private:
     };
 
     Selection_tool_select_command m_select_command;
+    Selection_tool_delete_command m_delete_command;
 
     // Component dependencies
     std::shared_ptr<Line_renderer_set> m_line_renderer_set;

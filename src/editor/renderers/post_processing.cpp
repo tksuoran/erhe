@@ -136,6 +136,7 @@ void Post_processing::initialize_component()
     create_frame_resources();
 
     get<Editor_imgui_windows>()->register_imgui_window(this);
+    this->hide();
 }
 
 Rendertarget::Rendertarget(
@@ -209,36 +210,30 @@ void Post_processing::imgui()
     for (auto& rendertarget : m_rendertargets)
     {
         if (
-            !rendertarget.texture ||
-            (rendertarget.texture->width() < 1) ||
+            !rendertarget.texture                ||
+            (rendertarget.texture->width () < 1) ||
             (rendertarget.texture->height() < 1)
         )
         {
             continue;
         }
 
-        //const uint64_t handle = erhe::graphics::get_handle(
-        //    *rendertarget.texture.get(),
-        //    *get<Programs>()->linear_sampler.get()
-        //);
-
         image(
             rendertarget.texture,
             rendertarget.texture->width (),
             rendertarget.texture->height()
         );
-        //ImGui::Image(
-        //    handle,
-        //    ImVec2{
-        //        static_cast<float>(rendertarget.texture->width ()),
-        //        static_cast<float>(rendertarget.texture->height())
-        //    },
-        //    ImVec2{0, 1},
-        //    ImVec2{1, 0}
-        //);
-        //get<Imgui_renderer>()->use(rendertarget.texture, handle);
     }
     ImGui::PopStyleVar();
+}
+
+[[nodiscard]] auto Post_processing::get_output() -> std::shared_ptr<erhe::graphics::Texture>
+{
+    if (m_rendertargets.empty())
+    {
+        return {};
+    }
+    return m_rendertargets.front().texture;
 }
 
 void Post_processing::post_process(

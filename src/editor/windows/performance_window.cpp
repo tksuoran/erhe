@@ -191,12 +191,12 @@ namespace {
 
 static inline ImVec2 operator+(const ImVec2& lhs, const ImVec2& rhs)
 {
-    return ImVec2(lhs.x + rhs.x, lhs.y + rhs.y);
+    return ImVec2{lhs.x + rhs.x, lhs.y + rhs.y};
 }
 
 static inline ImVec2 operator-(const ImVec2& lhs, const ImVec2& rhs)
 {
-    return ImVec2(lhs.x - rhs.x, lhs.y - rhs.y);
+    return ImVec2{lhs.x - rhs.x, lhs.y - rhs.y};
 }
 
 template<typename T>
@@ -376,7 +376,13 @@ void Plot::imgui()
     //    RenderTextClipped(ImVec2(frame_bb.Min.x, frame_bb.Min.y + style.FramePadding.y), frame_bb.Max, overlay_text, NULL, NULL, ImVec2(0.5f, 0.0f));
     //
     //if (label_size.x > 0.0f)
-    ImGui::RenderText(ImVec2(frame_bb.Max.x + style.ItemInnerSpacing.x, inner_bb.Min.y), m_label.c_str());
+    ImGui::RenderText(
+        ImVec2{
+            frame_bb.Max.x + style.ItemInnerSpacing.x,
+            inner_bb.Min.y
+        },
+        m_label.c_str()
+    );
 
     // Return hovered index or -1 if none are hovered.
     // This is currently not exposed in the public API because we need a larger redesign of the whole thing, but in the short-term we are making it available in PlotEx().

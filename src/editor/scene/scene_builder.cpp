@@ -259,13 +259,13 @@ void Scene_builder::make_brushes()
         }
     );
 
-    constexpr bool gltf_files      = true; // WIP
-    constexpr bool obj_files       = true;
-    constexpr bool platonic_solids = true;
-    constexpr bool sphere          = true;
-    constexpr bool torus           = true;
-    constexpr bool cylinder        = true;
-    constexpr bool cone            = true;
+    constexpr bool gltf_files      = true;
+    constexpr bool obj_files       = false;
+    constexpr bool platonic_solids = false;
+    constexpr bool sphere          = false;
+    constexpr bool torus           = false;
+    constexpr bool cylinder        = false;
+    constexpr bool cone            = false;
     constexpr bool johnson_solids  = false;
 
     constexpr float object_scale = 1.0f;
@@ -282,10 +282,12 @@ void Scene_builder::make_brushes()
 
                 const char* files_names[] = {
                     "res/models/SM_Deccer_Cubes.gltf"
+                    //"res/models/MetalRoughSpheresNoTextures.gltf"
+                    //"res/models/Suzanne.gltf"
                 };
                 for (auto* path : files_names)
                 {
-                    parse_gltf(m_scene_root, path);
+                    parse_gltf(m_scene_root, build_info(), path);
 
                     //for (auto& geometry : geometries)
                     //{
@@ -953,10 +955,10 @@ void Scene_builder::setup_lights()
     //);
     //make_spot_light(
     //    "Spot",
-    //    vec3(0.0f, 1.0f, 0.0f), // position
-    //    vec3(0.0f, 0.0f, 0.0f), // target
-    //    vec3(0.0f, 1.0f, 0.0f), // color
-    //    10.0f,                       // intensity
+    //    vec3{0.0f, 1.0f, 0.0f}, // position
+    //    vec3{0.0f, 0.0f, 0.0f}, // target
+    //    vec3{0.0f, 1.0f, 0.0f}, // color
+    //    10.0f,                  // intensity
     //    vec2{                   // cone angles
     //        glm::pi<float>() * 0.125f,
     //        glm::pi<float>() * 0.25f

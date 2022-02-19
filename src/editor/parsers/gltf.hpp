@@ -4,13 +4,18 @@
 
 #include <memory>
 
+namespace erhe::primitive {
+    class Build_info;
+};
+
 namespace editor {
 
 class Scene_root;
 
-auto parse_gltf(
+void parse_gltf(
     const std::shared_ptr<Scene_root>& scene_root,
+    erhe::primitive::Build_info&       build_info,
     const fs::path&                    path
-) -> bool;
+);
 
 }

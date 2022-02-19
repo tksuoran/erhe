@@ -361,7 +361,7 @@ void Node_properties::transform_properties(erhe::scene::Node& node)
         glm::vec4 perspective;
         glm::decompose(transform, scale, orientation, translation, skew, perspective);
 
-        const glm::mat4 orientation_matrix(orientation);
+        const glm::mat4 orientation_matrix{orientation};
         glm::vec3 euler_angles;
         glm::extractEulerAngleZYX(orientation_matrix, euler_angles.x, euler_angles.y, euler_angles.z);
 

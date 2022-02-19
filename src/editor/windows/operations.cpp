@@ -71,7 +71,7 @@ void Operations::imgui()
         return;
     }
 
-    const auto button_size  = ImVec2(ImGui::GetContentRegionAvail().x, 0.0f);
+    const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
     for (unsigned int i = 0; i < static_cast<unsigned int>(m_active_tools.size()); ++i)
     {
         auto* tool = m_active_tools.at(i);
@@ -238,6 +238,14 @@ void Operations::imgui()
     {
         m_operation_stack->push(
             std::make_shared<Truncate_operator>(
+                mesh_context()
+            )
+        );
+    }
+    if (make_button("Normalize", has_selection_mode, button_size))
+    {
+        m_operation_stack->push(
+            std::make_shared<Normalize_operation>(
                 mesh_context()
             )
         );

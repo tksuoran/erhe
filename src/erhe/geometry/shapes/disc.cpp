@@ -100,7 +100,7 @@ public:
             auto s = static_cast<float>(rel_slice);
             auto t = static_cast<float>(rel_stack);
 
-            corner_texcoords->put(corner_id, vec2(s, t));
+            corner_texcoords->put(corner_id, vec2{s, t});
         }
 
         return corner_id;

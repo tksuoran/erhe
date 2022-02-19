@@ -16,19 +16,13 @@
 #   ifndef NOMINMAX
 #       define NOMINMAX       // Macros min(a,b) and max(a,b)
 #   endif
-//#   include <windows.h>
+//#   include <windows.h>     This is included by GL/glcorearb.h
 #endif
 
-#if defined(ERHE_WINDOW_LIBRARY_MANGO)
-#   define MANGO_OPENGL_DISABLE_PLATFORM_API 1
-#   include "mango/opengl/opengl.hpp"
-#   undef MANGO_OPENGL_DISABLE_PLATFORM_API
-#else
-#   include <GL/glcorearb.h>
-#   define GL_GLEXT_PROTOTYPES 1
-#   include <GL/glext.h>
-#   undef GL_GLEXT_PROTOTYPES
-#endif
+#include <GL/glcorearb.h>
+#define GL_GLEXT_PROTOTYPES 1
+#include <GL/glext.h>
+#undef GL_GLEXT_PROTOTYPES
 
 #include "erhe/gl/wrapper_enums.hpp"
 

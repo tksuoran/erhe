@@ -207,9 +207,9 @@ void Editor_view::on_cursor_enter(int entered)
 }
 
 void Editor_view::on_key(
-    const bool                   pressed,
     const erhe::toolkit::Keycode code,
-    const uint32_t               modifier_mask
+    const uint32_t               modifier_mask,
+    const bool                   pressed
 )
 {
     m_editor_imgui_windows->on_key(
@@ -231,12 +231,20 @@ void Editor_view::on_key(
     }
 
     log_input_event_filtered.trace(
-        "key {} {} not consumed",
+        "key {} {} not consumed\n",
         erhe::toolkit::c_str(code),
         pressed ? "press" : "release"
     );
     // Keycode::Key_f2:     m_trigger_capture = true; break;
     // Keycode::Key_delete: m_editor_tools->delete_selected_meshes();
+}
+
+void Editor_view::on_char(
+    const unsigned int codepoint
+)
+{
+    log_input_event.trace("char input codepoint = {}\n", codepoint);
+    m_editor_imgui_windows->on_char(codepoint);
 }
 
 namespace {
@@ -366,7 +374,7 @@ void Editor_view::on_mouse_click(
     }
 
     log_input_event.trace(
-        "mouse button {} {}",
+        "mousemouse button {} {}\n",
         erhe::toolkit::c_str(button),
         count
     );
@@ -412,11 +420,11 @@ void Editor_view::on_mouse_move(const double x, const double y)
         (m_active_mouse_command == nullptr)
     )
     {
-        log_input_event_filtered.trace("ImGui WantCaptureMouse");
+        //log_input_event_filtered.trace("ImGui WantCaptureMouse\n");
         return;
     }
 
-    log_input_event.trace("mouse move");
+    //log_input_event.trace("mouse move\n");
 
     glm::dvec2 new_mouse_position{x, y};
     const auto mouse_position_delta = m_last_mouse_position - new_mouse_position;
@@ -440,26 +448,6 @@ void Editor_view::on_mouse_move(const double x, const double y)
             break;
         }
     }
-}
-
-void Editor_view::on_key_press(
-    const erhe::toolkit::Keycode code,
-    const uint32_t               modifier_mask
-)
-{
-    log_input_event.trace("key press {}", erhe::toolkit::c_str(code));
-
-    on_key(true, code, modifier_mask);
-}
-
-void Editor_view::on_key_release(
-    const erhe::toolkit::Keycode code,
-    const uint32_t               modifier_mask
-)
-{
-    log_input_event.trace("key release {}", erhe::toolkit::c_str(code));
-
-    on_key(false, code, modifier_mask);
 }
 
 void Editor_view::imgui()

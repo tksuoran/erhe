@@ -233,19 +233,19 @@ void Root_view::on_resize(const int width, const int height)
     }
 }
 
-void Root_view::on_key_press(const Keycode code, const Key_modifier_mask mask)
+void Root_view::on_key(const Keycode code, const Key_modifier_mask mask, const bool pressed)
 {
     if (m_view != nullptr)
     {
-        m_view->on_key_press(code, mask);
+        m_view->on_key(code, mask, pressed);
     }
 }
 
-void Root_view::on_key_release(const Keycode code, const Key_modifier_mask mask)
+void Root_view::on_char(const unsigned int codepoint)
 {
     if (m_view != nullptr)
     {
-        m_view->on_key_release(code, mask);
+        m_view->on_char(codepoint);
     }
 }
 

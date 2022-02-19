@@ -465,12 +465,12 @@ void Edge::for_each_polygon_const(
         ++edge_polygon_id
     )
     {
-        const Polygon_id polygon_id = geometry.edge_polygons[edge_polygon_id];
+        const Polygon_id polygon_id = geometry.edge_polygons.at(edge_polygon_id);
         Edge_polygon_context_const context{
             .geometry        = geometry,
             .edge_polygon_id = edge_polygon_id,
             .polygon_id      = polygon_id,
-            .polygon         = geometry.polygons[polygon_id]
+            .polygon         = geometry.polygons.at(polygon_id)
         };
         callback(context);
         if (context.break_)

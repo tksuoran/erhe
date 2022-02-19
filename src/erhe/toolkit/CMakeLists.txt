@@ -33,14 +33,6 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
     )
 endif()
 
-if (${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-         mango_window.cpp
-         mango_window.hpp
-    )
-endif()
-
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(
@@ -66,10 +58,6 @@ endif ()
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
     target_link_libraries(${_target} PUBLIC glfw)
 endif ()
-
-if (${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
-    target_link_libraries(${_target} PUBLIC mango)
-endif()
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
     target_link_libraries(${_target} PRIVATE TracyClient)

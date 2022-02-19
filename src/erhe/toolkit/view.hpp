@@ -168,12 +168,12 @@ public:
     {
     }
 
-    virtual void on_focus(int focused)
+    virtual void on_focus(const int focused)
     {
         static_cast<void>(focused);
     }
 
-    virtual void on_cursor_enter(int entered)
+    virtual void on_cursor_enter(const int entered)
     {
         static_cast<void>(entered);
     }
@@ -182,31 +182,31 @@ public:
     {
     }
 
-    virtual void on_resize(int width, int height)
+    virtual void on_resize(const int width, const int height)
     {
         static_cast<void>(width);
         static_cast<void>(height);
     }
 
-    virtual void on_key_press(Keycode code, Key_modifier_mask modifier_mask)
+    virtual void on_key(const Keycode code, const Key_modifier_mask modifier_mask, const bool pressed)
     {
         static_cast<void>(code);
         static_cast<void>(modifier_mask);
+        static_cast<void>(pressed);
     }
 
-    virtual void on_key_release(Keycode code, Key_modifier_mask modifier_mask)
+    virtual void on_char(const unsigned int c)
     {
-        static_cast<void>(code);
-        static_cast<void>(modifier_mask);
+        static_cast<void>(c);
     }
 
-    virtual void on_mouse_move(double x, double y)
+    virtual void on_mouse_move(const double x, const double y)
     {
         static_cast<void>(x);
         static_cast<void>(y);
     }
 
-    virtual void on_mouse_click(Mouse_button button, int count)
+    virtual void on_mouse_click(const Mouse_button button, const int count)
     {
         static_cast<void>(button);
         static_cast<void>(count);
@@ -233,7 +233,7 @@ public:
     virtual void on_exit () {}
     virtual void update  () {}
 
-    void on_resize(int width, int height) override
+    void on_resize(const int width, const int height) override
     {
         m_width  = width;
         m_height = height;
@@ -267,14 +267,14 @@ public:
 
     void set_view       (View* view);
     void reset_view     (View* view);
-    void on_focus       (int focused) override;
-    void on_cursor_enter(int entered) override;
+    void on_focus       (const int focused) override;
+    void on_cursor_enter(const int entered) override;
     void on_refresh     () override;
     void on_idle        () override;
     void on_close       () override;
     void on_resize      (const int width, const int height) override;
-    void on_key_press   (const Keycode code, const Key_modifier_mask mask) override;
-    void on_key_release (const Keycode code, const Key_modifier_mask mask) override;
+    void on_key         (const Keycode code, const Key_modifier_mask mask, const bool pressed) override;
+    void on_char        (const unsigned int codepoint) override;
     void on_mouse_move  (const double x, const double y) override;
     void on_mouse_click (const Mouse_button button, const int count) override;
     void on_mouse_wheel (const double x, const double y) override;

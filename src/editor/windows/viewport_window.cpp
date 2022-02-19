@@ -288,7 +288,7 @@ void Viewport_window::imgui()
 
     //if (ImGui::Button("Post Process"))
     {
-        if (m_post_processing)
+        if (m_post_processing && m_viewport_config->post_processing_enable)
         {
             m_post_processing->post_process(
                 m_color_texture_resolved_for_present.get()
@@ -305,8 +305,15 @@ void Viewport_window::imgui()
         (m_color_texture_resolved_for_present->height() > 0)
     )
     {
+        const bool use_post_processing_texture =
+            m_viewport_config->post_processing_enable &&
+            m_post_processing &&
+            m_post_processing->get_output();
+        const auto& texture = use_post_processing_texture
+            ? m_post_processing->get_output()
+            : m_color_texture_resolved_for_present;
         image(
-            m_color_texture_resolved_for_present,
+            texture,
             static_cast<int>(size.x),
             static_cast<int>(size.y)
             //ImVec2{0, 1},

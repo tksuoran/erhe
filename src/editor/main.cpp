@@ -34,7 +34,7 @@ auto main(int argc, char** argv) -> int
 
     erhe::log::Log::console_init();
 
-    editor::initialize_renderdoc_capture_support();
+    //editor::initialize_renderdoc_capture_support();
 
     int return_value = EXIT_FAILURE;
 

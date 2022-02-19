@@ -9,6 +9,7 @@ namespace editor {
 class Editor_imgui_windows;
 class Editor_view;
 class Editor_time;
+class Editor_tools;
 class Imgui_window;
 class Render_context;
 class Tool;

@@ -27,6 +27,8 @@ erhe_target_sources_grouped(
     operation/geometry_operation.hpp
     operation/gyro.cpp
     operation/gyro.hpp
+    operation/normalize.cpp
+    operation/normalize.hpp
     operation/reverse.cpp
     operation/reverse.hpp
     operation/sqrt3_subdivision.cpp
@@ -37,6 +39,8 @@ erhe_target_sources_grouped(
     operation/triangulate.hpp
     operation/truncate.cpp
     operation/truncate.hpp
+    operation/weld.cpp
+    operation/weld.hpp
     polygon.cpp
     polygon.inl
     property_map_collection.hpp

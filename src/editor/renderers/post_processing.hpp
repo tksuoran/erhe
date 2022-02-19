@@ -62,6 +62,7 @@ public:
 
     // Public API
     void post_process(erhe::graphics::Texture* source_texture);
+    [[nodiscard]] auto get_output() -> std::shared_ptr<erhe::graphics::Texture>;
 
     void next_frame();
 

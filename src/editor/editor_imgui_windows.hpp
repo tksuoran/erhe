@@ -73,6 +73,7 @@ public:
 
     void mouse_button  (const uint32_t button, bool pressed);
     void on_key        (const signed int keycode, const bool pressed);
+    void on_char       (const unsigned int codepoint);
     void on_mouse_wheel(const double x, const double y);
 
 private:
@@ -147,6 +148,7 @@ public:
     void render_rendertarget_gui_meshes(const Render_context& context);
 
     void on_key         (const signed int keycode, const bool pressed);
+    void on_char        (const unsigned int codepoint);
     void on_focus       (int focused);
     void on_cursor_enter(int entered);
     void on_mouse_click (const uint32_t button, const int count);

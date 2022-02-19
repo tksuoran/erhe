@@ -95,14 +95,6 @@ target_link_libraries(${_target}
         erhe_log
 )
 
-if (${ERHE_WINDOW_LIBRARY} STREQUAL "mango")
-    target_link_libraries(${_target}
-        PUBLIC
-            mango
-            mango-opengl
-    )
-endif ()
-
 target_compile_definitions(${_target} PUBLIC -DERHE_TRACY_GL)
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

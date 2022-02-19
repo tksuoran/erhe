@@ -1,9 +1,7 @@
 #include "erhe/gl/gl.hpp"
 #include "erhe/log/log.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
-//#if !defined(ERHE_WINDOW_LIBRARY_MANGO)
 #include "erhe/gl/dynamic_load.hpp"
-//#endif
 #include "erhe/toolkit/verify.hpp"
 
 #include <cassert>

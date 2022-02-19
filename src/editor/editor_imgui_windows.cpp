@@ -648,7 +648,7 @@ void Editor_imgui_windows::window_menu()
 {
     //m_frame_log_window->log("menu");
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 10.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
 
     if (ImGui::BeginMenu("Window"))
     {
@@ -863,6 +863,14 @@ void Editor_imgui_windows::on_key(
     const signed int right_super = static_cast<signed int>(erhe::toolkit::Key_right_super);
     io.KeySuper = io.KeysDown[left_super] || io.KeysDown[right_super];
 #endif
+}
+
+void Editor_imgui_windows::on_char(
+    const unsigned int codepoint
+)
+{
+    ImGuiIO& io = ImGui::GetIO(m_imgui_context);
+    io.AddInputCharacter(codepoint);
 }
 
 }  // namespace editor

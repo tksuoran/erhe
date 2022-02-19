@@ -182,6 +182,12 @@ auto Node::get_id() const -> erhe::toolkit::Unique_id<Node>::id_type
 
 void Node::attach(const std::shared_ptr<Node>& child_node)
 {
+    if (child_node.get() == this)
+    {
+        log.error("Cannot attach node to itself");
+        return;
+    }
+
     ERHE_PROFILE_FUNCTION
 
     ERHE_VERIFY(child_node);

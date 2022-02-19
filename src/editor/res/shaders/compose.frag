@@ -86,18 +86,19 @@ vec3 tonemap_ue3(vec3 x) {
 
 void main()
 {
-    vec3 sum = 0.1 * texture(sampler2D(post_processing.source_texture[0]), v_texcoord).rgb;
+    vec3 sum = 1.0 * texture(sampler2D(post_processing.source_texture[0]), v_texcoord).rgb;
     for (uint i = 1; i < post_processing.texture_count; ++i)
     {
-        float scale = 0.001 / float(i + 1);
+        float scale = 0.02 / float(i + 1);
         vec3 source = texture(sampler2D(post_processing.source_texture[i]), v_texcoord).rgb;
         sum += fix(scale * source);
     }
 
     vec3 color = sum;
 
-    //out_color.rgb = tonemap_reinhard(color);
+    //out_color.rgb = color;
+    out_color.rgb = tonemap_reinhard(color);
     //out_color.rgb = tonemap_simple(color);
-    out_color.rgb = tonemap_ue3(color);
+    //out_color.rgb = tonemap_ue3(color);
     out_color.a   = 1.0;
 }

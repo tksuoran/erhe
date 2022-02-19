@@ -39,15 +39,18 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(
         source.for_each_point_const([&](auto& i)
         {
             const auto n = static_cast<float>(i.point.corner_count);
-            if (i.point.corner_count < 3)
+            if (i.point.corner_count >= 3)
             {
                 // n = 0   -> centroid points, safe to skip
                 // n = 1,2 -> ?
                 // n = 3   -> ?
-                return;
+                const float weight = (n - 3.0f) / n;
+                make_new_point_from_point(weight, i.point_id);
             }
-            const float weight = (n - 3.0f) / n;
-            make_new_point_from_point(weight, i.point_id);
+            else
+            {
+                make_new_point_from_point(1.0f, i.point_id);
+            }
         });
     }
 
@@ -75,8 +78,8 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(
                 const auto weight = 1.0f / static_cast<float>(j.polygon.corner_count);
                 add_polygon_centroid(new_point_id, weight, j.polygon_id);
             });
-            const Point_id new_point_a_id = point_old_to_new[i.edge.a];
-            const Point_id new_point_b_id = point_old_to_new[i.edge.b];
+            const Point_id new_point_a_id = point_old_to_new.at(i.edge.a);
+            const Point_id new_point_b_id = point_old_to_new.at(i.edge.b);
 
             const float n_a = static_cast<float>(src_point_a.corner_count);
             const float n_b = static_cast<float>(src_point_b.corner_count);

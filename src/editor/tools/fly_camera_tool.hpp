@@ -149,35 +149,35 @@ private:
     void update_camera   ();
     auto can_use_keyboard() const -> bool;
 
-    Fly_camera_turn_command m_turn_command;
-    Fly_camera_move_command m_move_up_active_command;
-    Fly_camera_move_command m_move_up_inactive_command;
-    Fly_camera_move_command m_move_down_active_command;
-    Fly_camera_move_command m_move_down_inactive_command;
-    Fly_camera_move_command m_move_left_active_command;
-    Fly_camera_move_command m_move_left_inactive_command;
-    Fly_camera_move_command m_move_right_active_command;
-    Fly_camera_move_command m_move_right_inactive_command;
-    Fly_camera_move_command m_move_forward_active_command;
-    Fly_camera_move_command m_move_forward_inactive_command;
-    Fly_camera_move_command m_move_backward_active_command;
-    Fly_camera_move_command m_move_backward_inactive_command;
-    std::shared_ptr<Frame_controller>       m_camera_controller;
+    Fly_camera_turn_command           m_turn_command;
+    Fly_camera_move_command           m_move_up_active_command;
+    Fly_camera_move_command           m_move_up_inactive_command;
+    Fly_camera_move_command           m_move_down_active_command;
+    Fly_camera_move_command           m_move_down_inactive_command;
+    Fly_camera_move_command           m_move_left_active_command;
+    Fly_camera_move_command           m_move_left_inactive_command;
+    Fly_camera_move_command           m_move_right_active_command;
+    Fly_camera_move_command           m_move_right_inactive_command;
+    Fly_camera_move_command           m_move_forward_active_command;
+    Fly_camera_move_command           m_move_forward_inactive_command;
+    Fly_camera_move_command           m_move_backward_active_command;
+    Fly_camera_move_command           m_move_backward_inactive_command;
+    std::shared_ptr<Frame_controller> m_camera_controller;
 
     // Component dependencies
-    std::shared_ptr<Editor_tools>         m_editor_tools;
-    std::shared_ptr<Pointer_context>      m_pointer_context;
-    std::shared_ptr<Scene_root>           m_scene_root;
-    std::shared_ptr<Trs_tool>             m_trs_tool;
+    std::shared_ptr<Editor_tools>     m_editor_tools;
+    std::shared_ptr<Pointer_context>  m_pointer_context;
+    std::shared_ptr<Scene_root>       m_scene_root;
+    std::shared_ptr<Trs_tool>         m_trs_tool;
 
-    std::mutex                            m_mutex;
+    std::mutex                        m_mutex;
 
 #if defined(_WIN32) && 0
     Fly_camera_space_mouse_listener       m_space_mouse_listener;
     erhe::toolkit::Space_mouse_controller m_space_mouse_controller;
 #endif
-    float                                 m_sensitivity        {1.0f};
-    bool                                  m_use_viewport_camera{true};
+    float                             m_sensitivity        {1.0f};
+    bool                              m_use_viewport_camera{true};
 };
 
 } // namespace editor

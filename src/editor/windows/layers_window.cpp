@@ -66,7 +66,7 @@ void Layers_window::imgui()
             const auto& meshes = layer->meshes;
             for (const auto& mesh : meshes)
             {
-                //m_icon_set->icon(*mesh.get());
+                m_icon_set->icon(*mesh.get());
                 ImGui::TreeNodeEx(
                     mesh->name().c_str(),
                     leaf_flags |

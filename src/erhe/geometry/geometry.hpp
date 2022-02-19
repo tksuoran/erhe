@@ -710,6 +710,8 @@ public:
 
     void weld(const Weld_settings& weld_settings);
 
+    void connect(const Weld_settings& weld_settings);
+
     void sanity_check() const;
 
     [[nodiscard]] auto get_mass_properties() -> Mass_properties;

@@ -106,6 +106,7 @@ void Viewport_config::render_style_ui(Render_style& render_style)
 void Viewport_config::imgui()
 {
     ImGui::ColorEdit4("Clear Color", &clear_color.x, ImGuiColorEditFlags_Float);
+    ImGui::Checkbox  ("Post Processing", &post_processing_enable);
 
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_Framed            |

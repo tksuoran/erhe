@@ -81,7 +81,7 @@ auto Command::state() const -> State
 
 void Command::set_inactive(Command_context& context)
 {
-    log_command_state_transition.trace("{} -> inactive", name());
+    log_command_state_transition.trace("{} -> inactive\n", name());
     on_inactive(context);
     m_state = State::Inactive;
 };
@@ -89,14 +89,14 @@ void Command::set_inactive(Command_context& context)
 void Command::set_ready(Command_context& context)
 {
     static_cast<void>(context);
-    log_command_state_transition.trace("{} -> ready", name());
+    log_command_state_transition.trace("{} -> ready\n", name());
     m_state = State::Ready;
 }
 
 void Command::set_active(Command_context& context)
 {
     static_cast<void>(context);
-    log_command_state_transition.trace("{} -> active", name());
+    log_command_state_transition.trace("{} -> active\n", name());
     m_state = State::Active;
 }
 
@@ -161,7 +161,7 @@ auto Key_binding::on_key(
         m_modifier_mask.value() != modifier_mask)
     {
         log_input_event_filtered.trace(
-            "{} rejected key {} due to modifier mask mismatch",
+            "{} rejected key {} due to modifier mask mismatch\n",
             command->name(),
             pressed ? "press" : "release",
             erhe::toolkit::c_str(code)
@@ -178,7 +178,7 @@ auto Key_binding::on_key(
     if (consumed)
     {
         log_input_event_consumed.trace(
-            "{} consumed key {} {}",
+            "{} consumed key {} {}\n",
             command->name(),
             erhe::toolkit::c_str(code),
             pressed ? "press" : "release"
@@ -263,7 +263,7 @@ auto Mouse_click_binding::on_button(
         {
             consumed = command->try_call(context);
             log_input_event_consumed.trace(
-                "{} consumed mouse button {} click",
+                "{} consumed mouse button {} click\n",
                 command->name(),
                 erhe::toolkit::c_str(button)
             );
@@ -342,7 +342,7 @@ auto Mouse_drag_binding::on_button(
     {
         ERHE_VERIFY(command->state() == State::Inactive);
         log_input_event_filtered.trace(
-            "{} not active so button event ignored",
+            "{} not active so button event ignored\n",
             command->name()
         );
         return false;
@@ -367,7 +367,7 @@ auto Mouse_drag_binding::on_button(
             consumed = command->state() == State::Active;
             command->set_inactive(context);
             log_input_event_consumed.trace(
-                "{} consumed mouse drag release {}",
+                "{} consumed mouse drag release {}\n",
                 command->name(),
                 erhe::toolkit::c_str(button)
             );
@@ -389,7 +389,7 @@ auto Mouse_drag_binding::on_motion(Command_context& context) -> bool
     if (consumed)
     {
         log_input_event_consumed.trace(
-            "{} consumed mouse drag motion",
+            "{} consumed mouse drag motion\n",
             command->name()
         );
     }

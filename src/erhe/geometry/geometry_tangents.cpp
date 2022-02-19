@@ -275,7 +275,7 @@ auto Geometry::compute_tangents(
                 return texcoord;
             }
             ERHE_FATAL("No texture coordinate\n");
-            // unreachatble return vec2(0.0f, 0.0f);
+            // unreachable return vec2{0.0f, 0.0f};
         }
 
         void set_tangent(

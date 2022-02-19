@@ -206,19 +206,11 @@ erhe_target_sources_grouped(
     res/shaders/wide_lines.frag
 )
 
-if (${ERHE_GLTF_LIBRARY} STREQUAL "glTF-SDK")
+if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         parsers/gltf.cpp
         parsers/gltf.hpp
-    )
-endif ()
-
-if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        parsers/cgltf.cpp
-        parsers/cgltf.hpp
     )
 endif ()
 
@@ -278,10 +270,6 @@ endif ()
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
     target_link_libraries(${_target} PRIVATE SuperluminalAPI)
-endif ()
-
-if (${ERHE_GLTF_LIBRARY} STREQUAL "glTF-SDK")
-    target_link_libraries(${_target} PRIVATE GLTFSDK)
 endif ()
 
 if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")

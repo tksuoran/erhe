@@ -86,4 +86,22 @@ public:
     [[nodiscard]] auto describe() const -> std::string override;
 };
 
+class Normalize_operation
+    : public Mesh_operation
+{
+public:
+    explicit Normalize_operation(Context&& context);
+
+    [[nodiscard]] auto describe() const -> std::string override;
+};
+
+class Weld_operation
+    : public Mesh_operation
+{
+public:
+    explicit Weld_operation(Context&& context);
+
+    [[nodiscard]] auto describe() const -> std::string override;
+};
+
 }

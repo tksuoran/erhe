@@ -210,22 +210,48 @@ auto get_event_handler(GLFWwindow* glfw_window) -> Event_handler*
     return nullptr;
 }
 
-void key_event_callback(GLFWwindow* glfw_window, const int key, const int scancode, const int action, const int glfe_modifiers)
+void key_event_callback(
+    GLFWwindow* glfw_window,
+    const int   key,
+    const int   scancode,
+    const int   action,
+    const int   glfe_modifiers
+)
 {
     static_cast<void>(scancode);
 
     auto* const event_handler = get_event_handler(glfw_window);
     if (event_handler)
     {
-        const Keycode keycode = glfw_key_to_erhe(key);
-        if (action == GLFW_PRESS)
+        switch (action)
         {
-            event_handler->on_key_press(keycode, glfw_modifiers_to_erhe(glfe_modifiers));
+            case GLFW_PRESS:
+            case GLFW_RELEASE:
+            {
+                event_handler->on_key(
+                    glfw_key_to_erhe(key),
+                    glfw_modifiers_to_erhe(glfe_modifiers),
+                    (action == GLFW_PRESS)
+                );
+                break;
+            }
+
+            case GLFW_REPEAT:
+            default:
+                break;
         }
-        else if (action == GLFW_RELEASE)
-        {
-            event_handler->on_key_release(keycode, glfw_modifiers_to_erhe(glfe_modifiers));
-        }
+    }
+}
+
+void char_event_callback(
+    GLFWwindow*        glfw_window,
+    const unsigned int codepoint
+)
+{
+    auto* const event_handler = get_event_handler(glfw_window);
+    if (event_handler)
+    {
+        event_handler->on_char(codepoint);
     }
 }
 
@@ -426,6 +452,7 @@ auto Context_window::open(
     glfwSetWindowSizeCallback   (window, window_resize_event_callback);
     glfwSetWindowRefreshCallback(window, window_refresh_callback);
     glfwSetKeyCallback          (window, key_event_callback);
+    glfwSetCharCallback         (window, char_event_callback);
     glfwSetCursorPosCallback    (window, mouse_position_event_callback);
     glfwSetMouseButtonCallback  (window, mouse_button_event_callback);
     glfwSetScrollCallback       (window, mouse_wheel_event_callback);

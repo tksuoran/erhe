@@ -111,7 +111,7 @@ void Rendertarget_imgui_window::on_begin()
     ImGui::SetNextWindowSize(viewport->WorkSize);
     ImGui::SetNextWindowViewport(viewport->ID);
 #else
-    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+    ImGui::SetNextWindowPos(ImVec2{0.0f, 0.0f});
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 #endif
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);

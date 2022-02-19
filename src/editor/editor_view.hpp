@@ -61,8 +61,8 @@ public:
     void on_mouse_move  (const double x, const double y) override;
     void on_mouse_click (const erhe::toolkit::Mouse_button button, const int count) override;
     void on_mouse_wheel (const double x, const double y) override;
-    void on_key_press   (const erhe::toolkit::Keycode code, const uint32_t modifier_mask) override;
-    void on_key_release (const erhe::toolkit::Keycode code, const uint32_t modifier_mask) override;
+    void on_key         (const erhe::toolkit::Keycode code, const uint32_t modifier_mask, const bool pressed) override;
+    void on_char        (const unsigned int codepoint) override;
     void on_key         (bool pressed, erhe::toolkit::Keycode code, uint32_t modifier_mask);
 
     // Implements Imgui_window

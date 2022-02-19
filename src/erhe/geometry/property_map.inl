@@ -338,12 +338,15 @@ Property_map<Key_type, Value_type>::import_from(
             // TODO Use cofactor matrix for bivectors?
             case Transform_mode::normalize_inverse_transpose_matrix:
             {
-                const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
-                for (size_t i = 0, end = source->values.size(); i < end; ++i)
+                if constexpr (std::is_same_v<Value_type, glm::vec3>)
                 {
-                    const Value_type source_value = source->values[i];
-                    const Value_type result       = glm::normalize(apply_transform(source_value, inverse_transpose_transform, 0.0f));
-                    values.push_back(result);
+                    const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
+                    for (size_t i = 0, end = source->values.size(); i < end; ++i)
+                    {
+                        const Value_type source_value = source->values[i];
+                        const Value_type result       = glm::normalize(apply_transform(source_value, inverse_transpose_transform, 0.0f));
+                        values.push_back(result);
+                    }
                 }
                 break;
             }

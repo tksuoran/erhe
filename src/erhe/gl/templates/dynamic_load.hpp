@@ -18,16 +18,10 @@
 //#   include <windows.h>
 #endif
 
-#if defined(ERHE_WINDOW_LIBRARY_MANGO)
-#   define MANGO_OPENGL_DISABLE_PLATFORM_API 1
-#   include "mango/opengl/opengl.hpp"
-#   undef MANGO_OPENGL_DISABLE_PLATFORM_API
-#else
-#   include <GL/glcorearb.h>
-#   define GL_GLEXT_PROTOTYPES 1
-#   include <GL/glext.h>
-#   undef GL_GLEXT_PROTOTYPES
-#endif
+#include <GL/glcorearb.h>
+#define GL_GLEXT_PROTOTYPES 1
+#include <GL/glext.h>
+#undef GL_GLEXT_PROTOTYPES
 
 namespace gl
 {{

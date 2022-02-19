@@ -68,31 +68,31 @@ auto Selection_tool::delete_selection() -> bool
 
     const auto scene_root = get<Scene_root>();
     Compound_operation::Context compound_context;
-    for (auto node : m_selection)
+    for (auto& node : m_selection)
     {
-        const auto mesh = as_mesh(node);
-        if (!mesh)
+        // TODO Handle all node types
+        if (is_mesh(node))
         {
-            continue;
-        }
+            const auto mesh = as_mesh(node);
 
-        auto* parent = mesh->parent();
-        compound_context.operations.push_back(
-            std::make_shared<Mesh_insert_remove_operation>(
-                Mesh_insert_remove_operation::Context{
-                    .scene          = scene_root->scene(),
-                    .layer          = *scene_root->content_layer(),
-                    .physics_world  = scene_root->physics_world(),
-                    .mesh           = mesh,
-                    .node_physics   = get_physics_node(mesh.get()),
-                    .parent         = (parent != nullptr)
-                        ? parent->shared_from_this()
-                        : std::shared_ptr<erhe::scene::Node>{},
-                    .mode           = Scene_item_operation::Mode::remove,
-                    .selection_tool = this
-                }
-            )
-        );
+            auto* parent = mesh->parent();
+            compound_context.operations.push_back(
+                std::make_shared<Mesh_insert_remove_operation>(
+                    Mesh_insert_remove_operation::Context{
+                        .scene          = scene_root->scene(),
+                        .layer          = *scene_root->content_layer(),
+                        .physics_world  = scene_root->physics_world(),
+                        .mesh           = mesh,
+                        .node_physics   = get_physics_node(mesh.get()),
+                        .parent         = (parent != nullptr)
+                            ? parent->shared_from_this()
+                            : std::shared_ptr<erhe::scene::Node>{},
+                        .mode           = Scene_item_operation::Mode::remove,
+                        .selection_tool = this
+                    }
+                )
+            );
+        }
     }
     if (compound_context.operations.empty())
     {
@@ -107,6 +107,7 @@ auto Selection_tool::delete_selection() -> bool
 Selection_tool::Selection_tool()
     : erhe::components::Component{c_name}
     , m_select_command           {*this}
+    , m_delete_command           {*this}
 {
 }
 
@@ -126,7 +127,9 @@ void Selection_tool::initialize_component()
     const auto view = get<Editor_view>();
 
     view->register_command           (&m_select_command);
+    view->register_command           (&m_delete_command);
     view->bind_command_to_mouse_click(&m_select_command, erhe::toolkit::Mouse_button_left);
+    view->bind_command_to_key        (&m_delete_command, erhe::toolkit::Key_delete, true);
 }
 
 auto Selection_tool::description() -> const char*
