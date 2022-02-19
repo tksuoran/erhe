@@ -96,7 +96,7 @@ else ()
     add_definitions(-DERHE_SVG_LIBRARY_NONE)
 endif ()
 
-if (${ERHE_GLTF_LIBRARY} STREQUAL "glTF-SDK")
+if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
     message("Fetching cgltf")
     FetchContent_MakeAvailable(cgltf)
     message(STATUS "Erhe configured to use cgltf for glTF.")

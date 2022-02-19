@@ -270,6 +270,7 @@ void Scene_builder::make_brushes()
 
     constexpr float object_scale = 1.0f;
 
+#if !defined(ERHE_GLTF_LIBRARY_NONE)
     if constexpr (gltf_files)
     {
         //execution_queue.enqueue(
@@ -298,6 +299,7 @@ void Scene_builder::make_brushes()
             }
         //);
     }
+#endif
 
     if constexpr (obj_files)
     {
