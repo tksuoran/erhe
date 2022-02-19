@@ -90,7 +90,7 @@ template<typename T>
 class Remapper
 {
 public:
-    Remapper(const T size)
+    explicit Remapper(const T size)
         : old_size{size}
         , new_size{size}
         , new_end {size}
