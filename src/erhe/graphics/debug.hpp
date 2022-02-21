@@ -22,7 +22,7 @@ public:
 class Gpu_timer
 {
 public:
-    Gpu_timer();
+    explicit Gpu_timer(const char* label);
     ~Gpu_timer();
 
     Gpu_timer     (const Gpu_timer&) = delete;
@@ -31,6 +31,7 @@ public:
     auto operator=(Gpu_timer&&)      = delete;
 
     [[nodiscard]] auto last_result() const -> uint64_t;
+    [[nodiscard]] auto label      () const -> const char*;
     void begin ();
     void end   ();
     void read  ();
@@ -38,8 +39,9 @@ public:
     void reset ();
 
     static void on_thread_enter();
-    static void on_thread_exit();
-    static void end_frame();
+    static void on_thread_exit ();
+    static void end_frame      ();
+    static auto all_gpu_timers () -> std::vector<Gpu_timer*>;
 
 private:
     class Query
@@ -60,6 +62,7 @@ private:
     std::array<Query, s_count> m_queries;
     std::thread::id            m_owner_thread;
     uint64_t                   m_last_result{0};
+    const char*                m_label{nullptr};
 };
 
 class Scoped_gpu_timer

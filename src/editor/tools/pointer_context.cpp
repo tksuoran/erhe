@@ -277,14 +277,15 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
     //m_log_window->frame_log("in_content_area = {}", in_content_area);
     if (in_content_area && id_renderer)
     {
+        const bool reverse_depth = m_window->viewport().reverse_depth;
         const auto mesh_primitive = id_renderer->get(
             static_cast<int>(position_in_window.x),
             static_cast<int>(position_in_window.y),
             m_position_in_window.value().z
         );
         m_position_in_world      = position_in_world(m_position_in_window.value().z);
-        m_near_position_in_world = position_in_world(0.0f);
-        m_far_position_in_world  = position_in_world(1.0f);
+        m_near_position_in_world = position_in_world(reverse_depth ? 1.0f : 0.0f);
+        m_far_position_in_world  = position_in_world(reverse_depth ? 0.0f : 1.0f);
         m_hover_valid = mesh_primitive.valid;
         //m_log_window->frame_log("position in world = {}", m_position_in_world.value());
         if (m_hover_valid && (mesh_primitive.layer != nullptr))

@@ -10,6 +10,11 @@
 #include <string>
 #include <vector>
 
+namespace erhe::graphics
+{
+    class Gpu_timer;
+};
+
 namespace editor
 {
 
@@ -20,24 +25,29 @@ class Line_renderer;
 class Shadow_renderer;
 class Text_renderer;
 
-class Plot
+class Gpu_timer_plot
 {
 public:
-    explicit Plot(const std::string_view label, const size_t width = 256);
-    void imgui();
+    explicit Gpu_timer_plot(
+        erhe::graphics::Gpu_timer* timer,
+        const size_t               width = 256
+    );
 
-    void clear();
-    void add  (const float sample);
+    void imgui    ();
+    void clear    ();
+    void sample   ();
+    auto gpu_timer() const -> erhe::graphics::Gpu_timer*;
 
-    size_t             m_offset     {0};
-    size_t             m_value_count{0};
-    std::string        m_label;
-    std::vector<float> m_values;
-    float              m_max_great {0.50f};
-    float              m_max_ok    {0.60f};
-    float              m_scale_min {0.0f};
-    float              m_scale_max {1.0f}; // 1 ms
-    ImVec2             m_frame_size{256.0f, 64.0f};
+    size_t                     m_offset         {0};
+    size_t                     m_value_count    {0};
+    erhe::graphics::Gpu_timer* m_gpu_timer      {nullptr};
+    float                      m_max_great      {1.0f};
+    float                      m_max_ok         {2.5f};
+    float                      m_scale_min      {0.0f};
+    float                      m_scale_max      {2.0f}; // 2 ms
+    float                      m_scale_max_limit{1.0f}; // 1 ms
+    ImVec2                     m_frame_size     {256.0f, 64.0f};
+    std::vector<float>         m_values;
 };
 
 class Performance_window
@@ -70,16 +80,7 @@ private:
     std::shared_ptr<Line_renderer>    m_line_renderer;
     std::shared_ptr<Text_renderer>    m_text_renderer;
 
-    Plot m_id_renderer_plot    {"ID"};
-    Plot m_imgui_renderer_plot {"ImGui"};
-    Plot m_shadow_renderer_plot{"Shadow"};
-    Plot m_content_plot        {"Content"};
-    Plot m_selection_plot      {"Selection"};
-    Plot m_brush_plot          {"Brush"};
-    Plot m_gui_plot            {"GUI"};
-    Plot m_tools_plot          {"Tools"};
-    Plot m_line_renderer_plot  {"Line"};
-    Plot m_text_renderer_plot  {"Text"};
+    std::vector<Gpu_timer_plot> m_gpu_timer_plots;
     bool m_pause{false};
 
     int  m_taps   = 1;

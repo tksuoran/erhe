@@ -58,6 +58,11 @@ auto Operations::count_selected_meshes() const -> size_t
     return count;
 }
 
+[[nodiscard]] auto Operations::get_active_tool() const -> Tool*
+{
+    return m_current_active_tool;
+}
+
 void Operations::register_active_tool(Tool* tool)
 {
     tool->set_enable_state(false);

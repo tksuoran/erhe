@@ -51,6 +51,7 @@ private:
     int       m_cell_div   {10};
     int       m_cell_count {2};
     float     m_thickness  {-2.0f};
+    glm::vec3 m_center     {0.0f};
     glm::vec4 m_major_color{0.065f, 0.065f, 0.065f, 1.0f};
     glm::vec4 m_minor_color{0.035f, 0.035f, 0.035f, 1.0f};
 };

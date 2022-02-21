@@ -1,5 +1,6 @@
 #pragma once
 
+#include "commands/command.hpp"
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
 
@@ -48,7 +49,7 @@ class Operation_stack
 {
 public:
     static constexpr std::string_view c_name       {"Operation_stack"};
-    static constexpr std::string_view c_description{"Operations"};
+    static constexpr std::string_view c_description{"Operation Stack"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Operation_stack ();

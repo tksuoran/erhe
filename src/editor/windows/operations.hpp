@@ -38,6 +38,7 @@ public:
     void imgui() override;
 
     // Public API
+    [[nodiscard]] auto get_active_tool() const -> Tool*;
     void register_active_tool(Tool* tool);
 
 private:

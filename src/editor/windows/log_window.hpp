@@ -1,6 +1,6 @@
 #pragma once
 
-#include "command.hpp"
+#include "commands/command.hpp"
 #include "windows/imgui_window.hpp"
 
 #include "erhe/components/components.hpp"
@@ -89,27 +89,23 @@ private:
     void tail_write (const char* format, fmt::format_args args);
     void tail_write (const ImVec4 color, const char* format, fmt::format_args args);
 
-    class Tail_entry
+    class Entry
     {
     public:
-        Tail_entry(
+        Entry(
             const ImVec4&      color,
             const std::string& message,
             const unsigned int repeat_count = 0
-        )
-        : color       {color}
-        , message     {message}
-        , repeat_count{repeat_count}
-        {
-        }
+        );
         ImVec4       color;
+        std::string  timestamp;
         std::string  message;
         unsigned int repeat_count{0};
     };
 
     Log_window_toggle_pause_command m_toggle_pause_command;
-    std::vector<std::string>        m_frame_entries;
-    std::deque<Tail_entry>          m_tail_entries;
+    std::vector<Entry>              m_frame_entries;
+    std::deque<Entry>               m_tail_entries;
     int                             m_tail_buffer_show_size{7};
     int                             m_tail_buffer_trim_size{1000};
     bool                            m_paused{false};

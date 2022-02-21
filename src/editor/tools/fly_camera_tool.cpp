@@ -3,6 +3,8 @@
 #include "editor_imgui_windows.hpp"
 #include "editor_tools.hpp"
 #include "editor_view.hpp"
+
+#include "commands/command_context.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
@@ -157,6 +159,7 @@ void Fly_camera_tool::connect()
     m_trs_tool        = get    <Trs_tool>();
 
     require<Editor_imgui_windows>();
+    require<Editor_view>();
 }
 
 auto Fly_camera_tool::can_use_keyboard() const -> bool

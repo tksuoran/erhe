@@ -4,6 +4,25 @@ add_executable(${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    commands/command.cpp
+    commands/command.hpp
+    commands/command_binding.cpp
+    commands/command_binding.hpp
+    commands/command_context.cpp
+    commands/command_context.hpp
+    commands/key_binding.cpp
+    commands/key_binding.hpp
+    commands/mouse_binding.cpp
+    commands/mouse_binding.hpp
+    commands/mouse_click_binding.cpp
+    commands/mouse_click_binding.hpp
+    commands/mouse_motion_binding.cpp
+    commands/mouse_motion_binding.hpp
+    commands/mouse_drag_binding.cpp
+    commands/mouse_drag_binding.hpp
+    commands/state.cpp
+    commands/state.hpp
+
     graphics/gl_context_provider.cpp
     graphics/gl_context_provider.hpp
     graphics/gradients.cpp
@@ -92,6 +111,8 @@ erhe_target_sources_grouped(
     tools/grid_tool.hpp
     tools/hover_tool.cpp
     tools/hover_tool.hpp
+    tools/material_paint_tool.cpp
+    tools/material_paint_tool.hpp
     tools/pointer_context.cpp
     tools/pointer_context.hpp
     tools/physics_tool.cpp
@@ -133,6 +154,8 @@ erhe_target_sources_grouped(
     windows/physics_window.hpp
     windows/pipelines.cpp
     windows/pipelines.hpp
+    windows/tool_properties_window.cpp
+    windows/tool_properties_window.hpp
     windows/viewport_config.cpp
     windows/viewport_config.hpp
     windows/viewport_window.cpp
@@ -142,8 +165,6 @@ erhe_target_sources_grouped(
 
     application.cpp
     application.hpp
-    command.cpp
-    command.hpp
     configuration.cpp
     configuration.hpp
     log.cpp

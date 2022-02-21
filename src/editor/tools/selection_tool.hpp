@@ -1,5 +1,6 @@
 #pragma once
 
+#include "commands/command.hpp"
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
 

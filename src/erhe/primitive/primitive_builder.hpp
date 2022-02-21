@@ -60,11 +60,11 @@ public:
         Primitive_geometry*             primitive_geometry
     );
 
-    void get_mesh_info         ();
-    void get_vertex_attributes ();
-    void calculate_bounding_box(erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec3>* point_locations);
-    void allocate_vertex_buffer();
-    void allocate_index_buffer ();
+    void get_mesh_info            ();
+    void get_vertex_attributes    ();
+    void calculate_bounding_volume(erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec3>* point_locations);
+    void allocate_vertex_buffer   ();
+    void allocate_index_buffer    ();
     void allocate_index_range(
         const gl::Primitive_type primitive_type,
         const size_t             index_count,

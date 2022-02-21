@@ -378,7 +378,7 @@ void Build_context_root::allocate_index_buffer()
     );
 }
 
-void Build_context_root::calculate_bounding_box(
+void Build_context_root::calculate_bounding_volume(
     erhe::geometry::Property_map<Point_id, vec3>* point_locations
 )
 {
@@ -388,6 +388,14 @@ void Build_context_root::calculate_bounding_box(
 
     primitive_geometry->bounding_box_min = vec3{std::numeric_limits<float>::max()};
     primitive_geometry->bounding_box_max = vec3{std::numeric_limits<float>::lowest()};
+
+    glm::vec3 x_min{std::numeric_limits<float>::max()};
+    glm::vec3 y_min{std::numeric_limits<float>::max()};
+    glm::vec3 z_min{std::numeric_limits<float>::max()};
+    glm::vec3 x_max{std::numeric_limits<float>::lowest()};
+    glm::vec3 y_max{std::numeric_limits<float>::lowest()};
+    glm::vec3 z_max{std::numeric_limits<float>::lowest()};
+
     if (
         (geometry.get_point_count() == 0) ||
         (point_locations == nullptr)
@@ -409,8 +417,75 @@ void Build_context_root::calculate_bounding_box(
                 const vec3 position = point_locations->get(point_id);
                 primitive_geometry->bounding_box_min = glm::min(primitive_geometry->bounding_box_min, position);
                 primitive_geometry->bounding_box_max = glm::max(primitive_geometry->bounding_box_max, position);
+
+                if (position.x < x_min.x) x_min = position;
+                if (position.x > x_max.x) x_max = position;
+                if (position.y < y_min.y) y_min = position;
+                if (position.y > y_max.y) y_max = position;
+                if (position.z < z_min.z) z_min = position;
+                if (position.z > z_max.z) z_max = position;
             }
         }
+
+        // Ritter's bounding sphere
+        // - Pick a point x from P, search a point y in P, which has the largest distance from x;
+        // - Search a point z in P, which has the largest distance from y.
+        //   Set up an initial ball B, with its centre as the midpoint of y and z,
+        //   the radius as half of the distance between y and z;
+        // - If all points in P are within ball B, then we get a bounding sphere.
+        //   Otherwise, let p be a point outside the ball, construct a new ball
+        //   covering both point p and previous ball.
+        //   Repeat this step until all points are covered.
+        const auto x_span_v = x_max - x_min;
+        const auto y_span_v = y_max - y_min;
+        const auto z_span_v = z_max - z_min;
+        const auto x_span   = glm::dot(x_span_v, x_span_v);
+        const auto y_span   = glm::dot(y_span_v, y_span_v);
+        const auto z_span   = glm::dot(z_span_v, z_span_v);
+
+        auto dia_1    = x_min;
+        auto dia_2    = x_max;
+        auto max_span = x_span;
+        if (y_span > max_span)
+        {
+            max_span = y_span;
+            dia_1    = y_min;
+            dia_2    = y_max;
+        }
+        if (z_span > max_span)
+        {
+            dia_1 = z_min;
+            dia_2 = z_max;
+        }
+
+        auto       center = (dia_1 + dia_2) / 2.0f;
+        const auto d0     = dia_2 - center;
+        auto       rad_sq = glm::dot(d0, d0);
+        auto       rad    = std::sqrt(rad_sq);
+
+        for (
+            Point_id point_id = 0, end = geometry.get_point_count();
+            point_id < end;
+            ++point_id
+        )
+        {
+            if (point_locations->has(point_id))
+            {
+                const vec3 position    = point_locations->get(point_id);
+                const auto d           = position - center;
+                const auto old_to_p_sq = glm::dot(d, d);
+                if (old_to_p_sq > rad_sq)
+                {
+                    const auto old_to_p = std::sqrt(old_to_p_sq);
+                    rad    = (rad + old_to_p) / 2.0f;
+                    rad_sq = rad * rad;
+                    const auto old_to_new = old_to_p - rad;
+                    center = (rad * center + old_to_new * position) / old_to_p;
+                }
+            }
+        }
+        primitive_geometry->bounding_sphere_center = center;
+        primitive_geometry->bounding_sphere_radius = rad;
     }
 
     log_primitive_builder.trace(
@@ -482,7 +557,7 @@ Build_context::Build_context(
 {
     Expects(property_maps.point_locations != nullptr);
 
-    root.calculate_bounding_box(property_maps.point_locations);
+    root.calculate_bounding_volume(property_maps.point_locations);
 }
 
 Build_context::~Build_context()

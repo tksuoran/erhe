@@ -76,8 +76,6 @@ public:
     ) = 0;
 };
 
-extern auto timestamp() -> std::string;
-
 class Category
 {
 public:

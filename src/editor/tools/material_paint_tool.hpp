@@ -1,0 +1,117 @@
+#pragma once
+
+#include "commands/command.hpp"
+#include "tools/tool.hpp"
+#include "windows/imgui_window.hpp"
+
+#include "erhe/components/components.hpp"
+
+#include <glm/glm.hpp>
+
+#include <functional>
+#include <memory>
+
+namespace erhe::scene {
+    class Mesh;
+}
+
+namespace erhe::physics {
+    class IConstraint;
+}
+
+namespace erhe::primitive {
+    class Material;
+}
+
+namespace editor
+{
+
+class Material_paint_tool;
+class Pointer_context;
+class Scene_root;
+
+class Material_paint_command
+    : public Command
+{
+public:
+    explicit Material_paint_command(Material_paint_tool& material_paint_tool)
+        : Command              {"Material_paint.paint"}
+        , m_material_paint_tool{material_paint_tool}
+    {
+    }
+
+    auto try_call (Command_context& context) -> bool override;
+    void try_ready(Command_context& context) override;
+
+private:
+    Material_paint_tool& m_material_paint_tool;
+};
+
+class Material_pick_command
+    : public Command
+{
+public:
+    explicit Material_pick_command(Material_paint_tool& material_paint_tool)
+        : Command              {"Material_paint.pick"}
+        , m_material_paint_tool{material_paint_tool}
+    {
+    }
+
+    auto try_call (Command_context& context) -> bool override;
+    void try_ready(Command_context& context) override;
+
+private:
+    Material_paint_tool& m_material_paint_tool;
+};
+
+class Material_paint_tool
+    : public erhe::components::Component
+    , public Tool
+{
+public:
+    static constexpr int              c_priority   {2};
+    static constexpr std::string_view c_name       {"Material_paint_tool"};
+    static constexpr std::string_view c_description{"Material Paint"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+
+    Material_paint_tool();
+
+    // Implements Component
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    void connect             () override;
+    void initialize_component() override;
+
+    // Implements Tool
+    [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
+    [[nodiscard]] auto description  () -> const char* override;
+    void tool_properties() override;
+
+    // Commands
+    void set_active_command(const int command);
+
+    auto on_paint_ready() -> bool;
+    auto on_paint      () -> bool;
+
+    auto on_pick_ready() -> bool;
+    auto on_pick      () -> bool;
+
+private:
+    // Commands
+    Material_paint_command m_paint_command;
+    Material_pick_command  m_pick_command;
+
+    // Component dependencies
+    std::shared_ptr<Pointer_context> m_pointer_context;
+    std::shared_ptr<Scene_root>      m_scene_root;
+
+    static const int c_command_paint{0};
+    static const int c_command_pick {1};
+
+    int m_active_command{c_command_paint};
+
+    std::shared_ptr<erhe::primitive::Material> m_material;
+    //std::shared_ptr<erhe::scene::Mesh>         m_target_mesh;
+    //size_t                                     m_target_primitive{0};
+};
+
+} // namespace editor

@@ -132,7 +132,7 @@ void Shadow_renderer::initialize_component()
         .reverse_depth = m_configuration->reverse_depth
     };
 
-    m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>();
+    m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Shadow_renderer");
 }
 
 static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::render()"};
@@ -238,12 +238,6 @@ auto Shadow_renderer::texture() const -> erhe::graphics::Texture*
 auto Shadow_renderer::viewport() const -> erhe::scene::Viewport
 {
     return m_viewport;
-}
-
-auto Shadow_renderer::gpu_time() const -> double
-{
-    const auto time_elapsed = static_cast<double>(m_gpu_timer->last_result());
-    return time_elapsed / 1000000.0;
 }
 
 } // namespace editor

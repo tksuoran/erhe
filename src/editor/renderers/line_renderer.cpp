@@ -318,6 +318,56 @@ void Line_renderer::add_lines(
     m_vertex_writer.end();
 }
 
+void Line_renderer::add_sphere(
+    const glm::mat4 transform,
+    const uint32_t  color,
+    const glm::vec3 center,
+    const float     radius,
+    const float     thickness
+)
+{
+    const glm::vec3 axis_x{radius, 0.0f, 0.0f};
+    const glm::vec3 axis_y{0.0f, radius, 0.0f};
+    const glm::vec3 axis_z{0.0f, 0.0f, radius};
+    int step_count = 32;
+    for (int i = 0; i < step_count; ++i)
+    {
+        const float t0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(step_count);
+        const float t1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(step_count);
+        add_lines(
+            transform,
+            color,
+            {
+                {
+                    center +
+                    + std::cos(t0) * axis_x
+                    + std::sin(t0) * axis_y,
+                    center +
+                    + std::cos(t1) * axis_x
+                    + std::sin(t1) * axis_y
+                },
+                {
+                    center +
+                    + std::cos(t0) * axis_y
+                    + std::sin(t0) * axis_z,
+                    center +
+                    + std::cos(t1) * axis_y
+                    + std::sin(t1) * axis_z
+                },
+                {
+                    center +
+                    + std::cos(t0) * axis_x
+                    + std::sin(t0) * axis_z,
+                    center +
+                    + std::cos(t1) * axis_x
+                    + std::sin(t1) * axis_z
+                }
+            },
+            thickness
+        );
+    }
+}
+
 static constexpr std::string_view c_line_renderer_render{"Line_renderer::render()"};
 
 void Line_renderer_set::render(

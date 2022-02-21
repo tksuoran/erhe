@@ -1,5 +1,6 @@
 #include "windows/performance_window.hpp"
 #include "editor_imgui_windows.hpp"
+#include "log.hpp"
 #include "rendering.hpp"
 #include "graphics/gradients.hpp"
 #include "renderers/id_renderer.hpp"
@@ -12,135 +13,6 @@
 
 namespace editor
 {
-
-
-auto factorial(int input) -> int
-{
-    int result = 1;
-    for (int i = 1; i <= input; i++)
-    {
-        result = result * i;
-    }
-    return result;
-}
-
-// Computes the n-th coefficient from Pascal's triangle binomial coefficients.
-auto binom(
-    const int row_index,
-    const int column_index = -1
-) -> int
-{
-    return
-        factorial(row_index) /
-        (
-            factorial(row_index - column_index) *
-            factorial(column_index)
-        );
-}
-
-class Kernel
-{
-public:
-    std::vector<float> weights;
-    std::vector<float> offsets;
-};
-
-// Compute discrete weights and factors
-auto kernel_binom(
-    const int taps,
-    const int expand_by = 0,
-    const int reduce_by = 0
-) -> Kernel
-{
-    const auto row          = taps - 1 + (expand_by << 1);
-    const auto coeffs_count = row + 1;
-    const auto radius       = taps >> 1;
-
-    // sanity check, avoid duped coefficients at center
-    if ((coeffs_count & 1) == 0)
-    {
-        return {}; // ValueError("Duped coefficients at center")
-    }
-
-    // compute total weight
-    // https://en.wikipedia.org/wiki/Power_of_two
-    // TODO: seems to be not optimal ...
-    int sum = 0;
-    for (int x = 0; x < reduce_by; ++x)
-    {
-        sum += 2 * binom(row, x);
-    }
-    const auto total = float(1 << row) - sum;
-
-    // compute final weights
-    Kernel result;
-    for (
-        int x = reduce_by + radius;
-        x > reduce_by - 1;
-        --x
-    )
-    {
-        result.weights.push_back(binom(row, x) / total);
-    }
-    for (
-        int offset = 0;
-        offset <= radius;
-        ++offset
-    )
-    {
-        result.offsets.push_back(static_cast<float>(offset));
-    }
-    return result;
-}
-
-// Compute linearly interpolated weights and factors
-auto kernel_binom_linear(const Kernel& discrete_data) -> Kernel
-{
-    const auto& wd = discrete_data.weights;
-    const auto& od = discrete_data.offsets;
-
-    const int w_count = static_cast<int>(wd.size());
-
-    // sanity checks
-    const auto pairs = w_count - 1;
-    if ((w_count & 1) == 0)
-    {
-        return {};
-        //raise ValueError("Duped coefficients at center")
-    }
-
-    if ((pairs % 2 != 0))
-    {
-        return {};
-        //raise ValueError("Can't perform bilinear reduction on non-paired texels")
-    }
-
-    Kernel result;
-    result.weights.push_back(wd[0]);
-    for (int x = 1; x < w_count - 1; x += 2)
-    {
-        result.weights.push_back(wd[x] + wd[x + 1]);
-    }
-
-    result.offsets.push_back(0);
-    for (
-        int x = 1;
-        x < w_count - 1;
-        x += 2
-    )
-    {
-        int i = (x - 1) / 2;
-        const float value =
-            (
-                od[x    ] * wd[x] +
-                od[x + 1] * wd[x + 1]
-            ) / result.weights[i + 1];
-        result.offsets.push_back(value);
-    }
-
-    return result;
-}
-
 
 Performance_window::Performance_window()
     : erhe::components::Component{c_name}
@@ -163,13 +35,16 @@ void Performance_window::initialize_component()
     get<Editor_imgui_windows>()->register_imgui_window(this);
 }
 
-Plot::Plot(const std::string_view label, const size_t width)
-    : m_label{label}
+Gpu_timer_plot::Gpu_timer_plot(
+    erhe::graphics::Gpu_timer* timer,
+    const size_t               width
+)
+    : m_gpu_timer{timer}
 {
     m_values.resize(width);
 }
 
-void Plot::clear()
+void Gpu_timer_plot::clear()
 {
     m_offset = 0;
     m_value_count = 0;
@@ -180,11 +55,19 @@ void Plot::clear()
     );
 }
 
-void Plot::add(const float sample)
+void Gpu_timer_plot::sample()
 {
-    m_values[m_offset % m_values.size()] = sample;
+    const auto time_elapsed = static_cast<double>(m_gpu_timer->last_result());
+    const auto sample_value = time_elapsed / 1000000.0;
+
+    m_values[m_offset % m_values.size()] = static_cast<float>(sample_value);
     m_value_count = std::min(m_value_count + 1, m_values.size());
     m_offset++;
+}
+
+auto Gpu_timer_plot::gpu_timer() const -> erhe::graphics::Gpu_timer*
+{
+    return m_gpu_timer;
 }
 
 namespace {
@@ -211,7 +94,7 @@ static inline T clamp(T value, T min_value, T max_value)
 
 }
 
-void Plot::imgui()
+void Gpu_timer_plot::imgui()
 {
     //ImGuiContext& g = *GImGui;
     ImGuiWindow* window = ImGui::GetCurrentWindow();
@@ -221,9 +104,10 @@ void Plot::imgui()
     }
 
     //const ImGuiStyle& style = g.Style;
-    const ImGuiID id = ImGui::GetID(m_label.c_str());
+    const char* label = m_gpu_timer->label();
+    const ImGuiID id = ImGui::GetID(label);
 
-    const auto label_size = ImGui::CalcTextSize(m_label.c_str(), nullptr, true);
+    const auto label_size = ImGui::CalcTextSize(label, nullptr, true);
     // if (frame_size.x == 0.0f)
     // {
     //     frame_size.x = CalcItemWidth();
@@ -265,7 +149,8 @@ void Plot::imgui()
             m_scale_max = std::max(m_scale_max, v);
         }
     }
-    //m_scale_max = std::max(m_scale_max, 0.2f);
+    const auto displayed_max = m_scale_max;
+    m_scale_max = std::max(m_scale_max, m_scale_max_limit);
 
     ImGui::RenderFrame(
         frame_bb.Min,
@@ -360,7 +245,7 @@ void Plot::imgui()
             tp0 = tp1;
         }
 
-        auto overlay_text = fmt::format("Max: {} ms", m_scale_max);
+        auto overlay_text = fmt::format("Max: {:.3f} ms", displayed_max);
         ImGui::RenderTextClipped(
             ImVec2{frame_bb.Min.x, frame_bb.Min.y + style.FramePadding.y},
             frame_bb.Max,
@@ -381,7 +266,7 @@ void Plot::imgui()
             frame_bb.Max.x + style.ItemInnerSpacing.x,
             inner_bb.Min.y
         },
-        m_label.c_str()
+        label
     );
 
     // Return hovered index or -1 if none are hovered.
@@ -391,79 +276,74 @@ void Plot::imgui()
 
 void Performance_window::imgui()
 {
-    ImGui::DragInt("Taps",   &m_taps,   1.0f, 1, 32);
-    ImGui::DragInt("Expand", &m_expand, 1.0f, 0, 32);
-    ImGui::DragInt("Reduce", &m_reduce, 1.0f, 0, 32);
-    ImGui::Checkbox("Linear", &m_linear);
 
-    const auto discrete = kernel_binom(m_taps, m_expand, m_reduce);
-    if (ImGui::TreeNodeEx("Discrete", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+    const auto all_gpu_timers = erhe::graphics::Gpu_timer::all_gpu_timers();
+    for (auto* timer : all_gpu_timers)
     {
-        for (size_t i = 0; i < discrete.weights.size(); ++i)
+        bool found{false};
+        for (auto& plot : m_gpu_timer_plots)
         {
-            ImGui::Text(
-                "W: %.3f O: %.3f",
-                discrete.weights.at(i),
-                discrete.offsets.at(i)
-            );
-        }
-        ImGui::TreePop();
-    }
-    if (m_linear)
-    {
-        const auto linear = kernel_binom_linear(discrete);
-        if (ImGui::TreeNodeEx("Linear", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            for (size_t i = 0; i < linear.weights.size(); ++i)
+            if (plot.gpu_timer() == timer)
             {
-                ImGui::Text(
-                    "W: %.3f O: %.3f",
-                    linear.weights.at(i),
-                    linear.offsets.at(i)
-                );
+                found = true;
+                break;
             }
-            ImGui::TreePop();
+        }
+        if (!found)
+        {
+            log_performance.info("Added new GPU timer plot {}\n", timer->label());
+            m_gpu_timer_plots.emplace_back(timer);
         }
     }
+    m_gpu_timer_plots.erase(
+        std::remove_if(
+            m_gpu_timer_plots.begin(),
+            m_gpu_timer_plots.end(),
+            [&all_gpu_timers](auto& plot) -> bool
+            {
+                bool found{false};
+                for (auto* timer : all_gpu_timers)
+                {
+                    if (plot.gpu_timer() == timer)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                const bool do_remove = !found;
+                if (do_remove)
+                {
+                    log_performance.info("Removed old GPU timer plot\n");
+                }
+                return do_remove;
+            }
+        ),
+        m_gpu_timer_plots.end()
+    );
 
     ImGui::Checkbox("Pause", &m_pause);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(100.0f);
     if (ImGui::Button("Clear"))
     {
-        m_id_renderer_plot    .clear();
-        m_imgui_renderer_plot .clear();
-        m_shadow_renderer_plot.clear();
-        m_content_plot        .clear();
-        m_selection_plot      .clear();
-        m_brush_plot          .clear();
-        m_gui_plot            .clear();
-        m_tools_plot          .clear();
+        for (auto& plot : m_gpu_timer_plots)
+        {
+            plot.clear();
+        }
     }
-    //ImGui::SameLine();
 
     if (!m_pause)
     {
-        m_id_renderer_plot    .add(static_cast<float>(m_id_renderer     ->gpu_time()));
-        m_imgui_renderer_plot .add(static_cast<float>(m_imgui_renderer  ->gpu_time()));
-        m_shadow_renderer_plot.add(static_cast<float>(m_shadow_renderer ->gpu_time()));
-        m_content_plot        .add(static_cast<float>(m_editor_rendering->gpu_time_content  ()));
-        m_selection_plot      .add(static_cast<float>(m_editor_rendering->gpu_time_selection()));
-        m_brush_plot          .add(static_cast<float>(m_editor_rendering->gpu_time_brush    ()));
-        m_gui_plot            .add(static_cast<float>(m_editor_rendering->gpu_time_gui      ()));
-        m_tools_plot          .add(static_cast<float>(m_editor_rendering->gpu_time_tools    ()));
-        //m_line_renderer_plot  .add(static_cast<float>(m_editor_rendering->lin
-        //m_text_renderer_plot  .add(static_cast<float>(m_editor_rendering->
+        for (auto& plot : m_gpu_timer_plots)
+        {
+            plot.sample();
+        }
     }
 
-    m_id_renderer_plot    .imgui();
-    m_imgui_renderer_plot .imgui();
-    m_shadow_renderer_plot.imgui();
-    m_content_plot        .imgui();
-    m_selection_plot      .imgui();
-    m_brush_plot          .imgui();
-    m_gui_plot            .imgui();
-    m_tools_plot          .imgui();
+    for (auto& plot : m_gpu_timer_plots)
+    {
+        plot.imgui();
+    }
 }
 
 }

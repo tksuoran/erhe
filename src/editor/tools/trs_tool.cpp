@@ -120,6 +120,10 @@ void Trs_tool::connect()
     m_scene_root        = require<Scene_root       >();
     m_selection_tool    = require<Selection_tool   >();
     m_text_renderer     = get    <Text_renderer    >();
+
+    require<Editor_imgui_windows>();
+    require<Editor_tools>();
+    require<Editor_view>();
 }
 
 void Trs_tool::initialize_component()

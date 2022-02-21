@@ -5,6 +5,7 @@
 
 #include "renderers/line_renderer.hpp"
 
+#include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <imgui.h>
@@ -54,10 +55,11 @@ void Grid_tool::tool_render(const Render_context& /*context*/)
         return;
     }
 
-    const ImVec4   im_major_color{m_major_color.x, m_major_color.y, m_major_color.z, m_major_color.w};
-    const ImVec4   im_minor_color{m_minor_color.x, m_minor_color.y, m_minor_color.z, m_minor_color.w};
-    const uint32_t cell_major_color = ImGui::ColorConvertFloat4ToU32(im_major_color);
-    const uint32_t cell_minor_color = ImGui::ColorConvertFloat4ToU32(im_minor_color);
+    const ImVec4    im_major_color{m_major_color.x, m_major_color.y, m_major_color.z, m_major_color.w};
+    const ImVec4    im_minor_color{m_minor_color.x, m_minor_color.y, m_minor_color.z, m_minor_color.w};
+    const uint32_t  cell_major_color = ImGui::ColorConvertFloat4ToU32(im_major_color);
+    const uint32_t  cell_minor_color = ImGui::ColorConvertFloat4ToU32(im_minor_color);
+    const glm::mat4 m = erhe::toolkit::create_translation<float>(m_center);
 
     const float extent     = static_cast<float>(m_cell_count) * m_cell_size;
     const float minor_step = m_cell_size / static_cast<float>(m_cell_div);
@@ -68,6 +70,7 @@ void Grid_tool::tool_render(const Render_context& /*context*/)
         float xz = static_cast<float>(cell) * m_cell_size;
         line_renderer.set_line_color(cell_major_color);
         line_renderer.add_lines(
+            m,
             {
                 {
                     vec3{     xz, 0.0f, -extent},
@@ -85,6 +88,7 @@ void Grid_tool::tool_render(const Render_context& /*context*/)
         {
             xz += minor_step;
             line_renderer.add_lines(
+                m,
                 {
                     {
                         vec3{     xz, 0.0f, -extent},
@@ -102,6 +106,7 @@ void Grid_tool::tool_render(const Render_context& /*context*/)
     line_renderer.set_line_color(cell_major_color);
     float xz = static_cast<float>(cell) * m_cell_size;
     line_renderer.add_lines(
+        m,
         {
             {
                 vec3{    xz, 0.0f, -extent},
@@ -125,6 +130,7 @@ void Grid_tool::imgui()
     ImGui::SliderInt  ("Cell Div",    &m_cell_div,   0,       10);
     ImGui::SliderInt  ("Cell Count",  &m_cell_count, 1,       100);
     ImGui::SliderFloat("Thickness",   &m_thickness,  -100.0f, 100.0f);
+    ImGui::DragFloat3 ("Center",      &m_center.x);
     ImGui::ColorEdit4 ("Major Color", &m_major_color.x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Minor Color", &m_minor_color.x, ImGuiColorEditFlags_Float);
 }

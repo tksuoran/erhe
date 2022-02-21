@@ -17,6 +17,134 @@
 namespace editor
 {
 
+
+auto factorial(const int input) -> int
+{
+    int result = 1;
+    for (int i = 1; i <= input; i++)
+    {
+        result = result * i;
+    }
+    return result;
+}
+
+// Computes the n-th coefficient from Pascal's triangle binomial coefficients.
+auto binom(
+    const int row_index,
+    const int column_index = -1
+) -> int
+{
+    return
+        factorial(row_index) /
+        (
+            factorial(row_index - column_index) *
+            factorial(column_index)
+        );
+}
+
+class Kernel
+{
+public:
+    std::vector<float> weights;
+    std::vector<float> offsets;
+};
+
+// Compute discrete weights and factors
+auto kernel_binom(
+    const int taps,
+    const int expand_by = 0,
+    const int reduce_by = 0
+) -> Kernel
+{
+    const auto row          = taps - 1 + (expand_by << 1);
+    const auto coeffs_count = row + 1;
+    const auto radius       = taps >> 1;
+
+    // sanity check, avoid duped coefficients at center
+    if ((coeffs_count & 1) == 0)
+    {
+        return {}; // ValueError("Duped coefficients at center")
+    }
+
+    // compute total weight
+    // https://en.wikipedia.org/wiki/Power_of_two
+    // TODO: seems to be not optimal ...
+    int sum = 0;
+    for (int x = 0; x < reduce_by; ++x)
+    {
+        sum += 2 * binom(row, x);
+    }
+    const auto total = float(1 << row) - sum;
+
+    // compute final weights
+    Kernel result;
+    for (
+        int x = reduce_by + radius;
+        x > reduce_by - 1;
+        --x
+    )
+    {
+        result.weights.push_back(binom(row, x) / total);
+    }
+    for (
+        int offset = 0;
+        offset <= radius;
+        ++offset
+    )
+    {
+        result.offsets.push_back(static_cast<float>(offset));
+    }
+    return result;
+}
+
+// Compute linearly interpolated weights and factors
+auto kernel_binom_linear(const Kernel& discrete_data) -> Kernel
+{
+    const auto& wd = discrete_data.weights;
+    const auto& od = discrete_data.offsets;
+
+    const int w_count = static_cast<int>(wd.size());
+
+    // sanity checks
+    const auto pairs = w_count - 1;
+    if ((w_count & 1) == 0)
+    {
+        return {};
+        //raise ValueError("Duped coefficients at center")
+    }
+
+    if ((pairs % 2 != 0))
+    {
+        return {};
+        //raise ValueError("Can't perform bilinear reduction on non-paired texels")
+    }
+
+    Kernel result;
+    result.weights.push_back(wd[0]);
+    for (int x = 1; x < w_count - 1; x += 2)
+    {
+        result.weights.push_back(wd[x] + wd[x + 1]);
+    }
+
+    result.offsets.push_back(0);
+    for (
+        int x = 1;
+        x < w_count - 1;
+        x += 2
+    )
+    {
+        int i = (x - 1) / 2;
+        const float value =
+            (
+                od[x    ] * wd[x] +
+                od[x + 1] * wd[x + 1]
+            ) / result.weights[i + 1];
+        result.offsets.push_back(value);
+    }
+
+    return result;
+}
+
 Post_processing::Post_processing()
     : Component   {c_name }
     , Imgui_window{c_title}
@@ -135,6 +263,8 @@ void Post_processing::initialize_component()
 
     create_frame_resources();
 
+    m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Post_processing");
+
     get<Editor_imgui_windows>()->register_imgui_window(this);
     this->hide();
 }
@@ -206,6 +336,41 @@ auto Post_processing::current_frame_resources() -> Frame_resources&
 
 void Post_processing::imgui()
 {
+    //ImGui::DragInt("Taps",   &m_taps,   1.0f, 1, 32);
+    //ImGui::DragInt("Expand", &m_expand, 1.0f, 0, 32);
+    //ImGui::DragInt("Reduce", &m_reduce, 1.0f, 0, 32);
+    //ImGui::Checkbox("Linear", &m_linear);
+
+    //const auto discrete = kernel_binom(m_taps, m_expand, m_reduce);
+    //if (ImGui::TreeNodeEx("Discrete", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+    //{
+    //    for (size_t i = 0; i < discrete.weights.size(); ++i)
+    //    {
+    //        ImGui::Text(
+    //            "W: %.3f O: %.3f",
+    //            discrete.weights.at(i),
+    //            discrete.offsets.at(i)
+    //        );
+    //    }
+    //    ImGui::TreePop();
+    //}
+    //if (m_linear)
+    //{
+    //    const auto linear = kernel_binom_linear(discrete);
+    //    if (ImGui::TreeNodeEx("Linear", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+    //    {
+    //        for (size_t i = 0; i < linear.weights.size(); ++i)
+    //        {
+    //            ImGui::Text(
+    //                "W: %.3f O: %.3f",
+    //                linear.weights.at(i),
+    //                linear.offsets.at(i)
+    //            );
+    //        }
+    //        ImGui::TreePop();
+    //    }
+    //}
+
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
     for (auto& rendertarget : m_rendertargets)
     {
@@ -250,6 +415,7 @@ void Post_processing::post_process(
     }
 
     erhe::graphics::Scoped_debug_group pass_scope{"Post Processing"};
+    erhe::graphics::Scoped_gpu_timer   timer     {*m_gpu_timer.get()};
 
     if (
         (m_source_width  != source_texture->width ()) ||

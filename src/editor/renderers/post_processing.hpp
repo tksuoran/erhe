@@ -14,6 +14,7 @@
 
 namespace erhe::graphics
 {
+    class Gpu_timer;
     class OpenGL_state_tracker;
     class Shader_resource;
     class Shader_stages;
@@ -133,6 +134,7 @@ private:
     size_t                                              m_texture_count_offset {0};
     size_t                                              m_reserved0_offset     {0};
     size_t                                              m_reserved1_offset     {0};
+    std::unique_ptr<erhe::graphics::Gpu_timer>          m_gpu_timer;
 
     erhe::graphics::Fragment_outputs m_fragment_outputs;
     erhe::graphics::Pipeline         m_downsample_x_pipeline;

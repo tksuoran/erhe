@@ -259,20 +259,20 @@ void Scene_builder::make_brushes()
         }
     );
 
-    constexpr bool gltf_files      = true;
+    constexpr bool gltf_files      = false;
     constexpr bool obj_files       = false;
-    constexpr bool platonic_solids = false;
-    constexpr bool sphere          = false;
-    constexpr bool torus           = false;
-    constexpr bool cylinder        = false;
-    constexpr bool cone            = false;
+    constexpr bool platonic_solids = true;
+    constexpr bool sphere          = true;
+    constexpr bool torus           = true;
+    constexpr bool cylinder        = true;
+    constexpr bool cone            = true;
     constexpr bool johnson_solids  = false;
 
     constexpr float object_scale = 1.0f;
 
-#if !defined(ERHE_GLTF_LIBRARY_NONE)
     if constexpr (gltf_files)
     {
+#if !defined(ERHE_GLTF_LIBRARY_NONE)
         //execution_queue.enqueue(
         //    [this]()
             {
@@ -298,8 +298,8 @@ void Scene_builder::make_brushes()
                 }
             }
         //);
-    }
 #endif
+    }
 
     if constexpr (obj_files)
     {
@@ -967,7 +967,7 @@ void Scene_builder::setup_lights()
     //    }
     //);
 
-    constexpr int directional_light_count = 3;
+    constexpr int directional_light_count = 2;
     if constexpr (directional_light_count > 0)
     {
         for (int i = 0; i < directional_light_count; ++i)
@@ -991,7 +991,7 @@ void Scene_builder::setup_lights()
         }
     }
 
-    constexpr int spot_light_count = 3;
+    constexpr int spot_light_count = 0;
     if constexpr (spot_light_count > 0)
     {
         for (int i = 0; i < spot_light_count; ++i)

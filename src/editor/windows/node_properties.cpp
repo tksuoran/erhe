@@ -60,7 +60,7 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
     }
 
     ImGui::PushID("##icamera_properties");
-    if (ImGui::TreeNodeEx("Projection", ImGuiTreeNodeFlags_Framed))
+    if (ImGui::TreeNodeEx("Projection", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::SetNextItemWidth(200);
         make_combo(
@@ -163,7 +163,7 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
         }
         ImGui::TreePop();
     }
-    if (ImGui::TreeNodeEx("Camera", ImGuiTreeNodeFlags_Framed))
+    if (ImGui::TreeNodeEx("Camera", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
     {
         float exposure = camera.get_exposure();
         if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 2000.0f, "%.3f", logarithmic))
@@ -180,7 +180,7 @@ void Node_properties::light_properties(erhe::scene::Light& light) const
     const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
 
     ImGui::PushID("##light_properties");
-    if (ImGui::TreeNodeEx("Light", ImGuiTreeNodeFlags_Framed))
+    if (ImGui::TreeNodeEx("Light", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
     {
         make_combo(
             "Type",
@@ -215,17 +215,18 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
     auto& mesh_data = mesh.data;
 
     ImGui::PushID("##mesh_properties");
-    if (ImGui::TreeNodeEx("Mesh", ImGuiTreeNodeFlags_Framed))
+    if (ImGui::TreeNodeEx("Mesh", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::ColorEdit3("Wireframe Color", &mesh_data.wireframe_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);
 
-        for (const auto& primitive : mesh_data.primitives)
+        for (auto& primitive : mesh_data.primitives)
         {
-            const auto geometry = primitive.source_geometry;
+            const auto& geometry = primitive.source_geometry;
             if (geometry)
             {
                 if (ImGui::TreeNode(geometry->name.c_str()))
                 {
+                    get<Scene_root>()->material_combo("Material", primitive.material);
                     int point_count   = geometry->get_point_count();
                     int polygon_count = geometry->get_polygon_count();
                     int edge_count    = geometry->get_edge_count();
@@ -237,7 +238,6 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
                     ImGui::TreePop();
                 }
             }
-            ImGui::InputText("Material", &primitive.material->name, ImGuiInputTextFlags_ReadOnly);
         }
         ImGui::TreePop();
     }

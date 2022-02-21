@@ -147,6 +147,9 @@ public:
 
     void render_rendertarget_gui_meshes(const Render_context& context);
 
+    void make_imgui_context_current  ();
+    void make_imgui_context_uncurrent();
+
     void on_key         (const signed int keycode, const bool pressed);
     void on_char        (const unsigned int codepoint);
     void on_focus       (int focused);

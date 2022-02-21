@@ -27,6 +27,7 @@ Category log_physics                 {0.4f, 0.8f, 8.0f, Console_color::CYAN,    
 Category log_gl                      {0.5f, 0.5f, 1.0f, Console_color::BLUE,    Level::LEVEL_INFO};
 Category log_headset                 {1.0f, 1.0f, 1.0f, Console_color::WHITE,   Level::LEVEL_INFO};
 Category log_scene                   {0.7f, 0.8f, 0.9f, Console_color::WHITE,   Level::LEVEL_INFO};
+Category log_performance             {0.9f, 0.5f, 0.1f, Console_color::YELLOW,  Level::LEVEL_INFO};
 Category log_command_state_transition{0.8f, 0.9f, 1.0f, Console_color::YELLOW,  Level::LEVEL_INFO};
 Category log_input_event             {0.9f, 0.9f, 5.0f, Console_color::YELLOW,  Level::LEVEL_INFO};
 Category log_input_event_consumed    {1.0f, 1.0f, 8.0f, Console_color::YELLOW,  Level::LEVEL_INFO};

@@ -39,6 +39,9 @@ public:
 
     glm::vec3    bounding_box_min        {std::numeric_limits<float>::max()}; // bounding box
     glm::vec3    bounding_box_max        {std::numeric_limits<float>::lowest()};
+    glm::vec3    bounding_sphere_center  {0.0f};
+    float        bounding_sphere_radius  {0.0f};
+
     Index_range  triangle_fill_indices   {};
     Index_range  edge_line_indices       {};
     Index_range  corner_point_indices    {};

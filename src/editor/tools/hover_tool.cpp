@@ -3,6 +3,8 @@
 #include "log.hpp"
 #include "rendering.hpp"
 
+#include "commands/command_context.hpp"
+
 #include "tools/hover_tool.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
@@ -65,7 +67,7 @@ void Hover_tool::connect()
     m_pointer_context   = get    <Pointer_context  >();
     m_scene_root        = require<Scene_root       >();
     m_text_renderer     = get    <Text_renderer    >();
-    require<Editor_tools        >();
+    require<Editor_tools>();
 }
 
 void Hover_tool::initialize_component()

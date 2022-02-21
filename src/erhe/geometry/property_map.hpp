@@ -26,8 +26,8 @@ enum class Interpolation_mode : unsigned int
 {
     none = 0,
     linear,                 // transform with matrix - position
-    normalized,             // normalize(tranform with inverse transpose of matrix) = normal, tagent, bitangent
-    normalized_vec3_float,  // normalize(tranform with inverse transpose of matrix) = normal, tagent, bitangent
+    normalized,             // normalize(transform with inverse transpose of matrix) = normal, tagent, bitangent
+    normalized_vec3_float,  // normalize(transform with inverse transpose of matrix) = normal, tagent, bitangent
 };
 
 class Property_map_descriptor
@@ -60,6 +60,7 @@ public:
         const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds
     ) const = 0;
 
+    virtual void transform  (const glm::mat4 matrix) = 0;
     virtual void import_from(Property_map_base<Key_type>* source) = 0;
     virtual void import_from(Property_map_base<Key_type>* source, const glm::mat4 transform) = 0;
 
@@ -98,6 +99,7 @@ public:
         const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds
     ) const final;
 
+    void transform  (const glm::mat4 matrix) final;
     void import_from(Property_map_base<Key_type>* source) final;
     void import_from(Property_map_base<Key_type>* source, const glm::mat4 transform) final;
     auto constructor(const Property_map_descriptor& descriptor) const -> Property_map_base<Key_type>* final;

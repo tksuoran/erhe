@@ -33,6 +33,7 @@ endmacro ()
 # Options to control which third party libraries are used with erhe
 set_option(ERHE_AUDIO_LIBRARY              "Audio library. Either miniaudio or none"                              "none"     "miniaudio;none")
 set_option(ERHE_FONT_RASTERIZATION_LIBRARY "Font rasterization library. Either freetype or none"                  "freetype" "freetype;none")
+set_option(ERHE_GLTF_LIBRARY               "GLTF library. Either cgltf or none"                                   "cgltf"    "cgltf;none")
 set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either bullet or none"              "bullet"   "bullet;none")
 set_option(ERHE_PNG_LIBRARY                "PNG loading library. Either mango or none"                            "none"     "mango;none")
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either superluminal, tracy or none" "none"     "superluminal;tracy;none")

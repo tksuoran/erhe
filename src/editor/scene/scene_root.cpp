@@ -70,11 +70,13 @@ void Scene_root::initialize_component()
     m_raytrace_scene = erhe::raytrace::IScene::create_unique("root");
 }
 
+// TODO This is not thread safe
 auto Scene_root::materials() -> std::vector<std::shared_ptr<Material>>&
 {
     return m_materials;
 }
 
+// TODO This is not thread safe
 auto Scene_root::materials() const -> const std::vector<std::shared_ptr<Material>>&
 {
     return m_materials;
@@ -163,7 +165,7 @@ auto Scene_root::camera_combo(
         names.push_back("(none)");
         cameras.push_back(nullptr);
     }
-    for (auto camera : scene().cameras)
+    for (const auto& camera : scene().cameras)
     {
         names.push_back(camera->name().c_str());
         cameras.push_back(camera.get());
@@ -187,6 +189,55 @@ auto Scene_root::camera_combo(
         selected_camera = cameras[selected_camera_index];
     }
     return camera_changed;
+}
+
+auto Scene_root::material_combo(
+    const char*                                 label,
+    std::shared_ptr<erhe::primitive::Material>& selected_material,
+    const bool                                  empty_option
+) const -> bool
+{
+    const std::lock_guard<std::mutex> lock{m_materials_mutex};
+
+    int selection_index = 0;
+    int index = 0;
+    std::vector<const char*> names;
+    std::vector<std::shared_ptr<Material>> materials;
+    const bool empty_entry = empty_option || (selected_material == nullptr);
+    if (empty_entry)
+    {
+        names.push_back("(none)");
+        materials.push_back({});
+        ++index;
+    }
+    for (const auto& material : m_materials)
+    {
+        if (!material->visible)
+        {
+            continue;
+        }
+        names.push_back(material->name.c_str());
+        materials.push_back(material);
+        if (selected_material == material)
+        {
+            selection_index = index;
+        }
+        ++index;
+    }
+
+    const bool selection_changed =
+        ImGui::Combo(
+            label,
+            &selection_index,
+            names.data(),
+            static_cast<int>(names.size())
+        ) &&
+        (selected_material != materials.at(selection_index));
+    if (selection_changed)
+    {
+        selected_material = materials.at(selection_index);
+    }
+    return selection_changed;
 }
 
 namespace

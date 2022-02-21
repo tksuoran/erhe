@@ -73,9 +73,8 @@ public:
     };
     void render(const Render_parameters& parameters);
 
-    [[nodiscard]] auto gpu_time() const -> double;
-    [[nodiscard]] auto get     (const int x, const int y, uint32_t& id, float& depth) -> bool;
-    [[nodiscard]] auto get     (const int x, const int y, float& depth) -> Mesh_primitive;
+    [[nodiscard]] auto get(const int x, const int y, uint32_t& id, float& depth) -> bool;
+    [[nodiscard]] auto get(const int x, const int y, float& depth) -> Mesh_primitive;
 
     void next_frame();
 

@@ -97,7 +97,6 @@ public:
 
     // Public API
     [[nodiscard]] auto get_font_atlas() -> ImFontAtlas*;
-    [[nodiscard]] auto gpu_time      () const -> double;
     void use_as_backend_renderer_on_context(ImGuiContext* imgui_context);
 
     void image(

@@ -508,60 +508,12 @@ auto Geometry::transform(const mat4& m) -> Geometry&
         return *this;
     }
 
-    ++m_serial;
-
     const mat4 it = glm::transpose(glm::inverse(m));
 
-    // TODO Use Transform_mode
-    // Check.. Did I forget something?
-    auto* const polygon_centroids = polygon_attributes().find<vec3>(c_polygon_centroids);
-    auto* const polygon_normals   = polygon_attributes().find<vec3>(c_polygon_normals  );
-    auto* const point_locations   = point_attributes()  .find<vec3>(c_point_locations  );
-    auto* const point_normals     = point_attributes()  .find<vec3>(c_point_normals    );
-    auto* const corner_normals    = corner_attributes() .find<vec3>(c_corner_normals   );
-    auto* const corner_tangents   = corner_attributes() .find<vec4>(c_corner_tangents  );
-
-    for (Point_id point_id = 0; point_id < m_next_point_id; ++point_id)
-    {
-        if ((point_locations != nullptr) && point_locations->has(point_id))
-        {
-            point_locations->put(point_id, vec3{m * vec4{point_locations->get(point_id), 1.0f}});
-        }
-
-        if ((point_normals != nullptr) && point_normals->has(point_id))
-        {
-            point_normals->put(point_id, vec3{it * vec4{point_normals->get(point_id), 0.0f}});
-        }
-    }
-
-    for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
-    {
-        if ((polygon_centroids != nullptr) && polygon_centroids->has(polygon_id))
-        {
-            polygon_centroids->put(polygon_id, vec3{m * vec4{polygon_centroids->get(polygon_id), 1.0f}});
-        }
-
-        if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id))
-        {
-            polygon_normals->put(polygon_id, vec3{it * vec4{polygon_normals->get(polygon_id), 0.0f}});
-        }
-    }
-
-    for (Corner_id corner_id = 0, end = m_next_corner_id; corner_id < end; ++corner_id)
-    {
-        if ((corner_normals != nullptr) && corner_normals->has(corner_id))
-        {
-            corner_normals->put(corner_id, vec3{it * vec4{corner_normals->get(corner_id), 0.0f}});
-        }
-
-        if ((corner_tangents != nullptr) && corner_tangents->has(corner_id))
-        {
-            const vec4  t0_sign = corner_tangents->get(corner_id);
-            const vec3  t0      = vec3{t0_sign};
-            const float sign    = t0_sign.w;
-            corner_tangents->put(corner_id, vec4{vec3{it * vec4{t0, 0.0f}}, sign});
-        }
-    }
+    polygon_attributes().transform(m);
+    point_attributes  ().transform(m);
+    corner_attributes ().transform(m);
+    edge_attributes   ().transform(m);
 
     const auto det = glm::determinant(m);
     if (det < 0.0f)
@@ -575,8 +527,6 @@ auto Geometry::transform(const mat4& m) -> Geometry&
 void Geometry::reverse_polygons()
 {
     ERHE_PROFILE_FUNCTION
-
-    ++m_serial;
 
     for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
     {

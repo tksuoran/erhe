@@ -1,6 +1,6 @@
 #pragma once
 
-#include "command.hpp"
+#include "commands/command.hpp"
 #include "editor_view.hpp"
 #include "scene/frame_controller.hpp"
 #include "tools/tool.hpp"

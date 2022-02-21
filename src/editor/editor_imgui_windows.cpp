@@ -465,28 +465,111 @@ void Editor_imgui_windows::init_context()
     m_time = 0.0;
 
     // Keyboard mapping. Dear ImGui will use those indices to peek into the io.KeysDown[] array.
-    io.KeyMap[ImGuiKey_Tab        ] = erhe::toolkit::Key_tab;
-    io.KeyMap[ImGuiKey_LeftArrow  ] = erhe::toolkit::Key_left;
-    io.KeyMap[ImGuiKey_RightArrow ] = erhe::toolkit::Key_right;
-    io.KeyMap[ImGuiKey_UpArrow    ] = erhe::toolkit::Key_up;
-    io.KeyMap[ImGuiKey_DownArrow  ] = erhe::toolkit::Key_down;
-    io.KeyMap[ImGuiKey_PageUp     ] = erhe::toolkit::Key_page_up;
-    io.KeyMap[ImGuiKey_PageDown   ] = erhe::toolkit::Key_page_down;
-    io.KeyMap[ImGuiKey_Home       ] = erhe::toolkit::Key_home;
-    io.KeyMap[ImGuiKey_End        ] = erhe::toolkit::Key_end;
-    io.KeyMap[ImGuiKey_Insert     ] = erhe::toolkit::Key_insert;
-    io.KeyMap[ImGuiKey_Delete     ] = erhe::toolkit::Key_delete;
-    io.KeyMap[ImGuiKey_Backspace  ] = erhe::toolkit::Key_backspace;
-    io.KeyMap[ImGuiKey_Space      ] = erhe::toolkit::Key_space;
-    io.KeyMap[ImGuiKey_Enter      ] = erhe::toolkit::Key_enter;
-    io.KeyMap[ImGuiKey_Escape     ] = erhe::toolkit::Key_escape;
-    io.KeyMap[ImGuiKey_KeyPadEnter] = erhe::toolkit::Key_kp_enter;
-    io.KeyMap[ImGuiKey_A          ] = erhe::toolkit::Key_a;
-    io.KeyMap[ImGuiKey_C          ] = erhe::toolkit::Key_c;
-    io.KeyMap[ImGuiKey_V          ] = erhe::toolkit::Key_v;
-    io.KeyMap[ImGuiKey_X          ] = erhe::toolkit::Key_x;
-    io.KeyMap[ImGuiKey_Y          ] = erhe::toolkit::Key_y;
-    io.KeyMap[ImGuiKey_Z          ] = erhe::toolkit::Key_z;
+    io.KeyMap[ImGuiKey_Tab           ] = erhe::toolkit::Key_tab;
+    io.KeyMap[ImGuiKey_LeftArrow     ] = erhe::toolkit::Key_left;
+    io.KeyMap[ImGuiKey_RightArrow    ] = erhe::toolkit::Key_right;
+    io.KeyMap[ImGuiKey_UpArrow       ] = erhe::toolkit::Key_up;
+    io.KeyMap[ImGuiKey_DownArrow     ] = erhe::toolkit::Key_down;
+    io.KeyMap[ImGuiKey_PageUp        ] = erhe::toolkit::Key_page_up;
+    io.KeyMap[ImGuiKey_PageDown      ] = erhe::toolkit::Key_page_down;
+    io.KeyMap[ImGuiKey_Home          ] = erhe::toolkit::Key_home;
+    io.KeyMap[ImGuiKey_End           ] = erhe::toolkit::Key_end;
+    io.KeyMap[ImGuiKey_Insert        ] = erhe::toolkit::Key_insert;
+    io.KeyMap[ImGuiKey_Delete        ] = erhe::toolkit::Key_delete;
+    io.KeyMap[ImGuiKey_Backspace     ] = erhe::toolkit::Key_backspace;
+    io.KeyMap[ImGuiKey_Space         ] = erhe::toolkit::Key_space;
+    io.KeyMap[ImGuiKey_Enter         ] = erhe::toolkit::Key_enter;
+    io.KeyMap[ImGuiKey_Escape        ] = erhe::toolkit::Key_escape;
+    io.KeyMap[ImGuiKey_LeftCtrl      ] = erhe::toolkit::Key_left_control;
+    io.KeyMap[ImGuiKey_LeftShift     ] = erhe::toolkit::Key_left_shift;
+    io.KeyMap[ImGuiKey_LeftAlt       ] = erhe::toolkit::Key_left_alt;
+    io.KeyMap[ImGuiKey_LeftSuper     ] = erhe::toolkit::Key_left_super;
+    io.KeyMap[ImGuiKey_RightCtrl     ] = erhe::toolkit::Key_right_control;
+    io.KeyMap[ImGuiKey_RightShift    ] = erhe::toolkit::Key_right_shift;
+    io.KeyMap[ImGuiKey_RightAlt      ] = erhe::toolkit::Key_right_alt;
+    io.KeyMap[ImGuiKey_RightSuper    ] = erhe::toolkit::Key_right_super;
+    io.KeyMap[ImGuiKey_Menu          ] = erhe::toolkit::Key_menu;
+    io.KeyMap[ImGuiKey_0             ] = erhe::toolkit::Key_0;
+    io.KeyMap[ImGuiKey_1             ] = erhe::toolkit::Key_1;
+    io.KeyMap[ImGuiKey_2             ] = erhe::toolkit::Key_2;
+    io.KeyMap[ImGuiKey_3             ] = erhe::toolkit::Key_3;
+    io.KeyMap[ImGuiKey_4             ] = erhe::toolkit::Key_4;
+    io.KeyMap[ImGuiKey_5             ] = erhe::toolkit::Key_5;
+    io.KeyMap[ImGuiKey_6             ] = erhe::toolkit::Key_6;
+    io.KeyMap[ImGuiKey_7             ] = erhe::toolkit::Key_7;
+    io.KeyMap[ImGuiKey_8             ] = erhe::toolkit::Key_8;
+    io.KeyMap[ImGuiKey_9             ] = erhe::toolkit::Key_9;
+    io.KeyMap[ImGuiKey_A             ] = erhe::toolkit::Key_a;
+    io.KeyMap[ImGuiKey_B             ] = erhe::toolkit::Key_b;
+    io.KeyMap[ImGuiKey_C             ] = erhe::toolkit::Key_c;
+    io.KeyMap[ImGuiKey_D             ] = erhe::toolkit::Key_d;
+    io.KeyMap[ImGuiKey_E             ] = erhe::toolkit::Key_e;
+    io.KeyMap[ImGuiKey_F             ] = erhe::toolkit::Key_f;
+    io.KeyMap[ImGuiKey_G             ] = erhe::toolkit::Key_g;
+    io.KeyMap[ImGuiKey_H             ] = erhe::toolkit::Key_h;
+    io.KeyMap[ImGuiKey_I             ] = erhe::toolkit::Key_i;
+    io.KeyMap[ImGuiKey_J             ] = erhe::toolkit::Key_j;
+    io.KeyMap[ImGuiKey_K             ] = erhe::toolkit::Key_k;
+    io.KeyMap[ImGuiKey_L             ] = erhe::toolkit::Key_l;
+    io.KeyMap[ImGuiKey_M             ] = erhe::toolkit::Key_m;
+    io.KeyMap[ImGuiKey_N             ] = erhe::toolkit::Key_n;
+    io.KeyMap[ImGuiKey_O             ] = erhe::toolkit::Key_o;
+    io.KeyMap[ImGuiKey_P             ] = erhe::toolkit::Key_p;
+    io.KeyMap[ImGuiKey_Q             ] = erhe::toolkit::Key_q;
+    io.KeyMap[ImGuiKey_R             ] = erhe::toolkit::Key_r;
+    io.KeyMap[ImGuiKey_S             ] = erhe::toolkit::Key_s;
+    io.KeyMap[ImGuiKey_T             ] = erhe::toolkit::Key_t;
+    io.KeyMap[ImGuiKey_U             ] = erhe::toolkit::Key_u;
+    io.KeyMap[ImGuiKey_V             ] = erhe::toolkit::Key_v;
+    io.KeyMap[ImGuiKey_W             ] = erhe::toolkit::Key_w;
+    io.KeyMap[ImGuiKey_X             ] = erhe::toolkit::Key_x;
+    io.KeyMap[ImGuiKey_Y             ] = erhe::toolkit::Key_y;
+    io.KeyMap[ImGuiKey_Z             ] = erhe::toolkit::Key_z;
+    io.KeyMap[ImGuiKey_F1            ] = erhe::toolkit::Key_f1;
+    io.KeyMap[ImGuiKey_F2            ] = erhe::toolkit::Key_f2;
+    io.KeyMap[ImGuiKey_F3            ] = erhe::toolkit::Key_f3;
+    io.KeyMap[ImGuiKey_F4            ] = erhe::toolkit::Key_f4;
+    io.KeyMap[ImGuiKey_F5            ] = erhe::toolkit::Key_f5;
+    io.KeyMap[ImGuiKey_F6            ] = erhe::toolkit::Key_f6;
+    io.KeyMap[ImGuiKey_F7            ] = erhe::toolkit::Key_f7;
+    io.KeyMap[ImGuiKey_F8            ] = erhe::toolkit::Key_f8;
+    io.KeyMap[ImGuiKey_F9            ] = erhe::toolkit::Key_f9;
+    io.KeyMap[ImGuiKey_F10           ] = erhe::toolkit::Key_f10;
+    io.KeyMap[ImGuiKey_F11           ] = erhe::toolkit::Key_f11;
+    io.KeyMap[ImGuiKey_F12           ] = erhe::toolkit::Key_f12;
+    io.KeyMap[ImGuiKey_Apostrophe    ] = erhe::toolkit::Key_apostrophe;
+    io.KeyMap[ImGuiKey_Comma         ] = erhe::toolkit::Key_comma;
+    io.KeyMap[ImGuiKey_Minus         ] = erhe::toolkit::Key_minus;         // -
+    io.KeyMap[ImGuiKey_Period        ] = erhe::toolkit::Key_period;        // .
+    io.KeyMap[ImGuiKey_Slash         ] = erhe::toolkit::Key_slash;         // /
+    io.KeyMap[ImGuiKey_Semicolon     ] = erhe::toolkit::Key_semicolon;     // ;
+    io.KeyMap[ImGuiKey_Equal         ] = erhe::toolkit::Key_equal;         // =
+    io.KeyMap[ImGuiKey_LeftBracket   ] = erhe::toolkit::Key_left_bracket;  // [
+    io.KeyMap[ImGuiKey_Backslash     ] = erhe::toolkit::Key_backslash;     // \ (this text inhibit multiline comment caused by backslash)
+    io.KeyMap[ImGuiKey_RightBracket  ] = erhe::toolkit::Key_right_bracket; // ]
+    io.KeyMap[ImGuiKey_GraveAccent   ] = erhe::toolkit::Key_grave_accent;  // `
+    io.KeyMap[ImGuiKey_CapsLock      ] = erhe::toolkit::Key_caps_lock;
+    io.KeyMap[ImGuiKey_ScrollLock    ] = erhe::toolkit::Key_scroll_lock;
+    io.KeyMap[ImGuiKey_NumLock       ] = erhe::toolkit::Key_num_lock;
+    io.KeyMap[ImGuiKey_PrintScreen   ] = erhe::toolkit::Key_print_screen;
+    io.KeyMap[ImGuiKey_Pause         ] = erhe::toolkit::Key_pause;
+    io.KeyMap[ImGuiKey_Keypad0       ] = erhe::toolkit::Key_kp_0;
+    io.KeyMap[ImGuiKey_Keypad1       ] = erhe::toolkit::Key_kp_1;
+    io.KeyMap[ImGuiKey_Keypad2       ] = erhe::toolkit::Key_kp_2;
+    io.KeyMap[ImGuiKey_Keypad3       ] = erhe::toolkit::Key_kp_3;
+    io.KeyMap[ImGuiKey_Keypad4       ] = erhe::toolkit::Key_kp_4;
+    io.KeyMap[ImGuiKey_Keypad5       ] = erhe::toolkit::Key_kp_5;
+    io.KeyMap[ImGuiKey_Keypad6       ] = erhe::toolkit::Key_kp_6;
+    io.KeyMap[ImGuiKey_Keypad7       ] = erhe::toolkit::Key_kp_7;
+    io.KeyMap[ImGuiKey_Keypad8       ] = erhe::toolkit::Key_kp_8;
+    io.KeyMap[ImGuiKey_Keypad9       ] = erhe::toolkit::Key_kp_9;
+    io.KeyMap[ImGuiKey_KeypadDecimal ] = erhe::toolkit::Key_kp_decimal;
+    io.KeyMap[ImGuiKey_KeypadDivide  ] = erhe::toolkit::Key_kp_divide;
+    io.KeyMap[ImGuiKey_KeypadMultiply] = erhe::toolkit::Key_kp_multiply;
+    io.KeyMap[ImGuiKey_KeypadSubtract] = erhe::toolkit::Key_kp_subtract;
+    io.KeyMap[ImGuiKey_KeypadAdd     ] = erhe::toolkit::Key_kp_add;
+    io.KeyMap[ImGuiKey_KeypadEnter   ] = erhe::toolkit::Key_kp_enter;
+    io.KeyMap[ImGuiKey_KeypadEqual   ] = erhe::toolkit::Key_kp_equal;
 
     // TODO Clipboard
     // TODO Update monitors
@@ -722,7 +805,7 @@ void Editor_imgui_windows::imgui_windows()
 
     menu();
 
-    for (auto imgui_window : m_imgui_windows)
+    for (auto& imgui_window : m_imgui_windows)
     {
         if (imgui_window->is_visibile())
         {
@@ -733,19 +816,6 @@ void Editor_imgui_windows::imgui_windows()
             imgui_window->end();
         }
     }
-
-    //auto priority_action_tool = get_action_tool(m_pointer_context->priority_action());
-    //if (
-    //    m_show_tool_properties &&
-    //    (priority_action_tool != nullptr)
-    //)
-    //{
-    //    if (ImGui::Begin("Tool Properties", &m_show_tool_properties))
-    //    {
-    //        priority_action_tool->tool_properties();
-    //    }
-    //    ImGui::End();
-    //}
 
     if (m_show_style_editor)
     {
@@ -815,6 +885,16 @@ void Editor_imgui_windows::on_mouse_wheel(
     {
         rendertarget->on_mouse_wheel(x, y);
     }
+}
+
+void Editor_imgui_windows::make_imgui_context_current()
+{
+    ImGui::SetCurrentContext(m_imgui_context);
+}
+
+void Editor_imgui_windows::make_imgui_context_uncurrent()
+{
+    ImGui::SetCurrentContext(nullptr);
 }
 
 void Editor_imgui_windows::on_key(

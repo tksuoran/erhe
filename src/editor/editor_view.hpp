@@ -1,6 +1,5 @@
 #pragma once
 
-#include "command.hpp"
 #include "windows/imgui_window.hpp"
 
 #include "erhe/components/components.hpp"
@@ -10,6 +9,14 @@
 #include <functional>
 
 namespace editor {
+
+class Command;
+class Command_binding;
+class Key_binding;
+class Mouse_binding;
+class Mouse_click_binding;
+class Mouse_drag_binding;
+class Mouse_motion_binding;
 
 class Configuration;
 class Editor_imgui_windows;
@@ -52,8 +59,11 @@ public:
     void connect             () override;
     void initialize_component() override;
 
+    void run();
+
     // Implements View
     void update         () override;
+    void on_close       () override;
     void on_focus       (int focused) override;
     void on_cursor_enter(int entered) override;
     void on_refresh     () override;
@@ -102,6 +112,8 @@ public:
             (m_active_mouse_command == command);
     }
 
+    void command_inactivated(Command* const command);
+
 private:
     [[nodiscard]] auto get_command_priority   (Command* const command) const -> int;
     [[nodiscard]] auto get_imgui_capture_mouse() const -> bool;
@@ -128,7 +140,8 @@ private:
     std::vector<Command*>                       m_commands;
     std::vector<Key_binding>                    m_key_bindings;
     std::vector<std::unique_ptr<Mouse_binding>> m_mouse_bindings;
-    bool                                        m_ready{false};
+    bool                                        m_ready          {false};
+    bool                                        m_close_requested{false};
     glm::dvec2                                  m_last_mouse_position;
 };
 

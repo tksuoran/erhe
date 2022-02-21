@@ -14,16 +14,17 @@ namespace erhe::toolkit
 
 using Mouse_cursor = signed int;
 constexpr Mouse_cursor Mouse_cursor_None       = -1;
-constexpr Mouse_cursor Mouse_cursor_Arrow      = 0;
-constexpr Mouse_cursor Mouse_cursor_TextInput  = 1;   // When hovering over InputText, etc.
-constexpr Mouse_cursor Mouse_cursor_ResizeAll  = 2;   // (Unused by Dear ImGui functions)
-constexpr Mouse_cursor Mouse_cursor_ResizeNS   = 3;   // When hovering over an horizontal border
-constexpr Mouse_cursor Mouse_cursor_ResizeEW   = 4;   // When hovering over a vertical border or a column
-constexpr Mouse_cursor Mouse_cursor_ResizeNESW = 5;   // When hovering over the bottom-left corner of a window
-constexpr Mouse_cursor Mouse_cursor_ResizeNWSE = 6;   // When hovering over the bottom-right corner of a window
-constexpr Mouse_cursor Mouse_cursor_Hand       = 7;   // (Unused by Dear ImGui functions. Use for e.g. hyperlinks)
-constexpr Mouse_cursor Mouse_cursor_NotAllowed = 8;   // When hovering something with disallowed interaction. Usually a crossed circle.
-constexpr Mouse_cursor Mouse_cursor_COUNT      = 9;
+constexpr Mouse_cursor Mouse_cursor_Arrow      =  0;
+constexpr Mouse_cursor Mouse_cursor_TextInput  =  1;   // When hovering over InputText, etc.
+constexpr Mouse_cursor Mouse_cursor_ResizeAll  =  2;   // (Unused by Dear ImGui functions)
+constexpr Mouse_cursor Mouse_cursor_ResizeNS   =  3;   // When hovering over an horizontal border
+constexpr Mouse_cursor Mouse_cursor_ResizeEW   =  4;   // When hovering over a vertical border or a column
+constexpr Mouse_cursor Mouse_cursor_ResizeNESW =  5;   // When hovering over the bottom-left corner of a window
+constexpr Mouse_cursor Mouse_cursor_ResizeNWSE =  6;   // When hovering over the bottom-right corner of a window
+constexpr Mouse_cursor Mouse_cursor_Hand       =  7;   // (Unused by Dear ImGui functions. Use for e.g. hyperlinks)
+constexpr Mouse_cursor Mouse_cursor_NotAllowed =  8;   // When hovering something with disallowed interaction. Usually a crossed circle.
+constexpr Mouse_cursor Mouse_cursor_Crosshair  =  9;   // Crosshair cursor
+constexpr Mouse_cursor Mouse_cursor_COUNT      = 10;
 
 class Window_configuration
 {
@@ -44,11 +45,11 @@ public:
     explicit Context_window(Context_window* share);
     virtual ~Context_window();
 
-    [[nodiscard]] auto get_width() const -> int;
-    [[nodiscard]] auto get_height() const -> int;
-    [[nodiscard]] auto get_root_view() -> Root_view&;
+    [[nodiscard]] auto get_width        () const -> int;
+    [[nodiscard]] auto get_height       () const -> int;
+    [[nodiscard]] auto get_root_view    () -> Root_view&;
     [[nodiscard]] auto is_mouse_captured() const -> bool;
-    [[nodiscard]] auto get_glfw_window() const -> GLFWwindow*;
+    [[nodiscard]] auto get_glfw_window  () const -> GLFWwindow*;
 
     auto open               (const Window_configuration& configuration) -> bool;
     void make_current       () const;
@@ -56,6 +57,7 @@ public:
     void swap_buffers       () const;
     void break_event_loop   ();
     void enter_event_loop   ();
+    void poll_events        ();
     void get_cursor_position(double& xpos, double& ypos);
     void set_visible        (const bool visible);
     void set_cursor         (const Mouse_cursor cursor);

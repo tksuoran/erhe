@@ -93,7 +93,8 @@ void Materials::initialize_component()
 
 void Materials::imgui()
 {
-    const auto& materials = m_scene_root->materials();
+    // TODO We take a copy here
+    const auto materials = m_scene_root->materials();
 
     const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
     for (const auto& material : materials)

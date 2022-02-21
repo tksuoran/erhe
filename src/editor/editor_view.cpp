@@ -8,6 +8,12 @@
 #include "editor_view.hpp"
 #include "window.hpp"
 
+#include "commands/command.hpp"
+#include "commands/command_context.hpp"
+#include "commands/key_binding.hpp"
+#include "commands/mouse_click_binding.hpp"
+#include "commands/mouse_motion_binding.hpp"
+#include "commands/mouse_drag_binding.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/imgui_renderer.hpp"
@@ -141,6 +147,14 @@ void Editor_view::remove_command_binding(
     );
 }
 
+void Editor_view::command_inactivated(Command* const command)
+{
+    if (m_active_mouse_command == command)
+    {
+        m_active_mouse_command = nullptr;
+    }
+}
+
 void Editor_view::on_refresh()
 {
     if (!m_configuration->show_window)
@@ -165,6 +179,33 @@ void Editor_view::on_refresh()
 }
 
 static constexpr std::string_view c_swap_buffers{"swap_buffers" };
+
+void Editor_view::run()
+{
+    for (;;)
+    {
+        if (m_close_requested)
+        {
+            break;
+        }
+
+        m_editor_imgui_windows->make_imgui_context_current();
+        get<Window>()->get_context_window()->poll_events();
+        m_editor_imgui_windows->make_imgui_context_uncurrent();
+
+        if (m_close_requested)
+        {
+            break;
+        }
+
+        update();
+    }
+}
+
+void Editor_view::on_close()
+{
+    m_close_requested = true;
+}
 
 void Editor_view::update()
 {

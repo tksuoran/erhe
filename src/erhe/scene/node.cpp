@@ -86,7 +86,7 @@ void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
 
     ERHE_VERIFY(attachment);
 
-    log.info(
+    log.trace(
         "{} ({}).attach({})\n",
         name(),
         node_type(),
@@ -119,7 +119,7 @@ auto Node::detach(INode_attachment* attachment) -> bool
         return false;
     }
 
-    log.info(
+    log.trace(
         "{} ({}).detach({})\n",
         name(),
         node_type(),
@@ -192,7 +192,7 @@ void Node::attach(const std::shared_ptr<Node>& child_node)
 
     ERHE_VERIFY(child_node);
 
-    log.info(
+    log.trace(
         "{} ({}).attach({} ({}))\n",
         name(),
         node_type(),
@@ -224,7 +224,7 @@ auto Node::detach(Node* child_node) -> bool
         return false;
     }
 
-    log.info(
+    log.trace(
         "{} ({}).detach({} ({}))\n",
         name(),
         node_type(),

@@ -118,6 +118,9 @@ void Selection_tool::connect()
     m_line_renderer_set = get<Line_renderer_set>();
     m_pointer_context   = get<Pointer_context>();
     m_viewport_config   = get<Viewport_config>();
+
+    require<Editor_tools>();
+    require<Editor_view >();
 }
 
 void Selection_tool::initialize_component()
@@ -214,7 +217,7 @@ auto Selection_tool::clear_selection() -> bool
         return false;
     }
 
-    for (auto item : m_selection)
+    for (const auto& item : m_selection)
     {
         ERHE_VERIFY(item);
         if (!item)
@@ -354,15 +357,16 @@ void Selection_tool::tool_render(const Render_context& context)
         return;
     }
 
-    constexpr uint32_t red        = 0xff0000ffu;
-    constexpr uint32_t green      = 0xff00ff00u;
-    constexpr uint32_t blue       = 0xffff0000u;
-    constexpr uint32_t yellow     = 0xff00ffffu;
-    constexpr uint32_t white      = 0xffffffffu;
-    constexpr uint32_t half_white = 0x88888888u; // premultiplied
-    constexpr float    thickness  = 10.0f;
+    constexpr uint32_t red         = 0xff0000ffu;
+    constexpr uint32_t green       = 0xff00ff00u;
+    constexpr uint32_t blue        = 0xffff0000u;
+    constexpr uint32_t yellow      = 0xff00ffffu;
+    constexpr uint32_t half_yellow = 0x88008888u;
+    constexpr uint32_t white       = 0xffffffffu;
+    constexpr uint32_t half_white  = 0x88888888u; // premultiplied
+    constexpr float    thickness   = 10.0f;
     auto& line_renderer = m_line_renderer_set->hidden;
-    for (auto node : m_selection)
+    for (const auto& node : m_selection)
     {
         const mat4 m     {node->world_from_node()};
         const vec3 O     {0.0f};
@@ -376,7 +380,7 @@ void Selection_tool::tool_render(const Render_context& context)
         if (is_mesh(node))
         {
             const auto& mesh = as_mesh(node);
-            for (auto primitive : mesh->data.primitives)
+            for (const auto& primitive : mesh->data.primitives)
             {
                 if (!primitive.source_geometry)
                 {
@@ -402,6 +406,13 @@ void Selection_tool::tool_render(const Render_context& context)
 		                { vec3{box_max.x, box_max.y, box_max.z}, vec3{box_min.x, box_max.y, box_max.z} },
                         { vec3{box_min.x, box_max.y, box_max.z}, vec3{box_min.x, box_min.y, box_max.z} }
                     },
+                    thickness
+                );
+                line_renderer.add_sphere(
+                    node->world_from_node(),
+                    half_yellow,
+                    primitive_geometry.bounding_sphere_center,
+                    primitive_geometry.bounding_sphere_radius,
                     thickness
                 );
             }

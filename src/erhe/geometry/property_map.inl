@@ -290,6 +290,84 @@ Property_map<Key_type, Value_type>::import_from(
 
 template <typename Key_type, typename Value_type>
 inline void
+Property_map<Key_type, Value_type>::transform(
+    const glm::mat4 transform
+)
+{
+    ERHE_PROFILE_FUNCTION
+
+    ERHE_VERIFY(values.size() == present.size());
+
+    if constexpr(transform_properties<Value_type>::is_transformable)
+    {
+        switch (m_descriptor.transform_mode)
+        {
+            //using enum Transform_mode;
+            default:
+            case Transform_mode::none:
+            {
+                break;
+            }
+
+            case Transform_mode::matrix:
+            {
+                for (size_t i = 0, end = values.size(); i < end; ++i)
+                {
+                    values[i] = apply_transform(values[i], transform, 1.0f);
+                }
+                break;
+            }
+
+            // TODO Use cofactor matrix for bivectors?
+            case Transform_mode::normalize_inverse_transpose_matrix:
+            {
+                if constexpr (std::is_same_v<Value_type, glm::vec3>)
+                {
+                    const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
+                    for (size_t i = 0, end = values.size(); i < end; ++i)
+                    {
+                        values[i] = glm::normalize(
+                            apply_transform(
+                                values[i],
+                                inverse_transpose_transform,
+                                0.0f
+                            )
+                        );
+                    }
+                }
+                break;
+            }
+
+            // TODO Use cofactor matrix for bivectors?
+            case Transform_mode::normalize_inverse_transpose_matrix_vec3_float:
+            {
+                if constexpr (std::is_same_v<Value_type, glm::vec4>)
+                {
+                    const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
+                    for (size_t i = 0, end = values.size(); i < end; ++i)
+                    {
+                        values[i] = glm::vec4{
+                            glm::normalize(
+                                apply_transform(
+                                    glm::vec3{
+                                        values[i]
+                                    },
+                                    inverse_transpose_transform,
+                                    0.0f
+                                )
+                            ),
+                            values[i].w
+                        };
+                    }
+                }
+                break;
+            }
+        }
+    }
+}
+
+template <typename Key_type, typename Value_type>
+inline void
 Property_map<Key_type, Value_type>::import_from(
     Property_map_base<Key_type>* source_base,
     const glm::mat4              transform

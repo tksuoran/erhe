@@ -35,6 +35,11 @@ namespace editor
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
+using erhe::graphics::Input_assembly_state;
+using erhe::graphics::Rasterization_state;
+using erhe::graphics::Depth_stencil_state;
+using erhe::graphics::Color_blend_state;
+
 using glm::mat4;
 
 Id_renderer::Id_renderer()
@@ -74,27 +79,27 @@ void Id_renderer::initialize_component()
         .name           = "ID Renderer",
         .shader_stages  = m_programs->id.get(),
         .vertex_input   = m_mesh_memory->vertex_input.get(),
-        .input_assembly = erhe::graphics::Input_assembly_state::triangles,
-        .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw(reverse_depth),
-        .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-        .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+        .input_assembly = Input_assembly_state::triangles,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+        .color_blend    = Color_blend_state::color_blend_disabled
     };
 
     m_selective_depth_clear_pipeline.data = {
         .name           = "ID Renderer selective depth clear",
         .shader_stages  = m_programs->id.get(),
         .vertex_input   = m_mesh_memory->vertex_input.get(),
-        .input_assembly = erhe::graphics::Input_assembly_state::triangles,
-        .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw(reverse_depth),
-        .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_always_stencil_test_disabled,
-        .color_blend    = erhe::graphics::Color_blend_state::color_writes_disabled,
+        .input_assembly = Input_assembly_state::triangles,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
+        .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
+        .color_blend    = Color_blend_state::color_writes_disabled,
     };
 
     erhe::graphics::Scoped_debug_group debug_group{c_id_renderer_initialize_component};
 
     create_id_frame_resources();
 
-    m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>();
+    m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Id_renderer");
 }
 
 void Id_renderer::create_id_frame_resources()
@@ -491,12 +496,6 @@ auto Id_renderer::get(
     }
 
     return result;
-}
-
-auto Id_renderer::gpu_time() const -> double
-{
-    const auto time_elapsed = static_cast<double>(m_gpu_timer->last_result());
-    return time_elapsed / 1000000.0;
 }
 
 }

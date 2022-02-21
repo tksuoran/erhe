@@ -468,6 +468,7 @@ auto Context_window::open(
         m_mouse_cursor[Mouse_cursor_ResizeNS  ] = glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
         m_mouse_cursor[Mouse_cursor_ResizeEW  ] = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
         m_mouse_cursor[Mouse_cursor_Hand      ] = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
+        m_mouse_cursor[Mouse_cursor_Crosshair ] = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
 #if GLFW_HAS_NEW_CURSORS
         m_mouse_cursor[Mouse_cursor_ResizeAll ] = glfwCreateStandardCursor(GLFW_RESIZE_ALL_CURSOR);
         m_mouse_cursor[Mouse_cursor_ResizeNESW] = glfwCreateStandardCursor(GLFW_RESIZE_NESW_CURSOR);
@@ -528,6 +529,11 @@ Context_window::~Context_window()
 void Context_window::break_event_loop()
 {
     m_is_event_loop_running = false;
+}
+
+void Context_window::poll_events()
+{
+    glfwPollEvents();
 }
 
 void Context_window::enter_event_loop()

@@ -189,16 +189,17 @@ void Root_view::on_close()
 {
     if (m_view != nullptr)
     {
-        m_view->on_exit();
-        m_view = nullptr;
+        //m_view->on_exit();
+        m_view->on_close();
+        //m_view = nullptr;
     }
 
-    m_last_view = nullptr;
-
-    if (m_window != nullptr)
-    {
-        m_window->break_event_loop();
-    }
+    //m_last_view = nullptr;
+    //
+    //if (m_window != nullptr)
+    //{
+    //    m_window->break_event_loop();
+    //}
 }
 
 void Root_view::on_focus(int focused)

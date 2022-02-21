@@ -19,7 +19,7 @@ Editor_time::~Editor_time() = default;
 
 void Editor_time::connect()
 {
-    m_scene_root  = get<Scene_root >();
+    m_scene_root = get<Scene_root>();
 }
 
 void Editor_time::start_time()

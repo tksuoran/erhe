@@ -74,6 +74,27 @@ vec2 srgb_to_linear(vec2 v)
     );
 }
 
+float linear_to_srgb(float x)
+{
+    if (x <= 0.00031308)
+    {
+        return 12.92 * x;
+    }
+    else
+    {
+        return 1.055 * pow(x, (1.0 / 2.4)) - 0.055;
+    }
+}
+
+vec3 linear_to_srgb(vec3 c)
+{
+    return vec3(
+        linear_to_srgb(c.x),
+        linear_to_srgb(c.y),
+        linear_to_srgb(c.z)
+    );
+}
+
 const float M_PI = 3.141592653589793;
 
 struct NormalInfo
@@ -352,7 +373,7 @@ void main()
             float BdotH            = dot(b, h);
             float rangeAttenuation = getRangeAttenuation(light.radiance_and_range.w, length(pointToLight));
             float spotAttenuation  = getSpotAttenuation(-pointToLight, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
-            float lightVisibility  = sample_light_visibility(v_position, light_index, NdotL);
+            float lightVisibility  = 1.0; //sample_light_visibility(v_position, light_index, NdotL);
             vec3  intensity        = rangeAttenuation * spotAttenuation * light.radiance_and_range.rgb * lightVisibility; // sample_light_visibility(v_position, light_index);
 
             f_diffuse  += intensity * NdotL * BRDF_lambertian(materialInfo.f0, materialInfo.f90, materialInfo.albedoColor, VdotH);
@@ -368,6 +389,7 @@ void main()
 
     float exposure = camera.cameras[0].exposure;
     out_color.rgb = color * exposure;
+    //out_color.rgb = srgb_to_linear(0.5 * t + vec3(0.5));
     out_color.a = 1.0;
 }
 

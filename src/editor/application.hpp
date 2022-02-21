@@ -33,7 +33,6 @@ public:
     void component_initialization_complete(const bool initialization_succeeded);
 
 private:
-
     erhe::components::Components m_components;
 };
 

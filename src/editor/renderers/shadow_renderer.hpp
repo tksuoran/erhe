@@ -57,7 +57,6 @@ public:
 
     [[nodiscard]] auto texture () const -> erhe::graphics::Texture*;
     [[nodiscard]] auto viewport() const -> erhe::scene::Viewport;
-    [[nodiscard]] auto gpu_time() const -> double;
 
 private:
     // Component dependencies

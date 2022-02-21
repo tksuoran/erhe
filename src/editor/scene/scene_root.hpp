@@ -128,11 +128,17 @@ public:
         const bool             nullptr_option = false
     ) const -> bool;
 
+    auto material_combo(
+        const char*                                 label,
+        std::shared_ptr<erhe::primitive::Material>& material,
+        const bool                                  empty_option = false
+    ) const -> bool;
+
     void sort_lights();
 
 private:
-    std::mutex                                              m_materials_mutex;
-    std::mutex                                              m_scene_mutex;
+    mutable std::mutex                                      m_materials_mutex;
+    mutable std::mutex                                      m_scene_mutex;
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
 
     std::unique_ptr<erhe::physics::IWorld>    m_physics_world;

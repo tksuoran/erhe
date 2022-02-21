@@ -183,7 +183,7 @@ void Imgui_renderer::initialize_component()
     create_frame_resources                     ();
     create_font_texture                        ();
 
-    m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>();
+    m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Imgui_renderer");
 }
 
 void Imgui_renderer::create_attribute_mappings_and_vertex_format()
@@ -789,12 +789,6 @@ void Imgui_renderer::render_draw_data()
         gl::disable(gl::Enable_cap::clip_distance2);
         gl::disable(gl::Enable_cap::clip_distance3);
     }
-}
-
-auto Imgui_renderer::gpu_time() const -> double
-{
-    const auto time_elapsed = static_cast<double>(m_gpu_timer->last_result());
-    return time_elapsed / 1000000.0;
 }
 
 } // namespace editor

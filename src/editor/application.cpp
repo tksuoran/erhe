@@ -1,16 +1,20 @@
 #include "application.hpp"
-#include "log.hpp"
-
-#include "erhe/scene/transform.hpp"
+#include "editor_view.hpp"
+#include "window.hpp"
 
 namespace editor {
-
-using std::shared_ptr;
-using View = erhe::toolkit::View;
 
 Application::Application()
     : erhe::components::Component{c_name}
 {
+}
+
+void Application::run()
+{
+    auto view = get<Editor_view>();
+    view->on_enter();
+    view->run();
+    //get<Window>()->get_context_window()->enter_event_loop();
 }
 
 Application::~Application()

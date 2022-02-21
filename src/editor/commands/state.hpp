@@ -19,4 +19,6 @@ static constexpr const char* c_state_str[] =
     "active"
 };
 
+auto c_str(const State state) -> const char*;
+
 } // namespace editor

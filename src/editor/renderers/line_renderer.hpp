@@ -158,6 +158,14 @@ public:
         add_lines(transform, lines, thickness);
     }
 
+    void add_sphere(
+        const glm::mat4 transform,
+        const uint32_t  color,
+        const glm::vec3 center,
+        const float     radius,
+        const float     thickness
+    );
+
     //void add_lines(
     //    const glm::mat4                         transform,
     //    const std::initializer_list<Color_line> color_lines,

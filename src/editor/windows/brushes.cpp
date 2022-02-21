@@ -7,6 +7,7 @@
 #include "log.hpp"
 #include "rendering.hpp"
 
+#include "commands/command_context.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/insert_operation.hpp"
 #include "renderers/line_renderer.hpp"

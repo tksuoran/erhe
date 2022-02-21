@@ -17,7 +17,8 @@ class Scene_root;
 class Physics_window
     : public erhe::components::Component
     , public Tool
-    , public Rendertarget_imgui_window // Imgui_window
+//    , public Rendertarget_imgui_window // Imgui_window
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_name {"Physics_window"};

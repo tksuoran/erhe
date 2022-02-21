@@ -72,7 +72,8 @@ void Gpu_timer::on_thread_exit()
     }
 }
 
-Gpu_timer::Gpu_timer()
+Gpu_timer::Gpu_timer(const char* label)
+    : m_label{label}
 {
     const std::lock_guard<std::mutex> lock{s_mutex};
 
@@ -204,8 +205,15 @@ auto Gpu_timer::last_result() const -> uint64_t
     return m_last_result;
 }
 
+auto Gpu_timer::label() const -> const char*
+{
+    return (m_label != nullptr) ? m_label : "(unnamed)";
+}
+
 void Gpu_timer::end_frame()
 {
+    const std::lock_guard<std::mutex> lock{s_mutex};
+
     for (auto* timer : s_all_gpu_timers)
     {
         if (timer->m_owner_thread == std::this_thread::get_id())
@@ -214,6 +222,13 @@ void Gpu_timer::end_frame()
         }
     }
     ++s_index;
+}
+
+auto Gpu_timer::all_gpu_timers() -> std::vector<Gpu_timer*>
+{
+    const std::lock_guard<std::mutex> lock{s_mutex};
+
+    return s_all_gpu_timers;
 }
 
 Scoped_gpu_timer::Scoped_gpu_timer(Gpu_timer& timer)

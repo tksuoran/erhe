@@ -356,11 +356,11 @@ void Editor_rendering::initialize_component()
         .color_blend    = Color_blend_state::color_blend_premultiplied
     };
 
-    m_content_timer   = std::make_unique<erhe::graphics::Gpu_timer>();
-    m_selection_timer = std::make_unique<erhe::graphics::Gpu_timer>();
-    m_gui_timer       = std::make_unique<erhe::graphics::Gpu_timer>();
-    m_brush_timer     = std::make_unique<erhe::graphics::Gpu_timer>();
-    m_tools_timer     = std::make_unique<erhe::graphics::Gpu_timer>();
+    m_content_timer   = std::make_unique<erhe::graphics::Gpu_timer>("Content");
+    m_selection_timer = std::make_unique<erhe::graphics::Gpu_timer>("Selection");
+    m_gui_timer       = std::make_unique<erhe::graphics::Gpu_timer>("Gui");
+    m_brush_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Brush");
+    m_tools_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Tools");
 }
 
 void Editor_rendering::init_state()

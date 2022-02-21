@@ -8,6 +8,8 @@
 
 #include "erhe/graphics/debug.hpp"
 #include "erhe/raytrace/log.hpp"
+#include "erhe/toolkit/timestamp.hpp"
+
 
 #include <imgui.h>
 
@@ -31,6 +33,18 @@ Log_window::Log_window()
 {
 }
 
+Log_window::Entry::Entry(
+    const ImVec4&      color,
+    const std::string& message,
+    const unsigned int repeat_count
+)
+    : color       {color}
+    , message     {message}
+    , repeat_count{repeat_count}
+{
+    timestamp = erhe::toolkit::timestamp();
+}
+
 Log_window::~Log_window() = default;
 
 void Log_window::connect()
@@ -41,6 +55,7 @@ void Log_window::connect()
 void Log_window::initialize_component()
 {
     get<Editor_imgui_windows>()->register_imgui_window(this);
+    m_min_size = glm::vec2{220.0f, 120.0f};
 
     log_startup     .set_sink(this);
     log_programs    .set_sink(this);
@@ -62,6 +77,9 @@ void Log_window::initialize_component()
     log_gl          .set_sink(this);
     log_headset     .set_sink(this);
     log_scene       .set_sink(this);
+
+    log_command_state_transition.set_sink(this);
+    log_input_event             .set_sink(this);
 
     erhe::raytrace::log_geometry.set_sink(this);
 
@@ -95,7 +113,10 @@ void Log_window::frame_write(const char* format, fmt::format_args args)
         return;
     }
 
-    m_frame_entries.emplace_back(fmt::vformat(format, args));
+    m_frame_entries.emplace_back(
+        ImVec4{0.8f, 0.8f, 0.8f, 1.0},
+        fmt::vformat(format, args)
+    );
 }
 
 void Log_window::tail_write(const char* format, fmt::format_args args)
@@ -140,18 +161,14 @@ void Log_window::tail_write(const ImVec4 color, const char* format, fmt::format_
         }
     }
 
-    m_tail_entries.emplace_back(color, fmt::vformat(format, args));
+    m_tail_entries.emplace_back(
+        color,
+        fmt::vformat(format, args)
+    );
 }
 
 void Log_window::imgui()
 {
-    const auto& shadow_renderer = get<Shadow_renderer>();
-    if (shadow_renderer)
-    {
-        const auto shadow_map_time = shadow_renderer->gpu_time();
-        ImGui::Text("Shadow renderer: %g", shadow_map_time);
-    }
-
     if (ImGui::TreeNodeEx("Tail", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
     {
         ImGui::SetNextItemWidth(100.0f);
@@ -213,6 +230,12 @@ void Log_window::imgui()
         )
         {
             auto& entry = *i;
+            ImGui::SetNextItemWidth(100.0f);
+            ImGui::TextColored(
+                ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
+                entry.timestamp.c_str()
+            );
+            ImGui::SameLine();
             ImGui::TextColored(entry.color, "%s", entry.message.c_str());
             if (entry.repeat_count > 0)
             {
@@ -234,7 +257,10 @@ void Log_window::imgui()
     {
         for (const auto& entry : m_frame_entries)
         {
-            ImGui::TextUnformatted(entry.c_str());
+            ImGui::SetNextItemWidth(100.0f);
+            ImGui::TextUnformatted (entry.timestamp.c_str());
+            ImGui::SameLine        ();
+            ImGui::TextUnformatted (entry.message.c_str());
         }
         ImGui::TreePop();
     }

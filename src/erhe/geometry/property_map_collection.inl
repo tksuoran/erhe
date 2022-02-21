@@ -255,6 +255,20 @@ Property_map_collection<Key_type>::clone() -> Property_map_collection<Key_type>
 }
 
 template <typename Key_type>
+inline void
+Property_map_collection<Key_type>::transform(
+    const glm::mat4 matrix
+)
+{
+    Property_map_collection<Key_type> result;
+    for (auto& entry : m_entries)
+    {
+        Property_map_base<Key_type>* property_map = entry.value.get();
+        property_map->transform(matrix);
+    }
+}
+
+template <typename Key_type>
 inline auto
 Property_map_collection<Key_type>::clone_with_transform(
     const glm::mat4 transform

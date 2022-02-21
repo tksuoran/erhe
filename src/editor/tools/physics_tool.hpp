@@ -1,6 +1,6 @@
 #pragma once
 
-#include "command.hpp"
+#include "commands/command.hpp"
 #include "tools/tool.hpp"
 #include "windows/imgui_window.hpp"
 
@@ -22,6 +22,7 @@ namespace erhe::physics {
 namespace editor
 {
 
+class Fly_camera_tool;
 class Line_renderer_set;
 class Node_physics;
 class Physics_tool;
@@ -46,8 +47,27 @@ private:
     Physics_tool& m_physics_tool;
 };
 
+class Physics_tool_force_command
+    : public Command
+{
+public:
+    explicit Physics_tool_force_command(Physics_tool& physics_tool)
+        : Command       {"Physics_tool.force"}
+        , m_physics_tool{physics_tool}
+    {
+    }
+
+    auto try_call   (Command_context& context) -> bool override;
+    void try_ready  (Command_context& context) override;
+    void on_inactive(Command_context& context) override;
+
+private:
+    Physics_tool& m_physics_tool;
+};
+
 class Physics_tool
     : public erhe::components::Component
+    , public erhe::components::IUpdate_fixed_step
     , public Tool
 {
 public:
@@ -70,35 +90,63 @@ public:
     void tool_render    (const Render_context& context) override;
     void tool_properties() override;
 
+    // Implements IUpdate_fixed_step
+    void update_fixed_step(const erhe::components::Time_context&) override;
+
+    auto acquire_target() -> bool;
+    void release_target();
+    void begin_point_to_point_constraint();
+
     // Commands
+    void set_active_command(const int command);
+
+    // Drag
     auto on_drag_ready() -> bool;
     auto on_drag      () -> bool;
-    void end_drag     ();
+
+    // Force
+    auto on_force_ready() -> bool;
+    auto on_force      () -> bool;
 
 private:
+    // Commands
     Physics_tool_drag_command  m_drag_command;
+    Physics_tool_force_command m_force_command;
 
     // Component dependencies
     std::shared_ptr<Line_renderer_set>          m_line_renderer_set;
     std::shared_ptr<Pointer_context>            m_pointer_context;
     std::shared_ptr<Scene_root>                 m_scene_root;
+    std::shared_ptr<Fly_camera_tool>            m_fly_camera;
 
-    std::shared_ptr<erhe::scene::Mesh>          m_drag_mesh;
-    std::shared_ptr<Node_physics>               m_drag_node_physics;
-    float                                       m_drag_depth{0.5f};
-    glm::vec3                                   m_drag_position_in_mesh{0.0f, 0.0f, 0.0f};
-    glm::vec3                                   m_drag_position_start  {0.0f, 0.0f, 0.0f};
-    glm::vec3                                   m_drag_position_end    {0.0f, 0.0f, 0.0f};
-    std::unique_ptr<erhe::physics::IConstraint> m_drag_constraint;
+    static const int c_command_drag {0};
+    static const int c_command_force{1};
 
-    float    m_tau                     { 0.001f};
-    float    m_damping                 { 1.00f};
-    float    m_impulse_clamp           { 1.00f};
-    float    m_linear_damping          { 0.99f};
-    float    m_angular_damping         { 0.99f};
-    float    m_original_linear_damping { 0.00f};
-    float    m_original_angular_damping{ 0.00f};
+    int m_active_command{c_command_drag};
+
+    std::shared_ptr<erhe::scene::Mesh>          m_target_mesh;
+    std::shared_ptr<Node_physics>               m_target_node_physics;
+    float                                       m_target_depth           {0.5f};
+    glm::vec3                                   m_target_position_in_mesh{0.0f, 0.0f, 0.0f};
+    glm::vec3                                   m_target_position_start  {0.0f, 0.0f, 0.0f};
+    glm::vec3                                   m_target_position_end    {0.0f, 0.0f, 0.0f};
+    std::unique_ptr<erhe::physics::IConstraint> m_target_constraint;
+
+    float    m_force_distance          {1.000f};
+    float    m_tau                     {0.001f};
+    float    m_damping                 {1.00f};
+    float    m_impulse_clamp           {1.00f};
+    float    m_linear_damping          {0.99f};
+    float    m_angular_damping         {0.99f};
+    float    m_original_linear_damping {0.00f};
+    float    m_original_angular_damping{0.00f};
     uint64_t m_last_update_frame_number{0};
+
+    glm::vec3 m_to_end_direction  {0.0f};
+    glm::vec3 m_to_start_direction{0.0f};
+    float     m_target_distance   {0.0f};
+    float     m_target_mesh_size  {0.0f};
+
 };
 
 } // namespace editor

@@ -35,6 +35,7 @@
 #include "tools/fly_camera_tool.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/hover_tool.hpp"
+#include "tools/material_paint_tool.hpp"
 #include "tools/physics_tool.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
@@ -55,6 +56,7 @@
 #include "windows/performance_window.hpp"
 #include "windows/physics_window.hpp"
 #include "windows/pipelines.hpp"
+#include "windows/tool_properties_window.hpp"
 #include "windows/viewport_config.hpp"
 #include "windows/viewport_window.hpp"
 
@@ -76,11 +78,6 @@ namespace editor {
 using erhe::graphics::OpenGL_state_tracker;
 using std::shared_ptr;
 using std::make_shared;
-
-void Application::run()
-{
-    get<Window>()->get_context_window()->enter_event_loop();
-}
 
 auto Application::initialize_components(int argc, char** argv) -> bool
 {
@@ -122,6 +119,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Imgui_renderer      >());
         m_components.add(make_shared<Layers_window       >());
         m_components.add(make_shared<Line_renderer_set   >());
+        m_components.add(make_shared<Material_paint_tool >());
         m_components.add(make_shared<Material_properties >());
         m_components.add(make_shared<Materials           >());
         m_components.add(make_shared<Mesh_memory         >());
@@ -147,11 +145,12 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Text_renderer       >());
         m_components.add(make_shared<Textures            >());
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-        m_components.add(make_shared<Theremin            >());
+        m_components.add(make_shared<Theremin              >());
 #endif
-        m_components.add(make_shared<Trs_tool            >());
-        m_components.add(make_shared<Viewport_config     >());
-        m_components.add(make_shared<Viewport_windows    >());
+        m_components.add(make_shared<Tool_properties_window>());
+        m_components.add(make_shared<Trs_tool              >());
+        m_components.add(make_shared<Viewport_config       >());
+        m_components.add(make_shared<Viewport_windows      >());
     }
 
     if (!window->create_gl_window())
