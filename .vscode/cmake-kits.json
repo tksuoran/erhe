@@ -1,10 +1,14 @@
 [
     {
-        "name": "Linux x86_64 GCC 9",
-        "toolchainFile": "${workspaceFolder}/cmake/toolchain/x86_64-linux-gnu-gcc-9.cmake"
+        "name": "Linux clang 13",
+        "toolchainFile": "${workspaceFolder}/cmake/toolchain/linux-clang-13.cmake"
     },
     {
-        "name": "Linux x86_64 GCC 11",
-        "toolchainFile": "${workspaceFolder}/cmake/toolchain/x86_64-linux-gnu-gcc-11.cmake"
+        "name": "Linux GNU GCC 9",
+        "toolchainFile": "${workspaceFolder}/cmake/toolchain/linux-gnu-gcc-9.cmake"
+    },
+    {
+        "name": "Linux GNU GCC 11",
+        "toolchainFile": "${workspaceFolder}/cmake/toolchain/linux-gnu-gcc-11.cmake"
     }
 ]

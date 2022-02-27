@@ -35,7 +35,7 @@ public:
 
     [[nodiscard]] auto get_rtc_device() -> RTCDevice;
 
-    static [[nodiscard]] auto get_instance() -> Embree_device&;
+    [[nodiscard]] static auto get_instance() -> Embree_device&;
 
 private:
     RTCDevice m_device{nullptr};
