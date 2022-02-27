@@ -181,12 +181,10 @@ else ()
     add_definitions(-DERHE_PHYSICS_LIBRARY_NONE)
 endif ()
 
-message("Finding OpenGL")
 find_package(OpenGL REQUIRED)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-message("src")
 add_subdirectory(src)
 
 if (MSVC)

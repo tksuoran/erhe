@@ -40,9 +40,18 @@
             "externalConsole": false
         },
         {
-            "name": "editor Ninja (Linux) LLDB",
-            //"type": "cppdbg",
-            "type": "lldb",
+            "name": "editor Ninja (Linux) GCC 9 LLDB",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/out/build/Linux_Debug_Ninja_GCC_9_Embree/src/editor/editor",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/src/editor",
+            "externalConsole": false
+        },
+        {
+            "name": "editor Ninja (Linux) GCC 11 LLDB",
+            "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/out/build/Linux_Debug_Ninja_GCC_11_Embree/src/editor/editor",
             "args": [],

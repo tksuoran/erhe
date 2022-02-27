@@ -41,7 +41,7 @@ public:
     explicit Scoped_imgui_context(ImGuiContext* context)
     {
         m_old_context = ImGui::GetCurrentContext();
-        Expects(m_old_context == nullptr);
+        // TODO Currently messy Expects(m_old_context == nullptr);
         ImGui::SetCurrentContext(context);
     }
     ~Scoped_imgui_context()

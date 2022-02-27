@@ -1,5 +1,7 @@
 #include "commands/state.hpp"
 
+#include <cstddef>
+
 namespace editor {
 
 auto c_str(const State state) -> const char*

@@ -233,6 +233,7 @@ void Log_window::imgui()
             ImGui::SetNextItemWidth(100.0f);
             ImGui::TextColored(
                 ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
+                "%s",
                 entry.timestamp.c_str()
             );
             ImGui::SameLine();
