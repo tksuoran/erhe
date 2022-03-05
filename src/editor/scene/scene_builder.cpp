@@ -45,6 +45,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/scene/transform.hpp"
 
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -70,6 +71,7 @@ using erhe::geometry::shapes::make_cylinder;
 using erhe::scene::Projection;
 using erhe::scene::Light;
 using erhe::scene::Node;
+using erhe::scene::Node_visibility;
 using erhe::geometry::shapes::make_box;
 using erhe::primitive::Normal_style;
 using glm::mat3;
@@ -259,14 +261,15 @@ void Scene_builder::make_brushes()
         }
     );
 
-    constexpr bool gltf_files      = false;
-    constexpr bool obj_files       = false;
-    constexpr bool platonic_solids = true;
-    constexpr bool sphere          = true;
-    constexpr bool torus           = true;
-    constexpr bool cylinder        = true;
-    constexpr bool cone            = true;
-    constexpr bool johnson_solids  = false;
+    constexpr bool gltf_files              = false;
+    constexpr bool obj_files               = false;
+    constexpr bool platonic_solids         = true;
+    constexpr bool sphere                  = true;
+    constexpr bool torus                   = true;
+    constexpr bool cylinder                = true;
+    constexpr bool cone                    = true;
+    constexpr bool johnson_solids          = false;
+    constexpr bool anisotropic_test_object = false;
 
     constexpr float object_scale = 1.0f;
 
@@ -422,7 +425,7 @@ void Scene_builder::make_brushes()
                 {
                     ERHE_PROFILE_SCOPE("torus_collision_shape_generator");
 
-                    auto torus_shape = erhe::physics::ICollision_shape::create_compound_shape_shared();
+                    erhe::physics::Compound_shape_create_info torus_shape_create_info;
 
                     const double     subdivisions        = 16.0;
                     const double     scaled_major_radius = major_radius * scale;
@@ -445,7 +448,7 @@ void Scene_builder::make_brushes()
                         const glm::dquat q        = glm::angleAxis(theta, forward);
                         const glm::dmat3 m        = glm::toMat3(q);
 
-                        torus_shape->add_child_shape(
+                        torus_shape_create_info.children.emplace_back(
                             capsule,
                             erhe::physics::Transform{
                                 mat3{m},
@@ -453,7 +456,7 @@ void Scene_builder::make_brushes()
                             }
                         );
                     }
-                    return torus_shape;
+                    return erhe::physics::ICollision_shape::create_compound_shape_shared(torus_shape_create_info);
                 };
 
                 make_brush(
@@ -530,43 +533,65 @@ void Scene_builder::make_brushes()
         );
     }
 
-    ///// if constexpr (anisotropic_test_object)
-    ///// {
-    /////     ERHE_PROFILE_SCOPE("test scene for anisotropic debugging");
-    /////
-    /////     auto x_material = m_scene_root->make_material("x", vec4{1.000f, 0.000f, 0.0f, 1.0f}, 0.3f, 0.0f, 0.3f);
-    /////     auto y_material = m_scene_root->make_material("y", vec4{0.228f, 1.000f, 0.0f, 1.0f}, 0.3f, 0.0f, 0.3f);
-    /////     auto z_material = m_scene_root->make_material("z", vec4{0.000f, 0.228f, 1.0f, 1.0f}, 0.3f, 0.0f, 0.3f);
-    /////
-    /////     const float ring_major_radius = 4.0f;
-    /////     const float ring_minor_radius = 0.55f; // 0.15f;
-    /////     auto        ring_geometry     = make_torus(ring_major_radius, ring_minor_radius, 80, 32);
-    /////     ring_geometry.transform(erhe::toolkit::mat4_swap_xy);
-    /////     auto rotate_ring_pg = make_primitive(ring_geometry, build_info_set().gl);
-    /////
-    /////     const vec3 pos{20.0f, 0.0f, 0.0f};
-    /////     auto x_rotate_ring_mesh = m_scene_root->make_mesh_node("X ring", rotate_ring_pg, x_material, nullptr, pos);
-    /////     auto y_rotate_ring_mesh = m_scene_root->make_mesh_node("Y ring", rotate_ring_pg, y_material, x_rotate_ring_mesh.get());
-    /////     auto z_rotate_ring_mesh = m_scene_root->make_mesh_node("Z ring", rotate_ring_pg, z_material, x_rotate_ring_mesh.get());
-    /////
-    /////     // x_rotate_ring_mesh identity
-    /////     y_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation( pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
-    /////     z_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation(-pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
-    /////
-    /////     x_rotate_ring_mesh->visibility_mask() |=
-    /////         (Node::c_visibility_content     |
-    /////          Node::c_visibility_shadow_cast |
-    /////          Node::c_visibility_id);
-    /////     y_rotate_ring_mesh->visibility_mask() |=
-    /////         (Node::c_visibility_content     |
-    /////          Node::c_visibility_shadow_cast |
-    /////          Node::c_visibility_id);
-    /////     z_rotate_ring_mesh->visibility_mask() |=
-    /////         (Node::c_visibility_content     |
-    /////          Node::c_visibility_shadow_cast |
-    /////          Node::c_visibility_id);
-    /////
-    ///// }
+    if constexpr (anisotropic_test_object)
+    {
+        ERHE_PROFILE_SCOPE("test scene for anisotropic debugging");
+
+        auto        aniso_material    = m_scene_root->make_material("aniso", vec3{1.0f, 1.0f, 1.0f}, glm::vec2{0.8f, 0.2f}, 0.0f);
+        const float ring_major_radius = 4.0f;
+        const float ring_minor_radius = 0.55f; // 0.15f;
+        auto        ring_geometry     = make_torus(ring_major_radius, ring_minor_radius, 80, 32);
+        ring_geometry.transform(erhe::toolkit::mat4_swap_xy);
+        auto rotate_ring_pg = make_primitive(ring_geometry, build_info());
+        const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
+            std::move(ring_geometry)
+        );
+
+        using erhe::scene::Transform;
+        auto make_mesh_node =
+        [
+            &aniso_material,
+            &ring_geometry,
+            &rotate_ring_pg,
+            &shared_geometry,
+            this
+        ]
+        (
+            const char*      name,
+            const Transform& transform
+        )
+        {
+            auto mesh = std::make_shared<erhe::scene::Mesh>(name);
+            mesh->mesh_data.primitives.push_back(
+                erhe::primitive::Primitive{
+                    .material              = aniso_material,
+                    .gl_primitive_geometry = rotate_ring_pg,
+                    .rt_primitive_geometry = {},
+                    .rt_vertex_buffer      = {},
+                    .rt_index_buffer       = {},
+                    .source_geometry       = shared_geometry,
+                    .normal_style          = erhe::primitive::Normal_style::point_normals
+                }
+            );
+            mesh->visibility_mask() |=
+                (
+                    Node_visibility::content     |
+                    //Node_visibility::shadow_cast |
+                    Node_visibility::id
+                );
+            mesh->set_parent_from_node(transform);
+            add_to_scene_layer(
+                m_scene_root->scene(),
+                *m_scene_root->content_layer(),
+                mesh
+            );
+
+        };
+
+        make_mesh_node("X ring", Transform{} );
+        make_mesh_node("Y ring", Transform::create_rotation( glm::pi<float>() / 2.0f, glm::vec3{0.0f, 0.0f, 1.0f}));
+        make_mesh_node("Z ring", Transform::create_rotation(-glm::pi<float>() / 2.0f, glm::vec3{0.0f, 1.0f, 0.0f}));
+    }
 
     if constexpr (johnson_solids)
     {
@@ -617,11 +642,9 @@ void Scene_builder::add_room()
         "Floor",
         //vec4{0.02f, 0.02f, 0.02f, 1.0f},
         vec4{0.01f, 0.01f, 0.01f, 1.0f},
-        0.90f,
-        0.00f,
+        glm::vec2{0.9f, 0.9f},
         0.01f
     );
-    floor_material->visible = true;
     //auto table_material = m_scene_root->make_material(
     //    "Table",
     //    vec4{0.2f, 0.2f, 0.2f, 1.0f},
@@ -629,10 +652,16 @@ void Scene_builder::add_room()
     //    0.8f
     //);
 
+    Instance_create_info floor_brush_instance_create_info
+    {
+        .physics_world   = m_scene_root->physics_world(),
+        .world_from_node = erhe::toolkit::create_translation<float>(0.0f, -0.5001f, 0.0f),
+        .material        = floor_material,
+        .scale           = 1.0f
+    };
+
     auto floor_instance = m_floor_brush->make_instance(
-        erhe::toolkit::create_translation<float>(0.0f, -0.5001f, 0.0f),
-        floor_material,
-        1.0f
+        floor_brush_instance_create_info
     );
     //auto table_instance = m_table_brush->make_instance(
     //    erhe::toolkit::create_translation<float>(0.0f, 0.5f, 0.0f),
@@ -640,13 +669,9 @@ void Scene_builder::add_room()
     //    1.0f
     //);
     floor_instance.mesh->visibility_mask() |=
-        (Node::c_visibility_content     |
-         //Node::c_visibility_shadow_cast |
-         Node::c_visibility_id);
-    //table_instance.mesh->visibility_mask() |=
-    //    (Node::c_visibility_content     |
-    //     Node::c_visibility_shadow_cast |
-    //     Node::c_visibility_id);
+        (Node_visibility::content     |
+         //Node_visibility::shadow_cast |
+         Node_visibility::id);
 
     add_to_scene_layer(
         m_scene_root->scene(),
@@ -708,7 +733,7 @@ void Scene_builder::make_mesh_nodes()
     );
 
     std::vector<Pack_entry> pack_entries;
-    for (auto brush : m_scene_brushes)
+    for (const auto& brush : m_scene_brushes)
     {
         pack_entries.emplace_back(brush.get());
     }
@@ -780,40 +805,16 @@ void Scene_builder::make_mesh_nodes()
         float y     = bottom_y_pos - brush->gl_primitive_geometry.bounding_box_min.y;
         //x -= 0.5f * static_cast<float>(group_width);
         //z -= 0.5f * static_cast<float>(group_depth);
-        const auto& material = m_scene_root->materials().at(material_index);
-        auto instance = brush->make_instance(
-            erhe::toolkit::create_translation<float>(
-                vec3{x, y, z}
-            ),
-            material,
-            1.0f
-        );
-        instance.mesh->visibility_mask() |=
-            (Node::c_visibility_content     |
-             Node::c_visibility_shadow_cast |
-             Node::c_visibility_id);
-
-        add_to_scene_layer(
-            m_scene_root->scene(),
-            *m_scene_root->content_layer(),
-            instance.mesh
-        );
-
-        if (instance.node_physics)
+        //const auto& material = m_scene_root->materials().at(material_index);
+        const Instance_create_info brush_instance_create_info
         {
-            add_to_physics_world(
-                m_scene_root->physics_world(),
-                instance.node_physics
-            );
-        }
-
-        if (instance.node_raytrace)
-        {
-            add_to_raytrace_scene(
-                m_scene_root->raytrace_scene(),
-                instance.node_raytrace
-            );
-        }
+            .physics_world   = m_scene_root->physics_world(),
+            .world_from_node = erhe::toolkit::create_translation(x, y, z),
+            .material        = m_scene_root->materials().at(material_index),
+            .scale           = 1.0f
+        };
+        auto instance = brush->make_instance(brush_instance_create_info);
+        m_scene_root->add_instance(instance);
 
         do {
             material_index = (material_index + 1) % m_scene_root->materials().size();
@@ -830,7 +831,7 @@ void Scene_builder::make_cube_benchmark()
 
     m_scene_root->scene().sanity_check();
 
-    auto material = m_scene_root->make_material("cube", vec4{1.0, 1.000f, 1.0f, 1.0f}, 0.3f, 0.0f, 0.3f);
+    auto material = m_scene_root->make_material("cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f);
     auto cube     = make_cube(0.1f);
     auto cube_pg  = make_primitive(cube, build_info(), Normal_style::polygon_normals);
 
@@ -858,9 +859,9 @@ void Scene_builder::make_cube_benchmark()
                 m_scene_root->add(mesh);
                 mesh->visibility_mask() |=
                     (
-                        Node::c_visibility_content     |
-                        Node::c_visibility_shadow_cast |
-                        Node::c_visibility_id
+                        Node_visibility::content     |
+                        Node_visibility::shadow_cast |
+                        Node_visibility::id
                     );
             }
         }
@@ -967,7 +968,7 @@ void Scene_builder::setup_lights()
     //    }
     //);
 
-    constexpr int directional_light_count = 2;
+    constexpr int directional_light_count = 3;
     if constexpr (directional_light_count > 0)
     {
         for (int i = 0; i < directional_light_count; ++i)

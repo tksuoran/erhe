@@ -70,7 +70,7 @@ void Mesh_properties::tool_render(const Render_context& context)
     const auto      projection_transforms = camera->projection_transforms(context.viewport);
     const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.matrix();
     const auto&     selection             = m_selection_tool->selection();
-    for (auto node : selection)
+    for (const auto& node : selection)
     {
         const auto* mesh = as_mesh(node.get());
         if (mesh == nullptr)
@@ -78,9 +78,9 @@ void Mesh_properties::tool_render(const Render_context& context)
             continue;
         }
         const glm::mat4 world_from_node = mesh->world_from_node();
-        for (auto& primitive : mesh->data.primitives)
+        for (auto& primitive : mesh->mesh_data.primitives)
         {
-            const auto geometry = primitive.source_geometry;
+            const auto& geometry = primitive.source_geometry;
             if (!geometry)
             {
                 continue;

@@ -1,11 +1,11 @@
 set(_target "erhe_gl")
+add_library(${_target})
+add_library(erhe::gl ALIAS ${_target})
 
 find_package(Python3 COMPONENTS Interpreter)
 if (NOT ${Python3_FOUND})
     message(FATAL_ERROR "Python3 is needed to generate sources.")
 endif ()
-
-add_library(${_target})
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS True)
 set(GENERATED_SOURCES
@@ -92,7 +92,8 @@ target_link_libraries(${_target}
         fmt::fmt
         Microsoft.GSL::GSL
         OpenGL::GL
-        erhe_log
+    PRIVATE
+        erhe::log
 )
 
 target_compile_definitions(${_target} PUBLIC -DERHE_TRACY_GL)

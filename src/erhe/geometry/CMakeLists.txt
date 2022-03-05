@@ -1,6 +1,6 @@
 set(_target "erhe_geometry")
-
 add_library(${_target})
+add_library(erhe::geometry ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -70,12 +70,13 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(${_target}
     PUBLIC
-        erhe_log
-        erhe_toolkit
         fmt::fmt
         glm::glm
-        optional_lite
         #gtmathematics
+    PRIVATE
+        erhe::log
+        erhe::toolkit
+        optional_lite
         Microsoft.GSL::GSL
         mikktspace
 )

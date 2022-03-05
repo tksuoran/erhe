@@ -41,7 +41,7 @@ void Mesh_operation::execute() const
     for (const auto& entry : m_entries)
     {
         m_context.scene.sanity_check();
-        entry.mesh->data = entry.after;
+        entry.mesh->mesh_data = entry.after;
         m_context.scene.sanity_check();
     }
 }
@@ -51,7 +51,7 @@ void Mesh_operation::undo() const
     for (const auto& entry : m_entries)
     {
         m_context.scene.sanity_check();
-        entry.mesh->data = entry.before;
+        entry.mesh->mesh_data = entry.before;
         m_context.scene.sanity_check();
     }
 }
@@ -65,7 +65,7 @@ void Mesh_operation::make_entries(
     m_context.scene.sanity_check();
 
     m_selection_tool = m_context.selection_tool;
-    for (auto item : m_context.selection_tool->selection())
+    for (auto& item : m_context.selection_tool->selection())
     {
         const auto& mesh = as_mesh(item);
         if (!mesh)
@@ -75,18 +75,18 @@ void Mesh_operation::make_entries(
 
         Entry entry{
             .mesh   = mesh,
-            .before = mesh->data,
-            .after  = mesh->data
+            .before = mesh->mesh_data,
+            .after  = mesh->mesh_data
         };
 
         for (auto& primitive : entry.after.primitives)
         {
-            auto geometry = primitive.source_geometry;
-            if (geometry.get() == nullptr)
+            const auto& geometry = primitive.source_geometry;
+            auto* g = geometry.get();
+            if (g == nullptr)
             {
                 continue;
             }
-            auto* g = geometry.get();
             auto& gr = *g;
             auto result_geometry = operation(gr);
             result_geometry.sanity_check();

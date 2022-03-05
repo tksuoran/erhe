@@ -145,9 +145,8 @@ Program_interface::Shader_resources::Shader_resources()
     );
 
     material_block_offsets = {
+        .roughness    = material_struct.add_vec2 ("roughness"   )->offset_in_parent(),
         .metallic     = material_struct.add_float("metallic"    )->offset_in_parent(),
-        .roughness    = material_struct.add_float("roughness"   )->offset_in_parent(),
-        .anisotropy   = material_struct.add_float("anisotropy"  )->offset_in_parent(),
         .transparency = material_struct.add_float("transparency")->offset_in_parent(),
         .base_color   = material_struct.add_vec4 ("base_color"  )->offset_in_parent(),
         .emissive     = material_struct.add_vec4 ("emissive"    )->offset_in_parent(),

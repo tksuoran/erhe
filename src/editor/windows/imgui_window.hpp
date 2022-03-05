@@ -33,17 +33,19 @@ public:
 class Imgui_window
 {
 public:
-    Imgui_window(const std::string_view title);
+    explicit Imgui_window(const std::string_view title);
+    Imgui_window(const std::string_view title, const std::string_view label);
     virtual ~Imgui_window();
 
     [[nodiscard]] auto is_visibile() const -> bool;
     [[nodiscard]] auto title      () const -> const std::string_view;
+    [[nodiscard]] auto label      () -> const char*;
     auto begin            () -> bool;
     void end              ();
     void show             ();
     void hide             ();
     void toggle_visibility();
-    void initialize(const erhe::components::Components& components);
+    void initialize       (const erhe::components::Components& components);
     void image(
         const std::shared_ptr<erhe::graphics::Texture>& texture,
         const int                                       width,
@@ -61,6 +63,7 @@ protected:
 
     bool              m_is_visible{true};
     const std::string m_title;
+    const std::string m_label;
     glm::vec2         m_min_size{120.0f, 120.0f};
     glm::vec2         m_max_size{99999.0f, 99999.0f};
 };

@@ -15,8 +15,8 @@ void main()
 
     vec3 normal          = normalize(vec3(world_from_node * vec4(a_normal,        0.0)));
     vec3 tangent         = normalize(vec3(world_from_node * vec4(a_tangent.xyz,   0.0)));
-    //vec3 bitangent       = normalize(vec3(world_from_node * vec4(a_bitangent.xyz, 0.0)));
-    vec3 bitangent       = normalize(cross(normal, tangent)) * a_tangent.w;
+    vec3 bitangent       = normalize(vec3(world_from_node * vec4(a_bitangent.xyz, 0.0)));
+    //vec3 bitangent       = normalize(cross(normal, tangent)) * a_tangent.w;
     vec4 position        = world_from_node * vec4(a_position, 1.0);
 
     v_tangent_scale  = a_tangent.w;

@@ -1,6 +1,6 @@
 set(_target "erhe_ui")
-
 add_library(${_target})
+add_library(erhe::ui ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -21,15 +21,17 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 target_link_libraries(
     ${_target}
     PUBLIC
-    erhe_gl
-    erhe_graphics
-    erhe_primitive
-    fmt::fmt
-    ghc_filesystem
-    glm::glm
-    glfw
-    Microsoft.GSL::GSL
-    RectangleBinPack::RectangleBinPack
+        erhe::gl
+        erhe::graphics
+        erhe::primitive
+        fmt::fmt
+        ghc_filesystem
+        glm::glm
+        glfw
+    PRIVATE
+        erhe::log
+        Microsoft.GSL::GSL
+        RectangleBinPack::RectangleBinPack
 )
 
 if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")

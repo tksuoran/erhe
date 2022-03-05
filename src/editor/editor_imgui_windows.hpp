@@ -72,7 +72,7 @@ public:
     );
 
     void mouse_button  (const uint32_t button, bool pressed);
-    void on_key        (const signed int keycode, const bool pressed);
+    void on_key        (const signed int keycode, const uint32_t modifier_mask, const bool pressed);
     void on_char       (const unsigned int codepoint);
     void on_mouse_wheel(const double x, const double y);
 
@@ -150,7 +150,7 @@ public:
     void make_imgui_context_current  ();
     void make_imgui_context_uncurrent();
 
-    void on_key         (const signed int keycode, const bool pressed);
+    void on_key         (const signed int keycode, const uint32_t modifier_mask, const bool pressed);
     void on_char        (const unsigned int codepoint);
     void on_focus       (int focused);
     void on_cursor_enter(int entered);

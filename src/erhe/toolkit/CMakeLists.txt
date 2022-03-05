@@ -1,6 +1,6 @@
 set(_target "erhe_toolkit")
-
 add_library(${_target})
+add_library(erhe::toolkit ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -43,7 +43,7 @@ target_link_libraries(
         ghc_filesystem
         optional_lite
     PRIVATE
-        erhe_gl
+        erhe::gl
         fmt::fmt
         glm::glm
         Microsoft.GSL::GSL

@@ -31,21 +31,21 @@ auto INode_attachment::flag_bits() -> uint64_t&
 }
 
 Node::Node(std::string_view name)
-    : m_id   {}
-    , m_name {name}
-    , m_label{fmt::format("{}##Node{}", name, m_id.get_id())}
+    : m_id{}
 {
+    node_data.name  = name;
+    node_data.label = fmt::format("{}##Node{}", name, m_id.get_id());
 }
 
 Node::~Node()
 {
     sanity_check();
 
-    for (auto& child : m_children)
+    for (auto& child : node_data.children)
     {
         child->on_detached_from(*this);
     }
-    for (auto& attachment : m_attachments)
+    for (auto& attachment : node_data.attachments)
     {
         attachment->on_detached_from(this);
     }
@@ -61,23 +61,23 @@ auto Node::node_type() const -> const char*
 
 auto Node::is_selected() const -> bool
 {
-    return (m_visibility_mask & Node::c_visibility_selected) == Node::c_visibility_selected;
+    return (node_data.visibility_mask & Node_visibility::selected) == Node_visibility::selected;
 }
 
 auto Node::name() const -> const std::string&
 {
-    return m_name;
+    return node_data.name;
 }
 
 auto Node::label() const -> const std::string&
 {
-    return m_label;
+    return node_data.label;
 }
 
 void Node::set_name(const std::string_view name)
 {
-    m_name = name;
-    m_label = fmt::format("{}##Node{}", name, m_id.get_id());
+    node_data.name = name;
+    node_data.label = fmt::format("{}##Node{}", name, m_id.get_id());
 }
 
 void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
@@ -94,15 +94,15 @@ void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
     );
 
 #ifndef NDEBUG
-    const auto i = std::find(m_attachments.begin(), m_attachments.end(), attachment);
-    if (i != m_attachments.end())
+    const auto i = std::find(node_data.attachments.begin(), node_data.attachments.end(), attachment);
+    if (i != node_data.attachments.end())
     {
         log.error("Attachment {} already attached to {}\n", attachment->node_attachment_type(), name());
         return;
     }
 #endif
 
-    m_attachments.push_back(attachment);
+    node_data.attachments.push_back(attachment);
     attachment->on_attached_to(this);
     sanity_check();
     attachment->on_node_transform_changed();
@@ -141,21 +141,21 @@ auto Node::detach(INode_attachment* attachment) -> bool
     }
 
     const auto i = std::remove_if(
-        m_attachments.begin(),
-        m_attachments.end(),
+        node_data.attachments.begin(),
+        node_data.attachments.end(),
         [attachment](const std::shared_ptr<INode_attachment>& node_attachment)
         {
             return node_attachment.get() == attachment;
         }
     );
-    if (i != m_attachments.end())
+    if (i != node_data.attachments.end())
     {
         log.trace(
             "Removing {} attachment from node\n",
             attachment->node_attachment_type(),
             name()
         );
-        m_attachments.erase(i, m_attachments.end());
+        node_data.attachments.erase(i, node_data.attachments.end());
         attachment->on_detached_from(this);
         sanity_check();
         return true;
@@ -172,7 +172,7 @@ auto Node::detach(INode_attachment* attachment) -> bool
 
 auto Node::child_count() const -> size_t
 {
-    return m_children.size();
+    return node_data.children.size();
 }
 
 auto Node::get_id() const -> erhe::toolkit::Unique_id<Node>::id_type
@@ -201,15 +201,15 @@ void Node::attach(const std::shared_ptr<Node>& child_node)
     );
 
 #ifndef NDEBUG
-    const auto i = std::find(m_children.begin(), m_children.end(), child_node);
-    if (i != m_children.end())
+    const auto i = std::find(node_data.children.begin(), node_data.children.end(), child_node);
+    if (i != node_data.children.end())
     {
         log.error("Attachment {} already attached to {}\n", child_node->name(), name());
         return;
     }
 #endif
 
-    m_children.push_back(child_node);
+    node_data.children.push_back(child_node);
     child_node->on_attached_to(*this);
     sanity_check();
 }
@@ -246,17 +246,17 @@ auto Node::detach(Node* child_node) -> bool
     }
 
     const auto i = std::remove_if(
-        m_children.begin(),
-        m_children.end(),
+        node_data.children.begin(),
+        node_data.children.end(),
         [child_node](const std::shared_ptr<Node>& node)
         {
             return node.get() == child_node;
         }
     );
-    if (i != m_children.end())
+    if (i != node_data.children.end())
     {
         log.trace("Removing attachment {} from node\n", child_node->name());
-        m_children.erase(i, m_children.end());
+        node_data.children.erase(i, node_data.children.end());
         child_node->on_detached_from(*this);
         sanity_check();
         return true;
@@ -268,19 +268,18 @@ auto Node::detach(Node* child_node) -> bool
 
 void Node::on_attached_to(Node& parent_node)
 {
-    if (m_parent == &parent_node)
+    if (parent() == &parent_node)
     {
         return;
     }
 
     const auto& world_from_node = world_from_node_transform();
-    //m_parent_node->attach(attachment.node);
 
-    if (m_parent != nullptr)
+    if (parent() != nullptr)
     {
-        m_parent->detach(this);
+        parent()->detach(this);
     }
-    m_parent = &parent_node;
+    node_data.parent = &parent_node;
     set_depth_recursive(parent_node.depth() + 1);
 
     const auto parent_from_node = parent_node.node_from_world_transform() * world_from_node;
@@ -291,12 +290,12 @@ void Node::on_attached_to(Node& parent_node)
 
 void Node::set_depth_recursive(const size_t depth)
 {
-    if (m_depth == depth)
+    if (node_data.depth == depth)
     {
         return;
     }
-    m_depth = depth;
-    for (const auto& child : m_children)
+    node_data.depth = depth;
+    for (const auto& child : node_data.children)
     {
         child->set_depth_recursive(depth + 1);
     }
@@ -304,17 +303,19 @@ void Node::set_depth_recursive(const size_t depth)
 
 void Node::on_detached_from(Node& node)
 {
-    if (m_parent != &node)
+    if (node_data.parent != &node)
     {
         log.error(
             "Cannot detach node {} from {} - parent is different ({})\n",
             name(),
             node.name(),
-            (m_parent != nullptr) ? m_parent->name() : "(nullptr)"
+            (node_data.parent != nullptr)
+                ? node_data.parent->name()
+                : "(nullptr)"
         );
         return;
     }
-    m_parent = nullptr;
+    node_data.parent = nullptr;
     set_depth_recursive(0);
 
     const auto& world_from_node = world_from_node_transform();
@@ -324,7 +325,7 @@ void Node::on_detached_from(Node& node)
 
 void Node::on_transform_changed()
 {
-    for (const auto& attachment : m_attachments)
+    for (const auto& attachment : node_data.attachments)
     {
         attachment->on_node_transform_changed();
     }
@@ -332,28 +333,28 @@ void Node::on_transform_changed()
 
 void Node::unparent()
 {
-    if (m_parent != nullptr)
+    if (node_data.parent != nullptr)
     {
-        m_parent->detach(this);
+        node_data.parent->detach(this);
     }
 }
 
 auto Node::root() -> Node*
 {
-    if (m_parent == nullptr)
+    if (node_data.parent == nullptr)
     {
         return this;
     }
-    return m_parent->root();
+    return node_data.parent->root();
 }
 
 auto Node::root() const -> const Node*
 {
-    if (m_parent == nullptr)
+    if (node_data.parent == nullptr)
     {
         return this;
     }
-    return m_parent->root();
+    return node_data.parent->root();
 }
 
 void Node::update_transform(const uint64_t serial)
@@ -363,41 +364,45 @@ void Node::update_transform(const uint64_t serial)
     //log.trace("{} update_transform\n", name());
     if (serial != 0)
     {
-        if (m_last_transform_update_serial == serial)
+        if (node_data.last_transform_update_serial == serial)
         {
             return;
         }
-        if ((m_parent != nullptr) && (m_parent->m_last_transform_update_serial < serial)) {
-            m_parent->update_transform(serial);
+        if (
+            (node_data.parent != nullptr) &&
+            (node_data.parent->node_data.last_transform_update_serial < serial)
+        )
+        {
+            node_data.parent->update_transform(serial);
         }
     }
 
-    if (m_parent != nullptr)
+    if (node_data.parent != nullptr)
     {
-        m_transforms.world_from_node.set(
-            m_parent->world_from_node() * parent_from_node(),
-            node_from_parent() * m_parent->node_from_world()
+        node_data.transforms.world_from_node.set(
+            parent()->world_from_node() * parent_from_node(),
+            node_from_parent() * parent()->node_from_world()
         );
     }
     else
     {
-        m_transforms.world_from_node.set(
+        node_data.transforms.world_from_node.set(
             parent_from_node(),
             node_from_parent()
         );
     }
 
-    m_last_transform_update_serial = (serial != 0)
+    node_data.last_transform_update_serial = (serial != 0)
         ? serial
-        : (m_parent != nullptr)
-            ? m_parent->m_last_transform_update_serial
-            : m_last_transform_update_serial;
+        : (node_data.parent != nullptr)
+            ? node_data.parent->node_data.last_transform_update_serial
+            : node_data.last_transform_update_serial;
 }
 
 void Node::update_transform_recursive(const uint64_t serial)
 {
     update_transform(serial);
-    for (auto& child_node : m_children)
+    for (auto& child_node : node_data.children)
     {
         child_node->update_transform_recursive(serial);
     }
@@ -407,10 +412,10 @@ void Node::sanity_check() const
 {
     sanity_check_root_path(this);
 
-    if (m_parent != nullptr)
+    if (node_data.parent != nullptr)
     {
         bool child_found_in_parent = false;
-        for (const auto& child : m_parent->children())
+        for (const auto& child : node_data.parent->children())
         {
             if (child.get() == this)
             {
@@ -420,11 +425,15 @@ void Node::sanity_check() const
         }
         if (!child_found_in_parent)
         {
-            log.error("Node {} parent {} does not have node as child\n", name(), m_parent->name());
+            log.error(
+                "Node {} parent {} does not have node as child\n",
+                name(),
+                node_data.parent->name()
+            );
         }
     }
 
-    for (const auto& child : m_children)
+    for (const auto& child : node_data.children)
     {
         if (child->parent() != this)
         {
@@ -450,7 +459,7 @@ void Node::sanity_check() const
         child->sanity_check();
     }
 
-    for (const auto& attachment : m_attachments)
+    for (const auto& attachment : node_data.attachments)
     {
         auto* node = attachment->get_node();
         if (node != this)
@@ -481,89 +490,89 @@ void Node::sanity_check_root_path(const Node* node) const
 
 auto Node::parent() const -> Node*
 {
-    return m_parent;
+    return node_data.parent;
 }
 
 auto Node::depth() const -> size_t
 {
-    return m_depth;
+    return node_data.depth;
 }
 
 auto Node::children() const -> const std::vector<std::shared_ptr<Node>>&
 {
-    return m_children;
+    return node_data.children;
 }
 
 auto Node::attachments() const -> const std::vector<std::shared_ptr<INode_attachment>>&
 {
-    return m_attachments;
+    return node_data.attachments;
 }
 
 auto Node::visibility_mask() const -> uint64_t
 {
-    return m_visibility_mask;
+    return node_data.visibility_mask;
 }
 
 auto Node::visibility_mask() -> uint64_t&
 {
-    return m_visibility_mask;
+    return node_data.visibility_mask;
 }
 
 auto Node::flag_bits() const -> uint64_t
 {
-    return m_flag_bits;
+    return node_data.flag_bits;
 }
 
 auto Node::flag_bits() -> uint64_t&
 {
-    return m_flag_bits;
+    return node_data.flag_bits;
 }
 
 auto Node::parent_from_node_transform() const -> const Transform&
 {
-    return m_transforms.parent_from_node;
+    return node_data.transforms.parent_from_node;
 }
 
 auto Node::node_from_parent_transform() const -> const Transform
 {
-    return Transform::inverse(m_transforms.parent_from_node);
+    return Transform::inverse(node_data.transforms.parent_from_node);
 }
 
 auto Node::parent_from_node() const -> glm::mat4
 {
-    return m_transforms.parent_from_node.matrix();
+    return node_data.transforms.parent_from_node.matrix();
 }
 
 auto Node::world_from_node_transform() const -> const Transform&
 {
-    return m_transforms.world_from_node;
+    return node_data.transforms.world_from_node;
 }
 
 auto Node::node_from_world_transform() const -> const Transform
 {
-    return Transform::inverse(m_transforms.world_from_node);
+    return Transform::inverse(node_data.transforms.world_from_node);
 }
 
 auto Node::world_from_node() const -> glm::mat4
 {
-    return m_transforms.world_from_node.matrix();
+    return node_data.transforms.world_from_node.matrix();
 }
 
 auto Node::node_from_parent() const -> glm::mat4
 {
-    return m_transforms.parent_from_node.inverse_matrix();
+    return node_data.transforms.parent_from_node.inverse_matrix();
 }
 
 auto Node::node_from_world() const -> glm::mat4
 {
-    return m_transforms.world_from_node.inverse_matrix();
+    return node_data.transforms.world_from_node.inverse_matrix();
 }
 
 auto Node::world_from_parent() const -> glm::mat4
 {
-    if (m_parent != nullptr)
+    if (node_data.parent != nullptr)
     {
-        return m_parent->world_from_node();
+        return node_data.parent->world_from_node();
     }
     return glm::mat4{1};
 }
@@ -591,59 +600,59 @@ auto Node::transform_direction_from_world_to_local(const glm::vec3 d) const -> g
 
 void Node::set_parent_from_node(const glm::mat4 m)
 {
-    m_transforms.parent_from_node.set(m);
-    m_last_transform_update_serial = 0;
+    node_data.transforms.parent_from_node.set(m);
+    node_data.last_transform_update_serial = 0;
     on_transform_changed();
 }
 
 void Node::set_parent_from_node(const Transform& transform)
 {
-    m_transforms.parent_from_node = transform;
-    m_last_transform_update_serial = 0;
+    node_data.transforms.parent_from_node = transform;
+    node_data.last_transform_update_serial = 0;
     on_transform_changed();
 }
 
 void Node::set_node_from_parent(const glm::mat4 matrix)
 {
-    m_transforms.parent_from_node.set(glm::inverse(matrix), matrix);
-    m_last_transform_update_serial = 0;
+    node_data.transforms.parent_from_node.set(glm::inverse(matrix), matrix);
+    node_data.last_transform_update_serial = 0;
     on_transform_changed();
 }
 
 void Node::set_node_from_parent(const Transform& transform)
 {
-    m_transforms.parent_from_node = Transform::inverse(transform);
-    m_last_transform_update_serial = 0;
+    node_data.transforms.parent_from_node = Transform::inverse(transform);
+    node_data.last_transform_update_serial = 0;
     on_transform_changed();
 }
 
 void Node::set_world_from_node(const glm::mat4 matrix)
 {
-    if (m_parent == nullptr)
+    if (node_data.parent == nullptr)
     {
         set_parent_from_node(matrix);
     }
     else
     {
-        set_parent_from_node(m_parent->node_from_world() * matrix);
+        set_parent_from_node(parent()->node_from_world() * matrix);
     }
 }
 
 void Node::set_world_from_node(const Transform& transform)
 {
-    if (m_parent == nullptr)
+    if (node_data.parent == nullptr)
     {
         set_parent_from_node(transform);
     }
     else
     {
-        set_parent_from_node(m_parent->node_from_world_transform() * transform);
+        set_parent_from_node(parent()->node_from_world_transform() * transform);
     }
 }
 
 auto is_empty(const Node* const node) -> bool
 {
-    return (node->flag_bits() & Node::c_flag_bit_is_empty) == Node::c_flag_bit_is_empty;
+    return (node->flag_bits() & Node_flag_bit::is_empty) == Node_flag_bit::is_empty;
 }
 
 auto is_empty(const std::shared_ptr<Node>& node) -> bool
@@ -653,7 +662,7 @@ auto is_empty(const std::shared_ptr<Node>& node) -> bool
 
 auto is_transform(Node* const node) -> bool
 {
-    return (node->flag_bits() & Node::c_flag_bit_is_transform) == Node::c_flag_bit_is_transform;
+    return (node->flag_bits() & Node_flag_bit::is_transform) == Node_flag_bit::is_transform;
 }
 
 auto is_transform(const std::shared_ptr<Node>& node) -> bool

@@ -61,14 +61,17 @@ void Programs::initialize_component()
     standard        = make_program("standard");
     //m_dump_reflection = false;
 
-    textured        = make_program("textured");
-    edge_lines      = make_program("edge_lines");
-    wide_lines      = make_program("wide_lines");
-    points          = make_program("points");
-    depth           = make_program("depth");
-    id              = make_program("id");
-    tool            = make_program("tool");
-    visualize_depth = make_program("visualize_depth");
+    textured            = make_program("textured");
+    edge_lines          = make_program("edge_lines");
+    wide_lines          = make_program("wide_lines");
+    points              = make_program("points");
+    depth               = make_program("depth");
+    id                  = make_program("id");
+    tool                = make_program("tool");
+    visualize_depth     = make_program("visualize_depth");
+    visualize_normal    = make_program("standard", "ERHE_VISUALIZE_NORMAL");
+    visualize_tangent   = make_program("standard", "ERHE_VISUALIZE_TANGENT");
+    visualize_bitangent = make_program("standard", "ERHE_VISUALIZE_BITANGENT");
 }
 
 auto Programs::make_program(

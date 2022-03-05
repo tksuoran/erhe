@@ -391,14 +391,12 @@ auto Brush::name() const -> const std::string&
 }
 
 auto Brush::make_instance(
-    const glm::mat4                                   world_from_node,
-    const std::shared_ptr<erhe::primitive::Material>& material,
-    const float                                       scale
+    const Instance_create_info& instance_create_info
 ) -> Instance
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& scaled = get_scaled(scale);
+    const auto& scaled = get_scaled(instance_create_info.scale);
 
     const auto& name = scaled.geometry
         ? scaled.geometry->name
@@ -407,9 +405,9 @@ auto Brush::make_instance(
     ERHE_VERIFY(scaled.rt_primitive);
 
     auto mesh = std::make_shared<erhe::scene::Mesh>(name);
-    mesh->data.primitives.push_back(
+    mesh->mesh_data.primitives.push_back(
         erhe::primitive::Primitive{
-            .material              = material,
+            .material              = instance_create_info.material,
             .gl_primitive_geometry = scaled.gl_primitive_geometry,
             .rt_primitive_geometry = scaled.rt_primitive->primitive_geometry,
             .rt_vertex_buffer      = scaled.rt_primitive->vertex_buffer,
@@ -418,7 +416,7 @@ auto Brush::make_instance(
             .normal_style          = normal_style
         }
     );
-    mesh->set_world_from_node(world_from_node);
+    mesh->set_world_from_node(instance_create_info.world_from_node);
 
     std::shared_ptr<Node_physics>  node_physics;
     std::shared_ptr<Node_raytrace> node_raytrace;
@@ -426,12 +424,13 @@ auto Brush::make_instance(
     {
         ERHE_PROFILE_SCOPE("make brush node physics");
 
-        const erhe::physics::IRigid_body_create_info create_info{
+        const erhe::physics::IRigid_body_create_info rigid_body_create_info{
+            .world           = instance_create_info.physics_world,
             .mass            = density * scaled.volume,
             .collision_shape = scaled.collision_shape,
             .local_inertia   = scaled.local_inertia
         };
-        node_physics = std::make_shared<Node_physics>(create_info);
+        node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
         mesh->attach(node_physics);
     }
 
@@ -441,10 +440,10 @@ auto Brush::make_instance(
         mesh->attach(node_raytrace);
     }
 
-    return {
-        .mesh          = mesh,
-        .node_physics  = node_physics,
-        .node_raytrace = node_raytrace
+    return Instance{
+        mesh,
+        node_physics,
+        node_raytrace
     };
 }
 

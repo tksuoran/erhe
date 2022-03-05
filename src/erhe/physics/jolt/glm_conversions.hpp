@@ -1,0 +1,93 @@
+#pragma once
+
+#include "erhe/log/log.hpp"
+
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+
+#include <Jolt.h>
+
+namespace erhe::physics
+{
+
+[[nodiscard]] inline auto from_jolt(const JPH::Vec3 v) -> glm::vec3
+{
+    return glm::vec3{
+        v.GetX(),
+        v.GetY(),
+        v.GetZ()
+    };
+}
+
+[[nodiscard]] inline auto from_jolt(const JPH::Vec4 v) -> glm::vec4
+{
+    return glm::vec4{
+        v.GetX(),
+        v.GetY(),
+        v.GetZ(),
+        v.GetW()
+    };
+}
+
+[[nodiscard]] inline auto from_jolt(const JPH::Quat q) -> glm::quat
+{
+    return glm::quat{
+        q.GetX(),
+        q.GetY(),
+        q.GetZ(),
+        q.GetW()
+    };
+}
+
+[[nodiscard]] inline auto to_jolt(const glm::vec3 v) -> JPH::Vec3
+{
+    return JPH::Vec3{v.x, v.y, v.z};
+}
+
+[[nodiscard]] inline auto to_jolt(const glm::vec4 v) -> JPH::Vec4
+{
+    return JPH::Vec4{v.x, v.y, v.z, v.w};
+}
+
+[[nodiscard]] inline auto to_jolt(const glm::quat q) -> JPH::Quat
+{
+    return JPH::Quat{q.x, q.y, q.z, q.w};
+}
+
+[[nodiscard]] inline auto from_jolt(const JPH::Mat44 m) -> glm::mat4
+{
+    return glm::mat4{
+        m(0, 0), m(1, 0), m(2, 0), m(3, 0),
+        m(0, 1), m(1, 1), m(2, 1), m(3, 1),
+        m(0, 2), m(1, 2), m(2, 2), m(3, 2),
+        m(0, 3), m(1, 3), m(2, 3), m(3, 3)
+    };
+}
+
+[[nodiscard]] inline auto to_jolt(const glm::mat4 m) -> JPH::Mat44
+{
+    return JPH::Mat44{
+        to_jolt(m[0]),
+        to_jolt(m[1]),
+        to_jolt(m[2]),
+        to_jolt(m[3])
+    };
+}
+
+//[[nodiscard]] inline auto from_bullet(const btTransform t) -> Transform
+//{
+//    return Transform{
+//        from_bullet(t.getBasis()),
+//        from_bullet(t.getOrigin())
+//    };
+//}
+//
+//[[nodiscard]] inline auto to_bullet(const Transform t) -> btTransform
+//{
+//    return btTransform{
+//        to_bullet(t.basis),
+//        to_bullet(t.origin)
+//    };
+//}
+
+} // namespace erhe::physics

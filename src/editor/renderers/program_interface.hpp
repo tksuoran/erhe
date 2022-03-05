@@ -69,9 +69,8 @@ public:
 class Material_struct
 {
 public:
+    size_t roughness;    // vec2
     size_t metallic;     // float
-    size_t roughness;    // float
-    size_t anisotropy;   // float
     size_t transparency; // float
     size_t base_color;   // vec4
     size_t emissive;     // vec4

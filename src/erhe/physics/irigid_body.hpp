@@ -30,10 +30,12 @@ static constexpr const char* c_motion_mode_strings[] =
 
 class ICollision_shape;
 class IMotion_state;
+class IWorld;
 
 class IRigid_body_create_info
 {
 public:
+    IWorld&                           world;
     float                             mass{1.0f};
     std::shared_ptr<ICollision_shape> collision_shape;
     glm::vec3                         local_inertia{0.0f, 0.0f, 0.0f};
@@ -42,19 +44,7 @@ public:
 class IRigid_body
 {
 public:
-    [[nodiscard]]
-    static auto create(
-        const IRigid_body_create_info& create_info,
-        IMotion_state*                 motion_state
-    ) -> IRigid_body*;
-
-    [[nodiscard]]
-    static auto create_shared(
-        const IRigid_body_create_info& create_info,
-        IMotion_state*                 motion_state
-    ) -> std::shared_ptr<IRigid_body>;
-
-    virtual ~IRigid_body(){}
+    virtual ~IRigid_body();
 
     [[nodiscard]] virtual auto get_collision_shape () const -> std::shared_ptr<ICollision_shape> = 0;
     [[nodiscard]] virtual auto get_motion_mode     () const -> Motion_mode                       = 0;

@@ -13,7 +13,7 @@ auto is_icamera(const Node* const node) -> bool
     {
         return false;
     }
-    return (node->flag_bits() & Node::c_flag_bit_is_icamera) == Node::c_flag_bit_is_icamera;
+    return (node->flag_bits() & Node_flag_bit::is_icamera) == Node_flag_bit::is_icamera;
 }
 
 auto is_icamera(const std::shared_ptr<Node>& node) -> bool
@@ -27,7 +27,7 @@ auto as_icamera(Node* const node) -> ICamera*
     {
         return nullptr;
     }
-    if ((node->flag_bits() & Node::c_flag_bit_is_icamera) == 0)
+    if ((node->flag_bits() & Node_flag_bit::is_icamera) == 0)
     {
         return nullptr;
     }
@@ -40,7 +40,7 @@ auto as_icamera(const std::shared_ptr<Node>& node) -> std::shared_ptr<ICamera>
     {
         return {};
     }
-    if ((node->flag_bits() & Node::c_flag_bit_is_icamera) == 0)
+    if ((node->flag_bits() & Node_flag_bit::is_icamera) == 0)
     {
         return {};
     }
@@ -53,7 +53,7 @@ auto is_camera(const Node* const node) -> bool
     {
         return false;
     }
-    return (node->flag_bits() & Node::c_flag_bit_is_camera) == Node::c_flag_bit_is_camera;
+    return (node->flag_bits() & Node_flag_bit::is_camera) == Node_flag_bit::is_camera;
 }
 
 auto is_camera(const std::shared_ptr<Node>& node) -> bool
@@ -67,7 +67,7 @@ auto as_camera(Node* const node) -> Camera*
     {
         return nullptr;
     }
-    if ((node->flag_bits() & Node::c_flag_bit_is_camera) == 0)
+    if ((node->flag_bits() & Node_flag_bit::is_camera) == 0)
     {
         return nullptr;
     }
@@ -80,7 +80,7 @@ auto as_camera(const std::shared_ptr<Node>& node) -> std::shared_ptr<Camera>
     {
         return {};
     }
-    if ((node->flag_bits() & Node::c_flag_bit_is_camera) == 0)
+    if ((node->flag_bits() & Node_flag_bit::is_camera) == 0)
     {
         return {};
     }
@@ -95,13 +95,13 @@ auto Camera::node_type() const -> const char*
 ICamera::ICamera(const std::string_view name)
     : Node{name}
 {
-    m_flag_bits |= (Node::c_flag_bit_is_icamera | Node::c_flag_bit_is_transform);
+    node_data.flag_bits |= (Node_flag_bit::is_icamera | Node_flag_bit::is_transform);
 }
 
 Camera::Camera(const std::string_view name)
     : ICamera{name}
 {
-    m_flag_bits |= (Node::c_flag_bit_is_camera | Node::c_flag_bit_is_transform);
+    node_data.flag_bits |= (Node_flag_bit::is_camera | Node_flag_bit::is_transform);
 }
 
 Camera::~Camera() = default;
@@ -137,25 +137,5 @@ auto Camera::projection() const -> const Projection*
 {
     return &m_projection;
 }
-
-//auto Camera::clip_from_node() const -> glm::mat4
-//{
-//    return m_camera_transforms.clip_from_node.matrix();
-//}
-//
-//auto Camera::clip_from_world() const -> glm::mat4
-//{
-//    return m_camera_transforms.clip_from_world.matrix();
-//}
-//
-//auto Camera::node_from_clip() const -> glm::mat4
-//{
-//    return m_camera_transforms.clip_from_node.inverse_matrix();
-//}
-//
-//auto Camera::world_from_clip() const -> glm::mat4
-//{
-//    return m_camera_transforms.clip_from_world.inverse_matrix();
-//}
 
 } // namespace erhe::scene

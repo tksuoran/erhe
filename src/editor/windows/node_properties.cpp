@@ -212,7 +212,7 @@ void Node_properties::light_properties(erhe::scene::Light& light) const
 
 void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
 {
-    auto& mesh_data = mesh.data;
+    auto& mesh_data = mesh.mesh_data;
 
     ImGui::PushID("##mesh_properties");
     if (ImGui::TreeNodeEx("Mesh", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))

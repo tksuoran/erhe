@@ -362,7 +362,7 @@ auto Physics_tool::on_force() -> bool
     m_target_position_start = glm::vec3{m_target_mesh->world_from_node() * glm::vec4{m_target_position_in_mesh, 1.0f}};
 
     float max_radius = 0.0f;
-    for (const auto& primitive : m_target_mesh->data.primitives)
+    for (const auto& primitive : m_target_mesh->mesh_data.primitives)
     {
         max_radius = std::max(
             max_radius,

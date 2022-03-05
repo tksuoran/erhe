@@ -90,7 +90,7 @@ auto intersect(
 
     out_t = std::numeric_limits<float>::max();
 
-    for (auto& primitive : mesh.data.primitives)
+    for (auto& primitive : mesh.mesh_data.primitives)
     {
         //const auto& primitive_geometry = primitive.gl_primitive_geometry;
         auto* geometry = primitive.source_geometry.get();

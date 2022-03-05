@@ -33,28 +33,29 @@ void Materials::initialize_component()
 {
     get<Editor_imgui_windows>()->register_imgui_window(this);
 
-    if constexpr (true) // White default material
-    {
-        auto m = m_scene_root->make_material(
-            "Default Material",
-            glm::vec4{0.5f, 0.5f, 0.5f, 1.0f},
-            0.02f,
-            0.00f,
-            0.97f
-        );
-        m->visible = true;
-    }
+    const glm::vec2 roughness{0.34f, 0.34f};
 
-    m_scene_root->make_material("Iron",     glm::vec3{0.560f, 0.570f, 0.580f});
-    m_scene_root->make_material("Silver",   glm::vec3{0.972f, 0.960f, 0.915f});
-    m_scene_root->make_material("Aluminum", glm::vec3{0.913f, 0.921f, 0.925f});
-    m_scene_root->make_material("Gold",     glm::vec3{1.000f, 0.766f, 0.336f});
-    m_scene_root->make_material("Copper",   glm::vec3{0.955f, 0.637f, 0.538f});
-    m_scene_root->make_material("Chromium", glm::vec3{0.550f, 0.556f, 0.554f});
-    m_scene_root->make_material("Nickel",   glm::vec3{0.660f, 0.609f, 0.526f});
-    m_scene_root->make_material("Titanium", glm::vec3{0.542f, 0.497f, 0.449f});
-    m_scene_root->make_material("Cobalt",   glm::vec3{0.662f, 0.655f, 0.634f});
-    m_scene_root->make_material("Platinum", glm::vec3{0.672f, 0.637f, 0.585f});
+    m_scene_root->make_material("Default",   glm::vec3{0.500f, 0.500f, 0.500f}, roughness, 0.0f);
+    m_scene_root->make_material("Titanium",  glm::vec3{0.542f, 0.497f, 0.449f}, roughness, 1.0f);
+    m_scene_root->make_material("Chromium",  glm::vec3{0.549f, 0.556f, 0.554f}, roughness, 1.0f);
+    m_scene_root->make_material("Iron",      glm::vec3{0.562f, 0.565f, 0.578f}, roughness, 1.0f);
+    m_scene_root->make_material("Nickel",    glm::vec3{0.660f, 0.609f, 0.526f}, roughness, 1.0f);
+    m_scene_root->make_material("Platinum",  glm::vec3{0.673f, 0.637f, 0.585f}, roughness, 1.0f);
+    m_scene_root->make_material("Copper",    glm::vec3{0.955f, 0.638f, 0.538f}, roughness, 1.0f);
+    m_scene_root->make_material("Palladium", glm::vec3{0.733f, 0.697f, 0.652f}, roughness, 1.0f);
+    m_scene_root->make_material("Zinc",      glm::vec3{0.664f, 0.824f, 0.850f}, roughness, 1.0f);
+    m_scene_root->make_material("Gold",      glm::vec3{1.022f, 0.782f, 0.344f}, roughness, 1.0f);
+    m_scene_root->make_material("Aluminum",  glm::vec3{0.913f, 0.922f, 0.924f}, roughness, 1.0f);
+    m_scene_root->make_material("Silver",    glm::vec3{0.972f, 0.960f, 0.915f}, roughness, 1.0f);
+
+    m_scene_root->make_material("Cobalt",    glm::vec3{0.662f, 0.655f, 0.634f}, roughness, 1.0f);
+
+    // water          0.020
+    // plastic, glass 0.040 .. 0.045
+    // crystal, gems  0.050 .. 0.080
+    // diamondlike    0.100 .. 0.200
+
+    // 0.2 - 0.45 forbidden zone
 
     // Iron      = c4c7c7 (198, 198, 200)
     // Brass     = d6b97b (214, 185, 123)

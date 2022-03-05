@@ -123,8 +123,8 @@ public:
     class Context
     {
     public:
-        erhe::scene::Light_layer&           layer;
         erhe::scene::Scene&                 scene;
+        erhe::scene::Light_layer&           layer;
         std::shared_ptr<erhe::scene::Light> light;
         std::shared_ptr<erhe::scene::Node>  parent;
         Mode                                mode;

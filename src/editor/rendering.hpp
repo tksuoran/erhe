@@ -117,7 +117,7 @@ private:
 
     bool                                                  m_trigger_capture{false};
 
-    Renderpass m_rp_polygon_fill;
+    Renderpass m_rp_polygon_fill_standard;
     Renderpass m_rp_tool1_hidden_stencil;
     Renderpass m_rp_tool2_visible_stencil;
     Renderpass m_rp_tool3_depth_clear;

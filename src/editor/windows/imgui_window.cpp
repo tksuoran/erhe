@@ -10,6 +10,16 @@ namespace editor {
 
 Imgui_window::Imgui_window(const std::string_view title)
     : m_title{title}
+    , m_label{title}
+{
+}
+
+Imgui_window::Imgui_window(
+    const std::string_view title,
+    const std::string_view label
+)
+    : m_title{title}
+    , m_label{label}
 {
 }
 
@@ -56,6 +66,11 @@ auto Imgui_window::title() const -> const std::string_view
     return m_title;
 }
 
+auto Imgui_window::label() -> const char*
+{
+    return m_label.c_str();
+}
+
 auto Imgui_window::begin() -> bool
 {
     on_begin();
@@ -65,7 +80,7 @@ auto Imgui_window::begin() -> bool
         ImVec2{m_max_size}
     );
     const bool not_collapsed = ImGui::Begin(
-        title().data(),
+        label(),
         &keep_visible,
         flags()
     );

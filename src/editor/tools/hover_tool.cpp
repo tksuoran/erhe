@@ -73,7 +73,7 @@ void Hover_tool::connect()
 void Hover_tool::initialize_component()
 {
     m_hover_material = m_scene_root->make_material("hover");
-    m_hover_material_index = m_hover_material->index;
+    m_hover_material->visible = false;
     get<Editor_tools>()->register_background_tool(this);
 }
 
@@ -228,7 +228,7 @@ void Hover_tool::deselect()
     if (m_enable_color_highlight)
     {
         // Restore original primitive material
-        m_hover_mesh->data.primitives[m_hover_primitive_index].material = m_original_primitive_material;
+        m_hover_mesh->mesh_data.primitives[m_hover_primitive_index].material = m_original_primitive_material;
         m_original_primitive_material.reset();
         m_hover_mesh = nullptr;
     }
@@ -250,7 +250,7 @@ void Hover_tool::select()
     if (m_enable_color_highlight)
     {
         // Store original primitive material
-        m_original_primitive_material = m_hover_mesh->data.primitives[m_hover_primitive_index].material;
+        m_original_primitive_material = m_hover_mesh->mesh_data.primitives[m_hover_primitive_index].material;
 
         // Copy material and mutate it with increased material emissive
         *m_hover_material.get()    = *m_original_primitive_material.get();
@@ -259,7 +259,7 @@ void Hover_tool::select()
         m_hover_material->index    = m_hover_material_index;
 
         // Replace primitive material with modified copy
-        m_hover_mesh->data.primitives[m_hover_primitive_index].material = m_hover_material;
+        m_hover_mesh->mesh_data.primitives[m_hover_primitive_index].material = m_hover_material;
         log_materials.info(
             "hover mesh {} primitive {} set to {} with index {}\n",
             m_hover_mesh->name(),

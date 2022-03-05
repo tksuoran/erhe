@@ -11,6 +11,7 @@
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
+#include "tools/selection_tool.hpp"
 #include "windows/log_window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_renderer.hpp"
@@ -44,8 +45,16 @@ using erhe::graphics::Framebuffer;
 using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
+auto Open_new_viewport_window_command::try_call(Command_context& context) -> bool
+{
+    static_cast<void>(context);
+
+    return m_viewport_windows.open_new_viewport_window();
+}
+
 Viewport_windows::Viewport_windows()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component       {c_name}
+    , m_open_new_viewport_window_command{*this}
 {
 }
 
@@ -76,13 +85,20 @@ void Viewport_windows::initialize_component()
         create_window("Headset Camera", headset_camera);
     }
 #else
-    for (const auto& camera : m_scene_root->scene().cameras)
     {
+        const auto& camera = m_scene_root->scene().cameras.front();
         auto* icamera = as_icamera(camera.get());
-        const std::string name = fmt::format("Scene for Camera {}", icamera->name());
-        create_window(name, icamera);
+        create_window("Viewport", icamera);
     }
+    //for (const auto& camera : m_scene_root->scene().cameras)
+    //{
+    //    auto* icamera = as_icamera(camera.get());
+    //    create_window("Viewport", icamera);
+    //}
 #endif
+    m_editor_view->register_command   (&m_open_new_viewport_window_command);
+    m_editor_view->bind_command_to_key(&m_open_new_viewport_window_command, erhe::toolkit::Key_f1, true);
+
 }
 
 auto Viewport_windows::create_window(
@@ -105,6 +121,27 @@ auto Viewport_windows::create_window(
         get<Editor_imgui_windows>()->register_imgui_window(new_window.get());
     }
     return new_window.get();
+}
+
+auto Viewport_windows::open_new_viewport_window() -> bool
+{
+    if (m_scene_root->scene().cameras.empty())
+    {
+        return false;
+    }
+    auto selection_tool = get<Selection_tool>();
+    for (const auto& entry : selection_tool->selection())
+    {
+        if (is_icamera(entry)) {
+            auto* icamera = as_icamera(entry.get());
+            create_window("Viewport", icamera);
+            return true;
+        }
+    }
+    const auto& camera = m_scene_root->scene().cameras.front();
+    auto* icamera = as_icamera(camera.get());
+    create_window("Viewport", icamera);
+    return true;
 }
 
 void Viewport_windows::update()
@@ -179,16 +216,19 @@ void Viewport_windows::render()
     }
 }
 
+int Viewport_window::s_serial = 0;
+
 Viewport_window::Viewport_window(
     const std::string_view              name,
     const erhe::components::Components& components,
     erhe::scene::ICamera*               camera
 )
-    : Imgui_window     {name}
+    : Imgui_window     {name, fmt::format("{}##{}", name, ++s_serial)}
     , m_configuration  {components.get<Configuration  >()}
     , m_scene_root     {components.get<Scene_root     >()}
     , m_viewport_config{components.get<Viewport_config>()}
     , m_post_processing{components.get<Post_processing>()}
+    , m_programs       {components.get<Programs       >()}
     , m_camera         {camera}
 {
 }
@@ -218,10 +258,17 @@ void Viewport_window::render(
 
     const Render_context context
     {
-        .window          = this,
-        .viewport_config = m_viewport_config.get(),
-        .camera          = m_camera,
-        .viewport        = m_viewport
+        .window                 = this,
+        .viewport_config        = m_viewport_config.get(),
+        .camera                 = m_camera,
+        .viewport               = m_viewport,
+        .override_shader_stages = m_visualize_normal
+            ? m_programs->visualize_normal.get()
+            : m_visualize_tangent
+                ? m_programs->visualize_tangent.get()
+                : m_visualize_bitangent
+                    ? m_programs->visualize_bitangent.get()
+                    : nullptr
     };
 
     if (m_is_hovered)
@@ -285,10 +332,25 @@ void Viewport_window::imgui()
 {
     ImGui::SetNextItemWidth(150.0f);
     m_scene_root->camera_combo("Camera", m_camera);
+    ImGui::SameLine();
+    ImGui::Checkbox("Normal", &m_visualize_normal);
+    ImGui::SameLine();
+    ImGui::Checkbox("Tangent", &m_visualize_tangent);
+    ImGui::SameLine();
+    ImGui::Checkbox("Bitangent", &m_visualize_bitangent);
+    ImGui::SameLine();
+    ImGui::Checkbox("Post Processing", &m_enable_post_processing);
 
     //if (ImGui::Button("Post Process"))
+    const bool gate_post_processing =
+        m_enable_post_processing &&
+        !m_visualize_normal &&
+        !m_visualize_tangent &&
+        !m_visualize_bitangent &&
+        m_post_processing &&
+        m_viewport_config->post_processing_enable;
     {
-        if (m_post_processing && m_viewport_config->post_processing_enable)
+        if (gate_post_processing)
         {
             m_post_processing->post_process(
                 m_color_texture_resolved_for_present.get()
@@ -306,8 +368,7 @@ void Viewport_window::imgui()
     )
     {
         const bool use_post_processing_texture =
-            m_viewport_config->post_processing_enable &&
-            m_post_processing &&
+            gate_post_processing &&
             m_post_processing->get_output();
         const auto& texture = use_post_processing_texture
             ? m_post_processing->get_output()

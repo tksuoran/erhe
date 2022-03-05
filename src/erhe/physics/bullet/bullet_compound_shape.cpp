@@ -5,38 +5,37 @@
 namespace erhe::physics
 {
 
-auto ICollision_shape::create_compound_shape() -> ICollision_shape*
+auto ICollision_shape::create_compound_shape(
+    const Compound_shape_create_info& create_info
+) -> ICollision_shape*
 {
-    return new Bullet_compound_shape();
+    return new Bullet_compound_shape(create_info);
 }
 
-auto ICollision_shape::create_compound_shape_shared() -> std::shared_ptr<ICollision_shape>
+auto ICollision_shape::create_compound_shape_shared(
+    const Compound_shape_create_info& create_info
+) -> std::shared_ptr<ICollision_shape>
 {
-    return std::make_shared<Bullet_compound_shape>();
+    return std::make_shared<Bullet_compound_shape>(create_info);
 }
 
 
-Bullet_compound_shape::Bullet_compound_shape()
+Bullet_compound_shape::Bullet_compound_shape(const Compound_shape_create_info& create_info)
     : Bullet_collision_shape{&m_compound_shape}
 {
+    for (const auto& entry : create_info.children)
+    {
+        auto bullet_collision_shape = dynamic_pointer_cast<Bullet_collision_shape>(entry.shape);
+        m_children.push_back(entry.shape);
+        m_compound_shape.addChildShape(
+            to_bullet(entry.transform),
+            bullet_collision_shape->get_bullet_collision_shape()
+        );
+    }
 }
 
 Bullet_compound_shape::~Bullet_compound_shape()
 {
-}
-
-void Bullet_compound_shape::add_child_shape(
-    const std::shared_ptr<ICollision_shape>& shape,
-    const Transform                          transform
-)
-{
-    auto bullet_collision_shape = dynamic_pointer_cast<Bullet_collision_shape>(shape);
-    ERHE_VERIFY(bullet_collision_shape);
-    m_children.push_back(bullet_collision_shape);
-    m_compound_shape.addChildShape(
-        to_bullet(transform),
-        bullet_collision_shape->get_bullet_collision_shape()
-    );
 }
 
 auto Bullet_compound_shape::is_convex() const -> bool

@@ -58,6 +58,9 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages> id;
     std::unique_ptr<erhe::graphics::Shader_stages> tool;
     std::unique_ptr<erhe::graphics::Shader_stages> visualize_depth;
+    std::unique_ptr<erhe::graphics::Shader_stages> visualize_normal;
+    std::unique_ptr<erhe::graphics::Shader_stages> visualize_tangent;
+    std::unique_ptr<erhe::graphics::Shader_stages> visualize_bitangent;
 
 private:
     [[nodiscard]] auto make_program(

@@ -1,6 +1,6 @@
 set(_target "erhe_xr")
-
-add_library(${_target} )
+add_library(${_target})
+add_library(erhe::xr ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -20,10 +20,11 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(${_target}
     PUBLIC
-        erhe_gl
-        erhe_toolkit
-        fmt::fmt
+        erhe::gl
+        erhe::toolkit
         glm::glm
+    PRIVATE
+        fmt::fmt
         Microsoft.GSL::GSL
         optional_lite
         openxr_loader

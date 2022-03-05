@@ -1,6 +1,6 @@
 set(_target "erhe_graphics")
-
 add_library(${_target})
+add_library(erhe::graphics ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -86,14 +86,15 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(${_target}
     PUBLIC
-        erhe_components
-        erhe_gl
-        erhe_log
+        erhe::components
+        erhe::gl
         fmt::fmt
         ghc_filesystem
         glm::glm
         optional_lite
         Microsoft.GSL::GSL
+    PRIVATE
+        erhe::log
 )
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")

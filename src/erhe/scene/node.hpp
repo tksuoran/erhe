@@ -36,6 +36,55 @@ protected:
     uint64_t m_flag_bits{c_flag_bit_none};
 };
 
+class Node_visibility
+{
+public:
+    static constexpr uint64_t none        = 0u;
+    static constexpr uint64_t content     = (1u << 0);
+    static constexpr uint64_t shadow_cast = (1u << 1);
+    static constexpr uint64_t id          = (1u << 2);
+    static constexpr uint64_t tool        = (1u << 3);
+    static constexpr uint64_t brush       = (1u << 4);
+    static constexpr uint64_t selected    = (1u << 5);
+    static constexpr uint64_t gui         = (1u << 6);
+    static constexpr uint64_t controller  = (1u << 7);
+};
+
+class Node_flag_bit
+{
+public:
+    static constexpr uint64_t none         = 0u;
+    static constexpr uint64_t is_transform = (1u << 0);
+    static constexpr uint64_t is_empty     = (1u << 1);
+    static constexpr uint64_t is_physics   = (1u << 2);
+    static constexpr uint64_t is_icamera   = (1u << 4);
+    static constexpr uint64_t is_camera    = (1u << 5);
+    static constexpr uint64_t is_light     = (1u << 6);
+    static constexpr uint64_t is_mesh      = (1u << 7);
+};
+
+class Node_transforms
+{
+public:
+    Transform parent_from_node; // normative
+    Transform world_from_node;  // calculated by update_transform()
+};
+
+class Node_data
+{
+public:
+    Node_transforms                                transforms;
+    std::uint64_t                                  last_transform_update_serial{0};
+    Node*                                          parent         {nullptr};
+    std::vector<std::shared_ptr<Node>>             children;
+    std::vector<std::shared_ptr<INode_attachment>> attachments;
+    uint64_t                                       visibility_mask{Node_visibility::none};
+    uint64_t                                       flag_bits      {Node_flag_bit::none};
+    size_t                                         depth          {0};
+    std::string                                    name;
+    std::string                                    label;
+};
+
 class Node
     : public std::enable_shared_from_this<Node>
 {
@@ -43,25 +92,6 @@ public:
     explicit Node(const std::string_view name);
 
     virtual ~Node();
-
-    static constexpr uint64_t c_visibility_none        = 0u;
-    static constexpr uint64_t c_visibility_content     = (1u << 0);
-    static constexpr uint64_t c_visibility_shadow_cast = (1u << 1);
-    static constexpr uint64_t c_visibility_id          = (1u << 2);
-    static constexpr uint64_t c_visibility_tool        = (1u << 3);
-    static constexpr uint64_t c_visibility_brush       = (1u << 4);
-    static constexpr uint64_t c_visibility_selected    = (1u << 5);
-    static constexpr uint64_t c_visibility_gui         = (1u << 6);
-    static constexpr uint64_t c_visibility_controller  = (1u << 7);
-
-    static constexpr uint64_t c_flag_bit_none         = 0u;
-    static constexpr uint64_t c_flag_bit_is_transform = (1u << 0);
-    static constexpr uint64_t c_flag_bit_is_empty     = (1u << 1);
-    static constexpr uint64_t c_flag_bit_is_physics   = (1u << 2);
-    static constexpr uint64_t c_flag_bit_is_icamera   = (1u << 4);
-    static constexpr uint64_t c_flag_bit_is_camera    = (1u << 5);
-    static constexpr uint64_t c_flag_bit_is_light     = (1u << 6);
-    static constexpr uint64_t c_flag_bit_is_mesh      = (1u << 7);
 
     virtual void on_attached_to      (Node& node);
     virtual void on_detached_from    (Node& node);
@@ -116,25 +146,10 @@ public:
     void unparent                  ();
     void set_name                  (const std::string_view name);
 
-protected:
-    class Transforms
-    {
-    public:
-        Transform parent_from_node; // normative
-        Transform world_from_node;  // calculated by update_transform()
-    };
+    Node_data                      node_data;
 
-    Transforms                                     m_transforms;
-    std::uint64_t                                  m_last_transform_update_serial{0};
-    Node*                                          m_parent         {nullptr};
-    std::vector<std::shared_ptr<Node>>             m_children;
-    std::vector<std::shared_ptr<INode_attachment>> m_attachments;
-    uint64_t                                       m_visibility_mask{c_visibility_none};
-    uint64_t                                       m_flag_bits      {c_flag_bit_none};
-    size_t                                         m_depth          {0};
-    erhe::toolkit::Unique_id<Node>                 m_id;
-    std::string                                    m_name;
-    std::string                                    m_label;
+protected:
+    erhe::toolkit::Unique_id<Node> m_id;
 };
 
 auto is_empty    (const Node* const node) -> bool;

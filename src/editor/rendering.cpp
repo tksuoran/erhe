@@ -85,7 +85,7 @@ void Editor_rendering::initialize_component()
     auto& programs     = *get<Programs>().get();
     auto* vertex_input = get<Mesh_memory>()->vertex_input.get();
 
-    m_rp_polygon_fill.pipeline.data = {
+    m_rp_polygon_fill_standard.pipeline.data = {
         .name           = "Polygon fill",
         .shader_stages  = programs.standard.get(),
         .vertex_input   = vertex_input,
@@ -547,8 +547,8 @@ void Editor_rendering::render_content(const Render_context& context)
     auto& render_style = context.viewport_config->render_style_not_selected;
 
     constexpr erhe::scene::Visibility_filter content_not_selected_filter{
-        .require_all_bits_set   = erhe::scene::Node::c_visibility_content,
-        .require_all_bits_clear = erhe::scene::Node::c_visibility_selected
+        .require_all_bits_set   = erhe::scene::Node_visibility::content,
+        .require_all_bits_clear = erhe::scene::Node_visibility::selected
     };
 
     if (render_style.polygon_fill)
@@ -560,6 +560,11 @@ void Editor_rendering::render_content(const Render_context& context)
         //                             render_style.polygon_offset_units,
         //                             render_style.polygon_offset_clamp);
         //}
+        Renderpass renderpass = m_rp_polygon_fill_standard;
+        if (context.override_shader_stages != nullptr)
+        {
+            renderpass.pipeline.data.shader_stages = context.override_shader_stages;
+        }
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
@@ -567,7 +572,8 @@ void Editor_rendering::render_content(const Render_context& context)
                 .mesh_layers       = { m_scene_root->content_layer(), m_scene_root->controller_layer() },
                 .light_layer       = m_scene_root->light_layer(),
                 .materials         = m_scene_root->materials(),
-                .passes            = { &m_rp_polygon_fill },
+                //.passes            = { &m_rp_polygon_fill_standard },
+                .passes            = { &renderpass },
                 .visibility_filter = content_not_selected_filter
             }
         );
@@ -651,8 +657,8 @@ void Editor_rendering::render_selection(const Render_context& context)
 
     constexpr erhe::scene::Visibility_filter content_selected_filter{
         .require_all_bits_set =
-            erhe::scene::Node::c_visibility_content |
-            erhe::scene::Node::c_visibility_selected
+            erhe::scene::Node_visibility::content |
+            erhe::scene::Node_visibility::selected
     };
 
     if (render_style.polygon_fill)
@@ -673,7 +679,7 @@ void Editor_rendering::render_selection(const Render_context& context)
                 .mesh_layers       = { m_scene_root->content_layer() },
                 .light_layer       = m_scene_root->light_layer(),
                 .materials         = m_scene_root->materials(),
-                .passes            = { &m_rp_polygon_fill },
+                .passes            = { &m_rp_polygon_fill_standard },
                 .visibility_filter = content_selected_filter
             }
         );
@@ -776,7 +782,7 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
             },
             .visibility_filter =
             {
-                .require_all_bits_set = erhe::scene::Node::c_visibility_tool
+                .require_all_bits_set = erhe::scene::Node_visibility::tool
             }
         }
     );
@@ -817,7 +823,7 @@ void Editor_rendering::render_brush(const Render_context& context)
             .passes            = { &m_rp_brush_back, &m_rp_brush_front },
             .visibility_filter =
             {
-                .require_all_bits_set = erhe::scene::Node::c_visibility_brush
+                .require_all_bits_set = erhe::scene::Node_visibility::brush
             }
         }
     );

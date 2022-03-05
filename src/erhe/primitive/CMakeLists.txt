@@ -1,6 +1,6 @@
 set(_target "erhe_primitive")
-
 add_library(${_target})
+add_library(erhe::primitive ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -36,14 +36,14 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(${_target}
     PRIVATE
-        erhe_log
+        erhe::log
         fmt::fmt
         Microsoft.GSL::GSL
     PUBLIC
         glm::glm
-        erhe_geometry
-        erhe_gl
-        erhe_raytrace
+        erhe::geometry
+        erhe::gl
+        erhe::raytrace
         optional_lite
 )
 

@@ -165,7 +165,7 @@ auto Material_paint_tool::on_paint() -> bool
     }
     const auto& target_mesh      = m_pointer_context->hover_mesh();
     const auto  target_primitive = m_pointer_context->hover_primitive();
-    auto&       hover_primitive  = target_mesh->data.primitives.at(target_primitive);
+    auto&       hover_primitive  = target_mesh->mesh_data.primitives.at(target_primitive);
     hover_primitive.material     = m_material;
 
     return true;
@@ -183,7 +183,7 @@ auto Material_paint_tool::on_pick() -> bool
     }
     const auto& target_mesh      = m_pointer_context->hover_mesh();
     const auto  target_primitive = m_pointer_context->hover_primitive();
-    auto&       hover_primitive  = target_mesh->data.primitives.at(target_primitive);
+    auto&       hover_primitive  = target_mesh->mesh_data.primitives.at(target_primitive);
     m_material = hover_primitive.material;
 
     return true;

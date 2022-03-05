@@ -1,6 +1,6 @@
 set(_target "erhe_log")
-
 add_library(${_target})
+add_library(erhe::log ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -15,6 +15,7 @@ target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
         glm::glm
+    PRIVATE
         Microsoft.GSL::GSL
 )
 

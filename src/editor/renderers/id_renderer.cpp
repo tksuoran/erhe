@@ -213,7 +213,7 @@ void Id_renderer::render_layer(
     };
 
     const erhe::scene::Visibility_filter id_filter{
-        .require_all_bits_set           = erhe::scene::Node::c_visibility_id,
+        .require_all_bits_set           = erhe::scene::Node_visibility::id,
         .require_at_least_one_bit_set   = 0u,
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u

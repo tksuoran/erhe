@@ -93,6 +93,26 @@ auto Selection_tool::delete_selection() -> bool
                 )
             );
         }
+        if (is_light(node))
+        {
+            const auto light = as_light(node);
+
+            auto* parent = light->parent();
+            compound_context.operations.push_back(
+                std::make_shared<Light_insert_remove_operation>(
+                    Light_insert_remove_operation::Context{
+                        .scene          = scene_root->scene(),
+                        .layer          = *scene_root->light_layer(),
+                        .light          = light,
+                        .parent         = (parent != nullptr)
+                            ? parent->shared_from_this()
+                            : std::shared_ptr<erhe::scene::Node>{},
+                        .mode           = Scene_item_operation::Mode::remove,
+                        .selection_tool = this
+                    }
+                )
+            );
+        }
     }
     if (compound_context.operations.empty())
     {
@@ -224,7 +244,7 @@ auto Selection_tool::clear_selection() -> bool
         {
             continue;
         }
-        item->visibility_mask() &= ~erhe::scene::Node::c_visibility_selected;
+        item->visibility_mask() &= ~erhe::scene::Node_visibility::selected;
     }
 
     log_selection.trace("Clearing selection ({} items were selected)\n", m_selection.size());
@@ -289,7 +309,7 @@ auto Selection_tool::add_to_selection(
         return false;
     }
 
-    item->visibility_mask() |= erhe::scene::Node::c_visibility_selected;
+    item->visibility_mask() |= erhe::scene::Node_visibility::selected;
 
     if (!is_in_selection(item))
     {
@@ -313,7 +333,7 @@ auto Selection_tool::remove_from_selection(
         return false;
     }
 
-    item->visibility_mask() &= ~erhe::scene::Node::c_visibility_selected;
+    item->visibility_mask() &= ~erhe::scene::Node_visibility::selected;
 
     const auto i = std::remove(
         m_selection.begin(),
@@ -380,7 +400,7 @@ void Selection_tool::tool_render(const Render_context& context)
         if (is_mesh(node))
         {
             const auto& mesh = as_mesh(node);
-            for (const auto& primitive : mesh->data.primitives)
+            for (const auto& primitive : mesh->mesh_data.primitives)
             {
                 if (!primitive.source_geometry)
                 {

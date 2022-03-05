@@ -9,16 +9,28 @@ namespace erhe::physics
 
 class IConstraint;
 class IDebug_draw;
+class IMotion_state;
 class IRigid_body;
+class IRigid_body_create_info;
 
 class IWorld
 {
 public:
-    virtual ~IWorld(){}
+    virtual ~IWorld();
 
-    [[nodiscard]] static auto create() -> IWorld*;
+    [[nodiscard]] static auto create       () -> IWorld*;
     [[nodiscard]] static auto create_shared() -> std::shared_ptr<IWorld>;
     [[nodiscard]] static auto create_unique() -> std::unique_ptr<IWorld>;
+
+    [[nodiscard]] auto create_rigid_body(
+        const IRigid_body_create_info& create_info,
+        IMotion_state*                 motion_state
+    ) -> IRigid_body*;
+
+    [[nodiscard]] auto create_rigid_body_shared(
+        const IRigid_body_create_info& create_info,
+        IMotion_state*                 motion_state
+    ) -> std::shared_ptr<IRigid_body>;
 
     [[nodiscard]] virtual auto is_physics_updates_enabled() const -> bool      = 0;
     [[nodiscard]] virtual auto get_gravity               () const -> glm::vec3 = 0;

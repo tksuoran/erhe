@@ -91,9 +91,10 @@ Merge_operation::Merge_operation(Context&& context)
     using erhe::primitive::Normal_style;
     using glm::mat4;
 
+    erhe::physics::Compound_shape_create_info compound_shape_create_info;
+
     erhe::geometry::Geometry combined_geometry;
-    m_state_before.selection      = context.selection_tool->selection();
-    m_state_after.collision_shape = erhe::physics::ICollision_shape::create_compound_shape_shared();
+    m_state_before.selection = context.selection_tool->selection();
     m_state_after.mass = 0.0f;
 
     bool first_mesh                = true;
@@ -134,7 +135,7 @@ Merge_operation::Merge_operation(Context&& context)
 
         if (node_physics && (rigid_body != nullptr))
         {
-            m_state_after.collision_shape->add_child_shape(
+            compound_shape_create_info.children.emplace_back(
                 collision_shape,
                 erhe::physics::Transform{transform}
             );
@@ -143,9 +144,9 @@ Merge_operation::Merge_operation(Context&& context)
             m_state_after.mass += child_mass;
         }
 
-        for (auto& primitive : mesh->data.primitives)
+        for (auto& primitive : mesh->mesh_data.primitives)
         {
-            auto geometry = primitive.source_geometry;
+            const auto& geometry = primitive.source_geometry;
             if (!geometry)
             {
                 continue;
@@ -163,7 +164,7 @@ Merge_operation::Merge_operation(Context&& context)
 
         m_source_entries.emplace_back(
             mesh,
-            mesh->data.primitives
+            mesh->mesh_data.primitives
         );
     }
 
@@ -174,6 +175,7 @@ Merge_operation::Merge_operation(Context&& context)
 
     m_state_before.rigidbody_from_node = erhe::physics::Transform{};
     erhe::physics::Transform principal_axis_transform;
+    m_state_after.collision_shape = erhe::physics::ICollision_shape::create_compound_shape_shared(compound_shape_create_info);
     m_state_after.collision_shape->calculate_principal_axis_transform(
         child_masses,
         principal_axis_transform,
@@ -206,13 +208,13 @@ void Merge_operation::execute() const
     bool first_entry = true;
     for (const auto& entry : m_source_entries)
     {
-        auto mesh = entry.mesh;
+        const auto& mesh = entry.mesh;
         if (first_entry)
         {
             // For first mesh: Replace mesh primitives
-            mesh->data.primitives.resize(1);
+            mesh->mesh_data.primitives.resize(1);
 
-            mesh->data.primitives.front() = m_combined_primitive;
+            mesh->mesh_data.primitives.front() = m_combined_primitive;
             first_entry = false;
             auto node_physics = get_physics_node(mesh.get());
             if (node_physics)
@@ -250,8 +252,8 @@ void Merge_operation::undo() const
     for (const auto& entry : m_source_entries)
     {
         // For all entries:
-        auto mesh = entry.mesh;
-        mesh->data.primitives = entry.primitives;
+        auto& mesh = entry.mesh;
+        mesh->mesh_data.primitives = entry.primitives;
         if (first_entry)
         {
             first_entry = false;

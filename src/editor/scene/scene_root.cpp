@@ -1,8 +1,12 @@
 #include "scene/scene_root.hpp"
+
+#include "editor_view.hpp"
+#include "log.hpp"
+
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
-#include "log.hpp"
+#include "tools/selection_tool.hpp"
 
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/primitive/material.hpp"
@@ -29,11 +33,52 @@ using erhe::scene::Light;
 using erhe::scene::Light_layer;
 using erhe::scene::Mesh;
 using erhe::scene::Mesh_layer;
+using erhe::scene::Node_visibility;
 using erhe::scene::Scene;
 using erhe::primitive::Material;
 
+Instance::Instance(
+    const std::shared_ptr<erhe::scene::Mesh>& mesh,
+    const std::shared_ptr<Node_physics>&      node_physics,
+    const std::shared_ptr<Node_raytrace>&     node_raytrace
+)
+    : mesh         {mesh}
+    , node_physics {node_physics}
+    , node_raytrace{node_raytrace}
+{
+}
+
+Instance::~Instance()
+{
+}
+
+auto Create_new_camera_command::try_call(Command_context& context) -> bool
+{
+    static_cast<void>(context);
+
+    return m_scene_root.create_new_camera();
+}
+
+auto Create_new_empty_node_command::try_call(Command_context& context) -> bool
+{
+    static_cast<void>(context);
+
+    return m_scene_root.create_new_empty_node();
+}
+
+auto Create_new_light_command::try_call(Command_context& context) -> bool
+{
+    static_cast<void>(context);
+
+    return m_scene_root.create_new_light();
+}
+
 Scene_root::Scene_root()
     : Component{c_name}
+    , m_create_new_camera_command    {*this}
+    , m_create_new_empty_node_command{*this}
+    , m_create_new_light_command     {*this}
+
 {
 }
 
@@ -41,6 +86,7 @@ Scene_root::~Scene_root() = default;
 
 void Scene_root::connect()
 {
+    require<Editor_view>();
 }
 
 void Scene_root::initialize_component()
@@ -51,11 +97,11 @@ void Scene_root::initialize_component()
     using std::make_shared;
     using std::make_unique;
     using erhe::scene::Node;
-    m_content_layer    = make_shared<Mesh_layer>("content",    Node::c_visibility_content);
-    m_controller_layer = make_shared<Mesh_layer>("controller", Node::c_visibility_controller);
-    m_tool_layer       = make_shared<Mesh_layer>("tool",       Node::c_visibility_tool);
-    m_gui_layer        = make_shared<Mesh_layer>("gui",        Node::c_visibility_gui);
-    m_brush_layer      = make_shared<Mesh_layer>("brush",      Node::c_visibility_brush);
+    m_content_layer    = make_shared<Mesh_layer>("content",    Node_visibility::content);
+    m_controller_layer = make_shared<Mesh_layer>("controller", Node_visibility::controller);
+    m_tool_layer       = make_shared<Mesh_layer>("tool",       Node_visibility::tool);
+    m_gui_layer        = make_shared<Mesh_layer>("gui",        Node_visibility::gui);
+    m_brush_layer      = make_shared<Mesh_layer>("brush",      Node_visibility::brush);
     m_light_layer      = make_shared<Light_layer>("lights");
 
     m_scene            = std::make_unique<Scene>();
@@ -68,6 +114,72 @@ void Scene_root::initialize_component()
 
     m_physics_world  = erhe::physics::IWorld::create_unique();
     m_raytrace_scene = erhe::raytrace::IScene::create_unique("root");
+
+    auto view = get<Editor_view>();
+
+    view->register_command   (&m_create_new_camera_command);
+    view->register_command   (&m_create_new_empty_node_command);
+    view->register_command   (&m_create_new_light_command);
+    view->bind_command_to_key(&m_create_new_camera_command,     erhe::toolkit::Key_f2, true);
+    view->bind_command_to_key(&m_create_new_empty_node_command, erhe::toolkit::Key_f3, true);
+    view->bind_command_to_key(&m_create_new_light_command,      erhe::toolkit::Key_f4, true);
+}
+
+void Scene_root::attach_to_selection(const std::shared_ptr<erhe::scene::Node>& node)
+{
+    auto selection_tool = get<Selection_tool>();
+    if (!selection_tool->selection().empty())
+    {
+        const auto& entry = selection_tool->selection().front();
+        entry->attach(node);
+        node->set_parent_from_node(erhe::scene::Transform{});
+    }
+}
+
+auto Scene_root::create_new_camera() -> bool
+{
+    auto camera = std::make_shared<erhe::scene::Camera>("Camera");
+    camera->projection()->fov_y           = glm::radians(35.0f);
+    camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
+    camera->projection()->z_near          = 0.03f;
+    camera->projection()->z_far           = 200.0f;
+    scene().cameras.push_back(camera);
+    scene().nodes.emplace_back(camera);
+    scene().nodes_sorted = false;
+    attach_to_selection(camera);
+    return true;
+}
+
+auto Scene_root::create_new_empty_node() -> bool
+{
+    auto node = std::make_shared<erhe::scene::Node>("Empty Node");
+    scene().nodes.emplace_back(node);
+    scene().nodes_sorted = false;
+    attach_to_selection(node);
+    return true;
+}
+
+auto Scene_root::create_new_light() -> bool
+{
+    auto light = std::make_shared<Light>("Light");
+    light->type                          = Light::Type::directional;
+    light->color                         = glm::vec3{1.0, 1.0f, 1.0};
+    light->intensity                     =  1.0f;
+    light->range                         =  0.0f;
+    light->projection()->projection_type = erhe::scene::Projection::Type::orthogonal;
+    light->projection()->ortho_left      = -10.0f;
+    light->projection()->ortho_width     =  20.0f;
+    light->projection()->ortho_bottom    = -10.0f;
+    light->projection()->ortho_height    =  20.0f;
+    light->projection()->z_near          =   5.0f;
+    light->projection()->z_far           =  20.0f;
+    attach_to_selection(light);
+    add_to_scene_layer(
+        scene(),
+        *light_layer(),
+        light
+    );
+    return true;
 }
 
 // TODO This is not thread safe
@@ -104,6 +216,38 @@ auto Scene_root::scene() const -> const erhe::scene::Scene&
 {
     ERHE_VERIFY(m_scene);
     return *m_scene.get();
+}
+
+void Scene_root::add_instance(const Instance& instance)
+{
+    instance.mesh->visibility_mask() |=
+        (
+            Node_visibility::content     |
+            Node_visibility::shadow_cast |
+            Node_visibility::id
+        );
+
+    add_to_scene_layer(
+        scene(),
+        *content_layer(),
+        instance.mesh
+    );
+
+    if (instance.node_physics)
+    {
+        add_to_physics_world(
+            physics_world(),
+            instance.node_physics
+        );
+    }
+
+    if (instance.node_raytrace)
+    {
+        add_to_raytrace_scene(
+            raytrace_scene(),
+            instance.node_raytrace
+        );
+    }
 }
 
 void Scene_root::add(

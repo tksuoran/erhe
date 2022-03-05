@@ -64,15 +64,14 @@ vec3 tonemap_reinhard(vec3 color)
 }
 
 
-vec3 tonemap_simple(vec3 x) {
-
-	// Reinhard with toe.
+vec3 tonemap_simple(vec3 x)
+{
 	vec3 a = vec3(
         pow(x.r, 1.25),
         pow(x.g, 1.25),
         pow(x.b, 1.25)
-    ); // toe
-	return a / (a + vec3(1.0)); // Shoulder
+    );
+	return a / (a + vec3(1.0));
 }
 
 vec3 tonemap_ue3(vec3 x) {
@@ -97,6 +96,11 @@ void main()
     vec3 color = sum;
 
     //out_color.rgb = color;
+    color   = max(vec3(0.0), color);
+    //color.r = max(0.0, color.r);
+    //color.g = max(0.0, color.g);
+    //color.b = max(0.0, color.b);
+    //out_color.rgb = tonemap(color);
     out_color.rgb = tonemap_reinhard(color);
     //out_color.rgb = tonemap_simple(color);
     //out_color.rgb = tonemap_ue3(color);

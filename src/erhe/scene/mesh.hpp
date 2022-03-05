@@ -36,7 +36,7 @@ public:
 
     [[nodiscard]] auto node_type() const -> const char* override;
 
-    Mesh_data data;
+    Mesh_data mesh_data;
 
     erhe::toolkit::Unique_id<Mesh> m_id;
 };

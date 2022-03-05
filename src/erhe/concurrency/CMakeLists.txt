@@ -1,6 +1,6 @@
 set(_target "erhe_concurrency")
-
 add_library(${_target})
+add_library(erhe::concurrency ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES

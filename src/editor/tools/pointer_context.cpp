@@ -294,9 +294,9 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
             m_hover_layer       = mesh_primitive.layer;
             m_hover_primitive   = mesh_primitive.mesh_primitive_index;
             m_hover_local_index = mesh_primitive.local_index;
-            m_hover_tool        = (m_hover_layer->flags & erhe::scene::Node::c_visibility_tool   ) == erhe::scene::Node::c_visibility_tool;
-            m_hover_content     = (m_hover_layer->flags & erhe::scene::Node::c_visibility_content) == erhe::scene::Node::c_visibility_content;
-            m_hover_gui         = (m_hover_layer->flags & erhe::scene::Node::c_visibility_gui    ) == erhe::scene::Node::c_visibility_gui;
+            m_hover_tool        = (m_hover_layer->flags & erhe::scene::Node_visibility::tool   ) == erhe::scene::Node_visibility::tool;
+            m_hover_content     = (m_hover_layer->flags & erhe::scene::Node_visibility::content) == erhe::scene::Node_visibility::content;
+            m_hover_gui         = (m_hover_layer->flags & erhe::scene::Node_visibility::gui    ) == erhe::scene::Node_visibility::gui;
             m_log_window->frame_log(
                 "hover mesh = {} primitive = {} local index {} tool = {} content = {} gui = {}",
                 m_hover_mesh ? m_hover_mesh->name() : "()",
@@ -308,7 +308,7 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
             );
             if (m_hover_mesh)
             {
-                const auto& primitive = m_hover_mesh->data.primitives[m_hover_primitive];
+                const auto& primitive = m_hover_mesh->mesh_data.primitives[m_hover_primitive];
                 m_hover_geometry = primitive.source_geometry.get();
                 m_hover_normal   = {};
                 if (m_hover_geometry != nullptr)

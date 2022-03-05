@@ -260,7 +260,7 @@ void Trs_tool::Visualization::update_visibility(
 {
     ERHE_PROFILE_FUNCTION
 
-    constexpr uint64_t visible_mask = erhe::scene::Node::c_visibility_tool | erhe::scene::Node::c_visibility_id;
+    constexpr uint64_t visible_mask = erhe::scene::Node_visibility::tool | erhe::scene::Node_visibility::id;
     const bool show_all = visible && (active_handle == Handle::e_handle_none);
     y_arrow_cylinder_mesh->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_y ) || show_all) ? visible_mask : 0;
     z_arrow_cylinder_mesh->visibility_mask() = show_translate && (!hide_inactive || (active_handle == Handle::e_handle_translate_z ) || show_all) ? visible_mask : 0;
@@ -283,18 +283,18 @@ void Trs_tool::Visualization::update_visibility(
     y_rotate_ring_mesh   ->visibility_mask() = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_y    ) || show_all) ? visible_mask : 0;
     z_rotate_ring_mesh   ->visibility_mask() = show_rotate    && (!hide_inactive || (active_handle == Handle::e_handle_rotate_z    ) || show_all) ? visible_mask : 0;
 
-    x_arrow_cylinder_mesh->data.primitives.front().material = (active_handle == Handle::e_handle_translate_x ) ? highlight_material : x_material;
-    x_arrow_cone_mesh    ->data.primitives.front().material = (active_handle == Handle::e_handle_translate_x ) ? highlight_material : x_material;
-    y_arrow_cylinder_mesh->data.primitives.front().material = (active_handle == Handle::e_handle_translate_y ) ? highlight_material : y_material;
-    y_arrow_cone_mesh    ->data.primitives.front().material = (active_handle == Handle::e_handle_translate_y ) ? highlight_material : y_material;
-    z_arrow_cylinder_mesh->data.primitives.front().material = (active_handle == Handle::e_handle_translate_z ) ? highlight_material : z_material;
-    z_arrow_cone_mesh    ->data.primitives.front().material = (active_handle == Handle::e_handle_translate_z ) ? highlight_material : z_material;
-    xy_box_mesh          ->data.primitives.front().material = (active_handle == Handle::e_handle_translate_xy) ? highlight_material : z_material;
-    xz_box_mesh          ->data.primitives.front().material = (active_handle == Handle::e_handle_translate_xz) ? highlight_material : y_material;
-    yz_box_mesh          ->data.primitives.front().material = (active_handle == Handle::e_handle_translate_yz) ? highlight_material : x_material;
-    x_rotate_ring_mesh   ->data.primitives.front().material = (active_handle == Handle::e_handle_rotate_x    ) ? highlight_material : x_material;
-    y_rotate_ring_mesh   ->data.primitives.front().material = (active_handle == Handle::e_handle_rotate_y    ) ? highlight_material : y_material;
-    z_rotate_ring_mesh   ->data.primitives.front().material = (active_handle == Handle::e_handle_rotate_z    ) ? highlight_material : z_material;
+    x_arrow_cylinder_mesh->mesh_data.primitives.front().material = (active_handle == Handle::e_handle_translate_x ) ? highlight_material : x_material;
+    x_arrow_cone_mesh    ->mesh_data.primitives.front().material = (active_handle == Handle::e_handle_translate_x ) ? highlight_material : x_material;
+    y_arrow_cylinder_mesh->mesh_data.primitives.front().material = (active_handle == Handle::e_handle_translate_y ) ? highlight_material : y_material;
+    y_arrow_cone_mesh    ->mesh_data.primitives.front().material = (active_handle == Handle::e_handle_translate_y ) ? highlight_material : y_material;
+    z_arrow_cylinder_mesh->mesh_data.primitives.front().material = (active_handle == Handle::e_handle_translate_z ) ? highlight_material : z_material;
+    z_arrow_cone_mesh    ->mesh_data.primitives.front().material = (active_handle == Handle::e_handle_translate_z ) ? highlight_material : z_material;
+    xy_box_mesh          ->mesh_data.primitives.front().material = (active_handle == Handle::e_handle_translate_xy) ? highlight_material : z_material;
+    xz_box_mesh          ->mesh_data.primitives.front().material = (active_handle == Handle::e_handle_translate_xz) ? highlight_material : y_material;
+    yz_box_mesh          ->mesh_data.primitives.front().material = (active_handle == Handle::e_handle_translate_yz) ? highlight_material : x_material;
+    x_rotate_ring_mesh   ->mesh_data.primitives.front().material = (active_handle == Handle::e_handle_rotate_x    ) ? highlight_material : x_material;
+    y_rotate_ring_mesh   ->mesh_data.primitives.front().material = (active_handle == Handle::e_handle_rotate_y    ) ? highlight_material : y_material;
+    z_rotate_ring_mesh   ->mesh_data.primitives.front().material = (active_handle == Handle::e_handle_rotate_z    ) ? highlight_material : z_material;
 }
 
 auto Trs_tool::Visualization::make_mesh(
@@ -327,10 +327,15 @@ void Trs_tool::Visualization::initialize(
     Scene_root&  scene_root
 )
 {
-    x_material         = scene_root.make_material("x",         vec4{1.00f, 0.00f, 0.0f, 1.0f});
-    y_material         = scene_root.make_material("y",         vec4{0.23f, 1.00f, 0.0f, 1.0f});
-    z_material         = scene_root.make_material("z",         vec4{0.00f, 0.23f, 1.0f, 1.0f});
-    highlight_material = scene_root.make_material("highlight", vec4{1.00f, 0.70f, 0.1f, 1.0f});
+    x_material         = scene_root.make_material("x",         vec3{1.00f, 0.00f, 0.0f});
+    y_material         = scene_root.make_material("y",         vec3{0.23f, 1.00f, 0.0f});
+    z_material         = scene_root.make_material("z",         vec3{0.00f, 0.23f, 1.0f});
+    highlight_material = scene_root.make_material("highlight", vec3{1.00f, 0.70f, 0.1f});
+
+    x_material        ->visible = false;
+    y_material        ->visible = false;
+    z_material        ->visible = false;
+    highlight_material->visible = false;
 
     constexpr float arrow_cylinder_length    = 2.5f;
     constexpr float arrow_cone_length        = 1.0f;

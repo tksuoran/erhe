@@ -50,7 +50,7 @@ class Bullet_world
 public:
     Bullet_world  ();
     ~Bullet_world ();
-    Bullet_world(const Bullet_world&)                    = delete;
+    Bullet_world  (const Bullet_world&)                  = delete;
     auto operator=(const Bullet_world&) -> Bullet_world& = delete;
     Bullet_world  (Bullet_world&&)                       = delete;
     auto operator=(Bullet_world&&) -> Bullet_world&      = delete;
@@ -70,7 +70,7 @@ public:
     void debug_draw             ()                        override;
 
 private:
-    bool                                m_physics_enabled{true};
+    bool                                m_physics_enabled{false};
     Debug_draw_adapter                  m_debug_draw_adapter;
     btDefaultCollisionConfiguration     m_bullet_collision_configuration;
     btCollisionDispatcher               m_bullet_collision_dispatcher;

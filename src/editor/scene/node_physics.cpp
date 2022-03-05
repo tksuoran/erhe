@@ -1,6 +1,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/helpers.hpp"
 
+#include "erhe/physics/iworld.hpp"
 #include "erhe/physics/log.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -19,7 +20,7 @@ Node_physics::Node_physics(
 )
     : m_rigidbody_from_node{}
     , m_node_from_rigidbody{}
-    , m_rigid_body         {IRigid_body::create_shared(create_info, this)}
+    , m_rigid_body         {create_info.world.create_rigid_body_shared(create_info, this)}
     , m_collision_shape    {create_info.collision_shape}
 {
     m_flag_bits |= INode_attachment::c_flag_bit_is_physics;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "commands/command.hpp"
+
 #include "scene/collision_generator.hpp"
 #include "scene/frame_controller.hpp"
 
@@ -66,10 +68,74 @@ namespace editor
 class Debug_draw;
 class Mesh_memory;
 class Node_physics;
+class Node_raytrace;
 class Raytrace_primitive;
 class Scene_root;
 class Brush;
 
+
+class Instance
+{
+public:
+    Instance(
+        const std::shared_ptr<erhe::scene::Mesh>& mesh,
+        const std::shared_ptr<Node_physics>&      node_physics,
+        const std::shared_ptr<Node_raytrace>&     node_raytrace
+    );
+    ~Instance();
+
+    std::shared_ptr<erhe::scene::Mesh> mesh;
+    std::shared_ptr<Node_physics>      node_physics;
+    std::shared_ptr<Node_raytrace>     node_raytrace;
+};
+
+class Create_new_camera_command
+    : public Command
+{
+public:
+    explicit Create_new_camera_command(Scene_root& scene_root)
+        : Command     {"Scene_root.create_new_camera"}
+        , m_scene_root{scene_root}
+    {
+    }
+
+    auto try_call(Command_context& context) -> bool override;
+
+private:
+    Scene_root& m_scene_root;
+};
+
+class Create_new_empty_node_command
+    : public Command
+{
+public:
+    explicit Create_new_empty_node_command(Scene_root& scene_root)
+        : Command       {"Editor_tools.create_new_empty_node"}
+        , m_scene_root{scene_root}
+    {
+    }
+
+    auto try_call(Command_context& context) -> bool override;
+
+private:
+    Scene_root& m_scene_root;
+};
+
+class Create_new_light_command
+    : public Command
+{
+public:
+    explicit Create_new_light_command(Scene_root& scene_root)
+        : Command     {"Editor_tools.create_new_light"}
+        , m_scene_root{scene_root}
+    {
+    }
+
+    auto try_call(Command_context& context) -> bool override;
+
+private:
+    Scene_root& m_scene_root;
+};
 
 class Scene_root
     : public erhe::components::Component
@@ -87,6 +153,12 @@ public:
     void initialize_component() override;
 
     // Public API
+    auto create_new_camera    () -> bool;
+    auto create_new_empty_node() -> bool;
+    auto create_new_light     () -> bool;
+
+    void attach_to_selection(const std::shared_ptr<erhe::scene::Node>& node);
+
     template <typename ...Args>
     auto make_material(
         const std::string_view name,
@@ -122,6 +194,8 @@ public:
     [[nodiscard]] auto scene           () -> erhe::scene::Scene&;
     [[nodiscard]] auto scene           () const -> const erhe::scene::Scene&;
 
+    void add_instance(const Instance& instance);
+
     auto camera_combo(
         const char*            label,
         erhe::scene::ICamera*& camera,
@@ -137,6 +211,11 @@ public:
     void sort_lights();
 
 private:
+    // Commands
+    Create_new_camera_command     m_create_new_camera_command;
+    Create_new_empty_node_command m_create_new_empty_node_command;
+    Create_new_light_command      m_create_new_light_command;
+
     mutable std::mutex                                      m_materials_mutex;
     mutable std::mutex                                      m_scene_mutex;
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;

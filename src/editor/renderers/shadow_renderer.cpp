@@ -158,7 +158,7 @@ void Shadow_renderer::render(const Render_parameters& parameters)
     gl::viewport(m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
 
     erhe::scene::Visibility_filter shadow_filter{
-        .require_all_bits_set           = erhe::scene::Node::c_visibility_shadow_cast,
+        .require_all_bits_set           = erhe::scene::Node_visibility::shadow_cast,
         .require_at_least_one_bit_set   = 0u,
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u

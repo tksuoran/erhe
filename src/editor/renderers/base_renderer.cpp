@@ -130,7 +130,7 @@ auto Base_renderer::update_primitive_buffer(
             continue;
         }
 
-        const auto& mesh_data = mesh->data;
+        const auto& mesh_data = mesh->mesh_data;
 
         size_t mesh_primitive_index{0};
         for (const auto& primitive : mesh_data.primitives)
@@ -308,7 +308,6 @@ auto Base_renderer::update_material_buffer(
             : 0;
         write(material_gpu_data, m_material_writer.write_offset + offsets.metallic    , as_span(material->metallic    ));
         write(material_gpu_data, m_material_writer.write_offset + offsets.roughness   , as_span(material->roughness   ));
-        write(material_gpu_data, m_material_writer.write_offset + offsets.anisotropy  , as_span(material->anisotropy  ));
         write(material_gpu_data, m_material_writer.write_offset + offsets.transparency, as_span(material->transparency));
         write(material_gpu_data, m_material_writer.write_offset + offsets.base_color  , as_span(material->base_color  ));
         write(material_gpu_data, m_material_writer.write_offset + offsets.emissive    , as_span(material->emissive    ));
@@ -391,7 +390,7 @@ auto Base_renderer::update_draw_indirect_buffer(
         {
             continue;
         }
-        for (auto& primitive : mesh->data.primitives)
+        for (auto& primitive : mesh->mesh_data.primitives)
         {
             const auto& primitive_geometry = primitive.gl_primitive_geometry;
             const auto  index_range        = primitive_geometry.index_range(primitive_mode);

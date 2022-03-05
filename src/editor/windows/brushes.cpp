@@ -40,6 +40,7 @@ using glm::vec4;
 using erhe::geometry::Polygon; // Resolve conflict with wingdi.h BOOL Polygon(HDC,const POINT *,int)
 using erhe::geometry::Polygon_id;
 using erhe::scene::Node;
+using erhe::scene::Node_visibility;
 
 auto Brush_tool_preview_command::try_call(Command_context& context) -> bool
 {
@@ -382,7 +383,7 @@ void Brushes::update_mesh_node_transform()
     }
     m_brush_mesh->set_parent_from_node(transform);
 
-    auto& primitive = m_brush_mesh->data.primitives.front();
+    auto& primitive = m_brush_mesh->mesh_data.primitives.front();
     primitive.gl_primitive_geometry = brush_scaled.gl_primitive_geometry;
     primitive.rt_primitive_geometry = brush_scaled.rt_primitive->primitive_geometry;
     primitive.rt_vertex_buffer      = brush_scaled.rt_primitive->vertex_buffer;
@@ -402,18 +403,25 @@ void Brushes::do_insert_operation()
     log_brush.trace("{} scale = {}\n", __func__, m_transform_scale);
 
     const auto hover_from_brush = get_brush_transform();
-    const auto world_from_brush = m_hover_mesh->world_from_node() * hover_from_brush;
-    const auto material         = m_materials->selected_material();
-    const auto instance         = m_brush->make_instance(
-        world_from_brush,
-        material,
-        m_transform_scale
-    );
-    instance.mesh->visibility_mask() &= ~Node::c_visibility_brush;
+    //const auto world_from_brush = m_hover_mesh->world_from_node() * hover_from_brush;
+    //const auto material         = m_materials->selected_material();
+    const Instance_create_info brush_instance_create_info
+    {
+        .physics_world   = m_scene_root->physics_world(),
+        .world_from_node = m_hover_mesh->world_from_node() * hover_from_brush,
+        .material        = m_materials->selected_material(),
+        .scale           = m_transform_scale
+    };
+    const auto instance = m_brush->make_instance(brush_instance_create_info);
+    //    world_from_brush,
+    //    material,
+    //    m_transform_scale
+    //);
+    instance.mesh->visibility_mask() &= ~Node_visibility::brush;
     instance.mesh->visibility_mask() |=
-        (Node::c_visibility_content     |
-         Node::c_visibility_shadow_cast |
-         Node::c_visibility_id);
+        (Node_visibility::content     |
+         Node_visibility::shadow_cast |
+         Node_visibility::id);
 
     auto op = std::make_shared<Mesh_insert_remove_operation>(
         Mesh_insert_remove_operation::Context{
@@ -461,8 +469,8 @@ void Brushes::add_brush_mesh()
     );
     m_scene_root->add(m_brush_mesh, m_scene_root->brush_layer());
 
-    m_brush_mesh->visibility_mask() &= ~(Node::c_visibility_id);
-    m_brush_mesh->visibility_mask() |= Node::c_visibility_brush;
+    m_brush_mesh->visibility_mask() &= ~(Node_visibility::id);
+    m_brush_mesh->visibility_mask() |= Node_visibility::brush;
     update_mesh_node_transform();
 }
 

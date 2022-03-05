@@ -256,17 +256,17 @@ target_link_libraries(
     ${_target}
     PRIVATE
     cxxopts
-    erhe_components
-    erhe_concurrency
-    erhe_geometry
-    erhe_gl
-    erhe_graphics
-    erhe_log
-    erhe_physics
-    erhe_primitive
-    erhe_scene
-    erhe_toolkit
-    erhe_ui
+    erhe::components
+    erhe::concurrency
+    erhe::geometry
+    erhe::gl
+    erhe::graphics
+    erhe::log
+    erhe::physics
+    erhe::primitive
+    erhe::scene
+    erhe::toolkit
+    erhe::ui
     imgui
     ghc_filesystem
     optional_lite

@@ -28,14 +28,6 @@ public:
         return true;
     }
 
-    void add_child_shape(
-        const std::shared_ptr<ICollision_shape>&,
-        const Transform
-    ) override
-    {
-        //assert(false);
-    }
-
     virtual void calculate_principal_axis_transform(
         const std::vector<float>& /*child_masses*/,
         Transform&                /*principal_transform*/,

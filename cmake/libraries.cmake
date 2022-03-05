@@ -133,6 +133,17 @@ FetchContent_Declare(
 #)
 
 FetchContent_Declare(
+    JoltPhysics
+    #GIT_REPOSITORY  https://github.com/jrouwe/JoltPhysics.git
+    #GIT_TAG         master
+    GIT_REPOSITORY  https://github.com/tksuoran/JoltPhysics.git
+    GIT_TAG         cmake
+    GIT_SHALLOW     TRUE
+    GIT_PROGRESS    TRUE
+)
+
+
+FetchContent_Declare(
     lunasvg
     GIT_REPOSITORY  https://github.com/sammycage/lunasvg.git
     GIT_TAG         master

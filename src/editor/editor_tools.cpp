@@ -18,6 +18,10 @@ void Editor_tools::connect()
     m_editor_imgui_windows = require<Editor_imgui_windows>();
 }
 
+void Editor_tools::initialize_component()
+{
+}
+
 void Editor_tools::register_tool(Tool* tool)
 {
     const std::lock_guard<std::mutex> lock{m_mutex};

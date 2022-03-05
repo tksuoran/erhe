@@ -32,10 +32,10 @@ public:
     explicit Pipeline(Pipeline_data&& create_info);
     ~Pipeline();
 
-    Pipeline(const Pipeline&)       = delete;
-    auto operator=(const Pipeline&) = delete;
-    Pipeline(Pipeline&&)            = delete;
-    auto operator=(Pipeline&&)      = delete;
+    Pipeline(const Pipeline& other);
+    auto operator=(const Pipeline& other) -> Pipeline&;
+    Pipeline(Pipeline&&)       = delete; // TODO
+    auto operator=(Pipeline&&) = delete; // TODO
 
     Pipeline_data data;
 

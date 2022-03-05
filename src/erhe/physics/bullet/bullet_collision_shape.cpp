@@ -148,15 +148,6 @@ auto Bullet_collision_shape::is_convex() const -> bool
     return true;
 }
 
-void Bullet_collision_shape::add_child_shape(
-    const std::shared_ptr<ICollision_shape>& /*shape*/,
-    const Transform                          /*transform*/
-)
-{
-    log_physics.error("Bullet_collision_shape::Bullet_collision_shape::add_child_shape() called\n");
-    assert(false);
-}
-
 void Bullet_collision_shape::calculate_principal_axis_transform(
     const std::vector<float>& /*child_masses*/,
     Transform&                /*principal_transform*/,

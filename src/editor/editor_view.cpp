@@ -255,8 +255,11 @@ void Editor_view::on_key(
 {
     m_editor_imgui_windows->on_key(
         static_cast<signed int>(code),
+        modifier_mask,
         pressed
     );
+
+    m_pointer_context->update_keyboard(pressed, code, modifier_mask);
 
     Command_context context{
         *this,

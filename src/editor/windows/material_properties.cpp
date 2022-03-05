@@ -42,10 +42,10 @@ void Material_properties::imgui()
         if (selected_material)
         {
             ImGui::InputText("Name", &selected_material->name);
-            ImGui::SliderFloat("Metallic",   &selected_material->metallic,    0.0f, 1.0f);
-            ImGui::SliderFloat("Anisotropy", &selected_material->anisotropy, -1.0f, 1.0f);
-            ImGui::SliderFloat("Roughness",  &selected_material->roughness,   0.0f, 1.0f);
-            ImGui::ColorEdit4 ("Base Color", &selected_material->base_color.x, ImGuiColorEditFlags_Float);
+            ImGui::SliderFloat("Metallic",    &selected_material->metallic,    0.0f, 1.0f);
+            ImGui::SliderFloat("Roughness X", &selected_material->roughness.x, 0.0f, 1.0f);
+            ImGui::SliderFloat("Roughness Y", &selected_material->roughness.y, 0.0f, 1.0f);
+            ImGui::ColorEdit4 ("Base Color",  &selected_material->base_color.x, ImGuiColorEditFlags_Float);
         }
     }
 }

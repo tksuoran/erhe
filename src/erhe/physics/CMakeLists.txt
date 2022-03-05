@@ -1,6 +1,6 @@
 set(_target "erhe_physics")
-
 add_library(${_target})
+add_library(erhe::physics ALIAS ${_target})
 
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "bullet")
     erhe_target_sources_grouped(
@@ -29,6 +29,31 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "bullet")
         BulletDynamics
         BulletCollision
         LinearMath
+    )
+
+endif ()
+
+if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        jolt/jolt_collision_shape.cpp
+        jolt/jolt_collision_shape.hpp
+        jolt/jolt_compound_shape.cpp
+        jolt/jolt_compound_shape.hpp
+        jolt/jolt_constraint.cpp
+        jolt/jolt_constraint.hpp
+        jolt/jolt_convex_hull_collision_shape.cpp
+        jolt/jolt_convex_hull_collision_shape.hpp
+        jolt/jolt_rigid_body.cpp
+        jolt/jolt_rigid_body.hpp
+        jolt/jolt_uniform_scaling_shape.cpp
+        jolt/jolt_uniform_scaling_shape.hpp
+        jolt/jolt_world.cpp
+        jolt/jolt_world.hpp
+        jolt/glm_conversions.hpp
+    )
+    set(impl_link_libraries
+        Jolt
     )
 
 endif ()
@@ -70,15 +95,16 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 target_link_libraries(
     ${_target}
     PUBLIC
-    ${impl_link_libraries}
-    erhe_components
-    erhe_geometry
-    erhe_log
-    erhe_primitive
-    fmt::fmt
-    glm::glm
-    optional_lite
-    Microsoft.GSL::GSL
+        ${impl_link_libraries}
+        erhe::components
+        erhe::geometry
+        erhe::log
+        erhe::primitive
+        fmt::fmt
+        glm::glm
+        optional_lite
+    PRIVATE
+        Microsoft.GSL::GSL
 )
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")

@@ -1,6 +1,6 @@
 set(_target "erhe_raytrace")
-
 add_library(${_target})
+add_library(erhe::raytrace ALIAS ${_target})
 
 if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
     erhe_target_sources_grouped(
@@ -50,13 +50,13 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 target_link_libraries(${_target}
     PRIVATE
         ${impl_link_libraries}
-        erhe_log
+        erhe::log
         fmt::fmt
         glm::glm
         Microsoft.GSL::GSL
     PUBLIC
-        erhe_primitive
-        erhe_scene
+        erhe::primitive
+        erhe::scene
 )
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")

@@ -247,7 +247,7 @@ MaterialInfo getSpecularGlossinessInfo(MaterialInfo info)
 MaterialInfo getMetallicRoughnessInfo(MaterialInfo info, float f0_ior)
 {
     info.metallic            = material.materials[v_material_index].metallic;
-    info.perceptualRoughness = material.materials[v_material_index].roughness;
+    info.perceptualRoughness = material.materials[v_material_index].roughness.x;
     vec3 f0 = vec3(f0_ior); // Achromatic f0 based on IOR.
     info.albedoColor = mix(info.baseColor.rgb * (vec3(1.0) - f0), vec3(0), info.metallic);
     info.f0          = mix(f0, info.baseColor.rgb, info.metallic);
@@ -293,7 +293,7 @@ void main()
     vec3  f_specular = vec3(0.0);
     vec3  f_diffuse  = vec3(0.0);
     vec3  f_emissive = light_block.ambient_light.rgb * materialInfo.baseColor + material.emissive.rgb;
-    float anisotropy = material.anisotropy.x;
+    //float anisotropy = material.anisotropy.x;
     float ao         = 1.0;
 
     uint  directional_light_count  = light_block.directional_light_count;
@@ -326,7 +326,7 @@ void main()
             f_specular += intensity * NdotL * BRDF_specularAnisotropicGGX(
                 materialInfo.f0, materialInfo.f90, materialInfo.alphaRoughness,
                 VdotH, NdotL, NdotV, NdotH,
-                BdotV, TdotV, TdotL, BdotL, TdotH, BdotH, anisotropy
+                BdotV, TdotV, TdotL, BdotL, TdotH, BdotH, 0.0
             );
         }
     }
@@ -358,7 +358,7 @@ void main()
             f_specular += intensity * NdotL * BRDF_specularAnisotropicGGX(
                 materialInfo.f0, materialInfo.f90, materialInfo.alphaRoughness,
                 VdotH, NdotL, NdotV, NdotH,
-                BdotV, TdotV, TdotL, BdotL, TdotH, BdotH, anisotropy
+                BdotV, TdotV, TdotL, BdotL, TdotH, BdotH, 0.0
             );
         }
     }

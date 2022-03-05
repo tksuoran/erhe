@@ -35,6 +35,127 @@ namespace editor {
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
+auto from_erhe(const erhe::toolkit::Keycode keycode) -> ImGuiKey
+{
+    switch (keycode)
+    {
+        case erhe::toolkit::Key_tab          : return ImGuiKey_Tab           ;
+        case erhe::toolkit::Key_left         : return ImGuiKey_LeftArrow     ;
+        case erhe::toolkit::Key_right        : return ImGuiKey_RightArrow    ;
+        case erhe::toolkit::Key_up           : return ImGuiKey_UpArrow       ;
+        case erhe::toolkit::Key_down         : return ImGuiKey_DownArrow     ;
+        case erhe::toolkit::Key_page_up      : return ImGuiKey_PageUp        ;
+        case erhe::toolkit::Key_page_down    : return ImGuiKey_PageDown      ;
+        case erhe::toolkit::Key_home         : return ImGuiKey_Home          ;
+        case erhe::toolkit::Key_end          : return ImGuiKey_End           ;
+        case erhe::toolkit::Key_insert       : return ImGuiKey_Insert        ;
+        case erhe::toolkit::Key_delete       : return ImGuiKey_Delete        ;
+        case erhe::toolkit::Key_backspace    : return ImGuiKey_Backspace     ;
+        case erhe::toolkit::Key_space        : return ImGuiKey_Space         ;
+        case erhe::toolkit::Key_enter        : return ImGuiKey_Enter         ;
+        case erhe::toolkit::Key_escape       : return ImGuiKey_Escape        ;
+        case erhe::toolkit::Key_left_control : return ImGuiKey_LeftCtrl      ;
+        case erhe::toolkit::Key_left_shift   : return ImGuiKey_LeftShift     ;
+        case erhe::toolkit::Key_left_alt     : return ImGuiKey_LeftAlt       ;
+        case erhe::toolkit::Key_left_super   : return ImGuiKey_LeftSuper     ;
+        case erhe::toolkit::Key_right_control: return ImGuiKey_RightCtrl     ;
+        case erhe::toolkit::Key_right_shift  : return ImGuiKey_RightShift    ;
+        case erhe::toolkit::Key_right_alt    : return ImGuiKey_RightAlt      ;
+        case erhe::toolkit::Key_right_super  : return ImGuiKey_RightSuper    ;
+        case erhe::toolkit::Key_menu         : return ImGuiKey_Menu          ;
+        case erhe::toolkit::Key_0            : return ImGuiKey_0             ;
+        case erhe::toolkit::Key_1            : return ImGuiKey_1             ;
+        case erhe::toolkit::Key_2            : return ImGuiKey_2             ;
+        case erhe::toolkit::Key_3            : return ImGuiKey_3             ;
+        case erhe::toolkit::Key_4            : return ImGuiKey_4             ;
+        case erhe::toolkit::Key_5            : return ImGuiKey_5             ;
+        case erhe::toolkit::Key_6            : return ImGuiKey_6             ;
+        case erhe::toolkit::Key_7            : return ImGuiKey_7             ;
+        case erhe::toolkit::Key_8            : return ImGuiKey_8             ;
+        case erhe::toolkit::Key_9            : return ImGuiKey_9             ;
+        case erhe::toolkit::Key_a            : return ImGuiKey_A             ;
+        case erhe::toolkit::Key_b            : return ImGuiKey_B             ;
+        case erhe::toolkit::Key_c            : return ImGuiKey_C             ;
+        case erhe::toolkit::Key_d            : return ImGuiKey_D             ;
+        case erhe::toolkit::Key_e            : return ImGuiKey_E             ;
+        case erhe::toolkit::Key_f            : return ImGuiKey_F             ;
+        case erhe::toolkit::Key_g            : return ImGuiKey_G             ;
+        case erhe::toolkit::Key_h            : return ImGuiKey_H             ;
+        case erhe::toolkit::Key_i            : return ImGuiKey_I             ;
+        case erhe::toolkit::Key_j            : return ImGuiKey_J             ;
+        case erhe::toolkit::Key_k            : return ImGuiKey_K             ;
+        case erhe::toolkit::Key_l            : return ImGuiKey_L             ;
+        case erhe::toolkit::Key_m            : return ImGuiKey_M             ;
+        case erhe::toolkit::Key_n            : return ImGuiKey_N             ;
+        case erhe::toolkit::Key_o            : return ImGuiKey_O             ;
+        case erhe::toolkit::Key_p            : return ImGuiKey_P             ;
+        case erhe::toolkit::Key_q            : return ImGuiKey_Q             ;
+        case erhe::toolkit::Key_r            : return ImGuiKey_R             ;
+        case erhe::toolkit::Key_s            : return ImGuiKey_S             ;
+        case erhe::toolkit::Key_t            : return ImGuiKey_T             ;
+        case erhe::toolkit::Key_u            : return ImGuiKey_U             ;
+        case erhe::toolkit::Key_v            : return ImGuiKey_V             ;
+        case erhe::toolkit::Key_w            : return ImGuiKey_W             ;
+        case erhe::toolkit::Key_x            : return ImGuiKey_X             ;
+        case erhe::toolkit::Key_y            : return ImGuiKey_Y             ;
+        case erhe::toolkit::Key_z            : return ImGuiKey_Z             ;
+        case erhe::toolkit::Key_f1           : return ImGuiKey_F1            ;
+        case erhe::toolkit::Key_f2           : return ImGuiKey_F2            ;
+        case erhe::toolkit::Key_f3           : return ImGuiKey_F3            ;
+        case erhe::toolkit::Key_f4           : return ImGuiKey_F4            ;
+        case erhe::toolkit::Key_f5           : return ImGuiKey_F5            ;
+        case erhe::toolkit::Key_f6           : return ImGuiKey_F6            ;
+        case erhe::toolkit::Key_f7           : return ImGuiKey_F7            ;
+        case erhe::toolkit::Key_f8           : return ImGuiKey_F8            ;
+        case erhe::toolkit::Key_f9           : return ImGuiKey_F9            ;
+        case erhe::toolkit::Key_f10          : return ImGuiKey_F10           ;
+        case erhe::toolkit::Key_f11          : return ImGuiKey_F11           ;
+        case erhe::toolkit::Key_f12          : return ImGuiKey_F12           ;
+        case erhe::toolkit::Key_apostrophe   : return ImGuiKey_Apostrophe    ;
+        case erhe::toolkit::Key_comma        : return ImGuiKey_Comma         ;
+        case erhe::toolkit::Key_minus        : return ImGuiKey_Minus         ; // -
+        case erhe::toolkit::Key_period       : return ImGuiKey_Period        ; // .
+        case erhe::toolkit::Key_slash        : return ImGuiKey_Slash         ; // /
+        case erhe::toolkit::Key_semicolon    : return ImGuiKey_Semicolon     ; // ;
+        case erhe::toolkit::Key_equal        : return ImGuiKey_Equal         ; // =
+        case erhe::toolkit::Key_left_bracket : return ImGuiKey_LeftBracket   ; // [
+        case erhe::toolkit::Key_backslash    : return ImGuiKey_Backslash     ; // \ (this text inhibit multiline comment caused by backslash)
+        case erhe::toolkit::Key_right_bracket: return ImGuiKey_RightBracket  ; // ]
+        case erhe::toolkit::Key_grave_accent : return ImGuiKey_GraveAccent   ; // `
+        case erhe::toolkit::Key_caps_lock    : return ImGuiKey_CapsLock      ;
+        case erhe::toolkit::Key_scroll_lock  : return ImGuiKey_ScrollLock    ;
+        case erhe::toolkit::Key_num_lock     : return ImGuiKey_NumLock       ;
+        case erhe::toolkit::Key_print_screen : return ImGuiKey_PrintScreen   ;
+        case erhe::toolkit::Key_pause        : return ImGuiKey_Pause         ;
+        case erhe::toolkit::Key_kp_0         : return ImGuiKey_Keypad0       ;
+        case erhe::toolkit::Key_kp_1         : return ImGuiKey_Keypad1       ;
+        case erhe::toolkit::Key_kp_2         : return ImGuiKey_Keypad2       ;
+        case erhe::toolkit::Key_kp_3         : return ImGuiKey_Keypad3       ;
+        case erhe::toolkit::Key_kp_4         : return ImGuiKey_Keypad4       ;
+        case erhe::toolkit::Key_kp_5         : return ImGuiKey_Keypad5       ;
+        case erhe::toolkit::Key_kp_6         : return ImGuiKey_Keypad6       ;
+        case erhe::toolkit::Key_kp_7         : return ImGuiKey_Keypad7       ;
+        case erhe::toolkit::Key_kp_8         : return ImGuiKey_Keypad8       ;
+        case erhe::toolkit::Key_kp_9         : return ImGuiKey_Keypad9       ;
+        case erhe::toolkit::Key_kp_decimal   : return ImGuiKey_KeypadDecimal ;
+        case erhe::toolkit::Key_kp_divide    : return ImGuiKey_KeypadDivide  ;
+        case erhe::toolkit::Key_kp_multiply  : return ImGuiKey_KeypadMultiply;
+        case erhe::toolkit::Key_kp_subtract  : return ImGuiKey_KeypadSubtract;
+        case erhe::toolkit::Key_kp_add       : return ImGuiKey_KeypadAdd     ;
+        case erhe::toolkit::Key_kp_enter     : return ImGuiKey_KeypadEnter   ;
+        case erhe::toolkit::Key_kp_equal     : return ImGuiKey_KeypadEqual   ;
+        default                              : return ImGuiKey_None          ;
+    }
+}
+
+void update_key_modifiers(ImGuiIO& io, uint32_t modifier_mask)
+{
+    io.AddKeyEvent(ImGuiKey_ModCtrl,  (modifier_mask & erhe::toolkit::Key_modifier_bit_ctrl ) != 0);
+    io.AddKeyEvent(ImGuiKey_ModShift, (modifier_mask & erhe::toolkit::Key_modifier_bit_shift) != 0);
+    io.AddKeyEvent(ImGuiKey_ModAlt,   (modifier_mask & erhe::toolkit::Key_modifier_bit_menu ) != 0);
+    io.AddKeyEvent(ImGuiKey_ModSuper, (modifier_mask & erhe::toolkit::Key_modifier_bit_super) != 0);
+}
+
 class Scoped_imgui_context
 {
 public:
@@ -63,7 +184,7 @@ Rendertarget_imgui_windows::Rendertarget_imgui_windows(
     : m_pipeline_state_tracker{components.get<erhe::graphics::OpenGL_state_tracker>()}
     , m_pointer_context       {components.get<Pointer_context>()}
     , m_name                  {name}
-    , m_mesh_layer            {"GUI Layer", erhe::scene::Node::c_visibility_gui}
+    , m_mesh_layer            {"GUI Layer", erhe::scene::Node_visibility::gui}
     , m_dots_per_meter        {dots_per_meter}
 {
     init_rendertarget(width, height);
@@ -215,8 +336,8 @@ void Rendertarget_imgui_windows::add_scene_node(
     };
     m_gui_mesh = std::make_shared<erhe::scene::Mesh>("GUI Quad", primitive);
     m_gui_mesh->visibility_mask() =
-        erhe::scene::Node::c_visibility_id |
-        erhe::scene::Node::c_visibility_gui;
+        erhe::scene::Node_visibility::id |
+        erhe::scene::Node_visibility::gui;
 
     auto rt_primitive = std::make_shared<Raytrace_primitive>(shared_geometry);
 
@@ -258,7 +379,7 @@ void Rendertarget_imgui_windows::render_mesh_layer(
             .passes            = { &m_renderpass },
             .visibility_filter =
             {
-                .require_all_bits_set = erhe::scene::Node::c_visibility_gui
+                .require_all_bits_set = erhe::scene::Node_visibility::gui
             }
         }
     );
@@ -270,15 +391,19 @@ void Rendertarget_imgui_windows::imgui_windows()
 
     begin_imgui_frame();
 
-    for (auto imgui_window : m_imgui_windows)
+    size_t i = 0;
+    for (auto& imgui_window : m_imgui_windows)
     {
         if (imgui_window->is_visibile())
         {
+            auto imgui_id = fmt::format("##rendertarget_window-{}", ++i);
+            ImGui::PushID(imgui_id.c_str());
             if (imgui_window->begin())
             {
                 imgui_window->imgui();
             }
             imgui_window->end();
+            ImGui::PopID();
         }
     }
 
@@ -291,44 +416,17 @@ void Rendertarget_imgui_windows::mouse_button(const uint32_t button, bool presse
     io.MouseDown[button] = pressed;
 }
 
-void Rendertarget_imgui_windows::on_key(const signed int keycode, const bool pressed)
+void Rendertarget_imgui_windows::on_key(
+    const signed int keycode,
+    const uint32_t   modifier_mask,
+    const bool       pressed
+)
 {
     using erhe::toolkit::Keycode;
 
     ImGuiIO& io = ImGui::GetIO(m_imgui_context);
-    if (
-        (keycode >= 0) &&
-        (keycode < IM_ARRAYSIZE(io.KeysDown))
-    )
-    {
-        if (pressed)
-        {
-            io.KeysDown[keycode] = true;
-        }
-        else
-        {
-            io.KeysDown[keycode] = false;
-        }
-    }
-
-    // Modifiers are not reliable across systems
-    const signed int left_control  = static_cast<signed int>(erhe::toolkit::Key_left_control);
-    const signed int right_control = static_cast<signed int>(erhe::toolkit::Key_right_control);
-    const signed int left_shift    = static_cast<signed int>(erhe::toolkit::Key_left_shift);
-    const signed int right_shift   = static_cast<signed int>(erhe::toolkit::Key_right_shift);
-    const signed int left_alt      = static_cast<signed int>(erhe::toolkit::Key_left_alt);
-    const signed int right_alt     = static_cast<signed int>(erhe::toolkit::Key_right_alt);
-
-    io.KeyCtrl  = io.KeysDown[left_control] || io.KeysDown[right_control];
-    io.KeyShift = io.KeysDown[left_shift  ] || io.KeysDown[right_shift  ];
-    io.KeyAlt   = io.KeysDown[left_alt    ] || io.KeysDown[right_alt    ];
-#ifdef _WIN32
-    io.KeySuper = false;
-#else
-    const signed int left_super  = static_cast<signed int>(erhe::toolkit::Key_left_super);
-    const signed int right_super = static_cast<signed int>(erhe::toolkit::Key_right_super);
-    io.KeySuper = io.KeysDown[left_super] || io.KeysDown[right_super];
-#endif
+    update_key_modifiers(io, modifier_mask);
+    io.AddKeyEvent(from_erhe(keycode), pressed);
 }
 
 void Rendertarget_imgui_windows::on_mouse_wheel(const double x, const double y)
@@ -427,7 +525,7 @@ void Editor_imgui_windows::connect()
     require<Gl_context_provider>();
     require<Mesh_memory        >();
     require<Programs           >();
-    require<Scene_root         >();
+    //require<Scene_root         >();
     require<Window             >();
 }
 
@@ -465,111 +563,7 @@ void Editor_imgui_windows::init_context()
     m_time = 0.0;
 
     // Keyboard mapping. Dear ImGui will use those indices to peek into the io.KeysDown[] array.
-    io.KeyMap[ImGuiKey_Tab           ] = erhe::toolkit::Key_tab;
-    io.KeyMap[ImGuiKey_LeftArrow     ] = erhe::toolkit::Key_left;
-    io.KeyMap[ImGuiKey_RightArrow    ] = erhe::toolkit::Key_right;
-    io.KeyMap[ImGuiKey_UpArrow       ] = erhe::toolkit::Key_up;
-    io.KeyMap[ImGuiKey_DownArrow     ] = erhe::toolkit::Key_down;
-    io.KeyMap[ImGuiKey_PageUp        ] = erhe::toolkit::Key_page_up;
-    io.KeyMap[ImGuiKey_PageDown      ] = erhe::toolkit::Key_page_down;
-    io.KeyMap[ImGuiKey_Home          ] = erhe::toolkit::Key_home;
-    io.KeyMap[ImGuiKey_End           ] = erhe::toolkit::Key_end;
-    io.KeyMap[ImGuiKey_Insert        ] = erhe::toolkit::Key_insert;
-    io.KeyMap[ImGuiKey_Delete        ] = erhe::toolkit::Key_delete;
-    io.KeyMap[ImGuiKey_Backspace     ] = erhe::toolkit::Key_backspace;
-    io.KeyMap[ImGuiKey_Space         ] = erhe::toolkit::Key_space;
-    io.KeyMap[ImGuiKey_Enter         ] = erhe::toolkit::Key_enter;
-    io.KeyMap[ImGuiKey_Escape        ] = erhe::toolkit::Key_escape;
-    io.KeyMap[ImGuiKey_LeftCtrl      ] = erhe::toolkit::Key_left_control;
-    io.KeyMap[ImGuiKey_LeftShift     ] = erhe::toolkit::Key_left_shift;
-    io.KeyMap[ImGuiKey_LeftAlt       ] = erhe::toolkit::Key_left_alt;
-    io.KeyMap[ImGuiKey_LeftSuper     ] = erhe::toolkit::Key_left_super;
-    io.KeyMap[ImGuiKey_RightCtrl     ] = erhe::toolkit::Key_right_control;
-    io.KeyMap[ImGuiKey_RightShift    ] = erhe::toolkit::Key_right_shift;
-    io.KeyMap[ImGuiKey_RightAlt      ] = erhe::toolkit::Key_right_alt;
-    io.KeyMap[ImGuiKey_RightSuper    ] = erhe::toolkit::Key_right_super;
-    io.KeyMap[ImGuiKey_Menu          ] = erhe::toolkit::Key_menu;
-    io.KeyMap[ImGuiKey_0             ] = erhe::toolkit::Key_0;
-    io.KeyMap[ImGuiKey_1             ] = erhe::toolkit::Key_1;
-    io.KeyMap[ImGuiKey_2             ] = erhe::toolkit::Key_2;
-    io.KeyMap[ImGuiKey_3             ] = erhe::toolkit::Key_3;
-    io.KeyMap[ImGuiKey_4             ] = erhe::toolkit::Key_4;
-    io.KeyMap[ImGuiKey_5             ] = erhe::toolkit::Key_5;
-    io.KeyMap[ImGuiKey_6             ] = erhe::toolkit::Key_6;
-    io.KeyMap[ImGuiKey_7             ] = erhe::toolkit::Key_7;
-    io.KeyMap[ImGuiKey_8             ] = erhe::toolkit::Key_8;
-    io.KeyMap[ImGuiKey_9             ] = erhe::toolkit::Key_9;
-    io.KeyMap[ImGuiKey_A             ] = erhe::toolkit::Key_a;
-    io.KeyMap[ImGuiKey_B             ] = erhe::toolkit::Key_b;
-    io.KeyMap[ImGuiKey_C             ] = erhe::toolkit::Key_c;
-    io.KeyMap[ImGuiKey_D             ] = erhe::toolkit::Key_d;
-    io.KeyMap[ImGuiKey_E             ] = erhe::toolkit::Key_e;
-    io.KeyMap[ImGuiKey_F             ] = erhe::toolkit::Key_f;
-    io.KeyMap[ImGuiKey_G             ] = erhe::toolkit::Key_g;
-    io.KeyMap[ImGuiKey_H             ] = erhe::toolkit::Key_h;
-    io.KeyMap[ImGuiKey_I             ] = erhe::toolkit::Key_i;
-    io.KeyMap[ImGuiKey_J             ] = erhe::toolkit::Key_j;
-    io.KeyMap[ImGuiKey_K             ] = erhe::toolkit::Key_k;
-    io.KeyMap[ImGuiKey_L             ] = erhe::toolkit::Key_l;
-    io.KeyMap[ImGuiKey_M             ] = erhe::toolkit::Key_m;
-    io.KeyMap[ImGuiKey_N             ] = erhe::toolkit::Key_n;
-    io.KeyMap[ImGuiKey_O             ] = erhe::toolkit::Key_o;
-    io.KeyMap[ImGuiKey_P             ] = erhe::toolkit::Key_p;
-    io.KeyMap[ImGuiKey_Q             ] = erhe::toolkit::Key_q;
-    io.KeyMap[ImGuiKey_R             ] = erhe::toolkit::Key_r;
-    io.KeyMap[ImGuiKey_S             ] = erhe::toolkit::Key_s;
-    io.KeyMap[ImGuiKey_T             ] = erhe::toolkit::Key_t;
-    io.KeyMap[ImGuiKey_U             ] = erhe::toolkit::Key_u;
-    io.KeyMap[ImGuiKey_V             ] = erhe::toolkit::Key_v;
-    io.KeyMap[ImGuiKey_W             ] = erhe::toolkit::Key_w;
-    io.KeyMap[ImGuiKey_X             ] = erhe::toolkit::Key_x;
-    io.KeyMap[ImGuiKey_Y             ] = erhe::toolkit::Key_y;
-    io.KeyMap[ImGuiKey_Z             ] = erhe::toolkit::Key_z;
-    io.KeyMap[ImGuiKey_F1            ] = erhe::toolkit::Key_f1;
-    io.KeyMap[ImGuiKey_F2            ] = erhe::toolkit::Key_f2;
-    io.KeyMap[ImGuiKey_F3            ] = erhe::toolkit::Key_f3;
-    io.KeyMap[ImGuiKey_F4            ] = erhe::toolkit::Key_f4;
-    io.KeyMap[ImGuiKey_F5            ] = erhe::toolkit::Key_f5;
-    io.KeyMap[ImGuiKey_F6            ] = erhe::toolkit::Key_f6;
-    io.KeyMap[ImGuiKey_F7            ] = erhe::toolkit::Key_f7;
-    io.KeyMap[ImGuiKey_F8            ] = erhe::toolkit::Key_f8;
-    io.KeyMap[ImGuiKey_F9            ] = erhe::toolkit::Key_f9;
-    io.KeyMap[ImGuiKey_F10           ] = erhe::toolkit::Key_f10;
-    io.KeyMap[ImGuiKey_F11           ] = erhe::toolkit::Key_f11;
-    io.KeyMap[ImGuiKey_F12           ] = erhe::toolkit::Key_f12;
-    io.KeyMap[ImGuiKey_Apostrophe    ] = erhe::toolkit::Key_apostrophe;
-    io.KeyMap[ImGuiKey_Comma         ] = erhe::toolkit::Key_comma;
-    io.KeyMap[ImGuiKey_Minus         ] = erhe::toolkit::Key_minus;         // -
-    io.KeyMap[ImGuiKey_Period        ] = erhe::toolkit::Key_period;        // .
-    io.KeyMap[ImGuiKey_Slash         ] = erhe::toolkit::Key_slash;         // /
-    io.KeyMap[ImGuiKey_Semicolon     ] = erhe::toolkit::Key_semicolon;     // ;
-    io.KeyMap[ImGuiKey_Equal         ] = erhe::toolkit::Key_equal;         // =
-    io.KeyMap[ImGuiKey_LeftBracket   ] = erhe::toolkit::Key_left_bracket;  // [
-    io.KeyMap[ImGuiKey_Backslash     ] = erhe::toolkit::Key_backslash;     // \ (this text inhibit multiline comment caused by backslash)
-    io.KeyMap[ImGuiKey_RightBracket  ] = erhe::toolkit::Key_right_bracket; // ]
-    io.KeyMap[ImGuiKey_GraveAccent   ] = erhe::toolkit::Key_grave_accent;  // `
-    io.KeyMap[ImGuiKey_CapsLock      ] = erhe::toolkit::Key_caps_lock;
-    io.KeyMap[ImGuiKey_ScrollLock    ] = erhe::toolkit::Key_scroll_lock;
-    io.KeyMap[ImGuiKey_NumLock       ] = erhe::toolkit::Key_num_lock;
-    io.KeyMap[ImGuiKey_PrintScreen   ] = erhe::toolkit::Key_print_screen;
-    io.KeyMap[ImGuiKey_Pause         ] = erhe::toolkit::Key_pause;
-    io.KeyMap[ImGuiKey_Keypad0       ] = erhe::toolkit::Key_kp_0;
-    io.KeyMap[ImGuiKey_Keypad1       ] = erhe::toolkit::Key_kp_1;
-    io.KeyMap[ImGuiKey_Keypad2       ] = erhe::toolkit::Key_kp_2;
-    io.KeyMap[ImGuiKey_Keypad3       ] = erhe::toolkit::Key_kp_3;
-    io.KeyMap[ImGuiKey_Keypad4       ] = erhe::toolkit::Key_kp_4;
-    io.KeyMap[ImGuiKey_Keypad5       ] = erhe::toolkit::Key_kp_5;
-    io.KeyMap[ImGuiKey_Keypad6       ] = erhe::toolkit::Key_kp_6;
-    io.KeyMap[ImGuiKey_Keypad7       ] = erhe::toolkit::Key_kp_7;
-    io.KeyMap[ImGuiKey_Keypad8       ] = erhe::toolkit::Key_kp_8;
-    io.KeyMap[ImGuiKey_Keypad9       ] = erhe::toolkit::Key_kp_9;
-    io.KeyMap[ImGuiKey_KeypadDecimal ] = erhe::toolkit::Key_kp_decimal;
-    io.KeyMap[ImGuiKey_KeypadDivide  ] = erhe::toolkit::Key_kp_divide;
-    io.KeyMap[ImGuiKey_KeypadMultiply] = erhe::toolkit::Key_kp_multiply;
-    io.KeyMap[ImGuiKey_KeypadSubtract] = erhe::toolkit::Key_kp_subtract;
-    io.KeyMap[ImGuiKey_KeypadAdd     ] = erhe::toolkit::Key_kp_add;
-    io.KeyMap[ImGuiKey_KeypadEnter   ] = erhe::toolkit::Key_kp_enter;
-    io.KeyMap[ImGuiKey_KeypadEqual   ] = erhe::toolkit::Key_kp_equal;
+    //io.AddKeyEvent
 
     // TODO Clipboard
     // TODO Update monitors
@@ -805,15 +799,19 @@ void Editor_imgui_windows::imgui_windows()
 
     menu();
 
+    size_t i = 0;
     for (auto& imgui_window : m_imgui_windows)
     {
         if (imgui_window->is_visibile())
         {
+            auto imgui_id = fmt::format("##window-{}", ++i);
+            ImGui::PushID(imgui_id.c_str());
             if (imgui_window->begin())
             {
                 imgui_window->imgui();
             }
             imgui_window->end();
+            ImGui::PopID();
         }
     }
 
@@ -899,50 +897,20 @@ void Editor_imgui_windows::make_imgui_context_uncurrent()
 
 void Editor_imgui_windows::on_key(
     const signed int keycode,
+    const uint32_t   modifier_mask,
     const bool       pressed
 )
 {
     for (const auto& rendertarget : m_rendertarget_imgui_windows)
     {
-        rendertarget->on_key(keycode, pressed);
+        rendertarget->on_key(keycode, modifier_mask, pressed);
     }
 
     using erhe::toolkit::Keycode;
 
     ImGuiIO& io = ImGui::GetIO(m_imgui_context);
-    if (
-        (keycode >= 0) &&
-        (keycode < IM_ARRAYSIZE(io.KeysDown))
-    )
-    {
-        if (pressed)
-        {
-            io.KeysDown[keycode] = true;
-        }
-        else
-        {
-            io.KeysDown[keycode] = false;
-        }
-    }
-
-    // Modifiers are not reliable across systems
-    const signed int left_control  = static_cast<signed int>(erhe::toolkit::Key_left_control);
-    const signed int right_control = static_cast<signed int>(erhe::toolkit::Key_right_control);
-    const signed int left_shift    = static_cast<signed int>(erhe::toolkit::Key_left_shift);
-    const signed int right_shift   = static_cast<signed int>(erhe::toolkit::Key_right_shift);
-    const signed int left_alt      = static_cast<signed int>(erhe::toolkit::Key_left_alt);
-    const signed int right_alt     = static_cast<signed int>(erhe::toolkit::Key_right_alt);
-
-    io.KeyCtrl  = io.KeysDown[left_control] || io.KeysDown[right_control];
-    io.KeyShift = io.KeysDown[left_shift  ] || io.KeysDown[right_shift  ];
-    io.KeyAlt   = io.KeysDown[left_alt    ] || io.KeysDown[right_alt    ];
-#ifdef _WIN32
-    io.KeySuper = false;
-#else
-    const signed int left_super  = static_cast<signed int>(erhe::toolkit::Key_left_super);
-    const signed int right_super = static_cast<signed int>(erhe::toolkit::Key_right_super);
-    io.KeySuper = io.KeysDown[left_super] || io.KeysDown[right_super];
-#endif
+    update_key_modifiers(io, modifier_mask);
+    io.AddKeyEvent(from_erhe(keycode), pressed);
 }
 
 void Editor_imgui_windows::on_char(

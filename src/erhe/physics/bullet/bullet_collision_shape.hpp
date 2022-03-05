@@ -26,11 +26,6 @@ public:
     [[nodiscard]] auto is_convex() const -> bool                       override;
     void calculate_local_inertia(float mass, glm::vec3& inertia) const override;
 
-    void add_child_shape(
-        const std::shared_ptr<ICollision_shape>& shape,
-        const Transform                          transform
-    ) override;
-
     void calculate_principal_axis_transform(
         const std::vector<float>& child_masses,
         Transform&                out_principal_transform,

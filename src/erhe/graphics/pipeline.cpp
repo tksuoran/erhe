@@ -23,6 +23,20 @@ Pipeline::Pipeline(Pipeline_data&& create_info)
     s_pipelines.push_back(this);
 }
 
+Pipeline::Pipeline(const Pipeline& other)
+{
+    const std::lock_guard<std::mutex> lock{s_mutex};
+
+    s_pipelines.push_back(this);
+    data = other.data;
+}
+
+auto Pipeline::operator=(const Pipeline& other) -> Pipeline&
+{
+    data = other.data;
+    return *this;
+}
+
 Pipeline::~Pipeline()
 {
     const std::lock_guard<std::mutex> lock{s_mutex};

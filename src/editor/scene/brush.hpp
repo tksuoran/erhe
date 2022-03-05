@@ -1,6 +1,7 @@
 #pragma once
 
 #include "scene/collision_generator.hpp"
+#include "scene/scene_root.hpp"
 
 #include "erhe/geometry/types.hpp"
 #include "erhe/primitive/enums.hpp"
@@ -76,12 +77,13 @@ public:
     Collision_shape_generator                        collision_shape_generator  {};
 };
 
-class Instance
+class Instance_create_info final
 {
 public:
-    std::shared_ptr<erhe::scene::Mesh> mesh;
-    std::shared_ptr<Node_physics>      node_physics;
-    std::shared_ptr<Node_raytrace>     node_raytrace;
+    erhe::physics::IWorld&                     physics_world;
+    glm::mat4                                  world_from_node;
+    std::shared_ptr<erhe::primitive::Material> material;
+    float                                      scale;
 };
 
 class Brush final
@@ -116,11 +118,7 @@ public:
     [[nodiscard]] auto get_reference_frame(const uint32_t corner_count) -> Reference_frame;
     [[nodiscard]] auto get_scaled         (const float scale) -> const Scaled&;
     [[nodiscard]] auto create_scaled      (const int scale_key) -> Scaled;
-    [[nodiscard]] auto make_instance(
-        const glm::mat4                                   world_from_node,
-        const std::shared_ptr<erhe::primitive::Material>& material,
-        const float                                       scale
-    ) -> Instance;
+    [[nodiscard]] auto make_instance      (const Instance_create_info& instance_create_info) -> Instance;
 
     std::shared_ptr<erhe::geometry::Geometry>        geometry;
     erhe::primitive::Build_info                      build_info;
