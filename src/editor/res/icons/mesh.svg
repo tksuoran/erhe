@@ -34,7 +34,7 @@
      inkscape:snap-grids="true"
      inkscape:snap-to-guides="false"
      inkscape:zoom="40.96"
-     inkscape:cx="7.9711915"
+     inkscape:cx="7.9956055"
      inkscape:cy="8.1176758"
      inkscape:window-width="1412"
      inkscape:window-height="970"
@@ -108,27 +108,27 @@
      id="layer2"
      inkscape:label="content">
     <path
-       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-opacity:1;stroke-miterlimit:4;stroke-dasharray:none"
+       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        d="M 1.5,10 V 5.5 l 4,-4 h 9 v 9 l -4,4 h -9 V 10"
        id="path3472" />
     <path
-       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-opacity:1;stroke-miterlimit:4;stroke-dasharray:none"
+       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        d="m 1.5,5.5 h 9 v 9"
        id="path3606" />
     <path
-       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-opacity:1;stroke-miterlimit:4;stroke-dasharray:none"
+       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        d="m 3.5,3.5 h 9 v 9"
        id="path3707" />
     <path
-       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-opacity:1;stroke-miterlimit:4;stroke-dasharray:none"
+       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        d="m 10.5,5.5 4,-4"
        id="path3841" />
     <path
-       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-opacity:1;stroke-miterlimit:4;stroke-dasharray:none"
+       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        d="m 6,14.5 v -9 l 4,-4"
        id="path3942" />
     <path
-       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-opacity:1;stroke-miterlimit:4;stroke-dasharray:none"
+       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        d="m 1.5,10 h 9 l 4,-4"
        id="path4043" />
   </g>

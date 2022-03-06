@@ -2,48 +2,48 @@
 // (headers)
 
 // Help:
-// - Read FAQ at http://dearimgui.org/faq
-// - Newcomers, read 'Programmer guide' in imgui.cpp for notes on how to setup Dear ImGui in your codebase.
-// - Call and read ImGui::ShowDemoWindow() in imgui_demo.cpp. All applications in examples/ are doing that.
-// Read imgui.cpp for details, links and comments.
+    // - Read FAQ at http://dearimgui.org/faq
+    // - Newcomers, read 'Programmer guide' in imgui.cpp for notes on how to setup Dear ImGui in your codebase.
+    // - Call and read ImGui::ShowDemoWindow() in imgui_demo.cpp. All applications in examples/ are doing that.
+    // Read imgui.cpp for details, links and comments.
 
-// Resources:
-// - FAQ                   http://dearimgui.org/faq
-// - Homepage & latest     https://github.com/ocornut/imgui
-// - Releases & changelog  https://github.com/ocornut/imgui/releases
-// - Gallery               https://github.com/ocornut/imgui/issues/4451 (please post your screenshots/video there!)
-// - Wiki                  https://github.com/ocornut/imgui/wiki (lots of good stuff there)
-// - Glossary              https://github.com/ocornut/imgui/wiki/Glossary
-// - Issues & support      https://github.com/ocornut/imgui/issues
+    // Resources:
+    // - FAQ                   http://dearimgui.org/faq
+    // - Homepage & latest     https://github.com/ocornut/imgui
+    // - Releases & changelog  https://github.com/ocornut/imgui/releases
+    // - Gallery               https://github.com/ocornut/imgui/issues/4451 (please post your screenshots/video there!)
+    // - Wiki                  https://github.com/ocornut/imgui/wiki (lots of good stuff there)
+    // - Glossary              https://github.com/ocornut/imgui/wiki/Glossary
+    // - Issues & support      https://github.com/ocornut/imgui/issues
 
-// Getting Started?
-// - For first-time users having issues compiling/linking/running or issues loading fonts:
-//   please post in https://github.com/ocornut/imgui/discussions if you cannot find a solution in resources above.
+    // Getting Started?
+    // - For first-time users having issues compiling/linking/running or issues loading fonts:
+    //   please post in https://github.com/ocornut/imgui/discussions if you cannot find a solution in resources above.
 
-/*
+    /*
 
-Index of this file:
-// [SECTION] Header mess
-// [SECTION] Forward declarations and basic types
-// [SECTION] Dear ImGui end-user API functions
-// [SECTION] Flags & Enumerations
-// [SECTION] Helpers: Memory allocations macros, ImVector<>
-// [SECTION] ImGuiStyle
-// [SECTION] ImGuiIO
-// [SECTION] Misc data structures (ImGuiInputTextCallbackData, ImGuiSizeCallbackData, ImGuiWindowClass, ImGuiPayload, ImGuiTableSortSpecs, ImGuiTableColumnSortSpecs)
-// [SECTION] Helpers (ImGuiOnceUponAFrame, ImGuiTextFilter, ImGuiTextBuffer, ImGuiStorage, ImGuiListClipper, ImColor)
-// [SECTION] Drawing API (ImDrawCallback, ImDrawCmd, ImDrawIdx, ImDrawVert, ImDrawChannel, ImDrawListSplitter, ImDrawFlags, ImDrawListFlags, ImDrawList, ImDrawData)
-// [SECTION] Font API (ImFontConfig, ImFontGlyph, ImFontGlyphRangesBuilder, ImFontAtlasFlags, ImFontAtlas, ImFont)
-// [SECTION] Viewports (ImGuiViewportFlags, ImGuiViewport)
-// [SECTION] Platform Dependent Interfaces (ImGuiPlatformIO, ImGuiPlatformMonitor, ImGuiPlatformImeData)
-// [SECTION] Obsolete functions and types
+    Index of this file:
+    // [SECTION] Header mess
+    // [SECTION] Forward declarations and basic types
+    // [SECTION] Dear ImGui end-user API functions
+    // [SECTION] Flags & Enumerations
+    // [SECTION] Helpers: Memory allocations macros, ImVector<>
+    // [SECTION] ImGuiStyle
+    // [SECTION] ImGuiIO
+    // [SECTION] Misc data structures (ImGuiInputTextCallbackData, ImGuiSizeCallbackData, ImGuiWindowClass, ImGuiPayload, ImGuiTableSortSpecs, ImGuiTableColumnSortSpecs)
+    // [SECTION] Helpers (ImGuiOnceUponAFrame, ImGuiTextFilter, ImGuiTextBuffer, ImGuiStorage, ImGuiListClipper, ImColor)
+    // [SECTION] Drawing API (ImDrawCallback, ImDrawCmd, ImDrawIdx, ImDrawVert, ImDrawChannel, ImDrawListSplitter, ImDrawFlags, ImDrawListFlags, ImDrawList, ImDrawData)
+    // [SECTION] Font API (ImFontConfig, ImFontGlyph, ImFontGlyphRangesBuilder, ImFontAtlasFlags, ImFontAtlas, ImFont)
+    // [SECTION] Viewports (ImGuiViewportFlags, ImGuiViewport)
+    // [SECTION] Platform Dependent Interfaces (ImGuiPlatformIO, ImGuiPlatformMonitor, ImGuiPlatformImeData)
+    // [SECTION] Obsolete functions and types
 
-*/
+    */
 
-#pragma once
+    #pragma once
 
-// Configuration file with compile-time options (edit imconfig.h or '#define IMGUI_USER_CONFIG "myfilename.h" from your build system')
-#ifdef IMGUI_USER_CONFIG
+    // Configuration file with compile-time options (edit imconfig.h or '#define IMGUI_USER_CONFIG "myfilename.h" from your build system')
+    #ifdef IMGUI_USER_CONFIG
 #include IMGUI_USER_CONFIG
 #endif
 #if !defined(IMGUI_DISABLE_INCLUDE_IMCONFIG_H) || defined(IMGUI_INCLUDE_IMCONFIG_H)

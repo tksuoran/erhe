@@ -200,9 +200,8 @@ void Brushes::remove_brush_mesh()
     if (m_brush_mesh)
     {
         log_brush.trace("removing brush mesh\n");
-        remove_from_scene_layer(
-            m_scene_root->scene(),
-            *m_scene_root->brush_layer(),
+        m_scene_root->scene().remove(
+            //*m_scene_root->brush_layer(),
             m_brush_mesh
         );
         m_brush_mesh->unparent();
@@ -348,14 +347,15 @@ void Brushes::update_mesh_node_transform()
 
     const auto  transform    = get_brush_transform();
     const auto& brush_scaled = m_brush->get_scaled(m_transform_scale);
-    if (m_brush_mesh->parent() != m_hover_mesh.get())
+    const auto& brush_parent = m_brush_mesh->parent().lock();
+    if (brush_parent != m_hover_mesh)
     {
-        if (m_brush_mesh->parent())
+        if (brush_parent)
         {
             log_brush.trace(
                 "m_brush_mesh->parent() = {} ({})\n",
-                m_brush_mesh->parent()->name(),
-                m_brush_mesh->parent()->node_type()
+                brush_parent->name(),
+                brush_parent->node_type()
             );
         }
         else
@@ -431,8 +431,7 @@ void Brushes::do_insert_operation()
             .mesh           = instance.mesh,
             .node_physics   = instance.node_physics,
             .parent         = m_hover_mesh,
-            .mode           = Scene_item_operation::Mode::insert,
-            .selection_tool = m_selection_tool.get()
+            .mode           = Scene_item_operation::Mode::insert
         }
     );
     m_operation_stack->push(op);

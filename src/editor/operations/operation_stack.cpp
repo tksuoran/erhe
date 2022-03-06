@@ -6,6 +6,10 @@
 namespace editor
 {
 
+IOperation::~IOperation() noexcept
+{
+}
+
 auto Undo_command::try_call(Command_context& context) -> bool
 {
     static_cast<void>(context);
@@ -72,7 +76,11 @@ auto Operation_stack::description() -> const char*
 
 void Operation_stack::push(const std::shared_ptr<IOperation>& operation)
 {
-    operation->execute();
+    Operation_context context
+    {
+        .components = m_components
+    };
+    operation->execute(context);
     m_executed.push_back(operation);
     m_undone.clear();
 }
@@ -83,9 +91,15 @@ void Operation_stack::undo()
     {
         return;
     }
-    auto operation = m_executed.back();
+    auto operation = m_executed.back(); // intentionally not a reference, otherwise pop_back() below will invalidate
     m_executed.pop_back();
-    operation->undo();
+
+    Operation_context context
+    {
+        .components = m_components
+    };
+
+    operation->undo(context);
     m_undone.push_back(operation);
 }
 
@@ -95,9 +109,16 @@ void Operation_stack::redo()
     {
         return;
     }
-    auto operation = m_undone.back();
+    auto operation = m_undone.back(); // intentionally not a reference, otherwise pop_back() below will invalidate
     m_undone.pop_back();
-    operation->execute();
+
+    Operation_context context
+    {
+        .components = m_components
+    };
+
+    operation->execute(context);
+
     m_executed.push_back(operation);
 }
 

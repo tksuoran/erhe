@@ -58,6 +58,7 @@ public:
     erhe::geometry::Property_map<erhe::geometry::Polygon_id, uint32_t>*  polygon_ids_uint32  {nullptr};
     erhe::geometry::Property_map<erhe::geometry::Polygon_id, glm::vec3>* polygon_normals     {nullptr};
     erhe::geometry::Property_map<erhe::geometry::Polygon_id, glm::vec3>* polygon_centroids   {nullptr};
+    erhe::geometry::Property_map<erhe::geometry::Polygon_id, glm::vec4>* polygon_colors      {nullptr};
     erhe::geometry::Property_map<erhe::geometry::Corner_id, glm::vec3>*  corner_normals      {nullptr};
     erhe::geometry::Property_map<erhe::geometry::Corner_id, glm::vec4>*  corner_tangents     {nullptr};
     erhe::geometry::Property_map<erhe::geometry::Corner_id, glm::vec4>*  corner_bitangents   {nullptr};

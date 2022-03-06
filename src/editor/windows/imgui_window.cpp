@@ -99,7 +99,7 @@ void Imgui_window::end()
 
 auto Imgui_window::flags() -> ImGuiWindowFlags
 {
-    return ImGuiWindowFlags_NoCollapse;
+    return 0; //ImGuiWindowFlags_NoCollapse;
 }
 
 void Imgui_window::on_begin()

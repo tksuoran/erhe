@@ -24,12 +24,12 @@ auto Node_transform_operation::describe() const -> std::string
     return ss.str();
 }
 
-void Node_transform_operation::execute() const
+void Node_transform_operation::execute(const Operation_context&)
 {
     m_context.node->set_parent_from_node(m_context.parent_from_node_after);
 }
 
-void Node_transform_operation::undo() const
+void Node_transform_operation::undo(const Operation_context&)
 {
     m_context.node->set_parent_from_node(m_context.parent_from_node_before);
 }
@@ -51,32 +51,24 @@ auto Mesh_insert_remove_operation::describe() const -> std::string
 Mesh_insert_remove_operation::Mesh_insert_remove_operation(const Context& context)
     : m_context{context}
 {
-    m_selection_before = context.selection_tool->selection();
-    m_selection_after = m_selection_before;
-
-    if (context.mode == Mode::remove)
-    {
-        const auto i = std::remove(m_selection_before.begin(), m_selection_before.end(), context.mesh);
-        if (i != m_selection_before.end())
-        {
-            m_selection_before.erase(i, m_selection_before.end());
-        }
-    }
 }
 
 Mesh_insert_remove_operation::~Mesh_insert_remove_operation() = default;
 
-void Mesh_insert_remove_operation::execute() const
+void Mesh_insert_remove_operation::execute(const Operation_context& context)
 {
-    execute(m_context.mode);
+    execute(context, m_context.mode);
 }
 
-void Mesh_insert_remove_operation::undo() const
+void Mesh_insert_remove_operation::undo(const Operation_context& context)
 {
-    execute(inverse(m_context.mode));
+    execute(context, inverse(m_context.mode));
 }
 
-void Mesh_insert_remove_operation::execute(const Mode mode) const
+void Mesh_insert_remove_operation::execute(
+    const Operation_context& context,
+    const Mode               mode
+) const
 {
     ERHE_VERIFY(m_context.mesh);
     ERHE_VERIFY(m_context.mesh);
@@ -85,7 +77,7 @@ void Mesh_insert_remove_operation::execute(const Mode mode) const
 
     if (mode == Mode::insert)
     {
-        add_to_scene_layer(m_context.scene, m_context.layer, m_context.mesh);
+        m_context.scene.add_to_mesh_layer(m_context.layer, m_context.mesh);
         if (m_context.parent)
         {
             m_context.parent->attach(m_context.mesh);
@@ -94,12 +86,11 @@ void Mesh_insert_remove_operation::execute(const Mode mode) const
         {
             add_to_physics_world(m_context.physics_world, m_context.node_physics);
         }
-        m_context.selection_tool->set_selection(m_selection_after);
     }
     else
     {
-        m_context.selection_tool->remove_from_selection(m_context.mesh);
-        remove_from_scene_layer(m_context.scene, m_context.layer, m_context.mesh);
+        //m_context.selection_tool->remove_from_selection(m_context.mesh);
+        m_context.scene.remove(m_context.mesh);
         if (m_context.node_physics)
         {
             remove_from_physics_world(m_context.physics_world, *m_context.node_physics.get());
@@ -108,11 +99,18 @@ void Mesh_insert_remove_operation::execute(const Mode mode) const
         {
             m_context.parent->detach(m_context.mesh.get());
         }
-        m_context.selection_tool->set_selection(m_selection_before);
     }
 
+    auto selection_tool = context.components->get<Selection_tool>();
+    if (selection_tool)
+    {
+        selection_tool->update_selection_from_node(m_context.mesh, mode == Mode::insert);
+    }
     m_context.scene.sanity_check();
 }
+
+//
+//
 
 auto Light_insert_remove_operation::describe() const -> std::string
 {
@@ -131,41 +129,29 @@ auto Light_insert_remove_operation::describe() const -> std::string
 Light_insert_remove_operation::Light_insert_remove_operation(const Context& context)
     : m_context{context}
 {
-    m_selection_before = context.selection_tool->selection();
-    m_selection_after  = m_selection_before;
-
-    if (context.mode == Mode::remove)
-    {
-        const auto i = std::remove(
-            m_selection_after.begin(),
-            m_selection_after.end(),
-            context.light
-        );
-        if (i != m_selection_after.end())
-        {
-            m_selection_after.erase(i, m_selection_after.end());
-        }
-    }
 }
 
 Light_insert_remove_operation::~Light_insert_remove_operation() = default;
 
-void Light_insert_remove_operation::execute() const
+void Light_insert_remove_operation::execute(const Operation_context& context)
 {
-    execute(m_context.mode);
+    execute(context, m_context.mode);
 }
 
-void Light_insert_remove_operation::undo() const
+void Light_insert_remove_operation::undo(const Operation_context& context)
 {
-    execute(inverse(m_context.mode));
+    execute(context, inverse(m_context.mode));
 }
 
-void Light_insert_remove_operation::execute(const Mode mode) const
+void Light_insert_remove_operation::execute(
+    const Operation_context& context,
+    const Mode               mode
+)
 {
     ERHE_VERIFY(m_context.light);
     if (mode == Mode::insert)
     {
-        add_to_scene_layer(m_context.scene, m_context.layer, m_context.light);
+        m_context.scene.add_to_light_layer(m_context.layer, m_context.light);
         if (m_context.parent)
         {
             m_context.parent->attach(m_context.light);
@@ -173,12 +159,86 @@ void Light_insert_remove_operation::execute(const Mode mode) const
     }
     else
     {
-        remove_from_scene_layer(m_context.scene, m_context.layer, m_context.light);
+        m_context.scene.remove(m_context.light);
         if (m_context.parent)
         {
             m_context.parent->detach(m_context.light.get());
         }
     }
+
+    auto selection_tool = context.components->get<Selection_tool>();
+    if (selection_tool)
+    {
+        selection_tool->update_selection_from_node(m_context.light, mode == Mode::insert);
+    }
+
+    m_context.scene.sanity_check();
 }
+
+//
+//
+
+auto Camera_insert_remove_operation::describe() const -> std::string
+{
+    std::stringstream ss;
+    switch (m_context.mode)
+    {
+        //using enum Mode;
+        case Mode::insert: ss << "Camera_insert "; break;
+        case Mode::remove: ss << "Camera_remove "; break;
+        default: break;
+    }
+    ss << m_context.camera->name();
+    return ss.str();
+}
+
+Camera_insert_remove_operation::Camera_insert_remove_operation(const Context& context)
+    : m_context{context}
+{
+}
+
+Camera_insert_remove_operation::~Camera_insert_remove_operation() = default;
+
+void Camera_insert_remove_operation::execute(const Operation_context& context)
+{
+    execute(context, m_context.mode);
+}
+
+void Camera_insert_remove_operation::undo(const Operation_context& context)
+{
+    execute(context, inverse(m_context.mode));
+}
+
+void Camera_insert_remove_operation::execute(
+    const Operation_context& context,
+    const Mode               mode
+) const
+{
+    ERHE_VERIFY(m_context.camera);
+    if (mode == Mode::insert)
+    {
+        m_context.scene.add(m_context.camera);
+        if (m_context.parent)
+        {
+            m_context.parent->attach(m_context.camera);
+        }
+    }
+    else
+    {
+        m_context.scene.remove(m_context.camera);
+        if (m_context.parent)
+        {
+            m_context.parent->detach(m_context.camera.get());
+        }
+    }
+
+    auto selection_tool = context.components->get<Selection_tool>();
+    if (selection_tool)
+    {
+        selection_tool->update_selection_from_node(m_context.camera, mode == Mode::insert);
+    }
+    m_context.scene.sanity_check();
+}
+
 
 }

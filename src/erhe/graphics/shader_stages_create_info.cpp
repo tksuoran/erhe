@@ -34,6 +34,92 @@ auto glsl_token(gl::Attribute_type type) -> const char*
     }
 }
 
+auto Shader_stages::Create_info::attributes_source() const -> std::string
+{
+    std::stringstream sb;
+
+    // Apply attrib location bindings
+    if (
+        (vertex_attribute_mappings != nullptr) &&
+        (vertex_attribute_mappings->mappings.size() > 0)
+    )
+    {
+        sb << "// Attributes\n";
+        for (const auto& mapping : vertex_attribute_mappings->mappings)
+        {
+            sb << "in layout(location = " << mapping.layout_location << ") ";
+            sb << glsl_token(mapping.shader_type) << " ";
+            sb << mapping.name,
+            sb << ";\n";
+        }
+        sb << "\n";
+    }
+
+    return sb.str();
+}
+
+auto Shader_stages::Create_info::fragment_outputs_source() const -> std::string
+{
+    std::stringstream sb;
+
+    sb << "// Fragment outputs\n";
+    if (fragment_outputs != nullptr)
+    {
+        sb << fragment_outputs->source();
+    }
+    sb << "\n";
+
+    return sb.str();
+}
+
+auto Shader_stages::Create_info::struct_types_source() const -> std::string
+{
+    std::stringstream sb;
+
+    if (struct_types.size() > 0)
+    {
+        sb << "// Struct types\n";
+        for (const auto& struct_type : struct_types)
+        {
+            ERHE_VERIFY(struct_type != nullptr);
+            sb << struct_type->source();
+            sb << "\n";
+        }
+        sb << "\n";
+    }
+
+    return sb.str();
+}
+
+auto Shader_stages::Create_info::interface_blocks_source() const -> std::string
+{
+    std::stringstream sb;
+
+    if (interface_blocks.size() > 0)
+    {
+        sb << "// Blocks\n";
+        for (const auto& i : interface_blocks)
+        {
+            auto block = i.second;
+            sb << block->source();
+            sb << "\n";
+        }
+        sb << "\n";
+    }
+
+    return sb.str();
+}
+
+auto Shader_stages::Create_info::interface_source() const -> std::string
+{
+    std::stringstream sb;
+    sb << attributes_source      ();
+    sb << fragment_outputs_source();
+    sb << struct_types_source    ();
+    sb << interface_blocks_source();
+    return sb.str();
+}
+
 auto Shader_stages::Create_info::final_source(
     const Shader_stage& shader
 ) const -> std::string
@@ -56,31 +142,11 @@ auto Shader_stages::Create_info::final_source(
 
     if (shader.type == gl::Shader_type::vertex_shader)
     {
-        // Apply attrib location bindings
-        if (
-            (vertex_attribute_mappings != nullptr) &&
-            (vertex_attribute_mappings->mappings.size() > 0)
-        )
-        {
-            sb << "// Attributes\n";
-            for (const auto& mapping : vertex_attribute_mappings->mappings)
-            {
-                sb << "in layout(location = " << mapping.layout_location << ") ";
-                sb << glsl_token(mapping.shader_type) << " ";
-                sb << mapping.name,
-                sb << ";\n";
-            }
-            sb << "\n";
-        }
+        sb << attributes_source();
     }
     else if (shader.type == gl::Shader_type::fragment_shader)
     {
-        sb << "// Fragment outputs\n";
-        if (fragment_outputs != nullptr)
-        {
-            sb << fragment_outputs->source();
-        }
-        sb << "\n";
+        sb << fragment_outputs_source();
     }
 
     if (defines.size() > 0)
@@ -93,29 +159,8 @@ auto Shader_stages::Create_info::final_source(
         sb << "\n";
     }
 
-    if (struct_types.size() > 0)
-    {
-        sb << "// Struct types\n";
-        for (const auto& struct_type : struct_types)
-        {
-            ERHE_VERIFY(struct_type != nullptr);
-            sb << struct_type->source();
-            sb << "\n";
-        }
-        sb << "\n";
-    }
-
-    if (interface_blocks.size() > 0)
-    {
-        sb << "// Blocks\n";
-        for (const auto& i : interface_blocks)
-        {
-            auto block = i.second;
-            sb << block->source();
-            sb << "\n";
-        }
-        sb << "\n";
-    }
+    sb << struct_types_source();
+    sb << interface_blocks_source();
 
     if (default_uniform_block != nullptr)
     {

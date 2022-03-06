@@ -55,7 +55,7 @@ auto Geometry::compute_tangents(
         return true;
     }
 
-    log_geometry.info("{} for {}\n", __func__, name);
+    log_tangent_gen.info("{} for {}\n", __func__, name);
 
     if (!compute_polygon_normals())
     {
@@ -295,10 +295,12 @@ auto Geometry::compute_tangents(
 
             if (polygon_tangents && (override_existing || !polygon_tangents->has(polygon_id)))
             {
+                log_tangent_gen.trace("put polygon_id {}, tangent = {}, sign = {}\n", polygon_id, tangent, sign);
                 polygon_tangents->put(polygon_id, vec4{tangent, sign});
             }
             if (corner_tangents && (override_existing || !corner_tangents->has(corner_id)))
             {
+                log_tangent_gen.trace("put polygon_id {}, corner_id = {} tangent = {}, sign = {}\n", polygon_id, corner_id, tangent, sign);
                 corner_tangents->put(corner_id, vec4{tangent, sign});
             }
         }
@@ -320,10 +322,12 @@ auto Geometry::compute_tangents(
 
             if (polygon_bitangents && (override_existing || !polygon_bitangents->has(polygon_id)))
             {
+                log_tangent_gen.trace("put polygon_id {}, bitangent = {}, sign = {}\n", polygon_id, bitangent, sign);
                 polygon_bitangents->put(polygon_id, vec4{bitangent, sign});
             }
             if (corner_bitangents && (override_existing || !corner_bitangents->has(corner_id)))
             {
+                log_tangent_gen.trace("put polygon_id {}, corner_id = {} bitangent = {}, sign = {}\n", polygon_id, corner_id, bitangent, sign);
                 corner_bitangents->put(corner_id, vec4{bitangent, sign});
             }
         }
@@ -487,62 +491,128 @@ auto Geometry::compute_tangents(
                 continue;
             }
 
-            nonstd::optional<vec4> T;
-            nonstd::optional<vec4> B;
-            std::vector<vec4>   tangents;
-            std::vector<vec4>   bitangents;
+            std::vector<nonstd::optional<vec4>> tangents;
+            std::vector<nonstd::optional<vec4>> bitangents;
+
+            std::optional<uint32_t> selected_tangent_corner_index;
+            std::optional<uint32_t> selected_bitangent_corner_index;
+            std::optional<uint32_t> selected_fallback_corner_index;
+            nonstd::optional<vec4> tangent_sum;
+            nonstd::optional<vec4> bitangent_sum;
             for (uint32_t i = 0; i < polygon.corner_count; ++i)
             {
                 const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + i;
                 const Corner_id         corner_id         = polygon_corners[polygon_corner_id];
-                if ((override_existing || !T.has_value()) && corner_tangents && g.corner_tangents->has(corner_id))
+                nonstd::optional<vec4> tangent;
+                nonstd::optional<vec4> bitangent;
+                if (corner_tangents && g.corner_tangents->has(corner_id))
                 {
-                    const auto tangent = g.corner_tangents->get(corner_id);
+                    tangent = g.corner_tangents->get(corner_id);
+                    if (tangent_sum.has_value())
+                    {
+                        tangent_sum = tangent_sum.value() + tangent.value();
+                    }
+                    else
+                    {
+                        tangent_sum = tangent.value();
+                    }
+                }
+                if (corner_bitangents && g.corner_bitangents->has(corner_id))
+                {
+                    bitangent = g.corner_bitangents->get(corner_id);
+                    if (bitangent_sum.has_value())
+                    {
+                        bitangent_sum = bitangent_sum.value() + bitangent.value();
+                    }
+                    else
+                    {
+                        bitangent_sum = bitangent.value();
+                    }
+                }
+                log_tangent_gen.trace("polygon {} corner {} has tangent   {} value {}\n", polygon_id, i, tangent.  has_value(), tangent.  has_value() ? tangent.  value() : vec4{});
+                log_tangent_gen.trace("polygon {} corner {} has bitangent {} value {}\n", polygon_id, i, bitangent.has_value(), bitangent.has_value() ? bitangent.value() : vec4{});
+                if ((override_existing || !selected_tangent_corner_index.has_value()) && tangent.has_value())
+                {
                     for (auto other : tangents)
                     {
-                        const float dot = glm::dot(vec3{tangent}, vec3{other});
-                        if (dot > 0.99f)
+                        if (other.has_value())
                         {
-                            T = tangent;
+                            const float dot = glm::dot(vec3{tangent.value()}, vec3{other.value()});
+                            log_tangent_gen.trace("tangent dot with other {} = {}\n", other.value(), dot);
+                            if (dot > 0.99f)
+                            {
+                                selected_tangent_corner_index = i;
+                            }
                         }
                     }
-                    tangents.emplace_back(tangent);
                 }
-                if ((override_existing || !B.has_value()) && corner_bitangents && g.corner_bitangents->has(corner_id))
+                if ((override_existing || !selected_bitangent_corner_index.has_value()) && bitangent.has_value())
                 {
-                    const auto bitangent = g.corner_bitangents->get(corner_id);
                     for (auto other : bitangents)
                     {
-                        const float dot = glm::dot(vec3{bitangent}, vec3{other});
-                        if (dot > 0.99f)
+                        if (other.has_value())
                         {
-                            B = bitangent;
+                            const float dot = glm::dot(vec3{bitangent.value()}, vec3{other.value()});
+                            log_tangent_gen.trace("bitangent dot with other {} = {}\n", other.value(), dot);
+                            if (dot > 0.99f)
+                            {
+                                selected_bitangent_corner_index = i;
+                            }
                         }
                     }
-                    bitangents.emplace_back(bitangent);
                 }
+                if (tangent.has_value() && bitangent.has_value())
+                {
+                    selected_fallback_corner_index = i;
+                }
+                tangents.  push_back(tangent);
+                bitangents.push_back(bitangent);
             }
 
-            vec4 tangent{1.0, 0.0, 0.0, 1.0};
-            if (T.has_value())
+            nonstd::optional<vec4> tangent;
+            nonstd::optional<vec4> bitangent;
+            if (
+                selected_tangent_corner_index.has_value() &&
+                selected_bitangent_corner_index.has_value() &&
+                selected_tangent_corner_index.value() == selected_bitangent_corner_index.value()
+            )
             {
-                tangent = T.value();
+                tangent   = tangents.  at(selected_tangent_corner_index.value());
+                bitangent = bitangents.at(selected_tangent_corner_index.value());
+            }
+            else if (
+                selected_tangent_corner_index.has_value() &&
+                bitangents.at(selected_tangent_corner_index.value()).has_value()
+            )
+            {
+                tangent   = tangents.  at(selected_tangent_corner_index.value());
+                bitangent = bitangents.at(selected_tangent_corner_index.value());
+            }
+            else if (
+                selected_bitangent_corner_index.has_value() &&
+                tangents.at(selected_bitangent_corner_index.value()).has_value()
+            )
+            {
+                tangent   = tangents.  at(selected_bitangent_corner_index.value());
+                bitangent = bitangents.at(selected_bitangent_corner_index.value());
+            }
+            else if (selected_fallback_corner_index.has_value())
+            {
+                tangent   = tangents.  at(selected_fallback_corner_index.value());
+                bitangent = bitangents.at(selected_fallback_corner_index.value());
             }
 
-            vec4 bitangent{0.0, 0.0, 1.0, 1.0};
-            if (B.has_value())
-            {
-                bitangent = B.value();
-            }
+            vec4 T = tangent.  has_value() ? tangent.  value() : vec4{1.0, 0.0, 0.0, 1.0};
+            vec4 B = bitangent.has_value() ? bitangent.value() : vec4{0.0, 0.0, 1.0, 1.0};
 
             // Second pass - put tangent to all corners
             if (polygon_tangents)
             {
-                g.polygon_tangents->put(polygon_id, tangent);
+                g.polygon_tangents->put(polygon_id, T);
             }
             if (polygon_bitangents)
             {
-                g.polygon_tangents->put(polygon_id, bitangent);
+                g.polygon_tangents->put(polygon_id, B);
             }
             if (corner_tangents)
             {
@@ -550,7 +620,7 @@ auto Geometry::compute_tangents(
                 {
                     const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + i;
                     const Corner_id         corner_id         = polygon_corners[polygon_corner_id];
-                    g.corner_tangents->put(corner_id, tangent);
+                    g.corner_tangents->put(corner_id, T);
                 }
             }
             if (corner_bitangents)
@@ -559,7 +629,7 @@ auto Geometry::compute_tangents(
                 {
                     const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + i;
                     const Corner_id         corner_id         = polygon_corners[polygon_corner_id];
-                    g.corner_bitangents->put(corner_id, bitangent);
+                    g.corner_bitangents->put(corner_id, B);
                 }
             }
         }

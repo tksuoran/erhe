@@ -143,9 +143,7 @@ auto Scene_root::create_new_camera() -> bool
     camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
     camera->projection()->z_near          = 0.03f;
     camera->projection()->z_far           = 200.0f;
-    scene().cameras.push_back(camera);
-    scene().nodes.emplace_back(camera);
-    scene().nodes_sorted = false;
+    scene().add(camera);
     attach_to_selection(camera);
     return true;
 }
@@ -153,8 +151,7 @@ auto Scene_root::create_new_camera() -> bool
 auto Scene_root::create_new_empty_node() -> bool
 {
     auto node = std::make_shared<erhe::scene::Node>("Empty Node");
-    scene().nodes.emplace_back(node);
-    scene().nodes_sorted = false;
+    scene().add_node(node);
     attach_to_selection(node);
     return true;
 }
@@ -174,8 +171,7 @@ auto Scene_root::create_new_light() -> bool
     light->projection()->z_near          =   5.0f;
     light->projection()->z_far           =  20.0f;
     attach_to_selection(light);
-    add_to_scene_layer(
-        scene(),
+    scene().add_to_light_layer(
         *light_layer(),
         light
     );
@@ -227,8 +223,7 @@ void Scene_root::add_instance(const Instance& instance)
             Node_visibility::id
         );
 
-    add_to_scene_layer(
-        scene(),
+    scene().add_to_mesh_layer(
         *content_layer(),
         instance.mesh
     );
@@ -261,7 +256,7 @@ void Scene_root::add(
     {
         layer = m_content_layer.get();
     }
-    add_to_scene_layer(scene(), *layer, mesh);
+    scene().add_to_mesh_layer(*layer, mesh);
 }
 
 auto Scene_root::brush_layer() const -> erhe::scene::Mesh_layer*

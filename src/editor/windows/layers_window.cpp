@@ -43,6 +43,8 @@ void Layers_window::connect()
 void Layers_window::initialize_component()
 {
     get<Editor_imgui_windows>()->register_imgui_window(this);
+
+    hide();
 }
 
 void Layers_window::imgui()

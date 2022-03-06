@@ -45,42 +45,6 @@ class Forward_renderer
     , public Base_renderer
 {
 public:
-    enum class Pass : unsigned int
-    {
-        brush_back = 0,
-        brush_front,
-        clear_depth,
-        corner_points,
-        depth_only,
-        edge_lines,
-        gui,
-        hidden_line_with_blend,
-        polygon_centroids,
-        polygon_fill,
-        require_stencil_tag_depth_visible,            // uses stencil value 2
-        require_stencil_tag_depth_hidden_and_blend,   // uses stencil value 1
-        tag_depth_hidden_with_stencil,  // uses stencil value 1
-        tag_depth_visible_with_stencil, // uses stencil value 2
-    };
-
-    static constexpr std::array<std::string_view, 14> c_pass_strings =
-    {
-        "Brush Back",
-        "Brush front",
-        "Clear Depth",
-        "Corner Points",
-        "Depth Only",
-        "Edge Lines",
-        "GUI",
-        "Hidden Line with Blend",
-        "Polygon Centroids",
-        "Polygon Fill",
-        "Require Stencil Tag 1 (Depth Hidden) Color with Blend",
-        "Require Stencil Tag 2 (Depth Visible) Color",
-        "Tag Depth Hidden with Stencil 1",
-        "Tag Depth Visible with Stencil 2",
-    };
-
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
     static constexpr std::string_view c_name{"Forward_renderer"};

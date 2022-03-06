@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe/scene/transform.hpp"
+#include "erhe/toolkit/optional.hpp"
 #include "erhe/toolkit/unique_id.hpp"
 
 #include <cstdint>
@@ -75,7 +76,7 @@ class Node_data
 public:
     Node_transforms                                transforms;
     std::uint64_t                                  last_transform_update_serial{0};
-    Node*                                          parent         {nullptr};
+    std::weak_ptr<Node>                            parent         {};
     std::vector<std::shared_ptr<Node>>             children;
     std::vector<std::shared_ptr<INode_attachment>> attachments;
     uint64_t                                       visibility_mask{Node_visibility::none};
@@ -99,7 +100,7 @@ public:
 
     [[nodiscard]] virtual auto node_type() const -> const char*;
 
-    [[nodiscard]] auto parent                    () const -> Node*;
+    [[nodiscard]] auto parent                    () const -> std::weak_ptr<Node>;
     [[nodiscard]] auto depth                     () const -> size_t;
     [[nodiscard]] auto children                  () const -> const std::vector<std::shared_ptr<Node>>&;
     [[nodiscard]] auto attachments               () const -> const std::vector<std::shared_ptr<INode_attachment>>&;
@@ -120,13 +121,16 @@ public:
     [[nodiscard]] auto direction_in_world        () const -> glm::vec4;
     [[nodiscard]] auto transform_point_from_world_to_local    (const glm::vec3 p) const -> glm::vec3;
     [[nodiscard]] auto transform_direction_from_world_to_local(const glm::vec3 p) const -> glm::vec3;
-    [[nodiscard]] auto is_selected() const -> bool;
-    [[nodiscard]] auto root       () -> Node*;
-    [[nodiscard]] auto root       () const -> const Node*;
-    [[nodiscard]] auto name       () const -> const std::string&;
-    [[nodiscard]] auto label      () const -> const std::string&;
-    [[nodiscard]] auto child_count() const -> size_t;
-    [[nodiscard]] auto get_id     () const -> erhe::toolkit::Unique_id<Node>::id_type;
+    [[nodiscard]] auto is_selected        () const -> bool;
+    [[nodiscard]] auto root               () -> std::weak_ptr<Node>;
+    [[nodiscard]] auto name               () const -> const std::string&;
+    [[nodiscard]] auto label              () const -> const std::string&;
+    [[nodiscard]] auto child_count        () const -> size_t;
+    [[nodiscard]] auto get_id             () const -> erhe::toolkit::Unique_id<Node>::id_type;
+    [[nodiscard]] auto get_index_in_parent() const -> size_t;
+    [[nodiscard]] auto get_index_of_child (const Node* child) const -> nonstd::optional<size_t>;
+    [[nodiscard]] auto is_ancestor        (const Node* ancestor_candidate) const -> bool;
+    //[[nodiscard]] auto is_descendant      (const Node* descendant_candidate) const -> bool;
 
     void set_depth_recursive       (const size_t depth);
     void update_transform          (const uint64_t serial = 0);
@@ -140,6 +144,7 @@ public:
     void set_world_from_node       (const glm::mat4 matrix);
     void set_world_from_node       (const Transform& transform);
     void attach                    (const std::shared_ptr<Node>& node);
+    void attach                    (const std::shared_ptr<Node>& node, size_t position);
     auto detach                    (Node* node) -> bool;
     void attach                    (const std::shared_ptr<INode_attachment>& attachment);
     auto detach                    (INode_attachment* attachment) -> bool;

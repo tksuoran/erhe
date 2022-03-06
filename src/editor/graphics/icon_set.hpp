@@ -61,6 +61,7 @@ public:
         ImVec2 spot_light       {};
         ImVec2 mesh             {};
         ImVec2 node             {};
+        ImVec2 three_dots        {};
     };
 
     Icons icons;

@@ -19,14 +19,6 @@ class Selection_tool;
 class Node_operation
     : public IOperation
 {
-public:
-    class Context
-    {
-    public:
-        erhe::scene::Scene& scene;
-        Selection_tool*     selection_tool;
-    };
-
 protected:
     class Entry
     {
@@ -36,23 +28,43 @@ protected:
         erhe::scene::Node_data             after;
     };
 
-    explicit Node_operation(Context&& context);
-    ~Node_operation() override;
+    // Implements IOperation
+    [[nodiscard]] auto describe() const -> std::string override;
+    void execute(const Operation_context& context) override;
+    void undo   (const Operation_context& context) override;
+
+    // Public API
+    void add_entry(Entry&& entry);
+
+private:
+    std::vector<Entry> m_entries;
+};
+
+class Node_attach_operation
+    : public IOperation
+{
+public:
+    Node_attach_operation();
+    Node_attach_operation(
+        const std::shared_ptr<erhe::scene::Node>& parent,
+        const std::shared_ptr<erhe::scene::Node>& child
+    );
+    Node_attach_operation(const Node_attach_operation&);
+    Node_attach_operation(Node_attach_operation&& other);
+    auto operator=(const Node_attach_operation&) -> Node_attach_operation&;
+    auto operator=(Node_attach_operation&& other) -> Node_attach_operation&;
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute () const override;
-    void undo    () const override;
-
-    // Public API
-    void add_entry   (Entry&& entry);
-    void make_entries();
+    void execute(const Operation_context& context) override;
+    void undo   (const Operation_context& context) override;
 
 private:
-    Selection_tool*    m_selection_tool{nullptr};
-
-    Context            m_context;
-    std::vector<Entry> m_entries;
+    std::shared_ptr<erhe::scene::Node> m_child_node;
+    std::shared_ptr<erhe::scene::Node> m_parent_before;
+    size_t                             m_parent_before_index;
+    std::shared_ptr<erhe::scene::Node> m_parent_after;
+    size_t                             m_parent_after_index;
 };
 
 }

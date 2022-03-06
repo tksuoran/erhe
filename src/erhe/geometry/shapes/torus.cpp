@@ -42,9 +42,12 @@ public:
     Property_map<Corner_id , vec2>* corner_texcoords {nullptr};
     Property_map<Polygon_id, vec3>* polygon_centroids{nullptr};
     Property_map<Polygon_id, vec3>* polygon_normals  {nullptr};
+    Property_map<Polygon_id, vec4>* polygon_colors   {nullptr};
 
-    auto torus_point(const double rel_major, const double rel_minor)
-    -> Point_id
+    auto torus_point(
+        const double rel_major,
+        const double rel_minor
+    ) -> Point_id
     {
         const double R         = major_radius;
         const double r         = minor_radius;
@@ -154,13 +157,16 @@ public:
         point_tangents    = geometry.point_attributes()  .create<vec4>(c_point_tangents   );
         point_bitangents  = geometry.point_attributes()  .create<vec4>(c_point_bitangents );
         point_texcoords   = geometry.point_attributes()  .create<vec2>(c_point_texcoords  );
+        corner_texcoords  = geometry.corner_attributes() .create<vec2>(c_corner_texcoords );
         polygon_centroids = geometry.polygon_attributes().create<vec3>(c_polygon_centroids);
         polygon_normals   = geometry.polygon_attributes().create<vec3>(c_polygon_normals  );
-        corner_texcoords  = geometry.corner_attributes() .create<vec2>(c_corner_texcoords );
+        polygon_colors    = geometry.polygon_attributes().create<vec4>(c_polygon_colors   );
     }
 
     void build()
     {
+        const glm::vec4 color_no_tangent_map{1.0f, 1.0f, 1.0f, 0.0f};
+
         for (int major = 0; major < major_axis_steps; ++major)
         {
             const auto rel_major = static_cast<double>(major) / static_cast<double>(major_axis_steps);
@@ -198,6 +204,7 @@ public:
                     polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
                 }
                 polygon_normals->put(polygon_id, point_normals->get(centroid_id));
+                polygon_colors ->put(polygon_id, color_no_tangent_map);
             }
         }
 

@@ -525,7 +525,6 @@ void Editor_imgui_windows::connect()
     require<Gl_context_provider>();
     require<Mesh_memory        >();
     require<Programs           >();
-    //require<Scene_root         >();
     require<Window             >();
 }
 
@@ -561,9 +560,6 @@ void Editor_imgui_windows::init_context()
     //io.BackendFlags |= ImGuiBackendFlags_PlatformHasViewports;    // We can create multi-viewports on the Platform side (optional)
 
     m_time = 0.0;
-
-    // Keyboard mapping. Dear ImGui will use those indices to peek into the io.KeysDown[] array.
-    //io.AddKeyEvent
 
     // TODO Clipboard
     // TODO Update monitors

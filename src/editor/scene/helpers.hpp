@@ -42,17 +42,22 @@ namespace editor
 class Node_physics;
 class Node_raytrace;
 
-void add_to_scene_layer(
-    erhe::scene::Scene&                scene,
-    erhe::scene::Mesh_layer&           layer,
-    std::shared_ptr<erhe::scene::Mesh> mesh_node
-);
-
-void add_to_scene_layer(
-    erhe::scene::Scene&                 scene,
-    erhe::scene::Light_layer&           layer,
-    std::shared_ptr<erhe::scene::Light> light_node
-);
+//void add_to_scene_layer(
+//    erhe::scene::Scene&                scene,
+//    erhe::scene::Mesh_layer&           layer,
+//    std::shared_ptr<erhe::scene::Mesh> mesh_node
+//);
+//
+//void add_to_scene_layer(
+//    erhe::scene::Scene&                 scene,
+//    erhe::scene::Light_layer&           layer,
+//    std::shared_ptr<erhe::scene::Light> light_node
+//);
+//
+//void add_to_scene(
+//    erhe::scene::Scene&                  scene,
+//    std::shared_ptr<erhe::scene::Camera> camera
+//);
 
 void add_to_physics_world(
     erhe::physics::IWorld&        physics_world,
@@ -62,18 +67,6 @@ void add_to_physics_world(
 void add_to_raytrace_scene(
     erhe::raytrace::IScene&        raytrace_scene,
     std::shared_ptr<Node_raytrace> node_raytrace
-);
-
-void remove_from_scene_layer(
-    erhe::scene::Scene&                scene,
-    erhe::scene::Mesh_layer&           layer,
-    std::shared_ptr<erhe::scene::Mesh> mesh_node
-);
-
-void remove_from_scene_layer(
-    erhe::scene::Scene&                 scene,
-    erhe::scene::Light_layer&           layer,
-    std::shared_ptr<erhe::scene::Light> light_node
 );
 
 void remove_from_physics_world(

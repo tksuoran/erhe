@@ -36,7 +36,7 @@ auto Mesh_operation::describe() const -> std::string
 
 Mesh_operation::~Mesh_operation() = default;
 
-void Mesh_operation::execute() const
+void Mesh_operation::execute(const Operation_context&)
 {
     for (const auto& entry : m_entries)
     {
@@ -46,7 +46,7 @@ void Mesh_operation::execute() const
     }
 }
 
-void Mesh_operation::undo() const
+void Mesh_operation::undo(const Operation_context&)
 {
     for (const auto& entry : m_entries)
     {

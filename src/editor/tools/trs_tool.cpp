@@ -936,8 +936,9 @@ void Trs_tool::update_rotate_final()
 
 void Trs_tool::set_node_world_transform(const dmat4 world_from_node)
 {
-    const dmat4 parent_from_world = (root()->parent() != nullptr)
-        ? dmat4{root()->parent()->node_from_world()} * world_from_node
+    const auto& root_parent = root()->parent().lock();
+    const dmat4 parent_from_world = root_parent
+        ? dmat4{root_parent->node_from_world()} * world_from_node
         : world_from_node;
     root()->set_parent_from_node(mat4{parent_from_world});
  }

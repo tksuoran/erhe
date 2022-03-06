@@ -24,6 +24,7 @@ Property_maps::Property_maps(
 
     polygon_normals      = geometry.polygon_attributes().find<vec3>(erhe::geometry::c_polygon_normals     );
     polygon_centroids    = geometry.polygon_attributes().find<vec3>(erhe::geometry::c_polygon_centroids   );
+    polygon_colors       = geometry.polygon_attributes().find<vec4>(erhe::geometry::c_polygon_colors      );
     corner_normals       = geometry.corner_attributes ().find<vec3>(erhe::geometry::c_corner_normals      );
     corner_tangents      = geometry.corner_attributes ().find<vec4>(erhe::geometry::c_corner_tangents     );
     corner_bitangents    = geometry.corner_attributes ().find<vec4>(erhe::geometry::c_corner_bitangents   );

@@ -63,8 +63,8 @@ protected:
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute () const override;
-    void undo    () const override;
+    void execute(const Operation_context& context) override;
+    void undo   (const Operation_context& context) override;
 
     // Public API
     void add_entry(Entry&& entry);

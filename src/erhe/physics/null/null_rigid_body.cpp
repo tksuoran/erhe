@@ -1,6 +1,7 @@
 #include "erhe/physics/null/null_rigid_body.hpp"
 #include "erhe/physics/null/null_collision_shape.hpp"
 #include "erhe/physics/imotion_state.hpp"
+#include "erhe/physics/iworld.hpp"
 #include "erhe/scene/node.hpp"
 
 #include <glm/glm.hpp>
@@ -9,7 +10,7 @@
 namespace erhe::physics
 {
 
-auto IRigid_body::create(
+auto IWorld::create_rigid_body(
     const IRigid_body_create_info& create_info,
     IMotion_state*                 motion_state
 ) -> IRigid_body*
@@ -17,7 +18,7 @@ auto IRigid_body::create(
     return new Null_rigid_body(create_info, motion_state);
 }
 
-auto IRigid_body::create_shared(
+auto IWorld::create_rigid_body_shared(
     const IRigid_body_create_info& create_info,
     IMotion_state*                 motion_state
 ) -> std::shared_ptr<IRigid_body>
@@ -39,6 +40,8 @@ Null_rigid_body::Null_rigid_body(
     }
 {
 }
+
+IRigid_body::~IRigid_body() = default;
 
 Null_rigid_body::~Null_rigid_body() = default;
 

@@ -106,6 +106,8 @@ void Frame_controller::on_node_transform_changed()
     node->update_transform();
     const vec4 position  = node->position_in_world();
     const vec4 direction = node->direction_in_world();
+    //const vec4 position  = node->position_in_parent();
+    //const vec4 direction = node->direction_in_parent();
 
     m_position = position;
     float heading{0.0f};
@@ -160,7 +162,8 @@ void Frame_controller::update()
    */
     //m_local_from_parent = inverse(m_parent_from_local);
     m_transform_update = true;
-    node->set_parent_from_node(parent_from_local);
+    //node->set_parent_from_node(parent_from_local);
+    node->set_world_from_node(parent_from_local);
     m_transform_update = false;
 
     //vec4 position  = m_node->world_from_local.matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f};

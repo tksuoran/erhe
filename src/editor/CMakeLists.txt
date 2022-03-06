@@ -49,6 +49,8 @@ erhe_target_sources_grouped(
     operations/merge_operation.hpp
     operations/mesh_operation.cpp
     operations/mesh_operation.hpp
+    operations/node_operation.cpp
+    operations/node_operation.hpp
     operations/operation_stack.cpp
     operations/operation_stack.hpp
     operations/selection_change_operation.cpp
@@ -85,6 +87,8 @@ erhe_target_sources_grouped(
     renderers/shadow_renderer.hpp
     renderers/text_renderer.cpp
     renderers/text_renderer.hpp
+    renderers/texture_renderer.cpp
+    renderers/texture_renderer.hpp
 
     scene/brush.cpp
     scene/brush.hpp

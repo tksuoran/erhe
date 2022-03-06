@@ -122,7 +122,7 @@ Merge_operation::Merge_operation(Context&& context)
             reference_node_from_world = mesh->node_from_world();
             transform  = mat4{1};
             first_mesh = false;
-            m_parent = mesh->parent();
+            m_parent = mesh->parent().lock();
             m_state_after.selection.push_back(mesh);
             m_state_before.collision_shape = collision_shape;
             m_state_before.mass            = node_physics ? node_physics->rigid_body()->get_mass()          : 0.0f;
@@ -201,7 +201,7 @@ Merge_operation::Merge_operation(Context&& context)
     m_combined_primitive.normal_style    = normal_style;
 }
 
-void Merge_operation::execute() const
+void Merge_operation::execute(const Operation_context&)
 {
     m_context.scene.sanity_check();
 
@@ -236,7 +236,7 @@ void Merge_operation::execute() const
                 mesh->detach(node_physics.get());
             }
             mesh->unparent();
-            remove_from_scene_layer(m_context.scene, m_context.layer, mesh);
+            m_context.scene.remove(mesh);
         }
     }
     m_context.selection_tool->set_selection(m_state_after.selection);
@@ -244,7 +244,7 @@ void Merge_operation::execute() const
     m_context.scene.sanity_check();
 }
 
-void Merge_operation::undo() const
+void Merge_operation::undo(const Operation_context&)
 {
     m_context.scene.sanity_check();
 
@@ -280,7 +280,7 @@ void Merge_operation::undo() const
             {
                 m_parent->attach(mesh);
             }
-            add_to_scene_layer(m_context.scene, m_context.layer, mesh);
+            m_context.scene.add_to_mesh_layer(m_context.layer, mesh);
         }
     }
     m_context.scene.nodes_sorted = false;

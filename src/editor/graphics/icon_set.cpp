@@ -69,6 +69,7 @@ void Icon_set::initialize_component()
     icons.point_light       = load(icon_directory / "point_light.svg");
     icons.mesh              = load(icon_directory / "mesh.svg");
     icons.node              = load(icon_directory / "node.svg");
+    icons.three_dots        = load(icon_directory / "three_dots.svg");
 }
 
 auto Icon_set::load(const fs::path& path) -> ImVec2

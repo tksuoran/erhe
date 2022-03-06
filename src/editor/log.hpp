@@ -26,6 +26,7 @@ extern erhe::log::Category log_gl;
 extern erhe::log::Category log_headset;
 extern erhe::log::Category log_scene;
 extern erhe::log::Category log_performance;
+extern erhe::log::Category log_node_properties;
 
 extern erhe::log::Category log_command_state_transition;
 extern erhe::log::Category log_input_event;

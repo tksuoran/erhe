@@ -12,22 +12,25 @@ class Compound_operation
     : public IOperation
 {
 public:
-    class Context
+    class Parameters
     {
     public:
+        Parameters();
+        ~Parameters();
+
         std::vector<std::shared_ptr<IOperation>> operations;
     };
 
-    explicit Compound_operation(Context&& context);
+    explicit Compound_operation(Parameters&& parameters);
     ~Compound_operation        () override;
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute () const override;
-    void undo    () const override;
+    void execute (const Operation_context& context) override;
+    void undo    (const Operation_context& context) override;
 
 private:
-    Context m_context;
+    Parameters m_parameters;
 };
 
 }

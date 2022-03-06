@@ -31,6 +31,7 @@
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "renderers/text_renderer.hpp"
+#include "renderers/texture_renderer.hpp"
 
 #include "tools/fly_camera_tool.hpp"
 #include "tools/grid_tool.hpp"
@@ -143,6 +144,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Shader_monitor      >());
         m_components.add(make_shared<Shadow_renderer     >());
         m_components.add(make_shared<Text_renderer       >());
+        m_components.add(make_shared<Texture_renderer    >());
         m_components.add(make_shared<Textures            >());
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         m_components.add(make_shared<Theremin              >());

@@ -121,11 +121,8 @@ auto Scene_builder::make_camera(
     camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
     camera->projection()->z_near          = 0.03f;
     camera->projection()->z_far           = 200.0f;
-    m_scene_root->scene().cameras.push_back(camera);
 
-    auto& scene = m_scene_root->scene();
-    scene.nodes.emplace_back(camera);
-    scene.nodes_sorted = false;
+    m_scene_root->scene().add(camera);
 
     const mat4 m = erhe::toolkit::create_look_at(
         position, // eye
@@ -209,57 +206,60 @@ void Scene_builder::make_brushes()
     //m_scene_root->physics_world().collision_shapes.push_back(floor_box_shape);
 
     // Floor
-    execution_queue.enqueue(
-        [this, /*floor_size,*/ &floor_box_shape/*, &table_box_shape*/]()
-        {
-            ERHE_PROFILE_SCOPE("Floor brush");
+    if constexpr (true)
+    {
+        execution_queue.enqueue(
+            [this, /*floor_size,*/ &floor_box_shape/*, &table_box_shape*/]()
+            {
+                ERHE_PROFILE_SCOPE("Floor brush");
 
-            Brush_create_context context{
-                .build_info   = build_info(),
-                .normal_style = Normal_style::corner_normals
-            };
-            context.normal_style = Normal_style::polygon_normals;
+                Brush_create_context context{
+                    .build_info   = build_info(),
+                    .normal_style = Normal_style::corner_normals
+                };
+                context.normal_style = Normal_style::polygon_normals;
 
-            auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
-                make_box(
-                    vec3{floor_size, 1.0f, floor_size},
-                    ivec3{static_cast<int>(floor_size), 1, static_cast<int>(floor_size)}
-                )
-            );
-            floor_geometry->name = "floor";
-            floor_geometry->build_edges();
+                auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
+                    make_box(
+                        vec3{floor_size, 1.0f, floor_size},
+                        ivec3{static_cast<int>(floor_size), 1, static_cast<int>(floor_size)}
+                    )
+                );
+                floor_geometry->name = "floor";
+                floor_geometry->build_edges();
 
-            m_floor_brush = std::make_unique<Brush>(
-                Brush::Create_info{
-                    .geometry        = floor_geometry,
-                    .build_info      = build_info(),
-                    .normal_style    = Normal_style::polygon_normals,
-                    .density         = 0.0f,
-                    .volume          = 0.0f,
-                    .collision_shape = floor_box_shape
-                }
-            );
+                m_floor_brush = std::make_unique<Brush>(
+                    Brush::Create_info{
+                        .geometry        = floor_geometry,
+                        .build_info      = build_info(),
+                        .normal_style    = Normal_style::polygon_normals,
+                        .density         = 0.0f,
+                        .volume          = 0.0f,
+                        .collision_shape = floor_box_shape
+                    }
+                );
 
-            //auto table_geometry = std::make_shared<erhe::geometry::Geometry>(
-            //    make_box(
-            //        vec3{2.0f, 1.0f, 1.0f},
-            //        ivec3{10, 1, 10}
-            //    )
-            //);
-            //table_geometry->name = "table";
-            //table_geometry->build_edges();
-            //m_table_brush = make_unique<Brush>(
-            //    Brush::Create_info{
-            //        .geometry        = table_geometry,
-            //        .build_info_set  = build_info_set(),
-            //        .normal_style    = Normal_style::polygon_normals,
-            //        .density         = 0.0f,
-            //        .volume          = 0.0f,
-            //        .collision_shape = table_box_shape
-            //    }
-            //);
-        }
-    );
+                //auto table_geometry = std::make_shared<erhe::geometry::Geometry>(
+                //    make_box(
+                //        vec3{2.0f, 1.0f, 1.0f},
+                //        ivec3{10, 1, 10}
+                //    )
+                //);
+                //table_geometry->name = "table";
+                //table_geometry->build_edges();
+                //m_table_brush = make_unique<Brush>(
+                //    Brush::Create_info{
+                //        .geometry        = table_geometry,
+                //        .build_info_set  = build_info_set(),
+                //        .normal_style    = Normal_style::polygon_normals,
+                //        .density         = 0.0f,
+                //        .volume          = 0.0f,
+                //        .collision_shape = table_box_shape
+                //    }
+                //);
+            }
+        );
+    }
 
     constexpr bool gltf_files              = false;
     constexpr bool obj_files               = false;
@@ -487,7 +487,7 @@ void Scene_builder::make_brushes()
                 auto cylinder_geometry = make_cylinder(
                     -1.0f * object_scale,
                      1.0f * object_scale,
-                     1.0f * object_scale, true, true, 32, 2
+                     1.0f * object_scale, true, true, 36, 4
                 ); // always axis = x
                 cylinder_geometry.transform(erhe::toolkit::mat4_swap_xy); // convert to axis = y
 
@@ -580,8 +580,7 @@ void Scene_builder::make_brushes()
                     Node_visibility::id
                 );
             mesh->set_parent_from_node(transform);
-            add_to_scene_layer(
-                m_scene_root->scene(),
+            m_scene_root->scene().add_to_mesh_layer(
                 *m_scene_root->content_layer(),
                 mesh
             );
@@ -673,8 +672,7 @@ void Scene_builder::add_room()
          //Node_visibility::shadow_cast |
          Node_visibility::id);
 
-    add_to_scene_layer(
-        m_scene_root->scene(),
+    m_scene_root->scene().add_to_mesh_layer(
         *m_scene_root->content_layer(),
         floor_instance.mesh
     );
@@ -742,7 +740,7 @@ void Scene_builder::make_mesh_nodes()
     int group_width = 2;
     int group_depth = 2;
 
-    constexpr float gap          = 0.2f;
+    constexpr float gap          = 0.4f;
     constexpr float bottom_y_pos = 0.01f;
 
     glm::ivec2 max_corner;
@@ -816,7 +814,8 @@ void Scene_builder::make_mesh_nodes()
         auto instance = brush->make_instance(brush_instance_create_info);
         m_scene_root->add_instance(instance);
 
-        do {
+        do
+        {
             material_index = (material_index + 1) % m_scene_root->materials().size();
         }
         while (!m_scene_root->materials().at(material_index)->visible);
@@ -835,7 +834,7 @@ void Scene_builder::make_cube_benchmark()
     auto cube     = make_cube(0.1f);
     auto cube_pg  = make_primitive(cube, build_info(), Normal_style::polygon_normals);
 
-    constexpr float scale = 0.5f;
+    constexpr float scale   = 0.5f;
     constexpr int   x_count = 20;
     constexpr int   y_count = 20;
     constexpr int   z_count = 20;
@@ -890,18 +889,17 @@ auto Scene_builder::make_directional_light(
     light->projection()->z_near          =   5.0f;
     light->projection()->z_far           =  20.0f;
 
+    m_scene_root->scene().add_to_light_layer(
+        *m_scene_root->light_layer(),
+        light
+    );
+
     const mat4 m = erhe::toolkit::create_look_at(
         position,                 // eye
         vec3{0.0f,  0.0f, 0.0f},  // center
         vec3{0.0f,  1.0f, 0.0f}   // up
     );
     light->set_parent_from_node(m);
-
-    add_to_scene_layer(
-        m_scene_root->scene(),
-        *m_scene_root->light_layer(),
-        light
-    );
 
     return light;
 }
@@ -928,14 +926,13 @@ auto Scene_builder::make_spot_light(
     light->projection()->z_near          =  1.0f;
     light->projection()->z_far           = 100.0f;
 
-    const mat4 m = erhe::toolkit::create_look_at(position, target, vec3{0.0f, 0.0f, 1.0f});
-    light->set_parent_from_node(m);
-
-    add_to_scene_layer(
-        m_scene_root->scene(),
+    m_scene_root->scene().add_to_light_layer(
         *m_scene_root->light_layer(),
         light
     );
+
+    const mat4 m = erhe::toolkit::create_look_at(position, target, vec3{0.0f, 0.0f, 1.0f});
+    light->set_parent_from_node(m);
 
     return light;
 }
@@ -968,7 +965,7 @@ void Scene_builder::setup_lights()
     //    }
     //);
 
-    constexpr int directional_light_count = 3;
+    constexpr int directional_light_count = 6;
     if constexpr (directional_light_count > 0)
     {
         for (int i = 0; i < directional_light_count; ++i)
@@ -992,7 +989,7 @@ void Scene_builder::setup_lights()
         }
     }
 
-    constexpr int spot_light_count = 0;
+    constexpr int spot_light_count = 3;
     if constexpr (spot_light_count > 0)
     {
         for (int i = 0; i < spot_light_count; ++i)
@@ -1058,7 +1055,7 @@ void Scene_builder::animate_lights(const double time_d)
 
     for (auto i = lights.begin(); i != lights.end(); ++i)
     {
-        auto l = *i;
+        const auto& l = *i;
         if (l->type == Light::Type::directional)
         {
             continue;

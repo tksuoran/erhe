@@ -52,6 +52,7 @@ public:
     Property_map<Corner_id , vec2>* corner_texcoords {nullptr};
     Property_map<Polygon_id, vec3>* polygon_centroids{nullptr};
     Property_map<Polygon_id, vec3>* polygon_normals  {nullptr};
+    Property_map<Polygon_id, vec4>* polygon_colors   {nullptr};
 
     auto get_point(const int slice, const int stack) -> Point_id
     {
@@ -122,7 +123,11 @@ public:
         return point_id;
     }
 
-    Corner_id make_corner(const Polygon_id polygon_id, const int slice, const int stack_base0)
+    auto make_corner(
+        const Polygon_id polygon_id,
+        const int        slice,
+        const int        stack_base0
+    ) -> Corner_id
     {
         Expects(slice >= 0);
 
@@ -193,16 +198,19 @@ public:
         point_tangents    = geometry.point_attributes  ().create<vec4>(c_point_tangents   );
         point_bitangents  = geometry.point_attributes  ().create<vec4>(c_point_bitangents );
         point_texcoords   = geometry.point_attributes  ().create<vec2>(c_point_texcoords  );
-        polygon_centroids = geometry.polygon_attributes().create<vec3>(c_polygon_centroids);
-        polygon_normals   = geometry.polygon_attributes().create<vec3>(c_polygon_normals  );
         corner_normals    = geometry.corner_attributes ().create<vec3>(c_corner_normals   );
         corner_tangents   = geometry.corner_attributes ().create<vec4>(c_corner_tangents  );
         corner_bitangents = geometry.corner_attributes ().create<vec4>(c_corner_bitangents);
         corner_texcoords  = geometry.corner_attributes ().create<vec2>(c_corner_texcoords );
+        polygon_centroids = geometry.polygon_attributes().create<vec3>(c_polygon_centroids);
+        polygon_normals   = geometry.polygon_attributes().create<vec3>(c_polygon_normals  );
+        polygon_colors    = geometry.polygon_attributes().create<vec4>(c_polygon_colors   );
     }
 
     void build()
     {
+        const glm::vec4 color_no_tangent_map{1.0f, 1.0f, 1.0f, 0.0f};
+
         bottom_point_id = sphere_point(0.5f, -1.0f);
         top_point_id    = sphere_point(0.5f,  1.0f);
         point_normals ->put(bottom_point_id, vec3{0.0f,-1.0f, 0.0f});
@@ -270,6 +278,7 @@ public:
                     polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
                 }
                 polygon_normals->put(polygon_id, point_normals->get(centroid_id));
+                polygon_colors ->put(polygon_id, color_no_tangent_map);
             }
         }
 
@@ -296,6 +305,7 @@ public:
                     polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
                 }
                 polygon_normals->put(polygon_id, point_normals->get(centroid_id));
+                polygon_colors ->put(polygon_id, color_no_tangent_map);
             }
         }
 
@@ -343,6 +353,7 @@ public:
                 polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
             }
             polygon_normals->put(polygon_id, point_normals->get(centroid_id));
+            polygon_colors ->put(polygon_id, color_no_tangent_map);
         }
 
         geometry.make_point_corners();

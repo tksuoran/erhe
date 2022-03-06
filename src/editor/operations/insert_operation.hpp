@@ -50,8 +50,8 @@ public:
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute () const override;
-    void undo    () const override;
+    void execute(const Operation_context& context) override;
+    void undo   (const Operation_context& context) override;
 
 private:
     Context m_context;
@@ -97,7 +97,6 @@ public:
         std::shared_ptr<Node_physics>      node_physics;
         std::shared_ptr<erhe::scene::Node> parent;
         Mode                               mode;
-        Selection_tool*                    selection_tool{nullptr};
     };
 
     explicit Mesh_insert_remove_operation(const Context& context);
@@ -105,15 +104,16 @@ public:
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute () const override;
-    void undo    () const override;
+    void execute(const Operation_context& context) override;
+    void undo   (const Operation_context& context) override;
 
 private:
-    void execute(const Mode mode) const;
+    void execute(
+        const Operation_context& context,
+        const Mode               mode
+    ) const;
 
-    Context                                         m_context;
-    std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_before;
-    std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_after;
+    Context m_context;
 };
 
 class Light_insert_remove_operation
@@ -128,7 +128,6 @@ public:
         std::shared_ptr<erhe::scene::Light> light;
         std::shared_ptr<erhe::scene::Node>  parent;
         Mode                                mode;
-        Selection_tool*                     selection_tool{nullptr};
     };
 
     explicit Light_insert_remove_operation(const Context& context);
@@ -136,11 +135,46 @@ public:
 
     // Public API
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute () const override;
-    void undo    () const override;
+    void execute(const Operation_context& context) override;
+    void undo   (const Operation_context& context) override;
 
 private:
-    void execute(const Mode mode) const;
+    void execute(
+        const Operation_context& context,
+        const Mode               mode
+    );
+
+    Context                                         m_context;
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_before;
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_after;
+};
+
+class Camera_insert_remove_operation
+    : public Scene_item_operation
+{
+public:
+    class Context
+    {
+    public:
+        erhe::scene::Scene&                  scene;
+        std::shared_ptr<erhe::scene::Camera> camera;
+        std::shared_ptr<erhe::scene::Node>   parent;
+        Mode                                 mode;
+    };
+
+    explicit Camera_insert_remove_operation(const Context& context);
+    ~Camera_insert_remove_operation        () override;
+
+    // Public API
+    [[nodiscard]] auto describe() const -> std::string override;
+    void execute(const Operation_context& context) override;
+    void undo   (const Operation_context& context) override;
+
+private:
+    void execute(
+        const Operation_context& context,
+        const Mode               mode
+    ) const;
 
     Context                                         m_context;
     std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_before;

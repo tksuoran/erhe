@@ -22,7 +22,7 @@ Attach_detach_operation::Attach_detach_operation(Context&& context)
     }
 
     bool first = true;
-    for (auto node : selection)
+    for (auto& node : selection)
     {
         if (first)
         {
@@ -35,7 +35,7 @@ Attach_detach_operation::Attach_detach_operation(Context&& context)
 
             if (context.attach)
             {
-                if (node->parent() == nullptr)
+                if (node->parent().expired())
                 {
                     m_entries.emplace_back(node);
                 }
@@ -50,7 +50,7 @@ Attach_detach_operation::Attach_detach_operation(Context&& context)
             }
             else
             {
-                if (node->parent() == m_parent_node.get())
+                if (node->parent().lock() == m_parent_node)
                 {
                     m_entries.emplace_back(node);
                 }
@@ -91,12 +91,12 @@ auto Attach_detach_operation::describe() const -> std::string
     return ss.str();
 }
 
-void Attach_detach_operation::execute() const
+void Attach_detach_operation::execute(const Operation_context&)
 {
     execute(m_context.attach);
 }
 
-void Attach_detach_operation::undo() const
+void Attach_detach_operation::undo(const Operation_context&)
 {
     execute(!m_context.attach);
 }

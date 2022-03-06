@@ -77,6 +77,8 @@ void Log_window::initialize_component()
     log_gl          .set_sink(this);
     log_headset     .set_sink(this);
     log_scene       .set_sink(this);
+    log_performance .set_sink(this);
+    log_node_properties.set_sink(this);
 
     log_command_state_transition.set_sink(this);
     log_input_event             .set_sink(this);
@@ -87,7 +89,7 @@ void Log_window::initialize_component()
     view->register_command   (&m_toggle_pause_command);
     view->bind_command_to_key(&m_toggle_pause_command, erhe::toolkit::Key_escape);
 
-    //hide();
+    hide();
 }
 
 void Log_window::toggle_pause()

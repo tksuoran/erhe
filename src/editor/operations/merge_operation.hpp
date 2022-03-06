@@ -55,8 +55,8 @@ public:
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute () const override;
-    void undo    () const override;
+    void execute(const Operation_context& context) override;
+    void undo   (const Operation_context& context) override;
 
 private:
     class Source_entry
@@ -86,7 +86,7 @@ private:
     };
 
     Context                                                     m_context;
-    erhe::scene::Node*                                          m_parent{nullptr};
+    std::shared_ptr<erhe::scene::Node>                          m_parent;
     std::vector<Source_entry>                                   m_source_entries;
     erhe::primitive::Primitive                                  m_combined_primitive;
     State_data                                                  m_state_before;

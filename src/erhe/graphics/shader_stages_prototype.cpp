@@ -495,6 +495,19 @@ Shader_stages::Prototype::Prototype(
         {
             dump_reflection();
         }
+        if (create_info.dump_interface)
+        {
+            const string f_source = format(create_info.interface_source());
+            log_glsl.info("\n{}\n", f_source);
+        }
+        if (create_info.dump_final_source)
+        {
+            for (const auto& s : create_info.shaders)
+            {
+                const string f_source = format(create_info.final_source(s));
+                log_glsl.info("\n{}\n", f_source);
+            }
+        }
     }
 }
 

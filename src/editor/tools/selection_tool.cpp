@@ -21,6 +21,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
+#include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 #include <imgui.h>
@@ -31,6 +32,95 @@ namespace editor
 using glm::mat4;
 using glm::vec3;
 using glm::vec4;
+
+Range_selection::Range_selection(Selection_tool& selection_tool)
+    : m_selection_tool{selection_tool}
+{
+
+}
+
+void Range_selection::set_terminator(const std::shared_ptr<erhe::scene::Node>& node)
+{
+    if (!m_primary_terminator)
+    {
+        log_selection.trace("setting primary terminator to {} {}\n", node->node_type(), node->name());
+        m_primary_terminator = node;
+        m_edited = true;
+        return;
+    }
+    if (m_secondary_terminator == node)
+    {
+        return;
+    }
+    log_selection.trace("setting secondary terminator to {} {}\n", node->node_type(), node->name());
+    m_secondary_terminator = node;
+    m_edited = true;
+}
+
+void Range_selection::entry(const std::shared_ptr<erhe::scene::Node>& node)
+{
+    m_entries.push_back(node);
+}
+
+void Range_selection::begin()
+{
+    m_edited = false;
+    m_entries.clear();
+}
+
+void Range_selection::end()
+{
+    if (m_entries.empty() || !m_edited || !m_primary_terminator || !m_secondary_terminator)
+    {
+        m_entries.clear();
+        return;
+    }
+    log_selection.trace("setting selection since range was modified\n");
+
+    std::vector<std::shared_ptr<erhe::scene::Node>> selection;
+    bool                                            between_terminators{false};
+    for (const auto& node : m_entries)
+    {
+        if (
+            (node == m_primary_terminator) ||
+            (node == m_secondary_terminator)
+        )
+        {
+            log_selection.trace("    ! {} {} {}\n", node->node_type(), node->name(), node->get_id());
+            selection.push_back(node);
+            between_terminators = !between_terminators;
+            continue;
+        }
+        if (between_terminators)
+        {
+            log_selection.trace("    + {} {} {}\n", node->node_type(), node->name(), node->get_id());
+            selection.push_back(node);
+        }
+        else
+        {
+            log_selection.trace("    - {} {} {}\n", node->node_type(), node->name(), node->get_id());
+        }
+    }
+    if (selection.empty())
+    {
+        m_entries.clear();
+        return;
+    }
+
+    m_selection_tool.set_selection(selection);
+    m_entries.clear();
+}
+
+void Range_selection::reset()
+{
+    log_selection.trace("resetting range selection\n");
+    if (m_primary_terminator && m_secondary_terminator)
+    {
+        m_selection_tool.clear_selection();
+    }
+    m_primary_terminator.reset();
+    m_secondary_terminator.reset();
+}
 
 void Selection_tool_select_command::try_ready(Command_context& context)
 {
@@ -67,16 +157,14 @@ auto Selection_tool::delete_selection() -> bool
     }
 
     const auto scene_root = get<Scene_root>();
-    Compound_operation::Context compound_context;
+    Compound_operation::Parameters compound_parameters;
     for (auto& node : m_selection)
     {
         // TODO Handle all node types
         if (is_mesh(node))
         {
             const auto mesh = as_mesh(node);
-
-            auto* parent = mesh->parent();
-            compound_context.operations.push_back(
+            compound_parameters.operations.push_back(
                 std::make_shared<Mesh_insert_remove_operation>(
                     Mesh_insert_remove_operation::Context{
                         .scene          = scene_root->scene(),
@@ -84,50 +172,62 @@ auto Selection_tool::delete_selection() -> bool
                         .physics_world  = scene_root->physics_world(),
                         .mesh           = mesh,
                         .node_physics   = get_physics_node(mesh.get()),
-                        .parent         = (parent != nullptr)
-                            ? parent->shared_from_this()
-                            : std::shared_ptr<erhe::scene::Node>{},
+                        .parent         = mesh->parent().lock(),
                         .mode           = Scene_item_operation::Mode::remove,
-                        .selection_tool = this
                     }
                 )
             );
         }
-        if (is_light(node))
+        else if (is_light(node))
         {
             const auto light = as_light(node);
-
-            auto* parent = light->parent();
-            compound_context.operations.push_back(
+            compound_parameters.operations.push_back(
                 std::make_shared<Light_insert_remove_operation>(
                     Light_insert_remove_operation::Context{
                         .scene          = scene_root->scene(),
                         .layer          = *scene_root->light_layer(),
                         .light          = light,
-                        .parent         = (parent != nullptr)
-                            ? parent->shared_from_this()
-                            : std::shared_ptr<erhe::scene::Node>{},
+                        .parent         = light->parent().lock(),
                         .mode           = Scene_item_operation::Mode::remove,
-                        .selection_tool = this
+                    }
+                )
+            );
+        }
+        else if (is_camera(node))
+        {
+            const auto camera = as_camera(node);
+            compound_parameters.operations.push_back(
+                std::make_shared<Camera_insert_remove_operation>(
+                    Camera_insert_remove_operation::Context{
+                        .scene          = scene_root->scene(),
+                        .camera         = camera,
+                        .parent         = camera->parent().lock(),
+                        .mode           = Scene_item_operation::Mode::remove,
                     }
                 )
             );
         }
     }
-    if (compound_context.operations.empty())
+    if (compound_parameters.operations.empty())
     {
         return false;
     }
 
-    auto op = std::make_shared<Compound_operation>(std::move(compound_context));
+    auto op = std::make_shared<Compound_operation>(std::move(compound_parameters));
     get<Operation_stack>()->push(op);
     return true;
+}
+
+auto Selection_tool::range_selection() -> Range_selection&
+{
+    return m_range_selection;
 }
 
 Selection_tool::Selection_tool()
     : erhe::components::Component{c_name}
     , m_select_command           {*this}
     , m_delete_command           {*this}
+    , m_range_selection          {*this}
 {
 }
 
@@ -136,8 +236,9 @@ Selection_tool::~Selection_tool() = default;
 void Selection_tool::connect()
 {
     m_line_renderer_set = get<Line_renderer_set>();
-    m_pointer_context   = get<Pointer_context>();
-    m_viewport_config   = get<Viewport_config>();
+    m_pointer_context   = get<Pointer_context  >();
+    m_scene_root        = get<Scene_root       >();
+    m_viewport_config   = get<Viewport_config  >();
 
     require<Editor_tools>();
     require<Editor_view >();
@@ -172,8 +273,35 @@ auto Selection_tool::selection() const -> const Selection&
     return m_selection;
 }
 
+template <typename T>
+[[nodiscard]] auto is_in(
+    const T&       item,
+    std::vector<T> items
+) -> bool
+{
+    return std::find(
+        items.begin(),
+        items.end(),
+        item
+    ) != items.end();
+}
+
 void Selection_tool::set_selection(const Selection& selection)
 {
+    for (auto& node : m_selection)
+    {
+        if (
+            node->is_selected() &&
+            !is_in(node, selection)
+        )
+        {
+            node->visibility_mask() &= ~erhe::scene::Node_visibility::selected;
+        }
+    }
+    for (auto& node : selection)
+    {
+        node->visibility_mask() |= erhe::scene::Node_visibility::selected;
+    }
     m_selection = selection;
     call_selection_change_subscriptions();
 }
@@ -209,7 +337,7 @@ auto Selection_tool::mouse_select_try_ready() -> bool
 
 auto Selection_tool::on_mouse_select() -> bool
 {
-    if (m_pointer_context->shift_key_down())
+    if (m_pointer_context->control_key_down())
     {
         if (m_hover_content)
         {
@@ -225,6 +353,7 @@ auto Selection_tool::on_mouse_select() -> bool
     }
     else
     {
+        m_range_selection.reset();
         toggle_selection(m_hover_mesh, true);
     }
     return true;
@@ -249,6 +378,8 @@ auto Selection_tool::clear_selection() -> bool
 
     log_selection.trace("Clearing selection ({} items were selected)\n", m_selection.size());
     m_selection.clear();
+    m_range_selection.reset();
+    sanity_check();
     call_selection_change_subscriptions();
     return true;
 }
@@ -266,6 +397,7 @@ void Selection_tool::toggle_selection(
         if (!was_selected && item)
         {
             add_to_selection(item);
+            m_range_selection.set_terminator(item);
         }
     }
     else if (item)
@@ -350,6 +482,57 @@ auto Selection_tool::remove_from_selection(
 
     log_selection.info("Removing item {} from selection failed - was not in selection\n", item->name());
     return false;
+}
+
+void Selection_tool::update_selection_from_node(const std::shared_ptr<erhe::scene::Node>& node, const bool added)
+{
+    if (node->is_selected() && added)
+    {
+        if (!is_in(node, m_selection))
+        {
+            m_selection.push_back(node);
+            call_selection_change_subscriptions();
+        }
+    }
+    else
+    {
+        if (is_in(node, m_selection))
+        {
+            const auto i = std::remove(
+                m_selection.begin(),
+                m_selection.end(),
+                node
+            );
+            if (i != m_selection.end())
+            {
+                m_selection.erase(i, m_selection.end());
+                call_selection_change_subscriptions();
+            }
+        }
+    }
+}
+
+void Selection_tool::sanity_check()
+{
+    const auto& scene = m_scene_root->scene();
+    size_t error_count{0};
+    for (const auto& node : scene.flat_node_vector)
+    {
+        if (node->is_selected() && !is_in(node, m_selection))
+        {
+            log_selection.error("Node has selection flag set without being in selection\n");
+            ++error_count;
+        }
+        else if (!node->is_selected() && is_in(node, m_selection))
+        {
+            log_selection.error("Node does not have selection flag set while being in selection\n");
+            ++error_count;
+        }
+    }
+    if (error_count > 0)
+    {
+        log_selection.error("Selection errors: {}\n", error_count);
+    }
 }
 
 void Selection_tool::call_selection_change_subscriptions() const

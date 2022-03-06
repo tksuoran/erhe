@@ -1,6 +1,7 @@
 #include "windows/node_properties.hpp"
 #include "editor_imgui_windows.hpp"
 #include "imgui_helpers.hpp"
+#include "log.hpp"
 
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -23,10 +24,17 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtc/constants.hpp>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
 namespace editor
 {
+
+void Node_properties::Value_edit_state::combine(const Value_edit_state& other)
+{
+    value_changed = value_changed || other.value_changed;
+    edit_ended    = edit_ended || other.edit_ended;
+}
 
 Node_properties::Node_properties()
     : erhe::components::Component{c_name}
@@ -244,6 +252,148 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
     ImGui::PopID();
 }
 
+namespace {
+
+static inline ImVec2 operator+(const ImVec2& lhs, const ImVec2& rhs)
+{
+    return ImVec2{lhs.x + rhs.x, lhs.y + rhs.y};
+}
+
+static inline ImVec2 operator-(const ImVec2& lhs, const ImVec2& rhs)
+{
+    return ImVec2{lhs.x - rhs.x, lhs.y - rhs.y};
+}
+
+static const float DRAG_MOUSE_THRESHOLD_FACTOR = 0.50f;    // Multiplier for the default value of io.MouseDragThreshold to make DragFloat/DragInt react faster to mouse drags.
+
+class Custom_drag_result
+{
+public:
+    bool text_edited{false};
+    bool drag_edited{false};
+};
+
+// Fork of DragScalar() so we can differentiate between drag and text edit
+auto custom_drag_scalar(
+    const char*      label,
+    void*            p_data,
+    float            v_speed = 1.0f,
+    float            min     = 0.0f,
+    float            max     = 0.0f,
+    const char*      format  = "%.3f"
+) -> Custom_drag_result
+{
+    ImGuiDataType    data_type = ImGuiDataType_Float;
+    ImGuiSliderFlags flags = 0;
+    float*           p_min = &min;
+    float*           p_max = &max;
+
+    Custom_drag_result result;
+
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    if (window->SkipItems)
+    {
+        return result;
+    }
+
+    ImGuiContext& g = *GImGui;
+    const ImGuiStyle& style = g.Style;
+    const ImGuiID id = window->GetID(label);
+    const float w = ImGui::CalcItemWidth();
+
+    const ImVec2 label_size = ImGui::CalcTextSize(label, NULL, true);
+    const ImRect frame_bb(window->DC.CursorPos, window->DC.CursorPos + ImVec2(w, label_size.y + style.FramePadding.y * 2.0f));
+    const ImRect total_bb(frame_bb.Min, frame_bb.Max + ImVec2(label_size.x > 0.0f ? style.ItemInnerSpacing.x + label_size.x : 0.0f, 0.0f));
+
+    const bool temp_input_allowed = (flags & ImGuiSliderFlags_NoInput) == 0;
+    ImGui::ItemSize(total_bb, style.FramePadding.y);
+    if (!ImGui::ItemAdd(total_bb, id, &frame_bb, temp_input_allowed ? ImGuiItemFlags_Inputable : 0))
+    {
+        return result;
+    }
+
+    // Default format string when passing NULL
+    if (format == NULL)
+    {
+        format = ImGui::DataTypeGetInfo(data_type)->PrintFmt;
+    }
+    //else if (data_type == ImGuiDataType_S32 && strcmp(format, "%d") != 0) // (FIXME-LEGACY: Patch old "%.0f" format string to use "%d", read function more details.)
+    //    format = ImGui::PatchFormatStringFloatToInt(format);
+
+    // Tabbing or CTRL-clicking on Drag turns it into an InputText
+    const bool hovered = ImGui::ItemHoverable(frame_bb, id);
+    bool temp_input_is_active = temp_input_allowed && ImGui::TempInputIsActive(id);
+    if (!temp_input_is_active)
+    {
+        const bool input_requested_by_tabbing = temp_input_allowed && (g.LastItemData.StatusFlags & ImGuiItemStatusFlags_FocusedByTabbing) != 0;
+        const bool clicked = (hovered && g.IO.MouseClicked[0]);
+        const bool double_clicked = (hovered && g.IO.MouseClickedCount[0] == 2);
+        if (input_requested_by_tabbing || clicked || double_clicked || g.NavActivateId == id || g.NavActivateInputId == id)
+        {
+            ImGui::SetActiveID(id, window);
+            ImGui::SetFocusID(id, window);
+            ImGui::FocusWindow(window);
+            g.ActiveIdUsingNavDirMask = (1 << ImGuiDir_Left) | (1 << ImGuiDir_Right);
+            if (temp_input_allowed)
+            {
+                if (input_requested_by_tabbing || (clicked && g.IO.KeyCtrl) || double_clicked || g.NavActivateInputId == id)
+                {
+                    temp_input_is_active = true;
+                }
+            }
+        }
+
+        // Experimental: simple click (without moving) turns Drag into an InputText
+        if (g.IO.ConfigDragClickToInputText && temp_input_allowed && !temp_input_is_active)
+        {
+            if (g.ActiveId == id && hovered && g.IO.MouseReleased[0] && !ImGui::IsMouseDragPastThreshold(0, g.IO.MouseDragThreshold * DRAG_MOUSE_THRESHOLD_FACTOR))
+            {
+                g.NavActivateId = g.NavActivateInputId = id;
+                g.NavActivateFlags = ImGuiActivateFlags_PreferInput;
+                temp_input_is_active = true;
+            }
+        }
+    }
+
+    if (temp_input_is_active)
+    {
+        // Only clamp CTRL+Click input when ImGuiSliderFlags_AlwaysClamp is set
+        const bool is_clamp_input = (flags & ImGuiSliderFlags_AlwaysClamp) != 0 && (p_min == NULL || p_max == NULL || ImGui::DataTypeCompare(data_type, p_min, p_max) < 0);
+        result.text_edited = ImGui::TempInputScalar(frame_bb, id, label, data_type, p_data, format, is_clamp_input ? p_min : NULL, is_clamp_input ? p_max : NULL);
+        return result;
+    }
+
+    // Draw frame
+    const ImU32 frame_col = ImGui::GetColorU32(g.ActiveId == id ? ImGuiCol_FrameBgActive : hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg);
+    ImGui::RenderNavHighlight(frame_bb, id);
+    ImGui::RenderFrame(frame_bb.Min, frame_bb.Max, frame_col, true, style.FrameRounding);
+
+    // Drag behavior
+    result.drag_edited = ImGui::DragBehavior(id, data_type, p_data, v_speed, p_min, p_max, format, flags);
+    if (result.drag_edited)
+    {
+        ImGui::MarkItemEdited(id);
+    }
+
+    // Display value using user-provided display format so user can add prefix/suffix/decorations to the value.
+    char value_buf[64];
+    const char* value_buf_end = value_buf + ImGui::DataTypeFormatString(value_buf, IM_ARRAYSIZE(value_buf), data_type, p_data, format);
+    if (g.LogEnabled)
+    {
+        ImGui::LogSetNextTextDecoration("{", "}");
+    }
+    ImGui::RenderTextClipped(frame_bb.Min, frame_bb.Max, value_buf, value_buf_end, NULL, ImVec2(0.5f, 0.5f));
+
+    if (label_size.x > 0.0f)
+    {
+        ImGui::RenderText(ImVec2(frame_bb.Max.x + style.ItemInnerSpacing.x, frame_bb.Min.y + style.FramePadding.y), label);
+    }
+
+    return result;
+}
+
+}
+
 auto Node_properties::make_scalar_button(
     float* const      value,
     const uint32_t    text_color,
@@ -263,9 +413,29 @@ auto Node_properties::make_scalar_button(
     ImGui::SetNextItemWidth(100.0f);
 
     constexpr float value_speed = 0.02f;
+    const auto value_changed = custom_drag_scalar(imgui_label, value, value_speed);
+    const bool edit_ended    = ImGui::IsItemDeactivatedAfterEdit();
+    //const bool item_edited   = ImGui::IsItemEdited();
+    //const bool item_active   = ImGui::IsItemActive();
+    //if (value_changed.drag_edited)
+    //{
+    //    log_node_properties.trace("drag edited for {}\n", label);
+    //}
+    //if (value_changed.text_edited)
+    //{
+    //    log_node_properties.trace("text edited for {}\n", label);
+    //}
+    //if (item_edited)
+    //{
+    //    log_node_properties.trace("item_edited for {}\n", label);
+    //}
+    //if (edit_ended)
+    //{
+    //    log_node_properties.trace("edit_ended for {}\n", label);
+    //}
     return Value_edit_state{
-        .value_changed = ImGui::DragFloat(imgui_label, value, value_speed),
-        .edit_ended    = ImGui::IsItemDeactivatedAfterEdit()
+        .value_changed = value_changed.drag_edited || (value_changed.text_edited && edit_ended),
+        .edit_ended    = edit_ended
     };
 };
 
@@ -292,7 +462,7 @@ auto Node_properties::make_angle_button(
     constexpr float value_min   = -360.0f;
     constexpr float value_max   =  360.0f;
 
-    const bool value_changed = ImGui::DragFloat(
+    const auto drag_result = custom_drag_scalar(
         imgui_label,
         &degrees_value,
         value_speed,
@@ -300,6 +470,8 @@ auto Node_properties::make_angle_button(
         value_max,
         "%.f\xc2\xb0" // \xc2\xb0 is degree symbol UTF-8 encoded
     );
+    const bool edit_ended    = ImGui::IsItemDeactivatedAfterEdit();
+    const bool value_changed = drag_result.drag_edited || (drag_result.text_edited && edit_ended);
     if (value_changed)
     {
         radians_value = glm::radians<float>(degrees_value);
@@ -403,20 +575,25 @@ void Node_properties::transform_properties(erhe::scene::Node& node)
         }
 
         erhe::scene::Transform new_parent_from_node;
-        if (edit_state.value_changed || (edit_state.edit_ended && node_state.touched))
+        if (
+            edit_state.value_changed ||
+            edit_state.edit_ended
+            //(edit_state.edit_ended && node_state.touched)
+        )
         {
             node_state.touched = true;
             const glm::mat4 new_translation     = erhe::toolkit::create_translation<float>(translation);
             const glm::mat4 new_rotation        = glm::eulerAngleZYX(euler_angles.x, euler_angles.y, euler_angles.z);
             const glm::mat4 new_scale           = erhe::toolkit::create_scale<float>(scale);
             const glm::mat4 new_world_from_node = new_translation * new_rotation * new_scale;
-            if (node.parent() == nullptr)
+            const auto current_parent = node.parent().lock();
+            if (!current_parent)
             {
                 new_parent_from_node = erhe::scene::Transform{new_world_from_node};
             }
             else
             {
-                new_parent_from_node = node.parent()->node_from_world_transform() * erhe::scene::Transform{new_world_from_node};
+                new_parent_from_node = current_parent->node_from_world_transform() * erhe::scene::Transform{new_world_from_node};
             }
             if (!edit_state.edit_ended)
             {

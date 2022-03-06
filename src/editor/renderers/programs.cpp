@@ -57,9 +57,9 @@ void Programs::initialize_component()
     // Not available on Dell laptop.
     //standard      = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
 
-    //m_dump_reflection = true;
-    standard        = make_program("standard");
-    //m_dump_reflection = false;
+    m_dump_interface = true;
+    standard            = make_program("standard");
+    m_dump_interface = false;
 
     textured            = make_program("textured");
     edge_lines          = make_program("edge_lines");
@@ -118,8 +118,10 @@ auto Programs::make_program(
         .vertex_attribute_mappings = &shader_resources.attribute_mappings,
         .fragment_outputs          = &shader_resources.fragment_outputs,
         .default_uniform_block     = default_uniform_block.get(),
-        .dump_reflection           = m_dump_reflection
-    };
+        .dump_reflection           = m_dump_reflection,
+        .dump_interface            = m_dump_interface,
+        .dump_final_source         = m_dump_final_source
+   };
     create_info.add_interface_block(&shader_resources.material_block);
     create_info.add_interface_block(&shader_resources.light_block);
     create_info.add_interface_block(&shader_resources.camera_block);

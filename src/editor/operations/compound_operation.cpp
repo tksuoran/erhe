@@ -5,32 +5,42 @@
 namespace editor
 {
 
-Compound_operation::Compound_operation(Context&& context)
-    : m_context{std::move(context)}
+Compound_operation::Parameters::Parameters()
 {
 }
 
-Compound_operation::~Compound_operation() = default;
-
-void Compound_operation::execute() const
+Compound_operation::Parameters::~Parameters()
 {
-    for (auto operation : m_context.operations)
+}
+
+Compound_operation::Compound_operation(Parameters&& parameters)
+    : m_parameters{std::move(parameters)}
+{
+}
+
+Compound_operation::~Compound_operation()
+{
+}
+
+void Compound_operation::execute(const Operation_context& context)
+{
+    for (auto& operation : m_parameters.operations)
     {
-        operation->execute();
+        operation->execute(context);
     }
 }
 
-void Compound_operation::undo() const
+void Compound_operation::undo(const Operation_context& context)
 {
     for (
-        auto i = rbegin(m_context.operations),
-        end = rend(m_context.operations);
+        auto i = rbegin(m_parameters.operations),
+        end = rend(m_parameters.operations);
         i < end;
         ++i
     )
     {
-        auto operation = *i;
-        operation->undo();
+        auto& operation = *i;
+        operation->undo(context);
     }
 }
 
@@ -39,7 +49,7 @@ auto Compound_operation::describe() const -> std::string
     std::stringstream ss;
     ss << "Compound ";
     bool first = true;
-    for (auto operation : m_context.operations)
+    for (auto& operation : m_parameters.operations)
     {
         if (first)
         {
@@ -53,6 +63,5 @@ auto Compound_operation::describe() const -> std::string
     }
     return ss.str();
 }
-
 
 }

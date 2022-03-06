@@ -55,12 +55,7 @@ private:
     class Value_edit_state
     {
     public:
-        void combine(Value_edit_state other)
-        {
-            value_changed = value_changed || other.value_changed;
-            edit_ended    = edit_ended || other.edit_ended;
-        }
-
+        void combine(const Value_edit_state& other);
         bool value_changed{false};
         bool edit_ended   {false};
     };

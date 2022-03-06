@@ -17,7 +17,8 @@ cmake ^
     -DERHE_PHYSICS_LIBRARY=none ^
     -DERHE_PROFILE_LIBRARY=none ^
     -DERHE_GLTF_LIBRARY=none ^
-    -DERHE_XR_LIBRARY=none
+    -DERHE_XR_LIBRARY=none ^
+    -DERHE_SVG_LIBRARY=lunasvg
 
 @rem    -DCMAKE_EXE_LINKER_FLAGS_DEBUG="/debug /incremental:no" ^
 @rem    -DCMAKE_EXE_LINKER_FLAGS_MINSIZEREL="/debug /incremental:no" ^

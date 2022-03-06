@@ -832,6 +832,11 @@ void Build_context::build_vertex_color(const uint32_t /*polygon_corner_count*/)
         color = property_maps.point_colors->get(point_id);
         log_primitive_builder.trace("point {} corner {} point color {}\n", point_id, corner_id, color);
     }
+    else if ((property_maps.polygon_colors != nullptr) && property_maps.polygon_colors->has(polygon_id))
+    {
+        color = property_maps.polygon_colors->get(polygon_id);
+        log_primitive_builder.trace("point {} corner {} polygon {} polygon color {}\n", point_id, corner_id, polygon_id, color);
+    }
     else
     {
         color = root.build_info.format.constant_color;

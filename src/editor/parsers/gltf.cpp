@@ -370,11 +370,11 @@ private:
                 pbr_metallic_roughness.base_color_factor[2],
                 pbr_metallic_roughness.base_color_factor[3]
             };
-            new_material->metallic   = pbr_metallic_roughness.metallic_factor;
-            new_material->roughness  = pbr_metallic_roughness.roughness_factor;
-            new_material->emissive   = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f};
-            new_material->anisotropy = 0.0f;
-            new_material->visible    = true;
+            new_material->metallic    = pbr_metallic_roughness.metallic_factor;
+            new_material->roughness.x = pbr_metallic_roughness.roughness_factor;
+            new_material->roughness.y = pbr_metallic_roughness.roughness_factor;
+            new_material->emissive    = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f};
+            new_material->visible     = true;
             log_parsers.trace(
                 "Material PBR metallic roughness base color factor = {}, {}, {}, {}\n",
                 pbr_metallic_roughness.base_color_factor[0],
@@ -482,8 +482,7 @@ private:
             }
         }
 
-        m_scene_root->scene().cameras.push_back(new_camera);
-        m_scene_root->scene().nodes.emplace_back(new_camera);
+        m_scene_root->scene().add(new_camera);
         m_nodes[node_index] = new_camera;
         parse_node_transform(node, new_camera);
     }
@@ -509,8 +508,7 @@ private:
         new_light->inner_spot_angle = light->spot_inner_cone_angle;
         new_light->outer_spot_angle = light->spot_outer_cone_angle;
 
-        add_to_scene_layer(
-            m_scene_root->scene(),
+        m_scene_root->scene().add_to_light_layer(
             *m_scene_root->light_layer(),
             new_light
         );
@@ -1097,7 +1095,7 @@ private:
 
         auto raytrace_primitive = std::make_shared<Raytrace_primitive>(context.erhe_geometry);
         const auto normal_style = erhe::primitive::Normal_style::point_normals;
-        erhe_mesh->data.primitives.push_back(
+        erhe_mesh->mesh_data.primitives.push_back(
             erhe::primitive::Primitive{
                 .material              = material,
                 .gl_primitive_geometry = make_primitive(
@@ -1139,13 +1137,12 @@ private:
 
         erhe_mesh->visibility_mask() |=
             (
-                erhe::scene::Node::c_visibility_content     |
-                erhe::scene::Node::c_visibility_shadow_cast |
-                erhe::scene::Node::c_visibility_id
+                erhe::scene::Node_visibility::content     |
+                erhe::scene::Node_visibility::shadow_cast |
+                erhe::scene::Node_visibility::id
             );
 
-        add_to_scene_layer(
-            m_scene_root->scene(),
+        m_scene_root->scene().add_to_mesh_layer(
             *m_scene_root->content_layer(),
             erhe_mesh
         );
@@ -1158,7 +1155,7 @@ private:
         log_parsers.trace("Empty node: node_index = {}, name = {}\n", node_index, safe_str(node->name));
         auto empty_node = std::make_shared<erhe::scene::Node>(node->name);
         m_nodes[node_index] = empty_node;
-        m_scene_root->scene().nodes.emplace_back(empty_node);
+        m_scene_root->scene().add_node(empty_node);
         parse_node_transform(node, empty_node);
     }
     void parse_node(cgltf_node* node)

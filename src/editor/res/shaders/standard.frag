@@ -187,8 +187,12 @@ void main()
 
     vec3  V     = normalize(view_position_in_world - v_position.xyz);
     vec3  N     = normalize(v_TBN[2]);
-    vec3  T     = normalize(v_TBN[0]);
-    vec3  B     = normalize(v_TBN[1]);
+    vec3  T0    = normalize(v_TBN[0]);
+    vec3  B0    = normalize(v_TBN[1]);
+    vec2  T_    = normalize(v_texcoord);
+    float T_a   = mix(1.0, min(1.0, length(v_texcoord) * 8.0), v_color.a);
+    vec3  T     = mix(T0, T_.x * T0 + T_.y * B0, v_color.a);
+    vec3  B     = mix(B0, T_.y * T0 - T_.x * B0, v_color.a);
 
     mat3  TBN   = mat3(T, B, N);
     mat3  TBN_t = transpose(TBN);
@@ -201,8 +205,11 @@ void main()
 
     Material material = material.materials[v_material_index];
 
-    float roughness_x = material.roughness.x;
-    float roughness_y = material.roughness.y;
+    //float roughness_x_ = material.roughness.x;
+    //float roughness_y_ = material.roughness.y;
+    float roughness    = 0.5 * material.roughness.x + 0.5 * material.roughness.y;
+    float roughness_x = mix(roughness, material.roughness.x, T_a);
+    float roughness_y = mix(roughness, material.roughness.y, T_a);
     float alpha_x     = roughness_x * roughness_x;
     float alpha_y     = roughness_y * roughness_y;
 
@@ -284,13 +291,11 @@ void main()
                 wg_dot_wi * intensity * (D * F * G) / (4.0 * cos_theta(wi) * cos_theta(wo)),
                 vec3(0.0, 0.0, 0.0)
             );
-            color += wg_dot_wi * intensity * (D * F * G) / (4.0 * cos_theta(wi) * cos_theta(wo));
        }
     }
 
     float exposure = camera.cameras[0].exposure;
     out_color.rgb = color * exposure;
-    //out_color.rgb = vec3(v_texcoord, 0.0);
 
 #if defined(ERHE_VISUALIZE_NORMAL)
     out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * N);
@@ -301,6 +306,8 @@ void main()
 #if defined(ERHE_VISUALIZE_BITANGENT)
     out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * B);
 #endif
+    //out_color.rgb = v_color.rgb;
+    //out_color.rgb = vec3(0.5 + 0.25 * v_tangent_scale);
 
     out_color.a = 1.0;
 }

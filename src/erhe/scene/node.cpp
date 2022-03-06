@@ -51,6 +51,12 @@ Node::~Node()
     }
     unparent();
 
+    const auto& root_node = root().lock();
+    if (root_node.get() != this)
+    {
+        root_node->detach(this);
+    }
+
     sanity_check();
 }
 
@@ -180,11 +186,61 @@ auto Node::get_id() const -> erhe::toolkit::Unique_id<Node>::id_type
     return m_id.get_id();
 }
 
+auto Node::get_index_in_parent() const -> size_t
+{
+    const auto& current_parent = parent().lock();
+    if (current_parent)
+    {
+        const auto index = current_parent->get_index_of_child(this);
+        return index.has_value() ? index.value() : 0;
+    }
+    return 0;
+}
+
+auto Node::get_index_of_child(const Node* child) const -> nonstd::optional<size_t>
+{
+    for (
+        size_t i = 0, end = node_data.children.size();
+        i < end;
+        ++i
+    )
+    {
+        if (node_data.children[i].get() == child)
+        {
+            return i;
+        }
+    }
+    return {};
+}
+
+auto Node::is_ancestor(const Node* ancestor_candidate) const -> bool
+{
+    const auto& current_parent = parent().lock();
+    if (!current_parent)
+    {
+        return false;
+    }
+    if (current_parent.get() == ancestor_candidate)
+    {
+        return true;
+    }
+    return current_parent->is_ancestor(ancestor_candidate);
+}
+
+//auto Node::is_descendant(const Node* descendant_candidate) const -> bool
+//{
+//}
+
 void Node::attach(const std::shared_ptr<Node>& child_node)
 {
     if (child_node.get() == this)
     {
         log.error("Cannot attach node to itself");
+        return;
+    }
+    if (is_ancestor(child_node.get()))
+    {
+        log.error("Cannot attach node to ancestor");
         return;
     }
 
@@ -204,12 +260,52 @@ void Node::attach(const std::shared_ptr<Node>& child_node)
     const auto i = std::find(node_data.children.begin(), node_data.children.end(), child_node);
     if (i != node_data.children.end())
     {
-        log.error("Attachment {} already attached to {}\n", child_node->name(), name());
+        log.error("Node {} already attached to {}\n", child_node->name(), name());
         return;
     }
 #endif
 
     node_data.children.push_back(child_node);
+    child_node->on_attached_to(*this);
+    sanity_check();
+}
+
+void Node::attach(const std::shared_ptr<Node>& child_node, size_t position)
+{
+    if (child_node.get() == this)
+    {
+        log.error("Cannot attach node to itself");
+        return;
+    }
+    if (is_ancestor(child_node.get()))
+    {
+        log.error("Cannot attach ancestor to node");
+        return;
+    }
+
+    ERHE_PROFILE_FUNCTION
+
+    ERHE_VERIFY(child_node);
+
+    log.trace(
+        "{} ({}).attach_at(child node = {} ({}), position = {})\n",
+        name(),
+        node_type(),
+        child_node->name(),
+        child_node->node_type(),
+        position
+    );
+
+#ifndef NDEBUG
+    const auto i = std::find(node_data.children.begin(), node_data.children.end(), child_node);
+    if (i != node_data.children.end())
+    {
+        log.error("Node {} already attached to {}\n", child_node->name(), name());
+        return;
+    }
+#endif
+
+    node_data.children.insert(node_data.children.begin() + position, child_node);
     child_node->on_attached_to(*this);
     sanity_check();
 }
@@ -232,13 +328,15 @@ auto Node::detach(Node* child_node) -> bool
         child_node->node_type()
     );
 
-    if (child_node->parent() != this)
+    const auto& parent = child_node->parent().lock();
+
+    if (parent.get() != this)
     {
         log.warn(
             "Child node {} parent {} != this {}\n",
             child_node->name(),
-            child_node->parent()
-                ? child_node->parent()->name()
+            parent
+                ? parent->name()
                 : "(none)",
             name()
         );
@@ -266,23 +364,24 @@ auto Node::detach(Node* child_node) -> bool
     return false;
 }
 
-void Node::on_attached_to(Node& parent_node)
+void Node::on_attached_to(Node& new_parent_node)
 {
-    if (parent() == &parent_node)
+    const auto& current_parent = parent().lock();
+    if (current_parent.get() == &new_parent_node)
     {
         return;
     }
 
     const auto& world_from_node = world_from_node_transform();
 
-    if (parent() != nullptr)
+    if (current_parent)
     {
-        parent()->detach(this);
+        current_parent->detach(this);
     }
-    node_data.parent = &parent_node;
-    set_depth_recursive(parent_node.depth() + 1);
+    node_data.parent = new_parent_node.shared_from_this();
+    set_depth_recursive(new_parent_node.depth() + 1);
 
-    const auto parent_from_node = parent_node.node_from_world_transform() * world_from_node;
+    const auto parent_from_node = new_parent_node.node_from_world_transform() * world_from_node;
     set_parent_from_node(parent_from_node);
     update_transform_recursive();
     sanity_check();
@@ -303,19 +402,20 @@ void Node::set_depth_recursive(const size_t depth)
 
 void Node::on_detached_from(Node& node)
 {
-    if (node_data.parent != &node)
+    const auto& current_parent = parent().lock();
+    if (current_parent.get() != &node)
     {
         log.error(
             "Cannot detach node {} from {} - parent is different ({})\n",
             name(),
             node.name(),
-            (node_data.parent != nullptr)
-                ? node_data.parent->name()
+            current_parent
+                ? current_parent->name()
                 : "(nullptr)"
         );
         return;
     }
-    node_data.parent = nullptr;
+    node_data.parent.reset();
     set_depth_recursive(0);
 
     const auto& world_from_node = world_from_node_transform();
@@ -333,35 +433,45 @@ void Node::on_transform_changed()
 
 void Node::unparent()
 {
-    if (node_data.parent != nullptr)
+    const auto& current_parent = parent().lock();
+    const auto& root_node      = root().lock();
+    if (
+        (current_parent != root_node) &&
+        (root_node.get() != this)
+    )
     {
-        node_data.parent->detach(this);
+        root_node->attach(shared_from_this());
+        //current_parent->detach(this);
     }
 }
 
-auto Node::root() -> Node*
+auto Node::root() -> std::weak_ptr<Node>
 {
-    if (node_data.parent == nullptr)
+    const auto& current_parent = parent().lock();
+    if (!current_parent)
     {
-        return this;
+        return shared_from_this();
     }
-    return node_data.parent->root();
+    return current_parent->root();
 }
 
-auto Node::root() const -> const Node*
-{
-    if (node_data.parent == nullptr)
-    {
-        return this;
-    }
-    return node_data.parent->root();
-}
+//auto Node::root() const -> std::weak_ptr<Node>
+//{
+//    const auto& current_parent = parent().lock();
+//    if (current_parent)
+//    {
+//        return std::weak_ptr<Node>(shared_from_this());
+//    }
+//    return current_parent->root();
+//}
 
 void Node::update_transform(const uint64_t serial)
 {
     ERHE_PROFILE_FUNCTION
 
     //log.trace("{} update_transform\n", name());
+    const auto& current_parent = parent().lock();
+
     if (serial != 0)
     {
         if (node_data.last_transform_update_serial == serial)
@@ -369,19 +479,19 @@ void Node::update_transform(const uint64_t serial)
             return;
         }
         if (
-            (node_data.parent != nullptr) &&
-            (node_data.parent->node_data.last_transform_update_serial < serial)
+            current_parent &&
+            (current_parent->node_data.last_transform_update_serial < serial)
         )
         {
-            node_data.parent->update_transform(serial);
+            current_parent->update_transform(serial);
         }
     }
 
-    if (node_data.parent != nullptr)
+    if (current_parent)
     {
         node_data.transforms.world_from_node.set(
-            parent()->world_from_node() * parent_from_node(),
-            node_from_parent() * parent()->node_from_world()
+            current_parent->world_from_node() * parent_from_node(),
+            node_from_parent() * current_parent->node_from_world()
         );
     }
     else
@@ -394,8 +504,8 @@ void Node::update_transform(const uint64_t serial)
 
     node_data.last_transform_update_serial = (serial != 0)
         ? serial
-        : (node_data.parent != nullptr)
-            ? node_data.parent->node_data.last_transform_update_serial
+        : current_parent
+            ? current_parent->node_data.last_transform_update_serial
             : node_data.last_transform_update_serial;
 }
 
@@ -412,10 +522,11 @@ void Node::sanity_check() const
 {
     sanity_check_root_path(this);
 
-    if (node_data.parent != nullptr)
+    const auto& current_parent = parent().lock();
+    if (current_parent)
     {
         bool child_found_in_parent = false;
-        for (const auto& child : node_data.parent->children())
+        for (const auto& child : current_parent->children())
         {
             if (child.get() == this)
             {
@@ -428,21 +539,21 @@ void Node::sanity_check() const
             log.error(
                 "Node {} parent {} does not have node as child\n",
                 name(),
-                node_data.parent->name()
+                current_parent->name()
             );
         }
     }
 
     for (const auto& child : node_data.children)
     {
-        if (child->parent() != this)
+        if (child->parent().lock().get() != this)
         {
             log.error(
                 "Node {} child {} parent == {}\n",
                 name(),
                 child->name(),
-                (child->parent() != nullptr)
-                    ? child->parent()->name()
+                (child->parent().lock())
+                    ? child->parent().lock()->name()
                     : "(none)"
             );
         }
@@ -478,17 +589,18 @@ void Node::sanity_check() const
 
 void Node::sanity_check_root_path(const Node* node) const
 {
-    if (parent() == node)
+    const auto& current_parent = parent().lock();
+    if (current_parent)
     {
-        log.error("Node {} has itself as an ancestor\n", node->name());
-    }
-    if (parent())
-    {
-        parent()->sanity_check_root_path(node);
+        if (current_parent.get() == node)
+        {
+            log.error("Node {} has itself as an ancestor\n", node->name());
+        }
+        current_parent->sanity_check_root_path(node);
     }
 }
 
-auto Node::parent() const -> Node*
+auto Node::parent() const -> std::weak_ptr<Node>
 {
     return node_data.parent;
 }
@@ -570,9 +682,10 @@ auto Node::node_from_world() const -> glm::mat4
 
 auto Node::world_from_parent() const -> glm::mat4
 {
-    if (node_data.parent != nullptr)
+    const auto& current_parent = parent().lock();
+    if (current_parent)
     {
-        return node_data.parent->world_from_node();
+        return current_parent->world_from_node();
     }
     return glm::mat4{1};
 }
@@ -628,25 +741,27 @@ void Node::set_node_from_parent(const Transform& transform)
 
 void Node::set_world_from_node(const glm::mat4 matrix)
 {
-    if (node_data.parent == nullptr)
+    const auto& current_parent = parent().lock();
+    if (current_parent)
     {
-        set_parent_from_node(matrix);
+        set_parent_from_node(current_parent->node_from_world() * matrix);
     }
     else
     {
-        set_parent_from_node(parent()->node_from_world() * matrix);
+        set_parent_from_node(matrix);
     }
 }
 
 void Node::set_world_from_node(const Transform& transform)
 {
-    if (node_data.parent == nullptr)
+    const auto& current_parent = parent().lock();
+    if (current_parent)
     {
-        set_parent_from_node(transform);
+        set_parent_from_node(current_parent->node_from_world_transform() * transform);
     }
     else
     {
-        set_parent_from_node(parent()->node_from_world_transform() * transform);
+        set_parent_from_node(transform);
     }
 }
 

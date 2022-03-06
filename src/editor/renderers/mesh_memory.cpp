@@ -45,7 +45,6 @@ void Mesh_memory::initialize_component()
             gl::Buffer_target::array_buffer,
             vertex_byte_count,
             storage_mask
-
         );
     }
 

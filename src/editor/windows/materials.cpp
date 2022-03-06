@@ -33,7 +33,7 @@ void Materials::initialize_component()
 {
     get<Editor_imgui_windows>()->register_imgui_window(this);
 
-    const glm::vec2 roughness{0.34f, 0.34f};
+    const glm::vec2 roughness{0.68f, 0.34f};
 
     m_scene_root->make_material("Default",   glm::vec3{0.500f, 0.500f, 0.500f}, roughness, 0.0f);
     m_scene_root->make_material("Titanium",  glm::vec3{0.542f, 0.497f, 0.449f}, roughness, 1.0f);

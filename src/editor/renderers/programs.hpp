@@ -79,7 +79,9 @@ private:
     // Component dependencies
     std::shared_ptr<Program_interface> m_program_interface;
     std::shared_ptr<Shader_monitor>    m_shader_monitor;
-    bool                               m_dump_reflection{false};
+    bool                               m_dump_reflection  {false};
+    bool                               m_dump_interface   {false};
+    bool                               m_dump_final_source{false};
 
     fs::path m_shader_path;
 };
