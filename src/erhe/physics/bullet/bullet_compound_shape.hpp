@@ -11,12 +11,11 @@
 namespace erhe::physics
 {
 
-
 class Bullet_compound_shape
     : public Bullet_collision_shape
 {
 public:
-    Bullet_compound_shape(const Compound_shape_create_info& create_info);
+    explicit Bullet_compound_shape(const Compound_shape_create_info& create_info);
     ~Bullet_compound_shape() override;
 
     // Implements ICollision_shape

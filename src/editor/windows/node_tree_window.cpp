@@ -304,9 +304,6 @@ auto Node_tree_window::drag_and_drop_target(
     const std::shared_ptr<erhe::scene::Node>& node
 ) -> bool
 {
-    ImGuiContext* g = ImGui::GetCurrentContext();
-    ImRect        r = g->DragDropTargetRect;
-
     const auto  rect_min = ImGui::GetItemRectMin();
     const auto  rect_max = ImGui::GetItemRectMax();
     const float height   = rect_max.y - rect_min.y;

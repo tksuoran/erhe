@@ -60,7 +60,7 @@ private:
 class Range_selection
 {
 public:
-    Range_selection(Selection_tool& selection_tool);
+    explicit Range_selection(Selection_tool& selection_tool);
 
     void set_terminator(const std::shared_ptr<erhe::scene::Node>& node);
     void entry         (const std::shared_ptr<erhe::scene::Node>& node);
