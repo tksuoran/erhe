@@ -19,7 +19,7 @@ public:
         const std::string_view debug_label,
         const Geometry_type    geometry_type
     );
-    ~Null_geometry() override;
+    ~Null_geometry() noexcept override;
 
     // Implements IGeometry
     void commit                    () override {}

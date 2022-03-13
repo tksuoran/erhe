@@ -227,11 +227,10 @@ auto Node::is_ancestor(const Node* ancestor_candidate) const -> bool
     return current_parent->is_ancestor(ancestor_candidate);
 }
 
-//auto Node::is_descendant(const Node* descendant_candidate) const -> bool
-//{
-//}
-
-void Node::attach(const std::shared_ptr<Node>& child_node)
+void Node::attach(
+    const std::shared_ptr<Node>& child_node,
+    const bool                   primary_operation
+)
 {
     if (child_node.get() == this)
     {
@@ -265,12 +264,31 @@ void Node::attach(const std::shared_ptr<Node>& child_node)
     }
 #endif
 
+    const auto child_parent_from_node = node_from_world_transform() * child_node->world_from_node_transform();
+
+    const auto& current_parent = child_node->parent().lock();
+    if (current_parent)
+    {
+        current_parent->detach(child_node.get(), false);
+    }
+
     node_data.children.push_back(child_node);
-    child_node->on_attached_to(*this);
+    child_node->set_parent                (shared_from_this());
+    child_node->set_parent_from_node      (child_parent_from_node);
+    child_node->set_depth_recursive       (depth() + 1);
+    child_node->update_transform_recursive();
+    if (primary_operation)
+    {
+        child_node->on_attached();
+    }
     sanity_check();
 }
 
-void Node::attach(const std::shared_ptr<Node>& child_node, size_t position)
+void Node::attach(
+    const std::shared_ptr<Node>& child_node,
+    const size_t                 position,
+    const bool                   primary_operation
+)
 {
     if (child_node.get() == this)
     {
@@ -305,12 +323,30 @@ void Node::attach(const std::shared_ptr<Node>& child_node, size_t position)
     }
 #endif
 
+    const auto child_parent_from_node = node_from_world_transform() * child_node->world_from_node_transform();
+
+    const auto& current_parent = child_node->parent().lock();
+    if (current_parent)
+    {
+        current_parent->detach(child_node.get(), false);
+    }
+
     node_data.children.insert(node_data.children.begin() + position, child_node);
-    child_node->on_attached_to(*this);
+    child_node->set_parent                (shared_from_this());
+    child_node->set_parent_from_node      (child_parent_from_node);
+    child_node->set_depth_recursive       (depth() + 1);
+    child_node->update_transform_recursive();
+    if (primary_operation)
+    {
+        child_node->on_attached();
+    }
     sanity_check();
 }
 
-auto Node::detach(Node* child_node) -> bool
+auto Node::detach(
+    Node*      child_node,
+    const bool primary_operation
+) -> bool
 {
     ERHE_PROFILE_FUNCTION
 
@@ -318,6 +354,18 @@ auto Node::detach(Node* child_node) -> bool
     {
         log.warn("empty child_node, cannot detach\n");
         return false;
+    }
+
+    const auto& root_node = root().lock();
+
+    // Detaching from the implicit root is nop.
+    // However as secondary (temporary) operation, it is allowed.
+    if (
+        primary_operation &&
+        (root_node.get() == this)
+    )
+    {
+        return true;
     }
 
     log.trace(
@@ -354,8 +402,42 @@ auto Node::detach(Node* child_node) -> bool
     if (i != node_data.children.end())
     {
         log.trace("Removing attachment {} from node\n", child_node->name());
+
+        const auto world_from_node = child_node->world_from_node_transform();
+
         node_data.children.erase(i, node_data.children.end());
-        child_node->on_detached_from(*this);
+
+        const auto& current_parent = child_node->parent().lock();
+        if (current_parent.get() != this)
+        {
+            log.error(
+                "Cannot detach node {} from {} - parent is different ({})\n",
+                child_node->name(),
+                name(),
+                current_parent
+                    ? current_parent->name()
+                    : "(nullptr)"
+            );
+            return false;
+        }
+        child_node->set_parent          ({}); // so that attach won't call detach
+        child_node->set_parent_from_node(world_from_node);
+        child_node->set_depth_recursive (0);
+
+        // Attach to the implicit root node, 
+        if (
+            primary_operation &&
+            (root_node.get() != this)
+        )
+        {
+            root_node->attach(child_node->shared_from_this(), false);
+        }
+        child_node->set_world_from_node(world_from_node);
+
+        if (primary_operation)
+        {
+            child_node->on_detached_from(*this);
+        }
         sanity_check();
         return true;
     }
@@ -364,26 +446,13 @@ auto Node::detach(Node* child_node) -> bool
     return false;
 }
 
-void Node::on_attached_to(Node& new_parent_node)
+void Node::set_parent(const std::weak_ptr<Node>& new_parent_node)
 {
-    const auto& current_parent = parent().lock();
-    if (current_parent.get() == &new_parent_node)
-    {
-        return;
-    }
+   node_data.parent = new_parent_node;
+ }
 
-    const auto& world_from_node = world_from_node_transform();
-
-    if (current_parent)
-    {
-        current_parent->detach(this);
-    }
-    node_data.parent = new_parent_node.shared_from_this();
-    set_depth_recursive(new_parent_node.depth() + 1);
-
-    const auto parent_from_node = new_parent_node.node_from_world_transform() * world_from_node;
-    set_parent_from_node(parent_from_node);
-    update_transform_recursive();
+void Node::on_attached()
+{
     sanity_check();
 }
 
@@ -402,24 +471,7 @@ void Node::set_depth_recursive(const size_t depth)
 
 void Node::on_detached_from(Node& node)
 {
-    const auto& current_parent = parent().lock();
-    if (current_parent.get() != &node)
-    {
-        log.error(
-            "Cannot detach node {} from {} - parent is different ({})\n",
-            name(),
-            node.name(),
-            current_parent
-                ? current_parent->name()
-                : "(nullptr)"
-        );
-        return;
-    }
-    node_data.parent.reset();
-    set_depth_recursive(0);
-
-    const auto& world_from_node = world_from_node_transform();
-    set_parent_from_node(world_from_node);
+    static_cast<void>(node);
     sanity_check();
 }
 
@@ -440,6 +492,7 @@ void Node::unparent()
         (root_node.get() != this)
     )
     {
+        current_parent->detach(this);
         root_node->attach(shared_from_this());
         //current_parent->detach(this);
     }

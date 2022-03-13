@@ -46,7 +46,7 @@ public:
     };
 
     explicit Node_transform_operation(const Parameters& parameters);
-    ~Node_transform_operation        () override;
+    ~Node_transform_operation() noexcept override;
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
@@ -100,7 +100,7 @@ public:
     };
 
     explicit Mesh_insert_remove_operation(const Parameters& parameters);
-    ~Mesh_insert_remove_operation        () override;
+    ~Mesh_insert_remove_operation() noexcept override;
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
@@ -131,7 +131,7 @@ public:
     };
 
     explicit Light_insert_remove_operation(const Parameters& parameters);
-    ~Light_insert_remove_operation        () override;
+    ~Light_insert_remove_operation() noexcept override;
 
     // Public API
     [[nodiscard]] auto describe() const -> std::string override;
@@ -163,7 +163,7 @@ public:
     };
 
     explicit Camera_insert_remove_operation(const Parameters& parameters);
-    ~Camera_insert_remove_operation        () override;
+    ~Camera_insert_remove_operation() noexcept override;
 
     // Public API
     [[nodiscard]] auto describe() const -> std::string override;

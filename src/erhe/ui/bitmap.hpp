@@ -40,7 +40,7 @@ public:
         fill(0);
     }
 
-    ~Bitmap() = default;
+    ~Bitmap() noexcept = default;
 
     [[nodiscard]] auto width() const noexcept -> int
     {

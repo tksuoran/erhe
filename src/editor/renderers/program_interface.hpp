@@ -87,7 +87,7 @@ public:
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Program_interface ();
-    ~Program_interface() override;
+    ~Program_interface() noexcept override;
     Program_interface (const Program_interface&) = delete;
     void operator=    (const Program_interface&) = delete;
     Program_interface (Program_interface&&)      = delete;

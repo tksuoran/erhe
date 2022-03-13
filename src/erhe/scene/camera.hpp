@@ -27,7 +27,7 @@ class ICamera
 {
 public:
     explicit ICamera(const std::string_view name);
-    virtual ~ICamera() {}
+    virtual ~ICamera() noexcept {}
 
     [[nodiscard]] virtual auto projection           () -> Projection* = 0;
     [[nodiscard]] virtual auto projection           () const -> const Projection* = 0;
@@ -41,7 +41,7 @@ class Camera
 {
 public:
     explicit Camera(const std::string_view name);
-    ~Camera() override;
+    ~Camera() noexcept override;
 
     [[nodiscard]] auto node_type() const -> const char* override;
 

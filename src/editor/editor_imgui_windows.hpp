@@ -56,7 +56,7 @@ public:
         const int                           height,
         const double                        dots_per_meter
     );
-    virtual ~Rendertarget_imgui_windows();
+    virtual ~Rendertarget_imgui_windows() noexcept;
 
     // Implements IImgui_windows
     void register_imgui_window(Imgui_window* window) override;
@@ -121,7 +121,7 @@ public:
     };
 
     Editor_imgui_windows ();
-    ~Editor_imgui_windows() override;
+    ~Editor_imgui_windows() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

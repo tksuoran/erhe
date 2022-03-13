@@ -42,7 +42,7 @@ template <typename Key_type>
 class Property_map_base
 {
 public:
-    virtual ~Property_map_base() = default;
+    virtual ~Property_map_base() noexcept = default;
 
     virtual auto constructor(const Property_map_descriptor& descriptor) const
     -> Property_map_base* = 0;

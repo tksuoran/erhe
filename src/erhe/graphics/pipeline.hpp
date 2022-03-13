@@ -30,7 +30,7 @@ class Pipeline final
 public:
     Pipeline();
     explicit Pipeline(Pipeline_data&& create_info);
-    ~Pipeline();
+    ~Pipeline() noexcept;
 
     Pipeline(const Pipeline& other);
     auto operator=(const Pipeline& other) -> Pipeline&;

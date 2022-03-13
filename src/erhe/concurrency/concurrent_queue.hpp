@@ -40,7 +40,7 @@ public:
         const std::string_view name,
         Priority               priority = Priority::NORMAL
     );
-    ~Concurrent_queue();
+    ~Concurrent_queue() noexcept;
 
     Concurrent_queue(const Concurrent_queue&) = delete;
     auto operator=(const Concurrent_queue&) -> Concurrent_queue = delete;

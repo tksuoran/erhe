@@ -17,7 +17,7 @@ public:
         const std::string_view debug_label,
         const Geometry_type    geometry_type
     );
-    ~Embree_geometry() override;
+    ~Embree_geometry() noexcept override;
 
     // Implements IGeometry
     void commit () override;

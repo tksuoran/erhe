@@ -15,7 +15,7 @@ class Buffer final
 {
 public:
     Buffer ();
-    ~Buffer();
+    ~Buffer() noexcept;
 
     Buffer(
         const gl::Buffer_target       target,

@@ -34,7 +34,7 @@ public:
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Node_tree_window ();
-    ~Node_tree_window() override;
+    ~Node_tree_window() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

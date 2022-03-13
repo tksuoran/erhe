@@ -98,7 +98,7 @@ public:
     using Material_collection = std::vector<std::shared_ptr<erhe::primitive::Material>>;
 
     explicit Base_renderer(const std::string& name);
-    virtual ~Base_renderer();
+    virtual ~Base_renderer() noexcept;
 
     static constexpr size_t s_frame_resources_count = 4;
 

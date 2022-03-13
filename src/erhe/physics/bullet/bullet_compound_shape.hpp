@@ -16,7 +16,7 @@ class Bullet_compound_shape
 {
 public:
     explicit Bullet_compound_shape(const Compound_shape_create_info& create_info);
-    ~Bullet_compound_shape() override;
+    ~Bullet_compound_shape() noexcept override;
 
     // Implements ICollision_shape
     [[nodiscard]] auto is_convex() const -> bool override;

@@ -23,7 +23,7 @@ public:
         const gl::Texture_wrap_mode  wrap_mode
     );
 
-    ~Sampler() = default;
+    ~Sampler() noexcept = default;
 
     [[nodiscard]] auto gl_name() const -> unsigned int
     {

@@ -13,7 +13,7 @@ public:
         const IRigid_body_create_info& create_info,
         IMotion_state*                 motion_state
     );
-    ~Null_rigid_body() override;
+    ~Null_rigid_body() noexcept override;
 
     // Implements IRigid_body
     void set_motion_mode             (const Motion_mode motion_mode)                           override;

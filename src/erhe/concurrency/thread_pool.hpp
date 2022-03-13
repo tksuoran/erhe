@@ -55,7 +55,7 @@ private:
 
 public:
     explicit Thread_pool(size_t size);
-    ~Thread_pool();
+    ~Thread_pool() noexcept;
 
     static Thread_pool& get_instance();
 

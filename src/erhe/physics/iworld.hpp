@@ -16,7 +16,7 @@ class IRigid_body_create_info;
 class IWorld
 {
 public:
-    virtual ~IWorld();
+    virtual ~IWorld() noexcept;
 
     [[nodiscard]] static auto create       () -> IWorld*;
     [[nodiscard]] static auto create_shared() -> std::shared_ptr<IWorld>;

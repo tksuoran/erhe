@@ -34,7 +34,7 @@ public:
     };
 
     explicit Light(const std::string_view name);
-    ~Light() override;
+    ~Light() noexcept override;
 
     [[nodiscard]] auto node_type() const -> const char* override;
 

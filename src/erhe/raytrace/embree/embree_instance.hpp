@@ -16,7 +16,7 @@ class Embree_instance
 {
 public:
     explicit Embree_instance(const std::string_view debug_label); // rtcNewGeometry()
-    ~Embree_instance() override; // rtcReleaseGeometry()
+    ~Embree_instance() noexcept override; // rtcReleaseGeometry()
 
     // Implements IGeometry
     void commit       () override;

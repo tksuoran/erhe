@@ -23,7 +23,7 @@ public:
         const unsigned int        height
     );
 
-    ~Renderbuffer();
+    ~Renderbuffer() noexcept;
 
     [[nodiscard]] auto internal_format() const -> gl::Internal_format;
     [[nodiscard]] auto sample_count   () const -> unsigned int;

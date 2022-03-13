@@ -22,8 +22,8 @@ public:
     static constexpr std::string_view c_name{"Shader_monitor"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
-    Shader_monitor();
-    ~Shader_monitor() override;
+    Shader_monitor ();
+    ~Shader_monitor() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

@@ -41,8 +41,8 @@ public:
         )
     };
 
-    Debug_view_window();
-    ~Debug_view_window() override;
+    Debug_view_window ();
+    ~Debug_view_window() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

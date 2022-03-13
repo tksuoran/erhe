@@ -42,7 +42,7 @@ public:
         const std::shared_ptr<Raytrace_primitive>& primitive
     );
 
-    ~Node_raytrace() override;
+    ~Node_raytrace() noexcept override;
 
 	// Implements INode_attachment
     [[nodiscard]] auto node_attachment_type() const -> const char* override;

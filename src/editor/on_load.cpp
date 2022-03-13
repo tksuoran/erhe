@@ -43,7 +43,7 @@
 #include "tools/trs_tool.hpp"
 
 #include "windows/brushes.hpp"
-#include "windows/camera_properties.hpp"
+//#include "windows/camera_properties.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/imgui_demo_window.hpp"
 #include "windows/layers_window.hpp"

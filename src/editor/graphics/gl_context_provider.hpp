@@ -38,7 +38,7 @@ public:
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Gl_context_provider ();
-    ~Gl_context_provider() override;
+    ~Gl_context_provider() noexcept override;
     Gl_context_provider (const Gl_context_provider&) = delete;
     void operator=      (const Gl_context_provider&) = delete;
     Gl_context_provider (Gl_context_provider&&)      = delete;
@@ -70,7 +70,7 @@ class Scoped_gl_context
 {
 public:
     explicit Scoped_gl_context(const std::shared_ptr<Gl_context_provider>& context_provider);
-    ~Scoped_gl_context        ();
+    ~Scoped_gl_context        () noexcept;
     Scoped_gl_context         (const Scoped_gl_context&) = delete;
     auto operator=            (const Scoped_gl_context&) = delete;
     Scoped_gl_context         (Scoped_gl_context&&)      = delete;

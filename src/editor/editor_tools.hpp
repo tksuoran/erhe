@@ -29,7 +29,7 @@ public:
     };
 
     Editor_tools ();
-    ~Editor_tools() override;
+    ~Editor_tools() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

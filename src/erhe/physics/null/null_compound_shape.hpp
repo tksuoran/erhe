@@ -14,7 +14,7 @@ class Null_compound_shape
     : public Null_collision_shape
 {
 public:
-    Null_compound_shape(const Compound_shape_create_info& create_info)
+    explicit Null_compound_shape(const Compound_shape_create_info& create_info)
     {
         static_cast<void>(create_info);
     }

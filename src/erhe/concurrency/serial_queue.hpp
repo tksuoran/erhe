@@ -68,7 +68,7 @@ protected:
 public:
     Serial_queue();
     explicit Serial_queue(const std::string_view name);
-    ~Serial_queue();
+    ~Serial_queue() noexcept;
 
     template <class F, class... Args>
     void enqueue(F&& f, Args&&... args)

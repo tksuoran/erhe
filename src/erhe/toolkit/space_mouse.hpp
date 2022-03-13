@@ -25,7 +25,7 @@ class Space_mouse_controller
 {
 public:
     explicit Space_mouse_controller(Space_mouse_listener& spacemouse_listener);
-    ~Space_mouse_controller();
+    ~Space_mouse_controller() noexcept;
 
     void run ();
     void stop();

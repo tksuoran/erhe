@@ -182,7 +182,7 @@ class Indenter final
 {
 public:
     Indenter(const int amount = 3);
-    ~Indenter();
+    ~Indenter() noexcept;
 
 private:
     int m_amount{0};

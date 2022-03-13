@@ -10,7 +10,7 @@ class Command
 {
 public:
     explicit Command(const char* name);
-    virtual ~Command();
+    virtual ~Command() noexcept;
 
     Command(const Command&) = delete;
     Command(Command&&) = delete;

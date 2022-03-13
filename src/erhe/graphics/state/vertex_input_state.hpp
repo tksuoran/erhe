@@ -60,7 +60,7 @@ class Vertex_input_state
 public:
     Vertex_input_state();
     explicit Vertex_input_state(Vertex_input_state_data&& create_info);
-    ~Vertex_input_state();
+    ~Vertex_input_state() noexcept;
 
     void set    (const Vertex_input_state_data& data);
     auto gl_name() const -> unsigned int;

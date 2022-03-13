@@ -37,7 +37,7 @@ class Fly_camera_space_mouse_listener
 {
 public:
     explicit Fly_camera_space_mouse_listener(Fly_camera_tool& fly_camera_tool);
-    ~Fly_camera_space_mouse_listener();
+    ~Fly_camera_space_mouse_listener() noexcept;
 
     auto is_active     () -> bool                                 override;
     void set_active    (const bool value)                         override;
@@ -109,7 +109,7 @@ public:
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Fly_camera_tool ();
-    ~Fly_camera_tool() override;
+    ~Fly_camera_tool() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

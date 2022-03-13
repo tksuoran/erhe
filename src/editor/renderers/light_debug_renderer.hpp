@@ -38,16 +38,20 @@ class Light_debug_renderer
 public:
     Light_debug_renderer();
 
-    virtual ~Light_debug_renderer() = default;
+    virtual ~Light_debug_renderer() noexcept = default;
 
-    void connect(std::shared_ptr<renderstack::graphics::Renderer> renderer,
-                 std::shared_ptr<Programs>                        programs,
-                 std::shared_ptr<Light_mesh>                      light_mesh);
+    void connect(
+        std::shared_ptr<renderstack::graphics::Renderer> renderer,
+        std::shared_ptr<Programs>                        programs,
+        std::shared_ptr<Light_mesh>                      light_mesh
+    );
 
     void initialize_service() override;
 
-    void light_pass(const Light_collection           &lights,
-                    const renderstack::scene::Camera &camera);
+    void light_pass(
+        const Light_collection           &lights,
+        const renderstack::scene::Camera &camera
+    );
 
 private:
     renderstack::graphics::Render_states m_debug_light_render_states;

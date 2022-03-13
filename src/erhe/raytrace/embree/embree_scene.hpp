@@ -18,7 +18,7 @@ class Embree_scene
 {
 public:
     explicit Embree_scene(const std::string_view debug_label); // rtcNewScene()
-    ~Embree_scene() override; // rtcReleaseScene()
+    ~Embree_scene() noexcept override; // rtcReleaseScene()
 
     // rtcGetSceneDevice()
     // rtcRetainScene()

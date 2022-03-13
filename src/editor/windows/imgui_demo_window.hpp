@@ -19,7 +19,7 @@ public:
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Imgui_demo_window ();
-    ~Imgui_demo_window() override;
+    ~Imgui_demo_window() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

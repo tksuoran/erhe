@@ -16,14 +16,14 @@ class Scoped_debug_group final
 {
 public:
     explicit Scoped_debug_group(const std::string_view debug_label);
-    ~Scoped_debug_group();
+    ~Scoped_debug_group() noexcept;
 };
 
 class Gpu_timer
 {
 public:
     explicit Gpu_timer(const char* label);
-    ~Gpu_timer();
+    ~Gpu_timer() noexcept;
 
     Gpu_timer     (const Gpu_timer&) = delete;
     auto operator=(const Gpu_timer&) = delete;
@@ -69,7 +69,7 @@ class Scoped_gpu_timer
 {
 public:
     explicit Scoped_gpu_timer(Gpu_timer& timer);
-    ~Scoped_gpu_timer();
+    ~Scoped_gpu_timer() noexcept;
 
 private:
     Gpu_timer& m_timer;

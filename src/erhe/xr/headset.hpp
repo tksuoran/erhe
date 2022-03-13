@@ -34,7 +34,7 @@ class Headset final
 {
 public:
     explicit Headset(erhe::toolkit::Context_window* window);
-    ~Headset        ();
+    ~Headset        () noexcept;
 
     // TODO [[nodiscard]]
     auto begin_frame            () -> Frame_timing;

@@ -29,7 +29,7 @@ class PNG_loader
 {
 public:
     PNG_loader    ();
-    ~PNG_loader   ();
+    ~PNG_loader   () noexcept;
     PNG_loader    (const PNG_loader&) = delete;
     auto operator=(const PNG_loader&) = delete;
     PNG_loader    (PNG_loader&&)      = delete;

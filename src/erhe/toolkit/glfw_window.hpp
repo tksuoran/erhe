@@ -43,7 +43,7 @@ public:
     explicit Context_window(const Window_configuration& configuration);
 
     explicit Context_window(Context_window* share);
-    virtual ~Context_window();
+    virtual ~Context_window() noexcept;
 
     [[nodiscard]] auto get_width        () const -> int;
     [[nodiscard]] auto get_height       () const -> int;

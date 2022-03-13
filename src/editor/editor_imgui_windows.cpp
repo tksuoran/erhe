@@ -165,7 +165,7 @@ public:
         // TODO Currently messy Expects(m_old_context == nullptr);
         ImGui::SetCurrentContext(context);
     }
-    ~Scoped_imgui_context()
+    ~Scoped_imgui_context() noexcept
     {
         ImGui::SetCurrentContext(m_old_context);
     }

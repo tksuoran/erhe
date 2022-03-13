@@ -22,7 +22,7 @@ class Jolt_collision_shape
     : public ICollision_shape
 {
 public:
-    ~Jolt_collision_shape() override = default;
+    ~Jolt_collision_shape() noexcept override = default;
 
     // Implements ICollision_shape
     void calculate_local_inertia(float mass, glm::vec3& inertia) const override
@@ -58,7 +58,7 @@ class Jolt_box_shape
     : public Jolt_collision_shape
 {
 public:
-    ~Jolt_box_shape() override = default;
+    ~Jolt_box_shape() noexcept override = default;
 
     explicit Jolt_box_shape(const glm::vec3 half_extents)
     {
@@ -82,7 +82,7 @@ public:
         m_jolt_shape = result.Get();
     }
 
-    ~Jolt_capsule_shape() override = default;
+    ~Jolt_capsule_shape() noexcept override = default;
 };
 
 
@@ -97,7 +97,7 @@ public:
         static_cast<void>(height);
     }
 
-    ~Jolt_cone_shape() override = default;
+    ~Jolt_cone_shape() noexcept override = default;
 
 private:
     //Axis  m_axis;
@@ -118,7 +118,7 @@ public:
         m_jolt_shape = result.Get();
     }
 
-    ~Jolt_cylinder_shape() override = default;
+    ~Jolt_cylinder_shape() noexcept override = default;
 
 private:
     //Axis m_axis;
@@ -138,7 +138,7 @@ public:
         m_jolt_shape = result.Get();
     }
 
-    ~Jolt_sphere_shape() override = default;
+    ~Jolt_sphere_shape() noexcept override = default;
 
 private:
     //float m_radius;

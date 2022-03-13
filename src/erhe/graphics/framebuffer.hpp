@@ -69,7 +69,7 @@ public:
     };
 
     explicit Framebuffer(const Create_info& create_info);
-    ~Framebuffer        ();
+    ~Framebuffer        () noexcept;
     Framebuffer         (const Framebuffer&) = delete;
     void operator=      (const Framebuffer&) = delete;
     Framebuffer         (Framebuffer&&)      = delete;

@@ -12,7 +12,7 @@ class Command_binding
 {
 public:
     explicit Command_binding(Command* const command);
-    virtual ~Command_binding();
+    virtual ~Command_binding() noexcept;
 
     Command_binding();
     Command_binding(const Command_binding&) = delete;

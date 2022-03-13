@@ -14,7 +14,7 @@ class Null_world
     : public IWorld
 {
 public:
-    virtual ~Null_world() override;
+    virtual ~Null_world() noexcept override;
 
     // Implements IWorld
     void enable_physics_updates    ()                        override;

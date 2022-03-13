@@ -52,7 +52,7 @@ public:
     static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Text_renderer ();
-    ~Text_renderer() override;
+    ~Text_renderer() noexcept override;
     Text_renderer (const Text_renderer&) = delete;
     void operator=(const Text_renderer&) = delete;
     Text_renderer (Text_renderer&&)      = delete;

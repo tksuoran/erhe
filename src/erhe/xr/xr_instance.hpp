@@ -35,7 +35,7 @@ class Xr_instance
 {
 public:
     Xr_instance   ();
-    ~Xr_instance  ();
+    ~Xr_instance  () noexcept;
     Xr_instance   (const Xr_instance&) = delete;
     void operator=(const Xr_instance&) = delete;
     Xr_instance   (Xr_instance&&)      = delete;

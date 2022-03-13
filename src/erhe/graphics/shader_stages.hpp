@@ -85,7 +85,7 @@ public:
     {
     public:
         explicit Prototype(const Create_info& create_info);
-        ~Prototype        () = default;
+        ~Prototype        () noexcept = default;
         Prototype         (const Prototype&) = delete;
         void operator=    (const Prototype&) = delete;
 

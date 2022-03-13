@@ -59,8 +59,8 @@ public:
     static constexpr std::string_view c_title{"Performance"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
-    Performance_window();
-    ~Performance_window() override;
+    Performance_window ();
+    ~Performance_window() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

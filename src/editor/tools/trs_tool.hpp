@@ -101,7 +101,7 @@ public:
     };
 
     Trs_tool ();
-    ~Trs_tool() override;
+    ~Trs_tool() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

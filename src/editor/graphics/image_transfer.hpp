@@ -40,8 +40,8 @@ public:
     static constexpr std::string_view c_name{"erhe::graphics::ImageTransfer"};
     static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
-    Image_transfer();
-    ~Image_transfer() override;
+    Image_transfer ();
+    ~Image_transfer() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

@@ -32,7 +32,7 @@ public:
     Mesh         ();
     explicit Mesh(const std::string_view name);
     Mesh         (const std::string_view name, const erhe::primitive::Primitive primitive);
-    ~Mesh        () override;
+    ~Mesh        () noexcept override;
 
     [[nodiscard]] auto node_type() const -> const char* override;
 

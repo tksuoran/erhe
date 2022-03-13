@@ -28,7 +28,7 @@ public:
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Material_properties ();
-    ~Material_properties() override;
+    ~Material_properties() noexcept override;
 
     // Implements Component
     [[nodiscard]]

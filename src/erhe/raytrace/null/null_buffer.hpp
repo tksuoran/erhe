@@ -15,7 +15,7 @@ public:
     explicit Null_buffer  (const std::string_view debug_label, const size_t capacity_bytes_count);
     explicit Null_buffer  (Null_buffer&& other) noexcept;
     Null_buffer& operator=(Null_buffer&& other) noexcept;
-    ~Null_buffer          () override;
+    ~Null_buffer          () noexcept override;
 
     Null_buffer           (const Null_buffer&) = delete;
     Null_buffer& operator=(const Null_buffer&) = delete;

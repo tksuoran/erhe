@@ -17,7 +17,7 @@ private:
     Embree_device();  // rtcNewDevice
 
 public:
-    ~Embree_device(); // rtcReleaseDevice
+    ~Embree_device() noexcept; // rtcReleaseDevice
 
     // rtcRetainDevice()
 

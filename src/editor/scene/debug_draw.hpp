@@ -18,7 +18,7 @@ public:
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Debug_draw();
-    ~Debug_draw() override;
+    ~Debug_draw() noexcept override;
 
     // Implements Component
     auto get_type_hash       () const -> uint32_t override { return hash; }

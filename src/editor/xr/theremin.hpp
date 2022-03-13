@@ -46,8 +46,8 @@ public:
         )
     };
 
-    Theremin();
-    ~Theremin() override;
+    Theremin ();
+    ~Theremin() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

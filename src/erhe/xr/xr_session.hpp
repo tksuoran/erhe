@@ -22,7 +22,7 @@ class Xr_session
 {
 public:
     Xr_session    (Xr_instance& instance, erhe::toolkit::Context_window& context_window);
-    ~Xr_session   ();
+    ~Xr_session   () noexcept;
     Xr_session    (const Xr_session&) = delete;
     void operator=(const Xr_session&) = delete;
     Xr_session    (Xr_session&&)      = delete;

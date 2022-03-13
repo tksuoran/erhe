@@ -13,7 +13,7 @@ class Buffer_transfer_queue final
 {
 public:
     Buffer_transfer_queue ();
-    ~Buffer_transfer_queue();
+    ~Buffer_transfer_queue() noexcept;
     Buffer_transfer_queue (Buffer_transfer_queue&) = delete;
     auto operator=        (Buffer_transfer_queue&) -> Buffer_transfer_queue& = delete;
 

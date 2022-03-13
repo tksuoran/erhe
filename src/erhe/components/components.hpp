@@ -65,7 +65,7 @@ protected:
     void operator=(Component&&)      = delete;
 
     explicit Component(const std::string_view name);
-    virtual ~Component();
+    virtual ~Component() noexcept;
 
 public:
     virtual void connect() {};
@@ -128,7 +128,7 @@ class Time_context;
 class IExecution_queue
 {
 public:
-    virtual ~IExecution_queue();
+    virtual ~IExecution_queue() noexcept;
     virtual void enqueue(std::function<void()>) = 0;
     virtual void wait   () = 0;
 };
@@ -137,7 +137,7 @@ class Components final
 {
 public:
     Components    ();
-    ~Components   ();
+    ~Components   () noexcept;
     Components    (const Components&) = delete;
     void operator=(const Components&) = delete;
     Components    (Components&&)      = delete;

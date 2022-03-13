@@ -19,7 +19,7 @@ public:
     };
 
     explicit Compound_operation(Parameters&& parameters);
-    ~Compound_operation        () override;
+    ~Compound_operation() noexcept override;
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;

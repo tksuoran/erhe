@@ -104,7 +104,7 @@ public:
     // Constructor with no arguments creates default uniform block
     Shader_resource();
 
-    ~Shader_resource();
+    ~Shader_resource() noexcept;
 
     Shader_resource(const Shader_resource& other) = delete;
 

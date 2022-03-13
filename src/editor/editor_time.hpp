@@ -21,7 +21,7 @@ public:
     };
 
     Editor_time();
-    ~Editor_time() override;
+    ~Editor_time() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

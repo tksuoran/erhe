@@ -23,7 +23,7 @@ public:
     explicit Node_physics(
         const erhe::physics::IRigid_body_create_info& create_info
     );
-    ~Node_physics() override;
+    ~Node_physics() noexcept override;
 
 	// Implements INode_attachment
     [[nodiscard]] auto node_attachment_type() const -> const char* override;

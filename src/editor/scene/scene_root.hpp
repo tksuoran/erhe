@@ -82,7 +82,7 @@ public:
         const std::shared_ptr<Node_physics>&      node_physics,
         const std::shared_ptr<Node_raytrace>&     node_raytrace
     );
-    ~Instance();
+    ~Instance() noexcept;
 
     std::shared_ptr<erhe::scene::Mesh> mesh;
     std::shared_ptr<Node_physics>      node_physics;
@@ -145,7 +145,7 @@ public:
     static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Scene_root ();
-    ~Scene_root() override;
+    ~Scene_root() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

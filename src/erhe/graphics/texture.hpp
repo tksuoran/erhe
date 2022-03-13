@@ -48,7 +48,7 @@ public:
     static auto size_level_count  (int size) -> int;
 
     explicit Texture(const Create_info& create_info);
-    ~Texture        ();
+    ~Texture        () noexcept;
     Texture         (const Texture&) = delete;
     void operator=  (const Texture&) = delete;
     Texture         (Texture&& other) noexcept;

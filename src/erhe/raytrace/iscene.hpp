@@ -37,7 +37,7 @@ public:
 class IScene
 {
 public:
-    virtual ~IScene(){};
+    virtual ~IScene() noexcept {};
 
     virtual void attach   (IGeometry* geometry) = 0;
     virtual void attach   (IInstance* instance) = 0;

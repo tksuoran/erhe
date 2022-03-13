@@ -15,7 +15,7 @@ class Null_scene
 {
 public:
     explicit Null_scene(const std::string_view debug_label);
-    ~Null_scene() override;
+    ~Null_scene() noexcept override;
 
     // Implements IScene
     void attach   (IGeometry* geometry) override;

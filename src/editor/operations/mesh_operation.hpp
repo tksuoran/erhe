@@ -59,7 +59,7 @@ protected:
     };
 
     explicit Mesh_operation(Parameters&& parameters);
-    ~Mesh_operation() override;
+    ~Mesh_operation() noexcept override;
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;

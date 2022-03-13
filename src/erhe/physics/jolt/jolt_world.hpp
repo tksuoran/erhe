@@ -22,7 +22,7 @@ class Jolt_world
 {
 public:
     Jolt_world();
-    virtual ~Jolt_world() override;
+    virtual ~Jolt_world() noexcept override;
 
     // Implements IWorld
     void enable_physics_updates    ()                        override;

@@ -93,7 +93,7 @@ public:
         {
         }
 
-        ~Subcription()
+        ~Subcription() noexcept
         {
             if (
                 (m_tool != nullptr) &&
@@ -134,8 +134,8 @@ public:
     static constexpr std::string_view c_description{"Selection tool"};
     static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
-    Selection_tool();
-    ~Selection_tool() override;
+    Selection_tool ();
+    ~Selection_tool() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash () const -> uint32_t override { return hash; }

@@ -49,7 +49,7 @@ class Bullet_world
 {
 public:
     Bullet_world  ();
-    ~Bullet_world ();
+    ~Bullet_world () noexcept;
     Bullet_world  (const Bullet_world&)                  = delete;
     auto operator=(const Bullet_world&) -> Bullet_world& = delete;
     Bullet_world  (Bullet_world&&)                       = delete;

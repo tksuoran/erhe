@@ -158,7 +158,7 @@ class Root_view;
 class Event_handler
 {
 public:
-    virtual ~Event_handler() = default;
+    virtual ~Event_handler() noexcept = default;
 
     virtual void on_idle()
     {
@@ -227,7 +227,7 @@ class View
     : public Event_handler
 {
 public:
-    ~View() override = default;
+    ~View() noexcept override = default;
 
     virtual void on_enter() {}
     virtual void on_exit () {}

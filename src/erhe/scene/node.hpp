@@ -16,7 +16,7 @@ class Node;
 class INode_attachment
 {
 public:
-    virtual ~INode_attachment();
+    virtual ~INode_attachment() noexcept;
 
     static constexpr uint64_t c_flag_bit_none                = 0u;
     static constexpr uint64_t c_flag_bit_is_physics          = (1u << 0);
@@ -92,9 +92,9 @@ class Node
 public:
     explicit Node(const std::string_view name);
 
-    virtual ~Node();
+    virtual ~Node() noexcept;
 
-    virtual void on_attached_to      (Node& node);
+    virtual void on_attached         ();
     virtual void on_detached_from    (Node& node);
     virtual void on_transform_changed();
 
@@ -132,6 +132,7 @@ public:
     [[nodiscard]] auto is_ancestor        (const Node* ancestor_candidate) const -> bool;
     //[[nodiscard]] auto is_descendant      (const Node* descendant_candidate) const -> bool;
 
+    void set_parent                (const std::weak_ptr<Node>& parent);
     void set_depth_recursive       (const size_t depth);
     void update_transform          (const uint64_t serial = 0);
     void update_transform_recursive(const uint64_t serial = 0);
@@ -143,9 +144,9 @@ public:
     void set_node_from_parent      (const Transform& transform);
     void set_world_from_node       (const glm::mat4 matrix);
     void set_world_from_node       (const Transform& transform);
-    void attach                    (const std::shared_ptr<Node>& node);
-    void attach                    (const std::shared_ptr<Node>& node, size_t position);
-    auto detach                    (Node* node) -> bool;
+    void attach                    (const std::shared_ptr<Node>& node, const bool primary_operation = true);
+    void attach                    (const std::shared_ptr<Node>& node, const size_t position, const bool primary_operation = true);
+    auto detach                    (Node* node, const bool primary_operation = true) -> bool;
     void attach                    (const std::shared_ptr<INode_attachment>& attachment);
     auto detach                    (INode_attachment* attachment) -> bool;
     void unparent                  ();

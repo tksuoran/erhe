@@ -43,21 +43,27 @@ class Deferred_renderer
 public:
     Deferred_renderer();
 
-    virtual ~Deferred_renderer() = default;
+    virtual ~Deferred_renderer() noexcept = default;
 
-    void connect(std::shared_ptr<renderstack::graphics::Renderer> renderer,
-                 std::shared_ptr<Programs>                        programs,
-                 std::shared_ptr<Quad_renderer>                   quad_renderer,
-                 std::shared_ptr<Light_mesh>                      light_mesh);
+    void connect(
+        std::shared_ptr<renderstack::graphics::Renderer> renderer,
+        std::shared_ptr<Programs>                        programs,
+        std::shared_ptr<Quad_renderer>                   quad_renderer,
+        std::shared_ptr<Light_mesh>                      light_mesh
+    );
 
     void initialize_service() override;
 
-    void geometry_pass(const Material_collection        &materials,
-                       const Model_collection           &models,
-                       const renderstack::scene::Camera &camera);
+    void geometry_pass(
+        const Material_collection        &materials,
+        const Model_collection           &models,
+        const renderstack::scene::Camera &camera
+    );
 
-    void light_pass(const Light_collection           &lights,
-                    const renderstack::scene::Camera &camera);
+    void light_pass(
+        const Light_collection           &lights,
+        const renderstack::scene::Camera &camera
+    );
 
     void show_rt();
 

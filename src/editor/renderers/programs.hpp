@@ -29,7 +29,7 @@ public:
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Programs      ();
-    ~Programs     () override;
+    ~Programs     () noexcept override;
     Programs      (const Programs&) = delete;
     void operator=(const Programs&) = delete;
     Programs      (Programs&&)      = delete;

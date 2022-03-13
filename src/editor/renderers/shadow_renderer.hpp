@@ -38,7 +38,7 @@ public:
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Shadow_renderer ();
-    ~Shadow_renderer() override;
+    ~Shadow_renderer() noexcept override;
 
     // Implements Component
     auto get_type_hash       () const -> uint32_t override { return hash; }

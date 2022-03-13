@@ -56,8 +56,8 @@ public:
     static constexpr std::string_view c_name{"Pointer_context"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
-    Pointer_context();
-    ~Pointer_context() override;
+    Pointer_context ();
+    ~Pointer_context() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

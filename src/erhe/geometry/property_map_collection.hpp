@@ -14,8 +14,8 @@ private:
     class Entry final
     {
     public:
-        Entry() = default;
-        ~Entry() = default;
+        Entry () = default;
+        ~Entry() noexcept = default;
 
         Entry(
             const std::string&           key,

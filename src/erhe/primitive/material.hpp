@@ -25,7 +25,7 @@ public:
         const glm::vec2        roughness  = glm::vec2{0.5f, 0.5f},
         const float            metallic   = 0.0f
     );
-    ~Material();
+    ~Material() noexcept;
 
     size_t                                   index{0};
     std::string                              name;

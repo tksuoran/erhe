@@ -36,7 +36,7 @@ public:
         const int row_count    = 16,
         const int column_count = 16
     );
-    ~Icon_set() override;
+    ~Icon_set() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

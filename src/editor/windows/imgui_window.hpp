@@ -35,7 +35,7 @@ class Imgui_window
 public:
     explicit Imgui_window(const std::string_view title);
     Imgui_window(const std::string_view title, const std::string_view label);
-    virtual ~Imgui_window();
+    virtual ~Imgui_window() noexcept;
 
     [[nodiscard]] auto is_visibile() const -> bool;
     [[nodiscard]] auto title      () const -> const std::string_view;

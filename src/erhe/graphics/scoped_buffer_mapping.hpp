@@ -28,7 +28,7 @@ public:
     {
     }
 
-    ~Scoped_buffer_mapping()
+    ~Scoped_buffer_mapping() noexcept
     {
         m_buffer.unmap();
     }

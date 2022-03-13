@@ -135,7 +135,7 @@ class IBuffer;
 class IGeometry
 {
 public:
-    virtual ~IGeometry(){};
+    virtual ~IGeometry() noexcept {};
 
     virtual void commit                    () = 0;
     virtual void enable                    () = 0;

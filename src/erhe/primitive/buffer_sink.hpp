@@ -27,7 +27,7 @@ class Vertex_buffer_writer;
 class Buffer_sink
 {
 public:
-    virtual ~Buffer_sink();
+    virtual ~Buffer_sink() noexcept;
 
     [[nodiscard]] virtual auto allocate_vertex_buffer(
         const size_t vertex_count,

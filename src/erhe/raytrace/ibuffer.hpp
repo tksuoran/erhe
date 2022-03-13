@@ -11,7 +11,7 @@ namespace erhe::raytrace
 class IBuffer
 {
 public:
-    virtual ~IBuffer(){};
+    virtual ~IBuffer() noexcept {};
 
     [[nodiscard]] virtual auto capacity_byte_count() const noexcept -> size_t = 0;
     [[nodiscard]] virtual auto allocate_bytes     (const size_t byte_count, const size_t alignment = 64) noexcept -> size_t = 0;

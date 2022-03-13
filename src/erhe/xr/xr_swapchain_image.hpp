@@ -17,7 +17,7 @@ class Swapchain_image
 {
 public:
     Swapchain_image (gsl::not_null<Swapchain*> swapchain, const uint32_t image_index);
-    ~Swapchain_image();
+    ~Swapchain_image() noexcept;
     Swapchain_image (const Swapchain_image&) = delete;
     void operator=  (const Swapchain_image&) = delete;
     Swapchain_image (Swapchain_image&& other) noexcept;
@@ -35,7 +35,7 @@ class Swapchain
 {
 public:
     explicit Swapchain(XrSwapchain xr_swapchain);
-    ~Swapchain();
+    ~Swapchain() noexcept;
     Swapchain     (const Swapchain&) = delete;
     void operator=(const Swapchain&) = delete;
     Swapchain     (Swapchain&& other) noexcept;

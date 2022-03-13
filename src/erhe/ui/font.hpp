@@ -29,7 +29,7 @@ public:
         const float        outline_thickness = 0.0f
     );
 
-    ~Font();
+    ~Font() noexcept;
 
     void save() const;
 

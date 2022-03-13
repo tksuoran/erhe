@@ -92,7 +92,7 @@ public:
         const Normal_style              normal_style,
         Primitive_geometry*             primitive_geometry
     );
-    ~Build_context();
+    ~Build_context() noexcept;
 
     void build_polygon_fill   ();
     void build_edge_lines     ();
@@ -151,7 +151,7 @@ public:
         const Normal_style              normal_style
     );
 
-    ~Primitive_builder();
+    ~Primitive_builder() noexcept;
 
     [[nodiscard]] auto build() -> Primitive_geometry;
 

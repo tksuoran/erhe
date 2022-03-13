@@ -24,8 +24,8 @@ public:
         )
     };
 
-    Textures();
-    ~Textures() override;
+    Textures ();
+    ~Textures() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

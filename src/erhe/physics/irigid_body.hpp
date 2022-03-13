@@ -44,7 +44,7 @@ public:
 class IRigid_body
 {
 public:
-    virtual ~IRigid_body();
+    virtual ~IRigid_body() noexcept;
 
     [[nodiscard]] virtual auto get_collision_shape () const -> std::shared_ptr<ICollision_shape> = 0;
     [[nodiscard]] virtual auto get_motion_mode     () const -> Motion_mode                       = 0;

@@ -14,7 +14,7 @@ class Null_collision_shape
     : public ICollision_shape
 {
 public:
-    ~Null_collision_shape() override = default;
+    ~Null_collision_shape() noexcept override = default;
 
     // Implements ICollision_shape
     void calculate_local_inertia(float mass, glm::vec3& inertia) const override
@@ -43,7 +43,7 @@ class Null_box_shape
     : public Null_collision_shape
 {
 public:
-    ~Null_box_shape() override = default;
+    ~Null_box_shape() noexcept override = default;
 
     explicit Null_box_shape(const glm::vec3 half_extents)
         //: m_half_extents{half_extents}
@@ -69,7 +69,7 @@ public:
         static_cast<void>(length);
     }
 
-    ~Null_capsule_shape() override = default;
+    ~Null_capsule_shape() noexcept override = default;
 
 private:
     //Axis  m_axis;
@@ -92,7 +92,7 @@ public:
         static_cast<void>(height);
     }
 
-    ~Null_cone_shape() override = default;
+    ~Null_cone_shape() noexcept override = default;
 
 private:
     //Axis  m_axis;
@@ -112,7 +112,7 @@ public:
         static_cast<void>(half_extents);
     }
 
-    ~Null_cylinder_shape() override = default;
+    ~Null_cylinder_shape() noexcept override = default;
 
 private:
     //Axis m_axis;
@@ -130,7 +130,7 @@ public:
         static_cast<void>(radius);
     }
 
-    ~Null_sphere_shape() override = default;
+    ~Null_sphere_shape() noexcept override = default;
 
 private:
     //float m_radius;

@@ -28,7 +28,7 @@ public:
         const IRigid_body_create_info& create_info,
         IMotion_state*                 motion_state
     );
-    ~Bullet_rigid_body() override;
+    ~Bullet_rigid_body() noexcept override;
 
     // Implements IRigid_body
     [[nodiscard]] auto get_motion_mode      () const -> Motion_mode                       override;

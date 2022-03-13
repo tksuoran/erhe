@@ -453,7 +453,7 @@ public:
     Geometry         ();
     explicit Geometry(std::string_view name);
     Geometry         (std::string_view name, std::function<void(Geometry&)>);
-    ~Geometry        ();
+    ~Geometry        () noexcept;
     Geometry         (const Geometry&)  = delete;
     void operator=   (const Geometry&)  = delete;
     Geometry         (Geometry&& other) noexcept;

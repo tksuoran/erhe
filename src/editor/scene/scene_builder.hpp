@@ -59,8 +59,8 @@ public:
     static constexpr std::string_view c_name{"Scene_builder"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
-    Scene_builder();
-    ~Scene_builder() override;
+    Scene_builder ();
+    ~Scene_builder() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

@@ -42,7 +42,7 @@ class PNG_loader final
 {
 public:
     PNG_loader    ();
-    ~PNG_loader   ();
+    ~PNG_loader   () noexcept;
     PNG_loader    (const PNG_loader&) = delete;
     void operator=(const PNG_loader&) = delete;
     PNG_loader    (PNG_loader&&)      = delete;
@@ -68,7 +68,7 @@ class PNG_writer final
 {
 public:
     PNG_writer    ();
-    ~PNG_writer   ();
+    ~PNG_writer   () noexcept;
     PNG_writer    (const PNG_writer&) = delete;
     PNG_writer    (PNG_writer&&)      = delete;
     auto operator=(const PNG_writer&) = delete;

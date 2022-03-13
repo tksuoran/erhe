@@ -13,7 +13,7 @@ class IScene;
 class IInstance
 {
 public:
-    virtual ~IInstance(){};
+    virtual ~IInstance() noexcept {};
 
     virtual void commit       () = 0;
     virtual void set_transform(const glm::mat4 transform) = 0;

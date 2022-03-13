@@ -14,7 +14,7 @@ class Embree_buffer
 {
 public:
     Embree_buffer(const std::string_view debug_label, const size_t capacity_byte_count); // rtcNewBuffer()
-    ~Embree_buffer() override;                       // rtcReleaseBuffer()
+    ~Embree_buffer() noexcept override;                       // rtcReleaseBuffer()
 
     // rtcNewSharedBuffer()
     // rtcRetainBuffer()

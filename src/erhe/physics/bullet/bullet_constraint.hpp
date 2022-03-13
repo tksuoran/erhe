@@ -16,7 +16,7 @@ class Bullet_constraint
     : public IConstraint
 {
 public:
-    ~Bullet_constraint() override;
+    ~Bullet_constraint() noexcept override;
 
     [[nodiscard]] virtual auto get_bullet_constraint()       ->       btTypedConstraint* = 0;
     [[nodiscard]] virtual auto get_bullet_constraint() const -> const btTypedConstraint* = 0;

@@ -34,7 +34,7 @@ public:
         return *this;
     }
 
-    ~Unique_id() = default;
+    ~Unique_id() noexcept = default;
 
     void reset()
     {

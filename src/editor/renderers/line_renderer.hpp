@@ -332,7 +332,7 @@ public:
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Line_renderer_set ();
-    ~Line_renderer_set() override;
+    ~Line_renderer_set() noexcept override;
 
     // Implements Component
     auto get_type_hash       () const -> uint32_t override { return hash; }

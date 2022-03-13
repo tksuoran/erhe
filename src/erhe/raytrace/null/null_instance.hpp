@@ -16,7 +16,7 @@ class Null_instance
 {
 public:
     explicit Null_instance(const std::string_view debug_label);
-    ~Null_instance() override;
+    ~Null_instance() noexcept override;
 
     // Implements IInstance
     void commit       () override;

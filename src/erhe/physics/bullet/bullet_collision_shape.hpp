@@ -20,7 +20,7 @@ class Bullet_collision_shape
 {
 public:
     explicit Bullet_collision_shape(btCollisionShape* shape);
-    ~Bullet_collision_shape() override;
+    ~Bullet_collision_shape() noexcept override;
 
     // Implements ICollision_shape
     [[nodiscard]] auto is_convex() const -> bool                       override;
