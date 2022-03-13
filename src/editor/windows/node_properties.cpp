@@ -605,7 +605,7 @@ void Node_properties::transform_properties(erhe::scene::Node& node)
         {
             m_operation_stack->push(
                 std::make_shared<Node_transform_operation>(
-                    Node_transform_operation::Context{
+                    Node_transform_operation::Parameters{
                         .layer                   = *m_scene_root->content_layer(),
                         .scene                   = m_scene_root->scene(),
                         .physics_world           = m_scene_root->physics_world(),

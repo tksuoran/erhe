@@ -12,10 +12,10 @@
 namespace editor
 {
 
-Attach_detach_operation::Attach_detach_operation(Context&& context)
-    : m_context{std::move(context)}
+Attach_detach_operation::Attach_detach_operation(Parameters&& parameters)
+    : m_parameters{std::move(parameters)}
 {
-    const auto& selection = context.selection_tool->selection();
+    const auto& selection = parameters.selection_tool->selection();
     if (selection.size() < 2)
     {
         return;
@@ -33,7 +33,7 @@ Attach_detach_operation::Attach_detach_operation(Context&& context)
         {
             //auto node_physics = get_physics_node(node.get());
 
-            if (context.attach)
+            if (parameters.attach)
             {
                 if (node->parent().expired())
                 {
@@ -70,7 +70,7 @@ Attach_detach_operation::Attach_detach_operation(Context&& context)
 auto Attach_detach_operation::describe() const -> std::string
 {
     std::stringstream ss;
-    ss << (m_context.attach ? "Attach " : "Detach ");
+    ss << (m_parameters.attach ? "Attach " : "Detach ");
     bool first = true;
     for (const auto& entry : m_entries)
     {
@@ -85,7 +85,7 @@ auto Attach_detach_operation::describe() const -> std::string
         }
         ss << entry.node->name();
     }
-    ss << (m_context.attach ? "to " : "from ");
+    ss << (m_parameters.attach ? "to " : "from ");
     ERHE_VERIFY(m_parent_node);
     ss << m_parent_node->name();
     return ss.str();
@@ -93,17 +93,17 @@ auto Attach_detach_operation::describe() const -> std::string
 
 void Attach_detach_operation::execute(const Operation_context&)
 {
-    execute(m_context.attach);
+    execute(m_parameters.attach);
 }
 
 void Attach_detach_operation::undo(const Operation_context&)
 {
-    execute(!m_context.attach);
+    execute(!m_parameters.attach);
 }
 
 void Attach_detach_operation::execute(bool attach) const
 {
-    m_context.scene.sanity_check();
+    m_parameters.scene.sanity_check();
 
     ERHE_VERIFY(m_parent_node);
 
@@ -119,7 +119,7 @@ void Attach_detach_operation::execute(bool attach) const
         }
     }
 
-    m_context.scene.sanity_check();
+    m_parameters.scene.sanity_check();
 }
 
 } // namespace editor

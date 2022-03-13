@@ -1106,7 +1106,7 @@ void Trs_tool::end_drag()
         ERHE_VERIFY(m_target_node);
         m_operation_stack->push(
             std::make_shared<Node_transform_operation>(
-                Node_transform_operation::Context{
+                Node_transform_operation::Parameters{
                     .layer                   = *m_scene_root->content_layer(),
                     .scene                   = m_scene_root->scene(),
                     .physics_world           = m_scene_root->physics_world(),

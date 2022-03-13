@@ -36,7 +36,6 @@ using glm::vec4;
 Range_selection::Range_selection(Selection_tool& selection_tool)
     : m_selection_tool{selection_tool}
 {
-
 }
 
 void Range_selection::set_terminator(const std::shared_ptr<erhe::scene::Node>& node)
@@ -137,7 +136,7 @@ auto Selection_tool_select_command::try_call(Command_context& context) -> bool
         return false;
     }
 
-    bool consumed = m_selection_tool.on_mouse_select();
+    const bool consumed = m_selection_tool.on_mouse_select();
     set_inactive(context);
     return consumed;
 }
@@ -166,7 +165,7 @@ auto Selection_tool::delete_selection() -> bool
             const auto mesh = as_mesh(node);
             compound_parameters.operations.push_back(
                 std::make_shared<Mesh_insert_remove_operation>(
-                    Mesh_insert_remove_operation::Context{
+                    Mesh_insert_remove_operation::Parameters{
                         .scene          = scene_root->scene(),
                         .layer          = *scene_root->content_layer(),
                         .physics_world  = scene_root->physics_world(),
@@ -183,7 +182,7 @@ auto Selection_tool::delete_selection() -> bool
             const auto light = as_light(node);
             compound_parameters.operations.push_back(
                 std::make_shared<Light_insert_remove_operation>(
-                    Light_insert_remove_operation::Context{
+                    Light_insert_remove_operation::Parameters{
                         .scene          = scene_root->scene(),
                         .layer          = *scene_root->light_layer(),
                         .light          = light,
@@ -198,7 +197,7 @@ auto Selection_tool::delete_selection() -> bool
             const auto camera = as_camera(node);
             compound_parameters.operations.push_back(
                 std::make_shared<Camera_insert_remove_operation>(
-                    Camera_insert_remove_operation::Context{
+                    Camera_insert_remove_operation::Parameters{
                         .scene          = scene_root->scene(),
                         .camera         = camera,
                         .parent         = camera->parent().lock(),
@@ -213,7 +212,7 @@ auto Selection_tool::delete_selection() -> bool
         return false;
     }
 
-    auto op = std::make_shared<Compound_operation>(std::move(compound_parameters));
+    const auto op = std::make_shared<Compound_operation>(std::move(compound_parameters));
     get<Operation_stack>()->push(op);
     return true;
 }
@@ -275,8 +274,8 @@ auto Selection_tool::selection() const -> const Selection&
 
 template <typename T>
 [[nodiscard]] auto is_in(
-    const T&       item,
-    std::vector<T> items
+    const T&              item,
+    const std::vector<T>& items
 ) -> bool
 {
     return std::find(

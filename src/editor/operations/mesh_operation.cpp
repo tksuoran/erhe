@@ -10,8 +10,8 @@
 namespace editor
 {
 
-Mesh_operation::Mesh_operation(Context&& context)
-    : m_context{std::move(context)}
+Mesh_operation::Mesh_operation(Parameters&& parameters)
+    : m_parameters{std::move(parameters)}
 {
 }
 
@@ -40,9 +40,9 @@ void Mesh_operation::execute(const Operation_context&)
 {
     for (const auto& entry : m_entries)
     {
-        m_context.scene.sanity_check();
+        m_parameters.scene.sanity_check();
         entry.mesh->mesh_data = entry.after;
-        m_context.scene.sanity_check();
+        m_parameters.scene.sanity_check();
     }
 }
 
@@ -50,9 +50,9 @@ void Mesh_operation::undo(const Operation_context&)
 {
     for (const auto& entry : m_entries)
     {
-        m_context.scene.sanity_check();
+        m_parameters.scene.sanity_check();
         entry.mesh->mesh_data = entry.before;
-        m_context.scene.sanity_check();
+        m_parameters.scene.sanity_check();
     }
 }
 
@@ -62,10 +62,10 @@ void Mesh_operation::make_entries(
     > operation
 )
 {
-    m_context.scene.sanity_check();
+    m_parameters.scene.sanity_check();
 
-    m_selection_tool = m_context.selection_tool;
-    for (auto& item : m_context.selection_tool->selection())
+    m_selection_tool = m_parameters.selection_tool;
+    for (auto& item : m_parameters.selection_tool->selection())
     {
         const auto& mesh = as_mesh(item);
         if (!mesh)
@@ -95,14 +95,14 @@ void Mesh_operation::make_entries(
             );
             primitive.gl_primitive_geometry = make_primitive(
                 *primitive.source_geometry.get(),
-                m_context.build_info,
+                m_parameters.build_info,
                 primitive.normal_style
             );
         }
         add_entry(std::move(entry));
     }
 
-    m_context.scene.sanity_check();
+    m_parameters.scene.sanity_check();
 }
 
 void Mesh_operation::add_entry(Entry&& entry)

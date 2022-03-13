@@ -99,7 +99,7 @@ void Operations::imgui()
     }
 
     const auto mesh_context = [this](){
-        return Mesh_operation::Context{
+        return Mesh_operation::Parameters{
             .build_info     = m_mesh_memory->build_info,
             .scene          = m_scene_root->scene(),
             .layer          = *m_scene_root->content_layer(),
@@ -133,7 +133,7 @@ void Operations::imgui()
     {
         m_operation_stack->push(
             std::make_shared<Attach_detach_operation>(
-                Attach_detach_operation::Context{
+                Attach_detach_operation::Parameters{
                     .scene          = m_scene_root->scene(),
                     .layer          = *m_scene_root->content_layer(),
                     .attach         = true,
@@ -147,7 +147,7 @@ void Operations::imgui()
     {
         m_operation_stack->push(
             std::make_shared<Attach_detach_operation>(
-                Attach_detach_operation::Context{
+                Attach_detach_operation::Parameters{
                     .scene          = m_scene_root->scene(),
                     .layer          = *m_scene_root->content_layer(),
                     .attach         = false,
@@ -161,7 +161,7 @@ void Operations::imgui()
     {
         m_operation_stack->push(
             std::make_shared<Merge_operation>(
-                Merge_operation::Context{
+                Merge_operation::Parameters{
                     .build_info     = m_mesh_memory->build_info,
                     .layer          = *m_scene_root->content_layer(),
                     .scene          = m_scene_root->scene(),

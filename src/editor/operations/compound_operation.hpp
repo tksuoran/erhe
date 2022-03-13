@@ -15,9 +15,6 @@ public:
     class Parameters
     {
     public:
-        Parameters();
-        ~Parameters();
-
         std::vector<std::shared_ptr<IOperation>> operations;
     };
 

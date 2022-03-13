@@ -424,7 +424,7 @@ void Brushes::do_insert_operation()
          Node_visibility::id);
 
     auto op = std::make_shared<Mesh_insert_remove_operation>(
-        Mesh_insert_remove_operation::Context{
+        Mesh_insert_remove_operation::Parameters{
             .scene          = m_scene_root->scene(),
             .layer          = *m_scene_root->content_layer(),
             .physics_world  = m_scene_root->physics_world(),

@@ -64,8 +64,8 @@ void Node_tree_window::select_all()
 
 template <typename T>
 [[nodiscard]] auto is_in(
-    const T&       item,
-    std::vector<T> items
+    const T&              item,
+    const std::vector<T>& items
 ) -> bool
 {
     return std::find(
@@ -98,21 +98,6 @@ void Node_tree_window::move_selection_before(
         target_node->name(),
         payload_id
     );
-    //const auto i = m_tree_nodes_last_frame.find(id);
-    //if (i == m_tree_nodes_last_frame.end())
-    //{
-    //    log_tools.warn("node for index = {} not found\n", id);
-    //    return;
-    //}
-    //const auto& node = i->second;
-    //const auto* parent = node->parent();
-    //if (parent == nullptr)
-    //{
-    //    const auto& selection = m_selection_tool->selection();
-    //    for (const auto& node : selection)
-    //    {
-    //    }
-    //}
 }
 
 void Node_tree_window::move_selection_after(
@@ -167,7 +152,7 @@ void Node_tree_window::attach_selection_to(
     const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id
 )
 {
-    log_tools.warn(
+    log_tools.trace(
         "attach_selection_to(target_node = {}, payload_id = {})\n",
         target_node->name(),
         payload_id
@@ -323,7 +308,7 @@ auto Node_tree_window::drag_and_drop_target(
     const ImGuiID     imgui_id_after    = ImGui::GetID(label_move_after.c_str());
 
     // Move selection before drop target
-    ImRect top_rect{rect_min, ImVec2{rect_max.x, y1}};
+    const ImRect top_rect{rect_min, ImVec2{rect_max.x, y1}};
     if (ImGui::BeginDragDropTargetCustom(top_rect, imgui_id_before))
     {
         const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
@@ -339,7 +324,7 @@ auto Node_tree_window::drag_and_drop_target(
     }
 
     // Attach selection to target
-    ImRect middle_rect{ImVec2{rect_min.x, y1}, ImVec2{rect_max.x, y2}};
+    const ImRect middle_rect{ImVec2{rect_min.x, y1}, ImVec2{rect_max.x, y2}};
     if (ImGui::BeginDragDropTargetCustom(middle_rect, imgui_id_attach))
     {
         const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
@@ -355,7 +340,7 @@ auto Node_tree_window::drag_and_drop_target(
     }
 
     // Move selection after drop target
-    ImRect bottom_rect{ImVec2{rect_min.x, y2}, rect_max};
+    const ImRect bottom_rect{ImVec2{rect_min.x, y2}, rect_max};
     if (ImGui::BeginDragDropTargetCustom(bottom_rect, imgui_id_after))
     {
         const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);

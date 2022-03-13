@@ -34,7 +34,7 @@ class Node_transform_operation
     : public IOperation
 {
 public:
-    class Context
+    class Parameters
     {
     public:
         erhe::scene::Mesh_layer&           layer;
@@ -45,7 +45,7 @@ public:
         erhe::scene::Transform             parent_from_node_after;
     };
 
-    explicit Node_transform_operation(const Context& context);
+    explicit Node_transform_operation(const Parameters& parameters);
     ~Node_transform_operation        () override;
 
     // Implements IOperation
@@ -54,7 +54,7 @@ public:
     void undo   (const Operation_context& context) override;
 
 private:
-    Context m_context;
+    Parameters m_parameters;
 };
 
 class Scene_item_operation
@@ -87,7 +87,7 @@ class Mesh_insert_remove_operation
     : public Scene_item_operation
 {
 public:
-    class Context
+    class Parameters
     {
     public:
         erhe::scene::Scene&                scene;
@@ -99,7 +99,7 @@ public:
         Mode                               mode;
     };
 
-    explicit Mesh_insert_remove_operation(const Context& context);
+    explicit Mesh_insert_remove_operation(const Parameters& parameters);
     ~Mesh_insert_remove_operation        () override;
 
     // Implements IOperation
@@ -113,14 +113,14 @@ private:
         const Mode               mode
     ) const;
 
-    Context m_context;
+    Parameters m_parameters;
 };
 
 class Light_insert_remove_operation
     : public Scene_item_operation
 {
 public:
-    class Context
+    class Parameters
     {
     public:
         erhe::scene::Scene&                 scene;
@@ -130,7 +130,7 @@ public:
         Mode                                mode;
     };
 
-    explicit Light_insert_remove_operation(const Context& context);
+    explicit Light_insert_remove_operation(const Parameters& parameters);
     ~Light_insert_remove_operation        () override;
 
     // Public API
@@ -144,7 +144,7 @@ private:
         const Mode               mode
     );
 
-    Context                                         m_context;
+    Parameters                                      m_parameters;
     std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_before;
     std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_after;
 };
@@ -153,7 +153,7 @@ class Camera_insert_remove_operation
     : public Scene_item_operation
 {
 public:
-    class Context
+    class Parameters
     {
     public:
         erhe::scene::Scene&                  scene;
@@ -162,7 +162,7 @@ public:
         Mode                                 mode;
     };
 
-    explicit Camera_insert_remove_operation(const Context& context);
+    explicit Camera_insert_remove_operation(const Parameters& parameters);
     ~Camera_insert_remove_operation        () override;
 
     // Public API
@@ -176,7 +176,7 @@ private:
         const Mode               mode
     ) const;
 
-    Context                                         m_context;
+    Parameters                                      m_parameters;
     std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_before;
     std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_after;
 };

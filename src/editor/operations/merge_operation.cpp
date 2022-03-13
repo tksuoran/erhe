@@ -79,11 +79,11 @@ auto Merge_operation::describe() const -> std::string
     return ss.str();
 }
 
-Merge_operation::Merge_operation(Context&& context)
-    : m_context{std::move(context)}
+Merge_operation::Merge_operation(Parameters&& parameters)
+    : m_parameters{std::move(parameters)}
 {
     // TODO count meshes in selection
-    if (context.selection_tool->selection().size() < 2)
+    if (parameters.selection_tool->selection().size() < 2)
     {
         return;
     }
@@ -94,7 +94,7 @@ Merge_operation::Merge_operation(Context&& context)
     erhe::physics::Compound_shape_create_info compound_shape_create_info;
 
     erhe::geometry::Geometry combined_geometry;
-    m_state_before.selection = context.selection_tool->selection();
+    m_state_before.selection = parameters.selection_tool->selection();
     m_state_after.mass = 0.0f;
 
     bool first_mesh                = true;
@@ -103,7 +103,7 @@ Merge_operation::Merge_operation(Context&& context)
     std::shared_ptr<erhe::primitive::Material> material;
 
     std::vector<float> child_masses;
-    for (const auto& item : context.selection_tool->selection())
+    for (const auto& item : parameters.selection_tool->selection())
     {
         const auto& mesh = as_mesh(item);
         if (!mesh)
@@ -191,19 +191,19 @@ Merge_operation::Merge_operation(Context&& context)
     m_combined_primitive.material              = material;
     m_combined_primitive.gl_primitive_geometry = make_primitive(
         combined_geometry,
-        context.build_info,
+        parameters.build_info,
         normal_style
     );
     //m_combined_primitive.rt_primitive_geometry
-    m_combined_primitive.rt_index_buffer = {};
+    m_combined_primitive.rt_index_buffer       = {};
     m_combined_primitive.rt_primitive_geometry = {};
-    m_combined_primitive.source_geometry = std::make_shared<erhe::geometry::Geometry>(std::move(combined_geometry));
-    m_combined_primitive.normal_style    = normal_style;
+    m_combined_primitive.source_geometry       = std::make_shared<erhe::geometry::Geometry>(std::move(combined_geometry));
+    m_combined_primitive.normal_style          = normal_style;
 }
 
 void Merge_operation::execute(const Operation_context&)
 {
-    m_context.scene.sanity_check();
+    m_parameters.scene.sanity_check();
 
     bool first_entry = true;
     for (const auto& entry : m_source_entries)
@@ -232,21 +232,21 @@ void Merge_operation::execute(const Operation_context&)
             auto node_physics = get_physics_node(mesh.get());
             if (node_physics)
             {
-                remove_from_physics_world(m_context.physics_world, *node_physics.get());
+                remove_from_physics_world(m_parameters.physics_world, *node_physics.get());
                 mesh->detach(node_physics.get());
             }
             mesh->unparent();
-            m_context.scene.remove(mesh);
+            m_parameters.scene.remove(mesh);
         }
     }
-    m_context.selection_tool->set_selection(m_state_after.selection);
+    m_parameters.selection_tool->set_selection(m_state_after.selection);
 
-    m_context.scene.sanity_check();
+    m_parameters.scene.sanity_check();
 }
 
 void Merge_operation::undo(const Operation_context&)
 {
-    m_context.scene.sanity_check();
+    m_parameters.scene.sanity_check();
 
     bool first_entry = true;
     for (const auto& entry : m_source_entries)
@@ -273,20 +273,20 @@ void Merge_operation::undo(const Operation_context&)
             auto node_physics = get_physics_node(mesh.get());
             if (node_physics)
             {
-                add_to_physics_world(m_context.physics_world, node_physics);
+                add_to_physics_world(m_parameters.physics_world, node_physics);
                 mesh->attach(node_physics);
             }
             if (m_parent != nullptr)
             {
                 m_parent->attach(mesh);
             }
-            m_context.scene.add_to_mesh_layer(m_context.layer, mesh);
+            m_parameters.scene.add_to_mesh_layer(m_parameters.layer, mesh);
         }
     }
-    m_context.scene.nodes_sorted = false;
-    m_context.selection_tool->set_selection(m_state_before.selection);
+    m_parameters.scene.nodes_sorted = false;
+    m_parameters.selection_tool->set_selection(m_state_before.selection);
 
-    m_context.scene.sanity_check();
+    m_parameters.scene.sanity_check();
 }
 
 } // namespace editor

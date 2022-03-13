@@ -36,7 +36,7 @@ class Attach_detach_operation
     : public IOperation
 {
 public:
-    class Context
+    class Parameters
     {
     public:
         erhe::scene::Scene&      scene;
@@ -46,7 +46,7 @@ public:
         Selection_tool* selection_tool{nullptr};
     };
 
-    explicit Attach_detach_operation(Context&& context);
+    explicit Attach_detach_operation(Parameters&& context);
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
@@ -68,7 +68,7 @@ private:
         erhe::scene::Transform             before_transform;
     };
 
-    Context                            m_context;
+    Parameters                         m_parameters;
     std::shared_ptr<erhe::scene::Node> m_parent_node;
     std::vector<Entry>                 m_entries;
 };

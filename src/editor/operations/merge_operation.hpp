@@ -40,7 +40,7 @@ class Merge_operation
     : public IOperation
 {
 public:
-    class Context
+    class Parameters
     {
     public:
         erhe::primitive::Build_info& build_info;
@@ -51,7 +51,7 @@ public:
         Selection_tool*              selection_tool{nullptr};
     };
 
-    explicit Merge_operation(Context&& context);
+    explicit Merge_operation(Parameters&& parameters);
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
@@ -85,7 +85,7 @@ private:
         std::vector<std::shared_ptr<erhe::scene::Node>>  selection;
     };
 
-    Context                                                     m_context;
+    Parameters                                                  m_parameters;
     std::shared_ptr<erhe::scene::Node>                          m_parent;
     std::vector<Source_entry>                                   m_source_entries;
     erhe::primitive::Primitive                                  m_combined_primitive;

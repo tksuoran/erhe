@@ -5,14 +5,6 @@
 namespace editor
 {
 
-Compound_operation::Parameters::Parameters()
-{
-}
-
-Compound_operation::Parameters::~Parameters()
-{
-}
-
 Compound_operation::Compound_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}
 {

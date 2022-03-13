@@ -39,7 +39,7 @@ class Mesh_operation
     : public IOperation
 {
 public:
-    class Context
+    class Parameters
     {
     public:
         erhe::primitive::Build_info& build_info;
@@ -58,7 +58,7 @@ protected:
         erhe::scene::Mesh_data             after;
     };
 
-    explicit Mesh_operation(Context&& context);
+    explicit Mesh_operation(Parameters&& parameters);
     ~Mesh_operation() override;
 
     // Implements IOperation
@@ -75,7 +75,7 @@ protected:
 private:
     Selection_tool*    m_selection_tool{nullptr};
 
-    Context            m_context;
+    Parameters         m_parameters;
     std::vector<Entry> m_entries;
 };
 
