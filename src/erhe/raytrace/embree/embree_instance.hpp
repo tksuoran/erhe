@@ -23,8 +23,10 @@ public:
     void set_transform(const glm::mat4 transform) override; // rtcSetGeometryTransform()
     void set_scene    (IScene* scene) override;
     void set_user_data(void* ptr) override;
+    [[nodiscard]] auto get_transform() -> glm::mat4 override;
+    [[nodiscard]] auto get_scene    () -> IScene* override;
     [[nodiscard]] auto get_user_data() -> void* override;
-    [[nodiscard]] auto debug_label() const -> std::string_view override;
+    [[nodiscard]] auto debug_label  () const -> std::string_view override;
 
     auto get_rtc_geometry() -> RTCGeometry;
 

@@ -378,6 +378,43 @@ void Build_context_root::allocate_index_buffer()
     );
 }
 
+class Geometry_point_source
+    : public erhe::toolkit::Point_source
+{
+public:
+    Geometry_point_source(
+        const erhe::geometry::Geometry&               geometry,
+        erhe::geometry::Property_map<Point_id, vec3>* point_locations
+    )
+        : m_geometry       {geometry}
+        , m_point_locations{point_locations}
+    {
+    }
+
+    auto point_count() const -> size_t override
+    {
+        if (m_point_locations == nullptr)
+        {
+            return 0;
+        }
+        return m_geometry.get_point_count();
+    }
+
+    auto get_point(size_t index) const -> std::optional<glm::vec3> override
+    {
+        const auto point_id = static_cast<erhe::geometry::Point_id>(index);
+        if (m_point_locations->has(point_id))
+        {
+            return m_point_locations->get(point_id);
+        }
+        return {};
+    }
+
+private:
+    const erhe::geometry::Geometry&               m_geometry;
+    erhe::geometry::Property_map<Point_id, vec3>* m_point_locations{nullptr};
+};
+
 void Build_context_root::calculate_bounding_volume(
     erhe::geometry::Property_map<Point_id, vec3>* point_locations
 )
@@ -386,6 +423,14 @@ void Build_context_root::calculate_bounding_volume(
 
     Expects(primitive_geometry != nullptr);
 
+    const Geometry_point_source point_source{geometry, point_locations};
+
+    erhe::toolkit::calculate_bounding_volume(
+        point_source,
+        primitive_geometry->bounding_box,
+        primitive_geometry->bounding_sphere
+    );
+#if 0
     primitive_geometry->bounding_box_min = vec3{std::numeric_limits<float>::max()};
     primitive_geometry->bounding_box_max = vec3{std::numeric_limits<float>::lowest()};
 
@@ -494,6 +539,7 @@ void Build_context_root::calculate_bounding_volume(
         primitive_geometry->bounding_box_min,
         primitive_geometry->bounding_box_max
     );
+#endif
 }
 
 auto Primitive_builder::build() -> Primitive_geometry

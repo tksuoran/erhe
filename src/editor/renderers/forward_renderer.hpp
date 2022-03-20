@@ -62,13 +62,16 @@ public:
     class Render_parameters
     {
     public:
-        const erhe::scene::Viewport&                                   viewport;
-        const erhe::scene::ICamera*                                    camera           {nullptr};
-        const std::vector<const erhe::scene::Mesh_layer*>&             mesh_layers;
-        const erhe::scene::Light_layer*                                light_layer;
-        const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials        {};
-        const std::vector<Renderpass*>                                 passes;
-        const erhe::scene::Visibility_filter                           visibility_filter{};
+        const erhe::scene::Viewport&                                       viewport;
+        const erhe::scene::ICamera*                                        camera           {nullptr};
+        const std::initializer_list<
+            const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>
+        >&                                                                 mesh_spans;
+        const gsl::span<const std::shared_ptr<erhe::scene::Light>>&        lights;
+        const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials        {};
+        const std::initializer_list<Renderpass* const>                     passes;
+        const erhe::scene::Visibility_filter                               visibility_filter{};
+        const glm::vec3                                                    ambient_light    {0.0f};
     };
 
     void render(const Render_parameters& parameters);

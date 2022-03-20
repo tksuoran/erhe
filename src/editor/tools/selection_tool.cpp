@@ -12,6 +12,7 @@
 #include "renderers/render_context.hpp"
 #include "renderers/line_renderer.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
@@ -169,8 +170,10 @@ auto Selection_tool::delete_selection() -> bool
                         .scene          = scene_root->scene(),
                         .layer          = *scene_root->content_layer(),
                         .physics_world  = scene_root->physics_world(),
+                        .raytrace_scene = scene_root->raytrace_scene(),
                         .mesh           = mesh,
                         .node_physics   = get_physics_node(mesh.get()),
+                        .node_raytrace  = get_raytrace(mesh.get()),
                         .parent         = mesh->parent().lock(),
                         .mode           = Scene_item_operation::Mode::remove,
                     }
@@ -294,12 +297,14 @@ void Selection_tool::set_selection(const Selection& selection)
             !is_in(node, selection)
         )
         {
-            node->visibility_mask() &= ~erhe::scene::Node_visibility::selected;
+            const auto mask = node->get_visibility_mask();
+            node->set_visibility_mask(mask & ~erhe::scene::Node_visibility::selected);
         }
     }
     for (auto& node : selection)
     {
-        node->visibility_mask() |= erhe::scene::Node_visibility::selected;
+        const auto mask = node->get_visibility_mask();
+        node->set_visibility_mask(mask | erhe::scene::Node_visibility::selected);
     }
     m_selection = selection;
     call_selection_change_subscriptions();
@@ -327,9 +332,11 @@ auto Selection_tool::mouse_select_try_ready() -> bool
         return false;
     }
 
-    m_hover_mesh    = m_pointer_context->hover_mesh();
-    m_hover_content = m_pointer_context->hovering_over_content();
-    m_hover_tool    = m_pointer_context->hovering_over_tool();
+    const auto& content = m_pointer_context->get_hover(Pointer_context::content_slot);
+    const auto& tool    = m_pointer_context->get_hover(Pointer_context::tool_slot);
+    m_hover_mesh    = content.mesh;
+    m_hover_content = content.valid;
+    m_hover_tool    = tool.valid;
 
     return m_hover_content;
 }
@@ -372,7 +379,8 @@ auto Selection_tool::clear_selection() -> bool
         {
             continue;
         }
-        item->visibility_mask() &= ~erhe::scene::Node_visibility::selected;
+        const auto mask = item->get_visibility_mask();
+        item->set_visibility_mask(mask & ~erhe::scene::Node_visibility::selected);
     }
 
     log_selection.trace("Clearing selection ({} items were selected)\n", m_selection.size());
@@ -440,7 +448,8 @@ auto Selection_tool::add_to_selection(
         return false;
     }
 
-    item->visibility_mask() |= erhe::scene::Node_visibility::selected;
+    const auto mask = item->get_visibility_mask();
+    item->set_visibility_mask(mask | erhe::scene::Node_visibility::selected);
 
     if (!is_in_selection(item))
     {
@@ -464,7 +473,8 @@ auto Selection_tool::remove_from_selection(
         return false;
     }
 
-    item->visibility_mask() &= ~erhe::scene::Node_visibility::selected;
+    const auto mask = item->get_visibility_mask();
+    item->set_visibility_mask(mask & ~erhe::scene::Node_visibility::selected);
 
     const auto i = std::remove(
         m_selection.begin(),
@@ -589,8 +599,8 @@ void Selection_tool::tool_render(const Render_context& context)
                     continue;
                 }
                 const auto& primitive_geometry = primitive.gl_primitive_geometry;
-                const vec3 box_min = primitive_geometry.bounding_box_min;
-                const vec3 box_max = primitive_geometry.bounding_box_max;
+                const vec3 box_min = primitive_geometry.bounding_box.min;
+                const vec3 box_max = primitive_geometry.bounding_box.max;
                 line_renderer.add_lines(
                     node->world_from_node(),
                     yellow,
@@ -613,8 +623,8 @@ void Selection_tool::tool_render(const Render_context& context)
                 line_renderer.add_sphere(
                     node->world_from_node(),
                     half_yellow,
-                    primitive_geometry.bounding_sphere_center,
-                    primitive_geometry.bounding_sphere_radius,
+                    primitive_geometry.bounding_sphere.center,
+                    primitive_geometry.bounding_sphere.radius,
                     thickness
                 );
             }

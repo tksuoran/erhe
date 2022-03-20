@@ -26,12 +26,12 @@ auto Command_context::viewport_window() -> Viewport_window*
 
 auto Command_context::hovering_over_tool() -> bool
 {
-    return m_pointer_context.hovering_over_tool();
+    return m_pointer_context.get_hover(Pointer_context::tool_slot).valid;
 }
 
 auto Command_context::hovering_over_gui() -> bool
 {
-    return m_pointer_context.hovering_over_gui();
+    return m_pointer_context.get_hover(Pointer_context::gui_slot).valid;
 }
 
 auto Command_context::accept_mouse_command(Command* command) -> bool

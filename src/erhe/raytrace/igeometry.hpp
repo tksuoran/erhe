@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string_view>
 
@@ -7,6 +8,8 @@ namespace erhe::raytrace
 {
 
 class IScene;
+class Ray;
+class Hit;
 
 enum class Buffer_type : int
 {
@@ -131,6 +134,7 @@ enum class Geometry_type : int
 };
 
 class IBuffer;
+class IInstance;
 
 class IGeometry
 {
@@ -140,19 +144,22 @@ public:
     virtual void commit                    () = 0;
     virtual void enable                    () = 0;
     virtual void disable                   () = 0;
+    virtual void set_mask                  (const uint32_t mask) = 0;
     virtual void set_vertex_attribute_count(const unsigned int count) = 0;
     virtual void set_buffer(
         const Buffer_type  type,
         const unsigned int slot,
         const Format       format,
-        const IBuffer*     buffer,
+        IBuffer* const     buffer,
         const size_t       byte_offset,
         const size_t       byte_stride,
         const size_t       item_count
     ) = 0;
     virtual void set_user_data(void* ptr) = 0;
-    [[nodiscard]] virtual auto get_user_data() -> void* = 0;
-    [[nodiscard]] virtual auto debug_label() const -> std::string_view = 0;
+    [[nodiscard]] virtual auto get_mask     () const -> uint32_t         = 0;
+    [[nodiscard]] virtual auto get_user_data() const -> void*            = 0;
+    [[nodiscard]] virtual auto is_enabled   () const -> bool             = 0;
+    [[nodiscard]] virtual auto debug_label  () const -> std::string_view = 0;
 
     [[nodiscard]] static auto create       (const std::string_view debug_label, const Geometry_type geometry_type) -> IGeometry*;
     [[nodiscard]] static auto create_shared(const std::string_view debug_label, const Geometry_type geometry_type) -> std::shared_ptr<IGeometry>;

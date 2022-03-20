@@ -47,7 +47,7 @@ auto is_mesh(const Node* const node) -> bool
     {
         return false;
     }
-    return (node->flag_bits() & Node_flag_bit::is_mesh) == Node_flag_bit::is_mesh;
+    return (node->get_flag_bits() & Node_flag_bit::is_mesh) == Node_flag_bit::is_mesh;
 }
 
 auto is_mesh(const std::shared_ptr<Node>& node) -> bool
@@ -61,7 +61,7 @@ auto as_mesh(Node* const node) -> Mesh*
     {
         return nullptr;
     }
-    if ((node->flag_bits() & Node_flag_bit::is_mesh) == 0)
+    if ((node->get_flag_bits() & Node_flag_bit::is_mesh) == 0)
     {
         return nullptr;
     }
@@ -74,7 +74,7 @@ auto as_mesh(const std::shared_ptr<Node>& node) -> std::shared_ptr<Mesh>
     {
         return {};
     }
-    if ((node->flag_bits() & Node_flag_bit::is_mesh) == 0)
+    if ((node->get_flag_bits() & Node_flag_bit::is_mesh) == 0)
     {
         return {};
     }

@@ -12,6 +12,8 @@ namespace erhe::raytrace
 class Embree_geometry;
 class IGeometry;
 class IInstance;
+class Ray;
+class Hit;
 
 class Embree_scene
     : public IScene

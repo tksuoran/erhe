@@ -335,13 +335,12 @@ void Rendertarget_imgui_windows::add_scene_node(
         .gl_primitive_geometry = gui_primitive
     };
     m_gui_mesh = std::make_shared<erhe::scene::Mesh>("GUI Quad", primitive);
-    m_gui_mesh->visibility_mask() =
-        erhe::scene::Node_visibility::id |
-        erhe::scene::Node_visibility::gui;
+    m_gui_mesh->set_visibility_mask(
+        erhe::scene::Node_visibility::visible |
+        erhe::scene::Node_visibility::gui
+    );
 
-    auto rt_primitive = std::make_shared<Raytrace_primitive>(shared_geometry);
-
-    m_node_raytrace = std::make_shared<Node_raytrace>(rt_primitive);
+    m_node_raytrace = std::make_shared<Node_raytrace>(shared_geometry);
 
     add_to_raytrace_scene(scene_root.raytrace_scene(), m_node_raytrace);
     m_gui_mesh->attach(m_node_raytrace);
@@ -364,22 +363,28 @@ auto Rendertarget_imgui_windows::texture() const -> std::shared_ptr<erhe::graphi
     return m_texture;
 }
 
+template <typename T>
+[[nodiscard]] inline auto as_span(const T& value) -> gsl::span<const T>
+{
+    return gsl::span<const T>(&value, 1);
+}
+
 void Rendertarget_imgui_windows::render_mesh_layer(
     Forward_renderer&     forward_renderer,
     const Render_context& context
 )
 {
     forward_renderer.render(
-        {
+        Forward_renderer::Render_parameters{
             .viewport          = context.viewport,
             .camera            = context.camera,
-            .mesh_layers       = { &m_mesh_layer },
-            .light_layer       = nullptr, // m_scene_root->light_layer(),
-            .materials         = { }, //m_scene_root->materials(),
+            .mesh_spans        = { m_mesh_layer.meshes },
+            .lights            = { },
+            .materials         = { },
             .passes            = { &m_renderpass },
             .visibility_filter =
             {
-                .require_all_bits_set = erhe::scene::Node_visibility::gui
+                .require_all_bits_set = (erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::gui)
             }
         }
     );
@@ -447,14 +452,16 @@ void Rendertarget_imgui_windows::begin_imgui_frame()
         : static_cast<float>(1.0 / 60.0);
     m_time = current_time;
 
+    const auto& gui = m_pointer_context->get_hover(Pointer_context::gui_slot);
     if (
-        m_pointer_context->raytrace_node() == m_node_raytrace.get() &&
-        m_pointer_context->raytrace_hit_position().has_value()
+        gui.valid &&
+        gui.raytrace_node == m_node_raytrace.get() &&
+        gui.position.has_value()
     )
     {
         const auto width    = static_cast<float>(m_texture->width());
         const auto height   = static_cast<float>(m_texture->height());
-        const auto p_world  = m_pointer_context->raytrace_hit_position().value();
+        const auto p_world  = gui.position.value();
         const auto p_local  = glm::vec3{m_gui_mesh->node_from_world() * glm::vec4{p_world, 1.0f}};
         const auto p_window = static_cast<float>(m_dots_per_meter) * p_local;
         io.MousePos = ImVec2{

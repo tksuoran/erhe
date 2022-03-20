@@ -18,6 +18,26 @@
 namespace editor
 {
 
+Log_window_sink::Log_window_sink(Log_window& log_window)
+    : m_log_window{log_window}
+{
+}
+
+void Log_window_sink::write(const erhe::log::Color& color, const std::string_view text)
+{
+    m_log_window.tail_log_write(color, text);
+}
+
+Frame_log_window_sink::Frame_log_window_sink(Log_window& log_window)
+    : m_log_window{log_window}
+{
+}
+
+void Frame_log_window_sink::write(const erhe::log::Color& color, const std::string_view text)
+{
+    m_log_window.frame_log_write(color, text);
+}
+
 auto Log_window_toggle_pause_command::try_call(Command_context& context) -> bool
 {
     static_cast<void>(context);
@@ -29,6 +49,8 @@ auto Log_window_toggle_pause_command::try_call(Command_context& context) -> bool
 Log_window::Log_window()
     : erhe::components::Component{c_name }
     , Imgui_window               {c_title}
+    , m_tail_log_sink            {*this}
+    , m_frame_log_sink           {*this}
     , m_toggle_pause_command     {*this}
 {
 }
@@ -57,39 +79,41 @@ void Log_window::initialize_component()
     get<Editor_imgui_windows>()->register_imgui_window(this);
     m_min_size = glm::vec2{220.0f, 120.0f};
 
-    log_startup     .set_sink(this);
-    log_programs    .set_sink(this);
-    log_textures    .set_sink(this);
-    log_input       .set_sink(this);
-    //log_parsers     .set_sink(this);
-    log_render      .set_sink(this);
-    //log_trs_tool    .set_sink(this);
-    log_tools       .set_sink(this);
-    log_selection   .set_sink(this);
-    log_id_render   .set_sink(this);
-    log_framebuffer .set_sink(this);
-    log_pointer     .set_sink(this);
-    log_input_events.set_sink(this);
-    log_materials   .set_sink(this);
-    log_renderdoc   .set_sink(this);
-    log_brush       .set_sink(this);
-    log_physics     .set_sink(this);
-    log_gl          .set_sink(this);
-    log_headset     .set_sink(this);
-    log_scene       .set_sink(this);
-    log_performance .set_sink(this);
-    log_node_properties.set_sink(this);
+    log_startup     .set_sink(&m_tail_log_sink);
+    log_programs    .set_sink(&m_tail_log_sink);
+    log_textures    .set_sink(&m_tail_log_sink);
+    log_input       .set_sink(&m_tail_log_sink);
+    log_parsers     .set_sink(&m_tail_log_sink);
+    log_render      .set_sink(&m_frame_log_sink, false);
+    log_tools       .set_sink(&m_tail_log_sink);
+    log_selection   .set_sink(&m_tail_log_sink);
+    log_id_render   .set_sink(&m_tail_log_sink);
+    log_framebuffer .set_sink(&m_frame_log_sink, false);
+    log_pointer     .set_sink(&m_frame_log_sink, false);
+    log_input_events.set_sink(&m_tail_log_sink);
+    log_materials   .set_sink(&m_tail_log_sink);
+    log_renderdoc   .set_sink(&m_tail_log_sink);
+    log_raytrace    .set_sink(&m_tail_log_sink);
+    log_brush       .set_sink(&m_tail_log_sink);
+    log_physics     .set_sink(&m_tail_log_sink);
+    log_gl          .set_sink(&m_tail_log_sink);
+    log_headset     .set_sink(&m_tail_log_sink);
+    log_scene       .set_sink(&m_tail_log_sink);
+    log_performance .set_sink(&m_tail_log_sink);
+    log_node_properties.set_sink(&m_tail_log_sink);
+    log_trs_tool    .set_sink(&m_tail_log_sink);
+    log_fly_camera  .set_sink(&m_tail_log_sink);
 
-    log_command_state_transition.set_sink(this);
-    log_input_event             .set_sink(this);
+    log_command_state_transition.set_sink(&m_tail_log_sink);
+    log_input_event             .set_sink(&m_tail_log_sink);
 
-    erhe::raytrace::log_geometry.set_sink(this);
+    erhe::raytrace::log_geometry.set_sink(&m_tail_log_sink);
 
     const auto view = get<Editor_view>();
     view->register_command   (&m_toggle_pause_command);
     view->bind_command_to_key(&m_toggle_pause_command, erhe::toolkit::Key_escape);
 
-    hide();
+    //hide();
 }
 
 void Log_window::toggle_pause()
@@ -97,18 +121,26 @@ void Log_window::toggle_pause()
     m_paused = !m_paused;
 }
 
-void Log_window::write(
+void Log_window::tail_log_write(
     const erhe::log::Color& color,
-    const std::string_view text
+    const std::string_view  text
 )
 {
+    if (m_paused)
+    {
+        return;
+    }
+
     m_tail_entries.emplace_back(
         ImVec4{color.r, color.g, color.b, 1.0},
         std::string{text}
     );
 }
 
-void Log_window::frame_write(const char* format, fmt::format_args args)
+void Log_window::frame_log_write(
+    const erhe::log::Color& color,
+    const std::string_view text
+)
 {
     if (m_paused)
     {
@@ -116,56 +148,8 @@ void Log_window::frame_write(const char* format, fmt::format_args args)
     }
 
     m_frame_entries.emplace_back(
-        ImVec4{0.8f, 0.8f, 0.8f, 1.0},
-        fmt::vformat(format, args)
-    );
-}
-
-void Log_window::tail_write(const char* format, fmt::format_args args)
-{
-    if (m_paused)
-    {
-        return;
-    }
-
-    const std::string message = fmt::vformat(format, args);
-    if (!m_tail_entries.empty())
-    {
-        auto& back = m_tail_entries.back();
-        if (back.message == message)
-        {
-            ++back.repeat_count;
-            return;
-        }
-    }
-
-    m_tail_entries.emplace_back(
-        ImVec4{0.8f, 0.8f, 0.8f, 1.0f},
-        fmt::vformat(format, args)
-    );
-}
-
-void Log_window::tail_write(const ImVec4 color, const char* format, fmt::format_args args)
-{
-    if (m_paused)
-    {
-        return;
-    }
-
-    std::string message = fmt::vformat(format, args);
-    if (!m_tail_entries.empty())
-    {
-        auto& back = m_tail_entries.back();
-        if (back.message == message)
-        {
-            ++back.repeat_count;
-            return;
-        }
-    }
-
-    m_tail_entries.emplace_back(
-        color,
-        fmt::vformat(format, args)
+        ImVec4{color.r, color.g, color.b, 1.0},
+        std::string{text}
     );
 }
 

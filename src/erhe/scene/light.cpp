@@ -65,7 +65,7 @@ auto is_light(const Node* const node) -> bool
     {
         return false;
     }
-    return (node->flag_bits() & Node_flag_bit::is_light) == Node_flag_bit::is_light;
+    return (node->get_flag_bits() & Node_flag_bit::is_light) == Node_flag_bit::is_light;
 }
 
 auto is_light(const std::shared_ptr<Node>& node) -> bool
@@ -79,7 +79,7 @@ auto as_light(Node* const node) -> Light*
     {
         return nullptr;
     }
-    if ((node->flag_bits() & Node_flag_bit::is_light) == 0)
+    if ((node->get_flag_bits() & Node_flag_bit::is_light) == 0)
     {
         return nullptr;
     }
@@ -92,7 +92,7 @@ auto as_light(const std::shared_ptr<Node>& node) -> std::shared_ptr<Light>
     {
         return {};
     }
-    if ((node->flag_bits() & Node_flag_bit::is_light) == 0)
+    if ((node->get_flag_bits() & Node_flag_bit::is_light) == 0)
     {
         return {};
     }

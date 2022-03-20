@@ -19,6 +19,21 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
     set(impl_link_libraries embree)
 endif ()
 
+if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        bvh/bvh_buffer.cpp
+        bvh/bvh_buffer.hpp
+        bvh/bvh_geometry.cpp
+        bvh/bvh_geometry.hpp
+        bvh/bvh_instance.cpp
+        bvh/bvh_instance.hpp
+        bvh/bvh_scene.cpp
+        bvh/bvh_scene.hpp
+    )
+    set(impl_link_libraries bvh)
+endif ()
+
 if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "none")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -43,6 +58,8 @@ erhe_target_sources_grouped(
     log.hpp
     mesh_intersect.cpp
     mesh_intersect.hpp
+    ray.cpp
+    ray.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})

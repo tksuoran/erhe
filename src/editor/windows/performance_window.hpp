@@ -15,6 +15,11 @@ namespace erhe::graphics
     class Gpu_timer;
 };
 
+namespace erhe::toolkit
+{
+    class Timer;
+};
+
 namespace editor
 {
 
@@ -25,22 +30,19 @@ class Line_renderer;
 class Shadow_renderer;
 class Text_renderer;
 
-class Gpu_timer_plot
+class Plot
 {
 public:
-    explicit Gpu_timer_plot(
-        erhe::graphics::Gpu_timer* timer,
-        const size_t               width = 256
-    );
+    void imgui ();
+    void clear ();
 
-    void imgui    ();
-    void clear    ();
-    void sample   ();
-    auto gpu_timer() const -> erhe::graphics::Gpu_timer*;
+    virtual void sample() = 0;
 
+    [[nodiscard]] virtual auto label () const -> const char* = 0;
+
+protected:
     size_t                     m_offset         {0};
     size_t                     m_value_count    {0};
-    erhe::graphics::Gpu_timer* m_gpu_timer      {nullptr};
     float                      m_max_great      {1.0f};
     float                      m_max_ok         {2.5f};
     float                      m_scale_min      {0.0f};
@@ -48,6 +50,42 @@ public:
     float                      m_scale_max_limit{1.0f}; // 1 ms
     ImVec2                     m_frame_size     {256.0f, 64.0f};
     std::vector<float>         m_values;
+};
+
+class Gpu_timer_plot
+    : public Plot
+{
+public:
+    explicit Gpu_timer_plot(
+        erhe::graphics::Gpu_timer* timer,
+        const size_t               width = 256
+    );
+
+    void sample() override;
+
+    [[nodiscard]] auto gpu_timer() const -> erhe::graphics::Gpu_timer*;
+    [[nodiscard]] auto label    () const -> const char* override;
+
+private:
+    erhe::graphics::Gpu_timer* m_gpu_timer{nullptr};
+};
+
+class Cpu_timer_plot
+    : public Plot
+{
+public:
+    explicit Cpu_timer_plot(
+        erhe::toolkit::Timer* timer,
+        const size_t          width = 256
+    );
+
+    void sample() override;
+
+    [[nodiscard]] auto timer() const -> erhe::toolkit::Timer*;
+    [[nodiscard]] auto label() const -> const char* override;
+
+private:
+    erhe::toolkit::Timer* m_timer{nullptr};
 };
 
 class Performance_window
@@ -81,6 +119,7 @@ private:
     std::shared_ptr<Text_renderer>    m_text_renderer;
 
     std::vector<Gpu_timer_plot> m_gpu_timer_plots;
+    std::vector<Cpu_timer_plot> m_cpu_timer_plots;
     bool m_pause{false};
 
     int  m_taps   = 1;

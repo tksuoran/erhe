@@ -129,42 +129,25 @@ auto Material_paint_tool::description() -> const char*
 
 auto Material_paint_tool::on_paint_ready() -> bool
 {
-    if (!m_pointer_context->hovering_over_content())
-    {
-        return false;
-    }
-    if (!m_pointer_context->hover_mesh())
-    {
-        return false;
-    }
-    return true;
+    const auto& hover = m_pointer_context->get_hover(Pointer_context::content_slot);
+    return hover.valid && hover.mesh;
 }
 
 auto Material_paint_tool::on_pick_ready() -> bool
 {
-    if (!m_pointer_context->hovering_over_content())
-    {
-        return false;
-    }
-    if (!m_pointer_context->hover_mesh())
-    {
-        return false;
-    }
-    return true;
+    const auto& hover = m_pointer_context->get_hover(Pointer_context::content_slot);
+    return hover.valid && hover.mesh;
 }
 
 auto Material_paint_tool::on_paint() -> bool
 {
-    if (!m_pointer_context->hovering_over_content())
+    const auto& hover = m_pointer_context->get_hover(Pointer_context::content_slot);
+    if (!hover.valid || !hover.mesh)
     {
         return false;
     }
-    if (!m_pointer_context->hover_mesh())
-    {
-        return false;
-    }
-    const auto& target_mesh      = m_pointer_context->hover_mesh();
-    const auto  target_primitive = m_pointer_context->hover_primitive();
+    const auto& target_mesh      = hover.mesh;
+    const auto  target_primitive = hover.primitive; // TODO currently always 0
     auto&       hover_primitive  = target_mesh->mesh_data.primitives.at(target_primitive);
     hover_primitive.material     = m_material;
 
@@ -173,16 +156,13 @@ auto Material_paint_tool::on_paint() -> bool
 
 auto Material_paint_tool::on_pick() -> bool
 {
-    if (!m_pointer_context->hovering_over_content())
+    const auto& hover = m_pointer_context->get_hover(Pointer_context::content_slot);
+    if (!hover.valid || !hover.mesh)
     {
         return false;
     }
-    if (!m_pointer_context->hover_mesh())
-    {
-        return false;
-    }
-    const auto& target_mesh      = m_pointer_context->hover_mesh();
-    const auto  target_primitive = m_pointer_context->hover_primitive();
+    const auto& target_mesh      = hover.mesh;
+    const auto  target_primitive = hover.primitive; // TODO currently always 0
     auto&       hover_primitive  = target_mesh->mesh_data.primitives.at(target_primitive);
     m_material = hover_primitive.material;
 

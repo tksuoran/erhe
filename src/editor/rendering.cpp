@@ -435,10 +435,15 @@ void Editor_rendering::render()
     )
     {
         m_scene_root->sort_lights();
+
+        //const std::initializer_list<
+        //    const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>
+        //>& mesh_spans = { m_scene_root->content_layer()->meshes };
+
         m_shadow_renderer->render(
             {
-                .mesh_layers = { m_scene_root->content_layer() },
-                .light_layer = m_scene_root->light_layer()
+                .mesh_spans = { m_scene_root->content_layer()->meshes },
+                .lights     = m_scene_root->light_layer()->lights
             }
         );
         get<Debug_view_window>()->render();
@@ -513,13 +518,13 @@ void Editor_rendering::render_id(const Render_context& context)
 
     m_id_renderer->render(
         {
-            .viewport            = context.viewport,
-            .camera              = context.camera,
-            .content_mesh_layers = { m_scene_root->content_layer(), m_scene_root->gui_layer() },
-            .tool_mesh_layers    = { m_scene_root->tool_layer() },
-            .time                = m_editor_time->time(),
-            .x                   = static_cast<int>(pointer.x),
-            .y                   = static_cast<int>(pointer.y)
+            .viewport           = context.viewport,
+            .camera             = context.camera,
+            .content_mesh_spans = { m_scene_root->content_layer()->meshes, m_scene_root->gui_layer()->meshes },
+            .tool_mesh_spans    = { m_scene_root->tool_layer()->meshes },
+            .time               = m_editor_time->time(),
+            .x                  = static_cast<int>(pointer.x),
+            .y                  = static_cast<int>(pointer.y)
         }
     );
 }
@@ -547,7 +552,7 @@ void Editor_rendering::render_content(const Render_context& context)
     auto& render_style = context.viewport_config->render_style_not_selected;
 
     constexpr erhe::scene::Visibility_filter content_not_selected_filter{
-        .require_all_bits_set   = erhe::scene::Node_visibility::content,
+        .require_all_bits_set   = erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::content,
         .require_all_bits_clear = erhe::scene::Node_visibility::selected
     };
 
@@ -569,12 +574,12 @@ void Editor_rendering::render_content(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_layers       = { m_scene_root->content_layer(), m_scene_root->controller_layer() },
-                .light_layer       = m_scene_root->light_layer(),
+                .mesh_spans        = { m_scene_root->content_layer()->meshes, m_scene_root->controller_layer()->meshes },
+                .lights            = m_scene_root->light_layer()->lights,
                 .materials         = m_scene_root->materials(),
-                //.passes            = { &m_rp_polygon_fill_standard },
                 .passes            = { &renderpass },
-                .visibility_filter = content_not_selected_filter
+                .visibility_filter = content_not_selected_filter,
+                .ambient_light     = m_scene_root->light_layer()->ambient_light
             }
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
@@ -591,8 +596,8 @@ void Editor_rendering::render_content(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_layers       = { m_scene_root->content_layer() },
-                .light_layer       = m_scene_root->light_layer(),
+                .mesh_spans        = { m_scene_root->content_layer()->meshes },
+                .lights            = m_scene_root->light_layer()->lights,
                 .materials         = m_scene_root->materials(),
                 .passes            = { &m_rp_edge_lines },
                 .visibility_filter = content_not_selected_filter
@@ -611,8 +616,8 @@ void Editor_rendering::render_content(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_layers       = { m_scene_root->content_layer() },
-                .light_layer       = m_scene_root->light_layer(),
+                .mesh_spans        = { m_scene_root->content_layer()->meshes },
+                .lights            = m_scene_root->light_layer()->lights,
                 .materials         = m_scene_root->materials(),
                 .passes            = { &m_rp_polygon_centroids },
                 .visibility_filter = content_not_selected_filter
@@ -630,8 +635,8 @@ void Editor_rendering::render_content(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_layers       = { m_scene_root->content_layer() },
-                .light_layer       = m_scene_root->light_layer(),
+                .mesh_spans        = { m_scene_root->content_layer()->meshes },
+                .lights            = m_scene_root->light_layer()->lights,
                 .materials         = m_scene_root->materials(),
                 .passes            = { &m_rp_corner_points },
                 .visibility_filter = content_not_selected_filter
@@ -657,6 +662,7 @@ void Editor_rendering::render_selection(const Render_context& context)
 
     constexpr erhe::scene::Visibility_filter content_selected_filter{
         .require_all_bits_set =
+            erhe::scene::Node_visibility::visible |
             erhe::scene::Node_visibility::content |
             erhe::scene::Node_visibility::selected
     };
@@ -676,11 +682,12 @@ void Editor_rendering::render_selection(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_layers       = { m_scene_root->content_layer() },
-                .light_layer       = m_scene_root->light_layer(),
+                .mesh_spans        = { m_scene_root->content_layer()->meshes },
+                .lights            = m_scene_root->light_layer()->lights,
                 .materials         = m_scene_root->materials(),
                 .passes            = { &m_rp_polygon_fill_standard },
-                .visibility_filter = content_selected_filter
+                .visibility_filter = content_selected_filter,
+                .ambient_light     = m_scene_root->light_layer()->ambient_light
             }
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
@@ -699,8 +706,8 @@ void Editor_rendering::render_selection(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_layers       = { m_scene_root->content_layer() },
-                .light_layer       = m_scene_root->light_layer(),
+                .mesh_spans        = { m_scene_root->content_layer()->meshes },
+                .lights            = m_scene_root->light_layer()->lights,
                 .materials         = m_scene_root->materials(),
                 .passes            = { &m_rp_edge_lines, &m_rp_line_hidden_blend },
                 .visibility_filter = content_selected_filter
@@ -722,8 +729,8 @@ void Editor_rendering::render_selection(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_layers       = { m_scene_root->content_layer() },
-                .light_layer       = m_scene_root->light_layer(),
+                .mesh_spans        = { m_scene_root->content_layer()->meshes },
+                .lights            = m_scene_root->light_layer()->lights,
                 .materials         = m_scene_root->materials(),
                 .passes            = { &m_rp_polygon_centroids },
                 .visibility_filter = content_selected_filter
@@ -742,8 +749,8 @@ void Editor_rendering::render_selection(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_layers       = { m_scene_root->content_layer() },
-                .light_layer       = m_scene_root->light_layer(),
+                .mesh_spans        = { m_scene_root->content_layer()->meshes },
+                .lights            = m_scene_root->light_layer()->lights,
                 .materials         = m_scene_root->materials(),
                 .passes            = { &m_rp_corner_points },
                 .visibility_filter = content_selected_filter
@@ -768,8 +775,8 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
         {
             .viewport    = context.viewport,
             .camera      = context.camera,
-            .mesh_layers = { m_scene_root->tool_layer() },
-            .light_layer = m_scene_root->light_layer(),
+            .mesh_spans  = { m_scene_root->tool_layer()->meshes },
+            .lights      = m_scene_root->light_layer()->lights,
             .materials   = m_scene_root->materials(),
             .passes      =
             {
@@ -782,7 +789,7 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
             },
             .visibility_filter =
             {
-                .require_all_bits_set = erhe::scene::Node_visibility::tool
+                .require_all_bits_set = erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::tool
             }
         }
     );
@@ -817,46 +824,17 @@ void Editor_rendering::render_brush(const Render_context& context)
         {
             .viewport          = context.viewport,
             .camera            = context.camera,
-            .mesh_layers       = { m_scene_root->brush_layer() },
-            .light_layer       = m_scene_root->light_layer(),
+            .mesh_spans        = { m_scene_root->brush_layer()->meshes },
+            .lights            = m_scene_root->light_layer()->lights,
             .materials         = m_scene_root->materials(),
             .passes            = { &m_rp_brush_back, &m_rp_brush_front },
             .visibility_filter =
             {
-                .require_all_bits_set = erhe::scene::Node_visibility::brush
-            }
+                .require_all_bits_set = erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::brush
+            },
+            .ambient_light     = m_scene_root->light_layer()->ambient_light
         }
     );
-}
-
-auto Editor_rendering::gpu_time_content() const -> double
-{
-    const auto time_elapsed = static_cast<double>(m_content_timer->last_result());
-    return time_elapsed / 1000000.0;
-}
-
-auto Editor_rendering::gpu_time_selection() const -> double
-{
-    const auto time_elapsed = static_cast<double>(m_selection_timer->last_result());
-    return time_elapsed / 1000000.0;
-}
-
-auto Editor_rendering::gpu_time_gui() const -> double
-{
-    const auto time_elapsed = static_cast<double>(m_gui_timer->last_result());
-    return time_elapsed / 1000000.0;
-}
-
-auto Editor_rendering::gpu_time_brush() const -> double
-{
-    const auto time_elapsed = static_cast<double>(m_brush_timer->last_result());
-    return time_elapsed / 1000000.0;
-}
-
-auto Editor_rendering::gpu_time_tools() const -> double
-{
-    const auto time_elapsed = static_cast<double>(m_tools_timer->last_result());
-    return time_elapsed / 1000000.0;
 }
 
 }  // namespace editor

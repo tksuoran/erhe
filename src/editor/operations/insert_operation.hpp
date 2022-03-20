@@ -24,10 +24,16 @@ namespace erhe::physics
     class IWorld;
 };
 
+namespace erhe::raytrace
+{
+    class IScene;
+};
+
 namespace editor
 {
 
 class Node_physics;
+class Node_raytrace;
 class Selection_tool;
 
 class Node_transform_operation
@@ -93,8 +99,10 @@ public:
         erhe::scene::Scene&                scene;
         erhe::scene::Mesh_layer&           layer;
         erhe::physics::IWorld&             physics_world;
+        erhe::raytrace::IScene&            raytrace_scene;
         std::shared_ptr<erhe::scene::Mesh> mesh;
         std::shared_ptr<Node_physics>      node_physics;
+        std::shared_ptr<Node_raytrace>     node_raytrace;
         std::shared_ptr<erhe::scene::Node> parent;
         Mode                               mode;
     };

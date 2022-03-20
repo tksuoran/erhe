@@ -107,14 +107,14 @@ auto Base_renderer::id_ranges() const -> const std::vector<Id_range>&
 }
 
 auto Base_renderer::update_primitive_buffer(
-    const erhe::scene::Mesh_layer&        mesh_layer,
-    const erhe::scene::Visibility_filter& visibility_filter,
-    const bool                            use_id_ranges
+    const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+    const erhe::scene::Visibility_filter&                      visibility_filter,
+    const bool                                                 use_id_ranges
 ) -> Buffer_range
 {
     ERHE_PROFILE_FUNCTION
 
-    log_render.trace("{}(meshes.size() = {})\n", __func__, mesh_layer.meshes.size());
+    log_render.trace("{}(meshes.size() = {})\n", __func__, meshes.size());
 
     m_primitive_writer.begin(current_frame_resources().primitive_buffer.target());
     const auto&  shader_resources   = *m_program_interface->shader_resources.get();
@@ -122,10 +122,10 @@ auto Base_renderer::update_primitive_buffer(
     const auto   primitive_gpu_data = current_frame_resources().primitive_buffer.map();
     const auto&  offsets            = shader_resources.primitive_block_offsets;
     size_t       primitive_index    = 0;
-    for (const auto& mesh : mesh_layer.meshes)
+    for (const auto& mesh : meshes)
     {
         ERHE_VERIFY(mesh);
-        if (!visibility_filter(mesh->visibility_mask()))
+        if (!visibility_filter(mesh->get_visibility_mask()))
         {
             continue;
         }
@@ -202,14 +202,15 @@ auto Base_renderer::update_primitive_buffer(
 }
 
 auto Base_renderer::update_light_buffer(
-    const erhe::scene::Light_layer& light_layer,
-    const erhe::scene::Viewport     light_texture_viewport,
-    const uint64_t                  shadow_map_texture_handle
+    const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
+    const glm::vec3&                                            ambient_light,
+    const erhe::scene::Viewport                                 light_texture_viewport,
+    const uint64_t                                              shadow_map_texture_handle
 ) -> Buffer_range
 {
     ERHE_PROFILE_FUNCTION
 
-    log_render.trace("{}(lights.size() = {})\n", __func__, light_layer.lights.size());
+    log_render.trace("{}(lights.size() = {})\n", __func__, lights.size());
 
     const auto&    shader_resources = *m_program_interface->shader_resources.get();
     const size_t   entry_size       = shader_resources.light_struct.size_bytes();
@@ -234,7 +235,7 @@ auto Base_renderer::update_light_buffer(
 
     using erhe::graphics::as_span;
     using erhe::graphics::write;
-    for (const auto& light : light_layer.lights)
+    for (const auto& light : lights)
     {
         ERHE_VERIFY(light);
 
@@ -270,7 +271,7 @@ auto Base_renderer::update_light_buffer(
     write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.spot_light_count,        as_span(spot_light_count)         );
     write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.point_light_count,       as_span(point_light_count)        );
     write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.reserved_0,              as_span(uint32_zero)              );
-    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.ambient_light,           as_span(light_layer.ambient_light));
+    write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.ambient_light,           as_span(ambient_light)            );
     write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.reserved_2,              as_span(uvec4_zero)               );
 
     m_light_writer.end();
@@ -279,7 +280,7 @@ auto Base_renderer::update_light_buffer(
 }
 
 auto Base_renderer::update_material_buffer(
-    const Material_collection& materials
+    const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials
 ) -> Buffer_range
 {
     ERHE_PROFILE_FUNCTION
@@ -372,9 +373,9 @@ auto Base_renderer::update_camera_buffer(
 }
 
 auto Base_renderer::update_draw_indirect_buffer(
-    const erhe::scene::Mesh_layer&        mesh_layer,
-    const erhe::primitive::Primitive_mode primitive_mode,
-    const erhe::scene::Visibility_filter& visibility_filter
+    const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+    const erhe::primitive::Primitive_mode                      primitive_mode,
+    const erhe::scene::Visibility_filter&                      visibility_filter
 ) -> Base_renderer::Draw_indirect_buffer_range
 {
     ERHE_PROFILE_FUNCTION
@@ -384,9 +385,9 @@ auto Base_renderer::update_draw_indirect_buffer(
     uint32_t   base_instance      {0};
     size_t     draw_indirect_count{0};
     m_draw_indirect_writer.begin(current_frame_resources().draw_indirect_buffer.target());
-    for (auto mesh : mesh_layer.meshes)
+    for (auto mesh : meshes)
     {
-        if (!visibility_filter(mesh->visibility_mask()))
+        if (!visibility_filter(mesh->get_visibility_mask()))
         {
             continue;
         }

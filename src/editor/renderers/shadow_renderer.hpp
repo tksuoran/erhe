@@ -6,6 +6,10 @@
 #include "erhe/scene/viewport.hpp"
 #include "erhe/components/components.hpp"
 
+#include <gsl/gsl>
+
+#include <initializer_list>
+
 namespace erhe::graphics
 {
     class Framebuffer;
@@ -49,8 +53,12 @@ public:
     class Render_parameters
     {
     public:
-        const std::vector<const erhe::scene::Mesh_layer*> mesh_layers;
-        const erhe::scene::Light_layer*                   light_layer;
+        const std::initializer_list<
+            const gsl::span<
+                const std::shared_ptr<erhe::scene::Mesh>
+            >
+        >&                                                         mesh_spans;
+        const gsl::span<const std::shared_ptr<erhe::scene::Light>> lights;
     };
 
     void render(const Render_parameters& parameters);

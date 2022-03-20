@@ -36,10 +36,35 @@ private:
     Log_window& m_log_window;
 };
 
+class Log_window_sink
+    : public erhe::log::ILog_sink
+{
+public:
+    Log_window_sink(Log_window& log_window);
+
+    // Implements erhe::log::ILog_sink
+    void write(const erhe::log::Color& color, const std::string_view text) override;
+
+private:
+    Log_window& m_log_window;
+};
+
+class Frame_log_window_sink
+    : public erhe::log::ILog_sink
+{
+public:
+    Frame_log_window_sink(Log_window& log_window);
+
+    // Implements erhe::log::ILog_sink
+    void write(const erhe::log::Color& color, const std::string_view text) override;
+
+private:
+    Log_window& m_log_window;
+};
+
 class Log_window
     : public erhe::components::Component
     , public Imgui_window
-    , public erhe::log::ILog_sink
 
 {
 public:
@@ -58,37 +83,14 @@ public:
     // Implements Imgui_window
     void imgui() override;
 
-    // Implements erhe::log::ILog_sink
-    void write(const erhe::log::Color& color, const std::string_view text) override;
-
     // Public API
+    void tail_log_write (const erhe::log::Color& color, const std::string_view text);
+    void frame_log_write(const erhe::log::Color& color, const std::string_view text);
 
     // Commands
     void toggle_pause();
 
-    template <typename... Args>
-    void frame_log(const char* format, const Args& ... args)
-    {
-        frame_write(format, fmt::make_format_args(args...));
-    }
-
-    template <typename... Args>
-    void tail_log(const char* format, const Args& ... args)
-    {
-        tail_write(format, fmt::make_format_args(args...));
-    }
-
-    template <typename... Args>
-    void tail_log(const ImVec4 color, const char* format, const Args& ... args)
-    {
-        tail_write(color, format, fmt::make_format_args(args...));
-    }
-
 private:
-    void frame_write(const char* format, fmt::format_args args);
-    void tail_write (const char* format, fmt::format_args args);
-    void tail_write (const ImVec4 color, const char* format, fmt::format_args args);
-
     class Entry
     {
     public:
@@ -102,6 +104,9 @@ private:
         std::string  message;
         unsigned int repeat_count{0};
     };
+
+    Log_window_sink                 m_tail_log_sink;
+    Frame_log_window_sink           m_frame_log_sink;
 
     Log_window_toggle_pause_command m_toggle_pause_command;
     std::vector<Entry>              m_frame_entries;

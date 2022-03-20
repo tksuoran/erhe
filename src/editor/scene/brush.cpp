@@ -416,6 +416,7 @@ auto Brush::make_instance(
             .normal_style          = normal_style
         }
     );
+    mesh->set_visibility_mask(instance_create_info.node_visibility_flags);
     mesh->set_world_from_node(instance_create_info.world_from_node);
 
     std::shared_ptr<Node_physics>  node_physics;
@@ -436,7 +437,10 @@ auto Brush::make_instance(
 
     if (scaled.rt_primitive)
     {
-        node_raytrace = std::make_shared<Node_raytrace>(scaled.rt_primitive);
+        node_raytrace = std::make_shared<Node_raytrace>(
+            scaled.geometry,
+            scaled.rt_primitive
+        );
         mesh->attach(node_raytrace);
     }
 

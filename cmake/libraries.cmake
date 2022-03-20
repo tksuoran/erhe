@@ -10,6 +10,14 @@ FetchContent_Declare(
 )
 
 FetchContent_Declare(
+    bvh
+    GIT_REPOSITORY https://github.com/tksuoran/bvh.git
+    GIT_TAG        dev
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+FetchContent_Declare(
     cgltf
     GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
     GIT_TAG        master

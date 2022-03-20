@@ -24,9 +24,10 @@ public:
     static constexpr uint64_t c_flag_bit_is_frame_controller = (1u << 2);
 
     [[nodiscard]] virtual auto node_attachment_type() const -> const char* = 0;
-    virtual void on_attached_to           (Node* node) { m_node = node; };
-    virtual void on_detached_from         (Node* node) { static_cast<void>(node); m_node = nullptr; };
-    virtual void on_node_transform_changed() {};
+    virtual void on_attached_to                 (Node* node) { m_node = node; };
+    virtual void on_detached_from               (Node* node) { static_cast<void>(node); m_node = nullptr; };
+    virtual void on_node_transform_changed      () {};
+    virtual void on_node_visibility_mask_changed(const uint64_t mask) { static_cast<void>(mask); };
 
     [[nodiscard]] auto get_node () const -> Node*;
     [[nodiscard]] auto flag_bits() const -> uint64_t;
@@ -41,14 +42,15 @@ class Node_visibility
 {
 public:
     static constexpr uint64_t none        = 0u;
-    static constexpr uint64_t content     = (1u << 0);
-    static constexpr uint64_t shadow_cast = (1u << 1);
-    static constexpr uint64_t id          = (1u << 2);
-    static constexpr uint64_t tool        = (1u << 3);
-    static constexpr uint64_t brush       = (1u << 4);
-    static constexpr uint64_t selected    = (1u << 5);
-    static constexpr uint64_t gui         = (1u << 6);
-    static constexpr uint64_t controller  = (1u << 7);
+    static constexpr uint64_t visible     = (1u << 0);
+    static constexpr uint64_t content     = (1u << 1);
+    static constexpr uint64_t shadow_cast = (1u << 2);
+    static constexpr uint64_t id          = (1u << 3);
+    static constexpr uint64_t tool        = (1u << 4);
+    static constexpr uint64_t brush       = (1u << 5);
+    static constexpr uint64_t selected    = (1u << 6);
+    static constexpr uint64_t gui         = (1u << 7);
+    static constexpr uint64_t controller  = (1u << 8);
 };
 
 class Node_flag_bit
@@ -94,9 +96,10 @@ public:
 
     virtual ~Node() noexcept;
 
-    virtual void on_attached         ();
-    virtual void on_detached_from    (Node& node);
-    virtual void on_transform_changed();
+    virtual void on_attached               ();
+    virtual void on_detached_from          (Node& node);
+    virtual void on_transform_changed      ();
+    virtual void on_visibility_mask_changed();
 
     [[nodiscard]] virtual auto node_type() const -> const char*;
 
@@ -104,10 +107,10 @@ public:
     [[nodiscard]] auto depth                     () const -> size_t;
     [[nodiscard]] auto children                  () const -> const std::vector<std::shared_ptr<Node>>&;
     [[nodiscard]] auto attachments               () const -> const std::vector<std::shared_ptr<INode_attachment>>&;
-    [[nodiscard]] auto visibility_mask           () const -> uint64_t;
-    [[nodiscard]] auto visibility_mask           () -> uint64_t&;
-    [[nodiscard]] auto flag_bits                 () const -> uint64_t;
-    [[nodiscard]] auto flag_bits                 () -> uint64_t&;
+    [[nodiscard]] auto get_visibility_mask       () const -> uint64_t;
+    [[nodiscard]] void set_visibility_mask       (const uint64_t value);
+    [[nodiscard]] auto get_flag_bits             () const -> uint64_t;
+    [[nodiscard]] void set_flag_bits             (const uint64_t value);
     [[nodiscard]] auto parent_from_node_transform() const -> const Transform&;
     [[nodiscard]] auto node_from_parent_transform() const -> const Transform;
     [[nodiscard]] auto parent_from_node          () const -> glm::mat4;
@@ -130,7 +133,6 @@ public:
     [[nodiscard]] auto get_index_in_parent() const -> size_t;
     [[nodiscard]] auto get_index_of_child (const Node* child) const -> nonstd::optional<size_t>;
     [[nodiscard]] auto is_ancestor        (const Node* ancestor_candidate) const -> bool;
-    //[[nodiscard]] auto is_descendant      (const Node* descendant_candidate) const -> bool;
 
     void set_parent                (const std::weak_ptr<Node>& parent);
     void set_depth_recursive       (const size_t depth);

@@ -167,19 +167,20 @@ auto Physics_tool::description() -> const char*
 
 auto Physics_tool::acquire_target() -> bool
 {
+    const auto& content = m_pointer_context->get_hover(Pointer_context::content_slot);
     if (
-        !m_pointer_context->hovering_over_content() ||
+        !content.valid ||
         !m_pointer_context->position_in_viewport_window().has_value() ||
-        !m_pointer_context->position_in_world().has_value()
+        !content.position.has_value()
     )
     {
         return false;
     }
 
-    m_target_mesh             = m_pointer_context->hover_mesh();
+    m_target_mesh             = content.mesh;
     m_target_depth            = m_pointer_context->position_in_viewport_window().value().z;
     m_target_position_in_mesh = m_target_mesh->transform_point_from_world_to_local(
-        m_pointer_context->position_in_world().value()
+        content.position.value()
     );
     m_target_node_physics     = get_physics_node(m_target_mesh.get());
 
@@ -366,7 +367,7 @@ auto Physics_tool::on_force() -> bool
     {
         max_radius = std::max(
             max_radius,
-            primitive.gl_primitive_geometry.bounding_sphere_radius
+            primitive.gl_primitive_geometry.bounding_sphere.radius
         );
     }
     m_target_mesh_size   = max_radius;

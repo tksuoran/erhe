@@ -34,7 +34,18 @@ void Performance_window::initialize_component()
 {
     get<Editor_imgui_windows>()->register_imgui_window(this);
 
-    hide();
+    //hide();
+}
+
+void Plot::clear()
+{
+    m_offset = 0;
+    m_value_count = 0;
+    std::fill(
+        m_values.begin(),
+        m_values.end(),
+        0.0f
+    );
 }
 
 Gpu_timer_plot::Gpu_timer_plot(
@@ -44,17 +55,6 @@ Gpu_timer_plot::Gpu_timer_plot(
     : m_gpu_timer{timer}
 {
     m_values.resize(width);
-}
-
-void Gpu_timer_plot::clear()
-{
-    m_offset = 0;
-    m_value_count = 0;
-    std::fill(
-        m_values.begin(),
-        m_values.end(),
-        0.0f
-    );
 }
 
 void Gpu_timer_plot::sample()
@@ -67,9 +67,46 @@ void Gpu_timer_plot::sample()
     m_offset++;
 }
 
+auto Gpu_timer_plot::label() const -> const char*
+{
+    return m_gpu_timer->label();
+}
+
 auto Gpu_timer_plot::gpu_timer() const -> erhe::graphics::Gpu_timer*
 {
     return m_gpu_timer;
+}
+
+Cpu_timer_plot::Cpu_timer_plot(
+    erhe::toolkit::Timer* timer,
+    const size_t          width
+)
+    : m_timer{timer}
+{
+    m_values.resize(width);
+}
+
+void Cpu_timer_plot::sample()
+{
+    if (!m_timer->duration().has_value())
+    {
+        return;
+    }
+    const auto sample_value = std::chrono::duration_cast<std::chrono::milliseconds>(m_timer->duration().value()).count();
+
+    m_values[m_offset % m_values.size()] = static_cast<float>(sample_value);
+    m_value_count = std::min(m_value_count + 1, m_values.size());
+    m_offset++;
+}
+
+auto Cpu_timer_plot::label() const -> const char*
+{
+    return m_timer->label();
+}
+
+auto Cpu_timer_plot::timer() const -> erhe::toolkit::Timer*
+{
+    return m_timer;
 }
 
 namespace {
@@ -96,7 +133,7 @@ static inline T clamp(T value, T min_value, T max_value)
 
 }
 
-void Gpu_timer_plot::imgui()
+void Plot::imgui()
 {
     //ImGuiContext& g = *GImGui;
     ImGuiWindow* window = ImGui::GetCurrentWindow();
@@ -106,10 +143,10 @@ void Gpu_timer_plot::imgui()
     }
 
     //const ImGuiStyle& style = g.Style;
-    const char* label = m_gpu_timer->label();
-    const ImGuiID id = ImGui::GetID(label);
+    const char* label_cstr = label();
+    const ImGuiID id = ImGui::GetID(label_cstr);
 
-    const auto label_size = ImGui::CalcTextSize(label, nullptr, true);
+    const auto label_size = ImGui::CalcTextSize(label_cstr, nullptr, true);
     // if (frame_size.x == 0.0f)
     // {
     //     frame_size.x = CalcItemWidth();
@@ -268,7 +305,7 @@ void Gpu_timer_plot::imgui()
             frame_bb.Max.x + style.ItemInnerSpacing.x,
             inner_bb.Min.y
         },
-        label
+        label_cstr
     );
 
     // Return hovered index or -1 if none are hovered.
@@ -323,6 +360,50 @@ void Performance_window::imgui()
         m_gpu_timer_plots.end()
     );
 
+    const auto all_cpu_timers = erhe::toolkit::Timer::all_timers();
+    for (auto* timer : all_cpu_timers)
+    {
+        bool found{false};
+        for (auto& plot : m_cpu_timer_plots)
+        {
+            if (plot.timer() == timer)
+            {
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+        {
+            log_performance.info("Added new CPU timer plot {}\n", timer->label());
+            m_cpu_timer_plots.emplace_back(timer);
+        }
+    }
+    m_cpu_timer_plots.erase(
+        std::remove_if(
+            m_cpu_timer_plots.begin(),
+            m_cpu_timer_plots.end(),
+            [&all_cpu_timers](auto& plot) -> bool
+            {
+                bool found{false};
+                for (auto* timer : all_cpu_timers)
+                {
+                    if (plot.timer() == timer)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                const bool do_remove = !found;
+                if (do_remove)
+                {
+                    log_performance.info("Removed old CPU timer plot\n");
+                }
+                return do_remove;
+            }
+        ),
+        m_cpu_timer_plots.end()
+    );
+
     ImGui::Checkbox("Pause", &m_pause);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(100.0f);
@@ -336,12 +417,20 @@ void Performance_window::imgui()
 
     if (!m_pause)
     {
+        for (auto& plot : m_cpu_timer_plots)
+        {
+            plot.sample();
+        }
         for (auto& plot : m_gpu_timer_plots)
         {
             plot.sample();
         }
     }
 
+    for (auto& plot : m_cpu_timer_plots)
+    {
+        plot.imgui();
+    }
     for (auto& plot : m_gpu_timer_plots)
     {
         plot.imgui();

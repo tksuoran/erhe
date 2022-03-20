@@ -104,7 +104,7 @@ void Embree_geometry::set_buffer(
     const Buffer_type  type,
     const unsigned int slot,
     const Format       format,
-    const IBuffer*     buffer,
+    IBuffer* const     buffer,
     const size_t       byte_offset,
     const size_t       byte_stride,
     const size_t       item_count

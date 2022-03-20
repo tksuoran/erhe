@@ -82,12 +82,6 @@ public:
     void bind_default_framebuffer();
     void clear                   ();
 
-    [[nodiscard]] auto gpu_time_content  () const -> double;
-    [[nodiscard]] auto gpu_time_selection() const -> double;
-    [[nodiscard]] auto gpu_time_gui      () const -> double;
-    [[nodiscard]] auto gpu_time_brush    () const -> double;
-    [[nodiscard]] auto gpu_time_tools    () const -> double;
-
 private:
     void begin_frame();
     [[nodiscard]] auto width () const -> int;

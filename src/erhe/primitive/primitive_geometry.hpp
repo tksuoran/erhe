@@ -4,6 +4,7 @@
 #include "erhe/primitive/index_range.hpp"
 #include "erhe/primitive/enums.hpp"
 #include "erhe/toolkit/optional.hpp"
+#include "erhe/toolkit/math_util.hpp"
 
 #include <glm/glm.hpp>
 
@@ -37,10 +38,8 @@ public:
     [[nodiscard]] auto base_index () const -> uint32_t;
     [[nodiscard]] auto index_range(const Primitive_mode primitive_mode) const -> Index_range;
 
-    glm::vec3    bounding_box_min        {std::numeric_limits<float>::max()}; // bounding box
-    glm::vec3    bounding_box_max        {std::numeric_limits<float>::lowest()};
-    glm::vec3    bounding_sphere_center  {0.0f};
-    float        bounding_sphere_radius  {0.0f};
+    erhe::toolkit::Bounding_box    bounding_box;
+    erhe::toolkit::Bounding_sphere bounding_sphere;
 
     Index_range  triangle_fill_indices   {};
     Index_range  edge_line_indices       {};

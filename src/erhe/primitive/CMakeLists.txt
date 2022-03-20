@@ -59,5 +59,9 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
     target_link_libraries(${_target} PUBLIC embree)
 endif ()
 
+if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
+    target_link_libraries(${_target} PUBLIC bvh)
+endif ()
+
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

@@ -10,29 +10,8 @@ namespace erhe::raytrace
 
 class IGeometry;
 class IInstance;
-
-class Ray
-{
-public:
-    glm::vec3    origin   {0.0f};
-    float        t_near   {0.0f};
-    glm::vec3    direction{0.0f};
-    float        time     {0.0f};
-    float        t_far    {0.0f};
-    unsigned int mask     {0};
-    unsigned int id       {0};
-    unsigned int flags    {0};
-};
-
-class Hit
-{
-public:
-    glm::vec3    normal      {0.0f};
-    glm::vec2    uv          {0.0f};
-    unsigned int primitive_id{0};
-    IGeometry*   geometry    {nullptr};
-    IInstance*   instance    {nullptr};
-};
+class Ray;
+class Hit;
 
 class IScene
 {

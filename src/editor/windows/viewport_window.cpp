@@ -271,10 +271,12 @@ void Viewport_window::render(
                     : nullptr
     };
 
+#if 0
     if (m_is_hovered)
     {
         editor_rendering.render_id(context);
     }
+#endif
 
     if (m_framebuffer_multisample)
     {

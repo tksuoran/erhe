@@ -12,6 +12,7 @@
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/igeometry.hpp"
 #include "erhe/raytrace/iinstance.hpp"
+#include "erhe/raytrace/ray.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
@@ -26,6 +27,8 @@ using erhe::geometry::Polygon_id;
 
 Pointer_context::Pointer_context()
     : erhe::components::Component{c_name}
+    , m_ray_scene_build_timer    {"Ray scene build"}
+    , m_ray_traverse_timer       {"Ray traverse"}
 {
 }
 
@@ -73,7 +76,6 @@ void Pointer_context::update_mouse(
     m_mouse_y = y;
 }
 
-
 void Pointer_context::raytrace()
 {
     if (m_window == nullptr)
@@ -84,80 +86,120 @@ void Pointer_context::raytrace()
     const auto log = get<Log_window>();
 
     const auto pointer_near = position_in_world(1.0);
-    //if (pointer_near.has_value())
-    //{
-    //    log->frame_log("Near: {}", glm::vec3{pointer_near.value()});
-    //}
     const auto pointer_far  = position_in_world(0.0);
-    //if (pointer_far.has_value())
-    //{
-    //    log->frame_log("Far: {}", glm::vec3{pointer_far.value()});
-    //}
 
     if (!pointer_near.has_value() || !pointer_far.has_value())
     {
         return;
     }
 
-    //log->frame_log("Direction: {}", glm::vec3{direction});
-
     const glm::vec3 origin{pointer_near.value()};
 
-    erhe::raytrace::Ray ray{
-        .origin    = glm::vec3{pointer_near.value()},
-        .t_near    = 0.0f,
-        .direction = glm::vec3{glm::normalize(pointer_far.value() - pointer_near.value())},
-        .time      = 0.0f,
-        .t_far     = 9999.0f,
-        .mask      = 0,
-        .id        = 0,
-        .flags     = 0
-    };
-    erhe::raytrace::Hit hit{};
-
     auto& scene = m_scene_root->raytrace_scene();
-    scene.commit();
-    scene.intersect(ray, hit);
-    //log->frame_log("Ray near t: {}",    ray.t_near);
-    //log->frame_log("Ray near: {}",      ray.origin + ray.t_near * ray.direction);
-    //log->frame_log("Ray far t: {}",     ray.t_far);
-    //log->frame_log("Ray far: {}",       ray.origin + ray.t_far * ray.direction);
-    //log->frame_log("Hit UV: {}",        hit.uv);
-    //log->frame_log("Hit primitive: {}", hit.primitive_id);
-    //if (hit.geometry != nullptr)
-    //{
-    //    log->frame_log("Hit geometry: {}", hit.geometry->debug_label());
-    //}
-    if (hit.instance != nullptr)
     {
-        //log->frame_log("Hit instance: {}", hit.instance->debug_label());
-        void* user_data     = hit.instance->get_user_data();
-        auto* node_raytrace = reinterpret_cast<Node_raytrace*>(user_data);
-        m_raytrace_node         = node_raytrace;
-        m_raytrace_hit_position = ray.origin + ray.t_far * ray.direction;
-        log->frame_log("Hit position: {}", m_raytrace_hit_position.value());
-        if (node_raytrace != nullptr)
+        erhe::toolkit::Scoped_timer scoped_timer{m_ray_scene_build_timer};
+        scene.commit();
+    }
+
+    m_nearest_slot = 0;
+    float nearest_t_far = 9999.0f;
+    {
+        erhe::toolkit::Scoped_timer scoped_timer{m_ray_traverse_timer};
+
+        for (size_t i = 0; i < slot_count; ++i)
         {
-            auto* primitive = node_raytrace->raytrace_primitive();
-            if (primitive != nullptr)
+            auto& entry = m_hover_entries[i];
+            erhe::raytrace::Ray ray{
+                .origin    = glm::vec3{pointer_near.value()},
+                .t_near    = 0.0f,
+                .direction = glm::vec3{glm::normalize(pointer_far.value() - pointer_near.value())},
+                .time      = 0.0f,
+                .t_far     = 9999.0f,
+                .mask      = slot_masks[i],
+                .id        = 0,
+                .flags     = 0
+            };
+            erhe::raytrace::Hit hit;
+            scene.intersect(ray, hit);
+            entry.valid = hit.instance != nullptr;
+            entry.mask  = slot_masks[i];
+            if (entry.valid)
             {
-                auto* geometry = primitive->geometry.get();
-                if (geometry != nullptr)
+                void* user_data     = hit.instance->get_user_data();
+                entry.raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
+                entry.position      = ray.origin + ray.t_far * ray.direction;
+                entry.geometry      = nullptr;
+                entry.local_index   = 0;
+
+                log_pointer.info("{}: Hit position: {}", slot_names[i], entry.position.value());
+
+                if (entry.raytrace_node != nullptr)
                 {
-                    log->frame_log("Hit geometry: {}", geometry->name);
+                    auto* node = entry.raytrace_node->get_node();
+                    if (node != nullptr)
+                    {
+                        log_pointer.info("{}: Hit node: {} {}", slot_names[i], node->node_type(), node->name());
+                        const auto* rt_instance = entry.raytrace_node->raytrace_instance();
+                        if (rt_instance != nullptr)
+                        {
+                            log_pointer.info(
+                                "{}: RT instance: {}",
+                                slot_names[i],
+                                rt_instance->is_enabled()
+                                    ? "enabled"
+                                    : "disabled"
+                            );
+                        }
+                    }
+                    if (is_mesh(node))
+                    {
+                        entry.mesh = as_mesh(node->shared_from_this());
+                        auto* primitive = entry.raytrace_node->raytrace_primitive();
+                        entry.primitive = 0; // TODO
+                        if (primitive != nullptr)
+                        {
+                            entry.geometry = entry.raytrace_node->source_geometry().get();
+                            if (entry.geometry != nullptr)
+                            {
+                                log_pointer.info("{}: Hit geometry: {}", slot_names[i], entry.geometry->name);
+                            }
+                            if (hit.primitive_id < primitive->primitive_geometry.primitive_id_to_polygon_id.size())
+                            {
+                                const auto polygon_id = primitive->primitive_geometry.primitive_id_to_polygon_id[hit.primitive_id];
+                                log_pointer.info("{}: Hit polygon: {}", slot_names[i], polygon_id);
+                                entry.local_index = polygon_id;
+                            }
+                        }
+                    }
                 }
-                if (hit.primitive_id < primitive->primitive_geometry.primitive_id_to_polygon_id.size())
+
+                if (ray.t_far < nearest_t_far)
                 {
-                    const auto polygon_id = primitive->primitive_geometry.primitive_id_to_polygon_id[hit.primitive_id];
-                    log->frame_log("Hit polygon: {}", polygon_id);
+                    m_nearest_slot = i;
+                    nearest_t_far = ray.t_far;
                 }
+            }
+            else
+            {
+                log_pointer.info("{}: no hit", slot_names[i]);
             }
         }
     }
+
+    log_pointer.info("Nearest slot: {}", slot_names[m_nearest_slot]);
+
+    const auto duration = m_ray_traverse_timer.duration().value();
+    if (duration >= std::chrono::milliseconds(1))
+    {
+        log_pointer.info("ray intersect time: {}\n", std::chrono::duration_cast<std::chrono::milliseconds>(duration));
+    }
+    else if (duration >= std::chrono::microseconds(1))
+    {
+        log_pointer.info("ray intersect time: {}\n", std::chrono::duration_cast<std::chrono::microseconds>(duration));
+    }
     else
     {
-        m_raytrace_node = nullptr;
-        m_raytrace_hit_position.reset();
+        log_pointer.info("ray intersect time: {}\n", duration);
     }
 
 #if 0
@@ -226,21 +268,15 @@ void Pointer_context::raytrace()
 
 void Pointer_context::update_viewport(Viewport_window* viewport_window)
 {
-    m_hover_mesh.reset();
-    m_hover_geometry    = nullptr;
-    m_hover_layer       = nullptr;
+    std::fill(
+        m_hover_entries.begin(),
+        m_hover_entries.end(),
+        Hover_entry{}
+    );
     m_position_in_window    .reset();
-    m_position_in_world     .reset();
     m_near_position_in_world.reset();
     m_far_position_in_world .reset();
-    m_hover_primitive   = 0;
-    m_hover_local_index = 0;
-    m_hover_tool        = false;
-    m_hover_content     = false;
-    m_hover_gui         = false;
-    m_hover_valid       = false;
     m_update_window     = nullptr;
-    m_raytrace_hit_position.reset();
 
     m_window = viewport_window;
 
@@ -256,7 +292,10 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
         }
     );
 
-    m_position_in_window = glm::vec3{position_in_window, 1.0f};
+    const bool reverse_depth = m_window->viewport().reverse_depth;
+    m_position_in_window     = glm::vec3{position_in_window, 1.0f};
+    m_near_position_in_world = position_in_world(reverse_depth ? 1.0f : 0.0f);
+    m_far_position_in_world  = position_in_world(reverse_depth ? 0.0f : 1.0f);
 
     auto* camera = m_window->camera();
     if (camera == nullptr)
@@ -264,13 +303,12 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
         return;
     }
 
-#if 1
     if (pointer_in_content_area())
     {
         raytrace();
     }
-#endif
 
+#if 0
     const auto id_renderer     = get<Id_renderer>();
     //const auto scene_root      = get<Scene_root>();
     const bool in_content_area = pointer_in_content_area();
@@ -278,25 +316,24 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
     if (in_content_area && id_renderer)
     {
         const bool reverse_depth = m_window->viewport().reverse_depth;
-        const auto mesh_primitive = id_renderer->get(
+        const auto id_query      = id_renderer->get(
             static_cast<int>(position_in_window.x),
-            static_cast<int>(position_in_window.y),
-            m_position_in_window.value().z
+            static_cast<int>(position_in_window.y)
         );
+        m_position_in_window.value().z = id_query.depth;
         m_position_in_world      = position_in_world(m_position_in_window.value().z);
         m_near_position_in_world = position_in_world(reverse_depth ? 1.0f : 0.0f);
         m_far_position_in_world  = position_in_world(reverse_depth ? 0.0f : 1.0f);
-        m_hover_valid = mesh_primitive.valid;
+        m_hover_valid = id_query.valid;
         //m_log_window->frame_log("position in world = {}", m_position_in_world.value());
-        if (m_hover_valid && (mesh_primitive.layer != nullptr))
+        if (m_hover_valid)
         {
-            m_hover_mesh        = mesh_primitive.mesh;
-            m_hover_layer       = mesh_primitive.layer;
-            m_hover_primitive   = mesh_primitive.mesh_primitive_index;
-            m_hover_local_index = mesh_primitive.local_index;
-            m_hover_tool        = (m_hover_layer->flags & erhe::scene::Node_visibility::tool   ) == erhe::scene::Node_visibility::tool;
-            m_hover_content     = (m_hover_layer->flags & erhe::scene::Node_visibility::content) == erhe::scene::Node_visibility::content;
-            m_hover_gui         = (m_hover_layer->flags & erhe::scene::Node_visibility::gui    ) == erhe::scene::Node_visibility::gui;
+            m_hover_mesh        = id_query.mesh;
+            m_hover_primitive   = id_query.mesh_primitive_index;
+            m_hover_local_index = id_query.local_index;
+            m_hover_tool        = id_query.mesh && (m_hover_mesh->visibility_mask() & erhe::scene::Node_visibility::tool   ) == erhe::scene::Node_visibility::tool;
+            m_hover_content     = id_query.mesh && (m_hover_mesh->visibility_mask() & erhe::scene::Node_visibility::content) == erhe::scene::Node_visibility::content;
+            m_hover_gui         = id_query.mesh && (m_hover_mesh->visibility_mask() & erhe::scene::Node_visibility::gui    ) == erhe::scene::Node_visibility::gui;
             m_log_window->frame_log(
                 "hover mesh = {} primitive = {} local index {} tool = {} content = {} gui = {}",
                 m_hover_mesh ? m_hover_mesh->name() : "()",
@@ -348,14 +385,11 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
         m_hover_primitive   = 0;
         m_hover_local_index = 0;
     }
+#endif
 
     m_frame_number = get<Editor_time>()->frame_number();
 }
 
-auto Pointer_context::position_in_world() const -> nonstd::optional<glm::vec3>
-{
-    return m_position_in_world;
-}
 
 auto Pointer_context::near_position_in_world() const -> nonstd::optional<glm::vec3>
 {
@@ -365,16 +399,6 @@ auto Pointer_context::near_position_in_world() const -> nonstd::optional<glm::ve
 auto Pointer_context::far_position_in_world() const -> nonstd::optional<glm::vec3>
 {
     return m_far_position_in_world;
-}
-
-auto Pointer_context::raytrace_node() const -> Node_raytrace*
-{
-    return m_raytrace_node;
-}
-
-auto Pointer_context::raytrace_hit_position() const -> nonstd::optional<glm::vec3>
-{
-    return m_raytrace_hit_position;
 }
 
 auto Pointer_context::position_in_world(const double viewport_depth) const -> nonstd::optional<glm::dvec3>
@@ -406,6 +430,11 @@ auto Pointer_context::position_in_world(const double viewport_depth) const -> no
         static_cast<double>(vp.width),
         static_cast<double>(vp.height)
     );
+}
+
+auto Pointer_context::position_in_viewport_window() const -> nonstd::optional<glm::vec3>
+{
+    return m_position_in_window;
 }
 
 auto Pointer_context::pointer_in_content_area() const -> bool
@@ -455,44 +484,14 @@ auto Pointer_context::mouse_y() const -> double
     return m_mouse_y;
 }
 
-auto Pointer_context::hovering_over_tool() const -> bool
+auto Pointer_context::get_hover(size_t slot) const -> const Hover_entry&
 {
-    return m_hover_valid && m_hover_tool;
+    return m_hover_entries.at(slot);
 }
 
-auto Pointer_context::hovering_over_content() const -> bool
+auto Pointer_context::get_nearest_hover() const -> const Hover_entry&
 {
-    return m_hover_valid && m_hover_content;
-}
-
-auto Pointer_context::hovering_over_gui() const -> bool
-{
-    return m_hover_valid && m_hover_gui;
-}
-
-auto Pointer_context::hover_normal() const -> nonstd::optional<glm::vec3>
-{
-    return m_hover_normal;
-}
-
-auto Pointer_context::hover_mesh() const -> std::shared_ptr<erhe::scene::Mesh>
-{
-    return m_hover_mesh;
-}
-
-auto Pointer_context::hover_primitive() const -> size_t
-{
-    return m_hover_primitive;
-}
-
-auto Pointer_context::hover_local_index() const -> size_t
-{
-    return m_hover_local_index;
-}
-
-auto Pointer_context::hover_geometry() const -> erhe::geometry::Geometry*
-{
-    return m_hover_geometry;
+    return m_hover_entries.at(m_nearest_slot);
 }
 
 auto Pointer_context::window() const -> Viewport_window*
@@ -503,11 +502,6 @@ auto Pointer_context::window() const -> Viewport_window*
 auto Pointer_context::last_window() const -> Viewport_window*
 {
     return m_last_window;
-}
-
-auto Pointer_context::position_in_viewport_window() const -> nonstd::optional<glm::vec3>
-{
-    return m_position_in_window;
 }
 
 auto Pointer_context::frame_number() const -> uint64_t

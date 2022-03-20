@@ -201,26 +201,25 @@ void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
     }
 }
 
-void Id_renderer::render_layer(
-    const erhe::scene::Mesh_layer& mesh_layer
+void Id_renderer::render(
+    const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
 )
 {
     ERHE_PROFILE_FUNCTION
 
-    Layer_range layer_range{
-        .offset = id_offset(),
-        .layer  = &mesh_layer
-    };
-
     const erhe::scene::Visibility_filter id_filter{
-        .require_all_bits_set           = erhe::scene::Node_visibility::id,
+        .require_all_bits_set           = erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::id,
         .require_at_least_one_bit_set   = 0u,
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u
     };
-    update_primitive_buffer(mesh_layer, id_filter, true);
+    update_primitive_buffer(
+        meshes,
+        id_filter,
+        true
+    );
     auto draw_indirect_buffer_range = update_draw_indirect_buffer(
-        mesh_layer,
+        meshes,
         erhe::primitive::Primitive_mode::polygon_fill,
         id_filter
     );
@@ -239,8 +238,6 @@ void Id_renderer::render_layer(
         static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
         static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
     );
-    layer_range.end = id_offset();
-    m_layer_ranges.emplace_back(layer_range);
 }
 
 static constexpr std::string_view c_id_renderer_render_clear  {"Id_renderer::render() clear"  };
@@ -252,13 +249,13 @@ void Id_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& viewport            = parameters.viewport;
-    const auto* camera              = parameters.camera;
-    const auto& content_mesh_layers = parameters.content_mesh_layers;
-    const auto& tool_mesh_layers    = parameters.tool_mesh_layers;
-    const auto  time                = parameters.time;
-    const auto  x                   = parameters.x;
-    const auto  y                   = parameters.y;
+    const auto& viewport           = parameters.viewport;
+    const auto* camera             = parameters.camera;
+    const auto& content_mesh_spans = parameters.content_mesh_spans;
+    const auto& tool_mesh_spans    = parameters.tool_mesh_spans;
+    const auto  time               = parameters.time;
+    const auto  x                  = parameters.x;
+    const auto  y                  = parameters.y;
 
     m_ranges.clear();
 
@@ -326,13 +323,12 @@ void Id_renderer::render(const Render_parameters& parameters)
     }
 
     reset_id_ranges();
-    m_layer_ranges.clear();
 
     m_pipeline_state_tracker->execute(m_pipeline);
-    for (auto layer : content_mesh_layers)
+    for (auto meshes : content_mesh_spans)
     {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_content)
-        render_layer(*layer);
+        render(meshes);
     }
 
     // Clear depth for tool pixels
@@ -340,9 +336,9 @@ void Id_renderer::render(const Render_parameters& parameters)
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
         m_pipeline_state_tracker->execute(m_selective_depth_clear_pipeline);
         gl::depth_range(0.0f, 0.0f);
-        for (auto layer : tool_mesh_layers)
+        for (auto mesh_spans : tool_mesh_spans)
         {
-            render_layer(*layer);
+            render(mesh_spans);
         }
     }
 
@@ -353,9 +349,9 @@ void Id_renderer::render(const Render_parameters& parameters)
         m_pipeline_state_tracker->execute(m_pipeline);
         gl::depth_range(0.0f, 1.0f);
 
-        for (auto layer : tool_mesh_layers)
+        for (auto meshes : tool_mesh_spans)
         {
-            render_layer(*layer);
+            render(meshes);
         }
     }
 
@@ -404,12 +400,12 @@ inline T read_as(uint8_t const* raw_memory)
     return result;
 }
 
-bool Id_renderer::get(
+auto Id_renderer::get(
     const int x,
     const int y,
     uint32_t& id,
     float&    depth
-)
+) -> bool
 {
     int slot = static_cast<int>(m_current_id_frame_resource_slot);
 
@@ -464,13 +460,11 @@ bool Id_renderer::get(
 
 auto Id_renderer::get(
     const int x,
-    const int y,
-    float&    depth
-) -> Id_renderer::Mesh_primitive
+    const int y
+) -> Id_query_result
 {
-    Mesh_primitive result;
-    uint32_t id{0};
-    const bool ok = get(x, y, id, depth);
+    Id_query_result result;
+    const bool ok = get(x, y, result.id, result.depth);
     if (!ok)
     {
         return result;
@@ -479,18 +473,14 @@ auto Id_renderer::get(
 
     for (auto& r : id_ranges())
     {
-        if ((id >= r.offset) && id < (r.offset + r.length))
+        if (
+            (result.id >= r.offset) &&
+            (result.id < (r.offset + r.length))
+        )
         {
             result.mesh                 = r.mesh;
             result.mesh_primitive_index = r.primitive_index;
-            result.local_index          = id - r.offset;
-            for (auto& layer_range : m_layer_ranges)
-            {
-                if ((id >= layer_range.offset) && (id < layer_range.end))
-                {
-                    result.layer = layer_range.layer;
-                }
-            }
+            result.local_index          = result.id - r.offset;
             return result;
         }
     }

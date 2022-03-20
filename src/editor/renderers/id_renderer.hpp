@@ -38,11 +38,12 @@ class Id_renderer
       public Base_renderer
 {
 public:
-    class Mesh_primitive
+    class Id_query_result
     {
     public:
+        uint32_t                           id                  {0};
+        float                              depth               {0.0f};
         std::shared_ptr<erhe::scene::Mesh> mesh                {};
-        const erhe::scene::Mesh_layer*     layer               {nullptr};
         size_t                             mesh_primitive_index{0};
         size_t                             local_index         {0};
         bool                               valid               {false};
@@ -63,18 +64,18 @@ public:
     class Render_parameters
     {
     public:
-        const erhe::scene::Viewport&                      viewport;
-        const erhe::scene::ICamera*                       camera;
-        const std::vector<const erhe::scene::Mesh_layer*> content_mesh_layers;
-        const std::vector<const erhe::scene::Mesh_layer*> tool_mesh_layers;
-        const double                                      time;
-        const int                                         x;
-        const int                                         y;
+        const erhe::scene::Viewport& viewport;
+        const erhe::scene::ICamera*  camera;
+        const std::initializer_list<const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;
+        const std::initializer_list<const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>>& tool_mesh_spans;
+        const double                 time;
+        const int                    x;
+        const int                    y;
     };
     void render(const Render_parameters& parameters);
 
     [[nodiscard]] auto get(const int x, const int y, uint32_t& id, float& depth) -> bool;
-    [[nodiscard]] auto get(const int x, const int y, float& depth) -> Mesh_primitive;
+    [[nodiscard]] auto get(const int x, const int y) -> Id_query_result;
 
     void next_frame();
 
@@ -156,7 +157,6 @@ private:
     [[nodiscard]] auto current_id_frame_resources() -> Id_frame_resources&;
     void create_id_frame_resources();
     void update_framebuffer       (const erhe::scene::Viewport viewport);
-    void render_layer             (const erhe::scene::Mesh_layer& layer);
 
     erhe::scene::Viewport                 m_viewport{0, 0, 0, 0, true};
 
@@ -185,19 +185,14 @@ private:
         size_t                             mesh_primitive_index{0};
     };
 
-    class Layer_range
-    {
-    public:
-        uint32_t                       offset{0};
-        uint32_t                       end   {0};
-        const erhe::scene::Mesh_layer* layer {nullptr};
-    };
+    void render(
+        const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
+    );
 
-    std::vector<Range>       m_ranges;
-    std::vector<Layer_range> m_layer_ranges;
-    bool                     m_use_scissor      {true};
-    bool                     m_use_renderbuffers{true};
-    bool                     m_use_textures     {false};
+    std::vector<Range> m_ranges;
+    bool               m_use_scissor      {true};
+    bool               m_use_renderbuffers{true};
+    bool               m_use_textures     {false};
 };
 
 }

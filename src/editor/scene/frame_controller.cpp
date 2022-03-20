@@ -103,14 +103,11 @@ void Frame_controller::on_node_transform_changed()
     }
 
     auto* node = get_node();
-    node->update_transform();
     const vec4 position  = node->position_in_world();
     const vec4 direction = node->direction_in_world();
-    //const vec4 position  = node->position_in_parent();
-    //const vec4 direction = node->direction_in_parent();
 
     m_position = position;
-    float heading{0.0f};
+    float heading  {0.0f};
     float elevation{0.0f};
     erhe::toolkit::cartesian_to_heading_elevation(direction, elevation, heading);
     m_elevation = elevation;

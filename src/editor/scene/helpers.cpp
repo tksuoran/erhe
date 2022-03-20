@@ -62,7 +62,7 @@ void remove_from_raytrace_scene(
 {
     ERHE_VERIFY(node_raytrace);
 
-    raytrace_scene.detach(node_raytrace->raytrace_geometry());
+    raytrace_scene.detach(node_raytrace->raytrace_instance());
 }
 
 }

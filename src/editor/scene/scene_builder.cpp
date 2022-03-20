@@ -573,12 +573,7 @@ void Scene_builder::make_brushes()
                     .normal_style          = erhe::primitive::Normal_style::point_normals
                 }
             );
-            mesh->visibility_mask() |=
-                (
-                    Node_visibility::content     |
-                    //Node_visibility::shadow_cast |
-                    Node_visibility::id
-                );
+            mesh->set_visibility_mask (Node_visibility::visible | Node_visibility::content);
             mesh->set_parent_from_node(transform);
             m_scene_root->scene().add_to_mesh_layer(
                 *m_scene_root->content_layer(),
@@ -653,10 +648,11 @@ void Scene_builder::add_room()
 
     Instance_create_info floor_brush_instance_create_info
     {
-        .physics_world   = m_scene_root->physics_world(),
-        .world_from_node = erhe::toolkit::create_translation<float>(0.0f, -0.5001f, 0.0f),
-        .material        = floor_material,
-        .scale           = 1.0f
+        .node_visibility_flags = Node_visibility::visible | Node_visibility::content, // notably shadow cast is not enabled for floor
+        .physics_world         = m_scene_root->physics_world(),
+        .world_from_node       = erhe::toolkit::create_translation<float>(0.0f, -0.5001f, 0.0f),
+        .material              = floor_material,
+        .scale                 = 1.0f
     };
 
     auto floor_instance = m_floor_brush->make_instance(
@@ -667,10 +663,10 @@ void Scene_builder::add_room()
     //    table_material,
     //    1.0f
     //);
-    floor_instance.mesh->visibility_mask() |=
-        (Node_visibility::content     |
-         //Node_visibility::shadow_cast |
-         Node_visibility::id);
+    //floor_instance.mesh->visibility_mask() |=
+    //    (Node_visibility::content     |
+    //     //Node_visibility::shadow_cast |
+    //     Node_visibility::id);
 
     m_scene_root->scene().add_to_mesh_layer(
         *m_scene_root->content_layer(),
@@ -753,7 +749,7 @@ void Scene_builder::make_mesh_nodes()
         for (auto& entry : pack_entries)
         {
             const auto* brush = entry.brush;
-            const vec3  size  = brush->gl_primitive_geometry.bounding_box_max - brush->gl_primitive_geometry.bounding_box_min;
+            const vec3  size  = brush->gl_primitive_geometry.bounding_box.diagonal();
             const int   width = static_cast<int>(256.0f * (size.x + gap));
             const int   depth = static_cast<int>(256.0f * (size.z + gap));
             entry.rectangle = packer.Insert(
@@ -800,16 +796,21 @@ void Scene_builder::make_mesh_nodes()
               z    += 0.5f * static_cast<float>(entry.rectangle.height) / 256.0f;
               x    -= 0.5f * static_cast<float>(max_corner.x) / 256.0f;
               z    -= 0.5f * static_cast<float>(max_corner.y) / 256.0f;
-        float y     = bottom_y_pos - brush->gl_primitive_geometry.bounding_box_min.y;
+        float y     = bottom_y_pos - brush->gl_primitive_geometry.bounding_box.min.y;
         //x -= 0.5f * static_cast<float>(group_width);
         //z -= 0.5f * static_cast<float>(group_depth);
         //const auto& material = m_scene_root->materials().at(material_index);
         const Instance_create_info brush_instance_create_info
         {
-            .physics_world   = m_scene_root->physics_world(),
-            .world_from_node = erhe::toolkit::create_translation(x, y, z),
-            .material        = m_scene_root->materials().at(material_index),
-            .scale           = 1.0f
+            .node_visibility_flags = (
+                erhe::scene::Node_visibility::visible |
+                erhe::scene::Node_visibility::content |
+                erhe::scene::Node_visibility::shadow_cast
+            ),
+            .physics_world         = m_scene_root->physics_world(),
+            .world_from_node       = erhe::toolkit::create_translation(x, y, z),
+            .material              = m_scene_root->materials().at(material_index),
+            .scale                 = 1.0f
         };
         auto instance = brush->make_instance(brush_instance_create_info);
         m_scene_root->add_instance(instance);
@@ -856,12 +857,10 @@ void Scene_builder::make_cube_benchmark()
                 auto mesh = std::make_shared<erhe::scene::Mesh>("", primitive);
                 mesh->set_world_from_node(erhe::toolkit::create_translation<float>(pos));
                 m_scene_root->add(mesh);
-                mesh->visibility_mask() |=
-                    (
-                        Node_visibility::content     |
-                        Node_visibility::shadow_cast |
-                        Node_visibility::id
-                    );
+                mesh->set_visibility_mask(
+                    Node_visibility::content |
+                    Node_visibility::shadow_cast
+                );
             }
         }
     }

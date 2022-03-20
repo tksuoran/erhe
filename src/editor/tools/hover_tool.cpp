@@ -88,13 +88,15 @@ void Hover_tool::on_inactive()
 
 auto Hover_tool::try_call() -> bool
 {
-    m_hover_content        = m_pointer_context->hovering_over_content();
-    m_hover_tool           = m_pointer_context->hovering_over_tool();
-    m_hover_position_world = m_hover_content ? m_pointer_context->position_in_world() : nonstd::optional<vec3>{};
-    m_hover_normal         = m_hover_content ? m_pointer_context->hover_normal()      : nonstd::optional<vec3>{};
+    const auto& content = m_pointer_context->get_hover(Pointer_context::content_slot);
+    const auto& tool    = m_pointer_context->get_hover(Pointer_context::tool_slot);
+    m_hover_content        = content.valid && content.mesh;
+    m_hover_tool           = tool   .valid && tool   .mesh;
+    m_hover_position_world = content.valid ? content.position : nonstd::optional<vec3>{};
+    m_hover_normal         = content.valid ? content.normal   : nonstd::optional<vec3>{};
     if (
-        (m_pointer_context->hover_mesh()      != m_hover_mesh) ||
-        (m_pointer_context->hover_primitive() != m_hover_primitive_index)
+        (content.mesh      != m_hover_mesh           ) ||
+        (content.primitive != m_hover_primitive_index)
     )
     {
         deselect();
@@ -111,7 +113,7 @@ void Hover_tool::tool_render(const Render_context& context)
     auto& line_renderer = m_line_renderer_set->hidden;
 
     constexpr uint32_t red   = 0xff0000ffu;
-    constexpr uint32_t green = 0xff00ff00u;
+    //constexpr uint32_t green = 0xff00ff00u;
     constexpr uint32_t blue  = 0xffff0000u;
     constexpr uint32_t white = 0xffffffffu;
 
@@ -171,7 +173,7 @@ void Hover_tool::tool_render(const Render_context& context)
                 10.0f
             );
         }
-#if 1
+#if 0
         if (m_pointer_context->raytrace_hit_position().has_value())
         {
             const vec3 p0 = m_pointer_context->raytrace_hit_position().value();
@@ -238,14 +240,15 @@ void Hover_tool::select()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_pointer_context->hover_mesh() == nullptr)
+    const auto& hover = m_pointer_context->get_hover(Pointer_context::content_slot);
+    if (!hover.valid || !hover.mesh)
     {
         return;
     }
 
     // Update hover information
-    m_hover_mesh            = m_pointer_context->hover_mesh();
-    m_hover_primitive_index = m_pointer_context->hover_primitive();
+    m_hover_mesh            = hover.mesh;
+    m_hover_primitive_index = hover.primitive;
 
     if (m_enable_color_highlight)
     {

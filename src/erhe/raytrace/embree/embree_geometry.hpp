@@ -20,12 +20,12 @@ public:
     ~Embree_geometry() noexcept override;
 
     // Implements IGeometry
-    void commit () override;
-    void enable () override;
-    void disable() override;
+    void commit       () override;
+    void enable       () override;
+    void disable      () override;
     void set_user_data(void* ptr) override;
     [[nodiscard]] auto get_user_data() -> void* override;
-    [[nodiscard]] auto debug_label() const -> std::string_view override;
+    [[nodiscard]] auto debug_label  () const -> std::string_view override;
 
     void set_vertex_attribute_count(const unsigned int count) override;
 
@@ -33,7 +33,7 @@ public:
         const Buffer_type  type,
         const unsigned int slot,
         const Format       format,
-        const IBuffer*     buffer,
+        IBuffer* const     buffer,
         const size_t       byte_offset,
         const size_t       byte_stride,
         const size_t       item_count

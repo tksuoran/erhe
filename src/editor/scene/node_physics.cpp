@@ -57,7 +57,6 @@ void Node_physics::on_node_transform_changed()
         return;
     }
 
-    get_node()->update_transform();
     const erhe::physics::Transform world_from_node = get_world_from_node();
     ERHE_VERIFY(m_rigid_body);
     if (m_rigid_body->get_motion_mode() == Motion_mode::e_static)

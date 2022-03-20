@@ -107,6 +107,23 @@ void Embree_instance::set_user_data(void* ptr)
     m_user_data = ptr;
 }
 
+auto Embree_instance::get_transform() -> glm::mat4
+{
+    glm::mat4 transform{1.0f};
+    rtcGetGeometryTransform(
+        m_geometry,
+        0.0f,
+        RTC_FORMAT_FLOAT4X4_COLUMN_MAJOR,
+        &transform[0][0]
+    );
+    return transform;
+}
+
+auto Embree_instance::get_scene() -> IScene*
+{
+    return m_scene;
+}
+
 auto Embree_instance::get_user_data() -> void*
 {
     return m_user_data;

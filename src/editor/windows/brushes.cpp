@@ -258,20 +258,16 @@ void Brushes::on_enable_state_changed()
 
 void Brushes::on_motion()
 {
-    m_hover_content     = m_pointer_context->hovering_over_content();
-    m_hover_tool        = m_pointer_context->hovering_over_tool();
-    m_hover_mesh        = m_pointer_context->hover_mesh();
-    m_hover_primitive   = m_pointer_context->hover_primitive();
-    m_hover_local_index = m_pointer_context->hover_local_index();
-    m_hover_geometry    = m_pointer_context->hover_geometry();
-
-    m_hover_position = m_hover_content
-        ? m_pointer_context->position_in_world()
-        : nonstd::optional<vec3>{};
-
-    m_hover_normal = m_hover_content
-        ? m_pointer_context->hover_normal()
-        : nonstd::optional<vec3>{};
+    const auto& content = m_pointer_context->get_hover(Pointer_context::content_slot);
+    const auto& tool    = m_pointer_context->get_hover(Pointer_context::tool_slot);
+    m_hover_content     = content.valid;
+    m_hover_tool        = tool.valid;
+    m_hover_mesh        = content.mesh;
+    m_hover_primitive   = content.primitive;
+    m_hover_local_index = content.local_index;
+    m_hover_geometry    = content.geometry;
+    m_hover_position    = content.position;
+    m_hover_normal      = content.normal;
 
     if (m_hover_mesh && m_hover_position.has_value())
     {
@@ -407,29 +403,23 @@ void Brushes::do_insert_operation()
     //const auto material         = m_materials->selected_material();
     const Instance_create_info brush_instance_create_info
     {
-        .physics_world   = m_scene_root->physics_world(),
-        .world_from_node = m_hover_mesh->world_from_node() * hover_from_brush,
-        .material        = m_materials->selected_material(),
-        .scale           = m_transform_scale
+        .node_visibility_flags = (erhe::scene::Node_visibility::content | erhe::scene::Node_visibility::shadow_cast),
+        .physics_world         = m_scene_root->physics_world(),
+        .world_from_node       = m_hover_mesh->world_from_node() * hover_from_brush,
+        .material              = m_materials->selected_material(),
+        .scale                 = m_transform_scale
     };
     const auto instance = m_brush->make_instance(brush_instance_create_info);
-    //    world_from_brush,
-    //    material,
-    //    m_transform_scale
-    //);
-    instance.mesh->visibility_mask() &= ~Node_visibility::brush;
-    instance.mesh->visibility_mask() |=
-        (Node_visibility::content     |
-         Node_visibility::shadow_cast |
-         Node_visibility::id);
 
     auto op = std::make_shared<Mesh_insert_remove_operation>(
         Mesh_insert_remove_operation::Parameters{
             .scene          = m_scene_root->scene(),
             .layer          = *m_scene_root->content_layer(),
             .physics_world  = m_scene_root->physics_world(),
+            .raytrace_scene = m_scene_root->raytrace_scene(),
             .mesh           = instance.mesh,
             .node_physics   = instance.node_physics,
+            .node_raytrace  = instance.node_raytrace,
             .parent         = m_hover_mesh,
             .mode           = Scene_item_operation::Mode::insert
         }
@@ -466,10 +456,9 @@ void Brushes::add_brush_mesh()
             .normal_style          = m_brush->normal_style
         }
     );
+    m_brush_mesh->set_visibility_mask(Node_visibility::content | Node_visibility::brush);
     m_scene_root->add(m_brush_mesh, m_scene_root->brush_layer());
 
-    m_brush_mesh->visibility_mask() &= ~(Node_visibility::id);
-    m_brush_mesh->visibility_mask() |= Node_visibility::brush;
     update_mesh_node_transform();
 }
 

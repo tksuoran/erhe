@@ -70,6 +70,12 @@ auto Debug_view_window::get_size() const -> glm::vec2
     };
 }
 
+template <typename T>
+[[nodiscard]] inline auto as_span(const T& value) -> gsl::span<const T>
+{
+    return gsl::span<const T>(&value, 1);
+}
+
 void Debug_view_window::render()
 {
     if (
@@ -83,11 +89,12 @@ void Debug_view_window::render()
     erhe::graphics::Scoped_debug_group pass_scope{m_debug_label};
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
+
     m_forward_renderer->render_fullscreen(
         Forward_renderer::Render_parameters{
             .viewport    = m_viewport,
-            .mesh_layers = {},
-            .light_layer = m_scene_root->light_layer(),
+            .mesh_spans  = {},
+            .lights      = m_scene_root->light_layer()->lights,
             .materials   = m_scene_root->materials(),
             .passes      = { &m_renderpass }
         }

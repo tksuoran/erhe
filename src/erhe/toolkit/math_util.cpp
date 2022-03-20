@@ -516,4 +516,104 @@ auto spherical_to_cartesian_iso(const float theta, const float phi) -> vec3
         };
 }
 
+void calculate_bounding_volume(
+    const Point_source& point_source,
+    Bounding_box&       bounding_box,
+    Bounding_sphere&    bounding_sphere
+)
+{
+    bounding_box.min = vec3{std::numeric_limits<float>::max()};
+    bounding_box.max = vec3{std::numeric_limits<float>::lowest()};
+    bounding_sphere.center = vec3{0.0f};
+    bounding_sphere.radius = 0.0f;
+
+    glm::vec3 x_min{std::numeric_limits<float>::max()};
+    glm::vec3 y_min{std::numeric_limits<float>::max()};
+    glm::vec3 z_min{std::numeric_limits<float>::max()};
+    glm::vec3 x_max{std::numeric_limits<float>::lowest()};
+    glm::vec3 y_max{std::numeric_limits<float>::lowest()};
+    glm::vec3 z_max{std::numeric_limits<float>::lowest()};
+
+    if (point_source.point_count() == 0)
+    {
+        bounding_box.min = vec3{0.0f};
+        bounding_box.max = vec3{0.0f};
+        return;
+    }
+    for (size_t i = 0, end = point_source.point_count(); i < end; ++i)
+    {
+        const auto point = point_source.get_point(i);
+        if (point.has_value())
+        {
+            const vec3 position = point.value();
+            bounding_box.min = glm::min(bounding_box.min, position);
+            bounding_box.max = glm::max(bounding_box.max, position);
+
+            if (position.x < x_min.x) x_min = position;
+            if (position.x > x_max.x) x_max = position;
+            if (position.y < y_min.y) y_min = position;
+            if (position.y > y_max.y) y_max = position;
+            if (position.z < z_min.z) z_min = position;
+            if (position.z > z_max.z) z_max = position;
+        }
+    }
+
+    // Ritter's bounding sphere
+    // - Pick a point x from P, search a point y in P, which has the largest distance from x;
+    // - Search a point z in P, which has the largest distance from y.
+    //   Set up an initial ball B, with its centre as the midpoint of y and z,
+    //   the radius as half of the distance between y and z;
+    // - If all points in P are within ball B, then we get a bounding sphere.
+    //   Otherwise, let p be a point outside the ball, construct a new ball
+    //   covering both point p and previous ball.
+    //   Repeat this step until all points are covered.
+    const auto x_span_v = x_max - x_min;
+    const auto y_span_v = y_max - y_min;
+    const auto z_span_v = z_max - z_min;
+    const auto x_span   = glm::dot(x_span_v, x_span_v);
+    const auto y_span   = glm::dot(y_span_v, y_span_v);
+    const auto z_span   = glm::dot(z_span_v, z_span_v);
+
+    auto dia_1    = x_min;
+    auto dia_2    = x_max;
+    auto max_span = x_span;
+    if (y_span > max_span)
+    {
+        max_span = y_span;
+        dia_1    = y_min;
+        dia_2    = y_max;
+    }
+    if (z_span > max_span)
+    {
+        dia_1 = z_min;
+        dia_2 = z_max;
+    }
+
+    auto       center = (dia_1 + dia_2) / 2.0f;
+    const auto d0     = dia_2 - center;
+    auto       rad_sq = glm::dot(d0, d0);
+    auto       rad    = std::sqrt(rad_sq);
+
+    for (size_t i = 0, end = point_source.point_count(); i < end; ++i)
+    {
+        const auto point = point_source.get_point(i);
+        if (point.has_value())
+        {
+            const vec3 position    = point.value();
+            const auto d           = position - center;
+            const auto old_to_p_sq = glm::dot(d, d);
+            if (old_to_p_sq > rad_sq)
+            {
+                const auto old_to_p = std::sqrt(old_to_p_sq);
+                rad    = (rad + old_to_p) / 2.0f;
+                rad_sq = rad * rad;
+                const auto old_to_new = old_to_p - rad;
+                center = (rad * center + old_to_new * position) / old_to_p;
+            }
+        }
+    }
+    bounding_sphere.center = center;
+    bounding_sphere.radius = rad;
+}
+
 } // namespace erhe::toolkit

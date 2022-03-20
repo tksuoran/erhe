@@ -151,32 +151,33 @@ void Shadow_renderer::render(const Render_parameters& parameters)
     erhe::graphics::Scoped_debug_group debug_group{c_shadow_renderer_render};
     erhe::graphics::Scoped_gpu_timer   timer      {*m_gpu_timer.get()};
 
-    const auto& mesh_layers = parameters.mesh_layers;
-    const auto& light_layer = *parameters.light_layer;
+    const auto& mesh_spans = parameters.mesh_spans;
+    const auto& lights     = parameters.lights;
 
     m_pipeline_state_tracker->execute(m_pipeline);
     gl::viewport(m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
 
     erhe::scene::Visibility_filter shadow_filter{
-        .require_all_bits_set           = erhe::scene::Node_visibility::shadow_cast,
+        .require_all_bits_set           = erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::shadow_cast,
         .require_at_least_one_bit_set   = 0u,
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u
     };
 
     update_light_buffer(
-        light_layer,
+        lights,
+        glm::vec3{0.0f},
         m_viewport,
         erhe::graphics::get_handle(
             *m_texture.get(),
             *get<Programs>()->nearest_sampler.get()
         )
     );
-    for (auto mesh_layer : mesh_layers)
+    for (const auto& meshes : mesh_spans)
     {
-        update_primitive_buffer(*mesh_layer, shadow_filter);
+        update_primitive_buffer(meshes, shadow_filter);
         const auto draw_indirect_buffer_range = update_draw_indirect_buffer(
-            *mesh_layer,
+            meshes,
             erhe::primitive::Primitive_mode::polygon_fill,
             shadow_filter
         );
@@ -190,7 +191,7 @@ void Shadow_renderer::render(const Render_parameters& parameters)
         bind_draw_indirect_buffer();
 
         size_t light_index = 0;
-        for (const auto& light : light_layer.lights)
+        for (const auto& light : lights)
         {
             if (light_index >= s_max_light_count)
             {
@@ -204,7 +205,7 @@ void Shadow_renderer::render(const Render_parameters& parameters)
 
             // if (light_index == m_slot)
             {
-                update_camera_buffer(*light.get(), m_viewport);
+                update_camera_buffer(*light, m_viewport);
 
                 gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffers[light_index]->gl_name());
                 gl::clear_buffer_fv(gl::Buffer::depth, 0, m_configuration->depth_clear_value_pointer());
@@ -224,7 +225,7 @@ void Shadow_renderer::render(const Render_parameters& parameters)
     }
 
     ++m_slot;
-    if (m_slot >= light_layer.lights.size())
+    if (m_slot >= lights.size())
     {
         m_slot = 0;
     }

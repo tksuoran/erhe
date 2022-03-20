@@ -11,6 +11,8 @@ erhe_target_sources_grouped(
     math_util.hpp
     optional.hpp
     profile.hpp
+    timer.cpp
+    timer.hpp
     timestamp.cpp
     timestamp.hpp
     verify.hpp

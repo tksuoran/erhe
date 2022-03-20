@@ -3,6 +3,7 @@
 #include "erhe/raytrace/embree/embree_geometry.hpp"
 #include "erhe/raytrace/embree/embree_instance.hpp"
 #include "erhe/raytrace/log.hpp"
+#include "erhe/raytrace/ray.hpp"
 
 namespace erhe::raytrace
 {

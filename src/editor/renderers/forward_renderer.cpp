@@ -84,12 +84,12 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     const auto&    viewport              = parameters.viewport;
     const auto*    camera                = parameters.camera;
-    const auto&    mesh_layers           = parameters.mesh_layers;
-    const auto*    light_layer           = parameters.light_layer;
+    const auto&    mesh_spans            = parameters.mesh_spans;
+    const auto&    lights                = parameters.lights;
     const auto&    materials             = parameters.materials;
     const auto&    passes                = parameters.passes;
     const auto&    visibility_filter     = parameters.visibility_filter;
-    const bool     enable_shadows        = m_shadow_renderer && (light_layer != nullptr);
+    const bool     enable_shadows        = m_shadow_renderer && (!lights.empty());
     const uint64_t shadow_texture_handle = enable_shadows
         ?
             erhe::graphics::get_handle(
@@ -108,10 +108,11 @@ void Forward_renderer::render(const Render_parameters& parameters)
     }
     update_material_buffer(materials);
     bind_material_buffer();
-    if (light_layer != nullptr)
+    if (!lights.empty())
     {
         update_light_buffer(
-            *light_layer,
+            lights,
+            parameters.ambient_light,
             m_shadow_renderer->viewport(),
             shadow_texture_handle
         );
@@ -139,12 +140,12 @@ void Forward_renderer::render(const Render_parameters& parameters)
         erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
 
         m_pipeline_state_tracker->execute(pipeline);
-        for (auto mesh_layer : mesh_layers)
+        for (const auto& meshes : mesh_spans)
         {
             ERHE_PROFILE_GPU_SCOPE(c_forward_renderer_render);
 
-            update_primitive_buffer(*mesh_layer, visibility_filter);
-            const auto draw_indirect_buffer_range = update_draw_indirect_buffer(*mesh_layer, primitive_mode, visibility_filter);
+            update_primitive_buffer(meshes, visibility_filter);
+            const auto draw_indirect_buffer_range = update_draw_indirect_buffer(meshes, primitive_mode, visibility_filter);
             if (draw_indirect_buffer_range.draw_indirect_count == 0)
             {
                 continue;
@@ -180,9 +181,9 @@ void Forward_renderer::render_fullscreen(
 
     const auto&    viewport              = parameters.viewport;
     const auto*    camera                = parameters.camera;
-    const auto*    light_layer           = parameters.light_layer;
+    const auto&    lights                = parameters.lights;
     const auto&    passes                = parameters.passes;
-    const bool     enable_shadows        = m_shadow_renderer && (light_layer != nullptr);
+    const bool     enable_shadows        = m_shadow_renderer && (!lights.empty());
     const uint64_t shadow_texture_handle = enable_shadows
         ?
             erhe::graphics::get_handle(
@@ -199,10 +200,11 @@ void Forward_renderer::render_fullscreen(
         update_camera_buffer(*camera, viewport);
         bind_camera_buffer  ();
     }
-    if (light_layer != nullptr)
+    if (!lights.empty())
     {
         update_light_buffer(
-            *light_layer,
+            lights,
+            parameters.ambient_light,
             m_shadow_renderer->viewport(),
             shadow_texture_handle
         );

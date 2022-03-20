@@ -685,4 +685,51 @@ template <typename T>
     return angle;
 }
 
+class Bounding_box
+{
+public:
+    [[nodiscard]] auto diagonal() const
+    {
+        return max - min;
+    }
+    [[nodiscard]] auto center() const
+    {
+        return (max + min) * 0.5f;
+    }
+    [[nodiscard]] auto volume() const
+    {
+        const auto d = diagonal();
+        return d.x * d.y * d.z;
+    }
+
+    glm::vec3 min{std::numeric_limits<float>::max()}; // bounding box
+    glm::vec3 max{std::numeric_limits<float>::lowest()};
+
+};
+
+class Bounding_sphere
+{
+public:
+    [[nodiscard]] auto volume() const
+    {
+        return (4.0 / 3.0) * glm::pi<float>() * radius * radius * radius;
+    }
+
+    glm::vec3 center{0.0f};
+    float     radius{0.0f};
+};
+
+class Point_source
+{
+public:
+    virtual auto point_count() const -> size_t = 0;
+    virtual auto get_point  (size_t index) const -> std::optional<glm::vec3> = 0;
+};
+
+void calculate_bounding_volume(
+    const Point_source& point_source,
+    Bounding_box&       bounding_box,
+    Bounding_sphere&    bounding_sphere
+);
+
 } // namespace erhe::toolkit

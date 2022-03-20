@@ -7,6 +7,7 @@
 #include "erhe/gl/wrapper_enums.hpp"
 
 #include <glm/glm.hpp>
+#include <gsl/gsl>
 
 #include <algorithm>
 #include <array>
@@ -95,8 +96,6 @@ public:
         size_t                             primitive_index{0};
     };
 
-    using Material_collection = std::vector<std::shared_ptr<erhe::primitive::Material>>;
-
     explicit Base_renderer(const std::string& name);
     virtual ~Base_renderer() noexcept;
 
@@ -118,20 +117,23 @@ public:
 
     // Can discard return value
     auto update_primitive_buffer(
-        const erhe::scene::Mesh_layer&        mesh_layer,
-        const erhe::scene::Visibility_filter& visibility_filter,
-        const bool                            use_id_ranges = false
+        const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+        const erhe::scene::Visibility_filter&                      visibility_filter,
+        const bool                                                 use_id_ranges = false
     ) -> Buffer_range;
 
     // Can discard return value
     auto update_light_buffer(
-        const erhe::scene::Light_layer& light_layer,
-        const erhe::scene::Viewport     light_texture_viewport,
-        const uint64_t                  shadow_map_texture_handle
+        const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
+        const glm::vec3&                                            ambient_light,
+        const erhe::scene::Viewport                                 light_texture_viewport,
+        const uint64_t                                              shadow_map_texture_handle
     ) -> Buffer_range;
 
     // Can discard return value
-    auto update_material_buffer(const Material_collection& materials) -> Buffer_range;
+    auto update_material_buffer(
+        const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials
+    ) -> Buffer_range;
 
     // Can discard return value
     auto update_camera_buffer(
@@ -141,9 +143,9 @@ public:
 
     // Can discard return value
     auto update_draw_indirect_buffer(
-        const erhe::scene::Mesh_layer&        mesh_layer,
-        const erhe::primitive::Primitive_mode primitive_mode,
-        const erhe::scene::Visibility_filter& visibility_filter
+        const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+        const erhe::primitive::Primitive_mode                      primitive_mode,
+        const erhe::scene::Visibility_filter&                      visibility_filter
     ) -> Draw_indirect_buffer_range;
 
     void bind_material_buffer     ();

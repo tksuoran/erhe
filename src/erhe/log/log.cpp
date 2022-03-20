@@ -175,9 +175,10 @@ Indenter::~Indenter()
     Log::indent(-m_amount);
 }
 
-void Category::set_sink(ILog_sink* sink)
+void Category::set_sink(ILog_sink* sink, const bool log_to_console)
 {
     m_sink = sink;
+    m_log_to_console = log_to_console;
 }
 
 void Category::write(const bool indent, const int level, const char* format, fmt::format_args args)
@@ -193,7 +194,7 @@ void Category::write(const bool indent, const int level, const char* format, fmt
     {
         m_sink->write(m_color, text);
     }
-    //else
+    if (m_log_to_console)
     {
         write(indent, text);
     }

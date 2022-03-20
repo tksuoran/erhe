@@ -3,6 +3,8 @@
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/primitive/primitive.hpp"
 
+#include <gsl/gsl>
+
 #include <functional>
 
 namespace editor
@@ -16,6 +18,5 @@ public:
     std::function<void()>           begin;
     std::function<void()>           end;
 };
-
 
 } // namespace editor

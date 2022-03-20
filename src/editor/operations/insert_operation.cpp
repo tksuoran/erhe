@@ -86,6 +86,10 @@ void Mesh_insert_remove_operation::execute(
         {
             add_to_physics_world(m_parameters.physics_world, m_parameters.node_physics);
         }
+        if (m_parameters.node_raytrace)
+        {
+            add_to_raytrace_scene(m_parameters.raytrace_scene, m_parameters.node_raytrace);
+        }
     }
     else
     {
@@ -94,6 +98,10 @@ void Mesh_insert_remove_operation::execute(
         if (m_parameters.node_physics)
         {
             remove_from_physics_world(m_parameters.physics_world, *m_parameters.node_physics.get());
+        }
+        if (m_parameters.node_raytrace)
+        {
+            remove_from_raytrace_scene(m_parameters.raytrace_scene, m_parameters.node_raytrace);
         }
         if (m_parameters.parent)
         {

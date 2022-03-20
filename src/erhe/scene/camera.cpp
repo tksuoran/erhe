@@ -13,7 +13,7 @@ auto is_icamera(const Node* const node) -> bool
     {
         return false;
     }
-    return (node->flag_bits() & Node_flag_bit::is_icamera) == Node_flag_bit::is_icamera;
+    return (node->get_flag_bits() & Node_flag_bit::is_icamera) == Node_flag_bit::is_icamera;
 }
 
 auto is_icamera(const std::shared_ptr<Node>& node) -> bool
@@ -27,7 +27,7 @@ auto as_icamera(Node* const node) -> ICamera*
     {
         return nullptr;
     }
-    if ((node->flag_bits() & Node_flag_bit::is_icamera) == 0)
+    if ((node->get_flag_bits() & Node_flag_bit::is_icamera) == 0)
     {
         return nullptr;
     }
@@ -40,7 +40,7 @@ auto as_icamera(const std::shared_ptr<Node>& node) -> std::shared_ptr<ICamera>
     {
         return {};
     }
-    if ((node->flag_bits() & Node_flag_bit::is_icamera) == 0)
+    if ((node->get_flag_bits() & Node_flag_bit::is_icamera) == 0)
     {
         return {};
     }
@@ -53,7 +53,7 @@ auto is_camera(const Node* const node) -> bool
     {
         return false;
     }
-    return (node->flag_bits() & Node_flag_bit::is_camera) == Node_flag_bit::is_camera;
+    return (node->get_flag_bits() & Node_flag_bit::is_camera) == Node_flag_bit::is_camera;
 }
 
 auto is_camera(const std::shared_ptr<Node>& node) -> bool
@@ -67,7 +67,7 @@ auto as_camera(Node* const node) -> Camera*
     {
         return nullptr;
     }
-    if ((node->flag_bits() & Node_flag_bit::is_camera) == 0)
+    if ((node->get_flag_bits() & Node_flag_bit::is_camera) == 0)
     {
         return nullptr;
     }
@@ -80,7 +80,7 @@ auto as_camera(const std::shared_ptr<Node>& node) -> std::shared_ptr<Camera>
     {
         return {};
     }
-    if ((node->flag_bits() & Node_flag_bit::is_camera) == 0)
+    if ((node->get_flag_bits() & Node_flag_bit::is_camera) == 0)
     {
         return {};
     }

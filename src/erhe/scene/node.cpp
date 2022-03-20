@@ -111,7 +111,8 @@ void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
     node_data.attachments.push_back(attachment);
     attachment->on_attached_to(this);
     sanity_check();
-    attachment->on_node_transform_changed();
+    update_transform();
+    on_visibility_mask_changed();
     sanity_check();
 }
 
@@ -424,7 +425,7 @@ auto Node::detach(
         child_node->set_parent_from_node(world_from_node);
         child_node->set_depth_recursive (0);
 
-        // Attach to the implicit root node, 
+        // Attach to the implicit root node,
         if (
             primary_operation &&
             (root_node.get() != this)
@@ -480,6 +481,14 @@ void Node::on_transform_changed()
     for (const auto& attachment : node_data.attachments)
     {
         attachment->on_node_transform_changed();
+    }
+}
+
+void Node::on_visibility_mask_changed()
+{
+    for (const auto& attachment : node_data.attachments)
+    {
+        attachment->on_node_visibility_mask_changed(node_data.visibility_mask);
     }
 }
 
@@ -560,6 +569,8 @@ void Node::update_transform(const uint64_t serial)
         : current_parent
             ? current_parent->node_data.last_transform_update_serial
             : node_data.last_transform_update_serial;
+
+    on_transform_changed();
 }
 
 void Node::update_transform_recursive(const uint64_t serial)
@@ -673,24 +684,33 @@ auto Node::attachments() const -> const std::vector<std::shared_ptr<INode_attach
     return node_data.attachments;
 }
 
-auto Node::visibility_mask() const -> uint64_t
+auto Node::get_visibility_mask() const -> uint64_t
 {
     return node_data.visibility_mask;
 }
 
-auto Node::visibility_mask() -> uint64_t&
+void Node::set_visibility_mask(const uint64_t value)
 {
-    return node_data.visibility_mask;
+    if (node_data.visibility_mask == value)
+    {
+        return;
+    }
+    node_data.visibility_mask = value;
+    on_visibility_mask_changed();
 }
 
-auto Node::flag_bits() const -> uint64_t
+auto Node::get_flag_bits() const -> uint64_t
 {
     return node_data.flag_bits;
 }
 
-auto Node::flag_bits() -> uint64_t&
+void Node::set_flag_bits(const uint64_t value)
 {
-    return node_data.flag_bits;
+    if (node_data.flag_bits == value)
+    {
+        return;
+    }
+    node_data.flag_bits = value;
 }
 
 auto Node::parent_from_node_transform() const -> const Transform&
@@ -820,7 +840,7 @@ void Node::set_world_from_node(const Transform& transform)
 
 auto is_empty(const Node* const node) -> bool
 {
-    return (node->flag_bits() & Node_flag_bit::is_empty) == Node_flag_bit::is_empty;
+    return (node->get_flag_bits() & Node_flag_bit::is_empty) == Node_flag_bit::is_empty;
 }
 
 auto is_empty(const std::shared_ptr<Node>& node) -> bool
@@ -830,7 +850,7 @@ auto is_empty(const std::shared_ptr<Node>& node) -> bool
 
 auto is_transform(Node* const node) -> bool
 {
-    return (node->flag_bits() & Node_flag_bit::is_transform) == Node_flag_bit::is_transform;
+    return (node->get_flag_bits() & Node_flag_bit::is_transform) == Node_flag_bit::is_transform;
 }
 
 auto is_transform(const std::shared_ptr<Node>& node) -> bool

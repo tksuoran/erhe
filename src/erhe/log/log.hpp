@@ -93,7 +93,7 @@ public:
     {
     }
 
-    void set_sink(ILog_sink* sink);
+    void set_sink(ILog_sink* sink, const bool log_to_console = true);
 
     void write(const bool indent, const int level, const char* format, fmt::format_args args);
 
@@ -159,11 +159,12 @@ protected:
     void write(const bool indent, const std::string& text);
 
     Color      m_color;
-    int        m_level    {Level::LEVEL_ALL};
-    Colorizer  m_colorizer{Colorizer::default_};
-    int        m_indent   {0};
-    bool       m_newline  {true};
-    ILog_sink* m_sink     {nullptr};
+    int        m_level         {Level::LEVEL_ALL};
+    Colorizer  m_colorizer     {Colorizer::default_};
+    int        m_indent        {0};
+    bool       m_newline       {true};
+    ILog_sink* m_sink          {nullptr};
+    bool       m_log_to_console{true};
 };
 
 class Log

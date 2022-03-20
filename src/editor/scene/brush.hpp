@@ -80,6 +80,7 @@ public:
 class Instance_create_info final
 {
 public:
+    uint64_t                                   node_visibility_flags{0};
     erhe::physics::IWorld&                     physics_world;
     glm::mat4                                  world_from_node;
     std::shared_ptr<erhe::primitive::Material> material;

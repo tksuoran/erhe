@@ -216,13 +216,6 @@ auto Scene_root::scene() const -> const erhe::scene::Scene&
 
 void Scene_root::add_instance(const Instance& instance)
 {
-    instance.mesh->visibility_mask() |=
-        (
-            Node_visibility::content     |
-            Node_visibility::shadow_cast |
-            Node_visibility::id
-        );
-
     scene().add_to_mesh_layer(
         *content_layer(),
         instance.mesh
