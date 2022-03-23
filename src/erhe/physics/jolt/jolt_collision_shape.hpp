@@ -25,10 +25,11 @@ public:
     ~Jolt_collision_shape() noexcept override = default;
 
     // Implements ICollision_shape
-    void calculate_local_inertia(float mass, glm::vec3& inertia) const override
+    void calculate_local_inertia(float mass, glm::mat4& inertia) const override
     {
-        static_cast<void>(mass);
-        inertia = glm::vec3{0.0f};
+        JPH::MassProperties mass_properties = m_jolt_shape->GetMassProperties();
+        mass_properties.ScaleToMass(mass);
+        inertia = from_jolt(mass_properties.mInertia);
     }
 
     auto is_convex() const -> bool override
@@ -36,19 +37,21 @@ public:
         return true;
     }
 
-    virtual void calculate_principal_axis_transform(
-        const std::vector<float>& /*child_masses*/,
-        Transform&                /*principal_transform*/,
-        glm::vec3&                /*inertia*/
-    ) override
-    {
-        //assert(false);
-    }
+    //virtual void calculate_principal_axis_transform(
+    //    const std::vector<float>& /*child_masses*/,
+    //    Transform&                /*principal_transform*/,
+    //    glm::mat4&                /*inertia*/
+    //) override
+    //{
+    //    //assert(false);
+    //}
 
     auto get_jolt_shape() -> JPH::ShapeRefC
     {
         return m_jolt_shape;
     }
+
+    virtual auto get_shape_settings() -> JPH::ShapeSettings& = 0;
 
 protected:
     JPH::ShapeRefC m_jolt_shape;
@@ -61,12 +64,20 @@ public:
     ~Jolt_box_shape() noexcept override = default;
 
     explicit Jolt_box_shape(const glm::vec3 half_extents)
+        : m_shape_settings{to_jolt(half_extents)}
     {
-	    JPH::BoxShapeSettings shape_settings{to_jolt(half_extents)};
-	    auto result = shape_settings.Create();
+	    auto result = m_shape_settings.Create();
         ERHE_VERIFY(result.IsValid());
         m_jolt_shape = result.Get();
     }
+
+    auto get_shape_settings() -> JPH::ShapeSettings& override
+    {
+        return m_shape_settings;
+    }
+
+private:
+    JPH::BoxShapeSettings m_shape_settings;
 };
 
 class Jolt_capsule_shape
@@ -74,18 +85,26 @@ class Jolt_capsule_shape
 {
 public:
     Jolt_capsule_shape(const Axis axis, const float radius, const float length)
+        : m_shape_settings{length * 0.5f, radius}
     {
         ERHE_VERIFY(axis == Axis::Y);
-	    JPH::CapsuleShapeSettings shape_settings{length * 0.5f, radius};
-	    auto result = shape_settings.Create();
+	    auto result = m_shape_settings.Create();
         ERHE_VERIFY(result.IsValid());
         m_jolt_shape = result.Get();
     }
 
     ~Jolt_capsule_shape() noexcept override = default;
+
+    auto get_shape_settings() -> JPH::ShapeSettings& override
+    {
+        return m_shape_settings;
+    }
+
+private:
+    JPH::CapsuleShapeSettings m_shape_settings;
 };
 
-
+#if 0
 class Jolt_cone_shape
     : public Jolt_collision_shape
 {
@@ -104,25 +123,32 @@ private:
     //float m_base_radius;
     //float m_height;
 };
+#endif
 
 class Jolt_cylinder_shape
     : public Jolt_collision_shape
 {
 public:
     Jolt_cylinder_shape(const Axis axis, const glm::vec3 half_extents)
+        : m_shape_settings{half_extents.x, half_extents.y}
     {
         ERHE_VERIFY(axis == Axis::Y);
-	    JPH::CylinderShapeSettings shape_settings{half_extents.x, half_extents.y};
-	    auto result = shape_settings.Create();
+	    auto result = m_shape_settings.Create();
         ERHE_VERIFY(result.IsValid());
         m_jolt_shape = result.Get();
     }
 
     ~Jolt_cylinder_shape() noexcept override = default;
 
+    auto get_shape_settings() -> JPH::ShapeSettings& override
+    {
+        return m_shape_settings;
+    }
+
 private:
     //Axis m_axis;
     //glm::vec3 m_half_extents;
+    JPH::CylinderShapeSettings m_shape_settings;
 };
 
 
@@ -131,17 +157,23 @@ class Jolt_sphere_shape
 {
 public:
     explicit Jolt_sphere_shape(const float radius)
+        : m_shape_settings{radius}
     {
-	    JPH::SphereShapeSettings shape_settings{radius};
-	    auto result = shape_settings.Create();
+	    auto result = m_shape_settings.Create();
         ERHE_VERIFY(result.IsValid());
         m_jolt_shape = result.Get();
     }
 
     ~Jolt_sphere_shape() noexcept override = default;
 
+    auto get_shape_settings() -> JPH::ShapeSettings& override
+    {
+        return m_shape_settings;
+    }
+
 private:
     //float m_radius;
+	JPH::SphereShapeSettings m_shape_settings;
 };
 
 } // namespace erhe::physics

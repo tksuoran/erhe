@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe/physics/iworld.hpp"
+#include "erhe/physics/imotion_state.hpp"
 
 #include "Jolt.h"
 #include <Core/TempAllocator.h>
@@ -8,6 +9,8 @@
 #include <Physics/PhysicsSettings.h>
 #include "Physics/PhysicsSystem.h"
 #include "Physics/Collision/BroadPhase/BroadPhaseLayer.h"
+#include "Physics/Collision/ContactListener.h"
+#include "Physics/Body/BodyActivationListener.h"
 
 #include <memory>
 #include <vector>
@@ -16,15 +19,34 @@ namespace erhe::physics
 {
 
 class ICollision_shape;
+class Jolt_rigid_body;
+
+// Layer that objects can be in, determines which other objects it can collide with
+// Typically you at least want to have 1 layer for moving bodies and 1 layer for static bodies, but you can have more
+// layers if you want. E.g. you could have a layer for high detail collision (which is not used by the physics simulation
+// but only if you do collision testing).
+namespace Layers
+{
+
+static constexpr uint8_t NON_MOVING = 0u;
+static constexpr uint8_t MOVING     = 1u;
+static constexpr uint8_t NUM_LAYERS = 2u;
+
+[[nodiscard]] auto get_layer(const Motion_mode motion_mode) -> uint8_t;
+
+};
 
 class Jolt_world
     : public IWorld
+    , public JPH::BodyActivationListener
+    , public JPH::ContactListener
 {
 public:
     Jolt_world();
     virtual ~Jolt_world() noexcept override;
 
     // Implements IWorld
+
     void enable_physics_updates    ()                        override;
     void disable_physics_updates   ()                        override;
     auto is_physics_updates_enabled() const -> bool          override;
@@ -38,6 +60,23 @@ public:
     void set_debug_drawer          (IDebug_draw* debug_draw) override;
     void debug_draw                ()                        override;
 
+    // Implements BodyActivationListener
+    void OnBodyActivated  (const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override;
+    void OnBodyDeactivated(const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override;
+
+    // Implements ContactListener
+	//auto OnContactValidate (const JPH::Body& inBody1, const JPH::Body& inBody2, const CollideShapeResult &inCollisionResult) -> JPH::ValidateResult override
+    //{
+    //    return ValidateResult::AcceptAllContactsForThisBodyPair;
+    //}
+
+	void OnContactAdded    (const JPH::Body& inBody1, const JPH::Body& inBody2, const JPH::ContactManifold& inManifold, JPH::ContactSettings& ioSettings) override;
+	void OnContactPersisted(const JPH::Body& inBody1, const JPH::Body& inBody2, const JPH::ContactManifold& inManifold, JPH::ContactSettings& ioSettings) override;
+	void OnContactRemoved  (const JPH::SubShapeIDPair& inSubShapePair) override;
+
+    // Public API
+    [[nodiscard]] auto get_physics_system() -> JPH::PhysicsSystem&;
+
 private:
     bool                      m_physics_enabled{false};
     glm::vec3                 m_gravity        {0.0f};
@@ -46,10 +85,11 @@ private:
     JPH::JobSystemThreadPool  m_job_system    {JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, 10};
     std::unique_ptr<JPH::BroadPhaseLayerInterface> m_broad_phase_layer_interface;
 
-    std::vector<IRigid_body*> m_rigid_bodies;
-    std::vector<IConstraint*> m_constraints;
+    std::vector<Jolt_rigid_body*> m_rigid_bodies;
+    //std::vector<IConstraint*> m_constraints;
 
     std::vector<std::shared_ptr<ICollision_shape>> m_collision_shapes;
+
 };
 
 } // namespace erhe::physics

@@ -18,6 +18,8 @@
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
 
+#include <glm/ext/matrix_common.hpp>
+
 #include <imgui.h>
 
 namespace editor
@@ -65,7 +67,7 @@ void Physics_window::initialize_component()
     get<Editor_imgui_windows>()->register_imgui_window(this);
     m_min_size = glm::vec2{120.0f, 120.0f};
 
-    hide();
+    //hide();
 }
 
 auto Physics_window::description() -> const char*
@@ -150,8 +152,8 @@ void Physics_window::imgui()
         int motion_mode = static_cast<int>(rigid_body->get_motion_mode());
 
         {
-            const glm::vec3 local_inertia = rigid_body->get_local_inertia();
-            float floats[3] = { local_inertia.x, local_inertia.y, local_inertia.z };
+            const glm::mat4 local_inertia = rigid_body->get_local_inertia();
+            float floats[4] = { local_inertia[0][0], local_inertia[1][1], local_inertia[2][2] };
             ImGui::InputFloat3("Local Inertia", floats);
             // TODO floats back to rigid body?
         }
@@ -169,7 +171,7 @@ void Physics_window::imgui()
         ImGui::SliderFloat("Mass", &mass, 0.0f, 10.0f);
         if (mass != before_mass)
         {
-            glm::vec3 local_inertia{1.0f};
+            glm::mat4 local_inertia{0.0f};
             rigid_body->get_collision_shape()->calculate_local_inertia(mass, local_inertia);
             rigid_body->set_mass_properties(mass, local_inertia);
         }

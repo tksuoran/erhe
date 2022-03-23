@@ -338,7 +338,7 @@ void Trs_tool::Visualization::update_mesh_visibility(
             (active_handle == handle) ||
             show_all
         )
-            ? (erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::tool)
+            ? (erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::tool | erhe::scene::Node_visibility::id)
             : erhe::scene::Node_visibility::tool
     );
 
@@ -589,8 +589,6 @@ void Trs_tool::Visualization::initialize(
     x_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
     z_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{1.0f, 0.0f, 0.0f}));
 
-    //root->transforms.parent_from_node.set_rotation(pi<float>() / 4.0f, vec3{0.0f, 1.0f, 0.0f});
-
     update_visibility(false);
 }
 
@@ -727,12 +725,9 @@ auto Trs_tool::on_drag_ready() -> bool
 
     m_active_handle = get_handle(tool.mesh.get());
 
-    const auto& content = m_pointer_context->get_hover(Pointer_context::content_slot);
     if (
         (m_active_handle == Handle::e_handle_none) ||
         (root() == nullptr) ||
-        !content.valid ||
-        !content.position.has_value() ||
         !m_pointer_context->position_in_viewport_window().has_value()
     )
     {
@@ -742,10 +737,13 @@ auto Trs_tool::on_drag_ready() -> bool
 
     const auto* camera = m_pointer_context->window()->camera();
 
-    m_drag.initial_position_in_world = content.position.value();
+    m_drag.initial_position_in_world = tool.position.value();
     m_drag.initial_world_from_local  = root()->world_from_node();
     m_drag.initial_local_from_world  = root()->node_from_world();
-    m_drag.initial_distance          = glm::distance(glm::vec3{camera->position_in_world()}, content.position.value());
+    m_drag.initial_distance          = glm::distance(
+        glm::vec3{camera->position_in_world()},
+        tool.position.value()
+    );
     if (m_target_node)
     {
         m_drag.initial_parent_from_node_transform = m_target_node->parent_from_node_transform();
@@ -858,8 +856,8 @@ void Trs_tool::update_axis_translate()
     }
     else
     {
-        const auto Q0_opt = m_pointer_context->position_in_world(1.0);
-        const auto Q1_opt = m_pointer_context->position_in_world(0.0);
+        const auto Q0_opt = m_pointer_context->position_in_world_viewport_depth(1.0);
+        const auto Q1_opt = m_pointer_context->position_in_world_viewport_depth(0.0);
         if (Q0_opt.has_value() && Q1_opt.has_value())
         {
             const auto Q0 = Q0_opt.value();
@@ -1010,8 +1008,8 @@ void Trs_tool::update_plane_translate()
 
     const dvec3 p0      = m_drag.initial_position_in_world;
     const dvec3 world_n = get_plane_normal(!m_local);
-    const auto  Q0_opt  = m_pointer_context->position_in_world(1.0);
-    const auto  Q1_opt  = m_pointer_context->position_in_world(0.0);
+    const auto  Q0_opt  = m_pointer_context->position_in_world_viewport_depth(1.0);
+    const auto  Q1_opt  = m_pointer_context->position_in_world_viewport_depth(0.0);
     if (
         !Q0_opt.has_value() ||
         !Q1_opt.has_value()
@@ -1073,8 +1071,8 @@ auto Trs_tool::project_to_offset_plane(
 
 auto Trs_tool::project_pointer_to_plane(const dvec3 n, const dvec3 p) -> nonstd::optional<dvec3>
 {
-    const auto near_opt = m_pointer_context->position_in_world(0.0);
-    const auto far_opt  = m_pointer_context->position_in_world(1.0);
+    const auto near_opt = m_pointer_context->position_in_world_viewport_depth(0.0);
+    const auto far_opt  = m_pointer_context->position_in_world_viewport_depth(1.0);
     if (
         !near_opt.has_value() ||
         !far_opt.has_value()

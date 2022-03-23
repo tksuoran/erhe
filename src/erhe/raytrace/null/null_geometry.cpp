@@ -39,20 +39,20 @@ Null_geometry::Null_geometry(
 
 Null_geometry::~Null_geometry() = default;
 
-void Null_geometry::set_user_data(void* ptr)
-{
-    m_user_data = ptr;
-}
+//void Null_geometry::set_user_data(void* ptr)
+//{
+//    m_user_data = ptr;
+//}
+//
+//auto Null_geometry::get_user_data() -> void*
+//{
+//    return m_user_data;
+//}
 
-auto Null_geometry::get_user_data() -> void*
-{
-    return m_user_data;
-}
-
-auto Null_geometry::debug_label() const -> std::string_view
-{
-    return m_debug_label;
-}
+// auto Null_geometry::debug_label() const -> std::string_view
+// {
+//     return m_debug_label;
+// }
 
 
 } // namespace erhe::raytrace

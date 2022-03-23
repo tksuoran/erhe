@@ -2,6 +2,9 @@
 
 #include "erhe/physics/jolt/jolt_collision_shape.hpp"
 
+#include <Jolt.h>
+#include <Physics/Collision/Shape/ScaledShape.h>
+
 #include <glm/glm.hpp>
 
 #include <memory>
@@ -14,16 +17,25 @@ class Jolt_uniform_scaling_shape
 {
 public:
     Jolt_uniform_scaling_shape(ICollision_shape* shape, const float scale)
-        //: m_shape{shape}
-        //, m_scale{scale}
+        : m_shape_settings{
+            &(reinterpret_cast<Jolt_collision_shape*>(shape)->get_shape_settings()),
+            JPH::Vec3Arg{scale, scale, scale}
+        }
     {
-        static_cast<void>(shape);
-        static_cast<void>(scale);
+        auto* jolt_collision_shape = reinterpret_cast<Jolt_collision_shape*>(shape);
+        auto  shape_ref = jolt_collision_shape->get_jolt_shape();
+	    auto result = m_shape_settings.Create();
+        ERHE_VERIFY(result.IsValid());
+        m_jolt_shape = result.Get();
+    }
+
+    auto get_shape_settings() -> JPH::ShapeSettings& override
+    {
+        return m_shape_settings;
     }
 
 private:
-    //ICollision_shape* m_shape{nullptr};
-    //float             m_scale{1.0f};
+    JPH::ScaledShapeSettings m_shape_settings;
 };
 
 } // namespace erhe::physics

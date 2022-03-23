@@ -82,8 +82,8 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     glm
-    GIT_REPOSITORY https://github.com/tksuoran/glm-1.git
-    GIT_TAG        fix-cmake
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG        master
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -145,7 +145,7 @@ FetchContent_Declare(
     #GIT_REPOSITORY  https://github.com/jrouwe/JoltPhysics.git
     #GIT_TAG         master
     GIT_REPOSITORY  https://github.com/tksuoran/JoltPhysics.git
-    GIT_TAG         cmake
+    GIT_TAG         dev
     GIT_SHALLOW     TRUE
     GIT_PROGRESS    TRUE
 )

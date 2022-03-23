@@ -20,7 +20,12 @@ Node_physics::Node_physics(
 )
     : m_rigidbody_from_node{}
     , m_node_from_rigidbody{}
-    , m_rigid_body         {create_info.world.create_rigid_body_shared(create_info, this)}
+    , m_motion_mode        {
+        (create_info.mass == 0.0f)
+            ? erhe::physics::Motion_mode::e_static
+            : erhe::physics::Motion_mode::e_dynamic
+    }
+    , m_rigid_body         {IRigid_body::create_rigid_body_shared(create_info, this)}
     , m_collision_shape    {create_info.collision_shape}
 {
     m_flag_bits |= INode_attachment::c_flag_bit_is_physics;
@@ -76,6 +81,16 @@ void Node_physics::set_rigidbody_from_node(const erhe::physics::Transform rigidb
 auto Node_physics::get_world_from_rigidbody() const -> erhe::physics::Transform
 {
     return get_world_from_node() * m_node_from_rigidbody;
+}
+
+auto Node_physics::get_motion_mode() const -> erhe::physics::Motion_mode
+{
+    return m_motion_mode;
+}
+
+void Node_physics::set_motion_mode(const erhe::physics::Motion_mode motion_mode)
+{
+    m_motion_mode = motion_mode;
 }
 
 auto Node_physics::get_world_from_node() const -> erhe::physics::Transform

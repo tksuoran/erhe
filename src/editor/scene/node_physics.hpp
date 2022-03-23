@@ -30,8 +30,10 @@ public:
     void on_node_transform_changed() override;
 
     // Implements IMotion_state
-    [[nodiscard]] auto get_world_from_rigidbody() const -> erhe::physics::Transform override;
-    void set_world_from_rigidbody(const erhe::physics::Transform world_from_rigidbody) override;
+    [[nodiscard]] auto get_world_from_rigidbody() const -> erhe::physics::Transform   override;
+    [[nodiscard]] auto get_motion_mode         () const -> erhe::physics::Motion_mode override;
+    void set_world_from_rigidbody(const erhe::physics::Transform   world_from_rigidbody) override;
+    void set_motion_mode         (const erhe::physics::Motion_mode motion_mode         ) override;
 
     // Public API
     [[nodiscard]] auto rigid_body         ()       ->       erhe::physics::IRigid_body*;
@@ -51,6 +53,7 @@ private:
     erhe::physics::IWorld*                           m_physics_world      {nullptr};
     erhe::physics::Transform                         m_rigidbody_from_node{};
     erhe::physics::Transform                         m_node_from_rigidbody{};
+    erhe::physics::Motion_mode                       m_motion_mode;
     std::shared_ptr<erhe::physics::IRigid_body>      m_rigid_body;
     std::shared_ptr<erhe::physics::ICollision_shape> m_collision_shape;
     bool                                             m_transform_change_from_physics{false};

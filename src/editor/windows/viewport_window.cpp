@@ -271,7 +271,7 @@ void Viewport_window::render(
                     : nullptr
     };
 
-#if 0
+#if defined(ERHE_RAYTRACE_LIBRARY_NONE)
     if (m_is_hovered)
     {
         editor_rendering.render_id(context);

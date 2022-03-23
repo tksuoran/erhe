@@ -10,7 +10,7 @@
 namespace erhe::physics
 {
 
-auto IWorld::create_rigid_body(
+auto IRigid_body::create_rigid_body(
     const IRigid_body_create_info& create_info,
     IMotion_state*                 motion_state
 ) -> IRigid_body*
@@ -18,7 +18,7 @@ auto IWorld::create_rigid_body(
     return new Null_rigid_body(create_info, motion_state);
 }
 
-auto IWorld::create_rigid_body_shared(
+auto IRigid_body::create_rigid_body_shared(
     const IRigid_body_create_info& create_info,
     IMotion_state*                 motion_state
 ) -> std::shared_ptr<IRigid_body>
@@ -38,6 +38,7 @@ Null_rigid_body::Null_rigid_body(
             ? Motion_mode::e_dynamic
             : Motion_mode::e_static
     }
+    , m_debug_label{create_info.debug_label}
 {
 }
 
@@ -50,7 +51,7 @@ auto Null_rigid_body::get_motion_mode() const -> Motion_mode
     return m_motion_mode;
 }
 
-void Null_rigid_body::set_collision_shape (const std::shared_ptr<ICollision_shape>& collision_shape)
+void Null_rigid_body::set_collision_shape(const std::shared_ptr<ICollision_shape>& collision_shape)
 {
     m_collision_shape = collision_shape;
 }
@@ -140,9 +141,14 @@ auto Null_rigid_body::get_angular_damping () const -> float
     return m_linear_damping;
 }
 
-auto Null_rigid_body::get_local_inertia() const -> glm::vec3
+auto Null_rigid_body::get_local_inertia() const -> glm::mat4
 {
     return m_local_inertia;
+}
+
+auto Null_rigid_body::get_center_of_mass_transform() const -> Transform
+{
+    return Transform{};
 }
 
 auto Null_rigid_body::get_mass() const -> float
@@ -150,10 +156,15 @@ auto Null_rigid_body::get_mass() const -> float
     return m_mass;
 }
 
-void Null_rigid_body::set_mass_properties(const float mass, const glm::vec3 local_inertia)
+void Null_rigid_body::set_mass_properties(const float mass, const glm::mat4 local_inertia)
 {
     m_mass = mass;
     m_local_inertia = local_inertia;
+}
+
+auto Null_rigid_body::get_debug_label() const -> const char*
+{
+    return m_debug_label.c_str();
 }
 
 

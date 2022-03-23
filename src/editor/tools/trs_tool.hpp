@@ -222,7 +222,7 @@ private:
     class Visualization
     {
     public:
-        Visualization(Trs_tool& trs_tool);
+        explicit Visualization(Trs_tool& trs_tool);
 
         class Part
         {

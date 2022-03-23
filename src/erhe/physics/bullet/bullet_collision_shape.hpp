@@ -23,15 +23,9 @@ public:
     ~Bullet_collision_shape() noexcept override;
 
     // Implements ICollision_shape
-    [[nodiscard]] auto is_convex() const -> bool                       override;
-    void calculate_local_inertia(float mass, glm::vec3& inertia) const override;
+    [[nodiscard]] auto is_convex() const -> bool override;
 
-    void calculate_principal_axis_transform(
-        const std::vector<float>& child_masses,
-        Transform&                out_principal_transform,
-        glm::vec3&                inertia
-    ) override;
-
+    // Public API
     [[nodiscard]] auto get_bullet_collision_shape() -> btCollisionShape*
     {
         return m_bullet_collision_shape;
@@ -41,6 +35,14 @@ public:
     {
         return m_bullet_collision_shape;
     }
+
+    void calculate_local_inertia(float mass, glm::mat4& inertia) const override;
+
+    virtual void calculate_principal_axis_transform(
+        const std::vector<float>& child_masses,
+        Transform&                out_principal_transform,
+        glm::vec3&                inertia
+    );
 
 protected:
     btCollisionShape* m_bullet_collision_shape{nullptr};

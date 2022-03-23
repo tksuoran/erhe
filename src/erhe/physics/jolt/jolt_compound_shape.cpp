@@ -1,9 +1,6 @@
 #include "erhe/physics/jolt/jolt_compound_shape.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include <Jolt.h>
-#include <Physics/Collision/Shape/StaticCompoundShape.h>
-
 namespace erhe::physics
 {
 
@@ -21,9 +18,12 @@ auto ICollision_shape::create_compound_shape_shared(
     return std::make_shared<Jolt_compound_shape>(create_info);
 }
 
-Jolt_compound_shape::Jolt_compound_shape(
+namespace
+{
+
+auto make_static_compound_shape_settings(
     const Compound_shape_create_info& create_info
-)
+) -> JPH::StaticCompoundShapeSettings
 {
 	JPH::StaticCompoundShapeSettings shape_settings;
     for (const auto& entry : create_info.children)
@@ -36,8 +36,17 @@ Jolt_compound_shape::Jolt_compound_shape(
             collision_shape->get_jolt_shape()
         );
     }
+    return shape_settings;
+}
 
-	auto result = shape_settings.Create();
+}
+
+Jolt_compound_shape::Jolt_compound_shape(
+    const Compound_shape_create_info& create_info
+)
+    : m_shape_settings{make_static_compound_shape_settings(create_info)}
+{
+	auto result = m_shape_settings.Create();
     ERHE_VERIFY(result.IsValid());
     m_jolt_shape = result.Get();
 }

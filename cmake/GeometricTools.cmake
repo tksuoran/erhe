@@ -1,4 +1,4 @@
-# Mango has CMakeLists.txt in build subdirectory
+# GeometricTools has CMakeLists.txt in GTE subdirectory
 
 function (FetchContent_MakeAvailable_GeometricTools)
     FetchContent_GetProperties(GeometricTools)

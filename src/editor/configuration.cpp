@@ -23,11 +23,11 @@ Configuration::Configuration(int argc, char** argv)
     , parallel_initialization          {false}
     , reverse_depth                    {true}
     , fullscreen                       {false}
-    , window_width                     {1920}
-    , window_height                    {1080}
+    , window_width                     {1920}//{1280}
+    , window_height                    {1080}//{720}
     , window_msaa_sample_count         {0}
 {
-    cxxopts::Options options("Editor", "Erhe Editor (C) 2021 Timo Suoranta");
+    cxxopts::Options options("Editor", "Erhe Editor (C) 2022 Timo Suoranta");
 
     options.add_options()
         ("gui",                        "Enable ImGui hosted viewports",         cxxopts::value<bool>()->default_value(str( viewports_hosted_in_imgui_windows)))

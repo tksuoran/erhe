@@ -1,6 +1,7 @@
 #include "erhe/physics/jolt/jolt_world.hpp"
 #include "erhe/physics/jolt/jolt_constraint.hpp"
 #include "erhe/physics/jolt/jolt_rigid_body.hpp"
+#include "erhe/physics/jolt/glm_conversions.hpp"
 #include "erhe/physics/idebug_draw.hpp"
 #include "erhe/physics/log.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -43,16 +44,20 @@ static auto AssertFailedImpl(
 
 #endif // JPH_ENABLE_ASSERTS
 
-// Layer that objects can be in, determines which other objects it can collide with
-// Typically you at least want to have 1 layer for moving bodies and 1 layer for static bodies, but you can have more
-// layers if you want. E.g. you could have a layer for high detail collision (which is not used by the physics simulation
-// but only if you do collision testing).
-namespace Layers
+namespace Layers {
+
+[[nodiscard]] auto get_layer(const Motion_mode motion_mode) -> uint8_t
 {
-    static constexpr uint8_t NON_MOVING = 0u;
-    static constexpr uint8_t MOVING     = 1u;
-    static constexpr uint8_t NUM_LAYERS = 2u;
-};
+    switch (motion_mode)
+    {
+        case Motion_mode::e_static:    return Layers::NON_MOVING;
+        case Motion_mode::e_kinematic: return Layers::MOVING;
+        case Motion_mode::e_dynamic:   return Layers::MOVING;
+        default:                       return Layers::MOVING;
+    }
+}
+
+} // namespace Layers
 
 // Function that determines if two object layers can collide
 static bool object_can_collide(
@@ -64,7 +69,7 @@ static bool object_can_collide(
     {
         case Layers::NON_MOVING: return inObject2 == Layers::MOVING; // Non moving only collides with moving
         case Layers::MOVING:     return true; // Moving collides with everything
-        default:                 JPH_ASSERT(false); return false;
+        default:                 ERHE_VERIFY(false); return false;
     }
 };
 
@@ -100,21 +105,21 @@ public:
 
     auto GetBroadPhaseLayer(JPH::ObjectLayer inLayer) const -> JPH::BroadPhaseLayer override
     {
-        JPH_ASSERT(inLayer < Layers::NUM_LAYERS);
+        ERHE_VERIFY(inLayer < Layers::NUM_LAYERS);
         return m_object_to_broad_phase[inLayer];
     }
 
-#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
-    auto GetBroadPhaseLayerName(BroadPhaseLayer inLayer) const -> const char* override
+//#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
+    auto GetBroadPhaseLayerName(JPH::BroadPhaseLayer inLayer) const -> const char* override
     {
-        switch ((BroadPhaseLayer::Type)inLayer)
+        switch ((JPH::BroadPhaseLayer::Type)inLayer)
         {
-            case (BroadPhaseLayer::Type)BroadPhaseLayers::NON_MOVING: return "NON_MOVING";
-            case (BroadPhaseLayer::Type)BroadPhaseLayers::MOVING:     return "MOVING";
-            default:                                                  JPH_ASSERT(false); return "INVALID";
+            case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::NON_MOVING: return "NON_MOVING";
+            case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::MOVING:     return "MOVING";
+            default:                                                  ERHE_VERIFY(false); return "INVALID";
         }
     }
-#endif // JPH_EXTERNAL_PROFILE || JPH_PROFILE_ENABLED
+//#endif // JPH_EXTERNAL_PROFILE || JPH_PROFILE_ENABLED
 
 private:
     JPH::BroadPhaseLayer m_object_to_broad_phase[Layers::NUM_LAYERS];
@@ -130,8 +135,12 @@ static bool broad_phase_can_collide(
     {
         case Layers::NON_MOVING: return inLayer2 == BroadPhaseLayers::MOVING;
         case Layers::MOVING:     return true;
-        default:                 JPH_ASSERT(false); return false;
+        default:                 ERHE_VERIFY(false); return false;
     }
+}
+
+IWorld::~IWorld()
+{
 }
 
 auto IWorld::create() -> IWorld*
@@ -173,9 +182,8 @@ Jolt_world::Jolt_world()
         object_can_collide
     );
 
-    // SetBodyActivationListener()
-    // SetContactListener()
-    auto& body_interface = m_physics_system.GetBodyInterface();
+    m_physics_system.SetBodyActivationListener(this);
+    m_physics_system.SetContactListener(this);
 }
 
 Jolt_world::~Jolt_world() = default;
@@ -197,12 +205,57 @@ auto Jolt_world::is_physics_updates_enabled() const -> bool
 
 void Jolt_world::update_fixed_step(const double dt)
 {
-    static_cast<void>(dt);
+    if (!m_physics_enabled)
+    {
+        log_physics_frame.info("Physics is disabled");
+        return;
+    }
+
+	// If you take larger steps than 1 / 60th of a second you need to do
+    // multiple collision steps in order to keep the simulation stable.
+    // Do 1 collision step per 1 / 60th of a second (round up).
+	const int cCollisionSteps = 1;
+
+	// If you want more accurate step results you can do multiple sub steps
+    // within a collision step. Usually you would set this to 1.
+	const int cIntegrationSubSteps = 1;
+
+    m_physics_system.Update(
+        static_cast<float>(dt),
+        cCollisionSteps,
+        cIntegrationSubSteps,
+        &m_temp_allocator,
+        &m_job_system
+    );
+
+    for (auto* rigid_body : m_rigid_bodies)
+    {
+        rigid_body->update_motion_state();
+    }
+
+    //const auto num_active_bodies = m_physics_system.GetNumActiveBodies();
+    //const auto num_bodies        = m_physics_system.GetNumBodies();
+    const auto body_stats = m_physics_system.GetBodyStats();
+    //log_physics_frame.info("num active bodies = {}", num_active_bodies);
+    //log_physics_frame.info("num bodies = {}", num_bodies);
+    log_physics_frame.info("num active dynamic = {}",   body_stats.mNumActiveBodiesDynamic);
+    log_physics_frame.info("num dynamic = {}",          body_stats.mNumBodiesDynamic);
+    log_physics_frame.info("num active kinematic = {}", body_stats.mNumActiveBodiesKinematic);
+    log_physics_frame.info("num kinematic = {}",        body_stats.mNumBodiesKinematic);
+    log_physics_frame.info("num static = {}",           body_stats.mNumBodiesStatic);
+    log_physics_frame.info("num bodies = {}",           body_stats.mNumBodies);
 }
 
 void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
 {
-    m_rigid_bodies.push_back(rigid_body);
+    m_rigid_bodies.push_back(reinterpret_cast<Jolt_rigid_body*>(rigid_body));
+    auto& body_interface  = m_physics_system.GetBodyInterface();
+    auto* jolt_rigid_body = reinterpret_cast<Jolt_rigid_body*>(rigid_body);
+    auto* jolt_body       = jolt_rigid_body->get_jolt_body();
+    body_interface.AddBody(
+        jolt_body->GetID(),
+        JPH::EActivation::DontActivate
+    );
 }
 
 void Jolt_world::remove_rigid_body(IRigid_body* rigid_body)
@@ -211,32 +264,40 @@ void Jolt_world::remove_rigid_body(IRigid_body* rigid_body)
         std::remove(
             m_rigid_bodies.begin(),
             m_rigid_bodies.end(),
-            rigid_body
+            reinterpret_cast<Jolt_rigid_body*>(rigid_body)
         ),
         m_rigid_bodies.end()
     );
+    auto& body_interface  = m_physics_system.GetBodyInterface();
+    auto* jolt_rigid_body = reinterpret_cast<Jolt_rigid_body*>(rigid_body);
+    auto* jolt_body       = jolt_rigid_body->get_jolt_body();
+    body_interface.RemoveBody(jolt_body->GetID());
 }
 
 void Jolt_world::add_constraint(IConstraint* constraint)
 {
-    m_constraints.push_back(constraint);
+    //m_constraints.push_back(constraint);
+    // TODO
+    static_cast<void>(constraint);
 }
 
 void Jolt_world::remove_constraint(IConstraint* constraint)
 {
-    m_constraints.erase(
-        std::remove(
-            m_constraints.begin(),
-            m_constraints.end(),
-            constraint
-        ),
-        m_constraints.end()
-    );
+    //m_constraints.erase(
+    //    std::remove(
+    //        m_constraints.begin(),
+    //        m_constraints.end(),
+    //        constraint
+    //    ),
+    //    m_constraints.end()
+    //);
+    static_cast<void>(constraint);
 }
 
 void Jolt_world::set_gravity(const glm::vec3 gravity)
 {
     m_gravity = gravity;
+    m_physics_system.SetGravity(to_jolt(gravity));
 }
 
 auto Jolt_world::get_gravity() const -> glm::vec3
@@ -253,5 +314,88 @@ void Jolt_world::debug_draw()
 {
 }
 
+auto Jolt_world::get_physics_system() -> JPH::PhysicsSystem&
+{
+    return m_physics_system;
+}
+
+void Jolt_world::OnBodyActivated(const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData)
+{
+    //const auto userdata = m_physics_system.GetBodyInterface().GetUserData(inBodyID);
+    auto* body = reinterpret_cast<Jolt_rigid_body*>(inBodyUserData);
+
+    log_physics.info(
+        "Body activated ID = {}, name = {}",
+        inBodyID.GetIndex(),
+        (body != nullptr)
+            ? body->get_debug_label()
+            : "()"
+    );
+}
+
+void Jolt_world::OnBodyDeactivated(
+    const JPH::BodyID& inBodyID,
+    JPH::uint64        inBodyUserData
+)
+{
+    auto* body = reinterpret_cast<Jolt_rigid_body*>(inBodyUserData);
+
+    log_physics.info(
+        "Body deactivated ID = {}, name = {}",
+        inBodyID.GetIndex(),
+        (body != nullptr)
+            ? body->get_debug_label()
+            : "()"
+    );
+}
+
+void Jolt_world::OnContactAdded(
+    const JPH::Body&            inBody1,
+    const JPH::Body&            inBody2,
+    const JPH::ContactManifold& inManifold,
+    JPH::ContactSettings&       ioSettings
+)
+{
+    log_physics.trace("contact added\n");
+    //auto* jolt_body1 = reinterpret_cast<Jolt_rigid_body*>(inBody1.GetUserData());
+    //auto* jolt_body2 = reinterpret_cast<Jolt_rigid_body*>(inBody1.GetUserData());
+    //log_physics.info(
+    //    "contact added {} - {}",
+    //    (jolt_body1 != nullptr) ? jolt_body1->get_debug_label() : "()",
+    //    (jolt_body2 != nullptr) ? jolt_body2->get_debug_label() : "()"
+    //);
+}
+
+void Jolt_world::OnContactPersisted(
+    const JPH::Body&            inBody1,
+    const JPH::Body&            inBody2,
+    const JPH::ContactManifold& inManifold,
+    JPH::ContactSettings&       ioSettings
+)
+{
+    //log_physics.info("contact persisted\n");
+    //auto* jolt_body1 = reinterpret_cast<Jolt_rigid_body*>(inBody1.GetUserData());
+    //auto* jolt_body2 = reinterpret_cast<Jolt_rigid_body*>(inBody1.GetUserData());
+    //log_physics.info(
+    //    "contact persisted {} - {}",
+    //    (jolt_body1 != nullptr) ? jolt_body1->get_debug_label() : "()",
+    //    (jolt_body2 != nullptr) ? jolt_body2->get_debug_label() : "()"
+    //);
+}
+
+void Jolt_world::OnContactRemoved(
+    const JPH::SubShapeIDPair& inSubShapePair
+)
+{
+    log_physics.trace("contact removed\n");
+    //auto& body_interface = m_physics_system.GetBodyInterface();
+    //auto* jolt_body1 = reinterpret_cast<Jolt_rigid_body*>(body_interface.GetUserData(inSubShapePair.GetBody1ID()));
+    //auto* jolt_body2 = reinterpret_cast<Jolt_rigid_body*>(body_interface.GetUserData(inSubShapePair.GetBody2ID()));
+    //log_physics.info(
+    //    "contact removed {} - {}",
+    //    (jolt_body1 != nullptr) ? jolt_body1->get_debug_label() : "()",
+    //    (jolt_body2 != nullptr) ? jolt_body2->get_debug_label() : "()"
+    //);
+}
 
 } // namespace erhe::physics

@@ -337,6 +337,7 @@ void Rendertarget_imgui_windows::add_scene_node(
     m_gui_mesh = std::make_shared<erhe::scene::Mesh>("GUI Quad", primitive);
     m_gui_mesh->set_visibility_mask(
         erhe::scene::Node_visibility::visible |
+        erhe::scene::Node_visibility::id      |
         erhe::scene::Node_visibility::gui
     );
 

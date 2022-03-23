@@ -7,6 +7,7 @@
 #include "renderers/shadow_renderer.hpp"
 
 #include "erhe/graphics/debug.hpp"
+#include "erhe/physics/log.hpp"
 #include "erhe/raytrace/log.hpp"
 #include "erhe/toolkit/timestamp.hpp"
 
@@ -100,7 +101,7 @@ void Log_window::initialize_component()
     log_headset     .set_sink(&m_tail_log_sink);
     log_scene       .set_sink(&m_tail_log_sink);
     log_performance .set_sink(&m_tail_log_sink);
-    log_node_properties.set_sink(&m_tail_log_sink);
+    log_node_properties.set_sink(&m_tail_log_sink, false);
     log_trs_tool    .set_sink(&m_tail_log_sink);
     log_fly_camera  .set_sink(&m_tail_log_sink);
 
@@ -108,6 +109,10 @@ void Log_window::initialize_component()
     log_input_event             .set_sink(&m_tail_log_sink);
 
     erhe::raytrace::log_geometry.set_sink(&m_tail_log_sink);
+    erhe::raytrace::log_embree  .set_sink(&m_tail_log_sink);
+
+    erhe::physics::log_physics      .set_sink(&m_tail_log_sink);
+    erhe::physics::log_physics_frame.set_sink(&m_frame_log_sink, false);
 
     const auto view = get<Editor_view>();
     view->register_command   (&m_toggle_pause_command);

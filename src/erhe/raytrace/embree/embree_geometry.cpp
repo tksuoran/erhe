@@ -62,20 +62,39 @@ auto Embree_geometry::get_rtc_geometry() -> RTCGeometry
 
 void Embree_geometry::commit()
 {
-    //log_embree.trace("rtcCommitGeometry({})\n", m_debug_label);
+    log_embree.trace("rtcCommitGeometry({})\n", m_debug_label);
     rtcCommitGeometry(m_geometry);
 }
 
 void Embree_geometry::enable()
 {
-    //log_embree.trace("rtcEnableGeometry({})\n", m_debug_label);
+    log_embree.trace("rtcEnableGeometry(geometry = {})\n", m_debug_label);
     rtcEnableGeometry(m_geometry);
+    m_enabled = true;
 }
 
 void Embree_geometry::disable()
 {
-    //log_embree.trace("rtcDisableGeometry({})\n", m_debug_label);
+    log_embree.trace("rtcDisableGeometry(geometry = {})\n", m_debug_label);
     rtcDisableGeometry(m_geometry);
+    m_enabled = true;
+}
+
+auto Embree_geometry::is_enabled() const -> bool
+{
+    return m_enabled;
+}
+
+void Embree_geometry::set_mask(const uint32_t mask)
+{
+    log_embree.trace("rtcSetGeometryMask(geometry = {}, mask = {:#04x})\n", m_debug_label, mask);
+    rtcSetGeometryMask(m_geometry, mask);
+    m_mask = mask;
+}
+
+auto Embree_geometry::get_mask() const -> uint32_t
+{
+    return m_mask;
 }
 
 void Embree_geometry::set_user_data(void* ptr)
@@ -83,10 +102,11 @@ void Embree_geometry::set_user_data(void* ptr)
     m_user_data = ptr; //rtcSetGeometryUserData(m_geometry, ptr);
 }
 
-auto Embree_geometry::get_user_data() -> void*
+auto Embree_geometry::get_user_data() const -> void*
 {
     return m_user_data; //return rtcGetGeometryUserData(m_geometry);
 }
+
 
 void Embree_geometry::set_vertex_attribute_count(
     const unsigned int count

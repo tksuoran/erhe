@@ -17,10 +17,10 @@ public:
     ~Null_collision_shape() noexcept override = default;
 
     // Implements ICollision_shape
-    void calculate_local_inertia(float mass, glm::vec3& inertia) const override
+    void calculate_local_inertia(float mass, glm::mat4& inertia) const override
     {
         static_cast<void>(mass);
-        inertia = glm::vec3{0.0f};
+        inertia = glm::mat4{0.0f};
     }
 
     auto is_convex() const -> bool override
@@ -28,15 +28,14 @@ public:
         return true;
     }
 
-    virtual void calculate_principal_axis_transform(
-        const std::vector<float>& /*child_masses*/,
-        Transform&                /*principal_transform*/,
-        glm::vec3&                /*inertia*/
-    ) override
-    {
-        //assert(false);
-    }
-
+    //virtual void calculate_principal_axis_transform(
+    //    const std::vector<float>& /*child_masses*/,
+    //    Transform&                /*principal_transform*/,
+    //    glm::vec3&                /*inertia*/
+    //) override
+    //{
+    //    //assert(false);
+    //}
 };
 
 class Null_box_shape

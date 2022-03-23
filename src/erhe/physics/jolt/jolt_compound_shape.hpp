@@ -2,6 +2,9 @@
 
 #include "erhe/physics/jolt/jolt_collision_shape.hpp"
 
+#include <Jolt.h>
+#include <Physics/Collision/Shape/StaticCompoundShape.h>
+
 #include <glm/glm.hpp>
 
 #include <memory>
@@ -21,6 +24,14 @@ public:
     {
         return false;
     }
+
+    auto get_shape_settings() -> JPH::ShapeSettings& override
+    {
+        return m_shape_settings;
+    }
+
+private:
+    JPH::StaticCompoundShapeSettings m_shape_settings;
 };
 
 } // namespace erhe::physics

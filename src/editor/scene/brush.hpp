@@ -103,7 +103,7 @@ public:
         std::shared_ptr<Raytrace_primitive>              rt_primitive;
         std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
         float                                            volume;
-        glm::vec3                                        local_inertia;
+        glm::mat4                                        local_inertia;
     };
 
     explicit Brush(erhe::primitive::Build_info& build_info);

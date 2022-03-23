@@ -35,7 +35,7 @@ void s_rtc_error_function(
 
 Embree_device::Embree_device()
 {
-    log_embree.trace("rtcNewDevice(nullptr)");
+    log_embree.trace("rtcNewDevice(nullptr)\n");
     m_device = rtcNewDevice("verbose=0");
     if (m_device == nullptr)
     {

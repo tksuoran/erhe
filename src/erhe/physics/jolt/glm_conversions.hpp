@@ -31,12 +31,21 @@ namespace erhe::physics
 
 [[nodiscard]] inline auto from_jolt(const JPH::Quat q) -> glm::quat
 {
+#if defined(GLM_FORCE_QUAT_DATA_XYZW)
     return glm::quat{
         q.GetX(),
         q.GetY(),
         q.GetZ(),
         q.GetW()
     };
+#else
+    return glm::quat{
+        q.GetW(),
+        q.GetX(),
+        q.GetY(),
+        q.GetZ(),
+    };
+#endif
 }
 
 [[nodiscard]] inline auto to_jolt(const glm::vec3 v) -> JPH::Vec3
@@ -62,6 +71,12 @@ namespace erhe::physics
         m(0, 2), m(1, 2), m(2, 2), m(3, 2),
         m(0, 3), m(1, 3), m(2, 3), m(3, 3)
     };
+    //return glm::mat4{
+    //    m(0, 0), m(0, 1), m(0, 2), m(0, 3),
+    //    m(1, 0), m(1, 1), m(1, 2), m(1, 3),
+    //    m(2, 0), m(2, 1), m(2, 2), m(2, 3),
+    //    m(3, 0), m(3, 1), m(3, 2), m(3, 3)
+    //};
 }
 
 [[nodiscard]] inline auto to_jolt(const glm::mat4 m) -> JPH::Mat44

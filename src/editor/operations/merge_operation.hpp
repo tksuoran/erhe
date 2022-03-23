@@ -79,8 +79,8 @@ private:
     {
     public:
         std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
-        float                                            mass         {1.0f};
-        glm::vec3                                        local_inertia{1.0f};
+        float                                            mass         {0.0f};
+        glm::mat4                                        local_inertia{0.0f};
         erhe::physics::Transform                         rigidbody_from_node;
         std::vector<std::shared_ptr<erhe::scene::Node>>  selection;
     };

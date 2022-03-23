@@ -265,9 +265,9 @@ void Scene_builder::make_brushes()
     constexpr bool obj_files               = false;
     constexpr bool platonic_solids         = true;
     constexpr bool sphere                  = true;
-    constexpr bool torus                   = true;
+    constexpr bool torus                   = false;
     constexpr bool cylinder                = true;
-    constexpr bool cone                    = true;
+    //constexpr bool cone                    = false;
     constexpr bool johnson_solids          = false;
     constexpr bool anisotropic_test_object = false;
 
@@ -504,34 +504,34 @@ void Scene_builder::make_brushes()
         );
     }
 
-    if constexpr (cone)
-    {
-        execution_queue.enqueue(
-            [this]()
-            {
-                ERHE_PROFILE_SCOPE("Cone");
-
-                const Brush_create_context context{
-                    .build_info   = build_info(),
-                    .normal_style = Normal_style::corner_normals
-                };
-                constexpr bool instantiate = true;
-                auto cone_geometry = make_cone(-object_scale, object_scale, object_scale, true, 42, 4); // always axis = x
-                cone_geometry.transform(erhe::toolkit::mat4_swap_xy); // convert to axis = y
-
-                make_brush(
-                    instantiate,
-                    std::move(cone_geometry),
-                    context,
-                    erhe::physics::ICollision_shape::create_cone_shape_shared(
-                        erhe::physics::Axis::Y,
-                        object_scale,
-                        2.0f * object_scale
-                    )
-                );
-            }
-        );
-    }
+    //if constexpr (cone)
+    //{
+    //    execution_queue.enqueue(
+    //        [this]()
+    //        {
+    //            ERHE_PROFILE_SCOPE("Cone");
+    //
+    //            const Brush_create_context context{
+    //                .build_info   = build_info(),
+    //                .normal_style = Normal_style::corner_normals
+    //            };
+    //            constexpr bool instantiate = true;
+    //            auto cone_geometry = make_cone(-object_scale, object_scale, object_scale, true, 42, 4); // always axis = x
+    //            cone_geometry.transform(erhe::toolkit::mat4_swap_xy); // convert to axis = y
+    //
+    //            make_brush(
+    //                instantiate,
+    //                std::move(cone_geometry),
+    //                context,
+    //                erhe::physics::ICollision_shape::create_cone_shape_shared(
+    //                    erhe::physics::Axis::Y,
+    //                    object_scale,
+    //                    2.0f * object_scale
+    //                )
+    //            );
+    //        }
+    //    );
+    //}
 
     if constexpr (anisotropic_test_object)
     {
@@ -646,9 +646,10 @@ void Scene_builder::add_room()
     //    0.8f
     //);
 
+    // Notably shadow cast is not enabled for floor
     Instance_create_info floor_brush_instance_create_info
     {
-        .node_visibility_flags = Node_visibility::visible | Node_visibility::content, // notably shadow cast is not enabled for floor
+        .node_visibility_flags = Node_visibility::visible | Node_visibility::content | Node_visibility::id,
         .physics_world         = m_scene_root->physics_world(),
         .world_from_node       = erhe::toolkit::create_translation<float>(0.0f, -0.5001f, 0.0f),
         .material              = floor_material,
@@ -805,6 +806,7 @@ void Scene_builder::make_mesh_nodes()
             .node_visibility_flags = (
                 erhe::scene::Node_visibility::visible |
                 erhe::scene::Node_visibility::content |
+                erhe::scene::Node_visibility::id      |
                 erhe::scene::Node_visibility::shadow_cast
             ),
             .physics_world         = m_scene_root->physics_world(),

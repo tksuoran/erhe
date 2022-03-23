@@ -146,22 +146,6 @@ auto IWorld::create_unique() -> std::unique_ptr<IWorld>
     return std::make_unique<Bullet_world>();
 }
 
-auto IWorld::create_rigid_body(
-    const IRigid_body_create_info& create_info,
-    IMotion_state*                 motion_state
-) -> IRigid_body*
-{
-    return new Bullet_rigid_body(create_info, motion_state);
-}
-
-auto IWorld::create_rigid_body_shared(
-    const IRigid_body_create_info& create_info,
-    IMotion_state*                 motion_state
-) -> std::shared_ptr<IRigid_body>
-{
-    return std::make_shared<Bullet_rigid_body>(create_info, motion_state);
-}
-
 Bullet_world::Bullet_world()
     : m_bullet_collision_configuration{}
     , m_bullet_collision_dispatcher{&m_bullet_collision_configuration}

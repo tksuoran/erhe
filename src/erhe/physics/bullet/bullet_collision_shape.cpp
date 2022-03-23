@@ -51,37 +51,37 @@ auto ICollision_shape::create_capsule_shape_shared(
     }
 }
 
-auto ICollision_shape::create_cone_shape(
-    const Axis  axis,
-    const float base_radius,
-    const float height
-) -> ICollision_shape*
-{
-    switch (axis)
-    {
-        //using enum Axis;
-        case Axis::X: return new Bullet_cone_x_shape(base_radius, height);
-        case Axis::Y: return new Bullet_cone_y_shape(base_radius, height);
-        case Axis::Z: return new Bullet_cone_z_shape(base_radius, height);
-        default:      return nullptr;
-    }
-}
-
-auto ICollision_shape::create_cone_shape_shared(
-    const Axis  axis,
-    const float base_radius,
-    const float height
-) -> std::shared_ptr<ICollision_shape>
-{
-    switch (axis)
-    {
-        //using enum Axis;
-        case Axis::X: return std::make_shared<Bullet_cone_x_shape>(base_radius, height);
-        case Axis::Y: return std::make_shared<Bullet_cone_y_shape>(base_radius, height);
-        case Axis::Z: return std::make_shared<Bullet_cone_z_shape>(base_radius, height);
-        default:      return {};
-    }
-}
+//auto ICollision_shape::create_cone_shape(
+//    const Axis  axis,
+//    const float base_radius,
+//    const float height
+//) -> ICollision_shape*
+//{
+//    switch (axis)
+//    {
+//        //using enum Axis;
+//        case Axis::X: return new Bullet_cone_x_shape(base_radius, height);
+//        case Axis::Y: return new Bullet_cone_y_shape(base_radius, height);
+//        case Axis::Z: return new Bullet_cone_z_shape(base_radius, height);
+//        default:      return nullptr;
+//    }
+//}
+//
+//auto ICollision_shape::create_cone_shape_shared(
+//    const Axis  axis,
+//    const float base_radius,
+//    const float height
+//) -> std::shared_ptr<ICollision_shape>
+//{
+//    switch (axis)
+//    {
+//        //using enum Axis;
+//        case Axis::X: return std::make_shared<Bullet_cone_x_shape>(base_radius, height);
+//        case Axis::Y: return std::make_shared<Bullet_cone_y_shape>(base_radius, height);
+//        case Axis::Z: return std::make_shared<Bullet_cone_z_shape>(base_radius, height);
+//        default:      return {};
+//    }
+//}
 
 auto ICollision_shape::create_cylinder_shape(
     const Axis      axis,
@@ -136,11 +136,17 @@ Bullet_collision_shape::~Bullet_collision_shape()
 {
 }
 
-void Bullet_collision_shape::calculate_local_inertia(float mass, glm::vec3& inertia) const
+void Bullet_collision_shape::calculate_local_inertia(float mass, glm::mat4& inertia) const
 {
-    btVector3 bulletInertia{inertia.x, inertia.y, inertia.z};
+    btVector3 bulletInertia{0.0f, 0.0f, 0.0f};
     m_bullet_collision_shape->calculateLocalInertia(static_cast<btScalar>(mass), bulletInertia);
-    inertia = from_bullet(bulletInertia);
+    const glm::vec3 i = from_bullet(bulletInertia);
+    inertia = glm::mat4{
+        i.x, 0.0f, 0.0f, 0.0f,
+        0.0f, i.y, 0.0f, 0.0f,
+        0.0f, 0.0f, i.z, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
 }
 
 auto Bullet_collision_shape::is_convex() const -> bool

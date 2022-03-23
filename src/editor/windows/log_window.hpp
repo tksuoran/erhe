@@ -40,7 +40,7 @@ class Log_window_sink
     : public erhe::log::ILog_sink
 {
 public:
-    Log_window_sink(Log_window& log_window);
+    explicit Log_window_sink(Log_window& log_window);
 
     // Implements erhe::log::ILog_sink
     void write(const erhe::log::Color& color, const std::string_view text) override;
@@ -53,7 +53,7 @@ class Frame_log_window_sink
     : public erhe::log::ILog_sink
 {
 public:
-    Frame_log_window_sink(Log_window& log_window);
+    explicit Frame_log_window_sink(Log_window& log_window);
 
     // Implements erhe::log::ILog_sink
     void write(const erhe::log::Color& color, const std::string_view text) override;

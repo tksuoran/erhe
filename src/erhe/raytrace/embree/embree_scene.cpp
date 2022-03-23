@@ -64,6 +64,8 @@ void Embree_scene::attach(IGeometry* geometry)
         m_scene,
         hgeometry
     );
+
+    m_dirty = true;
     //if (embree_geometry->geometry_id >= m_geometry_map.size())
     //{
     //    const auto old_size{embree_geometry->geometry_id};
@@ -102,12 +104,14 @@ void Embree_scene::attach(IInstance* instance)
     //    }
     //}
     //m_instance_map[embree_instance->geometry_id] = instance;
-    //log_embree.info(
-    //    "rtcAttachGeometry(scene = {}, instance = {}) id = {}\n",
-    //    m_debug_label,
-    //    embree_instance->debug_label(),
-    //    embree_instance->geometry_id
-    //);
+    log_embree.trace(
+        "rtcAttachGeometry(scene = {}, instance = {}) id = {}\n",
+        m_debug_label,
+        embree_instance->debug_label(),
+        embree_instance->geometry_id
+    );
+
+    m_dirty = true;
 }
 
 void Embree_scene::detach(IGeometry* geometry)
@@ -125,6 +129,8 @@ void Embree_scene::detach(IGeometry* geometry)
     //    geometry_id
     //);
     rtcDetachGeometry(m_scene, geometry_id);
+
+    m_dirty = true;
 }
 
 void Embree_scene::detach(IInstance* instance)
@@ -142,12 +148,18 @@ void Embree_scene::detach(IInstance* instance)
     //    geometry_id
     //);
     rtcDetachGeometry(m_scene, geometry_id);
+
+    m_dirty = true;
 }
 
 void Embree_scene::commit()
 {
-    log_embree.trace("rtcCommitScene({})\n", m_debug_label);
-    rtcCommitScene(m_scene);
+    //log_embree.trace("rtcCommitScene({})\n", m_debug_label);
+    //if (m_dirty)
+    //{
+        rtcCommitScene(m_scene);
+    //m_dirty = false;
+    //}
 }
 
 void Embree_scene::intersect(Ray& ray, Hit& hit)

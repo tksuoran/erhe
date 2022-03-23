@@ -126,7 +126,7 @@ private:
 
     std::shared_ptr<erhe::scene::Mesh>          m_target_mesh;
     std::shared_ptr<Node_physics>               m_target_node_physics;
-    float                                       m_target_depth           {0.5f};
+    float                                       m_target_distance        {1.0f};
     glm::vec3                                   m_target_position_in_mesh{0.0f, 0.0f, 0.0f};
     glm::vec3                                   m_target_position_start  {0.0f, 0.0f, 0.0f};
     glm::vec3                                   m_target_position_end    {0.0f, 0.0f, 0.0f};
@@ -144,7 +144,6 @@ private:
 
     glm::vec3 m_to_end_direction  {0.0f};
     glm::vec3 m_to_start_direction{0.0f};
-    float     m_target_distance   {0.0f};
     float     m_target_mesh_size  {0.0f};
 
 };

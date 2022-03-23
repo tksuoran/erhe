@@ -33,23 +33,23 @@ auto ICollision_shape::create_capsule_shape_shared(
      return std::make_shared<Null_capsule_shape>(axis, radius, length);
 }
 
-auto ICollision_shape::create_cone_shape(
-    const Axis  axis,
-    const float base_radius,
-    const float height
-) -> ICollision_shape*
-{
-    return new Null_cone_shape(axis, base_radius, height);
-}
+//auto ICollision_shape::create_cone_shape(
+//    const Axis  axis,
+//    const float base_radius,
+//    const float height
+//) -> ICollision_shape*
+//{
+//    return new Null_cone_shape(axis, base_radius, height);
+//}
 
-auto ICollision_shape::create_cone_shape_shared(
-    const Axis  axis,
-    const float base_radius,
-    const float height
-) -> std::shared_ptr<ICollision_shape>
-{
-    return std::make_shared<Null_cone_shape>(axis, base_radius, height);
-}
+//auto ICollision_shape::create_cone_shape_shared(
+//    const Axis  axis,
+//    const float base_radius,
+//    const float height
+//) -> std::shared_ptr<ICollision_shape>
+//{
+//    return std::make_shared<Null_cone_shape>(axis, base_radius, height);
+//}
 
 auto ICollision_shape::create_cylinder_shape(
     const Axis      axis,

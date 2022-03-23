@@ -126,7 +126,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             m_state_after.selection.push_back(mesh);
             m_state_before.collision_shape = collision_shape;
             m_state_before.mass            = node_physics ? node_physics->rigid_body()->get_mass()          : 0.0f;
-            m_state_before.local_inertia   = node_physics ? node_physics->rigid_body()->get_local_inertia() : glm::vec3{0.0f};
+            m_state_before.local_inertia   = node_physics ? node_physics->rigid_body()->get_local_inertia() : glm::mat4{0.0f};
         }
         else
         {
@@ -176,11 +176,11 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     m_state_before.rigidbody_from_node = erhe::physics::Transform{};
     erhe::physics::Transform principal_axis_transform;
     m_state_after.collision_shape = erhe::physics::ICollision_shape::create_compound_shape_shared(compound_shape_create_info);
-    m_state_after.collision_shape->calculate_principal_axis_transform(
-        child_masses,
-        principal_axis_transform,
-        m_state_after.local_inertia
-    );
+    //m_state_after.collision_shape->calculate_principal_axis_transform(
+    //    child_masses,
+    //    principal_axis_transform,
+    //    m_state_after.local_inertia
+    //);
 
     m_state_after.rigidbody_from_node = inverse(principal_axis_transform);
 

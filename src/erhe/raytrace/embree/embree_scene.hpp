@@ -54,6 +54,7 @@ public:
 private:
     RTCScene    m_scene{nullptr};
     std::string m_debug_label;
+    bool        m_dirty{true};
 };
 
 }

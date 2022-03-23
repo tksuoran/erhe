@@ -33,6 +33,7 @@ auto ICollision_shape::create_capsule_shape_shared(
      return std::make_shared<Jolt_capsule_shape>(axis, radius, length);
 }
 
+#if 0
 auto ICollision_shape::create_cone_shape(
     const Axis  axis,
     const float base_radius,
@@ -50,6 +51,7 @@ auto ICollision_shape::create_cone_shape_shared(
 {
     return std::make_shared<Jolt_cone_shape>(axis, base_radius, height);
 }
+#endif
 
 auto ICollision_shape::create_cylinder_shape(
     const Axis      axis,

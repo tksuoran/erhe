@@ -21,6 +21,7 @@ public:
     // Implements ICollision_shape
     [[nodiscard]] auto is_convex() const -> bool override;
 
+    // Implements Bullet_collision_shape
     void calculate_principal_axis_transform(
         const std::vector<float>& child_masses,
         Transform&                principal_transform,

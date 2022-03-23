@@ -266,7 +266,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
 
     if (scale == 1.0f)
     {
-        glm::vec3 local_inertia{1.0f};
+        glm::mat4 local_inertia{0.0f};
         if (collision_shape)
         {
             ERHE_VERIFY(collision_shape->is_convex());
@@ -333,7 +333,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
 
     auto scaled_rt_primitive = std::make_shared<Raytrace_primitive>(scaled_geometry);
 
-    glm::vec3 local_inertia{1.0f};
+    glm::mat4 local_inertia{0.0f};
     if (collision_shape)
     {
         ERHE_VERIFY(collision_shape->is_convex());
@@ -429,7 +429,8 @@ auto Brush::make_instance(
             .world           = instance_create_info.physics_world,
             .mass            = density * scaled.volume,
             .collision_shape = scaled.collision_shape,
-            .local_inertia   = scaled.local_inertia
+            .local_inertia   = scaled.local_inertia,
+            .debug_label     = name.c_str()
         };
         node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
         mesh->attach(node_physics);

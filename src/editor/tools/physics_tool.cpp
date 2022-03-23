@@ -177,8 +177,17 @@ auto Physics_tool::acquire_target() -> bool
         return false;
     }
 
+    const auto p0_opt = m_pointer_context->near_position_in_world();
+    if (!p0_opt.has_value())
+    {
+        return false;
+    }
+
+    const glm::vec3 view_position   = p0_opt.value();
+    const glm::vec3 target_position = content.position.value();
+
     m_target_mesh             = content.mesh;
-    m_target_depth            = m_pointer_context->position_in_viewport_window().value().z;
+    m_target_distance         = glm::distance(view_position, target_position);
     m_target_position_in_mesh = m_target_mesh->transform_point_from_world_to_local(
         content.position.value()
     );
@@ -303,7 +312,7 @@ auto Physics_tool::on_drag() -> bool
         return false;
     }
 
-    const auto end = m_pointer_context->position_in_world(m_target_depth);
+    const auto end = m_pointer_context->position_in_world_distance(m_target_distance);
     if (!end.has_value())
     {
         return false;
@@ -477,13 +486,13 @@ void Physics_tool::tool_properties()
         set_active_command(command);
     }
 
-    ImGui::Text("Drag state: %s", c_state_str[static_cast<int>(m_drag_command.state())]);
+    ImGui::Text("Drag state: %s",  c_state_str[static_cast<int>(m_drag_command.state())]);
     ImGui::Text("Force state: %s", c_state_str[static_cast<int>(m_force_command.state())]);
-    ImGui::Text("Mesh: %s",       m_target_mesh ? m_target_mesh->name().c_str() : "");
-    ImGui::Text("Drag depth: %f", m_target_depth);
+    ImGui::Text("Mesh: %s",            m_target_mesh ? m_target_mesh->name().c_str() : "");
+    ImGui::Text("Drag distance: %f",   m_target_distance);
     ImGui::Text("Target distance: %f", m_target_distance);
-    ImGui::Text("Target Size: %f", m_target_mesh_size);
-    ImGui::Text("Constraint: %s", m_target_constraint ? "yes" : "no");
+    ImGui::Text("Target Size: %f",     m_target_mesh_size);
+    ImGui::Text("Constraint: %s",      m_target_constraint ? "yes" : "no");
     const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
     ImGui::SliderFloat("Force Distance",  &m_force_distance, -10.0f, 10.0f, "%.2f", logarithmic);
     ImGui::SliderFloat("Tau",             &m_tau,             0.0f,   0.1f);

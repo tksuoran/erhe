@@ -76,6 +76,7 @@ void Pointer_context::update_mouse(
     m_mouse_y = y;
 }
 
+#if !defined(ERHE_RAYTRACE_LIBRARY_NONE)
 void Pointer_context::raytrace()
 {
     if (m_window == nullptr)
@@ -83,10 +84,8 @@ void Pointer_context::raytrace()
         return;
     }
 
-    const auto log = get<Log_window>();
-
-    const auto pointer_near = position_in_world(1.0);
-    const auto pointer_far  = position_in_world(0.0);
+    const auto pointer_near = position_in_world_viewport_depth(1.0);
+    const auto pointer_far  = position_in_world_viewport_depth(0.0);
 
     if (!pointer_near.has_value() || !pointer_far.has_value())
     {
@@ -265,6 +264,8 @@ void Pointer_context::raytrace()
     }
 #endif
 }
+#endif
+
 
 void Pointer_context::update_viewport(Viewport_window* viewport_window)
 {
@@ -293,9 +294,9 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
     );
 
     const bool reverse_depth = m_window->viewport().reverse_depth;
-    m_position_in_window     = glm::vec3{position_in_window, 1.0f};
-    m_near_position_in_world = position_in_world(reverse_depth ? 1.0f : 0.0f);
-    m_far_position_in_world  = position_in_world(reverse_depth ? 0.0f : 1.0f);
+    m_position_in_window     = position_in_window;
+    m_near_position_in_world = position_in_world_viewport_depth(reverse_depth ? 1.0f : 0.0f);
+    m_far_position_in_world  = position_in_world_viewport_depth(reverse_depth ? 0.0f : 1.0f);
 
     auto* camera = m_window->camera();
     if (camera == nullptr)
@@ -303,87 +304,102 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
         return;
     }
 
+#if !defined(ERHE_RAYTRACE_LIBRARY_NONE)
     if (pointer_in_content_area())
     {
         raytrace();
     }
+#endif
 
-#if 0
+#if defined(ERHE_RAYTRACE_LIBRARY_NONE)
     const auto id_renderer     = get<Id_renderer>();
     //const auto scene_root      = get<Scene_root>();
     const bool in_content_area = pointer_in_content_area();
     //m_log_window->frame_log("in_content_area = {}", in_content_area);
     if (in_content_area && id_renderer)
     {
-        const bool reverse_depth = m_window->viewport().reverse_depth;
-        const auto id_query      = id_renderer->get(
+        const auto id_query = id_renderer->get(
             static_cast<int>(position_in_window.x),
             static_cast<int>(position_in_window.y)
         );
-        m_position_in_window.value().z = id_query.depth;
-        m_position_in_world      = position_in_world(m_position_in_window.value().z);
-        m_near_position_in_world = position_in_world(reverse_depth ? 1.0f : 0.0f);
-        m_far_position_in_world  = position_in_world(reverse_depth ? 0.0f : 1.0f);
-        m_hover_valid = id_query.valid;
-        //m_log_window->frame_log("position in world = {}", m_position_in_world.value());
-        if (m_hover_valid)
+
+        //m_position_in_window.value().z = id_query.depth;
+
+        m_near_position_in_world = position_in_world_viewport_depth(reverse_depth ? 1.0f : 0.0f);
+        m_far_position_in_world  = position_in_world_viewport_depth(reverse_depth ? 0.0f : 1.0f);
+
+        Hover_entry entry;
+        entry.position = position_in_world_viewport_depth(id_query.depth);
+        entry.valid    = id_query.valid;
+
+        log_pointer.trace("position in world = {}", entry.position.value());
+        if (id_query.valid)
         {
-            m_hover_mesh        = id_query.mesh;
-            m_hover_primitive   = id_query.mesh_primitive_index;
-            m_hover_local_index = id_query.local_index;
-            m_hover_tool        = id_query.mesh && (m_hover_mesh->visibility_mask() & erhe::scene::Node_visibility::tool   ) == erhe::scene::Node_visibility::tool;
-            m_hover_content     = id_query.mesh && (m_hover_mesh->visibility_mask() & erhe::scene::Node_visibility::content) == erhe::scene::Node_visibility::content;
-            m_hover_gui         = id_query.mesh && (m_hover_mesh->visibility_mask() & erhe::scene::Node_visibility::gui    ) == erhe::scene::Node_visibility::gui;
-            m_log_window->frame_log(
-                "hover mesh = {} primitive = {} local index {} tool = {} content = {} gui = {}",
-                m_hover_mesh ? m_hover_mesh->name() : "()",
-                m_hover_primitive,
-                m_hover_local_index,
-                m_hover_tool,
-                m_hover_content,
-                m_hover_gui
-            );
-            if (m_hover_mesh)
+            entry.mesh        = id_query.mesh;
+            entry.primitive   = id_query.mesh_primitive_index;
+            entry.local_index = id_query.local_index;
+            if (entry.mesh)
             {
-                const auto& primitive = m_hover_mesh->mesh_data.primitives[m_hover_primitive];
-                m_hover_geometry = primitive.source_geometry.get();
-                m_hover_normal   = {};
-                if (m_hover_geometry != nullptr)
+                const auto& primitive = entry.mesh->mesh_data.primitives[entry.primitive];
+                entry.geometry = primitive.source_geometry.get();
+                entry.normal   = {};
+                if (entry.geometry != nullptr)
                 {
-                    const auto polygon_id = static_cast<Polygon_id>(m_hover_local_index);
+                    const auto polygon_id = static_cast<Polygon_id>(entry.local_index);
                     if (
-                        polygon_id < m_hover_geometry->get_polygon_count()
+                        polygon_id < entry.geometry->get_polygon_count()
                     )
                     {
-                        m_log_window->frame_log("hover polygon = {}", polygon_id);
-                        auto* const polygon_normals = m_hover_geometry->polygon_attributes().find<glm::vec3>(c_polygon_normals);
+                        log_pointer.trace("hover polygon = {}", polygon_id);
+                        auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(c_polygon_normals);
                         if (
                             (polygon_normals != nullptr) &&
                             polygon_normals->has(polygon_id)
                         )
                         {
                             const auto local_normal    = polygon_normals->get(polygon_id);
-                            const auto world_from_node = m_hover_mesh->world_from_node();
-                            m_hover_normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
-                            //m_log_window->frame_log("hover normal = {}", m_hover_normal.value());
+                            const auto world_from_node = entry.mesh->world_from_node();
+                            entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
+                            log_pointer.trace("hover normal = {}", entry.normal.value());
                         }
                     }
                 }
             }
+            const bool hover_content = id_query.mesh && (entry.mesh->get_visibility_mask() & erhe::scene::Node_visibility::content) == erhe::scene::Node_visibility::content;
+            const bool hover_tool    = id_query.mesh && (entry.mesh->get_visibility_mask() & erhe::scene::Node_visibility::tool   ) == erhe::scene::Node_visibility::tool;
+            const bool hover_brush   = id_query.mesh && (entry.mesh->get_visibility_mask() & erhe::scene::Node_visibility::brush  ) == erhe::scene::Node_visibility::brush;
+            const bool hover_gui     = id_query.mesh && (entry.mesh->get_visibility_mask() & erhe::scene::Node_visibility::gui    ) == erhe::scene::Node_visibility::gui;
+            log_pointer.trace(
+                "hover mesh = {} primitive = {} local index {} {}{}{}{}",
+                entry.mesh ? entry.mesh->name() : "()",
+                entry.primitive,
+                entry.local_index,
+                hover_content ? "content " : "",
+                hover_tool    ? "tool "    : "",
+                hover_brush   ? "brush "   : "",
+                hover_gui     ? "gui "     : ""
+            );
+            if (hover_content)
+            {
+                m_hover_entries[content_slot] = entry;
+            }
+            if (hover_tool)
+            {
+                m_hover_entries[tool_slot] = entry;
+            }
+            if (hover_brush)
+            {
+                m_hover_entries[brush_slot] = entry;
+            }
+            if (hover_gui)
+            {
+                m_hover_entries[gui_slot] = entry;
+            }
         }
-        //else
-        //{
-        //    m_log_window->tail_log("pointer context hover not valid");
-        //}
-        // else mesh etc. contain latest valid values
-    }
-    else
-    {
-        //m_log_window->frame_log("hover not content area or no id renderer");
-        m_hover_valid       = false;
-        m_hover_mesh        = nullptr;
-        m_hover_primitive   = 0;
-        m_hover_local_index = 0;
+        else
+        {
+            log_pointer.trace("pointer context hover not valid");
+        }
     }
 #endif
 
@@ -401,7 +417,24 @@ auto Pointer_context::far_position_in_world() const -> nonstd::optional<glm::vec
     return m_far_position_in_world;
 }
 
-auto Pointer_context::position_in_world(const double viewport_depth) const -> nonstd::optional<glm::dvec3>
+auto Pointer_context::position_in_world_distance(const float distance) const -> nonstd::optional<glm::vec3>
+{
+    if (
+        !m_near_position_in_world.has_value() ||
+        !m_far_position_in_world.has_value()
+    )
+    {
+        return {};
+    }
+
+    const glm::vec3 p0        = m_near_position_in_world.value();
+    const glm::vec3 p1        = m_far_position_in_world.value();
+    const glm::vec3 origin    = p0;
+    const glm::vec3 direction = glm::normalize(p1 - p0);
+    return origin + distance * direction;
+}
+
+auto Pointer_context::position_in_world_viewport_depth(const double viewport_depth) const -> nonstd::optional<glm::dvec3>
 {
     if (!m_position_in_window.has_value())
     {
@@ -432,7 +465,7 @@ auto Pointer_context::position_in_world(const double viewport_depth) const -> no
     );
 }
 
-auto Pointer_context::position_in_viewport_window() const -> nonstd::optional<glm::vec3>
+auto Pointer_context::position_in_viewport_window() const -> nonstd::optional<glm::vec2>
 {
     return m_position_in_window;
 }

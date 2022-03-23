@@ -61,8 +61,10 @@ public:
     void update_mouse(const erhe::toolkit::Mouse_button button, const int count);
     void update_mouse(const double x, const double y);
 
+#if !defined(ERHE_RAYTRACE_LIBRARY_NONE)
     void raytrace(uint32_t mask);
     void raytrace();
+#endif
 
     class Hover_entry
     {
@@ -98,23 +100,24 @@ public:
         "gui"
     };
 
-    [[nodiscard]] auto position_in_viewport_window() const -> nonstd::optional<glm::vec3>;
-    [[nodiscard]] auto position_in_world          (const double viewport_depth) const -> nonstd::optional<glm::dvec3>;
-    [[nodiscard]] auto near_position_in_world     () const -> nonstd::optional<glm::vec3>;
-    [[nodiscard]] auto far_position_in_world      () const -> nonstd::optional<glm::vec3>;
-    [[nodiscard]] auto pointer_in_content_area    () const -> bool;
-    [[nodiscard]] auto shift_key_down             () const -> bool;
-    [[nodiscard]] auto control_key_down           () const -> bool;
-    [[nodiscard]] auto alt_key_down               () const -> bool;
-    [[nodiscard]] auto mouse_button_pressed       (const erhe::toolkit::Mouse_button button) const -> bool;
-    [[nodiscard]] auto mouse_button_released      (const erhe::toolkit::Mouse_button button) const -> bool;
-    [[nodiscard]] auto mouse_x                    () const -> double;
-    [[nodiscard]] auto mouse_y                    () const -> double;
-    [[nodiscard]] auto get_hover                  (const size_t slot) const -> const Hover_entry&;
-    [[nodiscard]] auto get_nearest_hover          () const -> const Hover_entry&;
-    [[nodiscard]] auto window                     () const -> Viewport_window*;
-    [[nodiscard]] auto last_window                () const -> Viewport_window*;
-    [[nodiscard]] auto frame_number               () const -> uint64_t;
+    [[nodiscard]] auto position_in_viewport_window     () const -> nonstd::optional<glm::vec2>;
+    [[nodiscard]] auto position_in_world_viewport_depth(const double viewport_depth) const -> nonstd::optional<glm::dvec3>;
+    [[nodiscard]] auto near_position_in_world          () const -> nonstd::optional<glm::vec3>;
+    [[nodiscard]] auto far_position_in_world           () const -> nonstd::optional<glm::vec3>;
+    [[nodiscard]] auto position_in_world_distance      (const float distance) const -> nonstd::optional<glm::vec3>;
+    [[nodiscard]] auto pointer_in_content_area         () const -> bool;
+    [[nodiscard]] auto shift_key_down                  () const -> bool;
+    [[nodiscard]] auto control_key_down                () const -> bool;
+    [[nodiscard]] auto alt_key_down                    () const -> bool;
+    [[nodiscard]] auto mouse_button_pressed            (const erhe::toolkit::Mouse_button button) const -> bool;
+    [[nodiscard]] auto mouse_button_released           (const erhe::toolkit::Mouse_button button) const -> bool;
+    [[nodiscard]] auto mouse_x                         () const -> double;
+    [[nodiscard]] auto mouse_y                         () const -> double;
+    [[nodiscard]] auto get_hover                       (const size_t slot) const -> const Hover_entry&;
+    [[nodiscard]] auto get_nearest_hover               () const -> const Hover_entry&;
+    [[nodiscard]] auto window                          () const -> Viewport_window*;
+    [[nodiscard]] auto last_window                     () const -> Viewport_window*;
+    [[nodiscard]] auto frame_number                    () const -> uint64_t;
 
 private:
     class Mouse_button
@@ -133,7 +136,7 @@ private:
     erhe::toolkit::Timer               m_ray_scene_build_timer;
     erhe::toolkit::Timer               m_ray_traverse_timer;
 
-    nonstd::optional<glm::vec3>        m_position_in_window;
+    nonstd::optional<glm::vec2>        m_position_in_window;
     nonstd::optional<glm::vec3>        m_near_position_in_world;
     nonstd::optional<glm::vec3>        m_far_position_in_world;
     bool                               m_shift               {false};

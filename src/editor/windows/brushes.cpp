@@ -403,7 +403,7 @@ void Brushes::do_insert_operation()
     //const auto material         = m_materials->selected_material();
     const Instance_create_info brush_instance_create_info
     {
-        .node_visibility_flags = (erhe::scene::Node_visibility::content | erhe::scene::Node_visibility::shadow_cast),
+        .node_visibility_flags = (erhe::scene::Node_visibility::content | erhe::scene::Node_visibility::shadow_cast | erhe::scene::Node_visibility::id),
         .physics_world         = m_scene_root->physics_world(),
         .world_from_node       = m_hover_mesh->world_from_node() * hover_from_brush,
         .material              = m_materials->selected_material(),

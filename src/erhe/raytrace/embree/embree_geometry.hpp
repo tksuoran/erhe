@@ -23,8 +23,12 @@ public:
     void commit       () override;
     void enable       () override;
     void disable      () override;
+    void set_mask     (const uint32_t mask) override;
+
     void set_user_data(void* ptr) override;
-    [[nodiscard]] auto get_user_data() -> void* override;
+    [[nodiscard]] auto get_mask     () const -> uint32_t         override;
+    [[nodiscard]] auto get_user_data() const -> void*            override;
+    [[nodiscard]] auto is_enabled   () const -> bool             override;
     [[nodiscard]] auto debug_label  () const -> std::string_view override;
 
     void set_vertex_attribute_count(const unsigned int count) override;
@@ -48,6 +52,8 @@ private:
     RTCGeometry m_geometry {nullptr};
     void*       m_user_data{nullptr};
     std::string m_debug_label;
+    bool        m_enabled  {true};
+    uint32_t    m_mask     {0xffffffffu};
 };
 
 }
