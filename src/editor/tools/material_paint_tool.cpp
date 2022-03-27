@@ -129,18 +129,33 @@ auto Material_paint_tool::description() -> const char*
 
 auto Material_paint_tool::on_paint_ready() -> bool
 {
+    if (!is_enabled())
+    {
+        return false;
+    }
+
     const auto& hover = m_pointer_context->get_hover(Pointer_context::content_slot);
     return hover.valid && hover.mesh;
 }
 
 auto Material_paint_tool::on_pick_ready() -> bool
 {
+    if (!is_enabled())
+    {
+        return false;
+    }
+
     const auto& hover = m_pointer_context->get_hover(Pointer_context::content_slot);
     return hover.valid && hover.mesh;
 }
 
 auto Material_paint_tool::on_paint() -> bool
 {
+    if (!is_enabled())
+    {
+        return false;
+    }
+
     const auto& hover = m_pointer_context->get_hover(Pointer_context::content_slot);
     if (!hover.valid || !hover.mesh)
     {
@@ -156,6 +171,11 @@ auto Material_paint_tool::on_paint() -> bool
 
 auto Material_paint_tool::on_pick() -> bool
 {
+    if (!is_enabled())
+    {
+        return false;
+    }
+
     const auto& hover = m_pointer_context->get_hover(Pointer_context::content_slot);
     if (!hover.valid || !hover.mesh)
     {

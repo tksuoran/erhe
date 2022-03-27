@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe/log/log.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -60,7 +61,10 @@ namespace erhe::physics
 
 [[nodiscard]] inline auto to_jolt(const glm::quat q) -> JPH::Quat
 {
-    return JPH::Quat{q.x, q.y, q.z, q.w};
+    const auto nq = glm::normalize(q);
+    const auto jq = JPH::Quat{nq.x, nq.y, nq.z, nq.w};
+    ERHE_VERIFY(jq.IsNormalized());
+    return jq;
 }
 
 [[nodiscard]] inline auto from_jolt(const JPH::Mat44 m) -> glm::mat4
@@ -71,12 +75,6 @@ namespace erhe::physics
         m(0, 2), m(1, 2), m(2, 2), m(3, 2),
         m(0, 3), m(1, 3), m(2, 3), m(3, 3)
     };
-    //return glm::mat4{
-    //    m(0, 0), m(0, 1), m(0, 2), m(0, 3),
-    //    m(1, 0), m(1, 1), m(1, 2), m(1, 3),
-    //    m(2, 0), m(2, 1), m(2, 2), m(2, 3),
-    //    m(3, 0), m(3, 1), m(3, 2), m(3, 3)
-    //};
 }
 
 [[nodiscard]] inline auto to_jolt(const glm::mat4 m) -> JPH::Mat44

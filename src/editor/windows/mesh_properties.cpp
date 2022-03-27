@@ -45,8 +45,6 @@ void Mesh_properties::initialize_component()
 {
     get<Editor_tools>()->register_tool(this);
     get<Editor_imgui_windows>()->register_imgui_window(this);
-
-    hide();
 }
 
 void Mesh_properties::imgui()

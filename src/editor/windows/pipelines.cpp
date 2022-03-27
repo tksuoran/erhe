@@ -32,8 +32,6 @@ void Pipelines::connect()
 void Pipelines::initialize_component()
 {
     get<Editor_imgui_windows>()->register_imgui_window(this);
-
-    hide();
 }
 
 const char* gl_cull_face_mode_strings[] =

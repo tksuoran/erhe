@@ -60,8 +60,6 @@ void Operation_stack::initialize_component()
 {
     get<Editor_imgui_windows>()->register_imgui_window(this);
 
-    hide();
-
     const auto view = get<Editor_view>();
     view->register_command(&m_undo_command);
     view->register_command(&m_redo_command);

@@ -116,7 +116,7 @@ public:
         {
             case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::NON_MOVING: return "NON_MOVING";
             case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::MOVING:     return "MOVING";
-            default:                                                  ERHE_VERIFY(false); return "INVALID";
+            default:                                                       ERHE_VERIFY(false); return "INVALID";
         }
     }
 //#endif // JPH_EXTERNAL_PROFILE || JPH_PROFILE_ENABLED
@@ -207,7 +207,7 @@ void Jolt_world::update_fixed_step(const double dt)
 {
     if (!m_physics_enabled)
     {
-        log_physics_frame.info("Physics is disabled");
+        //log_physics_frame.info("Physics is disabled\n");
         return;
     }
 
@@ -238,12 +238,12 @@ void Jolt_world::update_fixed_step(const double dt)
     const auto body_stats = m_physics_system.GetBodyStats();
     //log_physics_frame.info("num active bodies = {}", num_active_bodies);
     //log_physics_frame.info("num bodies = {}", num_bodies);
-    log_physics_frame.info("num active dynamic = {}",   body_stats.mNumActiveBodiesDynamic);
-    log_physics_frame.info("num dynamic = {}",          body_stats.mNumBodiesDynamic);
-    log_physics_frame.info("num active kinematic = {}", body_stats.mNumActiveBodiesKinematic);
-    log_physics_frame.info("num kinematic = {}",        body_stats.mNumBodiesKinematic);
-    log_physics_frame.info("num static = {}",           body_stats.mNumBodiesStatic);
-    log_physics_frame.info("num bodies = {}",           body_stats.mNumBodies);
+    log_physics_frame.info("num active dynamic = {}\n",   body_stats.mNumActiveBodiesDynamic);
+    log_physics_frame.info("num dynamic = {}\n",          body_stats.mNumBodiesDynamic);
+    log_physics_frame.info("num active kinematic = {}\n", body_stats.mNumActiveBodiesKinematic);
+    log_physics_frame.info("num kinematic = {}\n",        body_stats.mNumBodiesKinematic);
+    log_physics_frame.info("num static = {}\n",           body_stats.mNumBodiesStatic);
+    log_physics_frame.info("num bodies = {}\n",           body_stats.mNumBodies);
 }
 
 void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
@@ -325,7 +325,7 @@ void Jolt_world::OnBodyActivated(const JPH::BodyID& inBodyID, JPH::uint64 inBody
     auto* body = reinterpret_cast<Jolt_rigid_body*>(inBodyUserData);
 
     log_physics.info(
-        "Body activated ID = {}, name = {}",
+        "Body activated ID = {}, name = {}\n",
         inBodyID.GetIndex(),
         (body != nullptr)
             ? body->get_debug_label()
@@ -341,7 +341,7 @@ void Jolt_world::OnBodyDeactivated(
     auto* body = reinterpret_cast<Jolt_rigid_body*>(inBodyUserData);
 
     log_physics.info(
-        "Body deactivated ID = {}, name = {}",
+        "Body deactivated ID = {}, name = {}\n",
         inBodyID.GetIndex(),
         (body != nullptr)
             ? body->get_debug_label()

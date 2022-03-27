@@ -66,8 +66,6 @@ void Physics_window::initialize_component()
     //rendertarget->register_imgui_window(this);
     get<Editor_imgui_windows>()->register_imgui_window(this);
     m_min_size = glm::vec2{120.0f, 120.0f};
-
-    //hide();
 }
 
 auto Physics_window::description() -> const char*

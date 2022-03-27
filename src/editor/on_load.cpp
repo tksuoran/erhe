@@ -43,7 +43,6 @@
 #include "tools/trs_tool.hpp"
 
 #include "windows/brushes.hpp"
-//#include "windows/camera_properties.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/imgui_demo_window.hpp"
 #include "windows/layers_window.hpp"
@@ -177,6 +176,20 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     m_components.wait_component_initialization_complete();
 
     component_initialization_complete(true);
+
+    m_components.get<Debug_view_window >()->hide();
+    m_components.get<Editor_view       >()->hide();
+    m_components.get<Fly_camera_tool   >()->hide();
+    m_components.get<Grid_tool         >()->hide();
+    m_components.get<Imgui_demo_window >()->hide();
+    m_components.get<Layers_window     >()->hide();
+    //m_components.get<Log_window        >()->hide();
+    m_components.get<Mesh_properties   >()->hide();
+    m_components.get<Operation_stack   >()->hide();
+    m_components.get<Performance_window>()->hide();
+    //m_components.get<Physics_window    >()->hide();
+    m_components.get<Pipelines         >()->hide();
+    m_components.get<Post_processing   >()->hide();
 
     opengl_state_tracker->on_thread_enter();
 

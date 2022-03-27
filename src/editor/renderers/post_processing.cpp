@@ -266,7 +266,6 @@ void Post_processing::initialize_component()
     m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Post_processing");
 
     get<Editor_imgui_windows>()->register_imgui_window(this);
-    this->hide();
 }
 
 Rendertarget::Rendertarget(

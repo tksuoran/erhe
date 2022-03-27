@@ -33,8 +33,6 @@ void Performance_window::connect()
 void Performance_window::initialize_component()
 {
     get<Editor_imgui_windows>()->register_imgui_window(this);
-
-    //hide();
 }
 
 void Plot::clear()

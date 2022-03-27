@@ -753,7 +753,7 @@ void Editor_imgui_windows::window_menu()
         ImGui::Separator();
         if (ImGui::MenuItem("Close All"))
         {
-            for (auto window : m_imgui_windows)
+            for (const auto& window : m_imgui_windows)
             {
                 window->hide();
             }
@@ -761,7 +761,7 @@ void Editor_imgui_windows::window_menu()
         }
         if (ImGui::MenuItem("Open All"))
         {
-            for (auto window : m_imgui_windows)
+            for (const auto& window : m_imgui_windows)
             {
                 window->show();
             }

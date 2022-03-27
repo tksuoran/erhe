@@ -69,8 +69,6 @@ void Editor_view::initialize_component()
     double mouse_y;
     m_window->get_context_window()->get_cursor_position(mouse_x, mouse_y);
     m_last_mouse_position = glm::dvec2{mouse_x, mouse_y};
-
-    hide();
 }
 
 void Editor_view::register_command(Command* const command)
@@ -282,7 +280,6 @@ void Editor_view::on_key(
         pressed ? "press" : "release"
     );
     // Keycode::Key_f2:     m_trigger_capture = true; break;
-    // Keycode::Key_delete: m_editor_tools->delete_selected_meshes();
 }
 
 void Editor_view::on_char(

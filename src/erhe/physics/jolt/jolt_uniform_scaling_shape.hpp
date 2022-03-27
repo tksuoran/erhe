@@ -22,8 +22,6 @@ public:
             JPH::Vec3Arg{scale, scale, scale}
         }
     {
-        auto* jolt_collision_shape = reinterpret_cast<Jolt_collision_shape*>(shape);
-        auto  shape_ref = jolt_collision_shape->get_jolt_shape();
 	    auto result = m_shape_settings.Create();
         ERHE_VERIFY(result.IsValid());
         m_jolt_shape = result.Get();

@@ -80,33 +80,34 @@ void Log_window::initialize_component()
     get<Editor_imgui_windows>()->register_imgui_window(this);
     m_min_size = glm::vec2{220.0f, 120.0f};
 
-    log_startup     .set_sink(&m_tail_log_sink);
-    log_programs    .set_sink(&m_tail_log_sink);
-    log_textures    .set_sink(&m_tail_log_sink);
-    log_input       .set_sink(&m_tail_log_sink);
-    log_parsers     .set_sink(&m_tail_log_sink);
-    log_render      .set_sink(&m_frame_log_sink, false);
-    log_tools       .set_sink(&m_tail_log_sink);
-    log_selection   .set_sink(&m_tail_log_sink);
-    log_id_render   .set_sink(&m_tail_log_sink);
-    log_framebuffer .set_sink(&m_frame_log_sink, false);
-    log_pointer     .set_sink(&m_frame_log_sink, false);
-    log_input_events.set_sink(&m_tail_log_sink);
-    log_materials   .set_sink(&m_tail_log_sink);
-    log_renderdoc   .set_sink(&m_tail_log_sink);
-    log_raytrace    .set_sink(&m_tail_log_sink);
-    log_brush       .set_sink(&m_tail_log_sink);
-    log_physics     .set_sink(&m_tail_log_sink);
-    log_gl          .set_sink(&m_tail_log_sink);
-    log_headset     .set_sink(&m_tail_log_sink);
-    log_scene       .set_sink(&m_tail_log_sink);
-    log_performance .set_sink(&m_tail_log_sink);
-    log_node_properties.set_sink(&m_tail_log_sink, false);
-    log_trs_tool    .set_sink(&m_tail_log_sink);
-    log_fly_camera  .set_sink(&m_tail_log_sink);
-
+    log_brush                   .set_sink(&m_tail_log_sink);
     log_command_state_transition.set_sink(&m_tail_log_sink);
+    log_fly_camera              .set_sink(&m_tail_log_sink);
+    log_framebuffer             .set_sink(&m_frame_log_sink, false);
+    log_gl                      .set_sink(&m_tail_log_sink);
+    log_headset                 .set_sink(&m_tail_log_sink);
+    log_id_render               .set_sink(&m_tail_log_sink);
+    log_input                   .set_sink(&m_tail_log_sink);
     log_input_event             .set_sink(&m_tail_log_sink);
+    log_input_events            .set_sink(&m_tail_log_sink);
+    log_input_event_consumed    .set_sink(&m_tail_log_sink);
+    log_input_event_filtered    .set_sink(&m_tail_log_sink);
+    log_materials               .set_sink(&m_tail_log_sink);
+    log_node_properties         .set_sink(&m_tail_log_sink, false);
+    log_parsers                 .set_sink(&m_tail_log_sink);
+    log_performance             .set_sink(&m_tail_log_sink);
+    log_physics                 .set_sink(&m_tail_log_sink);
+    log_pointer                 .set_sink(&m_frame_log_sink, false);
+    log_programs                .set_sink(&m_tail_log_sink);
+    log_raytrace                .set_sink(&m_tail_log_sink);
+    log_render                  .set_sink(&m_frame_log_sink, false);
+    log_renderdoc               .set_sink(&m_tail_log_sink);
+    log_scene                   .set_sink(&m_tail_log_sink);
+    log_selection               .set_sink(&m_tail_log_sink);
+    log_startup                 .set_sink(&m_tail_log_sink);
+    log_textures                .set_sink(&m_tail_log_sink);
+    log_tools                   .set_sink(&m_tail_log_sink);
+    log_trs_tool                .set_sink(&m_tail_log_sink);
 
     erhe::raytrace::log_geometry.set_sink(&m_tail_log_sink);
     erhe::raytrace::log_embree  .set_sink(&m_tail_log_sink);
@@ -117,8 +118,6 @@ void Log_window::initialize_component()
     const auto view = get<Editor_view>();
     view->register_command   (&m_toggle_pause_command);
     view->bind_command_to_key(&m_toggle_pause_command, erhe::toolkit::Key_escape);
-
-    //hide();
 }
 
 void Log_window::toggle_pause()

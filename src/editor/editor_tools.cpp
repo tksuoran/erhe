@@ -38,11 +38,11 @@ void Editor_tools::register_background_tool(Tool* tool)
 
 void Editor_tools::render_tools(const Render_context& context)
 {
-    for (auto& tool : m_background_tools)
+    for (const auto& tool : m_background_tools)
     {
         tool->tool_render(context);
     }
-    for (auto& tool : m_tools)
+    for (const auto& tool : m_tools)
     {
         tool->tool_render(context);
     }

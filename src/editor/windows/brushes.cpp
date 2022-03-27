@@ -401,9 +401,15 @@ void Brushes::do_insert_operation()
     const auto hover_from_brush = get_brush_transform();
     //const auto world_from_brush = m_hover_mesh->world_from_node() * hover_from_brush;
     //const auto material         = m_materials->selected_material();
+    const uint64_t visibility_flags =
+        erhe::scene::Node_visibility::visible     |
+        erhe::scene::Node_visibility::content     |
+        erhe::scene::Node_visibility::shadow_cast |
+        erhe::scene::Node_visibility::id;
+
     const Instance_create_info brush_instance_create_info
     {
-        .node_visibility_flags = (erhe::scene::Node_visibility::content | erhe::scene::Node_visibility::shadow_cast | erhe::scene::Node_visibility::id),
+        .node_visibility_flags = visibility_flags,
         .physics_world         = m_scene_root->physics_world(),
         .world_from_node       = m_hover_mesh->world_from_node() * hover_from_brush,
         .material              = m_materials->selected_material(),
@@ -456,7 +462,7 @@ void Brushes::add_brush_mesh()
             .normal_style          = m_brush->normal_style
         }
     );
-    m_brush_mesh->set_visibility_mask(Node_visibility::content | Node_visibility::brush);
+    m_brush_mesh->set_visibility_mask(Node_visibility::visible | Node_visibility::content | Node_visibility::brush);
     m_scene_root->add(m_brush_mesh, m_scene_root->brush_layer());
 
     update_mesh_node_transform();

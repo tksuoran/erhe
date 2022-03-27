@@ -189,9 +189,10 @@ auto Jolt_rigid_body::get_center_of_mass_transform() const -> Transform
 
 void Jolt_rigid_body::set_center_of_mass_transform(const Transform transform)
 {
+    static_cast<void>(transform);
     // TODO
-    const auto rotation = m_body->GetRotation();
-    const auto position = m_body->GetCenterOfMassPosition();
+    //const auto rotation = m_body->GetRotation();
+    //const auto position = m_body->GetCenterOfMassPosition();
 }
 
 void Jolt_rigid_body::set_world_transform(const Transform transform)

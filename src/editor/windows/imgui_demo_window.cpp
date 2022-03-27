@@ -22,8 +22,6 @@ void Imgui_demo_window::connect()
 void Imgui_demo_window::initialize_component()
 {
     get<Editor_imgui_windows>()->register_imgui_window(this);
-
-    hide();
 }
 
 void Imgui_demo_window::imgui()
