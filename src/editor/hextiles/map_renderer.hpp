@@ -67,6 +67,8 @@ public:
     void initialize_component() override;
 
     // Public API
+    [[nodiscard]] auto tileset_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&;
+
     void blit(
         int      src_x,
         int      src_y,
@@ -79,8 +81,8 @@ public:
         uint32_t color
     );
 
-    void begin();
-    void end();
+    void begin    ();
+    void end      ();
 
     void render    (erhe::scene::Viewport viewport);
     void next_frame();

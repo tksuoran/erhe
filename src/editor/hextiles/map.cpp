@@ -107,7 +107,7 @@ void Map::set_unit_icon(Tile_coordinate tile_coordinate, unit_t unit_icon_value)
     m_map[index].unit_icon = unit_icon_value;
 }
 
-auto Map::wrap_zero_to_one(Tile_coordinate in) const -> Tile_coordinate
+auto Map::wrap(Tile_coordinate in) const -> Tile_coordinate
 {
     Tile_coordinate ret = in;
     while (ret.x >= m_width)
@@ -129,7 +129,7 @@ auto Map::wrap_zero_to_one(Tile_coordinate in) const -> Tile_coordinate
     return ret;
 }
 
-auto Map::wrap_minus_half_to_half(Tile_coordinate in) const -> Tile_coordinate
+auto Map::wrap_center(Tile_coordinate in) const -> Tile_coordinate
 {
     Tile_coordinate ret = in;
     while (ret.x >= m_width / 2)
@@ -144,7 +144,7 @@ auto Map::wrap_minus_half_to_half(Tile_coordinate in) const -> Tile_coordinate
     {
         ret.y -= static_cast<coordinate_t>(m_height);
     }
-    while (ret.y < m_height / 2)
+    while (ret.y < -m_height / 2)
     {
         ret.y += static_cast<coordinate_t>(m_height);
     }
@@ -156,10 +156,10 @@ auto Map::neighbor(
     direction_t     direction
 ) const -> Tile_coordinate
 {
-    return wrap_zero_to_one(position.neighbor(direction));
+    return wrap(position.neighbor(direction));
 }
 
-void Map::Hex_circle(
+void Map::hex_circle(
     Tile_coordinate                                            center_position,
     int                                                        r0,
     int                                                        r1,
@@ -182,13 +182,13 @@ void Map::Hex_circle(
         auto position = center_position;
         for (int s = 0; s < radius; ++s)
         {
-            position = wrap_zero_to_one(position.neighbor(direction_north));
+            position = wrap(position.neighbor(direction_north));
         }
         for (auto direction = direction_first; direction < direction_count; ++direction)
         {
             for (int s = 0; s < radius; ++s)
             {
-                position = wrap_zero_to_one(position.neighbor((direction + offset) % direction_count));
+                position = wrap(position.neighbor((direction + offset) % direction_count));
                 op(position);
             }
         }

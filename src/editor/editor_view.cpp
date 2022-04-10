@@ -15,11 +15,9 @@
 #include "commands/mouse_drag_binding.hpp"
 #include "commands/mouse_motion_binding.hpp"
 #include "commands/mouse_wheel_binding.hpp"
-#include "operations/operation_stack.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/imgui_renderer.hpp"
 #include "scene/scene_root.hpp"
-#include "tools/fly_camera_tool.hpp"
 #include "windows/viewport_window.hpp"
 
 #include "hextiles/map_window.hpp"
@@ -57,10 +55,7 @@ void Editor_view::connect()
     m_editor_rendering     = get    <Editor_rendering    >();
     m_editor_time          = get    <Editor_time         >();
     m_editor_tools         = get    <Editor_tools        >();
-    m_fly_camera_tool      = get    <Fly_camera_tool     >();
-    m_operation_stack      = get    <Operation_stack     >();
     m_pointer_context      = get    <Pointer_context     >();
-    m_scene_root           = get    <Scene_root          >();
     m_viewport_windows     = get    <Viewport_windows    >();
     m_window               = require<Window              >();
 }
@@ -443,8 +438,10 @@ void Editor_view::set_mouse_input_sink(Imgui_window* mouse_input_sink)
     m_mouse_input_sink = mouse_input_sink;
     if (mouse_input_sink != nullptr)
     {
-        m_window_position  = glm::vec2{ImGui::GetWindowPos()};
-        m_window_size      = glm::vec2{ImGui::GetWindowSize()};
+        m_window_position           = glm::vec2{ImGui::GetWindowPos()};
+        m_window_size               = glm::vec2{ImGui::GetWindowSize()};
+        m_window_content_region_min = glm::vec2{ImGui::GetWindowContentRegionMin()};
+        m_window_content_region_max = glm::vec2{ImGui::GetWindowContentRegionMax()};
     }
     else
     {
@@ -453,15 +450,41 @@ void Editor_view::set_mouse_input_sink(Imgui_window* mouse_input_sink)
     }
 }
 
-auto Editor_view::to_window(const glm::vec2 position_in_root) const -> glm::vec2
+auto Editor_view::to_window_bottom_left(const glm::vec2 position_in_root) const -> glm::vec2
 {
-    const float content_x      = static_cast<float>(position_in_root.x) - m_window_position.x;
-    const float content_y      = static_cast<float>(position_in_root.y) - m_window_position.y;
+    // TODO This has not been tested!
+    const float content_x      = static_cast<float>(position_in_root.x) - m_window_position.x - m_window_content_region_min.x;
+    const float content_y      = static_cast<float>(position_in_root.y) - m_window_position.y - m_window_content_region_min.y;
     const float content_flip_y = m_window_size.y - content_y;
     return {
         content_x,
         content_flip_y
     };
+}
+
+auto Editor_view::to_window_top_left(const glm::vec2 position_in_root) const -> glm::vec2
+{
+    const float content_x = static_cast<float>(position_in_root.x) - m_window_position.x - m_window_content_region_min.x;
+    const float content_y = static_cast<float>(position_in_root.y) - m_window_position.y - m_window_content_region_min.y;
+    return {
+        content_x,
+        content_y
+    };
+}
+
+auto Editor_view::last_mouse_position() const -> glm::dvec2
+{
+    return m_last_mouse_position;
+}
+
+auto Editor_view::last_mouse_position_delta() const -> glm::dvec2
+{
+    return m_last_mouse_position_delta;
+}
+
+auto Editor_view::last_mouse_wheel_delta() const -> glm::dvec2
+{
+    return m_last_mouse_wheel_delta;
 }
 
 void Editor_view::update_active_mouse_command(
@@ -573,13 +596,12 @@ void Editor_view::on_mouse_wheel(const double x, const double y)
         return;
     }
 
+    m_last_mouse_wheel_delta.x = x;
+    m_last_mouse_wheel_delta.y = y;
+
     log_input_event.trace("mouse wheel {}, {}\n", x, y);
 
-    Command_context context{
-        *this,
-        {},
-        {x, y}
-    };
+    Command_context context{*this};
     for (const auto& binding : m_mouse_wheel_bindings)
     {
         auto* const command = binding->get_command();
@@ -606,16 +628,14 @@ void Editor_view::on_mouse_move(const double x, const double y)
     }
 
     glm::dvec2 new_mouse_position{x, y};
-    const auto mouse_position_delta = m_last_mouse_position - new_mouse_position;
+    m_last_mouse_position_delta = m_last_mouse_position - new_mouse_position;
     if (m_pointer_context)
     {
         m_pointer_context->update_mouse(x, y);
     }
 
     Command_context context{
-        *this,
-        new_mouse_position,
-        mouse_position_delta
+        *this
     };
     m_last_mouse_position = new_mouse_position;
 

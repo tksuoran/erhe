@@ -511,18 +511,21 @@ auto Imgui_renderer::get_font_atlas() -> ImFontAtlas*
     return &m_font_atlas;
 }
 
-void Imgui_renderer::image(
+auto Imgui_renderer::image(
     const std::shared_ptr<erhe::graphics::Texture>& texture,
-    const int                                        width,
-    const int                                        height,
-    const glm::vec2                                  uv0,
-    const glm::vec2                                  uv1,
-    const glm::vec4                                  tint_color
-)
+    const int                                       width,
+    const int                                       height,
+    const glm::vec2                                 uv0,
+    const glm::vec2                                 uv1,
+    const glm::vec4                                 tint_color,
+    const bool                                      linear
+) -> bool
 {
     const uint64_t handle = erhe::graphics::get_handle(
         *texture.get(),
-        *m_linear_sampler.get()
+        linear
+            ? *m_linear_sampler.get()
+            : *m_nearest_sampler.get()
     );
     ImGui::Image(
         handle,
@@ -535,6 +538,7 @@ void Imgui_renderer::image(
         tint_color
     );
     use(texture, handle);
+    return ImGui::IsItemClicked();
 }
 
 void Imgui_renderer::use(

@@ -26,12 +26,7 @@ class Editor_rendering;
 class Editor_time;
 class Editor_tools;
 class Editor_view;
-class Fly_camera_tool;
-class Log_window;
-class Id_renderer;
 class Pointer_context;
-class Operation_stack;
-class Scene_root;
 class Viewport_window;
 class Viewport_windows;
 class Window;
@@ -120,9 +115,13 @@ public:
 
     void command_inactivated(Command* const command);
 
-    [[nodiscard]] auto mouse_input_sink() const -> Imgui_window*;
-    [[nodiscard]] auto to_window       (const glm::vec2 position_in_root) const -> glm::vec2;
-    [[nodiscard]] auto pointer_context () const -> Pointer_context*;
+    [[nodiscard]] auto mouse_input_sink         () const -> Imgui_window*;
+    [[nodiscard]] auto to_window_bottom_left    (const glm::vec2 position_in_root) const -> glm::vec2;
+    [[nodiscard]] auto to_window_top_left       (const glm::vec2 position_in_root) const -> glm::vec2;
+    [[nodiscard]] auto last_mouse_position      () const -> glm::dvec2;
+    [[nodiscard]] auto last_mouse_position_delta() const -> glm::dvec2;
+    [[nodiscard]] auto last_mouse_wheel_delta   () const -> glm::dvec2;
+    [[nodiscard]] auto pointer_context          () const -> Pointer_context*;
 
     void set_mouse_input_sink(Imgui_window* mouse_input_sink);
 
@@ -140,11 +139,7 @@ private:
     std::shared_ptr<Editor_rendering>     m_editor_rendering;
     std::shared_ptr<Editor_time>          m_editor_time;
     std::shared_ptr<Editor_tools>         m_editor_tools;
-    std::shared_ptr<Fly_camera_tool>      m_fly_camera_tool;
-    std::shared_ptr<Log_window>           m_log_window;
-    std::shared_ptr<Operation_stack>      m_operation_stack;
     std::shared_ptr<Pointer_context>      m_pointer_context;
-    std::shared_ptr<Scene_root>           m_scene_root;
     std::shared_ptr<Viewport_windows>     m_viewport_windows;
     std::shared_ptr<Window>               m_window;
 
@@ -161,9 +156,11 @@ private:
     std::vector<Key_binding>                          m_key_bindings;
     std::vector<std::unique_ptr<Mouse_binding>>       m_mouse_bindings;
     std::vector<std::unique_ptr<Mouse_wheel_binding>> m_mouse_wheel_bindings;
-    bool                                              m_ready          {false};
-    bool                                              m_close_requested{false};
-    glm::dvec2                                        m_last_mouse_position;
+    bool                                              m_ready                    {false};
+    bool                                              m_close_requested          {false};
+    glm::dvec2                                        m_last_mouse_position      {0.0, 0.0};
+    glm::dvec2                                        m_last_mouse_position_delta{0.0, 0.0};
+    glm::dvec2                                        m_last_mouse_wheel_delta   {0.0, 0.0};
 };
 
 }

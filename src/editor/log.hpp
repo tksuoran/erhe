@@ -36,3 +36,9 @@ extern erhe::log::Category log_fly_camera;
 extern erhe::log::Category log_windows;
 
 }
+
+namespace hextiles {
+
+extern erhe::log::Category log_map_window;
+
+}

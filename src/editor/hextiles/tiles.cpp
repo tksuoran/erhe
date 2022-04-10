@@ -130,14 +130,6 @@ auto Tiles::get_base_terrain(terrain_t terrain) const -> terrain_t
     return multishape.base_terrain_type;
 }
 
-#if 0
-auto Tiles::get_base_terrain(Tile_coordinate tile_coordinate) const -> terrain_t
-{
-    terrain_t terrain = m_map->get_terrain(tile_coordinate);
-    return get_base_terrain(terrain);
-}
-#endif
-
 auto Tiles::get_multishape_terrain(int group, unsigned int neighbor_mask) -> terrain_t
 {
     return static_cast<terrain_t>(

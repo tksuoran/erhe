@@ -13,7 +13,7 @@ class Pixel_lookup
 public:
     Pixel_lookup();
 
-    auto lut_xy       (Pixel_coordinate pixel_coordinate) const -> Tile_coordinate;
+    auto lut_xy       (Pixel_coordinate pixel_coordinate) const -> Pixel_coordinate;
     auto lut_value    (Pixel_coordinate pixel_coordinate) const -> Tile_coordinate;
     auto pixel_to_tile(Pixel_coordinate pixel_coordinate) const -> Tile_coordinate;
 

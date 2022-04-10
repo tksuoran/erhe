@@ -298,6 +298,11 @@ void Map_renderer::begin()
     m_can_blit = true;
 }
 
+auto Map_renderer::tileset_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&
+{
+    return m_tileset_texture;
+}
+
 void Map_renderer::blit(
     int      src_x,
     int      src_y,

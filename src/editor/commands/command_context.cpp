@@ -6,14 +6,10 @@
 namespace editor {
 
 Command_context::Command_context(
-    Editor_view&      editor_view,
-    const glm::dvec2& absolute_pointer,
-    const glm::dvec2& relative_pointer
+    Editor_view& editor_view
 
 )
-    : m_editor_view     {editor_view}
-    , m_absolute_pointer{absolute_pointer}
-    , m_relative_pointer{relative_pointer}
+    : m_editor_view{editor_view}
 {
 }
 
@@ -39,12 +35,17 @@ auto Command_context::accept_mouse_command(Command* command) -> bool
 
 auto Command_context::absolute_pointer() const -> glm::dvec2
 {
-    return m_absolute_pointer;
+    return m_editor_view.last_mouse_position();
 }
 
 auto Command_context::relative_pointer() const -> glm::dvec2
 {
-    return m_relative_pointer;
+    return m_editor_view.last_mouse_position_delta();
+}
+
+auto Command_context::relative_wheel() const -> glm::dvec2
+{
+    return m_editor_view.last_mouse_wheel_delta();
 }
 
 auto Command_context::editor_view() const -> Editor_view&

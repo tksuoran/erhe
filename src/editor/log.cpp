@@ -38,3 +38,13 @@ Category log_trs_tool                {1.0f, 0.9f, 0.0f, Console_color::YELLOW,  
 Category log_windows                 {1.0f, 0.9f, 0.0f, Console_color::YELLOW,  Level::LEVEL_INFO};
 
 }
+
+namespace hextiles {
+
+using Category      = erhe::log::Category;
+using Console_color = erhe::log::Console_color;
+using Level         = erhe::log::Level;
+
+Category log_map_window{0.6f, 1.0f, 0.0f, Console_color::GREEN, Level::LEVEL_INFO};
+
+}

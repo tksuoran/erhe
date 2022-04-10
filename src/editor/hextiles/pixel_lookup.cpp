@@ -106,9 +106,10 @@ Pixel_lookup::Pixel_lookup()
     size_t used_glyphs{0};
     std::map<Tile_coordinate, char> tiles;
     bool bad{false};
-    for (pixel_t ly_ = 0; ly_ < lut_height; ++ly_)
+    //for (pixel_t ly_ = 0; ly_ < lut_height; ++ly_)
+    for (pixel_t ly = 0; ly < lut_height; ++ly)
     {
-        pixel_t ly = lut_height - 1 - ly_;
+        //pixel_t ly = lut_height - 1 - ly_;
         log_pixel_lookup.info("{:2}: ", ly);
         for (pixel_t lx = 0; lx < lut_width; ++lx)
         {
@@ -156,19 +157,19 @@ template <typename T> int mod(T a, T b)
     return r < 0 ? r + b : r;
 }
 
-auto Pixel_lookup::lut_xy(Pixel_coordinate pixel_coordinate) const -> Tile_coordinate
+auto Pixel_lookup::lut_xy(Pixel_coordinate pixel_coordinate) const -> Pixel_coordinate
 {
     pixel_coordinate.x += Tile_shape::center_x;
     pixel_coordinate.y += Tile_shape::center_y;
     const int lx = (int)mod(pixel_coordinate.x, lut_width);
     const int ly = (int)mod(pixel_coordinate.y, lut_height);
-    return Tile_coordinate{static_cast<coordinate_t>(lx), static_cast<coordinate_t>(ly)};
+    return Pixel_coordinate{static_cast<coordinate_t>(lx), static_cast<coordinate_t>(ly)};
 }
 
 auto Pixel_lookup::lut_value(Pixel_coordinate pixel_coordinate) const -> Tile_coordinate
 {
     pixel_coordinate.x += Tile_shape::center_x;
-    pixel_coordinate.y += Tile_shape::center_y;
+    pixel_coordinate.y += Tile_shape::center_y - 1;
     const int lx        = (int)mod(pixel_coordinate.x, lut_width);
     const int ly        = (int)mod(pixel_coordinate.y, lut_height);
     const int lut_index = lx + ly * lut_width;
@@ -178,7 +179,7 @@ auto Pixel_lookup::lut_value(Pixel_coordinate pixel_coordinate) const -> Tile_co
 auto Pixel_lookup::pixel_to_tile(Pixel_coordinate pixel_coordinate) const -> Tile_coordinate
 {
     pixel_coordinate.x += Tile_shape::center_x;
-    pixel_coordinate.y += Tile_shape::center_y;
+    pixel_coordinate.y += Tile_shape::center_y - 1;
     const int             tx          = static_cast<int>(std::floor(static_cast<float>(pixel_coordinate.x) / static_cast<float>(lut_width)));
     const int             ty          = static_cast<int>(std::floor(static_cast<float>(pixel_coordinate.y) / static_cast<float>(lut_height)));
     const int             lx          = (int)mod(pixel_coordinate.x, lut_width);

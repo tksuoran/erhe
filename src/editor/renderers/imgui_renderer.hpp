@@ -99,14 +99,15 @@ public:
     [[nodiscard]] auto get_font_atlas() -> ImFontAtlas*;
     void use_as_backend_renderer_on_context(ImGuiContext* imgui_context);
 
-    void image(
+    auto image(
         const std::shared_ptr<erhe::graphics::Texture>& texture,
         const int                                       width,
         const int                                       height,
         const glm::vec2                                 uv0        = {0.0f, 1.0f},
         const glm::vec2                                 uv1        = {1.0f, 0.0f},
-        const glm::vec4                                 tint_color = {1.0f, 1.0f, 1.0f, 1.0f}
-    );
+        const glm::vec4                                 tint_color = {1.0f, 1.0f, 1.0f, 1.0f},
+        const bool                                      linear     = true
+    ) -> bool;
 
     void use(
         const std::shared_ptr<erhe::graphics::Texture>& texture,

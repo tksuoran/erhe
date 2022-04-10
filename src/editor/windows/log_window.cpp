@@ -109,6 +109,8 @@ void Log_window::initialize_component()
     log_tools                   .set_sink(&m_tail_log_sink);
     log_trs_tool                .set_sink(&m_tail_log_sink);
 
+    hextiles::log_map_window    .set_sink(&m_tail_log_sink);
+
     erhe::raytrace::log_geometry.set_sink(&m_tail_log_sink);
     erhe::raytrace::log_embree  .set_sink(&m_tail_log_sink);
 

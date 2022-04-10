@@ -116,7 +116,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Shader_monitor      >());
         m_components.add(make_shared<Text_renderer       >());
 
-#if 1
+#if 0
         m_components.add(make_shared<Brushes             >());
         m_components.add(make_shared<Debug_draw          >());
         m_components.add(make_shared<Debug_view_window   >());
@@ -161,10 +161,11 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 #endif
 
 #if 1
-        m_components.add(make_shared<hextiles::Map_renderer   >());
-        m_components.add(make_shared<hextiles::Map_window     >());
-        m_components.add(make_shared<hextiles::Map_tool_window>());
-        m_components.add(make_shared<hextiles::Tiles          >());
+        m_components.add(make_shared<hextiles::Map_renderer          >());
+        m_components.add(make_shared<hextiles::Map_window            >());
+        m_components.add(make_shared<hextiles::Map_tool_window       >());
+        m_components.add(make_shared<hextiles::Terrain_palette_window>());
+        m_components.add(make_shared<hextiles::Tiles                 >());
 #endif
     }
 
@@ -197,7 +198,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     if (m_components.get<Grid_tool             >()) m_components.get<Grid_tool             >()->hide();
     if (m_components.get<Imgui_demo_window     >()) m_components.get<Imgui_demo_window     >()->hide();
     if (m_components.get<Layers_window         >()) m_components.get<Layers_window         >()->hide();
-    //if (m_components.get<Log_window            >()) m_components.get<Log_window            >()->hide();
+    if (m_components.get<Log_window            >()) m_components.get<Log_window            >()->hide();
     if (m_components.get<Mesh_properties       >()) m_components.get<Mesh_properties       >()->hide();
     if (m_components.get<Operation_stack       >()) m_components.get<Operation_stack       >()->hide();
     if (m_components.get<Performance_window    >()) m_components.get<Performance_window    >()->hide();
@@ -215,8 +216,8 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     //if (m_components.get<Tool_properties_window>()) m_components.get<Tool_properties_window>()->hide();
     //if (m_components.get<Scene_root>()            ) m_components.get<Scene_root>()->physics_world().enable_physics_updates();
 
-    if (m_components.get<hextiles::Map_window     >()) m_components.get<hextiles::Map_window     >()->hide();
-    if (m_components.get<hextiles::Map_tool_window>()) m_components.get<hextiles::Map_tool_window>()->hide();
+    //if (m_components.get<hextiles::Map_window     >()) m_components.get<hextiles::Map_window     >()->hide();
+    //if (m_components.get<hextiles::Map_tool_window>()) m_components.get<hextiles::Map_tool_window>()->hide();
 
     opengl_state_tracker->on_thread_enter();
 
