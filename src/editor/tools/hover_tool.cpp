@@ -1,5 +1,6 @@
 #include "hover_tool.hpp"
 #include "editor_tools.hpp"
+#include "editor_view.hpp"
 #include "log.hpp"
 #include "rendering.hpp"
 
@@ -51,6 +52,7 @@ auto Hover_tool_hover_command::try_call(Command_context& context) -> bool
 
 Hover_tool::Hover_tool()
     : erhe::components::Component{c_name}
+    , m_hover_command{*this}
 {
 }
 
@@ -75,6 +77,11 @@ void Hover_tool::initialize_component()
     m_hover_material = m_scene_root->make_material("hover");
     m_hover_material->visible = false;
     get<Editor_tools>()->register_background_tool(this);
+
+    const auto view = get<Editor_view>();
+    view->register_command(&m_hover_command);
+    view->bind_command_to_mouse_motion(&m_hover_command);
+
 }
 
 void Hover_tool::on_inactive()

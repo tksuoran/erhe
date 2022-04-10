@@ -150,11 +150,7 @@ void Physics_tool::initialize_component()
     view->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_right);
     view->bind_command_to_mouse_drag(&m_force_command, erhe::toolkit::Mouse_button_right);
 
-    Command_context context
-    {
-        *view.get(),
-        *m_pointer_context.get()
-    };
+    Command_context context{*view.get()};
     set_active_command(c_command_drag);
 
     get<Operations>()->register_active_tool(this);
@@ -449,11 +445,7 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
 void Physics_tool::set_active_command(const int command)
 {
     m_active_command = command;
-    Command_context context
-    {
-        *get<Editor_view>().get(),
-        *m_pointer_context.get()
-    };
+    Command_context context{*get<Editor_view>().get()};
 
     switch (command)
     {

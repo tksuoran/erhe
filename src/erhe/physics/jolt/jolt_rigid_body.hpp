@@ -2,8 +2,8 @@
 
 #include "erhe/physics/irigid_body.hpp"
 
-#include <Jolt.h>
-#include <Physics/Body/Body.h>
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/Body/Body.h>
 
 namespace JPH
 {

@@ -1,5 +1,6 @@
 #include "erhe/physics/jolt/jolt_world.hpp"
 #include "erhe/physics/jolt/jolt_constraint.hpp"
+#include "erhe/physics/jolt/jolt_debug_renderer.hpp"
 #include "erhe/physics/jolt/jolt_rigid_body.hpp"
 #include "erhe/physics/jolt/glm_conversions.hpp"
 #include "erhe/physics/idebug_draw.hpp"
@@ -7,9 +8,9 @@
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include "Core/Factory.h"
-#include "Core/RTTI.h"
-#include "RegisterTypes.h"
+#include <Jolt/Core/Factory.h>
+#include <Jolt/Core/RTTI.h>
+#include <Jolt/RegisterTypes.h>
 
 namespace erhe::physics
 {
@@ -171,6 +172,7 @@ Jolt_world::Jolt_world()
 	const unsigned int cMaxBodyPairs          = 1024;
 	const unsigned int cMaxContactConstraints = 1024;
 
+    m_debug_renderer              = std::make_unique<Jolt_debug_renderer             >();
     m_broad_phase_layer_interface = std::make_unique<Broad_phase_layer_interface_impl>();
 	m_physics_system.Init(
         cMaxBodies,
@@ -307,11 +309,12 @@ auto Jolt_world::get_gravity() const -> glm::vec3
 
 void Jolt_world::set_debug_drawer(IDebug_draw* debug_draw)
 {
-    static_cast<void>(debug_draw);
+    m_debug_renderer->set_debug_draw(debug_draw);
 }
 
 void Jolt_world::debug_draw()
 {
+    // TODO
 }
 
 auto Jolt_world::get_physics_system() -> JPH::PhysicsSystem&

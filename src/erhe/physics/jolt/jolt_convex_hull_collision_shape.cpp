@@ -1,7 +1,7 @@
 #include "erhe/physics/jolt/jolt_convex_hull_collision_shape.hpp"
 
-#include <Jolt.h>
-#include <Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 
 namespace erhe::physics
 {

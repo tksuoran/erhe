@@ -29,7 +29,7 @@ Embree_instance::Embree_instance(const std::string_view debug_label)
         Embree_device::get_instance().get_rtc_device(),
         RTC_GEOMETRY_TYPE_INSTANCE
     );
-    log_embree.trace("rtcNewGeometry(instance = {})\n", debug_label);
+    //log_embree.trace("rtcNewGeometry(instance = {})\n", debug_label);
     if (m_geometry != nullptr)
     {
         rtcSetGeometryUserData(m_geometry, this);
@@ -38,7 +38,7 @@ Embree_instance::Embree_instance(const std::string_view debug_label)
 
 Embree_instance::~Embree_instance()
 {
-    log_embree.trace("rtcReleaseGeometry(instance = {})\n", m_debug_label);
+    //log_embree.trace("rtcReleaseGeometry(instance = {})\n", m_debug_label);
     rtcReleaseGeometry(m_geometry);
 }
 
@@ -49,14 +49,14 @@ auto Embree_instance::get_rtc_geometry() -> RTCGeometry
 
 void Embree_instance::enable()
 {
-    log_embree.trace("rtcEnableGeometry(instance = {})\n", m_debug_label);
+    //log_embree.trace("rtcEnableGeometry(instance = {})\n", m_debug_label);
     rtcEnableGeometry(m_geometry);
     m_enabled = true;
 }
 
 void Embree_instance::disable()
 {
-    log_embree.trace("rtcDisableGeometry(instance = {})\n", m_debug_label);
+    //log_embree.trace("rtcDisableGeometry(instance = {})\n", m_debug_label);
     rtcDisableGeometry(m_geometry);
     m_enabled = false;
 }
@@ -68,7 +68,7 @@ void Embree_instance::disable()
 
 void Embree_instance::set_mask(const uint32_t mask)
 {
-    log_embree.trace("rtcSetGeometryMask(instance = {}, mask = {:#04x})\n", m_debug_label, mask);
+    //log_embree.trace("rtcSetGeometryMask(instance = {}, mask = {:#04x})\n", m_debug_label, mask);
     rtcSetGeometryMask(m_geometry, mask);
     m_mask = mask;
 }
@@ -107,13 +107,13 @@ void Embree_instance::set_transform(const glm::mat4 transform)
 void Embree_instance::set_scene(IScene* scene)
 {
     m_scene = static_cast<Embree_scene*>(scene);
-    log_embree.trace(
-        "rtcSetGeometryInstancedScene(instance = {}, scene = {})\n",
-        m_debug_label,
-        (m_scene != nullptr)
-            ? m_scene->debug_label()
-            : "()"
-    );
+    //log_embree.trace(
+    //    "rtcSetGeometryInstancedScene(instance = {}, scene = {})\n",
+    //    m_debug_label,
+    //    (m_scene != nullptr)
+    //        ? m_scene->debug_label()
+    //        : "()"
+    //);
     m_scene->commit();
     rtcSetGeometryInstancedScene(
         m_geometry,

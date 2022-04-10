@@ -35,5 +35,6 @@ Category log_svg                     {0.9f, 1.0f, 0.9f, Console_color::WHITE,   
 Category log_textures                {0.9f, 1.0f, 1.0f, Console_color::WHITE,   Level::LEVEL_INFO};
 Category log_tools                   {0.9f, 1.0f, 0.1f, Console_color::YELLOW,  Level::LEVEL_INFO};
 Category log_trs_tool                {1.0f, 0.9f, 0.0f, Console_color::YELLOW,  Level::LEVEL_INFO};
+Category log_windows                 {1.0f, 0.9f, 0.0f, Console_color::YELLOW,  Level::LEVEL_INFO};
 
 }

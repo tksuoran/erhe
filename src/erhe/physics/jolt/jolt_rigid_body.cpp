@@ -5,10 +5,10 @@
 #include "erhe/physics/transform.hpp"
 #include "erhe/scene/node.hpp"
 
-#include <Jolt.h>
-#include <Physics/Body/Body.h>
-#include <Physics/Body/BodyInterface.h>
-#include <Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/Body/Body.h>
+#include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -87,11 +87,13 @@ Jolt_rigid_body::Jolt_rigid_body(
     creation_settings.mAllowDynamicOrKinematic         = true;
     creation_settings.mFriction                        = create_info.friction;
     creation_settings.mRestitution                     = create_info.restitution;
-    creation_settings.mOverrideMassProperties          = JPH::EOverrideMassProperties::MassAndInertiaProvided;
+    creation_settings.mOverrideMassProperties          = JPH::EOverrideMassProperties::CalculateMassAndInertia; // JPH::EOverrideMassProperties::MassAndInertiaProvided;
     creation_settings.mMassPropertiesOverride.mMass    = create_info.mass > 0.0f ? create_info.mass : 1.0f;
     creation_settings.mMassPropertiesOverride.mInertia = to_jolt(create_info.local_inertia);
     creation_settings.mLinearDamping                   = create_info.linear_damping;
     creation_settings.mAngularDamping                  = create_info.angular_damping;
+
+    creation_settings.mLinearDamping                   = 0.001f;
 
     static_assert(sizeof(uintptr_t) <= sizeof(JPH::uint64));
     creation_settings.mUserData = static_cast<JPH::uint64>(reinterpret_cast<uintptr_t>(this));

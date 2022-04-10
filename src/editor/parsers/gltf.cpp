@@ -1093,6 +1093,9 @@ private:
             material = m_materials.at(material_index);
         }
 
+        auto node_raytrace = std::make_shared<Node_raytrace>(context.erhe_geometry);
+        auto* raytrace_primitive = node_raytrace->raytrace_primitive();
+
         const auto normal_style = erhe::primitive::Normal_style::point_normals;
         erhe_mesh->mesh_data.primitives.push_back(
             erhe::primitive::Primitive{
@@ -1110,7 +1113,6 @@ private:
             }
         );
 
-        auto node_raytrace = std::make_shared<Node_raytrace>(context.erhe_geometry);
         erhe_mesh->attach(node_raytrace);
         add_to_raytrace_scene(
             m_scene_root->raytrace_scene(),
@@ -1134,13 +1136,12 @@ private:
             parse_primitive(erhe_mesh, mesh, &mesh->primitives[i]);
         }
 
-        erhe_mesh->visibility_mask() |=
-            (
-                erhe::scene::Node_visibility::visible     |
-                erhe::scene::Node_visibility::content     |
-                erhe::scene::Node_visibility::shadow_cast |
-                erhe::scene::Node_visibility::id
-            );
+        erhe_mesh->set_visibility_mask(
+            erhe::scene::Node_visibility::visible     |
+            erhe::scene::Node_visibility::content     |
+            erhe::scene::Node_visibility::shadow_cast |
+            erhe::scene::Node_visibility::id
+        );
 
         m_scene_root->scene().add_to_mesh_layer(
             *m_scene_root->content_layer(),

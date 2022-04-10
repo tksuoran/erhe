@@ -55,8 +55,10 @@ void Framebuffer_window::initialize(
     };
 }
 
-auto Framebuffer_window::get_size() const -> glm::vec2
+auto Framebuffer_window::get_size(glm::vec2 available_size) const -> glm::vec2
 {
+    static_cast<void>(available_size);
+
     return glm::vec2{256.0f, 256.0f};
 }
 
@@ -91,7 +93,7 @@ void Framebuffer_window::update_framebuffer()
         static_cast<float>(imgui_available_size.y),
     };
 
-    const glm::vec2 source_size = get_size();
+    const glm::vec2 source_size = get_size(available_size);
     if (
         (source_size.x == 0) ||
         (source_size.y == 0)
@@ -161,6 +163,7 @@ void Framebuffer_window::imgui()
             //ImVec2{0, 1},
             //ImVec2{1, 0}
         );
+        m_is_hovered = ImGui::IsItemHovered();
         ImGui::PopStyleVar();
     }
     update_framebuffer();

@@ -26,6 +26,9 @@
 #   include "xr/headset_renderer.hpp"
 #endif
 
+#include "hextiles/map_window.hpp"
+#include "hextiles/map_renderer.hpp"
+
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/log/log_glm.hpp"
@@ -453,6 +456,12 @@ void Editor_rendering::render()
 
     m_viewport_windows->render();
 
+    const auto& map_window = get<hextiles::Map_window>();
+    if (map_window)
+    {
+        map_window->render();
+    }
+
     m_editor_imgui_windows->imgui_windows();
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -468,6 +477,12 @@ void Editor_rendering::render()
     if (m_post_processing  ) m_post_processing  ->next_frame();
     if (m_shadow_renderer  ) m_shadow_renderer  ->next_frame();
     if (m_text_renderer    ) m_text_renderer    ->next_frame();
+
+    const auto& map_renderer = get<hextiles::Map_renderer>();
+    if (map_renderer)
+    {
+        map_renderer->next_frame();
+    }
 }
 
 void Editor_rendering::render_viewport(const Render_context& context, const bool has_pointer)

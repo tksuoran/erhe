@@ -88,6 +88,8 @@ private:
     std::shared_ptr<Scene_root>        m_scene_root;
     std::shared_ptr<Text_renderer>     m_text_renderer;
 
+    Hover_tool_hover_command           m_hover_command;
+
     std::shared_ptr<erhe::scene::Mesh> m_hover_mesh           {nullptr};
     size_t                             m_hover_primitive_index{0};
     nonstd::optional<glm::vec3>        m_hover_position_world;

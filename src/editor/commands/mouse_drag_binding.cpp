@@ -16,6 +16,27 @@ Mouse_drag_binding::Mouse_drag_binding(
 {
 }
 
+Mouse_drag_binding::Mouse_drag_binding()
+{
+}
+
+Mouse_drag_binding::~Mouse_drag_binding()
+{
+}
+
+Mouse_drag_binding::Mouse_drag_binding(Mouse_drag_binding&& other) noexcept
+    : Mouse_binding{std::move(other)}
+    , m_button     {other.m_button}
+{
+}
+
+auto Mouse_drag_binding::operator=(Mouse_drag_binding&& other) noexcept -> Mouse_drag_binding&
+{
+    Mouse_binding::operator=(std::move(other));
+    this->m_button = other.m_button;
+    return *this;
+}
+
 auto Mouse_drag_binding::on_button(
     Command_context&                  context,
     const erhe::toolkit::Mouse_button button,

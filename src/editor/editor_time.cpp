@@ -63,7 +63,12 @@ void Editor_time::update()
             .frame_number = m_frame_number
         }
     );
-    m_scene_root->scene().update_node_transforms();
+
+    // TODO Move away from here, make IUpdate_once_per_frame
+    if (m_scene_root)
+    {
+        m_scene_root->scene().update_node_transforms();
+    }
 
     ERHE_PROFILE_FRAME_END
 }

@@ -178,6 +178,7 @@ void Fly_camera_tool::initialize_component()
 
     const auto view = get<Editor_view>();
 
+    // TODO these commands should be registered
     view->bind_command_to_key(&m_move_up_active_command,         erhe::toolkit::Key_e, true );
     view->bind_command_to_key(&m_move_up_inactive_command,       erhe::toolkit::Key_e, false);
     view->bind_command_to_key(&m_move_down_active_command,       erhe::toolkit::Key_q, true );

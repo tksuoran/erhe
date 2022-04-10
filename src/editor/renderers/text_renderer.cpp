@@ -104,11 +104,15 @@ void Text_renderer::initialize_component()
 
     m_projection_block = std::make_unique<erhe::graphics::Shader_resource>("projection", 0, erhe::graphics::Shader_resource::Type::uniform_block);
 
-    constexpr gl::Buffer_storage_mask    storage_mask  {gl::Buffer_storage_mask::map_write_bit};
-    constexpr gl::Map_buffer_access_mask access_mask   {gl::Map_buffer_access_mask::map_write_bit};
-    constexpr size_t                     max_quad_count{65536 / 4}; // each quad consumes 4 indices
-    constexpr size_t                     index_count   {65536 * 5};
-    constexpr size_t                     index_stride  {2};
+    constexpr gl::Buffer_storage_mask    storage_mask            {gl::Buffer_storage_mask::map_write_bit};
+    constexpr gl::Map_buffer_access_mask access_mask             {gl::Map_buffer_access_mask::map_write_bit};
+    constexpr size_t                     uint16_max              {65535};
+    constexpr size_t                     uint16_primitive_restart{0xffffu};
+    constexpr size_t                     per_quad_vertex_count   {4}; // corner count
+    constexpr size_t                     per_quad_index_count    {per_quad_vertex_count + 1}; // Plus one for primitive restart
+    constexpr size_t                     max_quad_count          {uint16_max / per_quad_vertex_count}; // each quad consumes 4 indices
+    constexpr size_t                     index_count             {uint16_max * per_quad_index_count};
+    constexpr size_t                     index_stride            {2};
 
     m_index_buffer = std::make_unique<erhe::graphics::Buffer>(
         gl::Buffer_target::element_array_buffer,
@@ -123,16 +127,16 @@ void Text_renderer::initialize_component()
         access_mask
     };
 
-    const auto gpu_index_data = index_buffer_map.span();
-    size_t     offset      {0};
-    uint16_t   vertex_index{0};
+    const auto& gpu_index_data = index_buffer_map.span();
+    size_t      offset      {0};
+    uint16_t    vertex_index{0};
     for (unsigned int i = 0; i < max_quad_count; ++i)
     {
         gpu_index_data[offset + 0] = vertex_index;
         gpu_index_data[offset + 1] = vertex_index + 1;
         gpu_index_data[offset + 2] = vertex_index + 2;
         gpu_index_data[offset + 3] = vertex_index + 3;
-        gpu_index_data[offset + 4] = 0xffffu;
+        gpu_index_data[offset + 4] = uint16_primitive_restart;
         vertex_index += 4;
         offset += 5;
     }
@@ -223,9 +227,12 @@ void Text_renderer::initialize_component()
         gl::Texture_mag_filter::nearest
     );
 
-    m_font_sampler_location = m_default_uniform_block.add_sampler("s_texture", gl::Uniform_type::sampler_2d)->location();
-
-    m_projection_block->add_mat4("clip_from_window");
+    const auto clip_from_window = m_projection_block->add_mat4 ("clip_from_window");
+    const auto texture          = m_projection_block->add_uvec2("texture");
+    m_u_clip_from_window_size   = clip_from_window->size_bytes();
+    m_u_clip_from_window_offset = clip_from_window->offset_in_parent();
+    m_u_texture_size            = texture->size_bytes();
+    m_u_texture_offset          = texture->offset_in_parent();
 
     m_font = std::make_unique<erhe::ui::Font>("res/fonts/SourceSansPro-Regular.otf", 12, 0.4f);
 
@@ -233,11 +240,11 @@ void Text_renderer::initialize_component()
     const fs::path vs_path = shader_path / fs::path("text.vert");
     const fs::path fs_path = shader_path / fs::path("text.frag");
     Shader_stages::Create_info create_info{
-        .name                      = "stream",
+        .name                      = "text",
         .vertex_attribute_mappings = &m_attribute_mappings,
         .fragment_outputs          = &m_fragment_outputs,
-        .default_uniform_block     = &m_default_uniform_block
     };
+    create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     create_info.add_interface_block(m_projection_block.get());
     create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
     create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
@@ -315,6 +322,11 @@ void Text_renderer::print(
     m_index_count += quad_count * 5;
 }
 
+auto Text_renderer::measure(const std::string_view text) const -> erhe::ui::Rectangle
+{
+    return m_font->measure(text);
+}
+
 static constexpr std::string_view c_text_renderer_render{"Text_renderer::render()"};
 void Text_renderer::render(erhe::scene::Viewport viewport)
 {
@@ -327,16 +339,19 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
 
     ERHE_PROFILE_GPU_SCOPE(c_text_renderer_render)
 
+    const auto handle = m_font->texture()->get_handle();
+
     erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_render};
 
     m_projection_writer.begin(current_frame_resources().projection_buffer.target());
 
-    auto* const            projection_buffer   = &current_frame_resources().projection_buffer;
-    const auto             projection_gpu_data = projection_buffer->map();
-    std::byte* const       start               = projection_gpu_data.data()       + m_projection_writer.write_offset;
-    const size_t           byte_count          = projection_gpu_data.size_bytes() - m_projection_writer.write_offset;
-    const size_t           word_count          = byte_count / sizeof(float);
-    const gsl::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
+    auto* const               projection_buffer   = &current_frame_resources().projection_buffer;
+    const auto                projection_gpu_data = projection_buffer->map();
+    std::byte* const          start               = projection_gpu_data.data()       + m_projection_writer.write_offset;
+    const size_t              byte_count          = projection_gpu_data.size_bytes() - m_projection_writer.write_offset;
+    const size_t              word_count          = byte_count / sizeof(float);
+    const gsl::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
+    const gsl::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     const mat4 clip_from_window = erhe::toolkit::create_orthographic(
         static_cast<float>(viewport.x), static_cast<float>(viewport.width),
@@ -346,8 +361,19 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
     );
     using erhe::graphics::as_span;
     using erhe::graphics::write;
-    write(gpu_float_data, 0, as_span(clip_from_window));
-    m_projection_writer.write_offset += 4 * 4 * sizeof(float);
+
+    write(gpu_float_data, m_u_clip_from_window_offset, as_span(clip_from_window));
+    m_projection_writer.write_offset += m_u_clip_from_window_size;
+
+    const uint32_t texture_handle[2] =
+    {
+        static_cast<uint32_t>((handle & 0xffffffffu)),
+        static_cast<uint32_t>(handle >> 32u)
+    };
+    const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
+    write(gpu_uint32_data, m_u_texture_offset, texture_handle_cpu_data);
+    m_projection_writer.write_offset += m_u_texture_size;
+
     m_projection_writer.end();
 
     const auto& pipeline = current_frame_resources().pipeline;
@@ -358,30 +384,22 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     m_pipeline_state_tracker->execute(pipeline);
 
-    const unsigned int font_texture_unit = 0;
-    const unsigned int font_texture_name = m_font->texture()->gl_name();
-    gl::program_uniform_1i(
-        pipeline.data.shader_stages->gl_name(),
-        m_font_sampler_location,
-        font_texture_unit
-    );
-    gl::bind_sampler(font_texture_unit, m_nearest_sampler->gl_name());
-    gl::bind_textures(font_texture_unit, 1, &font_texture_name);
-
     gl::bind_buffer_range(
         projection_buffer->target(),
         static_cast<GLuint>    (m_projection_block->binding_point()),
         static_cast<GLuint>    (projection_buffer->gl_name()),
         static_cast<GLintptr>  (m_projection_writer.range.first_byte_offset),
-        static_cast<GLsizeiptr>(4 * 4 * sizeof(float))
+        static_cast<GLsizeiptr>(m_projection_writer.range.byte_count)
     );
 
+    gl::make_texture_handle_resident_arb(handle);
     gl::draw_elements(
         pipeline.data.input_assembly.primitive_topology,
         static_cast<GLsizei>(m_index_count),
         gl::Draw_elements_type::unsigned_short,
         reinterpret_cast<const void*>(m_index_range_first * 2)
     );
+    gl::make_texture_handle_non_resident_arb(handle);
     gl::disable(gl::Enable_cap::primitive_restart_fixed_index);
 
     m_index_range_first += m_index_count;

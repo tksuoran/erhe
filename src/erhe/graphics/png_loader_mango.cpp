@@ -17,12 +17,12 @@ namespace erhe::graphics
 
     if (format == Format{24, Format::UNORM, Format::RGB, 8, 8, 8, 0})
     {
-        return Image_format::rgb8; // gl::Internal_format::rgb8;
+        return Image_format::srgb8; // gl::Internal_format::rgb8;
     }
 
     if (format == Format{32, Format::UNORM, Format::RGBA, 8, 8, 8, 8})
     {
-        return Image_format::rgba8; //gl::Internal_format::rgba8;
+        return Image_format::srgb8_alpha8; //gl::Internal_format::rgba8;
     }
 
     ERHE_FATAL("unsupported PNG image color type");
@@ -50,8 +50,8 @@ namespace erhe::graphics
     switch (format)
     {
         //using enum Image_format;
-        case Image_format::rgb8:  return Format{24, Format::UNORM, Format::RGB,  8, 8, 8, 0};
-        case Image_format::rgba8: return Format{32, Format::UNORM, Format::RGBA, 8, 8, 8, 8};
+        case Image_format::srgb8:        return Format{24, Format::UNORM, Format::RGB,  8, 8, 8, 0};
+        case Image_format::srgb8_alpha8: return Format{32, Format::UNORM, Format::RGBA, 8, 8, 8, 8};
         default: break;
     }
 

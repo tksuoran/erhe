@@ -57,8 +57,10 @@ void Debug_view_window::initialize_component()
 
 }
 
-auto Debug_view_window::get_size() const -> glm::vec2
+auto Debug_view_window::get_size(glm::vec2 available_size) const -> glm::vec2
 {
+    static_cast<void>(available_size);
+
     if (!m_shadow_renderer)
     {
         return {};

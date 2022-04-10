@@ -113,8 +113,7 @@ void Material_paint_tool::initialize_component()
 
     Command_context context
     {
-        *view.get(),
-        *m_pointer_context.get()
+        *view.get()
     };
     set_active_command(c_command_paint);
 
@@ -194,8 +193,7 @@ void Material_paint_tool::set_active_command(const int command)
     m_active_command = command;
     Command_context context
     {
-        *get<Editor_view>().get(),
-        *m_pointer_context.get()
+        *get<Editor_view>().get()
     };
 
     switch (command)

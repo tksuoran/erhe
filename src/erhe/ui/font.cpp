@@ -596,7 +596,7 @@ auto Font::print(
     return chars_printed;
 }
 
-void Font::measure(const std::string& text, Rectangle& bounds) const
+auto Font::measure(const std::string_view text) const -> Rectangle
 {
     ERHE_PROFILE_FUNCTION
 
@@ -604,11 +604,11 @@ void Font::measure(const std::string& text, Rectangle& bounds) const
 
     if (text.empty())
     {
-        return;
+        return Rectangle{0.0f, 0.0f, 0.0f, 0.0f};
     }
 
     hb_buffer_t* buf = hb_buffer_create();
-    hb_buffer_add_utf8     (buf, text.c_str(), -1, 0, -1);
+    hb_buffer_add_utf8     (buf, text.data(), static_cast<int>(text.size()), 0, -1);
     hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
     hb_buffer_set_script   (buf, HB_SCRIPT_LATIN);
     hb_buffer_set_language (buf, hb_language_from_string("en", -1));
@@ -619,6 +619,8 @@ void Font::measure(const std::string& text, Rectangle& bounds) const
 
     float x{0.0f};
     float y{0.0f};
+    Rectangle bounds{};
+    bounds.reset_for_grow();
     for (unsigned int i = 0; i < glyph_count; ++i)
     {
         const auto  glyph_id  = glyph_info[i].codepoint;
@@ -652,6 +654,7 @@ void Font::measure(const std::string& text, Rectangle& bounds) const
         y += y_advance;
     }
     hb_buffer_destroy(buf);
+    return bounds;
 }
 #else
 auto Font::print(

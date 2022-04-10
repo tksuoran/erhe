@@ -37,13 +37,13 @@ void Textures::initialize_component()
     background = load(fs::path("res") / "images" / "background.png");
 }
 
-gl::Internal_format to_gl(erhe::graphics::Image_format format)
+auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format
 {
     switch (format)
     {
         //using enum erhe::graphics::Image_format;
-        case erhe::graphics::Image_format::rgb8:  return gl::Internal_format::rgb8;
-        case erhe::graphics::Image_format::rgba8: return gl::Internal_format::rgba8;
+        case erhe::graphics::Image_format::srgb8:        return gl::Internal_format::srgb8;
+        case erhe::graphics::Image_format::srgb8_alpha8: return gl::Internal_format::srgb8_alpha8;
         default:
         {
             ERHE_FATAL("Bad image format %04x\n", static_cast<unsigned int>(format));
@@ -89,7 +89,7 @@ auto Textures::load(
         texture_create_info.internal_format
     );
 
-    bool ok = loader.load(span);
+    const bool ok = loader.load(span);
     loader.close();
     if (!ok)
     {

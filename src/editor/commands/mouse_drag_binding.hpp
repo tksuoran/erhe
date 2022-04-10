@@ -13,6 +13,13 @@ public:
         Command* const                    command,
         const erhe::toolkit::Mouse_button button
     );
+    ~Mouse_drag_binding() noexcept override;
+
+    Mouse_drag_binding();
+    Mouse_drag_binding(const Mouse_drag_binding&) = delete;
+    Mouse_drag_binding(Mouse_drag_binding&& other) noexcept;
+    auto operator=(const Mouse_drag_binding&) -> Mouse_drag_binding& = delete;
+    auto operator=(Mouse_drag_binding&& other) noexcept -> Mouse_drag_binding&;
 
     auto on_button(
         Command_context&                  context,

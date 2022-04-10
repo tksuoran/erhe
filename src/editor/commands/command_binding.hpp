@@ -17,8 +17,8 @@ public:
     Command_binding();
     Command_binding(const Command_binding&) = delete;
     Command_binding(Command_binding&& other) noexcept;
-
-    auto operator=(Command_binding&& other) noexcept -> Command_binding&;;
+    auto operator=(const Command_binding&) -> Command_binding& = delete;
+    auto operator=(Command_binding&& other) noexcept -> Command_binding&;
 
     [[nodiscard]] auto get_id     () const -> erhe::toolkit::Unique_id<Command_binding>::id_type;
     [[nodiscard]] auto get_command() const -> Command*;

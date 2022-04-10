@@ -3,16 +3,18 @@
 
 namespace editor {
 
-Command_binding::Command_binding()
-{
-}
-
 Command_binding::Command_binding(Command* const command)
     : m_command{command}
 {
 }
 
-Command_binding::~Command_binding() = default;
+Command_binding::Command_binding()
+{
+}
+
+Command_binding::~Command_binding()
+{
+}
 
 Command_binding::Command_binding(Command_binding&& other) noexcept
     : m_command{other.m_command}
@@ -23,7 +25,7 @@ Command_binding::Command_binding(Command_binding&& other) noexcept
 auto Command_binding::operator=(Command_binding&& other) noexcept -> Command_binding&
 {
     m_command = other.m_command;
-    m_id = std::move(other.m_id);
+    m_id      = std::move(other.m_id);
     return *this;
 }
 

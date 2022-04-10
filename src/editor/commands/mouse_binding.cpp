@@ -8,6 +8,25 @@ Mouse_binding::Mouse_binding(Command* const command)
 {
 }
 
+Mouse_binding::Mouse_binding()
+{
+}
+
+Mouse_binding::~Mouse_binding()
+{
+}
+
+Mouse_binding::Mouse_binding(Mouse_binding&& other) noexcept
+    : Command_binding{std::move(other)}
+{
+}
+
+auto Mouse_binding::operator=(Mouse_binding&& other) noexcept -> Mouse_binding&
+{
+    Command_binding::operator=(std::move(other));
+    return *this;
+}
+
 auto Mouse_binding::on_button(
     Command_context&                  context,
     const erhe::toolkit::Mouse_button button,

@@ -428,11 +428,11 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
     auto& style = ImGui::GetStyle();
     style.WindowMenuButtonPosition = ImGuiDir_None;
 
-    style.WindowPadding    = ImVec2{3.0f, 3.0f};
-    style.FramePadding     = ImVec2{3.0f, 3.0f};
-    style.CellPadding      = ImVec2{3.0f, 3.0f};
-    style.ItemSpacing      = ImVec2{3.0f, 3.0f};
-    style.ItemInnerSpacing = ImVec2{3.0f, 3.0f};
+    style.WindowPadding    = ImVec2{2.0f, 2.0f};
+    style.FramePadding     = ImVec2{2.0f, 2.0f};
+    style.CellPadding      = ImVec2{2.0f, 2.0f};
+    style.ItemSpacing      = ImVec2{2.0f, 2.0f};
+    style.ItemInnerSpacing = ImVec2{2.0f, 2.0f};
 
     style.WindowBorderSize = 0.0f;
     style.ChildBorderSize  = 0.0f;

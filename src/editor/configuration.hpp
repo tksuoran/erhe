@@ -27,15 +27,15 @@ public:
     [[nodiscard]] auto depth_clear_value_pointer() const -> const float *; // reverse_depth ? 0.0f : 1.0f;
     [[nodiscard]] auto depth_function           (const gl::Depth_function depth_function) const -> gl::Depth_function;
 
-    bool viewports_hosted_in_imgui_windows{false};
-    bool openxr                           {false};
-    bool show_window                      {true};
-    bool parallel_initialization          {false};
-    bool reverse_depth                    {true};
-    bool fullscreen                       {false};
-    int  window_width                     {512};
-    int  window_height                    {512};
-    int  window_msaa_sample_count         {0};
+    bool viewports_hosted_in_imgui_windows;
+    bool openxr;
+    bool show_window;
+    bool parallel_initialization;
+    bool reverse_depth;
+    bool fullscreen;
+    int  window_width;
+    int  window_height;
+    int  window_msaa_sample_count;
 };
 
 } // namespace editor

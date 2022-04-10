@@ -7,13 +7,11 @@ namespace editor {
 
 Command_context::Command_context(
     Editor_view&      editor_view,
-    Pointer_context&  pointer_context,
     const glm::dvec2& absolute_pointer,
     const glm::dvec2& relative_pointer
 
 )
     : m_editor_view     {editor_view}
-    , m_pointer_context {pointer_context}
     , m_absolute_pointer{absolute_pointer}
     , m_relative_pointer{relative_pointer}
 {
@@ -21,17 +19,17 @@ Command_context::Command_context(
 
 auto Command_context::viewport_window() -> Viewport_window*
 {
-    return m_pointer_context.window();
+    return m_editor_view.pointer_context()->window();
 }
 
 auto Command_context::hovering_over_tool() -> bool
 {
-    return m_pointer_context.get_hover(Pointer_context::tool_slot).valid;
+    return m_editor_view.pointer_context()->get_hover(Pointer_context::tool_slot).valid;
 }
 
 auto Command_context::hovering_over_gui() -> bool
 {
-    return m_pointer_context.get_hover(Pointer_context::gui_slot).valid;
+    return m_editor_view.pointer_context()->get_hover(Pointer_context::gui_slot).valid;
 }
 
 auto Command_context::accept_mouse_command(Command* command) -> bool

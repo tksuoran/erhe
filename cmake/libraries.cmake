@@ -11,8 +11,10 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     bvh
-    GIT_REPOSITORY https://github.com/tksuoran/bvh.git
-    GIT_TAG        dev
+    GIT_REPOSITORY https://github.com/madmann91/bvh.git
+    GIT_TAG        master
+    #GIT_REPOSITORY https://github.com/tksuoran/bvh.git
+    #GIT_TAG        dev
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -142,10 +144,10 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     JoltPhysics
-    #GIT_REPOSITORY  https://github.com/jrouwe/JoltPhysics.git
-    #GIT_TAG         master
-    GIT_REPOSITORY  https://github.com/tksuoran/JoltPhysics.git
-    GIT_TAG         dev
+    GIT_REPOSITORY  https://github.com/jrouwe/JoltPhysics.git
+    GIT_TAG         master
+    #GIT_REPOSITORY  https://github.com/tksuoran/JoltPhysics.git
+    #GIT_TAG         dev
     GIT_SHALLOW     TRUE
     GIT_PROGRESS    TRUE
 )
@@ -188,7 +190,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     tracy
     GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-    GIT_TAG        master
+    GIT_TAG        v0.8
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

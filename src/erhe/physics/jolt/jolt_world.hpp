@@ -3,14 +3,14 @@
 #include "erhe/physics/iworld.hpp"
 #include "erhe/physics/imotion_state.hpp"
 
-#include "Jolt.h"
-#include <Core/TempAllocator.h>
-#include <Core/JobSystemThreadPool.h>
-#include <Physics/PhysicsSettings.h>
-#include "Physics/PhysicsSystem.h"
-#include "Physics/Collision/BroadPhase/BroadPhaseLayer.h"
-#include "Physics/Collision/ContactListener.h"
-#include "Physics/Body/BodyActivationListener.h"
+#include <Jolt/Jolt.h>
+#include <Jolt/Core/TempAllocator.h>
+#include <Jolt/Core/JobSystemThreadPool.h>
+#include <Jolt/Physics/PhysicsSettings.h>
+#include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
+#include <Jolt/Physics/Collision/ContactListener.h>
+#include <Jolt/Physics/Body/BodyActivationListener.h>
 
 #include <memory>
 #include <vector>
@@ -20,6 +20,7 @@ namespace erhe::physics
 
 class ICollision_shape;
 class Jolt_rigid_body;
+class Jolt_debug_renderer;
 
 // Layer that objects can be in, determines which other objects it can collide with
 // Typically you at least want to have 1 layer for moving bodies and 1 layer for static bodies, but you can have more
@@ -78,12 +79,13 @@ public:
     [[nodiscard]] auto get_physics_system() -> JPH::PhysicsSystem&;
 
 private:
-    bool                      m_physics_enabled{false};
-    glm::vec3                 m_gravity        {0.0f};
-    JPH::PhysicsSystem        m_physics_system;
-    JPH::TempAllocatorImpl    m_temp_allocator{10 * 1024 * 1024};
-    JPH::JobSystemThreadPool  m_job_system    {JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, 10};
+    bool                                           m_physics_enabled{false};
+    glm::vec3                                      m_gravity        {0.0f};
+    JPH::PhysicsSystem                             m_physics_system;
+    JPH::TempAllocatorImpl                         m_temp_allocator{10 * 1024 * 1024};
+    JPH::JobSystemThreadPool                       m_job_system    {JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, 10};
     std::unique_ptr<JPH::BroadPhaseLayerInterface> m_broad_phase_layer_interface;
+    std::unique_ptr<Jolt_debug_renderer>           m_debug_renderer;
 
     std::vector<Jolt_rigid_body*> m_rigid_bodies;
     //std::vector<IConstraint*> m_constraints;

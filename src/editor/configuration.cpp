@@ -20,11 +20,16 @@ Configuration::Configuration(int argc, char** argv)
     , viewports_hosted_in_imgui_windows{true}
     , openxr                           {false}
     , show_window                      {true}
-    , parallel_initialization          {false}
+    , parallel_initialization          {true}
     , reverse_depth                    {true}
     , fullscreen                       {false}
+#if 0
     , window_width                     {1920}//{1280}
     , window_height                    {1080}//{720}
+#else
+    , window_width                     {1280}
+    , window_height                    {720}
+#endif
     , window_msaa_sample_count         {0}
 {
     cxxopts::Options options("Editor", "Erhe Editor (C) 2022 Timo Suoranta");

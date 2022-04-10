@@ -34,8 +34,8 @@ class Mesh_memory;
 class Programs;
 
 class Id_renderer
-    : public erhe::components::Component,
-      public Base_renderer
+    : public erhe::components::Component
+    , public Base_renderer
 {
 public:
     class Id_query_result

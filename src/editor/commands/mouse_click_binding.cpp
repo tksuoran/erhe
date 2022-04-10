@@ -14,6 +14,27 @@ Mouse_click_binding::Mouse_click_binding(
 {
 }
 
+Mouse_click_binding::Mouse_click_binding()
+{
+}
+
+Mouse_click_binding::~Mouse_click_binding()
+{
+}
+
+Mouse_click_binding::Mouse_click_binding(Mouse_click_binding&& other) noexcept
+    : Mouse_binding{std::move(other)}
+    , m_button     {other.m_button}
+{
+}
+
+auto Mouse_click_binding::operator=(Mouse_click_binding&& other) noexcept -> Mouse_click_binding&
+{
+    Mouse_binding::operator=(std::move(other));
+    this->m_button = other.m_button;
+    return *this;
+}
+
 auto Mouse_click_binding::on_button(
     Command_context&                  context,
     const erhe::toolkit::Mouse_button button,

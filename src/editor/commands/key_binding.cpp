@@ -18,6 +18,31 @@ Key_binding::Key_binding(
 {
 }
 
+Key_binding::Key_binding()
+{
+}
+
+Key_binding::~Key_binding()
+{
+}
+
+Key_binding::Key_binding(Key_binding&& other) noexcept
+    : Command_binding{std::move(other)}
+    , m_code         {other.m_code}
+    , m_pressed      {other.m_pressed}
+    , m_modifier_mask{other.m_modifier_mask}
+{
+}
+
+auto Key_binding::operator=(Key_binding&& other) noexcept -> Key_binding&
+{
+    Command_binding::operator=(std::move(other));
+    m_code          = other.m_code;
+    m_pressed       = other.m_pressed;
+    m_modifier_mask = other.m_modifier_mask;
+    return *this;
+}
+
 auto Key_binding::on_key(
     Command_context&             context,
     const bool                   pressed,

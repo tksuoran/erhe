@@ -23,8 +23,8 @@ namespace erhe::graphics
 
 enum Image_format
 {
-    rgb8 = 0,
-    rgba8,
+    srgb8 = 0,
+    srgb8_alpha8,
 };
 
 class Image_info
@@ -35,7 +35,7 @@ public:
     int          depth      {0};
     int          level_count{0};
     int          row_stride {0};
-    Image_format format     {rgba8};
+    Image_format format     {srgb8_alpha8};
 };
 
 class PNG_loader final

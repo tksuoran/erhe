@@ -232,10 +232,8 @@ auto Brushes::try_insert() -> bool
 
 void Brushes::on_enable_state_changed()
 {
-    Command_context context{
-        *get<Editor_view    >().get(),
-        *get<Pointer_context>().get()
-    };
+    Command_context context{*get<Editor_view>().get()};
+
     if (is_enabled())
     {
         m_preview_command.set_active(context);

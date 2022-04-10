@@ -37,6 +37,7 @@ class Headset_renderer;
 
 class Viewport_window
     : public Imgui_window
+    , public Mouse_input_sink
 {
 public:
     Viewport_window(
@@ -46,14 +47,15 @@ public:
     );
 
     // Implements Imgui_window
-    void imgui   () override;
-    void on_begin() override;
-    void on_end  () override;
+    void imgui               () override;
+    auto consumes_mouse_input() const -> bool override;
+    void on_begin            () override;
+    void on_end              () override;
 
     // Public API
     void try_hover                   (const int px, const int py);
     void update                      ();
-    void bind_multisample_framebuffer();
+    auto bind_multisample_framebuffer() -> bool;
     void multisample_resolve         ();
     void set_viewport                (const int x, const int y, const int width, const int height);
     void render(

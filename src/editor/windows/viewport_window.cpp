@@ -280,15 +280,15 @@ void Viewport_window::render(
 
     if (m_framebuffer_multisample)
     {
-        bind_multisample_framebuffer();
+        if (!bind_multisample_framebuffer())
+        {
+            gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+        }
         clear(pipeline_state_tracker);
     }
     else
     {
-        gl::bind_framebuffer(
-            gl::Framebuffer_target::draw_framebuffer,
-            0
-        );
+        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     }
 
     editor_rendering.render_viewport(context, m_is_hovered);
@@ -318,6 +318,11 @@ void Viewport_window::clear(
         gl::Clear_buffer_mask::color_buffer_bit |
         gl::Clear_buffer_mask::depth_buffer_bit
     );
+}
+
+auto Viewport_window::consumes_mouse_input() const -> bool
+{
+    return true;
 }
 
 void Viewport_window::on_begin()
@@ -445,11 +450,11 @@ auto Viewport_window::is_framebuffer_ready() const -> bool
     return m_framebuffer_multisample.get() != nullptr;
 }
 
-void Viewport_window::bind_multisample_framebuffer()
+auto Viewport_window::bind_multisample_framebuffer() -> bool
 {
     if (!m_framebuffer_multisample)
     {
-        return;
+        return false;
     }
 
     gl::bind_framebuffer(
@@ -465,6 +470,8 @@ void Viewport_window::bind_multisample_framebuffer()
         log_framebuffer.error("draw framebuffer status = {}\n", c_str(status));
     }
     ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
+
+    return true;
 }
 
 static constexpr std::string_view c_multisample_resolve{"Viewport_window::multisample_resolve()"};

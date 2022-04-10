@@ -30,7 +30,7 @@ class Node_tree_window
 {
 public:
     static constexpr std::string_view c_name {"Node_tree"};
-    static constexpr std::string_view c_title{"Scene"};
+    static constexpr std::string_view c_title{"Node Tree"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
     Node_tree_window ();

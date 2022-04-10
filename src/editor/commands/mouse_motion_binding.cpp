@@ -8,6 +8,25 @@ Mouse_motion_binding::Mouse_motion_binding(Command* const command)
 {
 }
 
+Mouse_motion_binding::Mouse_motion_binding()
+{
+}
+
+Mouse_motion_binding::~Mouse_motion_binding()
+{
+}
+
+Mouse_motion_binding::Mouse_motion_binding(Mouse_motion_binding&& other) noexcept
+    : Mouse_binding{std::move(other)}
+{
+}
+
+auto Mouse_motion_binding::operator=(Mouse_motion_binding&& other) noexcept -> Mouse_motion_binding&
+{
+    Mouse_binding::operator=(std::move(other));
+    return *this;
+}
+
 auto Mouse_motion_binding::on_motion(Command_context& context) -> bool
 {
     auto* const command = get_command();

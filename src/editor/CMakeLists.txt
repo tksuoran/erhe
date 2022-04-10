@@ -36,6 +36,31 @@ erhe_target_sources_grouped(
     graphics/textures.cpp
     graphics/textures.hpp
 
+    hextiles/coordinate.cpp
+    hextiles/coordinate.hpp
+    hextiles/file_util.cpp
+    hextiles/file_util.hpp
+    hextiles/map_renderer.cpp
+    hextiles/map_renderer.hpp
+    hextiles/map.cpp
+    hextiles/map.hpp
+    hextiles/map_window.cpp
+    hextiles/map_window.hpp
+    hextiles/pixel_lookup.cpp
+    hextiles/pixel_lookup.hpp
+    hextiles/stream.cpp
+    hextiles/stream.hpp
+    hextiles/terrain_type.cpp
+    hextiles/terrain_type.hpp
+    hextiles/texture_util.cpp
+    hextiles/texture_util.hpp
+    hextiles/tile_shape.cpp
+    hextiles/tile_shape.hpp
+    hextiles/tiles.cpp
+    hextiles/tiles.hpp
+    hextiles/types.cpp
+    hextiles/types.hpp
+
     operations/attach_detach_operation.cpp
     operations/attach_detach_operation.hpp
     operations/compound_operation.cpp
@@ -63,6 +88,7 @@ erhe_target_sources_grouped(
 
     renderers/base_renderer.cpp
     renderers/base_renderer.hpp
+    renderers/buffer_writer.hpp
     renderers/forward_renderer.cpp
     renderers/forward_renderer.hpp
     renderers/frame_resources.cpp
@@ -222,6 +248,8 @@ erhe_target_sources_grouped(
     res/shaders/text.frag
     res/shaders/textured.vert
     res/shaders/textured.frag
+    res/shaders/tile.vert
+    res/shaders/tile.frag
     res/shaders/tool.vert
     res/shaders/tool.frag
     res/shaders/visualize_depth.vert

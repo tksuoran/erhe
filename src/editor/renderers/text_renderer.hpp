@@ -13,6 +13,7 @@
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
+#include "erhe/ui/rectangle.hpp"
 
 #include <glm/glm.hpp>
 
@@ -69,6 +70,7 @@ public:
         const uint32_t         text_color,
         const std::string_view text
     );
+    auto measure(const std::string_view text) const -> erhe::ui::Rectangle;
 
     void render    (erhe::scene::Viewport viewport);
     void next_frame();
@@ -123,10 +125,13 @@ private:
     std::shared_ptr<erhe::graphics::Buffer>          m_index_buffer;
     std::unique_ptr<erhe::graphics::Shader_resource> m_projection_block;
     std::unique_ptr<erhe::graphics::Shader_stages>   m_shader_stages;
+    size_t                                           m_u_clip_from_window_size  {0};
+    size_t                                           m_u_clip_from_window_offset{0};
+    size_t                                           m_u_texture_size           {0};
+    size_t                                           m_u_texture_offset         {0};
+
     std::unique_ptr<erhe::ui::Font>                  m_font;
-    erhe::graphics::Shader_resource                  m_default_uniform_block; // containing sampler uniforms
     std::unique_ptr<erhe::graphics::Sampler>         m_nearest_sampler;
-    int                                              m_font_sampler_location{0};
 
     std::deque<Frame_resources> m_frame_resources;
     size_t                      m_current_frame_resource_slot{0};

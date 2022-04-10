@@ -50,7 +50,7 @@ public:
     void initialize_component() override;
 
     // Implements Framebuffer_window
-    auto get_size() const -> glm::vec2 override;
+    auto get_size(glm::vec2 available_size) const -> glm::vec2 override;
 
     // Public API
     void render();

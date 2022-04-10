@@ -30,6 +30,11 @@ public:
     Pointer_context& pointer_context;
 };
 
+class Mouse_input_sink
+{
+public:
+};
+
 class Imgui_window
 {
 public:
@@ -37,9 +42,9 @@ public:
     Imgui_window(const std::string_view title, const std::string_view label);
     virtual ~Imgui_window() noexcept;
 
-    [[nodiscard]] auto is_visibile() const -> bool;
-    [[nodiscard]] auto title      () const -> const std::string_view;
-    [[nodiscard]] auto label      () -> const char*;
+    [[nodiscard]] auto is_visible() const -> bool;
+    [[nodiscard]] auto title     () const -> const std::string_view;
+    [[nodiscard]] auto label     () -> const char*;
     auto begin            () -> bool;
     void end              ();
     void show             ();
@@ -52,10 +57,11 @@ public:
         const int                                       height
     );
 
-    virtual void imgui   () = 0;
-    virtual void on_begin();
-    virtual void on_end  ();
-    virtual auto flags   () -> ImGuiWindowFlags;
+    virtual void imgui               () = 0;
+    virtual void on_begin            ();
+    virtual void on_end              ();
+    virtual auto flags               () -> ImGuiWindowFlags;
+    virtual auto consumes_mouse_input() const -> bool;
 
 protected:
     // Component dependencies

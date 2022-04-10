@@ -56,7 +56,7 @@ void Imgui_window::toggle_visibility()
     m_is_visible = !m_is_visible;
 }
 
-auto Imgui_window::is_visibile() const -> bool
+auto Imgui_window::is_visible() const -> bool
 {
     return m_is_visible;
 }
@@ -100,6 +100,11 @@ void Imgui_window::end()
 auto Imgui_window::flags() -> ImGuiWindowFlags
 {
     return 0; //ImGuiWindowFlags_NoCollapse;
+}
+
+auto Imgui_window::consumes_mouse_input() const -> bool
+{
+    return false;
 }
 
 void Imgui_window::on_begin()

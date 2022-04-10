@@ -33,5 +33,6 @@ extern erhe::log::Category log_textures;
 extern erhe::log::Category log_tools;
 extern erhe::log::Category log_trs_tool;
 extern erhe::log::Category log_fly_camera;
+extern erhe::log::Category log_windows;
 
 }

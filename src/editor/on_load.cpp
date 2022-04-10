@@ -64,9 +64,14 @@
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 
+#include "hextiles/map_renderer.hpp"
+#include "hextiles/map_window.hpp"
+#include "hextiles/tiles.hpp"
+
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
+#include "erhe/physics/iworld.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/window.hpp"
@@ -95,28 +100,33 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(window);
         m_components.add(shared_from_this());
         m_components.add(gl_context_provider);
-        m_components.add(make_shared<Brushes             >());
-        m_components.add(make_shared<Debug_draw          >());
-        m_components.add(make_shared<Debug_view_window   >());
         m_components.add(make_shared<Editor_imgui_windows>());
-        m_components.add(make_shared<Editor_rendering    >());
         m_components.add(make_shared<Editor_time         >());
         m_components.add(make_shared<Editor_tools        >());
         m_components.add(make_shared<Editor_view         >());
-        m_components.add(make_shared<Fly_camera_tool     >());
-        m_components.add(make_shared<Forward_renderer    >());
         m_components.add(make_shared<Log_window          >());
-        m_components.add(make_shared<Grid_tool           >());
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-        m_components.add(make_shared<Hand_tracker        >());
-        m_components.add(make_shared<Headset_renderer    >());
-#endif
-        m_components.add(make_shared<Hover_tool          >());
-        m_components.add(make_shared<Icon_set            >());
-        m_components.add(make_shared<Id_renderer         >());
         m_components.add(make_shared<Image_transfer      >());
         m_components.add(make_shared<Imgui_demo_window   >());
         m_components.add(make_shared<Imgui_renderer      >());
+        m_components.add(make_shared<OpenGL_state_tracker>());
+        m_components.add(make_shared<Performance_window  >());
+        m_components.add(make_shared<Pipelines           >());
+        m_components.add(make_shared<Program_interface   >());
+        m_components.add(make_shared<Programs            >());
+        m_components.add(make_shared<Shader_monitor      >());
+        m_components.add(make_shared<Text_renderer       >());
+
+#if 1
+        m_components.add(make_shared<Brushes             >());
+        m_components.add(make_shared<Debug_draw          >());
+        m_components.add(make_shared<Debug_view_window   >());
+        m_components.add(make_shared<Editor_rendering    >());
+        m_components.add(make_shared<Fly_camera_tool     >());
+        m_components.add(make_shared<Forward_renderer    >());
+        m_components.add(make_shared<Grid_tool           >());
+        m_components.add(make_shared<Hover_tool          >());
+        m_components.add(make_shared<Icon_set            >());
+        m_components.add(make_shared<Id_renderer         >());
         m_components.add(make_shared<Layers_window       >());
         m_components.add(make_shared<Line_renderer_set   >());
         m_components.add(make_shared<Material_paint_tool >());
@@ -126,32 +136,36 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Mesh_properties     >());
         m_components.add(make_shared<Node_properties     >());
         m_components.add(make_shared<Node_tree_window    >());
-        m_components.add(make_shared<OpenGL_state_tracker>());
         m_components.add(make_shared<Operation_stack     >());
         m_components.add(make_shared<Operations          >());
-        m_components.add(make_shared<Performance_window  >());
         m_components.add(make_shared<Physics_tool        >());
         m_components.add(make_shared<Physics_window      >());
-        m_components.add(make_shared<Pipelines           >());
         m_components.add(make_shared<Pointer_context     >());
         m_components.add(make_shared<Post_processing     >());
-        m_components.add(make_shared<Program_interface   >());
-        m_components.add(make_shared<Programs            >());
         m_components.add(make_shared<Scene_builder       >());
         m_components.add(make_shared<Scene_root          >());
         m_components.add(make_shared<Selection_tool      >());
-        m_components.add(make_shared<Shader_monitor      >());
         m_components.add(make_shared<Shadow_renderer     >());
-        m_components.add(make_shared<Text_renderer       >());
         m_components.add(make_shared<Texture_renderer    >());
         m_components.add(make_shared<Textures            >());
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-        m_components.add(make_shared<Theremin              >());
-#endif
         m_components.add(make_shared<Tool_properties_window>());
         m_components.add(make_shared<Trs_tool              >());
         m_components.add(make_shared<Viewport_config       >());
         m_components.add(make_shared<Viewport_windows      >());
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        m_components.add(make_shared<Hand_tracker        >());
+        m_components.add(make_shared<Headset_renderer    >());
+        m_components.add(make_shared<Theremin              >());
+#endif
+#endif
+
+#if 1
+        m_components.add(make_shared<hextiles::Map_renderer   >());
+        m_components.add(make_shared<hextiles::Map_window     >());
+        m_components.add(make_shared<hextiles::Map_tool_window>());
+        m_components.add(make_shared<hextiles::Tiles          >());
+#endif
     }
 
     if (!window->create_gl_window())
@@ -177,19 +191,32 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 
     component_initialization_complete(true);
 
-    m_components.get<Debug_view_window >()->hide();
-    m_components.get<Editor_view       >()->hide();
-    m_components.get<Fly_camera_tool   >()->hide();
-    m_components.get<Grid_tool         >()->hide();
-    m_components.get<Imgui_demo_window >()->hide();
-    m_components.get<Layers_window     >()->hide();
-    //m_components.get<Log_window        >()->hide();
-    m_components.get<Mesh_properties   >()->hide();
-    m_components.get<Operation_stack   >()->hide();
-    m_components.get<Performance_window>()->hide();
-    //m_components.get<Physics_window    >()->hide();
-    m_components.get<Pipelines         >()->hide();
-    m_components.get<Post_processing   >()->hide();
+    if (m_components.get<Debug_view_window     >()) m_components.get<Debug_view_window     >()->hide();
+    if (m_components.get<Editor_view           >()) m_components.get<Editor_view           >()->hide();
+    if (m_components.get<Fly_camera_tool       >()) m_components.get<Fly_camera_tool       >()->hide();
+    if (m_components.get<Grid_tool             >()) m_components.get<Grid_tool             >()->hide();
+    if (m_components.get<Imgui_demo_window     >()) m_components.get<Imgui_demo_window     >()->hide();
+    if (m_components.get<Layers_window         >()) m_components.get<Layers_window         >()->hide();
+    //if (m_components.get<Log_window            >()) m_components.get<Log_window            >()->hide();
+    if (m_components.get<Mesh_properties       >()) m_components.get<Mesh_properties       >()->hide();
+    if (m_components.get<Operation_stack       >()) m_components.get<Operation_stack       >()->hide();
+    if (m_components.get<Performance_window    >()) m_components.get<Performance_window    >()->hide();
+    if (m_components.get<Physics_window        >()) m_components.get<Physics_window        >()->hide();
+    if (m_components.get<Pipelines             >()) m_components.get<Pipelines             >()->hide();
+    if (m_components.get<Post_processing       >()) m_components.get<Post_processing       >()->hide();
+    //if (m_components.get<Node_tree_window      >()) m_components.get<Node_tree_window      >()->hide();
+    //if (m_components.get<Node_properties       >()) m_components.get<Node_properties       >()->hide();
+    //if (m_components.get<Materials             >()) m_components.get<Materials             >()->hide();
+    //if (m_components.get<Material_properties   >()) m_components.get<Material_properties   >()->hide();
+    //if (m_components.get<Brushes               >()) m_components.get<Brushes               >()->hide();
+    //if (m_components.get<Operations            >()) m_components.get<Operations            >()->hide();
+    //if (m_components.get<Trs_tool              >()) m_components.get<Trs_tool              >()->hide();
+    if (m_components.get<Viewport_config       >()) m_components.get<Viewport_config       >()->hide();
+    //if (m_components.get<Tool_properties_window>()) m_components.get<Tool_properties_window>()->hide();
+    //if (m_components.get<Scene_root>()            ) m_components.get<Scene_root>()->physics_world().enable_physics_updates();
+
+    if (m_components.get<hextiles::Map_window     >()) m_components.get<hextiles::Map_window     >()->hide();
+    if (m_components.get<hextiles::Map_tool_window>()) m_components.get<hextiles::Map_tool_window>()->hide();
 
     opengl_state_tracker->on_thread_enter();
 

@@ -6,7 +6,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include <Jolt.h>
+#include <Jolt/Jolt.h>
+#include <Jolt/Core/Color.h>
 
 namespace erhe::physics
 {
@@ -27,6 +28,25 @@ namespace erhe::physics
         v.GetY(),
         v.GetZ(),
         v.GetW()
+    };
+}
+
+[[nodiscard]] inline auto from_jolt(JPH::Float3 v) -> glm::vec3
+{
+    return glm::vec3{
+        v.x,
+        v.y,
+        v.z
+    };
+}
+
+[[nodiscard]] inline auto from_jolt(JPH::ColorArg c) -> glm::vec4
+{
+    return glm::vec4{
+        c.r,
+        c.g,
+        c.b,
+        c.a
     };
 }
 

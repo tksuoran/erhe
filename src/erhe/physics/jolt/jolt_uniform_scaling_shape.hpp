@@ -2,8 +2,8 @@
 
 #include "erhe/physics/jolt/jolt_collision_shape.hpp"
 
-#include <Jolt.h>
-#include <Physics/Collision/Shape/ScaledShape.h>
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/Collision/Shape/ScaledShape.h>
 
 #include <glm/glm.hpp>
 

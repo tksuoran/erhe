@@ -182,7 +182,7 @@ Rendertarget_imgui_windows::Rendertarget_imgui_windows(
     const double                        dots_per_meter
 )
     : m_pipeline_state_tracker{components.get<erhe::graphics::OpenGL_state_tracker>()}
-    , m_pointer_context       {components.get<Pointer_context>()}
+    , m_editor_view           {components.get<Editor_view>()}
     , m_name                  {name}
     , m_mesh_layer            {"GUI Layer", erhe::scene::Node_visibility::gui}
     , m_dots_per_meter        {dots_per_meter}
@@ -297,6 +297,14 @@ void Rendertarget_imgui_windows::register_imgui_window(Imgui_window* window)
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
 
+#ifndef NDEBUG
+    const auto i = std::find(m_imgui_windows.begin(), m_imgui_windows.end(), window);
+    if (i != m_imgui_windows.end())
+    {
+        log_windows.error("Window {} already registered as rendertarget ImGui Window\n", window->title());
+    }
+    else
+#endif
     m_imgui_windows.push_back(window);
 }
 
@@ -398,9 +406,10 @@ void Rendertarget_imgui_windows::imgui_windows()
     begin_imgui_frame();
 
     size_t i = 0;
+    bool any_mouse_input_sink{false};
     for (auto& imgui_window : m_imgui_windows)
     {
-        if (imgui_window->is_visibile())
+        if (imgui_window->is_visible())
         {
             auto imgui_id = fmt::format("##rendertarget_window-{}", ++i);
             ImGui::PushID(imgui_id.c_str());
@@ -408,11 +417,23 @@ void Rendertarget_imgui_windows::imgui_windows()
             {
                 imgui_window->imgui();
             }
+            if (
+                imgui_window->consumes_mouse_input() &&
+                ImGui::IsWindowHovered()
+            )
+            {
+                any_mouse_input_sink = true;
+                m_editor_view->set_mouse_input_sink(imgui_window);
+            }
             imgui_window->end();
             ImGui::PopID();
         }
     }
 
+    if (!any_mouse_input_sink)
+    {
+        m_editor_view->set_mouse_input_sink(nullptr);
+    }
     end_and_render_imgui_frame();
 }
 
@@ -453,7 +474,7 @@ void Rendertarget_imgui_windows::begin_imgui_frame()
         : static_cast<float>(1.0 / 60.0);
     m_time = current_time;
 
-    const auto& gui = m_pointer_context->get_hover(Pointer_context::gui_slot);
+    const auto& gui = m_editor_view->pointer_context()->get_hover(Pointer_context::gui_slot);
     if (
         gui.valid &&
         gui.raytrace_node == m_node_raytrace.get() &&
@@ -526,8 +547,11 @@ Editor_imgui_windows::~Editor_imgui_windows()
 void Editor_imgui_windows::connect()
 {
     m_editor_rendering       = get    <Editor_rendering>();
+    m_editor_view            = get    <Editor_view>();
+
     m_pipeline_state_tracker = get    <erhe::graphics::OpenGL_state_tracker>();
     m_renderer               = require<Imgui_renderer>();
+    //m_pointer_context        = get    <Pointer_context>();
 
     require<Configuration      >();
     require<Gl_context_provider>();
@@ -640,8 +664,21 @@ void Editor_imgui_windows::end_and_render_imgui_frame()
     {
         ImGui::Render();
 
-        m_editor_rendering->bind_default_framebuffer();
-        m_editor_rendering->clear();
+        if (m_editor_rendering)
+        {
+            m_editor_rendering->bind_default_framebuffer();
+            m_editor_rendering->clear();
+        }
+        else
+        {
+            gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+            gl::viewport        (0, 0, get<Editor_view>()->width(), get<Editor_view>()->height());
+
+            m_pipeline_state_tracker->shader_stages.reset();
+            m_pipeline_state_tracker->color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
+            gl::clear_color  (0.2f, 0.3f, 0.0f, 0.1f);
+            gl::clear        (gl::Clear_buffer_mask::color_buffer_bit);
+        }
         m_renderer->render_draw_data();
     }
 }
@@ -685,39 +722,39 @@ void Editor_imgui_windows::menu()
 {
     if (ImGui::BeginMainMenuBar())
     {
-        if (ImGui::BeginMenu("Edit"))
-        {
-            if (ImGui::MenuItem("Undo"      )) {}
-            if (ImGui::MenuItem("Redo"      )) {}
-            ImGui::Separator();
-            if (ImGui::MenuItem("Select All")) {}
-            if (ImGui::MenuItem("Deselect"  )) {}
-            ImGui::Separator();
-            if (ImGui::MenuItem("Translate" )) {}
-            if (ImGui::MenuItem("Rotate"    )) {}
-            if (ImGui::MenuItem("Scale"     )) {}
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("Create"))
-        {
-            if (ImGui::MenuItem("Cube"  )) {}
-            if (ImGui::MenuItem("Box"   )) {}
-            if (ImGui::MenuItem("Sphere")) {}
-            if (ImGui::MenuItem("Torus" )) {}
-            if (ImGui::MenuItem("Cone"  )) {}
-            if (ImGui::BeginMenu("Brush"))
-            {
-                ImGui::EndMenu();
-            }
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("Modify"))
-        {
-            if (ImGui::MenuItem("Ambo"    )) {}
-            if (ImGui::MenuItem("Dual"    )) {}
-            if (ImGui::MenuItem("Truncate")) {}
-            ImGui::EndMenu();
-        }
+        //if (ImGui::BeginMenu("Edit"))
+        //{
+        //    if (ImGui::MenuItem("Undo"      )) {}
+        //    if (ImGui::MenuItem("Redo"      )) {}
+        //    ImGui::Separator();
+        //    if (ImGui::MenuItem("Select All")) {}
+        //    if (ImGui::MenuItem("Deselect"  )) {}
+        //    ImGui::Separator();
+        //    if (ImGui::MenuItem("Translate" )) {}
+        //    if (ImGui::MenuItem("Rotate"    )) {}
+        //    if (ImGui::MenuItem("Scale"     )) {}
+        //    ImGui::EndMenu();
+        //}
+        //if (ImGui::BeginMenu("Create"))
+        //{
+        //    if (ImGui::MenuItem("Cube"  )) {}
+        //    if (ImGui::MenuItem("Box"   )) {}
+        //    if (ImGui::MenuItem("Sphere")) {}
+        //    if (ImGui::MenuItem("Torus" )) {}
+        //    if (ImGui::MenuItem("Cone"  )) {}
+        //    if (ImGui::BeginMenu("Brush"))
+        //    {
+        //        ImGui::EndMenu();
+        //    }
+        //    ImGui::EndMenu();
+        //}
+        //if (ImGui::BeginMenu("Modify"))
+        //{
+        //    if (ImGui::MenuItem("Ambo"    )) {}
+        //    if (ImGui::MenuItem("Dual"    )) {}
+        //    if (ImGui::MenuItem("Truncate")) {}
+        //    ImGui::EndMenu();
+        //}
         window_menu();
         ImGui::EndMainMenuBar();
     }
@@ -727,18 +764,17 @@ void Editor_imgui_windows::menu()
 
 void Editor_imgui_windows::window_menu()
 {
-    //m_frame_log_window->log("menu");
-
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
 
     if (ImGui::BeginMenu("Window"))
     {
-        for (auto window : m_imgui_windows)
+        for (const auto& window : m_imgui_windows)
         {
-            bool enabled = window->is_visibile();
+            bool enabled = window->is_visible();
             if (ImGui::MenuItem(window->title().data(), "", &enabled))
             {
-                if (enabled) {
+                if (enabled)
+                {
                     window->show();
                 }
                 else
@@ -747,7 +783,7 @@ void Editor_imgui_windows::window_menu()
                 }
             }
         }
-        ImGui::MenuItem("Tool Properties", "", &m_show_tool_properties);
+        //ImGui::MenuItem("Tool Properties", "", &m_show_tool_properties);
         ImGui::MenuItem("ImGui Style Editor", "", &m_show_style_editor);
 
         ImGui::Separator();
@@ -757,7 +793,7 @@ void Editor_imgui_windows::window_menu()
             {
                 window->hide();
             }
-            m_show_tool_properties = false;
+            //m_show_tool_properties = false;
         }
         if (ImGui::MenuItem("Open All"))
         {
@@ -765,7 +801,7 @@ void Editor_imgui_windows::window_menu()
             {
                 window->show();
             }
-            m_show_tool_properties = true;
+            //m_show_tool_properties = true;
         }
         ImGui::EndMenu();
     }
@@ -784,7 +820,17 @@ void Editor_imgui_windows::register_imgui_window(Imgui_window* window)
 
     window->initialize(*m_components);
 
-    m_imgui_windows.emplace_back(window);
+#ifndef NDEBUG
+    const auto i = std::find(m_imgui_windows.begin(), m_imgui_windows.end(), window);
+    if (i != m_imgui_windows.end())
+    {
+        log_windows.error("Window {} already registered as ImGui Window\n", window->title());
+    }
+    else
+#endif
+    {
+        m_imgui_windows.emplace_back(window);
+    }
 }
 
 void Editor_imgui_windows::rendertarget_imgui_windows()
@@ -804,9 +850,10 @@ void Editor_imgui_windows::imgui_windows()
     menu();
 
     size_t i = 0;
+    bool any_mouse_input_sink{false};
     for (auto& imgui_window : m_imgui_windows)
     {
-        if (imgui_window->is_visibile())
+        if (imgui_window->is_visible())
         {
             auto imgui_id = fmt::format("##window-{}", ++i);
             ImGui::PushID(imgui_id.c_str());
@@ -814,9 +861,22 @@ void Editor_imgui_windows::imgui_windows()
             {
                 imgui_window->imgui();
             }
+            if (
+                imgui_window->consumes_mouse_input() &&
+                ImGui::IsWindowHovered()
+            )
+            {
+                any_mouse_input_sink = true;
+                m_editor_view->set_mouse_input_sink(imgui_window);
+            }
             imgui_window->end();
             ImGui::PopID();
         }
+    }
+
+    if (!any_mouse_input_sink)
+    {
+        m_editor_view->set_mouse_input_sink(nullptr);
     }
 
     if (m_show_style_editor)
@@ -851,6 +911,7 @@ void Editor_imgui_windows::render_rendertarget_gui_meshes(
 
 void Editor_imgui_windows::on_focus(int focused)
 {
+    // TODO must make sure context is current
     ImGuiIO& io = ImGui::GetIO(m_imgui_context);
     io.AddFocusEvent(focused != 0);
 }

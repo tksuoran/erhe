@@ -44,6 +44,8 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
         jolt/jolt_constraint.hpp
         jolt/jolt_convex_hull_collision_shape.cpp
         jolt/jolt_convex_hull_collision_shape.hpp
+        jolt/jolt_debug_renderer.cpp
+        jolt/jolt_debug_renderer.hpp
         jolt/jolt_rigid_body.cpp
         jolt/jolt_rigid_body.hpp
         jolt/jolt_uniform_scaling_shape.cpp
@@ -85,6 +87,7 @@ erhe_target_sources_grouped(
     icollision_shape.hpp
     iconstraint.hpp
     iconvex_hull_collision_shape.hpp
+    idebug_draw.hpp
     imotion_state.hpp
     irigid_body.hpp
     iworld.hpp

@@ -7,6 +7,7 @@
 #include "erhe/toolkit/unique_id.hpp"
 
 #include <functional>
+#include <mutex>
 
 namespace editor {
 
@@ -17,6 +18,7 @@ class Mouse_binding;
 class Mouse_click_binding;
 class Mouse_drag_binding;
 class Mouse_motion_binding;
+class Mouse_wheel_binding;
 
 class Configuration;
 class Editor_imgui_windows;
@@ -73,7 +75,7 @@ public:
     void on_mouse_wheel (const double x, const double y) override;
     void on_key         (const erhe::toolkit::Keycode code, const uint32_t modifier_mask, const bool pressed) override;
     void on_char        (const unsigned int codepoint) override;
-    void on_key         (bool pressed, erhe::toolkit::Keycode code, uint32_t modifier_mask);
+    //void on_key         (bool pressed, erhe::toolkit::Keycode code, uint32_t modifier_mask);
 
     // Implements Imgui_window
     void imgui() override;
@@ -94,6 +96,10 @@ public:
         const erhe::toolkit::Mouse_button button
     ) -> erhe::toolkit::Unique_id<Mouse_click_binding>::id_type;
 
+    auto bind_command_to_mouse_wheel(
+        Command* const command
+    ) -> erhe::toolkit::Unique_id<Mouse_wheel_binding>::id_type;
+
     auto bind_command_to_mouse_motion(
         Command* const command
     ) -> erhe::toolkit::Unique_id<Mouse_motion_binding>::id_type;
@@ -113,6 +119,12 @@ public:
     }
 
     void command_inactivated(Command* const command);
+
+    [[nodiscard]] auto mouse_input_sink() const -> Imgui_window*;
+    [[nodiscard]] auto to_window       (const glm::vec2 position_in_root) const -> glm::vec2;
+    [[nodiscard]] auto pointer_context () const -> Pointer_context*;
+
+    void set_mouse_input_sink(Imgui_window* mouse_input_sink);
 
 private:
     [[nodiscard]] auto get_command_priority   (Command* const command) const -> int;
@@ -136,13 +148,22 @@ private:
     std::shared_ptr<Viewport_windows>     m_viewport_windows;
     std::shared_ptr<Window>               m_window;
 
-    Command*                                    m_active_mouse_command{nullptr};
-    std::vector<Command*>                       m_commands;
-    std::vector<Key_binding>                    m_key_bindings;
-    std::vector<std::unique_ptr<Mouse_binding>> m_mouse_bindings;
-    bool                                        m_ready          {false};
-    bool                                        m_close_requested{false};
-    glm::dvec2                                  m_last_mouse_position;
+    std::mutex                                        m_command_mutex;
+    Command*                                          m_active_mouse_command{nullptr};
+
+    Imgui_window*                                     m_mouse_input_sink{nullptr};
+    glm::vec2                                         m_window_position          {};
+    glm::vec2                                         m_window_size              {};
+    glm::vec2                                         m_window_content_region_min{};
+    glm::vec2                                         m_window_content_region_max{};
+
+    std::vector<Command*>                             m_commands;
+    std::vector<Key_binding>                          m_key_bindings;
+    std::vector<std::unique_ptr<Mouse_binding>>       m_mouse_bindings;
+    std::vector<std::unique_ptr<Mouse_wheel_binding>> m_mouse_wheel_bindings;
+    bool                                              m_ready          {false};
+    bool                                              m_close_requested{false};
+    glm::dvec2                                        m_last_mouse_position;
 };
 
 }

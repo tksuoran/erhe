@@ -42,16 +42,18 @@ Embree_geometry::Embree_geometry(
         Embree_device::get_instance().get_rtc_device(),
         static_cast<RTCGeometryType>(geometry_type)
     );
-    log_embree.trace("rtcNewGeometry() = {} {}\n", debug_label, fmt::ptr(m_geometry));
+    //log_embree.trace("rtcNewGeometry() = {} {}\n", debug_label, fmt::ptr(m_geometry));
     if (m_geometry != nullptr)
     {
         rtcSetGeometryUserData(m_geometry, this);
     }
+
+    rtcSetGeometryBuildQuality(m_geometry, RTC_BUILD_QUALITY_LOW);
 }
 
 Embree_geometry::~Embree_geometry()
 {
-    log_embree.trace("rtcReleaseGeometry({})\n", m_debug_label);
+    //log_embree.trace("rtcReleaseGeometry({})\n", m_debug_label);
     rtcReleaseGeometry(m_geometry);
 }
 
@@ -62,20 +64,20 @@ auto Embree_geometry::get_rtc_geometry() -> RTCGeometry
 
 void Embree_geometry::commit()
 {
-    log_embree.trace("rtcCommitGeometry({})\n", m_debug_label);
+    //log_embree.trace("rtcCommitGeometry({})\n", m_debug_label);
     rtcCommitGeometry(m_geometry);
 }
 
 void Embree_geometry::enable()
 {
-    log_embree.trace("rtcEnableGeometry(geometry = {})\n", m_debug_label);
+    //log_embree.trace("rtcEnableGeometry(geometry = {})\n", m_debug_label);
     rtcEnableGeometry(m_geometry);
     m_enabled = true;
 }
 
 void Embree_geometry::disable()
 {
-    log_embree.trace("rtcDisableGeometry(geometry = {})\n", m_debug_label);
+    //log_embree.trace("rtcDisableGeometry(geometry = {})\n", m_debug_label);
     rtcDisableGeometry(m_geometry);
     m_enabled = true;
 }
@@ -87,7 +89,7 @@ auto Embree_geometry::is_enabled() const -> bool
 
 void Embree_geometry::set_mask(const uint32_t mask)
 {
-    log_embree.trace("rtcSetGeometryMask(geometry = {}, mask = {:#04x})\n", m_debug_label, mask);
+    //log_embree.trace("rtcSetGeometryMask(geometry = {}, mask = {:#04x})\n", m_debug_label, mask);
     rtcSetGeometryMask(m_geometry, mask);
     m_mask = mask;
 }

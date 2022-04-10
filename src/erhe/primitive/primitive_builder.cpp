@@ -971,6 +971,11 @@ void Build_context::build_polygon_fill()
     vertex_index  = 0;
     polygon_index = 0;
 
+    const bool any_normal_feature = root.build_info.format.features.normal =
+        root.build_info.format.features.normal      ||
+        root.build_info.format.features.normal_flat ||
+        root.build_info.format.features.normal_smooth;
+
     const Polygon_id polygon_id_end = root.geometry.get_polygon_count();
     for (polygon_id = 0; polygon_id < polygon_id_end; ++polygon_id)
     {
@@ -1002,7 +1007,10 @@ void Build_context::build_polygon_fill()
 
             build_polygon_id      ();
             build_vertex_position ();
-            build_vertex_normal   ();
+            if (any_normal_feature)
+            {
+                build_vertex_normal();
+            }
             build_vertex_tangent  ();
             build_vertex_bitangent();
             build_vertex_texcoord ();

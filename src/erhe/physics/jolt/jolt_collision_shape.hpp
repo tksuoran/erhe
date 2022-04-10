@@ -5,11 +5,11 @@
 #include "erhe/toolkit/optional.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include <Jolt.h>
-#include <Physics/Collision/Shape/BoxShape.h>
-#include <Physics/Collision/Shape/CapsuleShape.h>
-#include <Physics/Collision/Shape/CylinderShape.h>
-#include <Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/CylinderShape.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
 
 #include <glm/glm.hpp>
 

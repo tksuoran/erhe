@@ -32,21 +32,19 @@ Embree_scene::Embree_scene(const std::string_view debug_label)
         m_scene = nullptr;
     }
     m_scene = rtcNewScene(device);
-    log_embree.trace(
-        "rtcNewScene() = {}\n",
-        debug_label
-    );
+    //log_embree.trace("rtcNewScene() = {}\n", debug_label);
     if (m_scene == nullptr)
     {
         log_scene.error("rtcNewDevice() failed\n");
         Embree_device::get_instance().check_device_error();
         return;
     }
+    rtcSetSceneBuildQuality(m_scene, RTC_BUILD_QUALITY_LOW);
 }
 
 Embree_scene::~Embree_scene()
 {
-    log_embree.trace("rtcReleaseScene(hscene = {})\n", m_debug_label);
+    //log_embree.trace("rtcReleaseScene({})\n", m_debug_label);
     rtcReleaseScene(m_scene);
 }
 
@@ -104,12 +102,12 @@ void Embree_scene::attach(IInstance* instance)
     //    }
     //}
     //m_instance_map[embree_instance->geometry_id] = instance;
-    log_embree.trace(
-        "rtcAttachGeometry(scene = {}, instance = {}) id = {}\n",
-        m_debug_label,
-        embree_instance->debug_label(),
-        embree_instance->geometry_id
-    );
+    //log_embree.trace(
+    //    "rtcAttachGeometry(scene = {}, instance = {}) id = {}\n",
+    //    m_debug_label,
+    //    embree_instance->debug_label(),
+    //    embree_instance->geometry_id
+    //);
 
     m_dirty = true;
 }

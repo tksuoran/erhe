@@ -23,6 +23,7 @@ public:
         , m_operation_stack{operation_stack}
     {
     }
+    //~Undo_command() noexcept final {}
 
     auto try_call(Command_context& context) -> bool override;
 

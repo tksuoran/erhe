@@ -222,7 +222,8 @@ void Scene_builder::make_brushes()
                 auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
                     make_box(
                         vec3{floor_size, 1.0f, floor_size},
-                        ivec3{static_cast<int>(floor_size), 1, static_cast<int>(floor_size)}
+                        //ivec3{static_cast<int>(floor_size), 1, static_cast<int>(floor_size)}
+                        ivec3{4, 1, 4}
                     )
                 );
                 floor_geometry->name = "floor";

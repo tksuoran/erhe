@@ -28,6 +28,7 @@ namespace editor {
 
 class Configuration;
 class Editor_rendering;
+class Editor_view;
 class Forward_renderer;
 class Imgui_window;
 class Imgui_renderer;
@@ -73,7 +74,7 @@ public:
 
     void mouse_button  (const uint32_t button, bool pressed);
     void on_key        (const signed int keycode, const uint32_t modifier_mask, const bool pressed);
-    void on_char       (const unsigned int codepoint);
+    //void on_char       (const unsigned int codepoint);
     void on_mouse_wheel(const double x, const double y);
 
 private:
@@ -87,7 +88,7 @@ private:
     // Component dependencies
     std::shared_ptr<Imgui_renderer>                       m_renderer;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<Pointer_context>                      m_pointer_context;
+    std::shared_ptr<Editor_view>                          m_editor_view;
 
     std::string                                  m_name;
     erhe::scene::Mesh_layer                      m_mesh_layer;
@@ -166,6 +167,7 @@ private:
 
     // Component dependencies
     std::shared_ptr<Editor_rendering>                        m_editor_rendering;
+    std::shared_ptr<Editor_view>                             m_editor_view;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker>    m_pipeline_state_tracker;
     std::shared_ptr<Imgui_renderer>                          m_renderer;
 
@@ -174,7 +176,6 @@ private:
     std::vector<std::shared_ptr<Rendertarget_imgui_windows>> m_rendertarget_imgui_windows;
     ImGuiContext*                                            m_imgui_context       {nullptr};
     ImVector<ImWchar>                                        m_glyph_ranges;
-    bool                                                     m_show_tool_properties{true};
     bool                                                     m_show_style_editor   {false};
 
     double                                                   m_time                {0.0};
