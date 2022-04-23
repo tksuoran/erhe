@@ -1,8 +1,8 @@
 #pragma once
 
-#include "windows/framebuffer_window.hpp"
 #include "renderers/renderpass.hpp"
 
+#include "erhe/application/windows/framebuffer_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/vertex_format.hpp"
@@ -28,7 +28,7 @@ class Shadow_renderer;
 
 class Debug_view_window
     : public erhe::components::Component
-    , public Framebuffer_window
+    , public erhe::application::Framebuffer_window
 {
 public:
     static constexpr std::string_view c_name {"Debug_view_window"};

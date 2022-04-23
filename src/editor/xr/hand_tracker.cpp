@@ -1,9 +1,9 @@
 #include "xr/hand_tracker.hpp"
-#include "editor_tools.hpp"
 
 #include "renderers/line_renderer.hpp"
 #include "xr/headset_renderer.hpp"
 
+#include "erhe/application/tools.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -237,8 +237,8 @@ void Hand::set_color(const size_t finger, const ImVec4 color)
 }
 
 void Hand::draw(
-    Line_renderer&  line_renderer,
-    const glm::mat4 transform
+    erhe::application::Line_renderer& line_renderer,
+    const glm::mat4                   transform
 )
 {
     if (!m_is_active)
@@ -265,7 +265,7 @@ void Hand::draw(
 void Hand::draw_joint_line_strip(
     const glm::mat4                    transform,
     const std::vector<XrHandJointEXT>& joint_names,
-    Line_renderer&                     line_renderer
+    erhe::application::Line_renderer&  line_renderer
 ) const
 {
     ERHE_PROFILE_FUNCTION
@@ -334,13 +334,13 @@ auto Hand_tracker::description() -> const char*
 void Hand_tracker::connect()
 {
     m_headset_renderer  = get<Headset_renderer >();
-    m_line_renderer_set = get<Line_renderer_set>();
-    require<Editor_tools>();
+    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
+    require<erhe::application:Tools>();
 }
 
 void Hand_tracker::initialize_component()
 {
-    get<Editor_tools>()->register_background_tool(this);
+    get<erhe::application::Tools>()->register_background_tool(this);
 }
 
 void Hand_tracker::update(erhe::xr::Headset& headset)
@@ -378,7 +378,7 @@ void Hand_tracker::set_color(
     get_hand(hand_name).set_color(finger_name, color);
 }
 
-void Hand_tracker::tool_render(const Render_context& context)
+void Hand_tracker::tool_render(const erhe::application::Render_context& context)
 {
     static_cast<void>(context);
 

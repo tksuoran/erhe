@@ -1,10 +1,9 @@
 #include "tools/grid_tool.hpp"
-#include "editor_imgui_windows.hpp"
-#include "editor_tools.hpp"
-#include "rendering.hpp"
+#include "tools/tools.hpp"
+#include "editor_rendering.hpp"
 
-#include "renderers/line_renderer.hpp"
-
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -16,8 +15,8 @@ namespace editor
 using glm::vec3;
 
 Grid_tool::Grid_tool()
-    : erhe::components::Component{c_name}
-    , Imgui_window               {c_description}
+    : erhe::components::Component    {c_name}
+    , erhe::application::Imgui_window{c_description}
 {
 }
 
@@ -25,15 +24,15 @@ Grid_tool::~Grid_tool() = default;
 
 void Grid_tool::connect()
 {
-    m_line_renderer_set = get<Line_renderer_set>();
-    require<Editor_tools>();
-    require<Editor_imgui_windows>();
+    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
+    require<Tools>();
+    require<erhe::application::Imgui_windows>();
 }
 
 void Grid_tool::initialize_component()
 {
-    get<Editor_tools        >()->register_background_tool(this);
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    get<Tools                           >()->register_background_tool(this);
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 }
 
 auto Grid_tool::description() -> const char*
@@ -41,7 +40,9 @@ auto Grid_tool::description() -> const char*
    return c_description.data();
 }
 
-void Grid_tool::tool_render(const Render_context& /*context*/)
+void Grid_tool::tool_render(
+    const Render_context& /*context*/
+)
 {
     ERHE_PROFILE_FUNCTION
 

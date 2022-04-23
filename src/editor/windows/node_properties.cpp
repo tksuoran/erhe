@@ -1,13 +1,14 @@
 #include "windows/node_properties.hpp"
-#include "editor_imgui_windows.hpp"
-#include "imgui_helpers.hpp"
-#include "log.hpp"
 
+#include "log.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/scene_root.hpp"
-#include "windows/log_window.hpp"
+
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui_helpers.hpp"
+#include "erhe/application/windows/log_window.hpp"
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/primitive/primitive.hpp"
@@ -30,10 +31,12 @@
 namespace editor
 {
 
-void Node_properties::Value_edit_state::combine(const Value_edit_state& other)
+void Node_properties::Value_edit_state::combine(
+    const Value_edit_state& other
+)
 {
     value_changed = value_changed || other.value_changed;
-    edit_ended    = edit_ended || other.edit_ended;
+    edit_ended    = edit_ended    || other.edit_ended;
 }
 
 Node_properties::Node_properties()
@@ -49,12 +52,12 @@ void Node_properties::connect()
     m_operation_stack = get<Operation_stack>();
     m_scene_root      = get<Scene_root     >();
     m_selection_tool  = get<Selection_tool >();
-    require<Editor_imgui_windows>();
+    require<erhe::application::Imgui_windows>();
 }
 
 void Node_properties::initialize_component()
 {
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 }
 
 void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
@@ -68,10 +71,16 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
     }
 
     ImGui::PushID("##icamera_properties");
-    if (ImGui::TreeNodeEx("Projection", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+    if (
+        ImGui::TreeNodeEx(
+            "Projection",
+            ImGuiTreeNodeFlags_Framed |
+            ImGuiTreeNodeFlags_DefaultOpen
+        )
+    )
     {
         ImGui::SetNextItemWidth(200);
-        make_combo(
+        erhe::application::make_combo(
             "Type",
             projection->projection_type,
             erhe::scene::Projection::c_type_strings,
@@ -171,7 +180,14 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
         }
         ImGui::TreePop();
     }
-    if (ImGui::TreeNodeEx("Camera", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+
+    if (
+        ImGui::TreeNodeEx(
+            "Camera",
+            ImGuiTreeNodeFlags_Framed |
+            ImGuiTreeNodeFlags_DefaultOpen
+        )
+    )
     {
         float exposure = camera.get_exposure();
         if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 2000.0f, "%.3f", logarithmic))
@@ -188,9 +204,15 @@ void Node_properties::light_properties(erhe::scene::Light& light) const
     const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
 
     ImGui::PushID("##light_properties");
-    if (ImGui::TreeNodeEx("Light", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+    if (
+        ImGui::TreeNodeEx(
+            "Light",
+            ImGuiTreeNodeFlags_Framed |
+            ImGuiTreeNodeFlags_DefaultOpen
+        )
+    )
     {
-        make_combo(
+        erhe::application::make_combo(
             "Type",
             light.type,
             erhe::scene::Light::c_type_strings,
@@ -223,9 +245,20 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
     auto& mesh_data = mesh.mesh_data;
 
     ImGui::PushID("##mesh_properties");
-    if (ImGui::TreeNodeEx("Mesh", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+    if (
+        ImGui::TreeNodeEx(
+            "Mesh",
+            ImGuiTreeNodeFlags_Framed |
+            ImGuiTreeNodeFlags_DefaultOpen
+        )
+    )
     {
-        ImGui::ColorEdit3("Wireframe Color", &mesh_data.wireframe_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);
+        ImGui::ColorEdit3(
+            "Wireframe Color",
+            &mesh_data.wireframe_color.x,
+            ImGuiColorEditFlags_Float |
+            ImGuiColorEditFlags_NoInputs
+        );
 
         for (auto& primitive : mesh_data.primitives)
         {
@@ -684,4 +717,4 @@ void Node_properties::imgui()
     }
 }
 
-}
+} // namespace editor

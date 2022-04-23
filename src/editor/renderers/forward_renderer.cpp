@@ -1,11 +1,12 @@
 #include "renderers/forward_renderer.hpp"
-#include "configuration.hpp"
-#include "graphics/gl_context_provider.hpp"
 
 #include "renderers/mesh_memory.hpp"
 #include "renderers/program_interface.hpp"
+#include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
 
+#include "erhe/application/configuration.hpp"
+#include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/debug.hpp"
@@ -53,10 +54,10 @@ void Forward_renderer::connect()
 {
     base_connect(this);
 
-    require<Gl_context_provider>();
+    require<erhe::application::Gl_context_provider>();
     require<Program_interface  >();
 
-    m_configuration          = require<Configuration>();
+    m_configuration          = require<erhe::application::Configuration>();
     m_mesh_memory            = require<Mesh_memory>();
     m_programs               = require<Programs   >();
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
@@ -68,7 +69,9 @@ void Forward_renderer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const erhe::application::Scoped_gl_context gl_context{
+        Component::get<erhe::application::Gl_context_provider>()
+    };
 
     erhe::graphics::Scoped_debug_group forward_renderer_initialization{c_forward_renderer_initialize_component};
 

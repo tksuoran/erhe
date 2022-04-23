@@ -1,6 +1,6 @@
 #pragma once
 
-#include "renderers/buffer_writer.hpp"
+#include "erhe/application/renderers/buffer_writer.hpp"
 #include "renderers/frame_resources.hpp"
 
 #include "erhe/components/components.hpp"
@@ -13,7 +13,6 @@
 #include <array>
 #include <memory>
 #include <vector>
-
 
 namespace erhe::primitive
 {
@@ -38,6 +37,7 @@ namespace editor
 {
 
 class Programs;
+class Program_interface;
 
 class Base_renderer
 {
@@ -83,8 +83,8 @@ public:
     class Draw_indirect_buffer_range
     {
     public:
-        Buffer_range range;
-        size_t       draw_indirect_count{0};
+        erhe::application::Buffer_range range;
+        size_t                          draw_indirect_count{0};
     };
 
     class Id_range
@@ -120,7 +120,7 @@ public:
         const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
         const erhe::scene::Visibility_filter&                      visibility_filter,
         const bool                                                 use_id_ranges = false
-    ) -> Buffer_range;
+    ) -> erhe::application::Buffer_range;
 
     // Can discard return value
     auto update_light_buffer(
@@ -128,18 +128,18 @@ public:
         const glm::vec3&                                            ambient_light,
         const erhe::scene::Viewport                                 light_texture_viewport,
         const uint64_t                                              shadow_map_texture_handle
-    ) -> Buffer_range;
+    ) -> erhe::application::Buffer_range;
 
     // Can discard return value
     auto update_material_buffer(
         const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials
-    ) -> Buffer_range;
+    ) -> erhe::application::Buffer_range;
 
     // Can discard return value
     auto update_camera_buffer(
         const erhe::scene::ICamera& camera,
         const erhe::scene::Viewport viewport
-    ) -> Buffer_range;
+    ) -> erhe::application::Buffer_range;
 
     // Can discard return value
     auto update_draw_indirect_buffer(
@@ -165,15 +165,15 @@ private:
     std::shared_ptr<Program_interface> m_program_interface;
     std::shared_ptr<Programs>          m_programs;
 
-    std::string                  m_name;
-    std::vector<Frame_resources> m_frame_resources;
-    size_t                       m_current_frame_resource_slot{0};
+    std::string                      m_name;
+    std::vector<Frame_resources>     m_frame_resources;
+    size_t                           m_current_frame_resource_slot{0};
 
-    Buffer_writer                m_material_writer;
-    Buffer_writer                m_light_writer;
-    Buffer_writer                m_camera_writer;
-    Buffer_writer                m_primitive_writer;
-    Buffer_writer                m_draw_indirect_writer;
+    erhe::application::Buffer_writer m_material_writer;
+    erhe::application::Buffer_writer m_light_writer;
+    erhe::application::Buffer_writer m_camera_writer;
+    erhe::application::Buffer_writer m_primitive_writer;
+    erhe::application::Buffer_writer m_draw_indirect_writer;
 
     uint32_t                     m_id_offset{0};
     std::vector<Id_range>        m_id_ranges;

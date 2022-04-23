@@ -1,7 +1,7 @@
 #include "renderers/program_interface.hpp"
 #include "log.hpp"
-#include "window.hpp"
 
+#include "erhe/application/window.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -22,7 +22,7 @@ Program_interface::~Program_interface() = default;
 
 void Program_interface::connect()
 {
-    require<Window>(); // ensures we have graphics::Instance info
+    require<erhe::application::Window>(); // ensures we have graphics::Instance info
 
     // TODO Make erhe::graphics::Instance a component
 }

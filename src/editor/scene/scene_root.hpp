@@ -1,10 +1,10 @@
 #pragma once
 
-#include "commands/command.hpp"
 
 #include "scene/collision_generator.hpp"
 #include "scene/frame_controller.hpp"
 
+#include "erhe/application/commands/command.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/buffer_info.hpp"
@@ -90,23 +90,23 @@ public:
 };
 
 class Create_new_camera_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Create_new_camera_command(Scene_root& scene_root)
-        : Command     {"Scene_root.create_new_camera"}
+        : Command{"Scene_root.create_new_camera"}
         , m_scene_root{scene_root}
     {
     }
 
-    auto try_call(Command_context& context) -> bool override;
+    auto try_call(erhe::application::Command_context& context) -> bool override;
 
 private:
     Scene_root& m_scene_root;
 };
 
 class Create_new_empty_node_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Create_new_empty_node_command(Scene_root& scene_root)
@@ -115,14 +115,14 @@ public:
     {
     }
 
-    auto try_call(Command_context& context) -> bool override;
+    auto try_call(erhe::application::Command_context& context) -> bool override;
 
 private:
     Scene_root& m_scene_root;
 };
 
 class Create_new_light_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Create_new_light_command(Scene_root& scene_root)
@@ -131,7 +131,7 @@ public:
     {
     }
 
-    auto try_call(Command_context& context) -> bool override;
+    auto try_call(erhe::application::Command_context& context) -> bool override;
 
 private:
     Scene_root& m_scene_root;

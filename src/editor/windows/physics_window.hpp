@@ -1,8 +1,8 @@
 #pragma once
 
 #include "tools/tool.hpp"
-#include "windows/imgui_window.hpp"
 
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/physics/idebug_draw.hpp"
 
@@ -18,7 +18,7 @@ class Physics_window
     : public erhe::components::Component
     , public Tool
 //    , public Rendertarget_imgui_window // Imgui_window
-    , public Imgui_window
+    , public erhe::application::Imgui_window
 {
 public:
     static constexpr std::string_view c_name {"Physics_window"};

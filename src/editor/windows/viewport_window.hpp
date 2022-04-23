@@ -1,10 +1,9 @@
 #pragma once
 
-#include "commands/command.hpp"
-
-#include "windows/imgui_window.hpp"
 #include "windows/viewport_config.hpp"
 
+#include "erhe/application/commands/command.hpp"
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/viewport.hpp"
@@ -21,12 +20,15 @@ namespace erhe::graphics
     class OpenGL_state_tracker;
 }
 
+namespace erhe::application
+{
+    class Configuration;
+    class View;
+}
 namespace editor
 {
 
-class Configuration;
 class Editor_rendering;
-class Editor_view;
 class Pointer_context;
 class Post_processing;
 class Render_context;
@@ -36,10 +38,19 @@ class Headset_renderer;
 #endif
 
 class Viewport_window
-    : public Imgui_window
-    , public Mouse_input_sink
+    : public erhe::application::Imgui_window
+    , public erhe::application::Mouse_input_sink
 {
 public:
+    static constexpr std::string_view c_name{"Viewport_window"};
+    static constexpr uint32_t hash {
+        compiletime_xxhash::xxh32(
+            c_name.data(),
+            c_name.size(),
+            {}
+        )
+    };
+
     Viewport_window(
         const std::string_view              name,
         const erhe::components::Components& components,
@@ -48,6 +59,7 @@ public:
 
     // Implements Imgui_window
     void imgui               () override;
+    auto get_window_type_hash() const -> uint32_t override { return hash; }
     auto consumes_mouse_input() const -> bool override;
     void on_begin            () override;
     void on_end              () override;
@@ -66,6 +78,7 @@ public:
     [[nodiscard]] auto to_scene_content    (const glm::vec2 position_in_root) const -> glm::vec2;
     [[nodiscard]] auto project_to_viewport (const glm::dvec3 position_in_world) const -> glm::dvec3;
     [[nodiscard]] auto unproject_to_world  (const glm::dvec3 position_in_window) const -> nonstd::optional<glm::dvec3>;
+    [[nodiscard]] auto pointer_context     () const -> const std::shared_ptr<Pointer_context>&;
     [[nodiscard]] auto is_framebuffer_ready() const -> bool;
     [[nodiscard]] auto content_region_size () const -> glm::ivec2;
     [[nodiscard]] auto is_hovered          () const -> bool;
@@ -84,11 +97,12 @@ private:
     std::string                                   m_name;
 
     // Component dependencies
-    std::shared_ptr<Configuration>                m_configuration;
-    std::shared_ptr<Scene_root>                   m_scene_root;
-    std::shared_ptr<Viewport_config>              m_viewport_config;
+    std::shared_ptr<erhe::application::Configuration> m_configuration;
+    std::shared_ptr<Pointer_context>              m_pointer_context;
     std::shared_ptr<Post_processing>              m_post_processing;
     std::shared_ptr<Programs>                     m_programs;
+    std::shared_ptr<Scene_root>                   m_scene_root;
+    std::shared_ptr<Viewport_config>              m_viewport_config;
 
     erhe::scene::Viewport                         m_viewport              {0, 0, 0, 0, true};
     erhe::scene::ICamera*                         m_camera                {nullptr};
@@ -110,10 +124,26 @@ private:
     std::unique_ptr<erhe::graphics::Framebuffer>  m_framebuffer_resolved;
 };
 
+inline auto is_viewport_window(erhe::application::Imgui_window* window) -> bool
+{
+    return
+        (window != nullptr) &&
+        (window->get_window_type_hash() == Viewport_window::hash);
+}
+
+inline auto as_viewport_window(erhe::application::Imgui_window* window) -> Viewport_window*
+{
+    return
+        (window != nullptr) &&
+        (window->get_window_type_hash() == Viewport_window::hash)
+            ? reinterpret_cast<Viewport_window*>(window)
+            : nullptr;
+}
+
 class Viewport_windows;
 
 class Open_new_viewport_window_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Open_new_viewport_window_command(Viewport_windows& viewport_windows)
@@ -122,7 +152,7 @@ public:
     {
     }
 
-    auto try_call(Command_context& context) -> bool override;
+    auto try_call(erhe::application::Command_context& context) -> bool override;
 
 private:
     Viewport_windows& m_viewport_windows;
@@ -163,9 +193,9 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Configuration>                        m_configuration;
+    std::shared_ptr<erhe::application::Configuration>     m_configuration;
     std::shared_ptr<Editor_rendering>                     m_editor_rendering;
-    std::shared_ptr<Editor_view>                          m_editor_view;
+    std::shared_ptr<erhe::application::View>              m_editor_view;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Pointer_context>                      m_pointer_context;
     std::shared_ptr<Scene_root>                           m_scene_root;

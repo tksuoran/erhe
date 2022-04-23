@@ -1,0 +1,2627 @@
+{
+    "unit_types": [
+        {
+            "Ammo": 0,
+            "Attack": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "BType": 0,
+            "CAttack": 0,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "Frequ": 0,
+            "Fuel": 0,
+            "Hits": 0,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 0,
+            "Loading": 0,
+            "MType": 0,
+            "Moves": [
+                0,
+                0
+            ],
+            "Name": "No Unit     ",
+            "PTime": 99,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 0,
+            "Sfx": 0,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 0,
+            "Tech": 0,
+            "Undefd": 0,
+            "VFrom": [
+                0,
+                0
+            ],
+            "Vision": [
+                0,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                0,
+                2,
+                2,
+                2
+            ],
+            "BType": 2,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                2,
+                2,
+                2,
+                2
+            ],
+            "Frequ": 80,
+            "Fuel": 0,
+            "Hits": 15,
+            "L": 0,
+            "LAtt": 10,
+            "LDef": 15,
+            "LUI": 0,
+            "Levels": 1,
+            "LgtGndMod": 10,
+            "Loading": 0,
+            "MType": 4,
+            "Moves": [
+                40,
+                20
+            ],
+            "Name": "Settler     ",
+            "PTime": 8,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 5,
+            "Sfx": 1,
+            "Shots": 0,
+            "Specials": 46,
+            "TDef": 40,
+            "Tech": 0,
+            "Undefd": 1,
+            "VFrom": [
+                4,
+                2
+            ],
+            "Vision": [
+                2,
+                1
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                1,
+                5,
+                2,
+                1
+            ],
+            "BType": 2,
+            "CAttack": 12,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                5,
+                5,
+                8,
+                8
+            ],
+            "Frequ": 60,
+            "Fuel": 0,
+            "Hits": 5,
+            "L": 0,
+            "LAtt": 10,
+            "LDef": 15,
+            "LUI": 1,
+            "Levels": 1,
+            "LgtGndMod": 10,
+            "Loading": 0,
+            "MType": 4,
+            "Moves": [
+                30,
+                20
+            ],
+            "Name": "Infantry    ",
+            "PTime": 6,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 4,
+            "Sfx": 1,
+            "Shots": 0,
+            "Specials": 34,
+            "TDef": 14,
+            "Tech": 0,
+            "Undefd": 2,
+            "VFrom": [
+                3,
+                1
+            ],
+            "Vision": [
+                2,
+                1
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                1,
+                5,
+                2,
+                1
+            ],
+            "BType": 2,
+            "CAttack": 12,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                5,
+                5,
+                2,
+                2
+            ],
+            "Frequ": 78,
+            "Fuel": 0,
+            "Hits": 6,
+            "L": 0,
+            "LAtt": 10,
+            "LDef": 15,
+            "LUI": 2,
+            "Levels": 1,
+            "LgtGndMod": 10,
+            "Loading": 0,
+            "MType": 4,
+            "Moves": [
+                30,
+                20
+            ],
+            "Name": "Parachute   ",
+            "PTime": 6,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 4,
+            "Sfx": 1,
+            "Shots": 0,
+            "Specials": 35,
+            "TDef": 30,
+            "Tech": 40,
+            "Undefd": 3,
+            "VFrom": [
+                3,
+                1
+            ],
+            "Vision": [
+                2,
+                1
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                1,
+                10,
+                2,
+                3
+            ],
+            "BType": 2,
+            "CAttack": 12,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                5,
+                8,
+                2,
+                2
+            ],
+            "Frequ": 76,
+            "Fuel": 0,
+            "Hits": 10,
+            "L": 0,
+            "LAtt": 10,
+            "LDef": 15,
+            "LUI": 3,
+            "Levels": 1,
+            "LgtGndMod": 2,
+            "Loading": 0,
+            "MType": 4,
+            "Moves": [
+                30,
+                20
+            ],
+            "Name": "AntiTank    ",
+            "PTime": 7,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 5,
+            "Sfx": 1,
+            "Shots": 0,
+            "Specials": 35,
+            "TDef": 25,
+            "Tech": 22,
+            "Undefd": 4,
+            "VFrom": [
+                3,
+                1
+            ],
+            "Vision": [
+                2,
+                1
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                1,
+                5,
+                2,
+                1
+            ],
+            "BType": 2,
+            "CAttack": 12,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                5,
+                5,
+                2,
+                2
+            ],
+            "Frequ": 74,
+            "Fuel": 0,
+            "Hits": 8,
+            "L": 0,
+            "LAtt": 10,
+            "LDef": 15,
+            "LUI": 4,
+            "Levels": 1,
+            "LgtGndMod": 10,
+            "Loading": 0,
+            "MType": 4,
+            "Moves": [
+                40,
+                20
+            ],
+            "Name": "Engineers   ",
+            "PTime": 7,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 5,
+            "Sfx": 1,
+            "Shots": 0,
+            "Specials": 51,
+            "TDef": 40,
+            "Tech": 10,
+            "Undefd": 5,
+            "VFrom": [
+                3,
+                1
+            ],
+            "Vision": [
+                2,
+                1
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                1,
+                8,
+                4,
+                3
+            ],
+            "BType": 2,
+            "CAttack": 11,
+            "CType": 4,
+            "Cargo": 0,
+            "Cost": 2,
+            "Defence": [
+                6,
+                8,
+                8,
+                8
+            ],
+            "Frequ": 28,
+            "Fuel": 0,
+            "Hits": 15,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 10,
+            "Loading": 0,
+            "MType": 4,
+            "Moves": [
+                40,
+                20
+            ],
+            "Name": "Mech Inf    ",
+            "PTime": 9,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 5,
+            "Sfx": 10,
+            "Shots": 0,
+            "Specials": 35,
+            "TDef": 12,
+            "Tech": 0,
+            "Undefd": 6,
+            "VFrom": [
+                3,
+                0
+            ],
+            "Vision": [
+                2,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 20,
+            "Attack": [
+                2,
+                10,
+                8,
+                5
+            ],
+            "BType": 2,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 4,
+            "Defence": [
+                8,
+                10,
+                10,
+                14
+            ],
+            "Frequ": 100,
+            "Fuel": 0,
+            "Hits": 24,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 5,
+            "Loading": 0,
+            "MType": 8,
+            "Moves": [
+                35,
+                0
+            ],
+            "Name": "Panzer      ",
+            "PTime": 16,
+            "RAttack": 10,
+            "Range": [
+                3,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 10,
+            "Sfx": 2,
+            "Shots": 1,
+            "Specials": 34,
+            "TDef": 12,
+            "Tech": 22,
+            "Undefd": 7,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                2,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 25,
+            "Attack": [
+                3,
+                12,
+                9,
+                6
+            ],
+            "BType": 2,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 6,
+            "Defence": [
+                10,
+                12,
+                12,
+                14
+            ],
+            "Frequ": 127,
+            "Fuel": 0,
+            "Hits": 28,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 5,
+            "Loading": 0,
+            "MType": 8,
+            "Moves": [
+                35,
+                0
+            ],
+            "Name": "H. Panzer   ",
+            "PTime": 18,
+            "RAttack": 10,
+            "Range": [
+                4,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 10,
+            "Sfx": 2,
+            "Shots": 2,
+            "Specials": 34,
+            "TDef": 13,
+            "Tech": 45,
+            "Undefd": 8,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                2,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 30,
+            "Attack": [
+                4,
+                14,
+                10,
+                7
+            ],
+            "BType": 2,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 8,
+            "Defence": [
+                11,
+                13,
+                13,
+                13
+            ],
+            "Frequ": 127,
+            "Fuel": 0,
+            "Hits": 33,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 5,
+            "Loading": 0,
+            "MType": 8,
+            "Moves": [
+                30,
+                0
+            ],
+            "Name": "Buggy       ",
+            "PTime": 20,
+            "RAttack": 10,
+            "Range": [
+                5,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 10,
+            "Sfx": 3,
+            "Shots": 2,
+            "Specials": 34,
+            "TDef": 30,
+            "Tech": 64,
+            "Undefd": 9,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                1,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                5,
+                5,
+                5,
+                5
+            ],
+            "BType": 1,
+            "CAttack": 5,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 3,
+            "Defence": [
+                5,
+                10,
+                8,
+                5
+            ],
+            "Frequ": 22,
+            "Fuel": 22,
+            "Hits": 10,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 5,
+            "Loading": 0,
+            "MType": 1,
+            "Moves": [
+                5,
+                0
+            ],
+            "Name": "Fighter     ",
+            "PTime": 16,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 10,
+            "Repair": 3,
+            "Sfx": 3,
+            "Shots": 0,
+            "Specials": 64,
+            "TDef": 11,
+            "Tech": 38,
+            "Undefd": 10,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                4,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 3,
+            "Attack": [
+                4,
+                7,
+                7,
+                8
+            ],
+            "BType": 1,
+            "CAttack": 20,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 4,
+            "Defence": [
+                4,
+                9,
+                5,
+                6
+            ],
+            "Frequ": 35,
+            "Fuel": 28,
+            "Hits": 10,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 5,
+            "Loading": 0,
+            "MType": 1,
+            "Moves": [
+                4,
+                0
+            ],
+            "Name": "Bomber      ",
+            "PTime": 18,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 10,
+            "Repair": 3,
+            "Sfx": 3,
+            "Shots": 0,
+            "Specials": 64,
+            "TDef": 12,
+            "Tech": 43,
+            "Undefd": 11,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                4,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 8,
+            "Attack": [
+                7,
+                8,
+                8,
+                8
+            ],
+            "BType": 1,
+            "CAttack": 8,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 5,
+            "Defence": [
+                7,
+                13,
+                12,
+                13
+            ],
+            "Frequ": 13,
+            "Fuel": 34,
+            "Hits": 15,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 7,
+            "Loading": 0,
+            "MType": 2,
+            "Moves": [
+                6,
+                0
+            ],
+            "Name": "AtFighter   ",
+            "PTime": 20,
+            "RAttack": 10,
+            "Range": [
+                4,
+                0
+            ],
+            "Refuel": 20,
+            "Repair": 5,
+            "Sfx": 10,
+            "Shots": 2,
+            "Specials": 64,
+            "TDef": 14,
+            "Tech": 50,
+            "Undefd": 12,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                4,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 4,
+            "Attack": [
+                5,
+                9,
+                9,
+                6
+            ],
+            "BType": 1,
+            "CAttack": 20,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 5,
+            "Defence": [
+                5,
+                12,
+                11,
+                13
+            ],
+            "Frequ": 30,
+            "Fuel": 38,
+            "Hits": 15,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 8,
+            "Loading": 0,
+            "MType": 2,
+            "Moves": [
+                5,
+                0
+            ],
+            "Name": "AtBomber    ",
+            "PTime": 22,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 20,
+            "Repair": 5,
+            "Sfx": 18,
+            "Shots": 0,
+            "Specials": 64,
+            "TDef": 13,
+            "Tech": 66,
+            "Undefd": 13,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                4,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                1,
+                1,
+                1,
+                1
+            ],
+            "BType": 1,
+            "CAttack": 10,
+            "CType": 4,
+            "Cargo": 10,
+            "Cost": 4,
+            "Defence": [
+                4,
+                9,
+                7,
+                4
+            ],
+            "Frequ": 40,
+            "Fuel": 34,
+            "Hits": 10,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 10,
+            "Loading": 3,
+            "MType": 1,
+            "Moves": [
+                6,
+                0
+            ],
+            "Name": "Air Trans   ",
+            "PTime": 17,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 20,
+            "Repair": 3,
+            "Sfx": 3,
+            "Shots": 0,
+            "Specials": 64,
+            "TDef": 12,
+            "Tech": 40,
+            "Undefd": 14,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                4,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 6,
+            "Attack": [
+                4,
+                10,
+                10,
+                9
+            ],
+            "BType": 1,
+            "CAttack": 5,
+            "CType": 8,
+            "Cargo": 5,
+            "Cost": 4,
+            "Defence": [
+                5,
+                12,
+                11,
+                12
+            ],
+            "Frequ": 77,
+            "Fuel": 20,
+            "Hits": 8,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 9,
+            "Loading": 3,
+            "MType": 2,
+            "Moves": [
+                5,
+                0
+            ],
+            "Name": "HeliChop    ",
+            "PTime": 17,
+            "RAttack": 10,
+            "Range": [
+                3,
+                0
+            ],
+            "Refuel": 12,
+            "Repair": 4,
+            "Sfx": 19,
+            "Shots": 2,
+            "Specials": 64,
+            "TDef": 10,
+            "Tech": 49,
+            "Undefd": 15,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                3,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                5,
+                5,
+                10,
+                22
+            ],
+            "BType": 3,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 4,
+            "Defence": [
+                10,
+                10,
+                15,
+                20
+            ],
+            "Frequ": 45,
+            "Fuel": 70,
+            "Hits": 20,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 5,
+            "Loading": 0,
+            "MType": 32,
+            "Moves": [
+                80,
+                0
+            ],
+            "Name": "T.Boat      ",
+            "PTime": 8,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 30,
+            "Repair": 5,
+            "Sfx": 10,
+            "Shots": 0,
+            "Specials": 64,
+            "TDef": 13,
+            "Tech": 0,
+            "Undefd": 16,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                2,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 12,
+            "Attack": [
+                7,
+                6,
+                18,
+                25
+            ],
+            "BType": 3,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 8,
+            "Defence": [
+                10,
+                10,
+                10,
+                30
+            ],
+            "Frequ": 50,
+            "Fuel": 80,
+            "Hits": 40,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 5,
+            "Loading": 0,
+            "MType": 32,
+            "Moves": [
+                80,
+                0
+            ],
+            "Name": "Destroyer   ",
+            "PTime": 19,
+            "RAttack": 10,
+            "Range": [
+                4,
+                0
+            ],
+            "Refuel": 30,
+            "Repair": 7,
+            "Sfx": 5,
+            "Shots": 2,
+            "Specials": 0,
+            "TDef": 18,
+            "Tech": 20,
+            "Undefd": 17,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                4,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 20,
+            "Attack": [
+                9,
+                13,
+                20,
+                10
+            ],
+            "BType": 3,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 12,
+            "Defence": [
+                12,
+                12,
+                20,
+                20
+            ],
+            "Frequ": 70,
+            "Fuel": 85,
+            "Hits": 50,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 5,
+            "Loading": 0,
+            "MType": 64,
+            "Moves": [
+                60,
+                0
+            ],
+            "Name": "Cruiser     ",
+            "PTime": 25,
+            "RAttack": 10,
+            "Range": [
+                6,
+                0
+            ],
+            "Refuel": 40,
+            "Repair": 8,
+            "Sfx": 5,
+            "Shots": 2,
+            "Specials": 0,
+            "TDef": 25,
+            "Tech": 30,
+            "Undefd": 18,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                4,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                8,
+                12,
+                24,
+                13
+            ],
+            "BType": 3,
+            "CAttack": 10,
+            "CType": 2,
+            "Cargo": 99,
+            "Cost": 20,
+            "Defence": [
+                12,
+                12,
+                24,
+                10
+            ],
+            "Frequ": 85,
+            "Fuel": 90,
+            "Hits": 65,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 5,
+            "Loading": 6,
+            "MType": 64,
+            "Moves": [
+                60,
+                0
+            ],
+            "Name": "Carrier     ",
+            "PTime": 30,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 40,
+            "Repair": 8,
+            "Sfx": 5,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 26,
+            "Tech": 55,
+            "Undefd": 19,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                3,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 28,
+            "Attack": [
+                11,
+                15,
+                23,
+                8
+            ],
+            "BType": 3,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 30,
+            "Defence": [
+                14,
+                14,
+                23,
+                10
+            ],
+            "Frequ": 127,
+            "Fuel": 90,
+            "Hits": 65,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 5,
+            "Loading": 0,
+            "MType": 64,
+            "Moves": [
+                60,
+                0
+            ],
+            "Name": "BattlShip   ",
+            "PTime": 34,
+            "RAttack": 10,
+            "Range": [
+                8,
+                0
+            ],
+            "Refuel": 40,
+            "Repair": 10,
+            "Sfx": 5,
+            "Shots": 2,
+            "Specials": 0,
+            "TDef": 30,
+            "Tech": 40,
+            "Undefd": 20,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                4,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                1,
+                1,
+                1,
+                1
+            ],
+            "BType": 3,
+            "CAttack": 10,
+            "CType": 12,
+            "Cargo": 99,
+            "Cost": 10,
+            "Defence": [
+                4,
+                4,
+                3,
+                1
+            ],
+            "Frequ": 60,
+            "Fuel": 80,
+            "Hits": 20,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 10,
+            "Loading": 6,
+            "MType": 32,
+            "Moves": [
+                60,
+                0
+            ],
+            "Name": "Transport   ",
+            "PTime": 15,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 40,
+            "Repair": 5,
+            "Sfx": 5,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 16,
+            "Tech": 25,
+            "Undefd": 21,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                3,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 8,
+            "Attack": [
+                0,
+                0,
+                4,
+                2
+            ],
+            "BType": 4,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 12,
+            "Defence": [
+                3,
+                6,
+                4,
+                4
+            ],
+            "Frequ": 40,
+            "Fuel": 70,
+            "Hits": 30,
+            "L": 0,
+            "LAtt": 20,
+            "LDef": 20,
+            "LUI": 5,
+            "Levels": 1,
+            "LgtGndMod": 10,
+            "Loading": 0,
+            "MType": 128,
+            "Moves": [
+                60,
+                40
+            ],
+            "Name": "Sub         ",
+            "PTime": 27,
+            "RAttack": 20,
+            "Range": [
+                4,
+                3
+            ],
+            "Refuel": 35,
+            "Repair": 5,
+            "Sfx": 8,
+            "Shots": 2,
+            "Specials": 64,
+            "TDef": 25,
+            "Tech": 35,
+            "Undefd": 22,
+            "VFrom": [
+                2,
+                1
+            ],
+            "Vision": [
+                3,
+                1
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 9,
+            "Attack": [
+                4,
+                3,
+                2,
+                3
+            ],
+            "BType": 2,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 4,
+            "Defence": [
+                4,
+                4,
+                3,
+                7
+            ],
+            "Frequ": 30,
+            "Fuel": 0,
+            "Hits": 10,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 20,
+            "Loading": 0,
+            "MType": 8,
+            "Moves": [
+                30,
+                0
+            ],
+            "Name": "Light AA    ",
+            "PTime": 8,
+            "RAttack": 20,
+            "Range": [
+                7,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 5,
+            "Sfx": 10,
+            "Shots": 3,
+            "Specials": 32,
+            "TDef": 12,
+            "Tech": 40,
+            "Undefd": 23,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                3,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 18,
+            "Attack": [
+                5,
+                8,
+                2,
+                4
+            ],
+            "BType": 2,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 10,
+            "Defence": [
+                6,
+                6,
+                5,
+                8
+            ],
+            "Frequ": 34,
+            "Fuel": 0,
+            "Hits": 20,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 20,
+            "Loading": 0,
+            "MType": 8,
+            "Moves": [
+                25,
+                0
+            ],
+            "Name": "Heavy AA    ",
+            "PTime": 14,
+            "RAttack": 20,
+            "Range": [
+                9,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 5,
+            "Sfx": 10,
+            "Shots": 3,
+            "Specials": 34,
+            "TDef": 14,
+            "Tech": 46,
+            "Undefd": 24,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                4,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 18,
+            "Attack": [
+                1,
+                4,
+                3,
+                3
+            ],
+            "BType": 2,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 5,
+            "Defence": [
+                4,
+                5,
+                4,
+                8
+            ],
+            "Frequ": 110,
+            "Fuel": 0,
+            "Hits": 15,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 5,
+            "Loading": 0,
+            "MType": 8,
+            "Moves": [
+                30,
+                0
+            ],
+            "Name": "Artillery   ",
+            "PTime": 17,
+            "RAttack": 30,
+            "Range": [
+                8,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 5,
+            "Sfx": 2,
+            "Shots": 3,
+            "Specials": 34,
+            "TDef": 12,
+            "Tech": 40,
+            "Undefd": 25,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                2,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 18,
+            "Attack": [
+                2,
+                5,
+                5,
+                5
+            ],
+            "BType": 2,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 12,
+            "Defence": [
+                4,
+                7,
+                6,
+                9
+            ],
+            "Frequ": 120,
+            "Fuel": 0,
+            "Hits": 20,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 5,
+            "Loading": 0,
+            "MType": 8,
+            "Moves": [
+                25,
+                0
+            ],
+            "Name": "Heavy Gun   ",
+            "PTime": 19,
+            "RAttack": 30,
+            "Range": [
+                10,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 5,
+            "Sfx": 2,
+            "Shots": 3,
+            "Specials": 34,
+            "TDef": 14,
+            "Tech": 52,
+            "Undefd": 26,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                3,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 18,
+            "Attack": [
+                2,
+                4,
+                7,
+                7
+            ],
+            "BType": 2,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 8,
+            "Defence": [
+                4,
+                5,
+                6,
+                9
+            ],
+            "Frequ": 127,
+            "Fuel": 0,
+            "Hits": 25,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 5,
+            "Loading": 0,
+            "MType": 8,
+            "Moves": [
+                25,
+                0
+            ],
+            "Name": "Coast Gun   ",
+            "PTime": 18,
+            "RAttack": 30,
+            "Range": [
+                10,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 5,
+            "Sfx": 10,
+            "Shots": 3,
+            "Specials": 32,
+            "TDef": 13,
+            "Tech": 42,
+            "Undefd": 27,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                4,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "BType": 0,
+            "CAttack": 0,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "Frequ": 0,
+            "Fuel": 0,
+            "Hits": 0,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 0,
+            "Loading": 0,
+            "MType": 0,
+            "Moves": [
+                0,
+                0
+            ],
+            "Name": "Unit 28     ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 0,
+            "Sfx": 0,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 0,
+            "Tech": 0,
+            "Undefd": 28,
+            "VFrom": [
+                0,
+                0
+            ],
+            "Vision": [
+                0,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "BType": 0,
+            "CAttack": 0,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "Frequ": 0,
+            "Fuel": 0,
+            "Hits": 0,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 0,
+            "Loading": 0,
+            "MType": 0,
+            "Moves": [
+                0,
+                0
+            ],
+            "Name": "Unit 29     ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 0,
+            "Sfx": 0,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 0,
+            "Tech": 0,
+            "Undefd": 29,
+            "VFrom": [
+                0,
+                0
+            ],
+            "Vision": [
+                0,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "BType": 0,
+            "CAttack": 0,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "Frequ": 0,
+            "Fuel": 0,
+            "Hits": 0,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 0,
+            "Loading": 0,
+            "MType": 0,
+            "Moves": [
+                0,
+                0
+            ],
+            "Name": "Unit 30     ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 0,
+            "Sfx": 0,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 0,
+            "Tech": 0,
+            "Undefd": 30,
+            "VFrom": [
+                0,
+                0
+            ],
+            "Vision": [
+                0,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "BType": 0,
+            "CAttack": 0,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "Frequ": 0,
+            "Fuel": 0,
+            "Hits": 0,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 0,
+            "Loading": 0,
+            "MType": 0,
+            "Moves": [
+                0,
+                0
+            ],
+            "Name": "Missile     ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 0,
+            "Sfx": 0,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 0,
+            "Tech": 0,
+            "Undefd": 31,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                0,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                5,
+                5,
+                5,
+                5
+            ],
+            "BType": 2,
+            "CAttack": 0,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 6,
+            "Defence": [
+                12,
+                12,
+                12,
+                12
+            ],
+            "Frequ": 127,
+            "Fuel": 0,
+            "Hits": 24,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 0,
+            "Loading": 0,
+            "MType": 36,
+            "Moves": [
+                30,
+                0
+            ],
+            "Name": "Oil Rig     ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 8,
+            "Sfx": 18,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 22,
+            "Tech": 0,
+            "Undefd": 32,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                2,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                5,
+                5,
+                5,
+                5
+            ],
+            "BType": 2,
+            "CAttack": 0,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 6,
+            "Defence": [
+                12,
+                12,
+                12,
+                12
+            ],
+            "Frequ": 127,
+            "Fuel": 0,
+            "Hits": 24,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 0,
+            "Loading": 0,
+            "MType": 4,
+            "Moves": [
+                30,
+                0
+            ],
+            "Name": "Ore Mine    ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 8,
+            "Sfx": 18,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 22,
+            "Tech": 0,
+            "Undefd": 33,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                2,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                5,
+                5,
+                5,
+                5
+            ],
+            "BType": 2,
+            "CAttack": 0,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 6,
+            "Defence": [
+                12,
+                12,
+                12,
+                12
+            ],
+            "Frequ": 127,
+            "Fuel": 0,
+            "Hits": 24,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 0,
+            "Loading": 0,
+            "MType": 4,
+            "Moves": [
+                30,
+                0
+            ],
+            "Name": "RAN Mine    ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 8,
+            "Sfx": 18,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 22,
+            "Tech": 0,
+            "Undefd": 34,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                2,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                5,
+                5,
+                5,
+                5
+            ],
+            "BType": 5,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                18,
+                15,
+                12,
+                11
+            ],
+            "Frequ": 36,
+            "Fuel": 0,
+            "Hits": 33,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 10,
+            "Loading": 0,
+            "MType": 0,
+            "Moves": [
+                0,
+                0
+            ],
+            "Name": "City 5      ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 10,
+            "Sfx": 0,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 10,
+            "Tech": 0,
+            "Undefd": 35,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                4,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                4,
+                4,
+                4,
+                4
+            ],
+            "BType": 5,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                16,
+                14,
+                11,
+                10
+            ],
+            "Frequ": 28,
+            "Fuel": 0,
+            "Hits": 33,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 10,
+            "Loading": 0,
+            "MType": 0,
+            "Moves": [
+                0,
+                0
+            ],
+            "Name": "City 4      ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 10,
+            "Sfx": 0,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 10,
+            "Tech": 0,
+            "Undefd": 36,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                3,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                3,
+                3,
+                3,
+                3
+            ],
+            "BType": 5,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                14,
+                13,
+                10,
+                9
+            ],
+            "Frequ": 24,
+            "Fuel": 0,
+            "Hits": 33,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 10,
+            "Loading": 0,
+            "MType": 0,
+            "Moves": [
+                0,
+                0
+            ],
+            "Name": "City 3      ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 10,
+            "Sfx": 0,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 10,
+            "Tech": 0,
+            "Undefd": 37,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                2,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                2,
+                2,
+                2,
+                2
+            ],
+            "BType": 5,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                12,
+                12,
+                9,
+                8
+            ],
+            "Frequ": 22,
+            "Fuel": 0,
+            "Hits": 33,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 10,
+            "Loading": 0,
+            "MType": 0,
+            "Moves": [
+                0,
+                0
+            ],
+            "Name": "City 2      ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 10,
+            "Sfx": 0,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 10,
+            "Tech": 0,
+            "Undefd": 38,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                1,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                1,
+                1,
+                1,
+                1
+            ],
+            "BType": 5,
+            "CAttack": 10,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                10,
+                11,
+                8,
+                5
+            ],
+            "Frequ": 20,
+            "Fuel": 0,
+            "Hits": 33,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 10,
+            "Loading": 0,
+            "MType": 0,
+            "Moves": [
+                0,
+                0
+            ],
+            "Name": "City 1      ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 10,
+            "Sfx": 0,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 10,
+            "Tech": 0,
+            "Undefd": 39,
+            "VFrom": [
+                4,
+                0
+            ],
+            "Vision": [
+                1,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "BType": 1,
+            "CAttack": 0,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "Frequ": 0,
+            "Fuel": 0,
+            "Hits": 0,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 0,
+            "Loading": 0,
+            "MType": 4,
+            "Moves": [
+                0,
+                0
+            ],
+            "Name": "Unit 40     ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 0,
+            "Sfx": 0,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 0,
+            "Tech": 0,
+            "Undefd": 40,
+            "VFrom": [
+                0,
+                0
+            ],
+            "Vision": [
+                0,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "BType": 1,
+            "CAttack": 0,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "Frequ": 0,
+            "Fuel": 0,
+            "Hits": 0,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 0,
+            "Loading": 0,
+            "MType": 4,
+            "Moves": [
+                0,
+                0
+            ],
+            "Name": "Unit 41     ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 0,
+            "Sfx": 0,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 0,
+            "Tech": 0,
+            "Undefd": 41,
+            "VFrom": [
+                0,
+                0
+            ],
+            "Vision": [
+                0,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        },
+        {
+            "Ammo": 0,
+            "Attack": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "BType": 0,
+            "CAttack": 0,
+            "CType": 0,
+            "Cargo": 0,
+            "Cost": 0,
+            "Defence": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "Frequ": 0,
+            "Fuel": 0,
+            "Hits": 0,
+            "L": 0,
+            "LAtt": 0,
+            "LDef": 0,
+            "LUI": 0,
+            "Levels": 0,
+            "LgtGndMod": 0,
+            "Loading": 0,
+            "MType": 0,
+            "Moves": [
+                0,
+                0
+            ],
+            "Name": "            ",
+            "PTime": 0,
+            "RAttack": 0,
+            "Range": [
+                0,
+                0
+            ],
+            "Refuel": 0,
+            "Repair": 0,
+            "Sfx": 0,
+            "Shots": 0,
+            "Specials": 0,
+            "TDef": 0,
+            "Tech": 0,
+            "Undefd": 0,
+            "VFrom": [
+                0,
+                0
+            ],
+            "Vision": [
+                0,
+                0
+            ],
+            "fff": 0,
+            "ggg": 0,
+            "hhh": 0
+        }
+    ]
+}

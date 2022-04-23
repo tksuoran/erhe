@@ -1,27 +1,26 @@
 #include "tools/trs_tool.hpp"
 
-#include "editor_imgui_windows.hpp"
-#include "editor_tools.hpp"
-#include "editor_view.hpp"
-#include "imgui_helpers.hpp"
 #include "log.hpp"
-#include "rendering.hpp"
-
-#include "graphics/gl_context_provider.hpp"
+#include "editor_rendering.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
-#include "renderers/line_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
-#include "renderers/text_renderer.hpp"
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
+#include "tools/tools.hpp"
 #include "windows/operations.hpp"
 
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/view.hpp"
+#include "erhe/application/imgui_helpers.hpp"
+#include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/application/renderers/line_renderer.hpp"
+#include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/geometry/shapes/box.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
@@ -52,7 +51,9 @@ using glm::mat4;
 using glm::vec3;
 using glm::vec4;
 
-void Trs_tool_drag_command::try_ready(Command_context& context)
+void Trs_tool_drag_command::try_ready(
+    erhe::application::Command_context& context
+)
 {
     log_trs_tool.trace("try_ready\n");
     if (m_trs_tool.on_drag_ready())
@@ -61,7 +62,9 @@ void Trs_tool_drag_command::try_ready(Command_context& context)
     }
 }
 
-auto Trs_tool_drag_command::try_call(Command_context& context) -> bool
+auto Trs_tool_drag_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
     log_trs_tool.trace("try_call\n");
     if (!m_trs_tool.is_enabled())
@@ -71,14 +74,14 @@ auto Trs_tool_drag_command::try_call(Command_context& context) -> bool
     }
 
     if (
-        (state() == State::Ready) &&
+        (state() == erhe::application::State::Ready) &&
         m_trs_tool.is_enabled()
     )
     {
         set_active(context);
     }
 
-    if (state() != State::Active)
+    if (state() != erhe::application::State::Active)
     {
         // We might be ready, but not consuming event yet
         return false;
@@ -87,18 +90,22 @@ auto Trs_tool_drag_command::try_call(Command_context& context) -> bool
     return m_trs_tool.on_drag();
 }
 
-void Trs_tool_drag_command::on_inactive(Command_context& context)
+void Trs_tool_drag_command::on_inactive(
+    erhe::application::Command_context& context
+)
 {
     static_cast<void>(context);
     log_trs_tool.trace("on_inactive\n");
 
-    if (state() != State::Inactive)
+    if (state() != erhe::application::State::Inactive)
     {
         m_trs_tool.end_drag();
     }
 }
 
-auto Trs_tool_hover_command::try_call(Command_context& context) -> bool
+auto Trs_tool_hover_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
     if (!m_trs_tool.is_enabled())
     {
@@ -106,14 +113,14 @@ auto Trs_tool_hover_command::try_call(Command_context& context) -> bool
     }
 
     if (
-        (state() == State::Ready) &&
+        (state() == erhe::application::State::Ready) &&
         m_trs_tool.is_enabled()
     )
     {
         set_active(context);
     }
 
-    if (state() != State::Active)
+    if (state() != erhe::application::State::Active)
     {
         // We might be ready, but not consuming event yet
         return false;
@@ -122,11 +129,13 @@ auto Trs_tool_hover_command::try_call(Command_context& context) -> bool
     return m_trs_tool.on_hover();
 }
 
-void Trs_tool_hover_command::on_inactive(Command_context& context)
+void Trs_tool_hover_command::on_inactive(
+    erhe::application::Command_context& context
+)
 {
     static_cast<void>(context);
 
-    if (state() != State::Inactive)
+    if (state() != erhe::application::State::Inactive)
     {
         m_trs_tool.end_hover();
     }
@@ -150,26 +159,29 @@ auto Trs_tool::description() -> const char*
 
 void Trs_tool::connect()
 {
-    require<Gl_context_provider>();
+    require<erhe::application::Gl_context_provider>();
 
-    m_line_renderer_set = get    <Line_renderer_set>();
-    m_mesh_memory       = require<Mesh_memory      >();
-    m_operation_stack   = get    <Operation_stack  >();
-    m_pointer_context   = get    <Pointer_context  >();
-    m_scene_root        = require<Scene_root       >();
-    m_selection_tool    = require<Selection_tool   >();
-    m_text_renderer     = get    <Text_renderer    >();
+    m_line_renderer_set = get    <erhe::application::Line_renderer_set>();
+    m_text_renderer     = get    <erhe::application::Text_renderer    >();
 
-    require<Editor_imgui_windows>();
-    require<Editor_tools>();
-    require<Editor_view>();
+    m_mesh_memory       = require<Mesh_memory    >();
+    m_operation_stack   = get    <Operation_stack>();
+    m_pointer_context   = get    <Pointer_context>();
+    m_scene_root        = require<Scene_root     >();
+    m_selection_tool    = require<Selection_tool >();
+
+    require<erhe::application::Imgui_windows>();
+    require<erhe::application::View>();
+    require<Tools>();
 }
 
 void Trs_tool::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const erhe::application::Scoped_gl_context gl_context{
+        Component::get<erhe::application::Gl_context_provider>()
+    };
 
     ERHE_VERIFY(m_mesh_memory);
     ERHE_VERIFY(m_scene_root);
@@ -204,10 +216,10 @@ void Trs_tool::initialize_component()
         m_selection_subscription = m_selection_tool->subscribe_selection_change_notification(lambda);
     }
 
-    get<Editor_tools>()->register_tool(this);
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    get<Tools>()->register_tool(this);
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
-    const auto view = get<Editor_view>();
+    const auto view = get<erhe::application::View>();
     view->register_command(&m_drag_command);
     view->register_command(&m_hover_command);
     view->bind_command_to_mouse_drag  (&m_drag_command, erhe::toolkit::Mouse_button_left);
@@ -600,12 +612,28 @@ void Trs_tool::imgui()
     const bool   show_rotate    = m_visualization.show_rotate;
     const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};
 
-    if (make_button("Local", (m_local) ? Item_mode::active : Item_mode::normal, button_size))
+    if (
+        erhe::application::make_button(
+            "Local",
+            (m_local)
+                ? erhe::application::Item_mode::active
+                : erhe::application::Item_mode::normal,
+            button_size
+        )
+        )
     {
         m_local = true;
         m_visualization.local = true;
     }
-    if (make_button("Global", (!m_local) ? Item_mode::active : Item_mode::normal, button_size))
+    if (
+        erhe::application::make_button(
+            "Global",
+            (!m_local)
+                ? erhe::application::Item_mode::active
+                : erhe::application::Item_mode::normal,
+            button_size
+        )
+    )
     {
         m_local = false;
         m_visualization.local = false;
@@ -618,7 +646,12 @@ void Trs_tool::imgui()
         ImGui::Checkbox("Translate Snap Enable", &m_translate_snap_enable);
         const float translate_snap_values[] = {  0.001f,  0.01f,  0.1f,  0.2f,  0.25f,  0.5f,  1.0f,  2.0f,  5.0f,  10.0f,  100.0f };
         const char* translate_snap_items [] = { "0.001", "0.01", "0.1", "0.2", "0.25", "0.5", "1.0", "2.0", "5.0", "10.0", "100.0" };
-        make_combo("Translate Snap", m_translate_snap_index, translate_snap_items, IM_ARRAYSIZE(translate_snap_items));
+        erhe::application::make_combo(
+            "Translate Snap",
+            m_translate_snap_index,
+            translate_snap_items,
+            IM_ARRAYSIZE(translate_snap_items)
+        );
         if (
             (m_translate_snap_index >= 0) &&
             (m_translate_snap_index < IM_ARRAYSIZE(translate_snap_values))
@@ -635,7 +668,12 @@ void Trs_tool::imgui()
         ImGui::Checkbox("Rotate Snap Enable", &m_rotate_snap_enable);
         const float rotate_snap_values[] = {  5.0f, 10.0f, 15.0f, 20.0f, 30.0f, 45.0f, 60.0f, 90.0f };
         const char* rotate_snap_items [] = { "5",  "10",  "15",  "20",  "30",  "45",  "60",  "90" };
-        make_combo("Rotate Snap", m_rotate_snap_index, rotate_snap_items, IM_ARRAYSIZE(rotate_snap_items));
+        erhe::application::make_combo(
+            "Rotate Snap",
+            m_rotate_snap_index,
+            rotate_snap_items,
+            IM_ARRAYSIZE(rotate_snap_items)
+        );
         if (
             (m_rotate_snap_index >= 0) &&
             (m_rotate_snap_index < IM_ARRAYSIZE(rotate_snap_values))
@@ -1239,7 +1277,9 @@ void Trs_tool::update_once_per_frame(const erhe::components::Time_context&)
     //->tail_log.trace("V.N = {}", v_dot_n);
 }
 
-void Trs_tool::tool_render(const Render_context& context)
+void Trs_tool::tool_render(
+    const Render_context& context
+)
 {
     ERHE_PROFILE_FUNCTION
 

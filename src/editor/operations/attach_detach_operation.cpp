@@ -41,7 +41,7 @@ Attach_detach_operation::Attach_detach_operation(Parameters&& parameters)
                 }
                 else
                 {
-                    log_tools.info(
+                    log_scene.info(
                         "Node {} is already attached and thus cannot be attached to {}\n",
                         node->name(),
                         m_parent_node->name()
@@ -56,7 +56,7 @@ Attach_detach_operation::Attach_detach_operation(Parameters&& parameters)
                 }
                 else
                 {
-                    log_tools.info(
+                    log_scene.info(
                         "Node {} is not attached to {} and thus cannot be detached from it\n",
                         node->name(),
                         m_parent_node->name()

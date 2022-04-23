@@ -1,9 +1,10 @@
 #include "renderers/shadow_renderer.hpp"
-#include "configuration.hpp"
-#include "graphics/gl_context_provider.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/program_interface.hpp"
+#include "renderers/programs.hpp"
 
+#include "erhe/application/configuration.hpp"
+#include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/debug.hpp"
@@ -54,12 +55,12 @@ void Shadow_renderer::connect()
 {
     base_connect(this);
 
-    require<Gl_context_provider>();
+    require<erhe::application::Gl_context_provider>();
     require<Program_interface>();
     require<Programs>();
 
     m_mesh_memory            = require<Mesh_memory>();
-    m_configuration          = require<Configuration>();
+    m_configuration          = require<erhe::application::Configuration>();
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 }
 
@@ -69,7 +70,9 @@ void Shadow_renderer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const erhe::application::Scoped_gl_context gl_context{
+        Component::get<erhe::application::Gl_context_provider>()
+    };
 
     erhe::graphics::Scoped_debug_group debug_group{c_shadow_renderer_initialize_component};
 
@@ -158,7 +161,9 @@ void Shadow_renderer::render(const Render_parameters& parameters)
     gl::viewport(m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
 
     erhe::scene::Visibility_filter shadow_filter{
-        .require_all_bits_set           = erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::shadow_cast,
+        .require_all_bits_set           =
+            erhe::scene::Node_visibility::visible |
+            erhe::scene::Node_visibility::shadow_cast,
         .require_at_least_one_bit_set   = 0u,
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u

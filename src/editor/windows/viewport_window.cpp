@@ -1,22 +1,23 @@
 #include "windows/viewport_window.hpp"
-#include "configuration.hpp"
-#include "editor_imgui_windows.hpp"
-#include "editor_tools.hpp"
-#include "editor_view.hpp"
-#include "log.hpp"
-#include "rendering.hpp"
 
+#include "log.hpp"
+#include "editor_rendering.hpp"
 #include "renderers/post_processing.hpp"
+#include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
-#include "windows/log_window.hpp"
+#include "tools/tools.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_renderer.hpp"
 #endif
 
+#include "erhe/application/windows/log_window.hpp"
+#include "erhe/application/configuration.hpp"
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/view.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
@@ -45,7 +46,9 @@ using erhe::graphics::Framebuffer;
 using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
-auto Open_new_viewport_window_command::try_call(Command_context& context) -> bool
+auto Open_new_viewport_window_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
     static_cast<void>(context);
 
@@ -62,9 +65,9 @@ Viewport_windows::~Viewport_windows() = default;
 
 void Viewport_windows::connect()
 {
-    m_configuration          = require<Configuration   >();
-    m_editor_rendering       = get    <Editor_rendering>();
-    m_editor_view            = require<Editor_view     >();
+    m_configuration          = require<erhe::application::Configuration    >();
+    m_editor_rendering       = get    <Editor_rendering                    >();
+    m_editor_view            = require<erhe::application::View             >();
     m_pipeline_state_tracker = get    <erhe::graphics::OpenGL_state_tracker>();
     m_pointer_context        = get    <Pointer_context >();
     m_scene_root             = require<Scene_root      >();
@@ -118,7 +121,7 @@ auto Viewport_windows::create_window(
 
     if (configuration.viewports_hosted_in_imgui_windows)
     {
-        get<Editor_imgui_windows>()->register_imgui_window(new_window.get());
+        get<erhe::application::Imgui_windows>()->register_imgui_window(new_window.get());
     }
     return new_window.get();
 }
@@ -224,11 +227,12 @@ Viewport_window::Viewport_window(
     erhe::scene::ICamera*               camera
 )
     : Imgui_window     {name, fmt::format("{}##{}", name, ++s_serial)}
-    , m_configuration  {components.get<Configuration  >()}
-    , m_scene_root     {components.get<Scene_root     >()}
-    , m_viewport_config{components.get<Viewport_config>()}
+    , m_configuration  {components.get<erhe::application::Configuration>()}
+    , m_pointer_context{components.get<Pointer_context>()}
     , m_post_processing{components.get<Post_processing>()}
     , m_programs       {components.get<Programs       >()}
+    , m_scene_root     {components.get<Scene_root     >()}
+    , m_viewport_config{components.get<Viewport_config>()}
     , m_camera         {camera}
 {
 }
@@ -445,6 +449,11 @@ auto Viewport_window::camera() const -> erhe::scene::ICamera*
     return m_camera;
 }
 
+auto Viewport_window::pointer_context() const -> const std::shared_ptr<Pointer_context>&
+{
+    return m_pointer_context;
+}
+
 auto Viewport_window::is_framebuffer_ready() const -> bool
 {
     return m_framebuffer_multisample.get() != nullptr;
@@ -475,6 +484,7 @@ auto Viewport_window::bind_multisample_framebuffer() -> bool
 }
 
 static constexpr std::string_view c_multisample_resolve{"Viewport_window::multisample_resolve()"};
+
 void Viewport_window::multisample_resolve()
 {
     ERHE_PROFILE_FUNCTION

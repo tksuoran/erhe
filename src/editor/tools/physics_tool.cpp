@@ -1,20 +1,19 @@
 #include "tools/physics_tool.hpp"
-#include "tools/physics_tool.hpp"
-#include "editor_imgui_windows.hpp"
-#include "editor_tools.hpp"
-#include "editor_view.hpp"
-#include "log.hpp"
-#include "rendering.hpp"
 
-#include "commands/command_context.hpp"
-#include "renderers/line_renderer.hpp"
+#include "log.hpp"
+#include "editor_rendering.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "tools/pointer_context.hpp"
+#include "tools/tools.hpp"
 #include "windows/operations.hpp"
 #include "windows/viewport_window.hpp"
 
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/view.hpp"
+#include "erhe/application/commands/command_context.hpp"
+#include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/physics/iconstraint.hpp"
@@ -24,9 +23,11 @@
 namespace editor
 {
 
-void Physics_tool_drag_command::try_ready(Command_context& context)
+void Physics_tool_drag_command::try_ready(
+    erhe::application::Command_context& context
+)
 {
-    if (state() != State::Inactive)
+    if (state() != erhe::application::State::Inactive)
     {
         return;
     }
@@ -37,30 +38,34 @@ void Physics_tool_drag_command::try_ready(Command_context& context)
     }
 }
 
-auto Physics_tool_drag_command::try_call(Command_context& context) -> bool
+auto Physics_tool_drag_command::try_call(
+    erhe::application::Command_context&
+context) -> bool
 {
-    if (state() == State::Inactive)
+    if (state() == erhe::application::State::Inactive)
     {
         return false;
     }
 
     if (
         m_physics_tool.on_drag() &&
-        (state() == State::Ready)
+        (state() == erhe::application::State::Ready)
     )
     {
         set_active(context);
     }
 
-    return state() == State::Active;
+    return state() == erhe::application::State::Active;
 }
 
-void Physics_tool_drag_command::on_inactive(Command_context& context)
+void Physics_tool_drag_command::on_inactive(
+    erhe::application::Command_context& context
+)
 {
     static_cast<void>(context);
 
     log_physics.info("Physics_tool_drag_command::on_inactive() - command state = {}", c_str(state()));
-    if (state() == State::Active)
+    if (state() == erhe::application::State::Active)
     {
         m_physics_tool.release_target();
     }
@@ -68,9 +73,11 @@ void Physics_tool_drag_command::on_inactive(Command_context& context)
 
 ////////
 
-void Physics_tool_force_command::try_ready(Command_context& context)
+void Physics_tool_force_command::try_ready(
+    erhe::application::Command_context& context
+)
 {
-    if (state() != State::Inactive)
+    if (state() != erhe::application::State::Inactive)
     {
         return;
     }
@@ -82,31 +89,35 @@ void Physics_tool_force_command::try_ready(Command_context& context)
     }
 }
 
-auto Physics_tool_force_command::try_call(Command_context& context) -> bool
+auto Physics_tool_force_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
-    if (state() == State::Inactive)
+    if (state() == erhe::application::State::Inactive)
     {
         return false;
     }
 
     if (
         m_physics_tool.on_force() &&
-        (state() == State::Ready)
+        (state() == erhe::application::State::Ready)
     )
     {
         set_active(context);
     }
 
-    return state() == State::Active;
+    return state() == erhe::application::State::Active;
 }
 
-void Physics_tool_force_command::on_inactive(Command_context& context)
+void Physics_tool_force_command::on_inactive(
+    erhe::application::Command_context& context
+)
 {
     static_cast<void>(context);
 
     log_physics.info("Physics_tool_force_command::on_inactive() - command state = {}", c_str(state()));
 
-    if (state() == State::Active)
+    if (state() == erhe::application::State::Active)
     {
         m_physics_tool.release_target();
     }
@@ -116,8 +127,8 @@ void Physics_tool_force_command::on_inactive(Command_context& context)
 
 Physics_tool::Physics_tool()
     : erhe::components::Component{c_name}
-    , m_drag_command {*this}
-    , m_force_command{*this}
+    , m_drag_command             {*this}
+    , m_force_command            {*this}
 {
 }
 
@@ -132,25 +143,25 @@ Physics_tool::~Physics_tool()
 void Physics_tool::connect()
 {
     m_fly_camera        = get<Fly_camera_tool  >();
-    m_line_renderer_set = get<Line_renderer_set>();
+    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
     m_pointer_context   = get<Pointer_context  >();
     m_scene_root        = require<Scene_root   >();
-    require<Editor_tools>();
-    require<Editor_view >();
-    require<Operations  >();
+    require<Tools                  >();
+    require<erhe::application::View>();
+    require<Operations             >();
 }
 
 void Physics_tool::initialize_component()
 {
-    get<Editor_tools>()->register_tool(this);
+    get<Tools>()->register_tool(this);
 
-    const auto view = get<Editor_view>();
+    const auto view = get<erhe::application::View>();
     view->register_command(&m_drag_command);
     view->register_command(&m_force_command);
     view->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_right);
     view->bind_command_to_mouse_drag(&m_force_command, erhe::toolkit::Mouse_button_right);
 
-    Command_context context{*view.get()};
+    erhe::application::Command_context context{*view.get()};
     set_active_command(c_command_drag);
 
     get<Operations>()->register_active_tool(this);
@@ -396,7 +407,7 @@ auto Physics_tool::on_force() -> bool
 
 void Physics_tool::update_fixed_step(const erhe::components::Time_context&)
 {
-    if (m_force_command.state() == State::Active)
+    if (m_force_command.state() == erhe::application::State::Active)
     {
         on_force();
     }
@@ -445,7 +456,9 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
 void Physics_tool::set_active_command(const int command)
 {
     m_active_command = command;
-    Command_context context{*get<Editor_view>().get()};
+    erhe::application::Command_context context{
+        *get<erhe::application::View>().get()
+    };
 
     switch (command)
     {
@@ -478,8 +491,8 @@ void Physics_tool::tool_properties()
         set_active_command(command);
     }
 
-    ImGui::Text("Drag state: %s",  c_state_str[static_cast<int>(m_drag_command.state())]);
-    ImGui::Text("Force state: %s", c_state_str[static_cast<int>(m_force_command.state())]);
+    ImGui::Text("Drag state: %s",  erhe::application::c_state_str[static_cast<int>(m_drag_command.state())]);
+    ImGui::Text("Force state: %s", erhe::application::c_state_str[static_cast<int>(m_force_command.state())]);
     ImGui::Text("Mesh: %s",            m_target_mesh ? m_target_mesh->name().c_str() : "");
     ImGui::Text("Drag distance: %f",   m_target_distance);
     ImGui::Text("Target distance: %f", m_target_distance);
@@ -494,4 +507,4 @@ void Physics_tool::tool_properties()
     ImGui::SliderFloat("Angular Damping", &m_angular_damping, 0.0f,   1.0f);
 }
 
-}
+} // namespace editor

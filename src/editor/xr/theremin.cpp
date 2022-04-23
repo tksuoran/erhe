@@ -1,11 +1,7 @@
 #include "theremin.hpp"
-#include "editor_imgui_windows.hpp"
-#include "editor_tools.hpp"
+
 #include "log.hpp"
 #include "rendering.hpp"
-
-#include "graphics/gl_context_provider.hpp"
-#include "renderers/line_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/grid_tool.hpp"
@@ -14,6 +10,10 @@
 #include "xr/hand_tracker.hpp"
 #include "xr/headset_renderer.hpp"
 
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/tools.hpp"
+#include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <fmt/core.h>
@@ -170,12 +170,12 @@ auto Theremin::description() -> const char*
 
 void Theremin::connect()
 {
-    m_hand_tracker      = require<Hand_tracker     >();
-    m_headset_renderer  = get    <Headset_renderer >();
-    m_line_renderer_set = get    <Line_renderer_set>();
-    require<Editor_imgui_windows>();
-    require<Editor_tools>();
-    require<Gl_context_provider>();
+    m_hand_tracker      = require<Hand_tracker                        >();
+    m_headset_renderer  = get    <Headset_renderer                    >();
+    m_line_renderer_set = get    <erhe::application::Line_renderer_set>();
+    require<erhe::application::Imgui_windows>();
+    require<erhe::application::Tools>();
+    require<erhe::application::Gl_context_provider>();
     require<Mesh_memory>();
     require<Programs>();
     require<Grid_tool>();
@@ -215,9 +215,9 @@ void Theremin::initialize_component()
 
 void Theremin::create_gui_quad()
 {
-    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const Scoped_gl_context gl_context{Component::get<erhe::application::Gl_context_provider>()};
 
-    auto rendertarget = get<Editor_imgui_windows>()->create_rendertarget(
+    auto rendertarget = get<erhe::application::Imgui_windows>()->create_rendertarget(
         "Theremin",
         1000,
         1000,
@@ -313,7 +313,7 @@ void Theremin::update_grid_color() const
     }
 }
 
-void Theremin::tool_render(const Render_context& context)
+void Theremin::tool_render(const erhe::application::Render_context& context)
 {
     static_cast<void>(context);
 
@@ -530,4 +530,4 @@ void Theremin::imgui()
     }
 }
 
-}
+} // namespace editor

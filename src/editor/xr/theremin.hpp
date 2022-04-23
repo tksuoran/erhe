@@ -1,8 +1,7 @@
 #pragma once
 
-#include "tools/tool.hpp"
-#include "windows/imgui_window.hpp"
-
+#include "erhe/application/tools/tool.hpp"
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/optional.hpp"
 
@@ -12,27 +11,32 @@
 #include <chrono>
 #include <memory>
 
-namespace erhe::scene {
+namespace erhe::scene
+{
     class Mesh;
 }
 
-namespace erhe::primitive {
+namespace erhe::primitive
+{
     class Material;
 }
 
+namespace erhe::application
+{
+    class Line_renderer_set;
+    class Text_renderer;
+}
 namespace editor
 {
 
 class Hand_tracker;
 class Headset_renderer;
-class Line_renderer_set;
 class Pointer_context;
 class Scene_root;
-class Text_renderer;
 
 class Theremin
     : public erhe::components::Component
-    , public Tool
+    , public erhe::application::Tool
     , public Rendertarget_imgui_window
 {
 public:
@@ -56,7 +60,7 @@ public:
 
     // Implements Tool
     [[nodiscard]] auto description() -> const char* override;
-    void tool_render(const Render_context& context) override;
+    void tool_render(const erhe::application::Render_context& context) override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -83,9 +87,9 @@ private:
     auto normalized_finger_distance() const -> float;
 
     // Component dependencies
-    std::shared_ptr<Hand_tracker     > m_hand_tracker;
-    std::shared_ptr<Headset_renderer > m_headset_renderer;
-    std::shared_ptr<Line_renderer_set> m_line_renderer_set;
+    std::shared_ptr<Hand_tracker                        > m_hand_tracker;
+    std::shared_ptr<Headset_renderer                    > m_headset_renderer;
+    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
 
     bool                    m_enable_audio          {false};   // master on/off switch
     float                   m_antenna_distance      {0.0f};   // closest point of right hand to the frequency antenna

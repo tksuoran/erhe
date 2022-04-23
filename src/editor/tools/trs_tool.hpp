@@ -1,10 +1,10 @@
 #pragma once
 
-#include "commands/command.hpp"
-#include "tools/tool.hpp"
 #include "tools/selection_tool.hpp"
-#include "windows/imgui_window.hpp"
+#include "tools/tool.hpp"
 
+#include "erhe/application/commands/command.hpp"
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/scene/node.hpp"
@@ -43,11 +43,15 @@ namespace erhe::scene
     class Viewport;
 }
 
+namespace erhe::application
+{
+    class Log_window;
+    class Line_renderer_set;
+    class Text_renderer;
+}
 namespace editor
 {
 
-class Log_window;
-class Line_renderer_set;
 class Node_physics;
 class Node_raytrace;
 class Mesh_memory;
@@ -55,11 +59,10 @@ class Operation_stack;
 class Pointer_context;
 class Raytrace_primitive;
 class Scene_root;
-class Text_renderer;
 class Trs_tool;
 
 class Trs_tool_drag_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Trs_tool_drag_command(Trs_tool& trs_tool)
@@ -68,16 +71,16 @@ public:
     {
     }
 
-    auto try_call   (Command_context& context) -> bool override;
-    void try_ready  (Command_context& context) override;
-    void on_inactive(Command_context& context) override;
+    auto try_call   (erhe::application::Command_context& context) -> bool override;
+    void try_ready  (erhe::application::Command_context& context) override;
+    void on_inactive(erhe::application::Command_context& context) override;
 
 private:
     Trs_tool& m_trs_tool;
 };
 
 class Trs_tool_hover_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Trs_tool_hover_command(Trs_tool& trs_tool)
@@ -86,8 +89,8 @@ public:
     {
     }
 
-    auto try_call   (Command_context& context) -> bool override;
-    void on_inactive(Command_context& context) override;
+    auto try_call   (erhe::application::Command_context& context) -> bool override;
+    void on_inactive(erhe::application::Command_context& context) override;
 
 private:
     Trs_tool& m_trs_tool;
@@ -97,7 +100,7 @@ class Trs_tool
     : public erhe::components::Component
     , public erhe::components::IUpdate_once_per_frame
     , public Tool
-    , public Imgui_window
+    , public erhe::application::Imgui_window
 {
 public:
     enum class Reference_mode : unsigned int
@@ -140,7 +143,7 @@ public:
     [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
     [[nodiscard]] auto description  () -> const char* override;
     void tool_render            (const Render_context& context) override;
-    void on_enable_state_changed()                              override;
+    void on_enable_state_changed() override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -320,13 +323,13 @@ private:
     Trs_tool_hover_command                        m_hover_command;
 
     // Component dependencies
-    std::shared_ptr<Line_renderer_set>            m_line_renderer_set;
-    std::shared_ptr<Mesh_memory>                  m_mesh_memory;
-    std::shared_ptr<Operation_stack>              m_operation_stack;
-    std::shared_ptr<Pointer_context>              m_pointer_context;
-    std::shared_ptr<Scene_root>                   m_scene_root;
-    std::shared_ptr<Selection_tool>               m_selection_tool;
-    std::shared_ptr<Text_renderer>                m_text_renderer;
+    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
+    std::shared_ptr<Mesh_memory>                          m_mesh_memory;
+    std::shared_ptr<Operation_stack>                      m_operation_stack;
+    std::shared_ptr<Pointer_context>                      m_pointer_context;
+    std::shared_ptr<Scene_root>                           m_scene_root;
+    std::shared_ptr<Selection_tool>                       m_selection_tool;
+    std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
 
     bool                                          m_local          {true};
     bool                                          m_touched        {false};

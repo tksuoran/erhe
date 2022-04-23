@@ -1,8 +1,7 @@
 #include "windows/material_properties.hpp"
-#include "editor_imgui_windows.hpp"
-
 #include "windows/materials.hpp"
 
+#include "erhe/application/imgui_windows.hpp"
 #include "erhe/primitive/material.hpp"
 
 #include <imgui.h>
@@ -12,8 +11,8 @@ namespace editor
 {
 
 Material_properties::Material_properties()
-    : erhe::components::Component{c_name}
-    , Imgui_window               {c_title}
+    : erhe::components::Component    {c_name}
+    , erhe::application::Imgui_window{c_title}
 {
 }
 
@@ -22,12 +21,12 @@ Material_properties::~Material_properties() = default;
 void Material_properties::connect()
 {
     m_materials = get<Materials>();
-    require<Editor_imgui_windows>();
+    require<erhe::application::Imgui_windows>();
 }
 
 void Material_properties::initialize_component()
 {
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 }
 
 void Material_properties::imgui()
@@ -50,4 +49,4 @@ void Material_properties::imgui()
     }
 }
 
-}
+} // namespace editor

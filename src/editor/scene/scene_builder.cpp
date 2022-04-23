@@ -1,8 +1,6 @@
 #include "scene/scene_builder.hpp"
-#include "configuration.hpp"
 #include "log.hpp"
 
-#include "graphics/gl_context_provider.hpp"
 #include "parsers/gltf.hpp"
 #include "parsers/json_polyhedron.hpp"
 #include "parsers/wavefront_obj.hpp"
@@ -19,34 +17,30 @@
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
+#include "erhe/application/configuration.hpp"
+#include "erhe/application/graphics/gl_context_provider.hpp"
 #include <erhe/concurrency/concurrent_queue.hpp>
 #include <erhe/concurrency/serial_queue.hpp>
-
 #include "erhe/geometry/shapes/box.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/disc.hpp"
 #include "erhe/geometry/shapes/sphere.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/geometry/shapes/regular_polyhedron.hpp"
-
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
-
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/primitive/material.hpp"
-
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/iworld.hpp"
-
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/transform.hpp"
-
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -90,8 +84,8 @@ Scene_builder::~Scene_builder() = default;
 
 void Scene_builder::connect()
 {
-    require<Configuration      >();
-    require<Gl_context_provider>();
+    require<erhe::application::Configuration      >();
+    require<erhe::application::Gl_context_provider>();
     require<Fly_camera_tool    >();
     require<Materials          >();
     m_brushes     = require<Brushes    >();
@@ -103,7 +97,9 @@ void Scene_builder::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const erhe::application::Scoped_gl_context gl_context{
+        Component::get<erhe::application::Gl_context_provider>()
+    };
 
     m_scene_root = Component::get<Scene_root>();
 
@@ -191,7 +187,7 @@ void Scene_builder::make_brushes()
 {
     ERHE_PROFILE_FUNCTION
 
-    Task_queue execution_queue{get<Configuration>()->parallel_initialization};
+    Task_queue execution_queue{get<erhe::application::Configuration>()->parallel_initialization};
 
     constexpr float floor_size = 40.0f;
 

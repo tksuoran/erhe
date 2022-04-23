@@ -1,6 +1,6 @@
 #include "graphics/image_transfer.hpp"
-#include "graphics/gl_context_provider.hpp"
 
+#include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/gl/gl.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -17,12 +17,14 @@ Image_transfer::~Image_transfer() = default;
 
 void Image_transfer::connect()
 {
-    require<Gl_context_provider>();
+    require<erhe::application::Gl_context_provider>();
 }
 
 void Image_transfer::initialize_component()
 {
-    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const erhe::application::Scoped_gl_context gl_context{
+        Component::get<erhe::application::Gl_context_provider>()
+    };
 
     m_slots = std::make_unique<std::array<Slot, 4>>();
 }
@@ -81,4 +83,4 @@ auto Image_transfer::Slot::span_for(
     return span.subspan(0, byte_count);
 }
 
-} // namespace erhe::graphics
+} // namespace editor

@@ -1,7 +1,7 @@
 #include "renderers/mesh_memory.hpp"
-#include "graphics/gl_context_provider.hpp"
 #include "renderers/program_interface.hpp"
 
+#include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/primitive/buffer_sink.hpp"
@@ -21,7 +21,7 @@ Mesh_memory::~Mesh_memory() = default;
 
 void Mesh_memory::connect()
 {
-    require<Gl_context_provider>();
+    require<erhe::application::Gl_context_provider>();
     require<Program_interface  >();
 }
 
@@ -29,7 +29,9 @@ void Mesh_memory::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const erhe::application::Scoped_gl_context gl_context{
+        Component::get<erhe::application::Gl_context_provider>()
+    };
 
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 

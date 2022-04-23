@@ -1,18 +1,17 @@
 #include "windows/physics_window.hpp"
 
-#include "editor_imgui_windows.hpp"
-#include "editor_tools.hpp"
 #include "log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
-
-#include "graphics/gl_context_provider.hpp"
 #include "scene/debug_draw.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
-#include "tools/selection_tool.hpp"
 #include "tools/pointer_context.hpp"
+#include "tools/selection_tool.hpp"
+#include "tools/tools.hpp"
 
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/primitive/primitive.hpp"
@@ -26,9 +25,9 @@ namespace editor
 {
 
 Physics_window::Physics_window()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component    {c_name}
 //    , Rendertarget_imgui_window  {c_title}
-    , Imgui_window               {c_title}
+    , erhe::application::Imgui_window{c_title}
 {
 }
 
@@ -41,12 +40,12 @@ void Physics_window::connect()
 
     require<Mesh_memory>();
     require<Programs   >();
-    require<Gl_context_provider>();
+    require<erhe::application::Gl_context_provider>();
 }
 
 void Physics_window::initialize_component()
 {
-    get<Editor_tools>()->register_tool(this);
+    get<Tools>()->register_tool(this);
 
     //const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
     //
@@ -64,7 +63,7 @@ void Physics_window::initialize_component()
     //rendertarget->mesh_node()->set_parent_from_node(placement);
     //
     //rendertarget->register_imgui_window(this);
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
     m_min_size = glm::vec2{120.0f, 120.0f};
 }
 
@@ -199,7 +198,9 @@ auto Physics_window::get_debug_draw_parameters() -> Debug_draw_parameters
     return m_debug_draw;
 }
 
-void Physics_window::tool_render(const Render_context& /*context*/)
+void Physics_window::tool_render(
+    const Render_context& /*context*/
+)
 {
     ERHE_PROFILE_FUNCTION
 

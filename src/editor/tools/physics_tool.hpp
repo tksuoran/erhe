@@ -1,9 +1,9 @@
 #pragma once
 
-#include "commands/command.hpp"
 #include "tools/tool.hpp"
-#include "windows/imgui_window.hpp"
 
+#include "erhe/application/commands/command.hpp"
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
 #include <glm/glm.hpp>
@@ -11,26 +11,33 @@
 #include <functional>
 #include <memory>
 
-namespace erhe::scene {
+namespace erhe::scene
+
+{
     class Mesh;
 }
 
-namespace erhe::physics {
+namespace erhe::physics
+{
     class IConstraint;
+}
+
+namespace erhe::application
+{
+    class Line_renderer_set;
 }
 
 namespace editor
 {
 
 class Fly_camera_tool;
-class Line_renderer_set;
 class Node_physics;
 class Physics_tool;
 class Pointer_context;
 class Scene_root;
 
 class Physics_tool_drag_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Physics_tool_drag_command(Physics_tool& physics_tool)
@@ -39,16 +46,16 @@ public:
     {
     }
 
-    auto try_call   (Command_context& context) -> bool override;
-    void try_ready  (Command_context& context) override;
-    void on_inactive(Command_context& context) override;
+    auto try_call   (erhe::application::Command_context& context) -> bool override;
+    void try_ready  (erhe::application::Command_context& context) override;
+    void on_inactive(erhe::application::Command_context& context) override;
 
 private:
     Physics_tool& m_physics_tool;
 };
 
 class Physics_tool_force_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Physics_tool_force_command(Physics_tool& physics_tool)
@@ -57,9 +64,9 @@ public:
     {
     }
 
-    auto try_call   (Command_context& context) -> bool override;
-    void try_ready  (Command_context& context) override;
-    void on_inactive(Command_context& context) override;
+    auto try_call   (erhe::application::Command_context& context) -> bool override;
+    void try_ready  (erhe::application::Command_context& context) override;
+    void on_inactive(erhe::application::Command_context& context) override;
 
 private:
     Physics_tool& m_physics_tool;
@@ -114,7 +121,7 @@ private:
     Physics_tool_force_command m_force_command;
 
     // Component dependencies
-    std::shared_ptr<Line_renderer_set>          m_line_renderer_set;
+    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
     std::shared_ptr<Pointer_context>            m_pointer_context;
     std::shared_ptr<Scene_root>                 m_scene_root;
     std::shared_ptr<Fly_camera_tool>            m_fly_camera;

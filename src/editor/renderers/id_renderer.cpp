@@ -1,11 +1,12 @@
 #include "renderers/id_renderer.hpp"
-#include "configuration.hpp"
-#include "graphics/gl_context_provider.hpp"
+
 #include "log.hpp"
-
-#include "renderers/program_interface.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "renderers/program_interface.hpp"
+#include "renderers/programs.hpp"
 
+#include "erhe/application/configuration.hpp"
+#include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/debug.hpp"
@@ -54,8 +55,8 @@ void Id_renderer::connect()
 {
     base_connect(this);
 
-    require<Configuration>();
-    require<Gl_context_provider>();
+    require<erhe::application::Configuration>();
+    require<erhe::application::Gl_context_provider>();
     require<Program_interface>();
 
     m_pipeline_state_tracker = erhe::components::Component::get<erhe::graphics::OpenGL_state_tracker>();
@@ -69,11 +70,13 @@ void Id_renderer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const erhe::application::Scoped_gl_context gl_context{
+        Component::get<erhe::application::Gl_context_provider>()
+    };
 
     create_frame_resources(1, 1, 1, 1000, 1000);
 
-    const auto reverse_depth = erhe::components::Component::get<Configuration>()->reverse_depth;
+    const auto reverse_depth = erhe::components::Component::get<erhe::application::Configuration>()->reverse_depth;
 
     m_pipeline.data = {
         .name           = "ID Renderer",
@@ -488,4 +491,4 @@ auto Id_renderer::get(
     return result;
 }
 
-}
+} // namespace editor

@@ -30,7 +30,6 @@ namespace editor
 {
 
 class Editor_rendering;
-class Log_window;
 class Node_raytrace;
 class Scene_root;
 class Viewport_window;
@@ -129,7 +128,6 @@ private:
 
     // Component dependencies
     std::shared_ptr<Editor_rendering>  m_editor_rendering;
-    std::shared_ptr<Log_window>        m_log_window;
     std::shared_ptr<Scene_root>        m_scene_root;
     std::shared_ptr<Viewport_windows>  m_viewport_windows;
 

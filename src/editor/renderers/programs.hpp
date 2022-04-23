@@ -9,17 +9,19 @@
 
 namespace erhe::graphics
 {
+    class Sampler;
+    class Shader_resource;
+    class Shader_stages;
+}
 
-class Sampler;
-class Shader_resource;
-class Shader_stages;
-
-} // namespace erhe::graphics
+namespace erhe::application
+{
+    class Shader_monitor;
+}
 
 namespace editor {
 
 class Program_interface;
-class Shader_monitor;
 
 class Programs
     : public erhe::components::Component
@@ -77,11 +79,11 @@ private:
     [[nodiscard]] auto make_program(const std::string_view name) -> std::unique_ptr<erhe::graphics::Shader_stages>;
 
     // Component dependencies
-    std::shared_ptr<Program_interface> m_program_interface;
-    std::shared_ptr<Shader_monitor>    m_shader_monitor;
-    bool                               m_dump_reflection  {false};
-    bool                               m_dump_interface   {false};
-    bool                               m_dump_final_source{false};
+    std::shared_ptr<Program_interface>                 m_program_interface;
+    std::shared_ptr<erhe::application::Shader_monitor> m_shader_monitor;
+    bool     m_dump_reflection  {false};
+    bool     m_dump_interface   {false};
+    bool     m_dump_final_source{false};
 
     fs::path m_shader_path;
 };

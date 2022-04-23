@@ -1,8 +1,8 @@
 #pragma once
 
 #include "renderers/base_renderer.hpp"
-#include "windows/imgui_window.hpp"
 
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/graphics/configuration.hpp"
 
@@ -10,10 +10,13 @@
 
 #include <string_view>
 
+namespace erhe::application
+{
+    class Configuration;
+}
+
 namespace editor
 {
-
-class Configuration;
 
 class Render_style
 {
@@ -46,7 +49,7 @@ enum class Visualization_mode : unsigned int
 
 class Viewport_config
     : public erhe::components::Component
-    , public Imgui_window
+    , public erhe::application::Imgui_window
 {
 public:
     static constexpr const char* c_visualization_mode_strings[] =

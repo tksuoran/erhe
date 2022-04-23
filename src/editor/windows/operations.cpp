@@ -1,6 +1,4 @@
 #include "windows/operations.hpp"
-#include "editor_imgui_windows.hpp"
-#include "imgui_helpers.hpp"
 #include "log.hpp"
 
 #include "operations/attach_detach_operation.hpp"
@@ -13,6 +11,8 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui_helpers.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
 
@@ -36,12 +36,12 @@ void Operations::connect()
     m_pointer_context = get<Pointer_context>();
     m_scene_root      = get<Scene_root     >();
     m_selection_tool  = get<Selection_tool >();
-    require<Editor_imgui_windows>();
+    require<erhe::application::Imgui_windows>();
 }
 
 void Operations::initialize_component()
 {
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 }
 
 auto Operations::count_selected_meshes() const -> size_t
@@ -80,11 +80,11 @@ void Operations::imgui()
     for (unsigned int i = 0; i < static_cast<unsigned int>(m_active_tools.size()); ++i)
     {
         auto* tool = m_active_tools.at(i);
-        const bool button_pressed = make_button(
+        const bool button_pressed = erhe::application::make_button(
             tool->description(),
             tool->is_enabled()
-                ? Item_mode::active
-                : Item_mode::normal,
+                ? erhe::application::Item_mode::active
+                : erhe::application::Item_mode::normal,
             button_size
         );
         if (button_pressed && (m_current_active_tool != tool))
@@ -109,17 +109,17 @@ void Operations::imgui()
     };
 
     const auto undo_mode = m_operation_stack->can_undo()
-        ? Item_mode::normal
-        : Item_mode::disabled;
-    if (make_button("Undo", undo_mode, button_size))
+        ? erhe::application::Item_mode::normal
+        : erhe::application::Item_mode::disabled;
+    if (erhe::application::make_button("Undo", undo_mode, button_size))
     {
         m_operation_stack->undo();
     }
 
     const auto redo_mode = m_operation_stack->can_redo()
-        ? Item_mode::normal
-        : Item_mode::disabled;
-    if (make_button("Redo", redo_mode, button_size))
+        ? erhe::application::Item_mode::normal
+        : erhe::application::Item_mode::disabled;
+    if (erhe::application::make_button("Redo", redo_mode, button_size))
     {
         m_operation_stack->redo();
     }
@@ -127,9 +127,9 @@ void Operations::imgui()
     const auto selected_mesh_count = count_selected_meshes();
 
     const auto multi_select_mode = (selected_mesh_count >= 2)
-        ? Item_mode::normal
-        : Item_mode::disabled;
-    if (make_button("Attach", multi_select_mode, button_size))
+        ? erhe::application::Item_mode::normal
+        : erhe::application::Item_mode::disabled;
+    if (erhe::application::make_button("Attach", multi_select_mode, button_size))
     {
         m_operation_stack->push(
             std::make_shared<Attach_detach_operation>(
@@ -173,8 +173,8 @@ void Operations::imgui()
     }
 
     const auto has_selection_mode = (selected_mesh_count >= 1)
-        ? Item_mode::normal
-        : Item_mode::disabled;
+        ? erhe::application::Item_mode::normal
+        : erhe::application::Item_mode::disabled;
     if (make_button("Catmull-Clark", has_selection_mode, button_size))
     {
         m_operation_stack->push(
@@ -255,21 +255,21 @@ void Operations::imgui()
             )
         );
     }
-    if (make_button("GUI Quad", Item_mode::normal, button_size))
-    {
-        auto rendertarget = get<Editor_imgui_windows>()->create_rendertarget(
-            "Gui Quad",
-            2048,
-            1024,
-            200.0
-        );
-        const auto placement = erhe::toolkit::create_look_at(
-            glm::vec3{0.0f, 1.0f, 0.0f},
-            glm::vec3{0.0f, 1.0f, 1.0f},
-            glm::vec3{0.0f, 1.0f, 0.0f}
-        );
-        rendertarget->mesh_node()->set_parent_from_node(placement);
-    }
+    ///// if (make_button("GUI Quad", erhe::application::Item_mode::normal, button_size))
+    ///// {
+    /////     auto rendertarget = get<erhe::application::Imgui_windows>()->create_rendertarget(
+    /////         "Gui Quad",
+    /////         2048,
+    /////         1024,
+    /////         200.0
+    /////     );
+    /////     const auto placement = erhe::toolkit::create_look_at(
+    /////         glm::vec3{0.0f, 1.0f, 0.0f},
+    /////         glm::vec3{0.0f, 1.0f, 1.0f},
+    /////         glm::vec3{0.0f, 1.0f, 0.0f}
+    /////     );
+    /////     rendertarget->mesh_node()->set_parent_from_node(placement);
+    ///// }
 }
 
 } // namespace editor

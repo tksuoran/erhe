@@ -1,9 +1,9 @@
 #include "renderers/programs.hpp"
-#include "graphics/gl_context_provider.hpp"
-#include "graphics/shader_monitor.hpp"
 #include "log.hpp"
 #include "renderers/program_interface.hpp"
 
+#include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/application/graphics/shader_monitor.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -18,14 +18,16 @@ Programs::Programs()
 {
 }
 
-Programs::~Programs() = default;
+Programs::~Programs()
+{
+}
 
 void Programs::connect()
 {
-    require<Gl_context_provider>();
+    require<erhe::application::Gl_context_provider>();
 
     m_program_interface = require<Program_interface>();
-    m_shader_monitor    = require<Shader_monitor>();
+    m_shader_monitor    = require<erhe::application::Shader_monitor>();
 }
 
 void Programs::initialize_component()
@@ -34,7 +36,9 @@ void Programs::initialize_component()
 
     const erhe::log::Indenter indenter;
 
-    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const erhe::application::Scoped_gl_context gl_context{
+        Component::get<erhe::application::Gl_context_provider>()
+    };
 
     nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
         gl::Texture_min_filter::nearest,

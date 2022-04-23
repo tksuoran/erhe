@@ -10,6 +10,11 @@
 
 #include <initializer_list>
 
+namespace erhe::application
+{
+    class Configuration;
+}
+
 namespace erhe::graphics
 {
     class Framebuffer;
@@ -30,7 +35,6 @@ namespace erhe::scene
 namespace editor
 {
 
-class Configuration;
 class Mesh_memory;
 
 class Shadow_renderer
@@ -68,7 +72,7 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Configuration>                        m_configuration;
+    std::shared_ptr<erhe::application::Configuration>     m_configuration;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Mesh_memory>                          m_mesh_memory;
 

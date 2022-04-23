@@ -1,21 +1,24 @@
 #pragma once
 
 #include "tools/tool.hpp"
-#include "windows/imgui_window.hpp"
 
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
 #include <glm/glm.hpp>
 
+namespace erhe::application
+{
+    class Line_renderer_set;
+}
+
 namespace editor
 {
-
-class Line_renderer_set;
 
 class Grid_tool
     : public erhe::components::Component
     , public Tool
-    , public Imgui_window
+    , public erhe::application::Imgui_window
 {
 public:
     static constexpr std::string_view c_name       {"Grid_tool"};
@@ -44,7 +47,7 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Line_renderer_set> m_line_renderer_set;
+    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
 
     bool      m_enable     {false};
     float     m_cell_size  {1.0f};

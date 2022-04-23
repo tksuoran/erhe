@@ -1,6 +1,5 @@
 #include "scene/scene_root.hpp"
 
-#include "editor_view.hpp"
 #include "log.hpp"
 
 #include "scene/helpers.hpp"
@@ -8,6 +7,7 @@
 #include "scene/node_raytrace.hpp"
 #include "tools/selection_tool.hpp"
 
+#include "erhe/application/view.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/physics/iworld.hpp"
@@ -52,21 +52,27 @@ Instance::~Instance()
 {
 }
 
-auto Create_new_camera_command::try_call(Command_context& context) -> bool
+auto Create_new_camera_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
     static_cast<void>(context);
 
     return m_scene_root.create_new_camera();
 }
 
-auto Create_new_empty_node_command::try_call(Command_context& context) -> bool
+auto Create_new_empty_node_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
     static_cast<void>(context);
 
     return m_scene_root.create_new_empty_node();
 }
 
-auto Create_new_light_command::try_call(Command_context& context) -> bool
+auto Create_new_light_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
     static_cast<void>(context);
 
@@ -86,7 +92,7 @@ Scene_root::~Scene_root() = default;
 
 void Scene_root::connect()
 {
-    require<Editor_view>();
+    require<erhe::application::View>();
 }
 
 void Scene_root::initialize_component()
@@ -115,7 +121,7 @@ void Scene_root::initialize_component()
     m_physics_world  = erhe::physics::IWorld::create_unique();
     m_raytrace_scene = erhe::raytrace::IScene::create_unique("root");
 
-    auto view = get<Editor_view>();
+    auto view = get<erhe::application::View>();
 
     view->register_command   (&m_create_new_camera_command);
     view->register_command   (&m_create_new_empty_node_command);
@@ -409,6 +415,5 @@ void Scene_root::sort_lights()
         Light_comparator()
     );
 }
-
 
 } // namespace editor

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "windows/imgui_window.hpp"
+#include "erhe/application/windows/imgui_window.hpp"
 
 #include "erhe/components/components.hpp"
 #include "erhe/scene/transform.hpp"
@@ -26,7 +26,7 @@ class Selection_tool;
 
 class Node_properties
     : public erhe::components::Component
-    , public Imgui_window
+    , public erhe::application::Imgui_window
 {
 public:
     static constexpr std::string_view c_name {"Node_properties"};

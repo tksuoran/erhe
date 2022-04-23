@@ -1,16 +1,10 @@
+
 #include "windows/brushes.hpp"
 
-#include "editor_imgui_windows.hpp"
-#include "editor_tools.hpp"
-#include "editor_view.hpp"
-#include "imgui_helpers.hpp"
 #include "log.hpp"
-#include "rendering.hpp"
-
-#include "commands/command_context.hpp"
+#include "editor_rendering.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/insert_operation.hpp"
-#include "renderers/line_renderer.hpp"
 #include "scene/brush.hpp"
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
@@ -18,9 +12,15 @@
 #include "scene/scene_root.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/selection_tool.hpp"
+#include "tools/tools.hpp"
 #include "windows/materials.hpp"
 #include "windows/operations.hpp"
 
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/view.hpp"
+#include "erhe/application/imgui_helpers.hpp"
+#include "erhe/application/commands/command_context.hpp"
+#include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/geometry/operation/clone.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/primitive/material.hpp"
@@ -42,12 +42,14 @@ using erhe::geometry::Polygon_id;
 using erhe::scene::Node;
 using erhe::scene::Node_visibility;
 
-auto Brush_tool_preview_command::try_call(Command_context& context) -> bool
+auto Brush_tool_preview_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
     static_cast<void>(context);
 
     if (
-        (state() != State::Active) ||
+        (state() != erhe::application::State::Active) ||
         !m_brushes.is_enabled()
     )
     {
@@ -57,7 +59,9 @@ auto Brush_tool_preview_command::try_call(Command_context& context) -> bool
     return true;
 }
 
-void Brush_tool_insert_command::try_ready(Command_context& context)
+void Brush_tool_insert_command::try_ready(
+    erhe::application::Command_context&
+context)
 {
     if (m_brushes.try_insert_ready())
     {
@@ -65,9 +69,11 @@ void Brush_tool_insert_command::try_ready(Command_context& context)
     }
 }
 
-auto Brush_tool_insert_command::try_call(Command_context& context) -> bool
+auto Brush_tool_insert_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
-    if (state() != State::Ready)
+    if (state() != erhe::application::State::Ready)
     {
         return false;
     }
@@ -94,16 +100,19 @@ void Brushes::connect()
     m_pointer_context = get<Pointer_context>();
     m_scene_root      = require<Scene_root>();
     m_selection_tool  = get<Selection_tool>();
+    require<erhe::application::Imgui_windows>();
+    require<Operations                      >();
+    require<Tools                           >();
 }
 
 void Brushes::initialize_component()
 {
     m_selected_brush_index = 0;
 
-    get<Editor_tools>()->register_tool(this);
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    get<Tools>()->register_tool(this);
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
-    const auto view = get<Editor_view>();
+    const auto view = get<erhe::application::View>();
     view->register_command(&m_preview_command);
     view->register_command(&m_insert_command);
     view->bind_command_to_mouse_motion(&m_preview_command);
@@ -232,7 +241,9 @@ auto Brushes::try_insert() -> bool
 
 void Brushes::on_enable_state_changed()
 {
-    Command_context context{*get<Editor_view>().get()};
+    erhe::application::Command_context context{
+        *get<erhe::application::View>().get()
+    };
 
     if (is_enabled())
     {
@@ -460,7 +471,11 @@ void Brushes::add_brush_mesh()
             .normal_style          = m_brush->normal_style
         }
     );
-    m_brush_mesh->set_visibility_mask(Node_visibility::visible | Node_visibility::content | Node_visibility::brush);
+    m_brush_mesh->set_visibility_mask(
+        Node_visibility::visible |
+        Node_visibility::content |
+        Node_visibility::brush
+    );
     m_scene_root->add(m_brush_mesh, m_scene_root->brush_layer());
 
     update_mesh_node_transform();
@@ -491,13 +506,13 @@ void Brushes::tool_properties()
     ImGui::InputFloat("Brush scale",     &debug_info.brush_frame_scale);
     ImGui::InputFloat("Transform scale", &debug_info.transform_scale);
     ImGui::SliderFloat("Scale", &m_scale, 0.0f, 2.0f);
-    make_check_box("Snap to Polygon", &m_snap_to_hover_polygon);
-    make_check_box(
+    erhe::application::make_check_box("Snap to Polygon", &m_snap_to_hover_polygon);
+    erhe::application::make_check_box(
         "Snap to Grid",
         &m_snap_to_grid,
         m_snap_to_hover_polygon
-            ? Item_mode::disabled
-            : Item_mode::normal
+            ? erhe::application::Item_mode::disabled
+            : erhe::application::Item_mode::normal
     );
 }
 
@@ -510,11 +525,11 @@ void Brushes::imgui()
         for (int i = 0; i < static_cast<int>(brush_count); ++i)
         {
             auto* brush = m_brushes[i].get();
-            const bool button_pressed = make_button(
+            const bool button_pressed = erhe::application::make_button(
                 brush->geometry->name.c_str(),
                 (m_selected_brush_index == i)
-                    ? Item_mode::active
-                    : Item_mode::normal,
+                    ? erhe::application::Item_mode::active
+                    : erhe::application::Item_mode::normal,
                 button_size
             );
             if (button_pressed)
@@ -526,4 +541,4 @@ void Brushes::imgui()
     }
 }
 
-}
+} // namespace editor

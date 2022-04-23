@@ -1,14 +1,13 @@
 #include "windows/mesh_properties.hpp"
 
-#include "editor_imgui_windows.hpp"
-#include "editor_tools.hpp"
-#include "rendering.hpp"
-
+#include "editor_rendering.hpp"
 #include "renderers/render_context.hpp"
-#include "renderers/text_renderer.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
+#include "tools/tools.hpp"
 
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -37,14 +36,14 @@ void Mesh_properties::connect()
 {
     m_scene_root     = get<Scene_root    >();
     m_selection_tool = get<Selection_tool>();
-    m_text_renderer  = get<Text_renderer >();
-    require<Editor_tools>();
+    m_text_renderer  = get<erhe::application::Text_renderer>();
+    require<Tools>();
 }
 
 void Mesh_properties::initialize_component()
 {
-    get<Editor_tools>()->register_tool(this);
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    get<Tools>()->register_tool(this);
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 }
 
 void Mesh_properties::imgui()
@@ -55,7 +54,9 @@ void Mesh_properties::imgui()
     ImGui::Checkbox ("Show Edges",    &m_show_edges);
 }
 
-void Mesh_properties::tool_render(const Render_context& context)
+void Mesh_properties::tool_render(
+    const Render_context& context
+)
 {
     ERHE_PROFILE_FUNCTION
 

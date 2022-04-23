@@ -32,10 +32,14 @@ namespace erhe::scene
     class Visibility_filter;
 }
 
+namespace erhe::application
+{
+    class Configuration;
+}
+
 namespace editor
 {
 
-class Configuration;
 class Programs;
 class Mesh_memory;
 class Shadow_renderer;
@@ -80,7 +84,7 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Configuration>                        m_configuration;
+    std::shared_ptr<erhe::application::Configuration>     m_configuration;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Mesh_memory>                          m_mesh_memory;
     std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;

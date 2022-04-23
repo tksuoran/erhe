@@ -1,13 +1,13 @@
 #include "tools/pointer_context.hpp"
-#include "editor_time.hpp"
 #include "log.hpp"
-#include "rendering.hpp"
+#include "editor_rendering.hpp"
 
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "renderers/id_renderer.hpp"
-#include "windows/log_window.hpp"
 
+#include "erhe/application/time.hpp"
+#include "erhe/application/windows/log_window.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/igeometry.hpp"
@@ -37,7 +37,6 @@ Pointer_context::~Pointer_context() = default;
 void Pointer_context::connect()
 {
     m_editor_rendering = get<Editor_rendering>();
-    m_log_window       = get<Log_window>();
     m_scene_root       = get<Scene_root>();
     m_viewport_windows = get<Viewport_windows>();
 }
@@ -61,7 +60,7 @@ void Pointer_context::update_mouse(
     const int                         count
 )
 {
-    log_input_events.trace("mouse {} count = {}\n", static_cast<int>(button), count);
+    log_pointer.trace("mouse {} count = {}\n", static_cast<int>(button), count);
     m_mouse_button[button].pressed  = (count > 0);
     m_mouse_button[button].released = (count == 0);
 }
@@ -71,7 +70,7 @@ void Pointer_context::update_mouse(
     const double y
 )
 {
-    log_input_events.trace("mouse x = {} y = {}\n", x, y);
+    log_pointer.trace("mouse x = {} y = {}\n", x, y);
     m_mouse_x = x;
     m_mouse_y = y;
 }
@@ -315,7 +314,6 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
     const auto id_renderer     = get<Id_renderer>();
     //const auto scene_root      = get<Scene_root>();
     const bool in_content_area = pointer_in_content_area();
-    //m_log_window->frame_log("in_content_area = {}", in_content_area);
     if (in_content_area && id_renderer)
     {
         const auto id_query = id_renderer->get(
@@ -403,7 +401,7 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
     }
 #endif
 
-    m_frame_number = get<Editor_time>()->frame_number();
+    m_frame_number = get<erhe::application::Time>()->frame_number();
 }
 
 

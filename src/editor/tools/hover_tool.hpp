@@ -1,9 +1,9 @@
 #pragma once
 
-#include "commands/command.hpp"
 #include "tools/tool.hpp"
-#include "windows/imgui_window.hpp"
 
+#include "erhe/application/commands/command.hpp"
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/optional.hpp"
 
@@ -11,25 +11,31 @@
 
 #include <memory>
 
-namespace erhe::scene {
+namespace erhe::scene
+{
     class Mesh;
 }
 
-namespace erhe::primitive {
+namespace erhe::primitive
+{
     class Material;
 }
 
+namespace erhe::application
+{
+    class Line_renderer_set;
+    class Text_renderer;
+
+}
 namespace editor
 {
 
 class Hover_tool;
-class Line_renderer_set;
 class Pointer_context;
 class Scene_root;
-class Text_renderer;
 
 class Hover_tool_hover_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Hover_tool_hover_command(Hover_tool& hover_tool)
@@ -38,8 +44,8 @@ public:
     {
     }
 
-    auto try_call   (Command_context& context) -> bool override;
-    void on_inactive(Command_context& context) override;
+    auto try_call   (erhe::application::Command_context& context) -> bool override;
+    void on_inactive(erhe::application::Command_context& context) override;
 
 private:
     Hover_tool& m_hover_tool;
@@ -83,10 +89,10 @@ private:
     void select  ();
 
     // Component dependencies
-    std::shared_ptr<Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Pointer_context>   m_pointer_context;
-    std::shared_ptr<Scene_root>        m_scene_root;
-    std::shared_ptr<Text_renderer>     m_text_renderer;
+    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
+    std::shared_ptr<Pointer_context>                      m_pointer_context;
+    std::shared_ptr<Scene_root>                           m_scene_root;
+    std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
 
     Hover_tool_hover_command           m_hover_command;
 

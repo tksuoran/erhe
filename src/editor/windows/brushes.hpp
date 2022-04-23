@@ -1,10 +1,10 @@
 #pragma once
 
-#include "commands/command.hpp"
 #include "scene/collision_generator.hpp"
 #include "tools/tool.hpp"
-#include "windows/imgui_window.hpp"
 
+#include "erhe/application/commands/command.hpp"
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/primitive/enums.hpp"
 #include "erhe/toolkit/optional.hpp"
@@ -52,7 +52,7 @@ class Scene_root;
 class Selection_tool;
 
 class Brush_tool_preview_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Brush_tool_preview_command(Brushes& brushes)
@@ -61,14 +61,14 @@ public:
     {
     }
 
-    auto try_call(Command_context& context) -> bool override;
+    auto try_call(erhe::application::Command_context& context) -> bool override;
 
 private:
     Brushes& m_brushes;
 };
 
 class Brush_tool_insert_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Brush_tool_insert_command(Brushes& brushes)
@@ -77,8 +77,8 @@ public:
     {
     }
 
-    void try_ready(Command_context& context) override;
-    auto try_call (Command_context& context) -> bool override;
+    void try_ready(erhe::application::Command_context& context) override;
+    auto try_call (erhe::application::Command_context& context) -> bool override;
 
 private:
     Brushes& m_brushes;
@@ -94,7 +94,7 @@ public:
 class Brushes
     : public erhe::components::Component
     , public Tool
-    , public Imgui_window
+    , public erhe::application::Imgui_window
 {
 public:
     static constexpr int              c_priority{4};
@@ -105,19 +105,19 @@ public:
     Brushes ();
     ~Brushes() noexcept override;
 
-    // Implements Component
+    // Implements erhe::components::Component
     [[nodiscard]]
     auto get_type_hash       () const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
-    // Implements Tool
+    // Implements erhe::application::Tool
     [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
     [[nodiscard]] auto description  () -> const char* override { return c_name.data(); }
     void tool_properties        () override;
     void on_enable_state_changed() override;
 
-    // Implements Imgui_window
+    // Implements erhe::application::Imgui_window
     void imgui() override;
 
     // Public API

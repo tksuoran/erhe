@@ -1,10 +1,10 @@
 #pragma once
 
-#include "windows/imgui_window.hpp"
-
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
 #include <memory>
+
 
 namespace editor
 {
@@ -18,7 +18,7 @@ class Tool;
 
 class Operations
     : public erhe::components::Component
-    , public Imgui_window
+    , public erhe::application::Imgui_window
 {
 public:
     static constexpr std::string_view c_name {"Operations"};
@@ -38,6 +38,7 @@ public:
     void imgui() override;
 
     // Public API
+    // TODO XXX FIXME Move to erhe::application::View
     [[nodiscard]] auto get_active_tool() const -> Tool*;
     void register_active_tool(Tool* tool);
 

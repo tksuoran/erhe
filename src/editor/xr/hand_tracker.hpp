@@ -1,6 +1,6 @@
 #pragma once
 
-#include "tools/tool.hpp"
+#include "erhe/application/tools/tool.hpp"
 
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/math_util.hpp"
@@ -15,12 +15,16 @@ namespace erhe::xr
     class Headset;
 }
 
+namespace erhe::application
+{
+    class Line_renderer;
+    class Line_renderer_set;
+}
+
 namespace editor
 {
 
 class Headset_renderer;
-class Line_renderer;
-class Line_renderer_set;
 
 enum class Hand_name : unsigned int
 {
@@ -83,7 +87,7 @@ private:
 
 class Hand_tracker
     : public erhe::components::Component
-    , public Tool
+    , public erhe::application::Tool
 {
 public:
     static constexpr std::string_view c_name       {"Hand_tracker"};
@@ -105,7 +109,7 @@ public:
 
     // Implements Tool
     [[nodiscard]] auto description() -> const char* override;
-    void tool_render(const Render_context& context) override;
+    void tool_render(const erhe::application::Render_context& context) override;
 
     // Public API
     void update   (erhe::xr::Headset& headset);

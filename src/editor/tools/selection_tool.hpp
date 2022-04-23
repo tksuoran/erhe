@@ -1,9 +1,9 @@
 #pragma once
 
-#include "commands/command.hpp"
 #include "tools/tool.hpp"
-#include "windows/imgui_window.hpp"
 
+#include "erhe/application/commands/command.hpp"
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/scene/node.hpp"
 
@@ -11,21 +11,27 @@
 #include <memory>
 #include <vector>
 
-namespace erhe::scene {
+namespace erhe::scene
+{
     class Mesh;
     class Scene;
+}
+
+namespace erhe::application
+{
+    class Line_renderer_set;
 }
 
 namespace editor
 {
 
-class Line_renderer_set;
+class Pointer_context;
 class Scene_root;
 class Selection_tool;
 class Viewport_config;
 
 class Selection_tool_delete_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Selection_tool_delete_command(Selection_tool& selection_tool)
@@ -34,14 +40,14 @@ public:
     {
     }
 
-    auto try_call(Command_context& context) -> bool override;
+    auto try_call(erhe::application::Command_context& context) -> bool override;
 
 private:
     Selection_tool& m_selection_tool;
 };
 
 class Selection_tool_select_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Selection_tool_select_command(Selection_tool& selection_tool)
@@ -50,8 +56,8 @@ public:
     {
     }
 
-    void try_ready(Command_context& context) override;
-    auto try_call (Command_context& context) -> bool override;
+    void try_ready(erhe::application::Command_context& context) override;
+    auto try_call (erhe::application::Command_context& context) -> bool override;
 
 private:
     Selection_tool& m_selection_tool;
@@ -186,7 +192,7 @@ private:
     Range_selection m_range_selection;
 
     // Component dependencies
-    std::shared_ptr<Line_renderer_set> m_line_renderer_set;
+    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
     std::shared_ptr<Pointer_context>   m_pointer_context;
     std::shared_ptr<Viewport_config>   m_viewport_config;
     std::shared_ptr<Scene_root>        m_scene_root;

@@ -1,8 +1,9 @@
 #include "windows/viewport_config.hpp"
-#include "application.hpp"
-#include "configuration.hpp"
-#include "editor_imgui_windows.hpp"
-#include "imgui_helpers.hpp"
+
+#include "erhe/application/application.hpp"
+#include "erhe/application/configuration.hpp"
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui_helpers.hpp"
 
 #include <imgui.h>
 
@@ -10,8 +11,8 @@ namespace editor
 {
 
 Viewport_config::Viewport_config()
-    : erhe::components::Component{c_name}
-    , Imgui_window               {c_title}
+    : erhe::components::Component    {c_name}
+    , erhe::application::Imgui_window{c_title}
 {
     render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
     render_style_not_selected.edge_lines = false;
@@ -21,12 +22,12 @@ Viewport_config::Viewport_config()
 
 void Viewport_config::connect()
 {
-    require<Editor_imgui_windows>();
+    require<erhe::application::Imgui_windows>();
 }
 
 void Viewport_config::initialize_component()
 {
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 }
 
 void Viewport_config::render_style_ui(Render_style& render_style)
@@ -58,7 +59,7 @@ void Viewport_config::render_style_ui(Render_style& render_style)
         {
             ImGui::SliderFloat("Width",          &render_style.line_width, 0.0f, 20.0f);
             ImGui::ColorEdit4 ("Constant Color", &render_style.line_color.x,     ImGuiColorEditFlags_Float);
-            make_combo(
+            erhe::application::make_combo(
                 "Color Source",
                 render_style.edge_lines_color_source,
                 Base_renderer::c_primitive_color_source_strings_data.data(),
@@ -74,7 +75,7 @@ void Viewport_config::render_style_ui(Render_style& render_style)
         if (render_style.polygon_centroids)
         {
             ImGui::ColorEdit4("Constant Color", &render_style.centroid_color.x, ImGuiColorEditFlags_Float);
-            make_combo(
+            erhe::application::make_combo(
                 "Color Source",
                 render_style.polygon_centroids_color_source,
                 Base_renderer::c_primitive_color_source_strings_data.data(),
@@ -88,7 +89,7 @@ void Viewport_config::render_style_ui(Render_style& render_style)
     {
         ImGui::Checkbox  ("Visible",        &render_style.corner_points);
         ImGui::ColorEdit4("Constant Color", &render_style.corner_color.x,   ImGuiColorEditFlags_Float);
-        make_combo(
+        erhe::application::make_combo(
             "Color Source",
             render_style.corner_points_color_source,
             Base_renderer::c_primitive_color_source_strings_data.data(),
@@ -129,11 +130,11 @@ void Viewport_config::imgui()
 
     if (ImGui::TreeNodeEx("Debug Visualizations", flags))
     {
-        make_combo("Light",        debug_visualizations.light,        c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
-        make_combo("Light Camera", debug_visualizations.light_camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
-        make_combo("Camera",       debug_visualizations.camera,       c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
+        erhe::application::make_combo("Light",        debug_visualizations.light,        c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
+        erhe::application::make_combo("Light Camera", debug_visualizations.light_camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
+        erhe::application::make_combo("Camera",       debug_visualizations.camera,       c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
         ImGui::TreePop();
     }
 }
 
-}
+} // namespace editor

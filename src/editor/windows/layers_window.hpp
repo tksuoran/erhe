@@ -1,6 +1,6 @@
 #pragma once
 
-#include "windows/imgui_window.hpp"
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
 #include <glm/glm.hpp>
@@ -27,7 +27,7 @@ class Selection_tool;
 
 class Layers_window
     : public erhe::components::Component
-    , public Imgui_window
+    , public erhe::application::Imgui_window
 {
 public:
     static constexpr std::string_view c_name {"Layers_window"};

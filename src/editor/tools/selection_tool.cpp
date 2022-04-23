@@ -1,23 +1,22 @@
 #include "tools/selection_tool.hpp"
 
-#include "editor_time.hpp"
-#include "editor_tools.hpp"
-#include "editor_view.hpp"
 #include "log.hpp"
-#include "rendering.hpp"
-
+#include "editor_rendering.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/render_context.hpp"
-#include "renderers/line_renderer.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
+#include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
 #include "windows/viewport_config.hpp"
 
+#include "erhe/application/time.hpp"
+#include "erhe/application/view.hpp"
+#include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/camera.hpp"
@@ -39,7 +38,9 @@ Range_selection::Range_selection(Selection_tool& selection_tool)
 {
 }
 
-void Range_selection::set_terminator(const std::shared_ptr<erhe::scene::Node>& node)
+void Range_selection::set_terminator(
+    const std::shared_ptr<erhe::scene::Node>& node
+)
 {
     if (!m_primary_terminator)
     {
@@ -57,7 +58,9 @@ void Range_selection::set_terminator(const std::shared_ptr<erhe::scene::Node>& n
     m_edited = true;
 }
 
-void Range_selection::entry(const std::shared_ptr<erhe::scene::Node>& node)
+void Range_selection::entry(
+    const std::shared_ptr<erhe::scene::Node>& node
+)
 {
     m_entries.push_back(node);
 }
@@ -122,7 +125,9 @@ void Range_selection::reset()
     m_secondary_terminator.reset();
 }
 
-void Selection_tool_select_command::try_ready(Command_context& context)
+void Selection_tool_select_command::try_ready(
+    erhe::application::Command_context& context
+)
 {
     if (m_selection_tool.mouse_select_try_ready())
     {
@@ -130,9 +135,11 @@ void Selection_tool_select_command::try_ready(Command_context& context)
     }
 }
 
-auto Selection_tool_select_command::try_call(Command_context& context) -> bool
+auto Selection_tool_select_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
-    if (state() != State::Ready)
+    if (state() != erhe::application::State::Ready)
     {
         return false;
     }
@@ -142,7 +149,9 @@ auto Selection_tool_select_command::try_call(Command_context& context) -> bool
     return consumed;
 }
 
-auto Selection_tool_delete_command::try_call(Command_context& context) -> bool
+auto Selection_tool_delete_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
     static_cast<void>(context);
 
@@ -237,20 +246,20 @@ Selection_tool::~Selection_tool() = default;
 
 void Selection_tool::connect()
 {
-    m_line_renderer_set = get<Line_renderer_set>();
+    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
     m_pointer_context   = get<Pointer_context  >();
     m_scene_root        = get<Scene_root       >();
     m_viewport_config   = get<Viewport_config  >();
 
-    require<Editor_tools>();
-    require<Editor_view >();
+    require<Tools>();
+    require<erhe::application::View >();
 }
 
 void Selection_tool::initialize_component()
 {
-    get<Editor_tools>()->register_tool(this);
+    get<Tools>()->register_tool(this);
 
-    const auto view = get<Editor_view>();
+    const auto view = get<erhe::application::View>();
 
     view->register_command           (&m_select_command);
     view->register_command           (&m_delete_command);
@@ -263,7 +272,9 @@ auto Selection_tool::description() -> const char*
     return c_description.data();
 }
 
-Selection_tool::Subcription Selection_tool::subscribe_selection_change_notification(On_selection_changed callback)
+auto Selection_tool::subscribe_selection_change_notification(
+    On_selection_changed callback
+) -> Selection_tool::Subcription
 {
     const int handle = m_next_selection_change_subscription++;
     m_selection_change_subscriptions.push_back({callback, handle});
@@ -449,7 +460,9 @@ auto Selection_tool::add_to_selection(
     }
 
     const auto mask = item->get_visibility_mask();
-    item->set_visibility_mask(mask | erhe::scene::Node_visibility::selected);
+    item->set_visibility_mask(
+        mask | erhe::scene::Node_visibility::selected
+    );
 
     if (!is_in_selection(item))
     {
@@ -493,7 +506,10 @@ auto Selection_tool::remove_from_selection(
     return false;
 }
 
-void Selection_tool::update_selection_from_node(const std::shared_ptr<erhe::scene::Node>& node, const bool added)
+void Selection_tool::update_selection_from_node(
+    const std::shared_ptr<erhe::scene::Node>& node,
+    const bool                                added
+)
 {
     if (node->is_selected() && added)
     {
@@ -562,7 +578,9 @@ auto sign(const float x) -> float
 
 }
 
-void Selection_tool::tool_render(const Render_context& context)
+void Selection_tool::tool_render(
+    const Render_context& context
+)
 {
     if (m_line_renderer_set == nullptr)
     {

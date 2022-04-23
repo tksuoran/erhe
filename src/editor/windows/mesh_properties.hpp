@@ -1,8 +1,8 @@
 #pragma once
 
 #include "tools/tool.hpp"
-#include "windows/imgui_window.hpp"
 
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
 #include <memory>
@@ -17,17 +17,21 @@ namespace erhe::scene
     class Mesh;
 }
 
+namespace erhe::application
+{
+    class Text_renderer;
+}
+
 namespace editor
 {
 
 class Scene_root;
 class Selection_tool;
-class Text_renderer;
 
 class Mesh_properties
     : public erhe::components::Component
     , public Tool
-    , public Imgui_window
+    , public erhe::application::Imgui_window
 {
 public:
     static constexpr std::string_view c_name {"Mesh_properties"};
@@ -51,9 +55,9 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Scene_root>     m_scene_root;
-    std::shared_ptr<Selection_tool> m_selection_tool;
-    std::shared_ptr<Text_renderer>  m_text_renderer;
+    std::shared_ptr<Scene_root>                       m_scene_root;
+    std::shared_ptr<Selection_tool>                   m_selection_tool;
+    std::shared_ptr<erhe::application::Text_renderer> m_text_renderer;
 
     int  m_max_labels   {400};
     bool m_show_points  {false};

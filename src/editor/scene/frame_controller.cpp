@@ -1,5 +1,6 @@
 #include "scene/frame_controller.hpp"
-#include "scene/controller.hpp"
+
+#include "erhe/application/controller.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -39,7 +40,9 @@ Frame_controller::Frame_controller()
     update();
 }
 
-auto Frame_controller::get_controller(const Control control) -> Controller&
+auto Frame_controller::get_controller(
+    const Control control
+) -> erhe::application::Controller&
 {
     switch (control)
     {

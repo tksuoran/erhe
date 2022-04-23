@@ -1,9 +1,8 @@
 #pragma once
 
-#include "windows/imgui_window.hpp"
-
 #include "xr/headset_view_resources.hpp"
 
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
 #include <array>
@@ -25,24 +24,27 @@ namespace erhe::xr
     class Headset;
 }
 
+namespace erhe::application
+{
+    class Application;
+    class Tools;
+    class Line_renderer_set;
+}
+
 namespace editor
 {
 
-class Application;
 class Editor_rendering;
-class Editor_tools;
 class Hand_tracker;
 class Headset_renderer;
-class Line_renderer_set;
 class Mesh_memory;
 class Scene_builder;
 class Scene_root;
-
 class Controller_visualization;
 
 class Headset_renderer
     : public erhe::components::Component
-    , public Imgui_window
+    , public erhe::application::Imgui_window
 {
 public:
     static constexpr std::string_view c_name       {"Headset_renderer"};
@@ -88,4 +90,4 @@ private:
     std::array<float, 4>                      m_clear_color{0.0f, 0.0f, 0.0f, 0.95f};
 };
 
-}
+} // namespace editor

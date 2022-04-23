@@ -1,8 +1,9 @@
 #pragma once
 
-#include "commands/command.hpp"
 #include "tools/tool.hpp"
-#include "windows/imgui_window.hpp"
+
+#include "erhe/application/commands/command.hpp"
+#include "erhe/application/windows/imgui_window.hpp"
 
 #include "erhe/components/components.hpp"
 
@@ -15,7 +16,7 @@ class IOperation;
 class Operation_stack;
 
 class Undo_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Undo_command(Operation_stack& operation_stack)
@@ -25,20 +26,22 @@ public:
     }
     //~Undo_command() noexcept final {}
 
-    auto try_call(Command_context& context) -> bool override;
+    auto try_call(erhe::application::Command_context& context) -> bool override;
 
 private:
     Operation_stack& m_operation_stack;
 };
 
 class Redo_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Redo_command(Operation_stack& operation_stack)
         : Command{"redo"}
         , m_operation_stack{operation_stack} {}
-    auto try_call(Command_context& context) -> bool override;
+
+    auto try_call(erhe::application::Command_context& context) -> bool override;
+
 private:
     Operation_stack& m_operation_stack;
 };
@@ -46,7 +49,7 @@ private:
 class Operation_stack
     : public erhe::components::Component
     , public Tool
-    , public Imgui_window
+    , public erhe::application::Imgui_window
 {
 public:
     static constexpr std::string_view c_name       {"Operation_stack"};
@@ -87,4 +90,4 @@ private:
     std::vector<std::shared_ptr<IOperation>> m_undone;
 };
 
-}
+} // namespace editor

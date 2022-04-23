@@ -1,11 +1,12 @@
 #include "windows/debug_view_window.hpp"
-#include "editor_imgui_windows.hpp"
+
 #include "scene/scene_root.hpp"
-#include "graphics/gl_context_provider.hpp"
 #include "renderers/forward_renderer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
 
+#include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/application/imgui_windows.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
@@ -16,8 +17,8 @@ namespace editor
 {
 
 Debug_view_window::Debug_view_window()
-    : erhe::components::Component{c_name}
-    , Framebuffer_window         {c_name, c_title}
+    : erhe::components::Component          {c_name}
+    , erhe::application::Framebuffer_window{c_name, c_title}
 {
 }
 
@@ -31,17 +32,13 @@ void Debug_view_window::connect()
     m_scene_root             = get    <Scene_root                          >();
     m_shadow_renderer        = get    <Shadow_renderer                     >();
 
-    require<Editor_imgui_windows>();
-    require<Gl_context_provider >();
+    require<erhe::application::Imgui_windows>();
+    require<erhe::application::Gl_context_provider>();
 }
 
 void Debug_view_window::initialize_component()
 {
-    Framebuffer_window::initialize(
-        *get<Editor_imgui_windows>().get(),
-        get<Gl_context_provider>(),
-        get<Programs>()->visualize_depth.get()
-    );
+    Framebuffer_window::initialize(*m_components);
 
     m_empty_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>();
 
@@ -54,10 +51,11 @@ void Debug_view_window::initialize_component()
         .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
         .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
     };
-
 }
 
-auto Debug_view_window::get_size(glm::vec2 available_size) const -> glm::vec2
+auto Debug_view_window::get_size(
+    glm::vec2 available_size
+) const -> glm::vec2
 {
     static_cast<void>(available_size);
 

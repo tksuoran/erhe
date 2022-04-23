@@ -1,9 +1,9 @@
 #pragma once
 
-#include "commands/command.hpp"
 #include "tools/tool.hpp"
-#include "windows/imgui_window.hpp"
 
+#include "erhe/application/commands/command.hpp"
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
 #include <glm/glm.hpp>
@@ -11,15 +11,18 @@
 #include <functional>
 #include <memory>
 
-namespace erhe::scene {
+namespace erhe::scene
+{
     class Mesh;
 }
 
-namespace erhe::physics {
+namespace erhe::physics
+{
     class IConstraint;
 }
 
-namespace erhe::primitive {
+namespace erhe::primitive
+{
     class Material;
 }
 
@@ -31,7 +34,7 @@ class Pointer_context;
 class Scene_root;
 
 class Material_paint_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Material_paint_command(Material_paint_tool& material_paint_tool)
@@ -40,15 +43,15 @@ public:
     {
     }
 
-    auto try_call (Command_context& context) -> bool override;
-    void try_ready(Command_context& context) override;
+    auto try_call (erhe::application::Command_context& context) -> bool override;
+    void try_ready(erhe::application::Command_context& context) override;
 
 private:
     Material_paint_tool& m_material_paint_tool;
 };
 
 class Material_pick_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Material_pick_command(Material_paint_tool& material_paint_tool)
@@ -57,8 +60,8 @@ public:
     {
     }
 
-    auto try_call (Command_context& context) -> bool override;
-    void try_ready(Command_context& context) override;
+    auto try_call (erhe::application::Command_context& context) -> bool override;
+    void try_ready(erhe::application::Command_context& context) override;
 
 private:
     Material_paint_tool& m_material_paint_tool;

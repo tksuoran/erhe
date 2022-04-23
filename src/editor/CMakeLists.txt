@@ -4,62 +4,14 @@ add_executable(${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    commands/command.cpp
-    commands/command.hpp
-    commands/command_binding.cpp
-    commands/command_binding.hpp
-    commands/command_context.cpp
-    commands/command_context.hpp
-    commands/key_binding.cpp
-    commands/key_binding.hpp
-    commands/mouse_binding.cpp
-    commands/mouse_binding.hpp
-    commands/mouse_click_binding.cpp
-    commands/mouse_click_binding.hpp
-    commands/mouse_motion_binding.cpp
-    commands/mouse_motion_binding.hpp
-    commands/mouse_drag_binding.cpp
-    commands/mouse_drag_binding.hpp
-    commands/state.cpp
-    commands/state.hpp
-
-    graphics/gl_context_provider.cpp
-    graphics/gl_context_provider.hpp
     graphics/gradients.cpp
     graphics/gradients.hpp
     graphics/icon_set.cpp
     graphics/icon_set.hpp
     graphics/image_transfer.cpp
     graphics/image_transfer.hpp
-    graphics/shader_monitor.cpp
-    graphics/shader_monitor.hpp
     graphics/textures.cpp
     graphics/textures.hpp
-
-    hextiles/coordinate.cpp
-    hextiles/coordinate.hpp
-    hextiles/file_util.cpp
-    hextiles/file_util.hpp
-    hextiles/map_renderer.cpp
-    hextiles/map_renderer.hpp
-    hextiles/map.cpp
-    hextiles/map.hpp
-    hextiles/map_window.cpp
-    hextiles/map_window.hpp
-    hextiles/pixel_lookup.cpp
-    hextiles/pixel_lookup.hpp
-    hextiles/stream.cpp
-    hextiles/stream.hpp
-    hextiles/terrain_type.cpp
-    hextiles/terrain_type.hpp
-    hextiles/texture_util.cpp
-    hextiles/texture_util.hpp
-    hextiles/tile_shape.cpp
-    hextiles/tile_shape.hpp
-    hextiles/tiles.cpp
-    hextiles/tiles.hpp
-    hextiles/types.cpp
-    hextiles/types.hpp
 
     operations/attach_detach_operation.cpp
     operations/attach_detach_operation.hpp
@@ -88,19 +40,14 @@ erhe_target_sources_grouped(
 
     renderers/base_renderer.cpp
     renderers/base_renderer.hpp
-    renderers/buffer_writer.hpp
     renderers/forward_renderer.cpp
     renderers/forward_renderer.hpp
     renderers/frame_resources.cpp
     renderers/frame_resources.hpp
     renderers/id_renderer.cpp
     renderers/id_renderer.hpp
-    renderers/imgui_renderer.cpp
-    renderers/imgui_renderer.hpp
     renderers/light_mesh.cpp
     renderers/light_mesh.hpp
-    renderers/line_renderer.cpp
-    renderers/line_renderer.hpp
     renderers/mesh_memory.cpp
     renderers/mesh_memory.hpp
     renderers/post_processing.cpp
@@ -111,15 +58,9 @@ erhe_target_sources_grouped(
     renderers/programs.hpp
     renderers/shadow_renderer.cpp
     renderers/shadow_renderer.hpp
-    renderers/text_renderer.cpp
-    renderers/text_renderer.hpp
-    renderers/texture_renderer.cpp
-    renderers/texture_renderer.hpp
 
     scene/brush.cpp
     scene/brush.hpp
-    scene/controller.cpp
-    scene/controller.hpp
     scene/debug_draw.cpp
     scene/debug_draw.hpp
     scene/frame_controller.cpp
@@ -149,23 +90,19 @@ erhe_target_sources_grouped(
     tools/physics_tool.hpp
     tools/selection_tool.cpp
     tools/selection_tool.hpp
-    tools/trs_tool.cpp
-    tools/trs_tool.hpp
     tools/tool.cpp
     tools/tool.hpp
+    tools/tools.cpp
+    tools/tools.hpp
+    tools/trs_tool.cpp
+    tools/trs_tool.hpp
 
     windows/brushes.cpp
     windows/brushes.hpp
     windows/debug_view_window.cpp
     windows/debug_view_window.hpp
-    windows/framebuffer_window.cpp
-    windows/framebuffer_window.hpp
-    windows/imgui_demo_window.cpp
-    windows/imgui_demo_window.hpp
     windows/layers_window.cpp
     windows/layers_window.hpp
-    windows/log_window.cpp
-    windows/log_window.hpp
     windows/materials.cpp
     windows/materials.hpp
     windows/material_properties.cpp
@@ -178,45 +115,23 @@ erhe_target_sources_grouped(
     windows/node_tree_window.hpp
     windows/operations.cpp
     windows/operations.hpp
-    windows/performance_window.cpp
-    windows/performance_window.hpp
     windows/physics_window.cpp
     windows/physics_window.hpp
-    windows/pipelines.cpp
-    windows/pipelines.hpp
     windows/tool_properties_window.cpp
     windows/tool_properties_window.hpp
     windows/viewport_config.cpp
     windows/viewport_config.hpp
     windows/viewport_window.cpp
     windows/viewport_window.hpp
-    windows/imgui_window.cpp
-    windows/imgui_window.hpp
 
-    application.cpp
-    application.hpp
-    configuration.cpp
-    configuration.hpp
     log.cpp
     log.hpp
     main.cpp
     on_load.cpp
-    renderdoc_capture_support.cpp
-    renderdoc_capture_support.hpp
-    rendering.cpp
-    rendering.hpp
-    editor_imgui_windows.cpp
-    editor_imgui_windows.hpp
-    editor_time.cpp
-    editor_time.hpp
-    editor_tools.cpp
-    editor_tools.hpp
-    editor_view.cpp
-    editor_view.hpp
-    imgui_helpers.cpp
-    imgui_helpers.hpp
-    window.cpp
-    window.hpp
+    editor_rendering.cpp
+    editor_rendering.hpp
+    view_client.cpp
+    view_client.hpp
 
     res/icons/camera.svg
     res/icons/directional_light.svg
@@ -248,8 +163,6 @@ erhe_target_sources_grouped(
     res/shaders/text.frag
     res/shaders/textured.vert
     res/shaders/textured.frag
-    res/shaders/tile.vert
-    res/shaders/tile.frag
     res/shaders/tool.vert
     res/shaders/tool.frag
     res/shaders/visualize_depth.vert
@@ -287,7 +200,7 @@ endif ()
 target_link_libraries(
     ${_target}
     PRIVATE
-    cxxopts
+    erhe::application
     erhe::components
     erhe::concurrency
     erhe::geometry

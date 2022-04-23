@@ -1,21 +1,17 @@
 #include "hover_tool.hpp"
-#include "editor_tools.hpp"
-#include "editor_view.hpp"
 #include "log.hpp"
-#include "rendering.hpp"
-
-#include "commands/command_context.hpp"
-
+#include "editor_rendering.hpp"
+#include "renderers/render_context.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/hover_tool.hpp"
 #include "tools/pointer_context.hpp"
+#include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
 
-#include "renderers/line_renderer.hpp"
-#include "renderers/render_context.hpp"
-#include "renderers/text_renderer.hpp"
-
-#include "scene/scene_root.hpp"
-
+#include "erhe/application/view.hpp"
+#include "erhe/application/commands/command_context.hpp"
+#include "erhe/application/renderers/line_renderer.hpp"
+#include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/material.hpp"
@@ -32,16 +28,21 @@ namespace editor
 
 using glm::vec3;
 
-void Hover_tool_hover_command::on_inactive(Command_context& context)
+void Hover_tool_hover_command::on_inactive(
+    erhe::application::Command_context& context
+)
 {
     static_cast<void>(context);
 
     m_hover_tool.on_inactive();
 }
 
-auto Hover_tool_hover_command::try_call(Command_context& context) -> bool
+auto Hover_tool_hover_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
-    if (context.viewport_window() == nullptr)
+    auto* viewport_window = as_viewport_window(context.get_window());
+    if (viewport_window == nullptr)
     {
         set_inactive(context);
         return false;
@@ -65,20 +66,20 @@ auto Hover_tool::description() -> const char*
 
 void Hover_tool::connect()
 {
-    m_line_renderer_set = get    <Line_renderer_set>();
-    m_pointer_context   = get    <Pointer_context  >();
-    m_scene_root        = require<Scene_root       >();
-    m_text_renderer     = get    <Text_renderer    >();
-    require<Editor_tools>();
+    m_line_renderer_set = get    <erhe::application::Line_renderer_set>();
+    m_pointer_context   = get    <Pointer_context                     >();
+    m_scene_root        = require<Scene_root                          >();
+    m_text_renderer     = get    <erhe::application::Text_renderer    >();
+    require<Tools>();
 }
 
 void Hover_tool::initialize_component()
 {
     m_hover_material = m_scene_root->make_material("hover");
     m_hover_material->visible = false;
-    get<Editor_tools>()->register_background_tool(this);
+    get<Tools>()->register_background_tool(this);
 
-    const auto view = get<Editor_view>();
+    const auto view = get<erhe::application::View>();
     view->register_command(&m_hover_command);
     view->bind_command_to_mouse_motion(&m_hover_command);
 
@@ -113,7 +114,9 @@ auto Hover_tool::try_call() -> bool
     return false;
 }
 
-void Hover_tool::tool_render(const Render_context& context)
+void Hover_tool::tool_render(
+    const Render_context& context
+)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -280,4 +283,4 @@ void Hover_tool::select()
     }
 }
 
-}
+} // namespace editor

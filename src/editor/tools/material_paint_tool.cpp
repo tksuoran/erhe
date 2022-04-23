@@ -1,16 +1,15 @@
 #include "tools/material_paint_tool.hpp"
-#include "tools/material_paint_tool.hpp"
-#include "editor_imgui_windows.hpp"
-#include "editor_tools.hpp"
-#include "editor_view.hpp"
 #include "log.hpp"
-#include "rendering.hpp"
+#include "editor_rendering.hpp"
 
-#include "commands/command_context.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
+#include "tools/tools.hpp"
 #include "windows/operations.hpp"
 
+#include "erhe/application/commands/command_context.hpp"
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/view.hpp"
 #include "erhe/scene/mesh.hpp"
 
 #include <imgui.h>
@@ -18,9 +17,11 @@
 namespace editor
 {
 
-void Material_paint_command::try_ready(Command_context& context)
+void Material_paint_command::try_ready(
+    erhe::application::Command_context& context
+)
 {
-    if (state() != State::Inactive)
+    if (state() != erhe::application::State::Inactive)
     {
         return;
     }
@@ -31,29 +32,33 @@ void Material_paint_command::try_ready(Command_context& context)
     }
 }
 
-auto Material_paint_command::try_call(Command_context& context) -> bool
+auto Material_paint_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
-    if (state() == State::Inactive)
+    if (state() == erhe::application::State::Inactive)
     {
         return false;
     }
 
     if (
         m_material_paint_tool.on_paint() &&
-        (state() == State::Ready)
+        (state() == erhe::application::State::Ready)
     )
     {
         set_active(context);
     }
 
-    return state() == State::Active;
+    return state() == erhe::application::State::Active;
 }
 
 ////////
 
-void Material_pick_command::try_ready(Command_context& context)
+void Material_pick_command::try_ready(
+    erhe::application::Command_context& context
+)
 {
-    if (state() != State::Inactive)
+    if (state() != erhe::application::State::Inactive)
     {
         return;
     }
@@ -64,22 +69,24 @@ void Material_pick_command::try_ready(Command_context& context)
     }
 }
 
-auto Material_pick_command::try_call(Command_context& context) -> bool
+auto Material_pick_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
-    if (state() == State::Inactive)
+    if (state() == erhe::application::State::Inactive)
     {
         return false;
     }
 
     if (
         m_material_paint_tool.on_pick() &&
-        (state() == State::Ready)
+        (state() == erhe::application::State::Ready)
     )
     {
         set_active(context);
     }
 
-    return state() == State::Active;
+    return state() == erhe::application::State::Active;
 }
 
 
@@ -96,22 +103,22 @@ void Material_paint_tool::connect()
 {
     m_pointer_context = get<Pointer_context>();
     m_scene_root      = get<Scene_root>();
-    require<Editor_tools>();
-    require<Editor_view >();
-    require<Operations  >();
+    require<Tools                  >();
+    require<erhe::application::View>();
+    require<Operations             >();
 }
 
 void Material_paint_tool::initialize_component()
 {
-    get<Editor_tools>()->register_tool(this);
+    get<Tools>()->register_tool(this);
 
-    const auto view = get<Editor_view>();
+    const auto view = get<erhe::application::View>();
     view->register_command(&m_paint_command);
     view->register_command(&m_pick_command);
     view->bind_command_to_mouse_click(&m_paint_command, erhe::toolkit::Mouse_button_right);
     view->bind_command_to_mouse_click(&m_pick_command,  erhe::toolkit::Mouse_button_right);
 
-    Command_context context
+    erhe::application::Command_context context
     {
         *view.get()
     };
@@ -191,9 +198,9 @@ auto Material_paint_tool::on_pick() -> bool
 void Material_paint_tool::set_active_command(const int command)
 {
     m_active_command = command;
-    Command_context context
+    erhe::application::Command_context context
     {
-        *get<Editor_view>().get()
+        *get<erhe::application::View>().get()
     };
 
     switch (command)
@@ -230,4 +237,4 @@ void Material_paint_tool::tool_properties()
     m_scene_root->material_combo("Material", m_material);
 }
 
-}
+} // namespace editor

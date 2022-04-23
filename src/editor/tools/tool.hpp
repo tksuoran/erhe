@@ -1,7 +1,6 @@
 #pragma once
 
-//#include "command.hpp" // state
-#include "erhe/toolkit/view.hpp" // keycode
+#include "erhe/toolkit/view.hpp"
 #include "erhe/toolkit/optional.hpp"
 
 #include <glm/glm.hpp>

@@ -1,8 +1,9 @@
 #pragma once
 
-#include "renderers/buffer_writer.hpp"
-#include "windows/imgui_window.hpp"
+#include "erhe/application/renderers/buffer_writer.hpp"
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
+#include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/pipeline.hpp"
@@ -11,6 +12,11 @@
 
 #include <string>
 #include <deque>
+
+namespace erhe::application
+{
+    class Shader_monitor;
+}
 
 namespace erhe::graphics
 {
@@ -25,7 +31,6 @@ namespace editor
 {
 
 class Programs;
-class Shader_monitor;
 
 class Rendertarget
 {
@@ -44,7 +49,7 @@ public:
 
 class Post_processing
     : public erhe::components::Component
-    , public Imgui_window
+    , public erhe::application::Imgui_window
 {
 public:
     static constexpr std::string_view c_name {"Post_processing"};
@@ -79,7 +84,7 @@ private:
     // Component dependencies
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Programs>                             m_programs;
-    std::shared_ptr<Shader_monitor>                       m_shader_monitor;
+    std::shared_ptr<erhe::application::Shader_monitor>    m_shader_monitor;
 
     static constexpr size_t s_frame_resources_count = 4;
     struct Frame_resources
@@ -119,9 +124,9 @@ private:
 
         erhe::graphics::Buffer parameter_buffer;
     };
-    std::deque<Frame_resources> m_frame_resources;
-    size_t                      m_current_frame_resource_slot{0};
-    Buffer_writer               m_parameter_writer;
+    std::deque<Frame_resources>      m_frame_resources;
+    size_t                           m_current_frame_resource_slot{0};
+    erhe::application::Buffer_writer m_parameter_writer;
     [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
 
     std::unique_ptr<erhe::graphics::Shader_resource>    m_parameter_block;

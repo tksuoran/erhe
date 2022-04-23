@@ -3,11 +3,14 @@
 #include "erhe/components/components.hpp"
 #include "erhe/physics/idebug_draw.hpp"
 
+namespace erhe::application
+{
+    class Line_renderer_set;
+    class Text_renderer;
+}
+
 namespace editor
 {
-
-class Line_renderer_set;
-class Text_renderer;
 
 class Debug_draw
     : public erhe::components::Component
@@ -45,8 +48,8 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Text_renderer>     m_text_renderer;
+    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
+    std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
 
     int    m_debug_mode{0};
     Colors m_colors;

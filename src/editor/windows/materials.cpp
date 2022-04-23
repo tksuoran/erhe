@@ -1,9 +1,9 @@
 #include "windows/materials.hpp"
-#include "editor_imgui_windows.hpp"
-#include "imgui_helpers.hpp"
 
 #include "scene/scene_root.hpp"
 
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui_helpers.hpp"
 #include "erhe/primitive/material.hpp"
 
 #include <imgui.h>
@@ -26,12 +26,12 @@ auto Materials::selected_material() const -> std::shared_ptr<erhe::primitive::Ma
 void Materials::connect()
 {
     m_scene_root = require<Scene_root>();
-    require<Editor_imgui_windows>();
+    require<erhe::application::Imgui_windows>();
 }
 
 void Materials::initialize_component()
 {
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
     const glm::vec2 roughness{0.68f, 0.34f};
 
@@ -95,7 +95,7 @@ void Materials::initialize_component()
 void Materials::imgui()
 {
     // TODO We take a copy here
-    const auto materials = m_scene_root->materials();
+    const auto& materials = m_scene_root->materials();
 
     const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
     for (const auto& material : materials)
@@ -105,9 +105,11 @@ void Materials::imgui()
             continue;
         }
         bool selected = m_selected_material == material;
-        const bool button_pressed = make_button(
+        const bool button_pressed = erhe::application::make_button(
             material->name.c_str(),
-            selected ? Item_mode::active : Item_mode::normal,
+            selected
+                ? erhe::application::Item_mode::active
+                : erhe::application::Item_mode::normal,
             button_size
         );
         if (button_pressed)
@@ -117,4 +119,4 @@ void Materials::imgui()
     }
 }
 
-}
+} // namespace editor

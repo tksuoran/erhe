@@ -56,4 +56,4 @@ private:
     std::unique_ptr<std::array<Slot, 4>> m_slots;
 };
 
-} // namespace erhe::graphics
+} // namespace editor

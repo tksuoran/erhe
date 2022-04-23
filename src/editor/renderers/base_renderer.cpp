@@ -110,7 +110,7 @@ auto Base_renderer::update_primitive_buffer(
     const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
     const erhe::scene::Visibility_filter&                      visibility_filter,
     const bool                                                 use_id_ranges
-) -> Buffer_range
+) -> erhe::application::Buffer_range
 {
     ERHE_PROFILE_FUNCTION
 
@@ -206,7 +206,7 @@ auto Base_renderer::update_light_buffer(
     const glm::vec3&                                            ambient_light,
     const erhe::scene::Viewport                                 light_texture_viewport,
     const uint64_t                                              shadow_map_texture_handle
-) -> Buffer_range
+) -> erhe::application::Buffer_range
 {
     ERHE_PROFILE_FUNCTION
 
@@ -281,7 +281,7 @@ auto Base_renderer::update_light_buffer(
 
 auto Base_renderer::update_material_buffer(
     const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials
-) -> Buffer_range
+) -> erhe::application::Buffer_range
 {
     ERHE_PROFILE_FUNCTION
 
@@ -325,7 +325,7 @@ auto Base_renderer::update_material_buffer(
 auto Base_renderer::update_camera_buffer(
     const erhe::scene::ICamera& camera,
     const erhe::scene::Viewport viewport
-) -> Buffer_range
+) -> erhe::application::Buffer_range
 {
     ERHE_PROFILE_FUNCTION
 

@@ -1,5 +1,5 @@
-#include "editor_imgui_windows.hpp"
-#include "editor_view.hpp"
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/view.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/ioperation.hpp"
 
@@ -10,7 +10,9 @@ IOperation::~IOperation() noexcept
 {
 }
 
-auto Undo_command::try_call(Command_context& context) -> bool
+auto Undo_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
     static_cast<void>(context);
 
@@ -25,7 +27,9 @@ auto Undo_command::try_call(Command_context& context) -> bool
     }
 }
 
-auto Redo_command::try_call(Command_context& context) -> bool
+auto Redo_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
 {
     static_cast<void>(context);
 
@@ -41,10 +45,10 @@ auto Redo_command::try_call(Command_context& context) -> bool
 }
 
 Operation_stack::Operation_stack()
-    : erhe::components::Component{c_name}
-    , Imgui_window               {c_description}
-    , m_undo_command             {*this}
-    , m_redo_command             {*this}
+    : erhe::components::Component    {c_name}
+    , erhe::application::Imgui_window{c_description}
+    , m_undo_command                 {*this}
+    , m_redo_command                 {*this}
 {
 }
 
@@ -52,15 +56,15 @@ Operation_stack::~Operation_stack() = default;
 
 void Operation_stack::connect()
 {
-    require<Editor_view         >();
-    require<Editor_imgui_windows>();
+    require<erhe::application::View         >();
+    require<erhe::application::Imgui_windows>();
 }
 
 void Operation_stack::initialize_component()
 {
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
-    const auto view = get<Editor_view>();
+    const auto view = get<erhe::application::View>();
     view->register_command(&m_undo_command);
     view->register_command(&m_redo_command);
     view->bind_command_to_key(&m_undo_command, erhe::toolkit::Key_z, true, erhe::toolkit::Key_modifier_bit_ctrl);
@@ -165,5 +169,4 @@ void Operation_stack::imgui()
     imgui("Undone", m_undone);
 }
 
-
-}
+} // namespace editor

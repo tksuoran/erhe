@@ -42,5 +42,4 @@ public:
     bool                                         is_valid{false};
 };
 
-
-}
+} // namespace editor

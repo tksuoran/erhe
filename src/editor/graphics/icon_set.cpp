@@ -1,10 +1,10 @@
 #include "icon_set.hpp"
-#include "gl_context_provider.hpp"
 #include "log.hpp"
 
-#include "renderers/imgui_renderer.hpp"
 #include "renderers/programs.hpp"
 
+#include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/application/renderers/imgui_renderer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/light.hpp"
 
@@ -34,13 +34,15 @@ Icon_set::~Icon_set() = default;
 
 void Icon_set::connect()
 {
-    require<Gl_context_provider>();
+    require<erhe::application::Gl_context_provider>();
     require<Programs>();
 }
 
 void Icon_set::initialize_component()
 {
-    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const erhe::application::Scoped_gl_context gl_context{
+        Component::get<erhe::application::Gl_context_provider>()
+    };
 
     m_texture = std::make_shared<erhe::graphics::Texture>(
         erhe::graphics::Texture_create_info{
@@ -191,7 +193,7 @@ void Icon_set::icon(
         uv1(uv0),
         imvec_from_glm(tint_color)
     );
-    get<Imgui_renderer>()->use(m_texture, m_texture_handle);
+    get<erhe::application::Imgui_renderer>()->use(m_texture, m_texture_handle);
     ImGui::SameLine();
 }
 

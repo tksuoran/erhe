@@ -1,6 +1,6 @@
 #pragma once
 
-#include "scene/controller.hpp"
+#include "erhe/application/controller.hpp"
 
 #include "erhe/scene/node.hpp"
 
@@ -50,15 +50,15 @@ public:
     [[nodiscard]] auto right         () const -> glm::vec3;
     [[nodiscard]] auto up            () const -> glm::vec3;
     [[nodiscard]] auto back          () const -> glm::vec3;
-    [[nodiscard]] auto get_controller(const Control control) -> Controller&;
+    [[nodiscard]] auto get_controller(const Control control) -> erhe::application::Controller&;
 
-    Controller rotate_x;
-    Controller rotate_y;
-    Controller rotate_z;
-    Controller translate_x;
-    Controller translate_y;
-    Controller translate_z;
-    Controller speed_modifier;
+    erhe::application::Controller rotate_x;
+    erhe::application::Controller rotate_y;
+    erhe::application::Controller rotate_z;
+    erhe::application::Controller translate_x;
+    erhe::application::Controller translate_y;
+    erhe::application::Controller translate_z;
+    erhe::application::Controller speed_modifier;
 
 private:
     float     m_elevation       {0.0f};

@@ -1,19 +1,16 @@
 #include "windows/node_tree_window.hpp"
-#include "editor_imgui_windows.hpp"
 #include "graphics/icon_set.hpp"
 #include "log.hpp"
 
 #include "operations/compound_operation.hpp"
 #include "operations/node_operation.hpp"
 #include "operations/operation_stack.hpp"
-
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
-
 #include "tools/selection_tool.hpp"
 
-#include "windows/log_window.hpp"
-
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/windows/log_window.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/light.hpp"
@@ -30,8 +27,8 @@ namespace editor
 using Light_type = erhe::scene::Light_type;
 
 Node_tree_window::Node_tree_window()
-    : erhe::components::Component{c_name}
-    , Imgui_window               {c_title}
+    : erhe::components::Component    {c_name}
+    , erhe::application::Imgui_window{c_title}
 {
 }
 
@@ -42,14 +39,14 @@ void Node_tree_window::connect()
     m_scene_root     = get    <Scene_root    >();
     m_selection_tool = require<Selection_tool>();
     m_icon_set       = get    <Icon_set      >();
-    require<Editor_imgui_windows>();
+    require<erhe::application::Imgui_windows>();
     Expects(m_scene_root != nullptr);
     Expects(m_icon_set   != nullptr);
 }
 
 void Node_tree_window::initialize_component()
 {
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 }
 
 void Node_tree_window::clear_selection()
@@ -59,7 +56,7 @@ void Node_tree_window::clear_selection()
 
 void Node_tree_window::select_all()
 {
-    log_tools.warn("TODO: select_all\n");
+    //log_tools.warn("TODO: select_all\n");
 }
 
 template <typename T>
@@ -82,7 +79,7 @@ auto Node_tree_window::get_node_by_id(
     const auto i = m_tree_nodes_last_frame.find(id);
     if (i == m_tree_nodes_last_frame.end())
     {
-        log_tools.warn("node for id = {} not found\n", id);
+        //// log_tools.warn("node for id = {} not found\n", id);
         return {};
     }
     return i->second;
@@ -93,11 +90,14 @@ void Node_tree_window::move_selection_before(
     const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id
 )
 {
-    log_tools.warn(
-        "TODO: move_selection_before(target_node = {}, payload_id = {})\n",
-        target_node->name(),
-        payload_id
-    );
+    static_cast<void>(target_node);
+    static_cast<void>(payload_id);
+
+    //// log_tools.warn(
+    ////     "TODO: move_selection_before(target_node = {}, payload_id = {})\n",
+    ////     target_node->name(),
+    ////     payload_id
+    //// );
 }
 
 void Node_tree_window::move_selection_after(
@@ -105,11 +105,14 @@ void Node_tree_window::move_selection_after(
     const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id
 )
 {
-    log_tools.warn(
-        "TODO: move_selection_after(target_node = {}, payload_id = {})\n",
-        target_node->name(),
-        payload_id
-    );
+    static_cast<void>(target_node);
+    static_cast<void>(payload_id);
+
+    //// log_tools.warn(
+    ////     "TODO: move_selection_after(target_node = {}, payload_id = {})\n",
+    ////     target_node->name(),
+    ////     payload_id
+    //// );
 }
 
 void Node_tree_window::try_add_to_attach(
@@ -152,11 +155,11 @@ void Node_tree_window::attach_selection_to(
     const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id
 )
 {
-    log_tools.trace(
-        "attach_selection_to(target_node = {}, payload_id = {})\n",
-        target_node->name(),
-        payload_id
-    );
+    //// log_tools.trace(
+    ////     "attach_selection_to(target_node = {}, payload_id = {})\n",
+    ////     target_node->name(),
+    ////     payload_id
+    //// );
     Compound_operation::Parameters compound_parameters;
     const auto& selection = m_selection_tool->selection();
     auto drag_node = get_node_by_id(payload_id);
@@ -357,7 +360,9 @@ auto Node_tree_window::drag_and_drop_target(
     return false;
 }
 
-void Node_tree_window::imgui_node_update(const std::shared_ptr<erhe::scene::Node>& node)
+void Node_tree_window::imgui_node_update(
+    const std::shared_ptr<erhe::scene::Node>& node
+)
 {
     if (!m_selection_tool)
     {

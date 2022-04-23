@@ -1,9 +1,9 @@
 #include "scene/debug_draw.hpp"
 #include "log.hpp"
-#include "renderers/line_renderer.hpp"
-#include "renderers/text_renderer.hpp"
 #include "scene/scene_root.hpp"
 
+#include "erhe/application/renderers/line_renderer.hpp"
+#include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/physics/iworld.hpp"
 
 #include <glm/glm.hpp>
@@ -26,8 +26,8 @@ void Debug_draw::connect()
     using IDebug_draw = erhe::physics::IDebug_draw;
 
     require<Scene_root>();
-    m_line_renderer_set = get<Line_renderer_set>();
-    m_text_renderer     = get<Text_renderer>();
+    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
+    m_text_renderer     = get<erhe::application::Text_renderer>();
 
     m_debug_mode =
         IDebug_draw::c_Draw_wireframe           |

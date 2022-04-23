@@ -1,10 +1,9 @@
 #pragma once
 
 #include "operations/compound_operation.hpp"
-#include "windows/imgui_window.hpp"
 
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
-
 #include "erhe/toolkit/optional.hpp"
 #include "erhe/toolkit/unique_id.hpp"
 
@@ -26,7 +25,7 @@ class Selection_tool;
 
 class Node_tree_window
     : public erhe::components::Component
-    , public Imgui_window
+    , public erhe::application::Imgui_window
 {
 public:
     static constexpr std::string_view c_name {"Node_tree"};
@@ -77,10 +76,12 @@ private:
         erhe::toolkit::Unique_id<erhe::scene::Node>::id_type,
         std::shared_ptr<erhe::scene::Node>
     > m_tree_nodes;
+
     std::unordered_map<
         erhe::toolkit::Unique_id<erhe::scene::Node>::id_type,
         std::shared_ptr<erhe::scene::Node>
     > m_tree_nodes_last_frame;
+
     std::shared_ptr<IOperation> m_drag_and_drop_operation;
 };
 

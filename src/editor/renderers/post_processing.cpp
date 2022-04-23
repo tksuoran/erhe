@@ -1,9 +1,9 @@
 #include "renderers/post_processing.hpp"
-#include "editor_imgui_windows.hpp"
+#include "renderers/programs.hpp"
 
-#include "graphics/gl_context_provider.hpp"
-#include "graphics/shader_monitor.hpp"
-
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/application/graphics/shader_monitor.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
@@ -155,17 +155,19 @@ void Post_processing::connect()
 {
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
     m_programs               = get<Programs>();
-    m_shader_monitor         = require<Shader_monitor>();
+    m_shader_monitor         = require<erhe::application::Shader_monitor>();
 
-    require<Editor_imgui_windows>();
-    require<Gl_context_provider >();
+    require<erhe::application::Imgui_windows      >();
+    require<erhe::application::Gl_context_provider>();
 }
 
 void Post_processing::initialize_component()
 {
     using erhe::graphics::Shader_stages;
 
-    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const erhe::application::Scoped_gl_context gl_context{
+        Component::get<erhe::application::Gl_context_provider>()
+    };
 
     m_fragment_outputs.add(
         "out_color",
@@ -265,7 +267,7 @@ void Post_processing::initialize_component()
 
     m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Post_processing");
 
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 }
 
 Rendertarget::Rendertarget(

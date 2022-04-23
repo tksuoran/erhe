@@ -1,11 +1,11 @@
 #pragma once
 
-#include "commands/command.hpp"
-#include "editor_view.hpp"
-#include "scene/frame_controller.hpp"
 #include "tools/tool.hpp"
-#include "windows/imgui_window.hpp"
+#include "scene/frame_controller.hpp"
 
+#include "erhe/application/commands/command.hpp"
+#include "erhe/application/view.hpp"
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/view.hpp" // keycode
 
@@ -15,19 +15,17 @@
 
 namespace erhe::scene
 {
-
-class Camera;
-class ICamera;
-
+    class Camera;
+    class ICamera;
 }
 
 namespace editor
 {
 
-class Editor_tools;
 class Fly_camera_tool;
 class Pointer_context;
 class Scene_root;
+class Tools;
 class Trs_tool;
 
 
@@ -52,7 +50,7 @@ private:
 #endif
 
 class Fly_camera_turn_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     explicit Fly_camera_turn_command(Fly_camera_tool& fly_camera_tool)
@@ -61,22 +59,22 @@ public:
     {
     }
 
-    auto try_call (Command_context& context) -> bool override;
-    void try_ready(Command_context& context) override;
+    auto try_call (erhe::application::Command_context& context) -> bool override;
+    void try_ready(erhe::application::Command_context& context) override;
 
 private:
     Fly_camera_tool& m_fly_camera_tool;
 };
 
 class Fly_camera_move_command
-    : public Command
+    : public erhe::application::Command
 {
 public:
     Fly_camera_move_command(
-        Fly_camera_tool&      fly_camera_tool,
-        const Control         control,
-        const Controller_item item,
-        const bool            active
+        Fly_camera_tool&                         fly_camera_tool,
+        const Control                            control,
+        const erhe::application::Controller_item item,
+        const bool                               active
     )
         : Command          {"Fly_camera.move"}
         , m_fly_camera_tool{fly_camera_tool  }
@@ -86,13 +84,13 @@ public:
     {
     }
 
-    auto try_call(Command_context& context) -> bool override;
+    auto try_call(erhe::application::Command_context& context) -> bool override;
 
 private:
-    Fly_camera_tool& m_fly_camera_tool;
-    Control          m_control;
-    Controller_item  m_item;
-    bool             m_active;
+    Fly_camera_tool&                   m_fly_camera_tool;
+    Control                            m_control;
+    erhe::application::Controller_item m_item;
+    bool                               m_active;
 };
 
 class Fly_camera_tool
@@ -100,7 +98,7 @@ class Fly_camera_tool
     , public erhe::components::IUpdate_fixed_step
     , public erhe::components::IUpdate_once_per_frame
     , public Tool
-    , public Imgui_window
+    , public erhe::application::Imgui_window
 {
 public:
     static constexpr int              c_priority   {5};
@@ -139,9 +137,9 @@ public:
     // Commands
     auto try_ready() -> bool;
     auto try_move(
-        const Control         control,
-        const Controller_item item,
-        const bool            active
+        const Control                            control,
+        const erhe::application::Controller_item item,
+        const bool                               active
     ) -> bool;
     void turn_relative(const double dx, const double dy);
 
@@ -165,12 +163,12 @@ private:
     std::shared_ptr<Frame_controller> m_camera_controller;
 
     // Component dependencies
-    std::shared_ptr<Editor_tools>     m_editor_tools;
-    std::shared_ptr<Pointer_context>  m_pointer_context;
-    std::shared_ptr<Scene_root>       m_scene_root;
-    std::shared_ptr<Trs_tool>         m_trs_tool;
+    std::shared_ptr<Tools>           m_editor_tools;
+    std::shared_ptr<Pointer_context> m_pointer_context;
+    std::shared_ptr<Scene_root>      m_scene_root;
+    std::shared_ptr<Trs_tool>        m_trs_tool;
 
-    std::mutex                        m_mutex;
+    std::mutex                       m_mutex;
 
 #if defined(_WIN32) && 0
     Fly_camera_space_mouse_listener       m_space_mouse_listener;
