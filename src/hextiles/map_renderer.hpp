@@ -51,8 +51,8 @@ class Map_renderer
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name{"Map_renderer"};
-    static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Map_renderer"};
+    static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Map_renderer  ();
     ~Map_renderer () noexcept override;
@@ -90,8 +90,8 @@ public:
 private:
     gsl::span<float>    m_gpu_float_data;
     gsl::span<uint32_t> m_gpu_uint_data;
-    size_t              m_word_offset;
-    bool                m_can_blit{false};
+    size_t              m_word_offset{0};
+    bool                m_can_blit   {false};
 
     static constexpr size_t s_frame_resources_count = 4;
 

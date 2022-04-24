@@ -38,7 +38,7 @@ namespace editor {
 using erhe::graphics::Color_blend_state;
 
 Editor_rendering::Editor_rendering()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
 {
 }
 

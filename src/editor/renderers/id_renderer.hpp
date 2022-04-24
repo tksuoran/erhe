@@ -49,8 +49,8 @@ public:
         bool                               valid               {false};
     };
 
-    static constexpr std::string_view c_name{"Id_renderer"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Id_renderer"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Id_renderer ();
     ~Id_renderer() noexcept override;

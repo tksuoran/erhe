@@ -59,7 +59,7 @@ void Player::add_city(Tile_coordinate location)
 }
 
 Game::Game()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
 {
 }
 

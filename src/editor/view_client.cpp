@@ -9,7 +9,7 @@ namespace editor
 {
 
 View_client::View_client()
-    : Component{c_name}
+    : Component{c_label}
 {
 }
 

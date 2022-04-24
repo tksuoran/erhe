@@ -56,8 +56,8 @@ class Scene_builder
     , public erhe::components::IUpdate_once_per_frame
 {
 public:
-    static constexpr std::string_view c_name{"Scene_builder"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Scene_builder"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Scene_builder ();
     ~Scene_builder() noexcept override;

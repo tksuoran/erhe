@@ -14,7 +14,7 @@ using erhe::log::Log;
 using std::shared_ptr;
 
 Textures::Textures()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
 {
 }
 

@@ -9,7 +9,7 @@ namespace hextiles
 {
 
 View_client::View_client()
-    : Component{c_name}
+    : Component{c_label}
 {
 }
 

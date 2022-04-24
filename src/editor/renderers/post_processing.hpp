@@ -52,9 +52,9 @@ class Post_processing
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_name {"Post_processing"};
+    static constexpr std::string_view c_label{"Post_processing"};
     static constexpr std::string_view c_title{"Post Processing"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Post_processing();
 

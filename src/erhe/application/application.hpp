@@ -10,11 +10,11 @@ class Application
     , public std::enable_shared_from_this<Application>
 {
 public:
-    static constexpr std::string_view c_name{"Application"};
+    static constexpr std::string_view c_label{"Application"};
     static constexpr uint32_t hash{
         compiletime_xxhash::xxh32(
-            c_name.data(),
-            c_name.size(),
+            c_label.data(),
+            c_label.size(),
             {}
         )
     };

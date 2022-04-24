@@ -75,7 +75,7 @@ Map_renderer::Frame_resources::Frame_resources(
 }
 
 Map_renderer::Map_renderer()
-    : Component{c_name}
+    : Component{c_label}
 {
 }
 

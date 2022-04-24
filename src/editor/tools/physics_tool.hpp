@@ -78,10 +78,10 @@ class Physics_tool
     , public Tool
 {
 public:
-    static constexpr int              c_priority   {2};
-    static constexpr std::string_view c_name       {"Physics_tool"};
-    static constexpr std::string_view c_description{"Physics Tool"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr int              c_priority{2};
+    static constexpr std::string_view c_label   {"Physics_tool"};
+    static constexpr std::string_view c_title   {"Physics Tool"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Physics_tool ();
     ~Physics_tool() noexcept override;

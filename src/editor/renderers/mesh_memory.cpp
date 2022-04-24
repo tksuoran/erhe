@@ -13,7 +13,7 @@
 namespace editor {
 
 Mesh_memory::Mesh_memory()
-    : Component{c_name}
+    : Component{c_label}
 {
 }
 

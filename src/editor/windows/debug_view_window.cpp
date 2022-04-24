@@ -17,8 +17,8 @@ namespace editor
 {
 
 Debug_view_window::Debug_view_window()
-    : erhe::components::Component          {c_name}
-    , erhe::application::Framebuffer_window{c_name, c_title}
+    : erhe::components::Component          {c_label}
+    , erhe::application::Framebuffer_window{c_title, c_label}
 {
 }
 

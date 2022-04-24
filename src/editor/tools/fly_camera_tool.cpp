@@ -141,8 +141,8 @@ auto Fly_camera_move_command::try_call(
 }
 
 Fly_camera_tool::Fly_camera_tool()
-    : erhe::components::Component    {c_name}
-    , erhe::application::Imgui_window{c_description}
+    : erhe::components::Component    {c_label}
+    , erhe::application::Imgui_window{c_title, c_label}
 #if defined(_WIN32) && 0
     , m_space_mouse_listener         {*this}
     , m_space_mouse_controller       {m_space_mouse_listener}
@@ -260,7 +260,7 @@ auto Fly_camera_tool::get_camera() const -> erhe::scene::ICamera*
 
 auto Fly_camera_tool::description() -> const char*
 {
-    return c_description.data();
+    return c_title.data();
 }
 
 void Fly_camera_tool::translation(

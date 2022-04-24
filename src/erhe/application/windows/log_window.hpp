@@ -68,9 +68,9 @@ class Log_window
 
 {
 public:
-    static constexpr std::string_view c_name {"Log_window"};
+    static constexpr std::string_view c_label{"Log_window"};
     static constexpr std::string_view c_title{"Log"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Log_window ();
     ~Log_window() noexcept override;

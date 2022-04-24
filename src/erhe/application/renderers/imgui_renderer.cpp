@@ -159,7 +159,7 @@ Imgui_renderer::Frame_resources::Frame_resources(
 }
 
 Imgui_renderer::Imgui_renderer()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
 {
 }
 

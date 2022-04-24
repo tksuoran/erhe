@@ -56,12 +56,12 @@ class Hover_tool
     , public Tool
 {
 public:
-    static constexpr std::string_view c_name       {"Hover_tool"};
-    static constexpr std::string_view c_description{"Hover tool"};
+    static constexpr std::string_view c_label{"Hover_tool"};
+    static constexpr std::string_view c_title{"Hover tool"};
     static constexpr uint32_t hash{
         compiletime_xxhash::xxh32(
-            c_name.data(),
-            c_name.size(),
+            c_label.data(),
+            c_label.size(),
             {}
         )
     };

@@ -52,7 +52,7 @@ auto Hover_tool_hover_command::try_call(
 }
 
 Hover_tool::Hover_tool()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
     , m_hover_command{*this}
 {
 }
@@ -61,7 +61,7 @@ Hover_tool::~Hover_tool() = default;
 
 auto Hover_tool::description() -> const char*
 {
-    return c_description.data();
+    return c_title.data();
 }
 
 void Hover_tool::connect()

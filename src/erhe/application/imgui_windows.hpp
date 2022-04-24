@@ -113,12 +113,12 @@ class Imgui_windows
 
 {
 public:
-    static constexpr std::string_view c_name       {"Editor_imgui_windows"};
-    static constexpr std::string_view c_description{"Editor ImGui Windows"};
+    static constexpr std::string_view c_label{"Editor_imgui_windows"};
+    static constexpr std::string_view c_title{"Editor ImGui Windows"};
     static constexpr uint32_t         hash{
         compiletime_xxhash::xxh32(
-            c_name.data(),
-            c_name.size(),
+            c_label.data(),
+            c_label.size(),
             {}
         )
     };

@@ -29,13 +29,12 @@ class Framebuffer_window
 {
 public:
     Framebuffer_window(
-        const std::string_view debug_label,
-        const std::string_view title
+        const std::string_view title,
+        const std::string_view label
     );
 
     void initialize(
         erhe::components::Components& components
-        //erhe::graphics::Shader_stages* shader_stages
     );
 
     // Implements Imgui_window

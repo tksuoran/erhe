@@ -36,7 +36,7 @@ using glm::vec3;
 using glm::vec4;
 
 Line_renderer_set::Line_renderer_set()
-    : Component{c_name}
+    : Component{c_label}
     , visible  {"visible"}
     , hidden   {"hidden"}
 {

@@ -10,7 +10,7 @@ erhe_target_sources_grouped(
     file_util.hpp
     log.cpp
     log.hpp
-    FastNoiseLite.h
+    #FastNoiseLite.h
     game.cpp
     game.hpp
     game_window.cpp
@@ -24,13 +24,13 @@ erhe_target_sources_grouped(
     map_window.hpp
     menu_window.cpp
     menu_window.hpp
+    new_game_window.cpp
+    new_game_window.hpp
     on_load.cpp
     pixel_lookup.cpp
     pixel_lookup.hpp
     stream.cpp
     stream.hpp
-    terrain_editor_window.cpp
-    terrain_editor_window.hpp
     terrain_type.cpp
     terrain_type.hpp
     texture_util.cpp
@@ -39,10 +39,6 @@ erhe_target_sources_grouped(
     tile_shape.hpp
     tiles.cpp
     tiles.hpp
-    type_editor.cpp
-    type_editor.hpp
-    unit_editor_window.cpp
-    unit_editor_window.hpp
     unit_type.cpp
     unit_type.hpp
     types.cpp
@@ -51,6 +47,32 @@ erhe_target_sources_grouped(
     rendering.hpp
     view_client.cpp
     view_client.hpp
+    map_editor/map_editor.cpp
+    map_editor/map_editor.hpp
+    map_editor/map_tool_window.cpp
+    map_editor/map_tool_window.hpp
+    map_editor/terrain_palette_window.cpp
+    map_editor/terrain_palette_window.hpp
+    map_generator/biome.cpp
+    map_generator/biome.hpp
+    map_generator/fbm_noise.cpp
+    map_generator/fbm_noise.hpp
+    map_generator/map_generator.cpp
+    map_generator/map_generator.hpp
+    map_generator/terrain_variation.cpp
+    map_generator/terrain_variation.hpp
+    map_generator/variations.cpp
+    map_generator/variations.hpp
+    type_editors/terrain_editor_window.cpp
+    type_editors/terrain_editor_window.hpp
+    type_editors/Terrain_replacement_rule_editor_window.cpp
+    type_editors/Terrain_replacement_rule_editor_window.hpp
+    type_editors/Terrain_group_editor_window.cpp
+    type_editors/Terrain_group_editor_window.hpp
+    type_editors/type_editor.cpp
+    type_editors/type_editor.hpp
+    type_editors/unit_editor_window.cpp
+    type_editors/unit_editor_window.hpp
 
     res/shaders/line.vert
     res/shaders/line.geom

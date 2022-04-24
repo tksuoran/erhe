@@ -72,10 +72,10 @@ class Material_paint_tool
     , public Tool
 {
 public:
-    static constexpr int              c_priority   {2};
-    static constexpr std::string_view c_name       {"Material_paint_tool"};
-    static constexpr std::string_view c_description{"Material Paint"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr int              c_priority{2};
+    static constexpr std::string_view c_label   {"Material_paint_tool"};
+    static constexpr std::string_view c_title   {"Material Paint"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Material_paint_tool();
 

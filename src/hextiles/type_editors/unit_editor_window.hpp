@@ -13,9 +13,9 @@ class Unit_editor_window
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_name {"Unit_editor_window"};
+    static constexpr std::string_view c_label{"Unit_editor_window"};
     static constexpr std::string_view c_title{"Unit Editor"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Unit_editor_window ();
     ~Unit_editor_window() noexcept override;

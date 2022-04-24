@@ -34,9 +34,9 @@ class Mesh_properties
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_name {"Mesh_properties"};
-    static constexpr std::string_view c_title{"Mesh Debug"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Mesh_properties"};
+    static constexpr std::string_view c_title{"Mesh"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Mesh_properties ();
     ~Mesh_properties() noexcept override;
@@ -47,7 +47,7 @@ public:
     void initialize_component() override;
 
     // Implements Tool
-    [[nodiscard]] auto description() -> const char* override { return c_name.data(); }
+    [[nodiscard]] auto description() -> const char* override { return c_title.data(); }
     void tool_render(const Render_context& context) override;
 
     // Implements Imgui_window

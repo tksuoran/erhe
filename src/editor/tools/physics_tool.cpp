@@ -126,7 +126,7 @@ void Physics_tool_force_command::on_inactive(
 /////////
 
 Physics_tool::Physics_tool()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
     , m_drag_command             {*this}
     , m_force_command            {*this}
 {
@@ -169,7 +169,7 @@ void Physics_tool::initialize_component()
 
 auto Physics_tool::description() -> const char*
 {
-    return c_description.data();
+    return c_title.data();
 }
 
 auto Physics_tool::acquire_target() -> bool

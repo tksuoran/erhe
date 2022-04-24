@@ -98,9 +98,9 @@ class Brushes
 {
 public:
     static constexpr int              c_priority{4};
-    static constexpr std::string_view c_name   {"Brushes"};
-    static constexpr std::string_view c_title  {"Brushes"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label   {"Brushes"};
+    static constexpr std::string_view c_title   {"Brushes"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Brushes ();
     ~Brushes() noexcept override;
@@ -113,7 +113,7 @@ public:
 
     // Implements erhe::application::Tool
     [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
-    [[nodiscard]] auto description  () -> const char* override { return c_name.data(); }
+    [[nodiscard]] auto description  () -> const char* override { return c_title.data(); }
     void tool_properties        () override;
     void on_enable_state_changed() override;
 

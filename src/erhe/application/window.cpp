@@ -26,7 +26,7 @@ using std::shared_ptr;
 using View = erhe::toolkit::View;
 
 Window::Window()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
     /////, m_renderdoc_api            {get_renderdoc_api()}
 {
 }

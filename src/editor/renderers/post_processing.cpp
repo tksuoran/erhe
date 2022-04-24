@@ -146,8 +146,8 @@ auto kernel_binom_linear(const Kernel& discrete_data) -> Kernel
 }
 
 Post_processing::Post_processing()
-    : Component   {c_name }
-    , Imgui_window{c_title}
+    : Component   {c_label}
+    , Imgui_window{c_title, c_label}
 {
 }
 

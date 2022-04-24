@@ -48,8 +48,8 @@ auto Log_window_toggle_pause_command::try_call(Command_context& context) -> bool
 }
 
 Log_window::Log_window()
-    : erhe::components::Component{c_name }
-    , Imgui_window               {c_title}
+    : erhe::components::Component{c_label}
+    , Imgui_window               {c_title, c_label}
     , m_tail_log_sink            {*this}
     , m_frame_log_sink           {*this}
     , m_toggle_pause_command     {*this}

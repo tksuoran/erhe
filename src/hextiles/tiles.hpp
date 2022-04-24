@@ -18,8 +18,8 @@ class Tiles
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name {"Tiles"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Tiles"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Tiles ();
     ~Tiles() noexcept override;
@@ -35,7 +35,7 @@ public:
     auto get_base_terrain                  (terrain_t terrain) const -> terrain_t;
     auto get_terrain_type                  (terrain_t terrain) const -> const Terrain_type&;
     auto get_terrain_type                  (terrain_t terrain) -> Terrain_type&;
-    auto get_terrain_group_shape           (int group, unsigned int neighbor_mask) -> uint16_t;
+    auto get_terrain_group_shape           (int group, unsigned int neighbor_mask) const -> uint16_t;
     auto get_grid_shape                    (int grid) const -> Pixel_coordinate;
     auto get_terrain_type_count            () const -> size_t;
     auto get_terrain_group_count           () const -> size_t;

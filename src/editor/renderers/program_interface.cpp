@@ -13,7 +13,7 @@ using erhe::graphics::Shader_stages;
 using erhe::graphics::Vertex_attribute;
 
 Program_interface::Program_interface()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
 {
 }
 

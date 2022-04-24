@@ -76,7 +76,7 @@ using glm::vec3;
 using glm::vec4;
 
 Scene_builder::Scene_builder()
-    : Component{c_name}
+    : Component{c_label}
 {
 }
 

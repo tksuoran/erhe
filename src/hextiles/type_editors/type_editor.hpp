@@ -25,8 +25,8 @@ class Type_editor
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name {"Type_editor"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Type_editor"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Type_editor ();
     ~Type_editor() noexcept override;
@@ -58,7 +58,7 @@ private:
     template<typename T>
     void make_bit_mask_def(const char* tooltip_text, uint32_t& value);
 
-    void reset_table(int column_count);
+    auto begin_table(int column_count) -> bool;
     void make_column(
         const char* label,
         float       width,

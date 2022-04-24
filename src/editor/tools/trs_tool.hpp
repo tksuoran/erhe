@@ -117,13 +117,13 @@ public:
         "World"
     };
 
-    static constexpr int              c_priority   {1};
-    static constexpr std::string_view c_name       {"Trs_tool"};
-    static constexpr std::string_view c_description{"Transform"};
-    static constexpr uint32_t         hash         {
+    static constexpr int              c_priority{1};
+    static constexpr std::string_view c_label   {"Trs_tool"};
+    static constexpr std::string_view c_title   {"Transform"};
+    static constexpr uint32_t         hash{
         compiletime_xxhash::xxh32(
-            c_name.data(),
-            c_name.size(),
+            c_label.data(),
+            c_label.size(),
             {}
         )
     };

@@ -25,7 +25,7 @@
 namespace editor {
 
 Rendering::Rendering()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
 {
 }
 

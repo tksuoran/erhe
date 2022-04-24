@@ -29,8 +29,8 @@ class Quad_renderer
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name{"Quad_renderer"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Quad_renderer"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Quad_renderer ();
     ~Quad_renderer() noexcept override;

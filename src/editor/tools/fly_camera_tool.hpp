@@ -101,10 +101,10 @@ class Fly_camera_tool
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr int              c_priority   {5};
-    static constexpr std::string_view c_name       {"Fly_camera_tool"};
-    static constexpr std::string_view c_description{"Fly Camera"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr int              c_priority{5};
+    static constexpr std::string_view c_label   {"Fly_camera_tool"};
+    static constexpr std::string_view c_title   {"Fly Camera"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Fly_camera_tool ();
     ~Fly_camera_tool() noexcept override;

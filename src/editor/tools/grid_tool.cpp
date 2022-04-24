@@ -15,8 +15,8 @@ namespace editor
 using glm::vec3;
 
 Grid_tool::Grid_tool()
-    : erhe::components::Component    {c_name}
-    , erhe::application::Imgui_window{c_description}
+    : erhe::components::Component    {c_label}
+    , erhe::application::Imgui_window{c_title, c_label}
 {
 }
 
@@ -37,7 +37,7 @@ void Grid_tool::initialize_component()
 
 auto Grid_tool::description() -> const char*
 {
-   return c_description.data();
+   return c_title.data();
 }
 
 void Grid_tool::tool_render(

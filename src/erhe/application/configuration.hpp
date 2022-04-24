@@ -9,11 +9,11 @@ class Configuration
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name{"Configuration"};
+    static constexpr std::string_view c_label{"Configuration"};
     static constexpr uint32_t hash{
         compiletime_xxhash::xxh32(
-            c_name.data(),
-            c_name.size(),
+            c_label.data(),
+            c_label.size(),
             {}
         )
     };

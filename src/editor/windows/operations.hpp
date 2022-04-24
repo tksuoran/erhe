@@ -21,9 +21,9 @@ class Operations
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_name {"Operations"};
+    static constexpr std::string_view c_label{"Operations"};
     static constexpr std::string_view c_title{"Operations"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Operations ();
     ~Operations() noexcept override;

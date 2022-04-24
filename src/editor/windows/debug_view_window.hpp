@@ -31,12 +31,12 @@ class Debug_view_window
     , public erhe::application::Framebuffer_window
 {
 public:
-    static constexpr std::string_view c_name {"Debug_view_window"};
+    static constexpr std::string_view c_label{"Debug_view_window"};
     static constexpr std::string_view c_title{"Debug View"};
     static constexpr uint32_t hash{
         compiletime_xxhash::xxh32(
-            c_name.data(),
-            c_name.size(),
+            c_label.data(),
+            c_label.size(),
             {}
         )
     };

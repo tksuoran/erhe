@@ -12,6 +12,8 @@
 namespace hextiles
 {
 
+class Tiles;
+
 class Map_cell
 {
 public:
@@ -45,6 +47,8 @@ public:
     auto height() const -> int;
 
     auto distance(const Tile_coordinate& lhs, const Tile_coordinate& rhs) -> int;
+
+    void update_group_terrain(const Tiles& tiles, Tile_coordinate position);
 
 private:
     uint16_t              m_width {0u};

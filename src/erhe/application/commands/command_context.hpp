@@ -7,7 +7,6 @@ namespace erhe::application {
 class Command;
 class Imgui_window;
 class View;
-///class Viewport_window;
 
 class Command_context
 {
@@ -22,12 +21,8 @@ public:
     [[nodiscard]] auto get_window             () -> Imgui_window*;
     [[nodiscard]] auto get_vec2_absolute_value() -> glm::dvec2;
     [[nodiscard]] auto get_vec2_relative_value() -> glm::dvec2;
-    //[[nodiscard]] auto hovering_over_gui   () -> bool;
 
     [[nodiscard]] auto accept_mouse_command(Command* const command) -> bool;
-    //[[nodiscard]] auto absolute_pointer    () const -> glm::dvec2;
-    //[[nodiscard]] auto relative_pointer    () const -> glm::dvec2;
-    //[[nodiscard]] auto relative_wheel      () const -> glm::dvec2;
     [[nodiscard]] auto view                () const -> View&;
 
 private:

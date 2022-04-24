@@ -83,8 +83,8 @@ class Program_interface
 {
 public:
     static constexpr size_t           c_max_light_count{120};
-    static constexpr std::string_view c_name           {"Program_interface"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Program_interface"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Program_interface ();
     ~Program_interface() noexcept override;

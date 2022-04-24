@@ -525,7 +525,7 @@ void Rendertarget_imgui_windows::end_and_render_imgui_frame()
 #endif
 
 Imgui_windows::Imgui_windows()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
 {
     std::fill(
         std::begin(m_mouse_just_pressed),

@@ -80,7 +80,7 @@ auto Create_new_light_command::try_call(
 }
 
 Scene_root::Scene_root()
-    : Component{c_name}
+    : Component{c_label}
     , m_create_new_camera_command    {*this}
     , m_create_new_empty_node_command{*this}
     , m_create_new_light_command     {*this}

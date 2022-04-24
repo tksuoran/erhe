@@ -93,9 +93,9 @@ auto Material_pick_command::try_call(
 /////////
 
 Material_paint_tool::Material_paint_tool()
-    : erhe::components::Component{c_name}
-    , m_paint_command{*this}
-    , m_pick_command {*this}
+    : erhe::components::Component{c_label}
+    , m_paint_command            {*this}
+    , m_pick_command             {*this}
 {
 }
 
@@ -129,9 +129,8 @@ void Material_paint_tool::initialize_component()
 
 auto Material_paint_tool::description() -> const char*
 {
-    return c_description.data();
+    return c_title.data();
 }
-
 
 auto Material_paint_tool::on_paint_ready() -> bool
 {

@@ -22,8 +22,8 @@ namespace editor
 using Light_type = erhe::scene::Light_type;
 
 Layers_window::Layers_window()
-    : erhe::components::Component    {c_name}
-    , erhe::application::Imgui_window{c_title}
+    : erhe::components::Component    {c_label}
+    , erhe::application::Imgui_window{c_title, c_label}
 {
 }
 

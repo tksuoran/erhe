@@ -20,7 +20,7 @@ Icon_set::Icon_set(
     const int row_count,
     const int column_count
 )
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
     , m_icon_width               {icon_width}
     , m_icon_height              {icon_height}
     , m_row_count                {row_count}

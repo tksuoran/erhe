@@ -9,7 +9,7 @@ namespace editor
 {
 
 Image_transfer::Image_transfer()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
 {
 }
 

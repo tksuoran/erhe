@@ -18,12 +18,12 @@ class Tools
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name       {"Editor_tools"};
-    static constexpr std::string_view c_description{"Editor Tools"};
+    static constexpr std::string_view c_label{"Editor_tools"};
+    static constexpr std::string_view c_title{"Editor Tools"};
     static constexpr uint32_t         hash{
         compiletime_xxhash::xxh32(
-            c_name.data(),
-            c_name.size(),
+            c_label.data(),
+            c_label.size(),
             {}
         )
     };

@@ -35,8 +35,8 @@ class Gl_context_provider
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name{"Gl_context_provider"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Gl_context_provider"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Gl_context_provider ();
     ~Gl_context_provider() noexcept override;

@@ -79,7 +79,7 @@ Text_renderer::Frame_resources::Frame_resources(
 }
 
 Text_renderer::Text_renderer()
-    : Component{c_name}
+    : Component{c_label}
 {
     ERHE_PROFILE_FUNCTION
 }

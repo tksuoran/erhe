@@ -93,9 +93,9 @@ class Performance_window
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name {"Performance_window"};
+    static constexpr std::string_view c_label{"Performance_window"};
     static constexpr std::string_view c_title{"Performance"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Performance_window ();
     ~Performance_window() noexcept override;

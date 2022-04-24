@@ -44,8 +44,8 @@ constexpr size_t s_texture_resolution = 4 * 1024;
 constexpr bool   s_enable             = true;
 
 Shadow_renderer::Shadow_renderer()
-    : Component    {c_name}
-    , Base_renderer{std::string{c_name}}
+    : Component    {c_label}
+    , Base_renderer{std::string{c_label}}
 {
 }
 

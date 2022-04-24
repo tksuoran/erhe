@@ -3,11 +3,18 @@
 #include "map_renderer.hpp"
 #include "map_window.hpp"
 #include "menu_window.hpp"
-#include "terrain_editor_window.hpp"
+#include "new_game_window.hpp"
 #include "tiles.hpp"
-#include "type_editor.hpp"
-#include "unit_editor_window.hpp"
 #include "view_client.hpp"
+#include "map_editor/map_editor.hpp"
+#include "map_editor/map_tool_window.hpp"
+#include "map_editor/terrain_palette_window.hpp"
+#include "map_generator/map_generator.hpp"
+#include "type_editors/terrain_editor_window.hpp"
+#include "type_editors/terrain_group_editor_window.hpp"
+#include "type_editors/terrain_replacement_rule_editor_window.hpp"
+#include "type_editors/type_editor.hpp"
+#include "type_editors/unit_editor_window.hpp"
 
 #include "erhe/application/application.hpp"
 #include "erhe/application/configuration.hpp"
@@ -72,9 +79,11 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<erhe::graphics::OpenGL_state_tracker >());
         m_components.add(make_shared<hextiles::Game                                  >());
         m_components.add(make_shared<hextiles::Game_window                           >());
+        m_components.add(make_shared<hextiles::Map_editor                            >());
+        m_components.add(make_shared<hextiles::Map_generator                         >());
         m_components.add(make_shared<hextiles::Map_renderer                          >());
-        m_components.add(make_shared<hextiles::Map_window                            >());
         m_components.add(make_shared<hextiles::Map_tool_window                       >());
+        m_components.add(make_shared<hextiles::Map_window                            >());
         m_components.add(make_shared<hextiles::Menu_window                           >());
         m_components.add(make_shared<hextiles::New_game_window                       >());
         m_components.add(make_shared<hextiles::Terrain_editor_window                 >());
@@ -117,15 +126,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     m_components.get<erhe::application::Performance_window>()->hide();
     m_components.get<erhe::application::Pipelines         >()->hide();
 
-    m_components.get<hextiles::Game_window                           >()->hide();
-    m_components.get<hextiles::Map_window                            >()->hide();
-    m_components.get<hextiles::Map_tool_window                       >()->hide();
-    m_components.get<hextiles::New_game_window                       >()->hide();
-    m_components.get<hextiles::Terrain_editor_window                 >()->hide();
-    m_components.get<hextiles::Terrain_group_editor_window           >()->hide();
-    m_components.get<hextiles::Terrain_replacement_rule_editor_window>()->hide();
-    m_components.get<hextiles::Terrain_palette_window                >()->hide();
-    m_components.get<hextiles::Unit_editor_window                    >()->hide();
+    m_components.get<hextiles::Menu_window>()->show_menu();
 
     opengl_state_tracker->on_thread_enter();
 

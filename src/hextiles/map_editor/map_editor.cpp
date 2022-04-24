@@ -1,0 +1,165 @@
+#include "map_editor/map_editor.hpp"
+#include "map.hpp"
+#include "map_renderer.hpp"
+#include "map_window.hpp"
+#include "tiles.hpp"
+
+#include "erhe/application/view.hpp"
+#include "erhe/application/commands/command_context.hpp"
+
+#include <imgui.h>
+
+namespace hextiles
+{
+
+auto Map_primary_brush_command::try_call(erhe::application::Command_context& context) -> bool
+{
+    if (state() == erhe::application::State::Ready)
+    {
+        set_active(context);
+    }
+
+    if (state() != erhe::application::State::Active)
+    {
+        return false;
+    }
+
+    const auto window_position = context.view().to_window_top_left(context.get_vec2_absolute_value());
+    m_map_editor.primary_brush(window_position);
+    return true;
+}
+
+void Map_primary_brush_command::try_ready(erhe::application::Command_context& context)
+{
+    if (state() != erhe::application::State::Inactive)
+    {
+        return;
+    }
+
+    // TODO only set ready when hovering over map
+    set_ready(context);
+    const auto window_position = context.view().to_window_top_left(context.get_vec2_absolute_value());
+    m_map_editor.primary_brush(window_position);
+}
+
+auto Map_hover_command::try_call(erhe::application::Command_context& context) -> bool
+{
+    const auto window_position = context.view().to_window_top_left(context.get_vec2_absolute_value());
+    m_map_editor.hover(
+        window_position
+    );
+    return false;
+}
+
+Map_editor::Map_editor()
+    : erhe::components::Component{c_label}
+    , m_map_hover_command        {*this}
+    , m_map_primary_brush_command{*this}
+{
+}
+
+Map_editor::~Map_editor()
+{
+}
+
+void Map_editor::connect()
+{
+    m_map_window   = require<Map_window  >();
+    m_map_renderer = get    <Map_renderer>();
+    m_tiles        = get    <Tiles       >();
+}
+
+void Map_editor::initialize_component()
+{
+    //m_pixel_lookup = std::make_unique<Pixel_lookup>();
+    m_map = m_map_window->get_map();
+
+    const auto view = get<erhe::application::View>();
+    view->register_command(&m_map_hover_command);
+    view->register_command(&m_map_primary_brush_command);
+
+    view->bind_command_to_mouse_motion(&m_map_hover_command);
+    view->bind_command_to_mouse_drag  (&m_map_primary_brush_command, erhe::toolkit::Mouse_button_left);
+}
+
+void Map_editor::hover(glm::vec2 window_position)
+{
+    m_hover_window_position = window_position;
+
+    Pixel_coordinate hover_pixel_position{
+        static_cast<pixel_t>(window_position.x),
+        static_cast<pixel_t>(window_position.y)
+    };
+    m_hover_tile_position = m_map_window->pixel_to_tile(hover_pixel_position);
+}
+
+void Map_editor::primary_brush(glm::vec2 mouse_position)
+{
+    const auto pixel_position = Pixel_coordinate{
+        static_cast<pixel_t>(mouse_position.x),
+        static_cast<pixel_t>(mouse_position.y)
+    };
+    const auto tile_position = m_map_window->pixel_to_tile(pixel_position);
+
+    std::function<void(Tile_coordinate)> set_terrain_op =
+    [this] (Tile_coordinate position) -> void
+    {
+        m_map->set_terrain(position, m_left_brush);
+    };
+
+    std::function<void(Tile_coordinate)> update_op =
+    [this] (Tile_coordinate position) -> void
+    {
+        m_map->update_group_terrain(*m_tiles.get(), position);
+    };
+
+    m_map->hex_circle(tile_position, 0, m_brush_size - 1, set_terrain_op);
+    m_map->hex_circle(tile_position, 0, m_brush_size + 1, update_op);
+}
+
+void Map_editor::terrain_palette()
+{
+    auto& terrain_type = m_tiles->get_terrain_type(m_left_brush);
+    m_map_window->tile_image(m_left_brush, 3);
+    ImGui::SameLine();
+    ImGui::Text("%s", terrain_type.name.c_str());
+
+    terrain_t terrain = 0;
+    for (int ty = 0; ty < Base_tiles::height; ++ty)
+    {
+        for (int tx = 0; tx < Base_tiles::width; ++tx)
+        {
+            const bool pressed = m_map_window->tile_image(terrain, 2);
+            if (pressed)
+            {
+                m_left_brush = terrain;
+            }
+            ++terrain;
+            if (tx + 1< Base_tiles::width)
+            {
+                ImGui::SameLine();
+            }
+        }
+    }
+}
+
+void Map_editor::render()
+{
+    const auto& terrain_shapes = m_tiles->get_terrain_shapes();
+
+    if (
+        !m_hover_tile_position.has_value() ||
+        m_left_brush >= terrain_shapes.size()
+    )
+    {
+        return;
+    }
+
+    const auto&             tile  = m_hover_tile_position.value();
+    const Pixel_coordinate& shape = terrain_shapes[m_left_brush];
+    const std::string       text  = fmt::format("{}, {}", tile.x, tile.y);
+    m_map_window->blit (tile, shape, 0x88888888u);
+    m_map_window->print(tile, text);
+}
+
+} // namespace hextiles

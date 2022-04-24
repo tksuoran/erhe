@@ -26,8 +26,8 @@ class Light_mesh
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name{"Light_mesh"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Light_mesh"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Light_mesh ();
     ~Light_mesh() noexcept override;

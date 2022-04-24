@@ -26,7 +26,7 @@ using erhe::geometry::c_polygon_normals;
 using erhe::geometry::Polygon_id;
 
 Pointer_context::Pointer_context()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
     , m_ray_scene_build_timer    {"Ray scene build"}
     , m_ray_traverse_timer       {"Ray traverse"}
 {

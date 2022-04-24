@@ -27,8 +27,8 @@ class Icon_set
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name{"Icon_set"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Icon_set"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Icon_set(
         const int icon_width   = 16,

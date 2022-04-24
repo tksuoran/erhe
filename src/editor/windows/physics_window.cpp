@@ -25,9 +25,9 @@ namespace editor
 {
 
 Physics_window::Physics_window()
-    : erhe::components::Component    {c_name}
+    : erhe::components::Component    {c_label}
 //    , Rendertarget_imgui_window  {c_title}
-    , erhe::application::Imgui_window{c_title}
+    , erhe::application::Imgui_window{c_title, c_label}
 {
 }
 
@@ -69,7 +69,7 @@ void Physics_window::initialize_component()
 
 auto Physics_window::description() -> const char*
 {
-    return c_name.data();
+    return c_title.data();
 }
 
 void Physics_window::imgui()

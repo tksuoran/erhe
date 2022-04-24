@@ -51,8 +51,8 @@ class Forward_renderer
 public:
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
-    static constexpr std::string_view c_name{"Forward_renderer"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Forward_renderer"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Forward_renderer ();
     ~Forward_renderer() noexcept override;

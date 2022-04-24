@@ -17,8 +17,8 @@ class Debug_draw
     , public erhe::physics::IDebug_draw
 {
 public:
-    static constexpr std::string_view c_name{"Debug_draw"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Debug_draw"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Debug_draw();
     ~Debug_draw() noexcept override;

@@ -11,8 +11,8 @@ namespace editor
 {
 
 Viewport_config::Viewport_config()
-    : erhe::components::Component    {c_name}
-    , erhe::application::Imgui_window{c_title}
+    : erhe::components::Component    {c_label}
+    , erhe::application::Imgui_window{c_title, c_label}
 {
     render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
     render_style_not_selected.edge_lines = false;

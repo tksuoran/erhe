@@ -13,8 +13,8 @@ namespace editor
 {
 
 Materials::Materials()
-    : erhe::components::Component{c_name}
-    , Imgui_window               {c_title}
+    : erhe::components::Component{c_label}
+    , Imgui_window               {c_title, c_label}
 {
 }
 

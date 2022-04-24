@@ -14,7 +14,7 @@
 namespace erhe::application {
 
 Gl_context_provider::Gl_context_provider()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
     , m_main_thread_id           {std::this_thread::get_id()}
 {
 }

@@ -18,8 +18,8 @@ Category log_shader_monitor{0.0f, 1.0f, 1.0f, Console_color::CYAN, Level::LEVEL_
 using std::string;
 
 Shader_monitor::Shader_monitor()
-    : erhe::components::Component{c_name}
-    , m_run{false}
+    : erhe::components::Component{c_label}
+    , m_run                      {false}
 {
 }
 

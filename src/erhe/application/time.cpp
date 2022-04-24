@@ -8,7 +8,7 @@
 namespace erhe::application {
 
 Time::Time()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
 {
 }
 

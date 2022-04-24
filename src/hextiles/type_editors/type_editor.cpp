@@ -1,4 +1,4 @@
-#include "type_editor.hpp"
+#include "type_editors/type_editor.hpp"
 #include "map_renderer.hpp"
 #include "map_window.hpp"
 #include "menu_window.hpp"
@@ -17,7 +17,7 @@ namespace hextiles
 {
 
 Type_editor::Type_editor()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
 {
 }
 
@@ -288,13 +288,13 @@ void Type_editor::make_unit_type_combo(const char* label, unit_t& value)
     }
 }
 
-void Type_editor::reset_table(int column_count)
+auto Type_editor::begin_table(int column_count) -> bool
 {
     m_header_colors.clear();
     m_value_colors.clear();
 
     const auto outer_size = ImGui::GetContentRegionAvail();
-    ImGui::BeginTable(
+    return ImGui::BeginTable(
         "Terrain Types",
         column_count,
         ImGuiTableFlags_Resizable   |
@@ -335,7 +335,10 @@ void Type_editor::table_headers_row()
     ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
     for (int column = 0; column < column_count; column++)
     {
-        ImGui::TableSetColumnIndex(column);
+        if (!ImGui::TableSetColumnIndex(column))
+        {
+            continue;
+        }
         const char* column_name = ImGui::TableGetColumnName(column); // Retrieve name passed to TableSetupColumn()
         ImGui::PushID(column);
         ImGui::PushStyleColor(ImGuiCol_Text, m_header_colors[column]);
@@ -359,9 +362,6 @@ void Type_editor::terrain_editor_imgui()
 {
     constexpr ImVec2 button_size{110.0f, 0.0f};
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{2.0f, 2.0f});
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,  ImVec2{1.0f, 0.0f});
-
     terrain_image(m_simulate_terrain_type, 2);
     ImGui::SameLine();
     make_terrain_type_combo("##Terrain Type", m_simulate_terrain_type);
@@ -384,19 +384,25 @@ void Type_editor::terrain_editor_imgui()
         //}
     }
 
-    ImGui::SameLine();
-    if (ImGui::Button("Update", button_size))
-    {
-        m_map_window->update_elevation_terrains();
-    }
+    //ImGui::SameLine();
+    //if (ImGui::Button("Update", button_size))
+    //{
+    //    m_map_window->update_elevation_terrains();
+    //}
 
     constexpr int column_count = 18;
+
+    if (!begin_table(column_count))
+    {
+        return;
+    }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{2.0f, 2.0f});
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,  ImVec2{1.0f, 0.0f});
 
     constexpr float narrow_column_width = 65.0f;
     constexpr float medium_column_width = 75.0f;
     constexpr float wide_column_width   = 120.0f;
-
-    reset_table(column_count);
 
     make_column("Terrain",      wide_column_width);
     make_column("Flags",        medium_column_width);
@@ -408,7 +414,7 @@ void Type_editor::terrain_editor_imgui()
     make_column("After Damage", wide_column_width,   attack_color);
     make_column("Defense+",     narrow_column_width, defense_color);
     make_column("Level Types",  medium_column_width);
-    make_column("Elevation",    narrow_column_width);
+    make_column("Elevation",    narrow_column_width, generate_color);
     make_column("Priority",     wide_column_width,   generate_color);
     make_column("Base",         wide_column_width,   generate_color);
     make_column("Min Temp",     narrow_column_width, generate_color);
@@ -464,23 +470,24 @@ void Type_editor::terrain_editor_imgui()
             make_def                        ("Generate Ratio",               terrain.generate_ratio, 0.0f, 1.0f);
         }
     }
-    ImGui::EndTable();
-
     ImGui::PopStyleVar(2);
-
+    ImGui::EndTable();
 }
 
 void Type_editor::terrain_group_editor_imgui()
 {
+    constexpr int column_count = 13;
+
+    if (!begin_table(column_count))
+    {
+        return;
+    }
+
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{2.0f, 2.0f});
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,  ImVec2{1.0f, 0.0f});
 
-    constexpr int column_count = 13;
-
     constexpr float narrow_column_width = 60.0f;
     constexpr float wide_column_width   = 120.0f;
-
-    reset_table(column_count);
 
     make_column("Group ID",     narrow_column_width); //  1
     make_column("Enabled",      narrow_column_width); //  2
@@ -540,35 +547,35 @@ void Type_editor::terrain_group_editor_imgui()
             }
         }
     }
+
     ImGui::TableNextRow();
-    if (ImGui::TableNextColumn())
+    if (ImGui::TableNextColumn() && ImGui::Button("Add"))
     {
-        if (ImGui::Button("Add"))
-        {
-            m_tiles->add_terrain_group();
-        }
+        m_tiles->add_terrain_group();
     }
+    ImGui::PopStyleVar(2);
     ImGui::EndTable();
 
     if (delete_row.has_value())
     {
         m_tiles->remove_terrain_group(delete_row.value());
     }
-
-    ImGui::PopStyleVar(2);
 }
 
 void Type_editor::terrain_replacement_rule_editor_imgui()
 {
+    constexpr int column_count = 9;
+
+    if (!begin_table(column_count))
+    {
+        return;
+    }
+
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{2.0f, 2.0f});
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,  ImVec2{1.0f, 0.0f});
 
-    constexpr int column_count = 9;
-
     constexpr float narrow_column_width = 60.0f;
     constexpr float wide_column_width   = 120.0f;
-
-    reset_table(column_count);
 
     make_column("Rule ID",     narrow_column_width); // 1
     make_column("Enabled",     narrow_column_width); // 2
@@ -620,29 +627,24 @@ void Type_editor::terrain_replacement_rule_editor_imgui()
             }
         }
     }
+
     ImGui::TableNextRow();
-    if (ImGui::TableNextColumn())
+    if (ImGui::TableNextColumn() && ImGui::Button("Add"))
     {
-        if (ImGui::Button("Add"))
-        {
-            m_tiles->add_terrain_replacement_rule();
-        }
+        m_tiles->add_terrain_replacement_rule();
     }
+
+    ImGui::PopStyleVar(2);
     ImGui::EndTable();
 
     if (delete_row.has_value())
     {
         m_tiles->remove_terrain_replacement_rule(delete_row.value());
     }
-
-    ImGui::PopStyleVar(2);
 }
 
 void Type_editor::unit_editor_imgui()
 {
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{2.0f, 2.0f});
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,  ImVec2{1.0f, 0.0f});
-
     unit_image(m_simulate_unit_type_a, 2);
     ImGui::SameLine();
     make_unit_type_combo("##Type A", m_simulate_unit_type_a);
@@ -664,12 +666,18 @@ void Type_editor::unit_editor_imgui()
 
     constexpr int column_count = 38;
 
+    if (!begin_table(column_count))
+    {
+        return;
+    }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{2.0f, 2.0f});
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,  ImVec2{1.0f, 0.0f});
+
     constexpr float narrow_column_width = 35.0f;
     constexpr float column_width        = 60.0f;
     constexpr float wide_column_width   = 80.0f;
     constexpr float combo_column_width  = 80.0f;
-
-    reset_table(column_count);
 
     make_column("Unit", 120.0f);                  // 1
 
@@ -793,9 +801,8 @@ void Type_editor::unit_editor_imgui()
             make_def                        ("Audio Frequency",                       unit.audio_frequency); // 38
         }
     }
-    ImGui::EndTable();
-
     ImGui::PopStyleVar(2);
+    ImGui::EndTable();
 }
 
 } // namespace hextiles

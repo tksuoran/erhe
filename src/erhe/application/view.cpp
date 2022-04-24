@@ -33,8 +33,8 @@ const ImVec4 consume_event_color{1.0f, 1.0f, 8.0f, 0.6f};
 const ImVec4 filter_event_color {1.0f, 0.8f, 7.0f, 0.6f};
 
 View::View()
-    : erhe::components::Component{c_name}
-    , Imgui_window               {c_description}
+    : erhe::components::Component{c_label}
+    , Imgui_window               {c_title, c_label}
 {
 }
 

@@ -142,8 +142,8 @@ void Trs_tool_hover_command::on_inactive(
 }
 
 Trs_tool::Trs_tool()
-    : erhe::components::Component{c_name}
-    , Imgui_window               {c_description}
+    : erhe::components::Component{c_label}
+    , Imgui_window               {c_title, c_label}
     , m_drag_command             {*this}
     , m_hover_command            {*this}
     , m_visualization            {*this}
@@ -154,7 +154,7 @@ Trs_tool::~Trs_tool() = default;
 
 auto Trs_tool::description() -> const char*
 {
-    return c_description.data();
+    return c_title.data();
 }
 
 void Trs_tool::connect()

@@ -135,10 +135,10 @@ public:
         int             m_handle{0};
     };
 
-    static constexpr int              c_priority   {3};
-    static constexpr std::string_view c_name       {"Selection_tool"};
-    static constexpr std::string_view c_description{"Selection tool"};
-    static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr int              c_priority{3};
+    static constexpr std::string_view c_label   {"Selection_tool"};
+    static constexpr std::string_view c_title   {"Selection tool"};
+    static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Selection_tool ();
     ~Selection_tool() noexcept override;

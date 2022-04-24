@@ -21,9 +21,9 @@ class Grid_tool
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_name       {"Grid_tool"};
-    static constexpr std::string_view c_description{"Grid"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Grid_tool"};
+    static constexpr std::string_view c_title{"Grid"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Grid_tool ();
     ~Grid_tool() noexcept override;

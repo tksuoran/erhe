@@ -27,8 +27,8 @@ class Programs
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name{"Programs"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Programs"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Programs      ();
     ~Programs     () noexcept override;

@@ -45,8 +45,8 @@ auto Redo_command::try_call(
 }
 
 Operation_stack::Operation_stack()
-    : erhe::components::Component    {c_name}
-    , erhe::application::Imgui_window{c_description}
+    : erhe::components::Component    {c_label}
+    , erhe::application::Imgui_window{c_title, c_label}
     , m_undo_command                 {*this}
     , m_redo_command                 {*this}
 {
@@ -73,7 +73,7 @@ void Operation_stack::initialize_component()
 
 auto Operation_stack::description() -> const char*
 {
-    return c_description.data();
+    return c_title.data();
 }
 
 void Operation_stack::push(const std::shared_ptr<IOperation>& operation)

@@ -141,8 +141,8 @@ class Scene_root
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name{"Scene_root"};
-    static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Scene_root"};
+    static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Scene_root ();
     ~Scene_root() noexcept override;

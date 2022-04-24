@@ -42,11 +42,11 @@ class Viewport_window
     , public erhe::application::Mouse_input_sink
 {
 public:
-    static constexpr std::string_view c_name{"Viewport_window"};
+    static constexpr std::string_view c_label{"Viewport_window"};
     static constexpr uint32_t hash {
         compiletime_xxhash::xxh32(
-            c_name.data(),
-            c_name.size(),
+            c_label.data(),
+            c_label.size(),
             {}
         )
     };
@@ -162,12 +162,12 @@ class Viewport_windows
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name {"Viewport_windows"};
+    static constexpr std::string_view c_label{"Viewport_windows"};
     static constexpr std::string_view c_title{"View"};
     static constexpr uint32_t hash{
         compiletime_xxhash::xxh32(
-            c_name.data(),
-            c_name.size(),
+            c_label.data(),
+            c_label.size(),
             {}
         )
     };

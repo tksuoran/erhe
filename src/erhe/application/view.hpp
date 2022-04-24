@@ -50,12 +50,12 @@ class View
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name       {"Editor_view"};
-    static constexpr std::string_view c_description{"Commands"};
+    static constexpr std::string_view c_label{"Editor_view"};
+    static constexpr std::string_view c_title{"Commands"};
     static constexpr uint32_t         hash{
         compiletime_xxhash::xxh32(
-            c_name.data(),
-            c_name.size(),
+            c_title.data(),
+            c_title.size(),
             {}
         )
     };

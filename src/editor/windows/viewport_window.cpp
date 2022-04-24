@@ -56,7 +56,7 @@ auto Open_new_viewport_window_command::try_call(
 }
 
 Viewport_windows::Viewport_windows()
-    : erhe::components::Component       {c_name}
+    : erhe::components::Component       {c_label}
     , m_open_new_viewport_window_command{*this}
 {
 }

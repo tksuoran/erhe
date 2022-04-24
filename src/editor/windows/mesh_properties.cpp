@@ -25,8 +25,8 @@ using erhe::geometry::Point_id;
 using erhe::geometry::Polygon_id;
 
 Mesh_properties::Mesh_properties()
-    : erhe::components::Component{c_name}
-    , Imgui_window               {c_title}
+    : erhe::components::Component{c_label}
+    , Imgui_window               {c_title, c_label}
 {
 }
 

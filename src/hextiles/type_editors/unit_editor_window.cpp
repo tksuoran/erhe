@@ -1,7 +1,7 @@
-#include "unit_editor_window.hpp"
+#include "type_editors/unit_editor_window.hpp"
 #include "tiles.hpp"
-#include "type_editor.hpp"
 #include "menu_window.hpp"
+#include "type_editors/type_editor.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
 
@@ -11,8 +11,8 @@ namespace hextiles
 {
 
 Unit_editor_window::Unit_editor_window()
-    : erhe::components::Component{c_name}
-    , Imgui_window               {c_name, c_title}
+    : erhe::components::Component{c_label}
+    , Imgui_window               {c_title, c_label}
 {
 }
 
@@ -32,8 +32,7 @@ void Unit_editor_window::imgui()
 
     if (ImGui::Button("Back to Menu", button_size))
     {
-        hide();
-        get<Menu_window>()->show();
+        get<Menu_window>()->show_menu();
     }
     ImGui::SameLine();
 

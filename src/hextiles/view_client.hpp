@@ -19,8 +19,8 @@ class View_client
     , public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name{"hextiles::View_client"};
-    static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"hextiles::View_client"};
+    static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     View_client ();
     ~View_client () noexcept override;

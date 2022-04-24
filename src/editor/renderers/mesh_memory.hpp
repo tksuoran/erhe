@@ -49,8 +49,8 @@ class Mesh_memory
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name{"Mesh_memory"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Mesh_memory"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Mesh_memory ();
     ~Mesh_memory() noexcept override;

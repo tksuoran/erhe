@@ -16,7 +16,7 @@ namespace hextiles
 {
 
 Tiles::Tiles()
-    : Component{c_name}
+    : Component{c_label}
 {
 }
 
@@ -152,7 +152,7 @@ auto Tiles::get_base_terrain(terrain_t terrain) const -> terrain_t
     return terrain_group.base_terrain_type;
 }
 
-auto Tiles::get_terrain_group_shape(int group, unsigned int neighbor_mask) -> terrain_t
+auto Tiles::get_terrain_group_shape(int group, unsigned int neighbor_mask) const -> terrain_t
 {
     Expects(group < m_terrain_groups.size());
     const auto shape_group = m_terrain_groups[group].shape_group;

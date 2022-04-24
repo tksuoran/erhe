@@ -42,8 +42,8 @@ class Shadow_renderer
     , public Base_renderer
 {
 public:
-    static constexpr std::string_view c_name{"Shadow_renderer"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr std::string_view c_label{"Shadow_renderer"};
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Shadow_renderer ();
     ~Shadow_renderer() noexcept override;

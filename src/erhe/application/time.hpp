@@ -11,11 +11,11 @@ class Time
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name{"Editor_time"};
+    static constexpr std::string_view c_label{"Editor_time"};
     static constexpr uint32_t         hash{
         compiletime_xxhash::xxh32(
-            c_name.data(),
-            c_name.size(),
+            c_label.data(),
+            c_label.size(),
             {}
         )
     };

@@ -23,9 +23,9 @@ class Material_properties
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_name {"Material_properties"};
+    static constexpr std::string_view c_label{"Material_properties"};
     static constexpr std::string_view c_title{"Material"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Material_properties ();
     ~Material_properties() noexcept override;

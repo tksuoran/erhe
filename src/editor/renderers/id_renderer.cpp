@@ -44,8 +44,8 @@ using erhe::graphics::Color_blend_state;
 using glm::mat4;
 
 Id_renderer::Id_renderer()
-    : erhe::components::Component{c_name}
-    , Base_renderer              {std::string{c_name}}
+    : erhe::components::Component{c_label}
+    , Base_renderer              {std::string{c_label}}
 {
 }
 

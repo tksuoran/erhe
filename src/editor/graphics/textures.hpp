@@ -15,11 +15,11 @@ class Textures
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_name{"Textures"};
-    static constexpr uint32_t         hash  {
+    static constexpr std::string_view c_label{"Textures"};
+    static constexpr uint32_t         hash{
         compiletime_xxhash::xxh32(
-            c_name.data(),
-            c_name.size(),
+            c_label.data(),
+            c_label.size(),
             {}
         )
     };

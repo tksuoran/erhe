@@ -7,8 +7,8 @@ namespace erhe::application
 {
 
 Imgui_demo_window::Imgui_demo_window()
-    : erhe::components::Component{c_name}
-    , Imgui_window               {c_title}
+    : erhe::components::Component{c_label}
+    , Imgui_window               {c_title, c_label}
 {
 }
 

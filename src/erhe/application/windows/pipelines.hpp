@@ -24,9 +24,9 @@ class Pipelines
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_name {"Pipelines"};
+    static constexpr std::string_view c_label{"Pipelines"};
     static constexpr std::string_view c_title{"Pipelines"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
+    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
     Pipelines();
 

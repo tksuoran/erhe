@@ -7,7 +7,7 @@
 namespace editor {
 
 Tools::Tools()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
 {
 }
 

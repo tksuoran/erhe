@@ -235,7 +235,7 @@ auto Selection_tool::range_selection() -> Range_selection&
 }
 
 Selection_tool::Selection_tool()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_label}
     , m_select_command           {*this}
     , m_delete_command           {*this}
     , m_range_selection          {*this}
@@ -269,7 +269,7 @@ void Selection_tool::initialize_component()
 
 auto Selection_tool::description() -> const char*
 {
-    return c_description.data();
+    return c_title.data();
 }
 
 auto Selection_tool::subscribe_selection_change_notification(

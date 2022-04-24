@@ -22,7 +22,7 @@ using vec3 = glm::vec3;
 using vec4 = glm::vec4;
 
 Light_mesh::Light_mesh()
-    : Component{c_name}
+    : Component{c_label}
 {
 }
 
