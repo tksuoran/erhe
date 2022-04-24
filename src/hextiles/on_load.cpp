@@ -4,6 +4,7 @@
 #include "map_window.hpp"
 #include "menu_window.hpp"
 #include "new_game_window.hpp"
+#include "rendering.hpp"
 #include "tiles.hpp"
 #include "view_client.hpp"
 #include "map_editor/map_editor.hpp"
@@ -86,6 +87,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<hextiles::Map_window                            >());
         m_components.add(make_shared<hextiles::Menu_window                           >());
         m_components.add(make_shared<hextiles::New_game_window                       >());
+        m_components.add(make_shared<hextiles::Rendering                             >());
         m_components.add(make_shared<hextiles::Terrain_editor_window                 >());
         m_components.add(make_shared<hextiles::Terrain_group_editor_window           >());
         m_components.add(make_shared<hextiles::Terrain_replacement_rule_editor_window>());

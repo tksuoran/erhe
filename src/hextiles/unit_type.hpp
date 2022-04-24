@@ -68,10 +68,10 @@ struct Unit_type
     int         production_time{0};
     int         city_size      {0};
     uint32_t    flags          {0};
-    int         hitpoints      {0};
+    int         hit_points     {0};
     int         repair_per_turn{0};
     uint32_t    move_type_bits {0};
-    int         moves[2] = {0, 0};
+    int         move_points[2] = {0, 0};
     int         terrain_defense{0};
     int         fuel           {0};
     int         refuel_per_turn{0};

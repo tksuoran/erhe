@@ -1,6 +1,9 @@
 #include "game_window.hpp"
+#include "game.hpp"
 #include "map_window.hpp"
 #include "menu_window.hpp"
+#include "rendering.hpp"
+#include "tiles.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
@@ -23,6 +26,9 @@ Game_window::~Game_window()
 
 void Game_window::connect()
 {
+    m_game      = get<Game>();
+    m_rendering = get<Rendering>();
+    m_tiles     = get<Tiles>();
     require<erhe::application::Imgui_windows>();
 }
 
@@ -34,8 +40,12 @@ void Game_window::initialize_component()
 
 void Game_window::imgui()
 {
+    auto game = get<Game>();
+    Player& player = game->get_current_player();
+    ImGui::Text("Player: %s", player.name.c_str());
     if (ImGui::Button("End Turn"))
     {
+        game->next_turn();
     }
     if (ImGui::Button("Back to Menu"))
     {
@@ -43,6 +53,14 @@ void Game_window::imgui()
         get<Map_window >()->hide();
         get<Menu_window>()->show();
     }
+
+    Game_context context
+    {
+        .game      = *m_game.get(),
+        .rendering = *m_rendering.get(),
+        .tiles     = *m_tiles.get()
+    };
+    player.imgui(context);
 
     // Blink (highlight) currently selected unit
     // Advance production for all cities

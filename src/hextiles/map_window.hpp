@@ -139,12 +139,15 @@ public:
     void on_end              () override;
 
     // Public API
-    auto get_map              () const -> const std::shared_ptr<Map>&;
+    void set_map(const std::shared_ptr<Map>& map);
+    //auto get_map              () const -> const std::shared_ptr<Map>&;
 
     // Commands
     auto mouse_scroll_try_ready() const -> bool;
     void scroll                (glm::vec2 delta);
     void scroll_tiles          (glm::vec2 delta);
+
+    void scroll_to    (const Tile_coordinate center_tile);
 
     void render       ();
     void blit         (const Tile_coordinate tile_location, Pixel_coordinate shape, uint32_t color = 0xffffffff) const;

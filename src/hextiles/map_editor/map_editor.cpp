@@ -72,7 +72,11 @@ void Map_editor::connect()
 void Map_editor::initialize_component()
 {
     //m_pixel_lookup = std::make_unique<Pixel_lookup>();
-    m_map = m_map_window->get_map();
+
+    m_map = std::make_shared<Map>();
+
+    File_read_stream file{"res/hextiles/map_new"};
+    m_map->read(file);
 
     const auto view = get<erhe::application::View>();
     view->register_command(&m_map_hover_command);
@@ -80,6 +84,11 @@ void Map_editor::initialize_component()
 
     view->bind_command_to_mouse_motion(&m_map_hover_command);
     view->bind_command_to_mouse_drag  (&m_map_primary_brush_command, erhe::toolkit::Mouse_button_left);
+}
+
+auto Map_editor::get_map() -> std::shared_ptr<Map>
+{
+    return m_map;
 }
 
 void Map_editor::hover(glm::vec2 window_position)
@@ -90,6 +99,7 @@ void Map_editor::hover(glm::vec2 window_position)
         static_cast<pixel_t>(window_position.x),
         static_cast<pixel_t>(window_position.y)
     };
+
     m_hover_tile_position = m_map_window->pixel_to_tile(hover_pixel_position);
 }
 

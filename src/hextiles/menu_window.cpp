@@ -3,9 +3,10 @@
 #include "game_window.hpp"
 #include "log.hpp"
 #include "map.hpp"
-#include "map_window.hpp"
 #include "new_game_window.hpp"
+#include "map_window.hpp"
 #include "tiles.hpp"
+#include "map_editor/map_editor.hpp"
 #include "map_editor/map_tool_window.hpp"
 #include "map_editor/terrain_palette_window.hpp"
 #include "map_generator/map_generator.hpp"
@@ -76,6 +77,10 @@ void Menu_window::imgui()
     if (ImGui::Button("Map Editor", button_size))
     {
         hide();
+        get<Map_window>()->set_map(
+            get<Map_editor>()->get_map()
+        );
+        //get<Map_editor>()->get_map();
         get<Map_window            >()->show();
         get<Terrain_palette_window>()->show();
         get<Map_tool_window       >()->show();

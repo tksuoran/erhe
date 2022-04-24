@@ -2,6 +2,7 @@
 #include "map_renderer.hpp"
 #include "map_window.hpp"
 #include "menu_window.hpp"
+#include "rendering.hpp"
 #include "tiles.hpp"
 #include "tile_shape.hpp"
 
@@ -31,31 +32,8 @@ void Type_editor::connect()
     m_imgui_renderer = get<erhe::application::Imgui_renderer>();
     m_map_renderer   = get<Map_renderer>();
     m_map_window     = get<Map_window  >();
+    m_rendering      = get<Rendering   >();
     m_tiles          = get<Tiles       >();
-}
-
-auto Type_editor::terrain_image(terrain_t terrain, const int scale) -> bool
-{
-    const auto&     texel           = m_tiles->get_terrain_shape(terrain);
-    const auto&     tileset_texture = m_map_renderer->tileset_texture();
-    const glm::vec2 uv0{
-        static_cast<float>(texel.x) / static_cast<float>(tileset_texture->width()),
-        static_cast<float>(texel.y) / static_cast<float>(tileset_texture->height()),
-    };
-    const glm::vec2 uv1 = uv0 + glm::vec2{
-        static_cast<float>(Tile_shape::full_width) / static_cast<float>(tileset_texture->width()),
-        static_cast<float>(Tile_shape::height) / static_cast<float>(tileset_texture->height()),
-    };
-
-    return m_imgui_renderer->image(
-        tileset_texture,
-        Tile_shape::full_width * scale,
-        Tile_shape::height * scale,
-        uv0,
-        uv1,
-        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        false
-    );
 }
 
 namespace
@@ -140,43 +118,19 @@ void Type_editor::make_def(const char* tooltip_text, float& value, float min_val
     ++m_current_column;
 }
 
-auto Type_editor::unit_image(unit_t unit, const int scale) -> bool
-{
-    const auto&     texel           = m_tiles->get_unit_shape(unit);
-    const auto&     tileset_texture = m_map_renderer->tileset_texture();
-    const glm::vec2 uv0{
-        static_cast<float>(texel.x) / static_cast<float>(tileset_texture->width()),
-        static_cast<float>(texel.y) / static_cast<float>(tileset_texture->height()),
-    };
-    const glm::vec2 uv1 = uv0 + glm::vec2{
-        static_cast<float>(Tile_shape::full_width) / static_cast<float>(tileset_texture->width()),
-        static_cast<float>(Tile_shape::height) / static_cast<float>(tileset_texture->height()),
-    };
-
-    return m_imgui_renderer->image(
-        tileset_texture,
-        Tile_shape::full_width * scale,
-        Tile_shape::height * scale,
-        uv0,
-        uv1,
-        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        false
-    );
-}
-
 void Type_editor::make_terrain_type_def(const char* tooltip_text, terrain_t& value)
 {
     if (ImGui::TableNextColumn())
     {
         const auto label   = fmt::format("##{}-{}", m_current_column, m_current_row);
         const auto tooltip = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name, value);
-        terrain_image(value, 2);
+        m_rendering->terrain_image(value, 2);
         ImGui::SameLine();
         if (m_current_column < m_value_colors.size())
         {
             ImGui::PushStyleColor(ImGuiCol_Text, m_value_colors[m_current_column]);
         }
-        make_terrain_type_combo(label.c_str(), value);
+        m_rendering->make_terrain_type_combo(label.c_str(), value);
         if (m_current_column < m_value_colors.size())
         {
             ImGui::PopStyleColor();
@@ -188,42 +142,6 @@ void Type_editor::make_terrain_type_def(const char* tooltip_text, terrain_t& val
     }
 
     ++m_current_column;
-}
-
-void Type_editor::make_terrain_type_combo(const char* label, terrain_t& value)
-{
-    auto&       preview_terrain = m_tiles->get_terrain_type(value);
-    const char* preview_value   = preview_terrain.name.c_str();
-
-    ImGui::SetNextItemWidth(100.0f);
-    if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge))
-    {
-        const terrain_t end = static_cast<unit_t>(m_tiles->get_terrain_type_count());
-        for (terrain_t i = 0; i < end; i++)
-        {
-            auto&      unit = m_tiles->get_terrain_type(i);
-            const auto id   = fmt::format("##{}-{}", label, i);
-            ImGui::PushID(id.c_str());
-            bool is_selected = (value == i);
-            if (terrain_image(i, 1))
-            {
-                value = i;
-            }
-            ImGui::SameLine();
-            if (ImGui::Selectable(unit.name.c_str(), is_selected))
-            {
-                value = i;
-            }
-
-            // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
-            if (is_selected)
-            {
-                ImGui::SetItemDefaultFocus();
-            }
-            ImGui::PopID();
-        }
-        ImGui::EndCombo();
-    }
 }
 
 void Type_editor::make_unit_type_def(const char* tooltip_text, unit_t& value)
@@ -232,13 +150,13 @@ void Type_editor::make_unit_type_def(const char* tooltip_text, unit_t& value)
     {
         const auto label   = fmt::format("##{}-{}", m_current_column, m_current_row);
         const auto tooltip = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name, value);
-        unit_image(value, 2);
+        m_rendering->unit_image(value, 2);
         ImGui::SameLine();
         if (m_current_column < m_value_colors.size())
         {
             ImGui::PushStyleColor(ImGuiCol_Text, m_value_colors[m_current_column]);
         }
-        make_unit_type_combo(label.c_str(), value);
+        m_rendering->make_unit_type_combo(label.c_str(), value);
         if (m_current_column < m_value_colors.size())
         {
             ImGui::PopStyleColor();
@@ -250,42 +168,6 @@ void Type_editor::make_unit_type_def(const char* tooltip_text, unit_t& value)
     }
 
     ++m_current_column;
-}
-
-void Type_editor::make_unit_type_combo(const char* label, unit_t& value)
-{
-    auto&       preview_unit  = m_tiles->get_unit_type(value);
-    const char* preview_value = preview_unit.name.c_str();
-
-    ImGui::SetNextItemWidth(100.0f);
-    if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge))
-    {
-        const unit_t end = static_cast<unit_t>(m_tiles->get_unit_type_count());
-        for (unit_t i = 0; i < end; i++)
-        {
-            auto&      unit = m_tiles->get_unit_type(i);
-            const auto id   = fmt::format("##{}-{}", label, i);
-            ImGui::PushID(id.c_str());
-            bool is_selected = (value == i);
-            if (unit_image(i, 1))
-            {
-                value = i;
-            }
-            ImGui::SameLine();
-            if (ImGui::Selectable(unit.name.c_str(), is_selected))
-            {
-                value = i;
-            }
-
-            // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
-            if (is_selected)
-            {
-                ImGui::SetItemDefaultFocus();
-            }
-            ImGui::PopID();
-        }
-        ImGui::EndCombo();
-    }
 }
 
 auto Type_editor::begin_table(int column_count) -> bool
@@ -362,15 +244,15 @@ void Type_editor::terrain_editor_imgui()
 {
     constexpr ImVec2 button_size{110.0f, 0.0f};
 
-    terrain_image(m_simulate_terrain_type, 2);
+    m_rendering->terrain_image(m_simulate_terrain_type, 2);
     ImGui::SameLine();
-    make_terrain_type_combo("##Terrain Type", m_simulate_terrain_type);
+    m_rendering->make_terrain_type_combo("##Terrain Type", m_simulate_terrain_type);
     ImGui::SameLine();
     ImGui::TextUnformatted("vs.");
     ImGui::SameLine();
-    unit_image(m_simulate_unit_type, 2);
+    m_rendering->unit_image(m_simulate_unit_type, 2);
     ImGui::SameLine();
-    make_unit_type_combo("##Unit Type", m_simulate_unit_type);
+    m_rendering->make_unit_type_combo("##Unit Type", m_simulate_unit_type);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(50.0f);
     ImGui::DragInt("Move Count", &m_simulate_move_count, drag_speed, 1, 99);
@@ -444,7 +326,7 @@ void Type_editor::terrain_editor_imgui()
                 ImGui::PopFont         ();
                 ImGui::SameLine        ();
                 const auto name_label = fmt::format("##name-{}", m_current_terrain_id);
-                terrain_image(m_current_terrain_id, 2);
+                m_rendering->terrain_image(m_current_terrain_id, 2);
                 ImGui::SameLine        ();
                 ImGui::SetNextItemWidth(80.0f);
                 ImGui::InputText       (name_label.c_str(), &terrain.name);
@@ -645,15 +527,15 @@ void Type_editor::terrain_replacement_rule_editor_imgui()
 
 void Type_editor::unit_editor_imgui()
 {
-    unit_image(m_simulate_unit_type_a, 2);
+    m_rendering->unit_image(m_simulate_unit_type_a, 2);
     ImGui::SameLine();
-    make_unit_type_combo("##Type A", m_simulate_unit_type_a);
+    m_rendering->make_unit_type_combo("##Type A", m_simulate_unit_type_a);
     ImGui::SameLine();
     ImGui::TextUnformatted("vs.");
     ImGui::SameLine();
-    unit_image(m_simulate_unit_type_b, 2);
+    m_rendering->unit_image(m_simulate_unit_type_b, 2);
     ImGui::SameLine();
-    make_unit_type_combo("##Type B", m_simulate_unit_type_b);
+    m_rendering->make_unit_type_combo("##Type B", m_simulate_unit_type_b);
     ImGui::SameLine();
 
     if (ImGui::Button("Simulate"))
@@ -748,7 +630,7 @@ void Type_editor::unit_editor_imgui()
                 ImGui::PopFont         ();
                 ImGui::SameLine        ();
                 const auto name_label = fmt::format("##name-{}", m_current_row);
-                unit_image(m_current_unit_id, 2);
+                m_rendering->unit_image(m_current_unit_id, 2);
                 ImGui::SameLine        ();
                 ImGui::SetNextItemWidth(80.0f);
                 ImGui::InputText       (name_label.c_str(), &unit.name);
@@ -760,7 +642,7 @@ void Type_editor::unit_editor_imgui()
             make_def                     ("City Size",                  unit.city_size);       // 4
             make_bit_mask_def<Unit_flags>("Flags",                      unit.flags);           // 5
 
-            make_def("Hit-Points",                                  unit.hitpoints);       // 6
+            make_def("Hit Points",                                  unit.hit_points);      // 6
             make_def("Repair hit-points per Turn (when in City)",   unit.repair_per_turn); // 7
 
             make_combo_def<Battle_type>("Battle Type",              unit.battle_type);     //  8
@@ -777,8 +659,8 @@ void Type_editor::unit_editor_imgui()
             make_def                   ("Stealth Defense",          unit.stealth_defense); // 19
 
             make_combo_def<Movement_type>("Movement Type",                              unit.move_type_bits);  // 20
-            make_def                     ("Movement Points per Turn (in normal mode)",  unit.moves[0]);        // 21
-            make_def                     ("Movement points per Turn (in stealth mode)", unit.moves[1]);        // 22
+            make_def                     ("Movement Points per Turn (in normal mode)",  unit.move_points[0]);  // 21
+            make_def                     ("Movement points per Turn (in stealth mode)", unit.move_points[1]);  // 22
             make_def                     ("Fuel Capacity",                              unit.fuel);            // 23
             make_def                     ("Refuel per Turn (when in City)",             unit.refuel_per_turn); // 24
 

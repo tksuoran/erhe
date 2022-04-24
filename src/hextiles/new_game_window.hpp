@@ -37,7 +37,7 @@ private:
     void select_player_start_cities();
     void create                    ();
 
-    std::vector<std::string> m_players;
+    std::vector<std::string> m_player_names;
     std::vector<size_t>      m_start_cities;
 
     struct Create_parameters

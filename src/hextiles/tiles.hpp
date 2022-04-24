@@ -32,6 +32,7 @@ public:
     auto get_terrain_shape                 (const terrain_t terrain) -> Pixel_coordinate;
     auto get_unit_shape                    (const unit_t unit) -> Pixel_coordinate;
     auto get_terrain_shapes                () const -> const std::vector<Pixel_coordinate>&;
+    auto get_unit_shapes                   () const -> const std::vector<Pixel_coordinate>&;
     auto get_base_terrain                  (terrain_t terrain) const -> terrain_t;
     auto get_terrain_type                  (terrain_t terrain) const -> const Terrain_type&;
     auto get_terrain_type                  (terrain_t terrain) -> Terrain_type&;

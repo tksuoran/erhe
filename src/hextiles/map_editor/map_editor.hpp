@@ -72,6 +72,7 @@ public:
     void initialize_component() override;
 
     // Public API
+    [[nodiscard]] auto get_map() -> std::shared_ptr<Map>;
     void terrain_palette();
     void render         ();
 

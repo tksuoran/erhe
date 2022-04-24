@@ -16,7 +16,8 @@
 namespace hextiles
 {
 
-class Map_window;
+class Map;
+class Map_editor;
 class Tiles;
 
 class Map_generator
@@ -39,20 +40,18 @@ public:
     // Implements Imgui_window
     void imgui() override;
 
-    // Public API
-    void update_elevation_terrains ();
-    void generate_noise_pass       ();
-    void generate_base_terrain_pass();
-    auto get_variation             (terrain_t base_terrain, float temperature, float humidity) const -> terrain_t;
-    void generate_variation_pass   ();
-    void apply_rule                (const Terrain_replacement_rule& rule);
-    void generate_apply_rules_pass ();
-    void generate_group_fix_pass   ();
-
 private:
+    void update_elevation_terrains ();
+    void generate_noise_pass       (Map& map);
+    void generate_base_terrain_pass(Map& map);
+    auto get_variation             (terrain_t base_terrain, float temperature, float humidity) const -> terrain_t;
+    void generate_variation_pass   (Map& map);
+    void apply_rule                (Map& map, const Terrain_replacement_rule& rule);
+    void generate_apply_rules_pass (Map& map);
+    void generate_group_fix_pass   (Map& map);
+
     // Component dependencies
-    std::shared_ptr<Map_window> m_map_window;
-    std::shared_ptr<Tiles>      m_tiles;
+    std::shared_ptr<Tiles> m_tiles;
 
     Fbm_noise          m_noise;
 

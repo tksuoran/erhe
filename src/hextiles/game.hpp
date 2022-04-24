@@ -1,7 +1,6 @@
 #pragma once
 
 #include "coordinate.hpp"
-#include "map.hpp"
 #include "types.hpp"
 
 #include "erhe/components/components.hpp"
@@ -11,51 +10,66 @@
 namespace hextiles
 {
 
-class City
+class Game;
+class Map;
+class Rendering;
+class Tiles;
+
+struct Game_context
 {
-public:
-    Tile_coordinate location;
-    std::string     name;
-    unit_t          production;
-    int             production_progress;
+    Game&      game;
+    Rendering& rendering;
+    Tiles&     tiles;
 };
 
 class Unit
 {
 public:
-    Tile_coordinate location;
-    unit_t          type{0};
-    int             hp  {0};
-    int             mp  {0};
-    int             fuel{0};
-    bool            ready_to_load{false};
-    int             level{0};
+    Tile_coordinate location           {0, 0};
+    unit_t          type               {0};
+    int             hit_points         {0};
+    int             move_points        {0};
+    int             fuel               {0};
+    bool            ready_to_load      {false};
+    int             level              {0};
+    std::string     name;                   // city only
+    unit_t          production         {0}; // city only
+    int             production_progress{0}; // city only
 };
 
 class Player
 {
 public:
-    explicit Player(const std::string& name);
-    ~Player() noexcept;
+    void city_imgui(Game_context& context);
+    void unit_imgui(Game_context& context);
+    void imgui     (Game_context& context);
 
-    Player           (const Player&) = delete;
-    Player& operator=(const Player&) = delete;
-    Player           (Player&& other);
-    Player& operator=(Player&& other);
+    std::shared_ptr<Map> map;
+    std::string          name;
+    std::vector<Unit>    cities;
+    std::vector<Unit>    units;
 
-    void set_map_size(int width, int height);
-    void add_city    (Tile_coordinate location);
+    void progress_production(Game_context& context);
 
 private:
-    std::unique_ptr<Map> m_map;
-    std::string          m_name;
-    std::vector<City>    m_cities;
-    std::vector<Unit>    m_units;
-    size_t               m_city_counter{0};
+    void next_unit    ();
+    void previous_unit();
+
+    std::shared_ptr<Tiles> tiles;
+    size_t                 m_current_unit{0};
+    size_t                 m_city_counter{0};
 };
 
 class Map_renderer;
 class Tiles;
+
+struct Game_create_parameters
+{
+    std::shared_ptr<Map>         map;
+    std::vector<std::string>     player_names;
+    std::vector<size_t>          player_starting_cities;
+    std::vector<Tile_coordinate> city_positions;
+};
 
 class Game
     : public erhe::components::Component
@@ -67,23 +81,31 @@ public:
     Game ();
     ~Game() noexcept override;
 
-    void new_game      ();
-    void add_player    (const std::string& name);
-    void next_turn     ();
-    auto current_player() -> Player&;
-
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
     void connect             () override;
     void initialize_component() override;
 
+    // Public API
+    auto make_unit         (unit_t unit_type, Tile_coordinate location) -> Unit;
+    void new_game          (const Game_create_parameters& parameters);
+    void next_turn         ();
+    auto get_current_player() -> Player&;
+
 private:
-    std::shared_ptr<Map_renderer> m_map_renderer;
+    void add_player           (const std::string& name, Tile_coordinate start_city);
+    void update_current_player();
+    void reveal               (Map& target_map, Tile_coordinate position, int radius) const;
+
+    std::shared_ptr<Rendering>    m_rendering;
+    //std::shared_ptr<Map_renderer> m_map_renderer;
     std::shared_ptr<Tiles>        m_tiles;
 
-    int                 m_turn  {0};
-    size_t              m_player{0};
-    std::vector<Player> m_players;
+    std::shared_ptr<Map>         m_map;
+    int                          m_turn          {0};
+    size_t                       m_current_player{0};
+    std::vector<Tile_coordinate> m_cities;
+    std::vector<Player>          m_players;
 };
 
 } // namespace hextiles

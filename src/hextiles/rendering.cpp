@@ -1,28 +1,12 @@
 #include "rendering.hpp"
+#include "map_renderer.hpp"
+#include "tiles.hpp"
+#include "tile_shape.hpp"
 
-#include "log.hpp"
+#include "erhe/graphics/texture.hpp"
+#include "erhe/application/renderers/imgui_renderer.hpp"
 
-#include "hextiles/map_window.hpp"
-#include "hextiles/map_renderer.hpp"
-
-
-#include "erhe/application/application.hpp"
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/time.hpp"
-#include "erhe/application/view.hpp"
-#include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/window.hpp"
-#include "erhe/application/renderers/line_renderer.hpp"
-#include "erhe/application/renderers/text_renderer.hpp"
-#include "erhe/application/windows/log_window.hpp"
-#include "erhe/graphics/debug.hpp"
-#include "erhe/graphics/opengl_state_tracker.hpp"
-#include "erhe/log/log_glm.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/profile.hpp"
-
-namespace editor {
+namespace hextiles {
 
 Rendering::Rendering()
     : erhe::components::Component{c_label}
@@ -35,94 +19,128 @@ Rendering::~Rendering()
 
 void Rendering::connect()
 {
-    m_configuration        = get<erhe::application::Configuration>();
-    m_editor_imgui_windows = get<erhe::application::Imgui_windows>();
-    m_editor_view          = get<erhe::application::View         >();
-    m_line_renderer_set    = get<erhe::application::Line_renderer_set>();
-    m_text_renderer        = get<erhe::application::Text_renderer    >();
-
-    require<erhe::application::Gl_context_provider>();
+    m_imgui_renderer = get<erhe::application::Imgui_renderer>();
+    m_map_renderer   = get<Map_renderer>();
+    m_tiles          = get<Tiles       >();
 }
 
-void Rendering::initialize_component()
+auto Rendering::terrain_image(terrain_t terrain, const int scale) -> bool
 {
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
+    const auto&     texel           = m_tiles->get_terrain_shape(terrain);
+    const auto&     tileset_texture = m_map_renderer->tileset_texture();
+    const glm::vec2 uv0{
+        static_cast<float>(texel.x) / static_cast<float>(tileset_texture->width()),
+        static_cast<float>(texel.y) / static_cast<float>(tileset_texture->height()),
     };
+    const glm::vec2 uv1 = uv0 + glm::vec2{
+        static_cast<float>(Tile_shape::full_width) / static_cast<float>(tileset_texture->width()),
+        static_cast<float>(Tile_shape::height) / static_cast<float>(tileset_texture->height()),
+    };
+
+    return m_imgui_renderer->image(
+        tileset_texture,
+        Tile_shape::full_width * scale,
+        Tile_shape::height * scale,
+        uv0,
+        uv1,
+        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+        false
+    );
 }
 
-void Rendering::init_state()
+auto Rendering::unit_image(unit_t unit, const int scale) -> bool
 {
-    gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
-    gl::disable     (gl::Enable_cap::primitive_restart);
-    gl::enable      (gl::Enable_cap::primitive_restart_fixed_index);
-    gl::enable      (gl::Enable_cap::texture_cube_map_seamless);
-    gl::enable      (gl::Enable_cap::framebuffer_srgb);
+    const auto&     texel           = m_tiles->get_unit_shape(unit);
+    const auto&     tileset_texture = m_map_renderer->tileset_texture();
+    const glm::vec2 uv0{
+        static_cast<float>(texel.x) / static_cast<float>(tileset_texture->width()),
+        static_cast<float>(texel.y) / static_cast<float>(tileset_texture->height()),
+    };
+    const glm::vec2 uv1 = uv0 + glm::vec2{
+        static_cast<float>(Tile_shape::full_width) / static_cast<float>(tileset_texture->width()),
+        static_cast<float>(Tile_shape::height) / static_cast<float>(tileset_texture->height()),
+    };
+
+    return m_imgui_renderer->image(
+        tileset_texture,
+        Tile_shape::full_width * scale,
+        Tile_shape::height * scale,
+        uv0,
+        uv1,
+        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+        false
+    );
 }
 
-auto Rendering::width() const -> int
+void Rendering::make_terrain_type_combo(const char* label, terrain_t& value)
 {
-    return m_editor_view->width();
-}
+    auto&       preview_terrain = m_tiles->get_terrain_type(value);
+    const char* preview_value   = preview_terrain.name.c_str();
 
-auto Rendering::height() const -> int
-{
-    return m_editor_view->height();
-}
-
-void Rendering::begin_frame()
-{
-}
-
-void Rendering::bind_default_framebuffer()
-{
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
-    gl::viewport        (0, 0, width(), height());
-}
-
-void Rendering::clear()
-{
-    ERHE_PROFILE_FUNCTION
-
-    Expects(m_pipeline_state_tracker != nullptr);
-
-    // Pipeline state required for NVIDIA driver not to complain about texture
-    // unit state when doing the clear.
-    m_pipeline_state_tracker->shader_stages.reset();
-    m_pipeline_state_tracker->color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
-    gl::clear_color  (0.0f, 0.0f, 0.2f, 0.1f);
-    gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
-    gl::clear        (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
-}
-
-void Rendering::render()
-{
-    ERHE_PROFILE_FUNCTION
-
-    Expects(m_editor_view);
-
-    if (m_trigger_capture)
+    ImGui::SetNextItemWidth(100.0f);
+    if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge))
     {
-        get<erhe::application::Window>()->begin_renderdoc_capture();
+        const terrain_t end = static_cast<unit_t>(m_tiles->get_terrain_type_count());
+        for (terrain_t i = 0; i < end; i++)
+        {
+            auto&      unit = m_tiles->get_terrain_type(i);
+            const auto id   = fmt::format("##{}-{}", label, i);
+            ImGui::PushID(id.c_str());
+            bool is_selected = (value == i);
+            if (terrain_image(i, 1))
+            {
+                value = i;
+            }
+            ImGui::SameLine();
+            if (ImGui::Selectable(unit.name.c_str(), is_selected))
+            {
+                value = i;
+            }
+
+            // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+            if (is_selected)
+            {
+                ImGui::SetItemDefaultFocus();
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
     }
+}
 
-    begin_frame();
+void Rendering::make_unit_type_combo(const char* label, unit_t& value)
+{
+    auto&       preview_unit  = m_tiles->get_unit_type(value);
+    const char* preview_value = preview_unit.name.c_str();
 
-    const auto& map_window = get<hextiles::Map_window>();
-    if (map_window)
+    ImGui::SetNextItemWidth(100.0f);
+    if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge))
     {
-        map_window->render();
-    }
+        const unit_t end = static_cast<unit_t>(m_tiles->get_unit_type_count());
+        for (unit_t i = 0; i < end; i++)
+        {
+            auto&      unit = m_tiles->get_unit_type(i);
+            const auto id   = fmt::format("##{}-{}", label, i);
+            ImGui::PushID(id.c_str());
+            bool is_selected = (value == i);
+            if (unit_image(i, 1))
+            {
+                value = i;
+            }
+            ImGui::SameLine();
+            if (ImGui::Selectable(unit.name.c_str(), is_selected))
+            {
+                value = i;
+            }
 
-    m_editor_imgui_windows->imgui_windows();
-
-    if (m_line_renderer_set) m_line_renderer_set->next_frame();
-    if (m_text_renderer    ) m_text_renderer    ->next_frame();
-
-    const auto& map_renderer = get<hextiles::Map_renderer>();
-    if (map_renderer)
-    {
-        map_renderer->next_frame();
+            // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+            if (is_selected)
+            {
+                ImGui::SetItemDefaultFocus();
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
     }
 }
 

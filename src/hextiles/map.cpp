@@ -112,6 +112,20 @@ void Map::set_unit_icon(Tile_coordinate tile_coordinate, unit_t unit_icon_value)
     m_map[index].unit_icon = unit_icon_value;
 }
 
+void Map::set(Tile_coordinate tile_coordinate, terrain_t terrain_value, unit_t unit_icon_value)
+{
+    Expects(tile_coordinate.x >= coordinate_t{0});
+    Expects(tile_coordinate.y >= coordinate_t{0});
+    Expects(tile_coordinate.x < m_width);
+    Expects(tile_coordinate.y < m_height);
+    const size_t index =
+        static_cast<size_t>(tile_coordinate.x) +
+        static_cast<size_t>(tile_coordinate.y) * static_cast<size_t>(m_width);
+    auto& map_cell = m_map[index];
+    map_cell.terrain   = terrain_value;
+    map_cell.unit_icon = unit_icon_value;
+}
+
 auto Map::wrap(Tile_coordinate in) const -> Tile_coordinate
 {
     Tile_coordinate ret = in;

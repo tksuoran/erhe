@@ -134,11 +134,6 @@ void Map_window::initialize_component()
 
     m_pixel_lookup = std::make_unique<Pixel_lookup>();
 
-    m_map = std::make_shared<Map>();
-
-    File_read_stream file{"res/hextiles/map_new"};
-    m_map->read(file);
-
     const auto view = get<erhe::application::View>();
     view->register_command(&m_free_zoom_command);
     view->register_command(&m_mouse_scroll_command);
@@ -227,6 +222,12 @@ void Map_window::scroll_tiles(glm::vec2 delta)
     );
 }
 
+void Map_window::scroll_to(const Tile_coordinate center_tile)
+{
+    m_center_tile = center_tile;
+    m_pixel_offset = glm::vec2{0.0f, 0.0f};
+}
+
 auto Map_window::get_size(glm::vec2 available_size) const -> glm::vec2
 {
     return available_size;
@@ -277,6 +278,11 @@ auto Map_window::normalize(Pixel_coordinate pixel_coordinate) const -> Pixel_coo
 
 auto Map_window::pixel_to_tile(Pixel_coordinate pixel_coordinate) const -> Tile_coordinate
 {
+    if (!m_map)
+    {
+        return Tile_coordinate{0, 0};
+    }
+
     const auto normalized         = normalize(pixel_coordinate);
     const auto view_relative_tile = m_pixel_lookup->pixel_to_tile(normalized);
     return wrap(view_relative_tile + m_center_tile);
@@ -344,9 +350,9 @@ auto Map_window::tile_image(terrain_t terrain, const int scale) -> bool
     );
 }
 
-auto Map_window::get_map() const -> const std::shared_ptr<Map>&
+void Map_window::set_map(const std::shared_ptr<Map>& map)
 {
-    return m_map;
+    m_map = map;
 }
 
 auto Map_window::tile_position(const Tile_coordinate absolute_tile) const -> glm::vec2
@@ -398,6 +404,7 @@ void Map_window::render()
 
     const auto  grid_shape     = m_tiles->get_grid_shape(std::max(0, m_grid - 1));
     const auto& terrain_shapes = m_tiles->get_terrain_shapes();
+    const auto& unit_shapes    = m_tiles->get_unit_shapes();
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
     gl::clear_color     (0.2f, 0.0f, 0.2f, 1.0f);
@@ -431,17 +438,18 @@ void Map_window::render()
             const float x1 = x0 + Tile_shape::full_width * m_zoom;
             const float y1 = y0 - Tile_shape::height * m_zoom;
 
-            const uint32_t color   = 0xffffffffu; //get_color((absolute_tile.x & 1) == 1, (absolute_tile.y & 1) == 0);
-            terrain_t      terrain = m_map->get_terrain(absolute_tile);
+            const uint32_t color     = 0xffffffffu; //get_color((absolute_tile.x & 1) == 1, (absolute_tile.y & 1) == 0);
+            terrain_t      terrain   = m_map->get_terrain(absolute_tile);
+            unit_t         unit_icon = m_map->get_unit_icon(absolute_tile);
             if (terrain >= terrain_shapes.size())
             {
                 terrain = 0;
             }
-            const Pixel_coordinate& shape = terrain_shapes[terrain];
 
+            const Pixel_coordinate& terrain_shape = terrain_shapes[terrain];
             m_map_renderer->blit(
-                shape.x,
-                shape.y,
+                terrain_shape.x,
+                terrain_shape.y,
                 Tile_shape::full_width,
                 Tile_shape::height,
                 x0,
@@ -450,6 +458,23 @@ void Map_window::render()
                 y1,
                 color
             );
+
+            if (unit_icon != 0)
+            {
+                const Pixel_coordinate& unit_shape = unit_shapes[unit_icon];
+                m_map_renderer->blit(
+                    unit_shape.x,
+                    unit_shape.y,
+                    Tile_shape::full_width,
+                    Tile_shape::height,
+                    x0,
+                    y0,
+                    x1,
+                    y1,
+                    color
+                );
+            }
+
             if (m_grid > 0)
             {
                 m_map_renderer->blit(

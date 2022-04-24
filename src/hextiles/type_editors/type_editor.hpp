@@ -19,6 +19,7 @@ namespace hextiles
 
 class Map_renderer;
 class Map_window;
+class Rendering;
 class Tiles;
 
 class Type_editor
@@ -42,15 +43,11 @@ public:
     void unit_editor_imgui();
 
 private:
-    auto terrain_image          (terrain_t unit, const int scale) -> bool;
-    auto unit_image             (unit_t unit, const int scale) -> bool;
     void make_def               (const char* tooltip_text, bool& value);
     void make_def               (const char* tooltip_text, int& value);
     void make_def               (const char* tooltip_text, float& value, float min_value, float max_value);
     void make_terrain_type_def  (const char* tooltip_text, terrain_t& value);
-    void make_terrain_type_combo(const char* label, terrain_t& value);
     void make_unit_type_def     (const char* label, unit_t& value);
-    void make_unit_type_combo   (const char* label, unit_t& value);
 
     template<typename T>
     void make_combo_def   (const char* tooltip_text, uint32_t& value);
@@ -70,6 +67,7 @@ private:
     std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
     std::shared_ptr<Map_renderer>                      m_map_renderer;
     std::shared_ptr<Map_window  >                      m_map_window;
+    std::shared_ptr<Rendering   >                      m_rendering;
     std::shared_ptr<Tiles       >                      m_tiles;
 
     // Simulate

@@ -79,7 +79,7 @@ void Map_tool_window::imgui()
 
 void Map_tool_window::tile_info(const Tile_coordinate tile_position)
 {
-    const auto&     map     = m_map_window->get_map();
+    const auto&     map     = m_map_editor->get_map();
     const terrain_t terrain = map->get_terrain(tile_position);
 
     const auto& terrain_shapes = m_tiles->get_terrain_shapes();

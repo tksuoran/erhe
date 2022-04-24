@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe/application/renderers/buffer_writer.hpp"
-//#include "hextiles/globals.hpp"
 
 #include "erhe/components/components.hpp"
 #include "erhe/graphics/buffer.hpp"
@@ -46,6 +45,8 @@ namespace erhe::ui
 
 namespace hextiles
 {
+
+class Tiles;
 
 class Map_renderer
     : public erhe::components::Component

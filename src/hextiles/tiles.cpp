@@ -99,6 +99,11 @@ auto Tiles::get_terrain_shapes() const -> const std::vector<Pixel_coordinate>&
     return m_terrain_shapes;
 }
 
+auto Tiles::get_unit_shapes() const -> const std::vector<Pixel_coordinate>&
+{
+    return m_unit_shapes;
+}
+
 auto Tiles::get_terrain_group(size_t group) const -> const Terrain_group&
 {
     Expects(group < m_terrain_groups.size());
@@ -766,11 +771,11 @@ void Tiles::load_unit_defs_v1()
             unit_type.flags |= (1u << Unit_flags::bit_has_stealth_mode);
         }
 
-        unit_type.hitpoints                    = json_unit_type["Hits"     ];
+        unit_type.hit_points                   = json_unit_type["Hits"     ];
         unit_type.repair_per_turn              = json_unit_type["Repair"   ];
         unit_type.move_type_bits               = json_unit_type["MType"    ];
-        unit_type.moves[0]                     = json_unit_type["Moves"    ][0];
-        unit_type.moves[1]                     = json_unit_type["Moves"    ][1];
+        unit_type.move_points[0]               = json_unit_type["Moves"    ][0];
+        unit_type.move_points[1]               = json_unit_type["Moves"    ][1];
         unit_type.terrain_defense              = json_unit_type["TDef"     ];
         unit_type.fuel                         = json_unit_type["Fuel"     ];
         unit_type.refuel_per_turn              = json_unit_type["Refuel"   ];
@@ -824,11 +829,11 @@ void Tiles::save_unit_defs_v2()
         json_unit_type["production_time"             ]    = unit_type.production_time;
         json_unit_type["city_size"                   ]    = unit_type.city_size;
         json_unit_type["flags"                       ]    = unit_type.flags;
-        json_unit_type["hitpoints"                   ]    = unit_type.hitpoints;
+        json_unit_type["hitpoints"                   ]    = unit_type.hit_points;
         json_unit_type["repair_per_turn"             ]    = unit_type.repair_per_turn;
         json_unit_type["move_type_bits"              ]    = unit_type.move_type_bits;
-        json_unit_type["moves"                       ][0] = unit_type.moves[0];
-        json_unit_type["moves"                       ][1] = unit_type.moves[1];
+        json_unit_type["moves"                       ][0] = unit_type.move_points[0];
+        json_unit_type["moves"                       ][1] = unit_type.move_points[1];
         json_unit_type["terrain_defense"             ]    = unit_type.terrain_defense;
         json_unit_type["fuel"                        ]    = unit_type.fuel;
         json_unit_type["refuel_per_turn"             ]    = unit_type.refuel_per_turn;
@@ -884,11 +889,11 @@ void Tiles::load_unit_defs_v2()
         unit_type.production_time              = json_unit_type["production_time"             ];
         unit_type.city_size                    = json_unit_type["city_size"                   ];
         unit_type.flags                        = json_unit_type["flags"                       ];
-        unit_type.hitpoints                    = json_unit_type["hitpoints"                   ];
+        unit_type.hit_points                   = json_unit_type["hitpoints"                   ];
         unit_type.repair_per_turn              = json_unit_type["repair_per_turn"             ];
         unit_type.move_type_bits               = json_unit_type["move_type_bits"              ];
-        unit_type.moves[0]                     = json_unit_type["moves"                       ][0];
-        unit_type.moves[1]                     = json_unit_type["moves"                       ][1];
+        unit_type.move_points[0]               = json_unit_type["moves"                       ][0];
+        unit_type.move_points[1]               = json_unit_type["moves"                       ][1];
         unit_type.terrain_defense              = json_unit_type["terrain_defense"             ];
         unit_type.fuel                         = json_unit_type["fuel"                        ];
         unit_type.refuel_per_turn              = json_unit_type["refuel_per_turn"             ];

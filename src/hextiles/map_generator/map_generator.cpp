@@ -1,7 +1,7 @@
 #include "map_generator/map_generator.hpp"
 #include "log.hpp"
-#include "map_window.hpp"
 #include "map.hpp"
+#include "map_editor/map_editor.hpp"
 #include "tiles.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
@@ -10,14 +10,6 @@
 
 namespace hextiles
 {
-
-// water d  5.0
-// water m  2.0
-// water l  4.0
-// plain    3.0
-// plain    5.0
-// mountain 0.4
-// peak     0.0
 
 Map_generator::Map_generator()
     : Component   {c_label}
@@ -31,8 +23,7 @@ Map_generator::~Map_generator()
 
 void Map_generator::connect()
 {
-    m_map_window = require<Map_window>();
-    m_tiles      = require<Tiles     >();
+    m_tiles = require<Tiles>();
     require<erhe::application::Imgui_windows>();
 }
 
@@ -188,12 +179,11 @@ void Map_generator::update_elevation_terrains()
     //}
 }
 
-void Map_generator::generate_noise_pass()
+void Map_generator::generate_noise_pass(Map& map)
 {
     // In the first pass, we just generate noise values
-    const auto&  map    = m_map_window->get_map();
-    const int    width  = map->width();
-    const int    height = map->height();
+    const int    width  = map.width();
+    const int    height = map.height();
     const size_t count  = static_cast<size_t>(width) * static_cast<size_t>(height);
 
     update_elevation_terrains();
@@ -225,7 +215,7 @@ void Map_generator::generate_noise_pass()
     }
 }
 
-void Map_generator::generate_base_terrain_pass()
+void Map_generator::generate_base_terrain_pass(Map& map)
 {
     // Second pass converts noise values to terrain values based on thresholds
     m_elevation_generator.compute_threshold_values();
@@ -244,9 +234,8 @@ void Map_generator::generate_base_terrain_pass()
     //    );
     //}
 
-    const auto& map = m_map_window->get_map();
-    const int   w   = map->width();
-    const int   h   = map->height();
+    const int w = map.width();
+    const int h = map.height();
 
     size_t index = 0;
     for (coordinate_t tx = 0; tx < w; ++tx)
@@ -254,7 +243,7 @@ void Map_generator::generate_base_terrain_pass()
         for (coordinate_t ty = 0; ty < h; ++ty)
         {
             const Terrain_variation t = m_elevation_generator.get(index);
-            map->set_terrain(Tile_coordinate{tx, ty}, t.base_terrain);
+            map.set_terrain(Tile_coordinate{tx, ty}, t.base_terrain);
             ++index;
         }
     }
@@ -293,15 +282,14 @@ auto Map_generator::get_variation(
     return base_terrain;
 }
 
-void Map_generator::generate_variation_pass()
+void Map_generator::generate_variation_pass(Map& map)
 {
     m_temperature_generator.compute_threshold_values();
     m_humidity_generator   .compute_threshold_values();
     m_variation_generator  .compute_threshold_values();
 
-    const auto& map    = m_map_window->get_map();
-    const int   width  = map->width();
-    const int   height = map->height();
+    const int width  = map.width();
+    const int height = map.height();
 
     size_t index = 0;
     for (coordinate_t tx = 0; tx < width; ++tx)
@@ -309,27 +297,26 @@ void Map_generator::generate_variation_pass()
         for (coordinate_t ty = 0; ty < height; ++ty)
         {
             const Tile_coordinate position{tx, ty};
-            const terrain_t       base_terrain = map->get_terrain(position);
+            const terrain_t       base_terrain = map.get_terrain(position);
             const float           temperature  = m_temperature_generator.get_noise_value(index);
             const float           humidity     = m_humidity_generator   .get_noise_value(index);
             //const float           variation    = m_variation_generator  .get_noise_value(index);
             const terrain_t       terrain      = get_variation(base_terrain, temperature, humidity);
-            map->set_terrain(position, terrain);
+            map.set_terrain(position, terrain);
             ++index;
         }
     }
 }
 
 void Map_generator::apply_rule(
+    Map&                            map,
     const Terrain_replacement_rule& rule
 )
 {
-    const auto& map = m_map_window->get_map();
-
     std::function<void(Tile_coordinate)> post_process_op =
     [this, &rule, &map](Tile_coordinate tile_position) -> void
     {
-        const terrain_t primary_t = map->get_terrain(tile_position);
+        const terrain_t primary_t = map.get_terrain(tile_position);
         if (primary_t != rule.primary)
         {
             return;
@@ -337,7 +324,7 @@ void Map_generator::apply_rule(
         std::function<void(Tile_coordinate)> replace =
         [this, &rule, &map] (Tile_coordinate position) -> void
         {
-            const terrain_t secondary_t = map->get_terrain(position);
+            const terrain_t secondary_t = map.get_terrain(position);
             const bool found = std::find(
                 rule.secondary.begin(),
                 rule.secondary.end(),
@@ -347,15 +334,15 @@ void Map_generator::apply_rule(
 
             if (apply)
             {
-                map->set_terrain(position, rule.replacement);
+                map.set_terrain(position, rule.replacement);
             }
         };
-        map->hex_circle(tile_position, 0, 1, replace);
+        map.hex_circle(tile_position, 0, 1, replace);
     };
-    map->for_each_tile(post_process_op);
+    map.for_each_tile(post_process_op);
 }
 
-void Map_generator::generate_apply_rules_pass()
+void Map_generator::generate_apply_rules_pass(Map& map)
 {
     // Third pass does post-processing, adjusting neighoring
     // tiles based on a few rules.
@@ -368,27 +355,25 @@ void Map_generator::generate_apply_rules_pass()
         {
             continue;
         }
-        apply_rule(rule);
+        apply_rule(map, rule);
     }
 }
 
-void Map_generator::generate_group_fix_pass()
+void Map_generator::generate_group_fix_pass(Map& map)
 {
     // Apply terrain group rules
-    const auto& map = m_map_window->get_map();
-
     const Tiles& tiles = *m_tiles.get();
 
-    map->for_each_tile(
-        [this, map, &tiles](Tile_coordinate tile_position)
+    map.for_each_tile(
+        [this, &map, &tiles](Tile_coordinate tile_position)
         {
-            map->update_group_terrain(tiles, tile_position);
+            map.update_group_terrain(tiles, tile_position);
         }
     );
-    map->for_each_tile(
-        [this, map, &tiles](Tile_coordinate tile_position)
+    map.for_each_tile(
+        [this, &map, &tiles](Tile_coordinate tile_position)
         {
-            map->update_group_terrain(tiles, tile_position);
+            map.update_group_terrain(tiles, tile_position);
         }
     );
 }
@@ -435,12 +420,14 @@ void Map_generator::imgui()
     if (ImGui::Button("Generate", button_size))
     {
         m_noise.prepare();
-        generate_noise_pass();
-        generate_base_terrain_pass();
-        generate_apply_rules_pass();
-        generate_group_fix_pass();
-        generate_variation_pass();
-        generate_group_fix_pass();
+
+        Map& map = *get<Map_editor>()->get_map().get();
+        generate_noise_pass       (map);
+        generate_base_terrain_pass(map);
+        generate_apply_rules_pass (map);
+        generate_group_fix_pass   (map);
+        generate_variation_pass   (map);
+        generate_group_fix_pass   (map);
     }
 
     ImGui::TreePop();

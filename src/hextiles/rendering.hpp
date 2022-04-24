@@ -1,42 +1,20 @@
 #pragma once
 
+#include "types.hpp"
+
 #include "erhe/components/components.hpp"
 #include "erhe/scene/viewport.hpp"
 
-namespace erhe::graphics
-{
-    class Framebuffer;
-    class Gpu_timer;
-    class OpenGL_state_tracker;
-    class Renderbuffer;
-    class Texture;
-}
-namespace erhe::scene
-{
-    class Camera;
-    class ICamera;
-    class Mesh;
-    class Node;
-}
-
 namespace erhe::application
 {
-    class Application;
-    class Configuration;
-    class Imgui_windows;
-    class Time;
-    class Tools;
-    class View;
-    class Log_window;
-    class Line_renderer_set;
-    class Render_context;
-    class Text_renderer;
+    class Imgui_renderer;
 }
 
-namespace editor
+namespace hextiles
 {
 
-class Rendering;
+class Map_renderer;
+class Tiles;
 
 class Rendering
     : public erhe::components::Component
@@ -56,30 +34,19 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    void connect() override;
 
     // Public API
-    void init_state              ();
-    void render                  ();
-    void bind_default_framebuffer();
-    void clear                   ();
+    auto terrain_image          (terrain_t unit, const int scale) -> bool;
+    auto unit_image             (unit_t unit, const int scale) -> bool;
+    void make_terrain_type_combo(const char* label, terrain_t& value);
+    void make_unit_type_combo   (const char* label, unit_t& value);
 
 private:
-    void begin_frame();
-    [[nodiscard]] auto width () const -> int;
-    [[nodiscard]] auto height() const -> int;
-
     // Component dependencies
-    std::shared_ptr<erhe::application::Application>       m_application;
-    std::shared_ptr<erhe::application::Configuration>     m_configuration;
-    std::shared_ptr<erhe::application::Imgui_windows>     m_editor_imgui_windows;
-    std::shared_ptr<erhe::application::View>              m_editor_view;
-    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
-
-    bool                                                  m_trigger_capture{false};
+    std::shared_ptr<Map_renderer>                      m_map_renderer;
+    std::shared_ptr<Tiles>                             m_tiles;
+    std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
 };
 
 }

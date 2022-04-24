@@ -4,6 +4,7 @@
 #include "map_renderer.hpp"
 #include "map_window.hpp"
 #include "menu_window.hpp"
+#include "rendering.hpp"
 #include "tiles.hpp"
 
 #include <imgui.h>
@@ -12,50 +13,100 @@
 namespace hextiles
 {
 
-Player::Player(const std::string& name)
-    : m_name{name}
+void Player::city_imgui(Game_context& context)
 {
+    const size_t city_index = m_current_unit;
+    Unit& city = cities.at(city_index);
+
+    Unit_type& product = context.tiles.get_unit_type(city.production);
+
+    ImGui::Text("City %d", city_index);
+    ImGui::SameLine();
+    context.rendering.unit_image(city.type, 2);
+    ImGui::SameLine();
+    ImGui::InputText("##city_name", &city.name);
+    //ImGui::Text("P: ", product.name.c_str());
+    context.rendering.make_unit_type_combo("Product", city.production);
+    ImGui::Text("PT: %d/%d", city.production_progress, product.production_time);
 }
 
-Player::~Player() noexcept
+void Player::unit_imgui(Game_context& context)
 {
+    static_cast<void>(context);
+
+    const size_t unit_index = m_current_unit - cities.size();
+    Unit& unit = units.at(unit_index);
+    const Unit_type& unit_type = context.tiles.get_unit_type(unit.type);
+
+    ImGui::Text("Unit %d", unit_index);
+    ImGui::SameLine();
+    context.rendering.unit_image(unit.type, 2);
+    ImGui::SameLine();
+    ImGui::Text("%s", unit_type.name.c_str());
+    ImGui::Text("Hit Points: %d / %d", unit.hit_points, unit_type.hit_points);
+    ImGui::Text("Move Points: %d / %d", unit.move_points, unit_type.move_points[0]);
+    ImGui::Text("Fuel: %d / %d", unit.fuel, unit_type.fuel);
 }
 
-Player::Player(Player&& other)
-    : m_map         {std::move(other.m_map   )}
-    , m_name        {std::move(other.m_name  )}
-    , m_cities      {std::move(other.m_cities)}
-    , m_units       {std::move(other.m_units )}
-    , m_city_counter{other.m_city_counter}
+void Player::next_unit()
 {
+    ++m_current_unit;
+    if (m_current_unit >= (cities.size() + units.size()))
+    {
+        m_current_unit = 0;
+    }
 }
 
-Player& Player::operator=(Player&& other)
+void Player::previous_unit()
 {
-    m_map          = std::move(other.m_map   );
-    m_name         = std::move(other.m_name  );
-    m_cities       = std::move(other.m_cities);
-    m_units        = std::move(other.m_units );
-    m_city_counter = other.m_city_counter;
-    return *this;
+    if (m_current_unit > 0)
+    {
+        --m_current_unit;
+    }
+    else
+    {
+        m_current_unit = cities.size() + units.size() - 1;
+    }
 }
 
-void Player::set_map_size(int width, int height)
+void Player::imgui(Game_context& context)
 {
-    m_map = std::make_unique<Map>();
-    m_map->reset(width, height);
+    if (ImGui::Button("Next Unit"))
+    {
+        next_unit();
+    }
+
+    if (ImGui::Button("Previous Unit"))
+    {
+        previous_unit();
+    }
+
+    if (m_current_unit < cities.size())
+    {
+        city_imgui(context);
+    }
+    else
+    {
+        unit_imgui(context);
+    }
 }
 
-void Player::add_city(Tile_coordinate location)
+void Player::progress_production(Game_context& context)
 {
-    City city{
-        .location            = location,
-        .name                = fmt::format("City {}", ++m_city_counter),
-        .production          = unit_t{1},
-        .production_progress = 0,
-    };
-
-    m_cities.push_back(city);
+    for (Unit& city : cities)
+    {
+        if (city.production == unit_t{0})
+        {
+            continue;
+        }
+        Unit_type& product = context.tiles.get_unit_type(city.production);
+        ++city.production_progress;
+        if (city.production_progress >= product.production_time)
+        {
+            Unit unit = context.game.make_unit(city.production, city.location);
+            units.push_back(unit);
+        }
+    }
 }
 
 Game::Game()
@@ -69,34 +120,110 @@ Game::~Game()
 
 void Game::connect()
 {
-    m_map_renderer = get<Map_renderer>();
-    m_tiles        = get<Tiles       >();
+    m_rendering = get<Rendering>();
+    m_tiles     = get<Tiles>();
 }
 
 void Game::initialize_component()
 {
 }
 
-void Game::new_game()
+void Game::reveal(Map& target_map, Tile_coordinate position, int radius) const
 {
-    m_turn = 0;
-    m_player = 0;
-    m_players.clear();
+    std::function<void(Tile_coordinate)> reveal_op =
+    [this, &target_map] (Tile_coordinate position) -> void
+    {
+        const terrain_t terrain   = m_map->get_terrain(position);
+        const unit_t    unit_icon = m_map->get_unit_icon(position);
+        target_map.set(position, terrain, unit_icon);
+    };
+
+    m_map->hex_circle(position, 0, radius, reveal_op);
 }
 
-void Game::add_player(const std::string& name)
+auto Game::make_unit(unit_t unit_id, Tile_coordinate location) -> Unit
 {
-    m_players.emplace_back(name);
+    Unit_type& unit_type = m_tiles->get_unit_type(unit_id);
+    m_map->set_unit_icon(location, unit_id);
+    return Unit{
+        .location            = location,
+        .type                = unit_id,
+        .hit_points          = unit_type.hit_points,
+        .move_points         = unit_type.move_points[0],
+        .fuel                = unit_type.fuel,
+        .ready_to_load       = false,
+        .level               = 0,
+        .production          = unit_t{0},
+        .production_progress = 0,
+    };
+}
+
+void Game::add_player(const std::string& name, Tile_coordinate location)
+{
+    const terrain_t     city_terrain      = m_map->get_terrain(location);
+    const Terrain_type& city_terrain_type = m_tiles->get_terrain_type(city_terrain);
+    const unit_t        city_unit_id      = m_tiles->get_city_unit_type(city_terrain_type.city_size);
+
+    m_players.emplace_back();
+    Player& player = m_players.back();
+    player.name = name;
+    player.map = std::make_shared<Map>();
+    player.map->reset(m_map->width(), m_map->height());
+
+    Unit city = make_unit(city_unit_id, location);
+    player.cities.push_back(city);
+
+    auto& player_map = *player.map.get();
+    m_map->set_unit_icon(location, city_unit_id);
+    reveal(player_map, location, city_terrain_type.city_size);
+}
+
+void Game::new_game(const Game_create_parameters& parameters)
+{
+    m_players.clear();
+    m_current_player = 0;
+    m_turn           = 0;
+    m_map            = parameters.map;
+    m_cities         = parameters.city_positions;
+    for (size_t i = 0; i < parameters.player_names.size(); ++i)
+    {
+        add_player(
+            parameters.player_names[i],
+            parameters.city_positions[parameters.player_starting_cities[i]]
+        );
+    }
+    m_current_player = 0;
+    update_current_player();
 }
 
 void Game::next_turn()
 {
-    m_player = (m_player + 1) % m_players.size();
+    m_current_player = (m_current_player + 1) % m_players.size();
+    update_current_player();
 }
 
-auto Game::current_player() -> Player&
+void Game::update_current_player()
 {
-    return m_players.at(m_player);
+    auto& player     = get_current_player();
+    auto& first_city = player.cities.at(0);
+    auto  map_window = get<Map_window>();
+    map_window->set_map(player.map);
+    map_window->scroll_to(first_city.location);
+
+    Game_context context
+    {
+        .game      = *this,
+        .rendering = *m_rendering.get(),
+        .tiles     = *m_tiles.get()
+    };
+
+    player.progress_production(context);
+}
+
+auto Game::get_current_player() -> Player&
+{
+    Expects(!m_players.empty());
+    return m_players.at(m_current_player);
 }
 
 } // namespace hextiles

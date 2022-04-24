@@ -33,6 +33,7 @@ public:
     void set_terrain  (Tile_coordinate tile_coordinate, terrain_t terrain_value);
     auto get_unit_icon(Tile_coordinate tile_coordinate) const -> unit_t;
     void set_unit_icon(Tile_coordinate tile_coordinate, unit_t unit_icon_value);
+    void set          (Tile_coordinate tile_coordinate, terrain_t terrain_value, unit_t unit_icon_value);
     auto wrap         (Tile_coordinate in) const -> Tile_coordinate;
     auto wrap_center  (Tile_coordinate in) const -> Tile_coordinate;
     auto neighbor     (Tile_coordinate position, direction_t direction) const -> Tile_coordinate;

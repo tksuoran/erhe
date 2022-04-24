@@ -7,6 +7,10 @@
 namespace hextiles
 {
 
+class Game;
+class Rendering;
+class Tiles;
+
 class Game_window
     : public erhe::components::Component
     , public erhe::application::Imgui_window
@@ -26,6 +30,12 @@ public:
 
     // Implements Imgui_window
     void imgui() override;
+
+private:
+    // Component dependencies
+    std::shared_ptr<Game>      m_game;
+    std::shared_ptr<Rendering> m_rendering;
+    std::shared_ptr<Tiles>     m_tiles;
 };
 
 } // namespace hextiles
