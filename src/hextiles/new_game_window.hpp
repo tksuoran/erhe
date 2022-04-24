@@ -57,7 +57,7 @@ private:
     int                          m_number_of_land_cities   {0};
 
     std::vector<size_t>          m_player_start_cities;
-    int                          m_minimum_player_start_city_distance;
+    int                          m_minimum_player_start_city_distance{10};
 };
 
 } // namespace hextiles

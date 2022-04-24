@@ -26,12 +26,12 @@ Tiles::~Tiles()
 
 void Tiles::initialize_component()
 {
+    init_shapes();
+
     load_terrain_defs();
     load_terrain_group_defs();
     load_terrain_replacement_rule_defs();
     load_unit_defs();
-
-    init_shapes();
 }
 
 using json = nlohmann::json;
@@ -785,7 +785,6 @@ void Tiles::load_unit_defs_v1()
         unit_type.defense[0]                   = json_unit_type["Defence"  ][0];
         unit_type.defense[1]                   = json_unit_type["Defence"  ][1];
         unit_type.defense[2]                   = json_unit_type["Defence"  ][2];
-        unit_type.defense[3]                   = json_unit_type["Defence"  ][3];
         unit_type.defense[3]                   = json_unit_type["Defence"  ][3];
         unit_type.city_light_ground_modifier   = json_unit_type["LgtGndMod"];
         unit_type.stealth_version              = json_unit_type["LUI"    ];

@@ -178,15 +178,15 @@ auto Pixel_lookup::pixel_to_tile(Pixel_coordinate pixel_coordinate) const -> Til
 {
     pixel_coordinate.x += Tile_shape::center_x;
     pixel_coordinate.y += Tile_shape::center_y - 1;
-    const int             tx          = static_cast<int>(std::floor(static_cast<float>(pixel_coordinate.x) / static_cast<float>(lut_width)));
-    const int             ty          = static_cast<int>(std::floor(static_cast<float>(pixel_coordinate.y) / static_cast<float>(lut_height)));
-    const int             lx          = (int)mod(pixel_coordinate.x, lut_width);
-    const int             ly          = (int)mod(pixel_coordinate.y, lut_height);
-    const int             lut_index   = lx + ly * lut_width;
+    const auto tx        = static_cast<coordinate_t>(std::floor(static_cast<float>(pixel_coordinate.x) / static_cast<float>(lut_width)));
+    const auto ty        = static_cast<coordinate_t>(std::floor(static_cast<float>(pixel_coordinate.y) / static_cast<float>(lut_height)));
+    const int  lx        = (int)mod(pixel_coordinate.x, lut_width);
+    const int  ly        = (int)mod(pixel_coordinate.y, lut_height);
+    const int  lut_index = lx + ly * lut_width;
     const Tile_coordinate tile_offset = m_lut[lut_index];
     return Tile_coordinate{
-        static_cast<coordinate_t>(tx * 2),
-        static_cast<coordinate_t>(ty)
+        tx * 2,
+        ty
     } + tile_offset;
 }
 

@@ -100,8 +100,7 @@ auto New_game_window::try_create_city(uint32_t flags_match) -> bool
 
 void New_game_window::select_player_start_cities()
 {
-    auto& map   = get<Map_window>()->get_map();
-    auto  tiles = get<Tiles>();
+    auto& map = get<Map_window>()->get_map();
 
     std::vector<size_t> player_start_cities;
     int                 minimum_distance = 99999999;

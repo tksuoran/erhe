@@ -85,8 +85,8 @@ private:
     void load_terrain_replacement_rule_defs_v1();
     void save_terrain_replacement_rule_defs_v1();
 
-    terrain_t                             m_multigroup_terrain_offset;
-    uint16_t                              m_last_terrain;
+    terrain_t                             m_multigroup_terrain_offset{0};
+    uint16_t                              m_last_terrain             {0};
     std::vector<Pixel_coordinate>         m_terrain_shapes;
     std::vector<Pixel_coordinate>         m_unit_shapes;
     std::vector<Pixel_coordinate>         m_extra_shapes;     // border, brush sizes

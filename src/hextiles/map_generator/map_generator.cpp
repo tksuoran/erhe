@@ -230,19 +230,19 @@ void Map_generator::generate_base_terrain_pass()
     // Second pass converts noise values to terrain values based on thresholds
     m_elevation_generator.compute_threshold_values();
 
-    for (const auto& entry : m_elevation_generator.m_terrains)
-    {
-        const Terrain_type& terrain = m_tiles->get_terrain_type(entry.base_terrain);
-        log_map_window.info(
-            "terrain {} - {}, elevation = {}, ratio = {}, normalized ratio = {}, threshold = {}\n",
-            entry.base_terrain,
-            terrain.name,
-            entry.id,
-            entry.ratio,
-            entry.normalized_ratio,
-            entry.threshold
-        );
-    }
+    //for (const auto& entry : m_elevation_generator.m_terrains)
+    //{
+    //    const Terrain_type& terrain = m_tiles->get_terrain_type(entry.base_terrain);
+    //    log_map_window.trace(
+    //        "terrain {} - {}, elevation = {}, ratio = {}, normalized ratio = {}, threshold = {}\n",
+    //        entry.base_terrain,
+    //        terrain.name,
+    //        entry.id,
+    //        entry.ratio,
+    //        entry.normalized_ratio,
+    //        entry.threshold
+    //    );
+    //}
 
     const auto& map = m_map_window->get_map();
     const int   w   = map->width();

@@ -81,18 +81,18 @@ struct Unit_type
     uint32_t    battle_type    {0};
     int         attack [4] = { 0, 0, 0, 0};
     int         defense[4] = { 0, 0, 0, 0};
-    int         city_light_ground_modifier;
-    unit_t      stealth_version{0};
-    int         stealth_attack {0};
-    int         stealth_defense{0};
+    int         city_light_ground_modifier{0};
+    unit_t      stealth_version           {0};
+    int         stealth_attack            {0};
+    int         stealth_defense           {0};
     int         vision_range      [2] = { 0, 0 };
     int         visible_from_range[2] = { 0, 0 };
     int         range             [2] = { 0, 0 };
-    int         ranged_attack_modifier;
-    int         ranged_attack_ammo;
-    int         ranged_attack_count_per_turn;
-    int         audio_loop     {0};
-    int         audio_frequency{0};
+    int         ranged_attack_modifier      {0};
+    int         ranged_attack_ammo          {0};
+    int         ranged_attack_count_per_turn{0};
+    int         audio_loop                  {0};
+    int         audio_frequency             {0};
 };
 
 } // namespace hextiles

@@ -36,7 +36,7 @@ auto Map_free_zoom_command::try_call(erhe::application::Command_context& context
     const double v = wheel.x + wheel.y;
     const double k = 0.1;
 
-    const auto window_position = context.view().to_window_top_left(context.get_vec2_absolute_value());
+    //const auto window_position = context.view().to_window_top_left(context.get_vec2_absolute_value());
     //m_map_window.hover(
     //    window_position
     //);
