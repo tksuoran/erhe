@@ -10,6 +10,7 @@ namespace hextiles
 class Game;
 class Rendering;
 class Tiles;
+class Tile_renderer;
 
 class Game_window
     : public erhe::components::Component
@@ -33,9 +34,10 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Game>      m_game;
-    std::shared_ptr<Rendering> m_rendering;
-    std::shared_ptr<Tiles>     m_tiles;
+    std::shared_ptr<Game>          m_game;
+    std::shared_ptr<Rendering>     m_rendering;
+    std::shared_ptr<Tiles>         m_tiles;
+    std::shared_ptr<Tile_renderer> m_tile_renderer;
 };
 
 } // namespace hextiles

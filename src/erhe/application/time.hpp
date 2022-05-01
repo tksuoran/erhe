@@ -5,7 +5,6 @@
 namespace erhe::application {
 
 class Application;
-//class Scene_root;
 
 class Time
     : public erhe::components::Component
@@ -35,9 +34,6 @@ public:
     auto frame_number         () const -> uint64_t;
 
 private:
-    // Component dependencies
-    //std::shared_ptr<Scene_root> m_scene_root;
-
     std::chrono::steady_clock::time_point m_current_time;
     double                                m_time_accumulator{0.0};
     double                                m_time            {0.0};

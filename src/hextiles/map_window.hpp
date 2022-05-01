@@ -26,7 +26,7 @@ namespace hextiles
 {
 
 class Map;
-class Map_renderer;
+class Tile_renderer;
 class Map_window;
 class Pixel_lookup;
 class Tiles;
@@ -150,8 +150,8 @@ public:
     void scroll_to    (const Tile_coordinate center_tile);
 
     void render       ();
-    void blit         (const Tile_coordinate tile_location, Pixel_coordinate shape, uint32_t color = 0xffffffff) const;
-    void print        (const Tile_coordinate tile_location, const std::string_view text, uint32_t color = 0xffffffff) const;
+    void blit         (const Pixel_coordinate shape, const Tile_coordinate tile_location, const uint32_t color = 0xffffffff) const;
+    void print        (const std::string_view text, const Tile_coordinate tile_location, uint32_t color = 0xffffffff) const;
 
     auto wrap         (Tile_coordinate in) const -> Tile_coordinate;
     auto wrap_center  (Tile_coordinate in) const -> Tile_coordinate;
@@ -160,7 +160,7 @@ public:
     void scale_zoom   (float scale);
     void set_zoom     (float scale);
 
-    auto tile_image   (terrain_t terrain, const int scale = 1) -> bool;
+    auto tile_image   (terrain_tile_t terrain, const int scale = 1) -> bool;
     auto tile_position(const Tile_coordinate coordinate) const -> glm::vec2;
 
 private:
@@ -168,7 +168,7 @@ private:
 
     // Component dependencies
     std::shared_ptr<Map>                              m_map;
-    std::shared_ptr<Map_renderer>                     m_map_renderer;
+    std::shared_ptr<Tile_renderer>                    m_tile_renderer;
     std::shared_ptr<erhe::application::Text_renderer> m_text_renderer;
     std::shared_ptr<Tiles>                            m_tiles;
     std::shared_ptr<erhe::application::View>          m_editor_view;

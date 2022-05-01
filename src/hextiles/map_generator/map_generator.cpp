@@ -242,8 +242,9 @@ void Map_generator::generate_base_terrain_pass(Map& map)
     {
         for (coordinate_t ty = 0; ty < h; ++ty)
         {
-            const Terrain_variation t = m_elevation_generator.get(index);
-            map.set_terrain(Tile_coordinate{tx, ty}, t.base_terrain);
+            const Terrain_variation terrain_variation = m_elevation_generator.get(index);
+            const terrain_tile_t    terrain_tile      = m_tiles->get_terrain_tile_from_terrain(terrain_variation.base_terrain);
+            map.set_terrain_tile(Tile_coordinate{tx, ty}, terrain_tile);
             ++index;
         }
     }
@@ -297,12 +298,14 @@ void Map_generator::generate_variation_pass(Map& map)
         for (coordinate_t ty = 0; ty < height; ++ty)
         {
             const Tile_coordinate position{tx, ty};
-            const terrain_t       base_terrain = map.get_terrain(position);
-            const float           temperature  = m_temperature_generator.get_noise_value(index);
-            const float           humidity     = m_humidity_generator   .get_noise_value(index);
+            const terrain_tile_t  terrain_tile   = map.get_terrain_tile(position);
+            const terrain_t       terrain        = m_tiles->get_terrain_from_tile(terrain_tile);
+            const float           temperature    = m_temperature_generator.get_noise_value(index);
+            const float           humidity       = m_humidity_generator   .get_noise_value(index);
             //const float           variation    = m_variation_generator  .get_noise_value(index);
-            const terrain_t       terrain      = get_variation(base_terrain, temperature, humidity);
-            map.set_terrain(position, terrain);
+            const terrain_t       v_terrain      = get_variation(terrain, temperature, humidity);
+            const terrain_tile_t  v_terrain_tile = m_tiles->get_terrain_tile_from_terrain(v_terrain);
+            map.set_terrain_tile(position, v_terrain_tile);
             ++index;
         }
     }
@@ -316,25 +319,28 @@ void Map_generator::apply_rule(
     std::function<void(Tile_coordinate)> post_process_op =
     [this, &rule, &map](Tile_coordinate tile_position) -> void
     {
-        const terrain_t primary_t = map.get_terrain(tile_position);
-        if (primary_t != rule.primary)
+        const terrain_tile_t primary_terrain_tile = map.get_terrain_tile(tile_position);
+        const terrain_t      primary_terrain      = m_tiles->get_terrain_from_tile(primary_terrain_tile);
+        if (primary_terrain != rule.primary)
         {
             return;
         }
         std::function<void(Tile_coordinate)> replace =
         [this, &rule, &map] (Tile_coordinate position) -> void
         {
-            const terrain_t secondary_t = map.get_terrain(position);
+            const terrain_tile_t secondary_terrain_tile = map.get_terrain_tile(position);
+            const terrain_t      secondary_terrain      = m_tiles->get_terrain_from_tile(secondary_terrain_tile);
             const bool found = std::find(
                 rule.secondary.begin(),
                 rule.secondary.end(),
-                secondary_t
+                secondary_terrain
             ) != rule.secondary.end();
             const bool apply = rule.equal ? found : !found;
 
             if (apply)
             {
-                map.set_terrain(position, rule.replacement);
+                const terrain_tile_t replacement_terrain_tile = m_tiles->get_terrain_tile_from_terrain(rule.replacement);
+                map.set_terrain_tile(position, replacement_terrain_tile);
             }
         };
         map.hex_circle(tile_position, 0, 1, replace);

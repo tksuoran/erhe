@@ -6,6 +6,7 @@
 #include "map_window.hpp"
 #include "menu_window.hpp"
 #include "tiles.hpp"
+#include "tile_renderer.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/renderers/imgui_renderer.hpp"
@@ -27,9 +28,10 @@ Map_tool_window::~Map_tool_window()
 
 void Map_tool_window::connect()
 {
+    m_imgui_renderer = get<erhe::application::Imgui_renderer>();
     m_map_editor     = get<Map_editor>();
     m_map_window     = get<Map_window>();
-    m_imgui_renderer = get<erhe::application::Imgui_renderer>();
+    m_tile_renderer  = get<Tile_renderer>();
 }
 
 void Map_tool_window::initialize_component()
@@ -79,29 +81,30 @@ void Map_tool_window::imgui()
 
 void Map_tool_window::tile_info(const Tile_coordinate tile_position)
 {
-    const auto&     map     = m_map_editor->get_map();
-    const terrain_t terrain = map->get_terrain(tile_position);
-
-    const auto& terrain_shapes = m_tiles->get_terrain_shapes();
+    const auto&          map            = m_map_editor->get_map();
+    const terrain_tile_t terrain_tile   = map->get_terrain_tile(tile_position);
+    const auto&          terrain_shapes = m_tile_renderer->get_terrain_shapes();
+    if (terrain_tile >= terrain_shapes.size())
+    {
+        return;
+    }
+    const auto terrain = m_tiles->get_terrain_from_tile(terrain_tile);
     if (terrain >= terrain_shapes.size())
     {
         return;
     }
-    const auto base_terrain = m_tiles->get_base_terrain(terrain);
-    if (base_terrain >= terrain_shapes.size())
-    {
-        return;
-    }
 
-    const auto& terrain_type = m_tiles->get_terrain_type(base_terrain);
+    const auto& terrain_type = m_tiles->get_terrain_type(terrain);
 
     ImGui::Text("Tile @ %d, %d %s", tile_position.x, tile_position.y, terrain_type.name.c_str());
-    ImGui::Text("Terrain: %d, base: %d", terrain, base_terrain);
+    ImGui::Text("Terrain: %d, base: %d", terrain, terrain);
     ImGui::Text("City Size: %d", terrain_type.city_size);
 
-    m_map_window->tile_image(terrain, 3);
+    m_map_window->tile_image(terrain_tile, 3);
     ImGui::SameLine();
-    m_map_window->tile_image(base_terrain, 3);
+
+    const terrain_tile_t base_terrain_tile = m_tiles->get_terrain_tile_from_terrain(terrain);
+    m_map_window->tile_image(base_terrain_tile, 3);
 
     const int distance = map->distance(tile_position, Tile_coordinate{0, 0});
     ImGui::Text("Distance to 0,0: %d", distance);

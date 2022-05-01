@@ -17,8 +17,8 @@ class Tiles;
 class Map_cell
 {
 public:
-    terrain_t terrain  {0u};
-    unit_t    unit_icon{0u};
+    terrain_tile_t terrain_tile{0u};
+    unit_tile_t    unit_tile   {0u};
 };
 
 class Map
@@ -26,18 +26,18 @@ class Map
 public:
     Map();
 
-    void reset        (int width, int height);
-    void read         (File_read_stream& stream);
-    void write        (File_write_stream& stream);
-    auto get_terrain  (Tile_coordinate tile_coordinate) const -> terrain_t;
-    void set_terrain  (Tile_coordinate tile_coordinate, terrain_t terrain_value);
-    auto get_unit_icon(Tile_coordinate tile_coordinate) const -> unit_t;
-    void set_unit_icon(Tile_coordinate tile_coordinate, unit_t unit_icon_value);
-    void set          (Tile_coordinate tile_coordinate, terrain_t terrain_value, unit_t unit_icon_value);
-    auto wrap         (Tile_coordinate in) const -> Tile_coordinate;
-    auto wrap_center  (Tile_coordinate in) const -> Tile_coordinate;
-    auto neighbor     (Tile_coordinate position, direction_t direction) const -> Tile_coordinate;
-    void for_each_tile(const std::function<void(Tile_coordinate position)>& op);
+    void reset           (int width, int height);
+    void read            (File_read_stream& stream);
+    void write           (File_write_stream& stream);
+    auto get_terrain_tile(Tile_coordinate tile_coordinate) const -> terrain_tile_t;
+    void set_terrain_tile(Tile_coordinate tile_coordinate, terrain_tile_t terrain_tile);
+    auto get_unit_tile   (Tile_coordinate tile_coordinate) const -> unit_tile_t;
+    void set_unit_tile   (Tile_coordinate tile_coordinate, unit_tile_t unit_tile);
+    void set             (Tile_coordinate tile_coordinate, terrain_tile_t terrain_tile, unit_tile_t unit_tile);
+    auto wrap            (Tile_coordinate in) const -> Tile_coordinate;
+    auto wrap_center     (Tile_coordinate in) const -> Tile_coordinate;
+    auto neighbor        (Tile_coordinate position, direction_t direction) const -> Tile_coordinate;
+    void for_each_tile   (const std::function<void(Tile_coordinate position)>& op);
     void hex_circle(
         Tile_coordinate                                      center_position,
         int                                                  r0,

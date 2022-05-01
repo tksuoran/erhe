@@ -593,6 +593,76 @@ void Texture::upload(
     }
 }
 
+void Texture::upload_subimage(
+    const gl::Internal_format        internal_format,
+    const gsl::span<const std::byte> data,
+    const int                        src_row_length,
+    const int                        src_x,
+    const int                        src_y,
+    const int                        width,
+    const int                        height,
+    const int                        level,
+    const int                        x,
+    const int                        y,
+    const int                        z
+)
+{
+    Expects(internal_format == m_internal_format);
+    Expects(width  >= 1);
+    Expects(height >= 1);
+    Expects(width  <= m_width);
+    Expects(height <= m_height);
+
+    gl::Pixel_format format;
+    gl::Pixel_type   type;
+    ERHE_VERIFY(get_format_and_type(m_internal_format, format, type));
+
+    const auto pixel_stride = get_upload_pixel_byte_count(internal_format);;
+    const auto row_stride   = src_row_length * pixel_stride;
+    //const auto byte_count   = row_stride * height;
+    //Expects(data.size_bytes() == byte_count);
+    const size_t src_x_offset = src_x * pixel_stride;
+    const size_t src_y_offset = src_y * row_stride;
+    const char* data_pointer =
+        reinterpret_cast<const char*>(data.data())
+        + src_x_offset
+        + src_y_offset;
+    //gl::pixel_store_i(gl::Pixel_store_parameter::pack_skip_pixels,  src_x);
+    //data_pointer += src_x * pixel_stride;
+    //data_pointer += src_y * row_stride;
+    //gl::pixel_store_i(gl::Pixel_store_parameter::unpack_skip_rows,  src_y);
+    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length, src_row_length);
+
+    switch (storage_dimensions(m_target))
+    {
+        case 1:
+        {
+            gl::texture_sub_image_1d(gl_name(), level, x, width, format, type, data_pointer);
+            break;
+        }
+
+        case 2:
+        {
+            gl::texture_sub_image_2d(gl_name(), level, x, y, width, height, format, type, data_pointer);
+            break;
+        }
+
+        case 3:
+        {
+            gl::texture_sub_image_3d(gl_name(), level, x, y, z, width, height, 1, format, type, data_pointer);
+            break;
+        }
+
+        default:
+        {
+            ERHE_FATAL("Bad texture target\n");
+        }
+    }
+    //gl::pixel_store_i(gl::Pixel_store_parameter::pack_skip_pixels,  0);
+    //gl::pixel_store_i(gl::Pixel_store_parameter::unpack_skip_rows,  0);
+    //gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length, 0);
+}
+
 void Texture::set_debug_label(const std::string& value)
 {
     m_debug_label = "(T) " + value;

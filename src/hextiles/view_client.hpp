@@ -11,7 +11,7 @@ namespace erhe::graphics
 namespace hextiles
 {
 
-class Map_renderer;
+class Tile_renderer;
 class Map_window;
 
 class View_client
@@ -48,7 +48,7 @@ public:
 private:
     std::shared_ptr<erhe::application::Imgui_windows>     m_imgui_windows;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<Map_renderer> m_map_renderer;
+    std::shared_ptr<Tile_renderer> m_tile_renderer;
     std::shared_ptr<Map_window  > m_map_window;
 };
 

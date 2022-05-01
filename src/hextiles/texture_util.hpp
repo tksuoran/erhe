@@ -1,4 +1,9 @@
+#pragma once
+
 #include "erhe/graphics/png_loader.hpp"
+#include "erhe/gl/gl.hpp"
+
+#include <glm/glm.hpp>
 
 namespace erhe::graphics
 {
@@ -11,34 +16,16 @@ namespace hextiles
 class Image
 {
 public:
+    [[nodiscard]] auto get_pixel(size_t x, size_t y) const -> glm::vec4;
+    void put_pixel(size_t x, size_t y, glm::vec4 color);
+
     erhe::graphics::Image_info info;
     std::vector<std::byte>     data;
 };
 
+auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format;
+
 auto load_png    (const fs::path& path) -> Image;
 auto load_texture(const fs::path& path) -> std::shared_ptr<erhe::graphics::Texture>;
-
-
-#if 0
-struct SDL_Surface;
-
-void mask_tile(
-    const int          tile_x,
-    const int          tile_y,
-    SDL_Surface* const mask,
-    SDL_Surface* const surface
-);
-
-void color_mask_tile(
-    unsigned char r0,
-    unsigned char g0,
-    unsigned char b0,
-    int           tile_x,
-    int           tile_y,
-    SDL_Surface* surface
-);
-
-void apply_mask();
-#endif
 
 }

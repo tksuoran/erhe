@@ -28,6 +28,8 @@ public:
 
 struct Terrain_type
 {
+    std::string name;
+    int         tile                    {0};
     uint32_t    move_type_allow_mask    {0};  // MAllow
     int         move_cost               {0};  // MCost
     int         threat                  {0};  // Threat
@@ -46,11 +48,10 @@ struct Terrain_type
     int         generate_max_humidity   {0};
     float       generate_ratio          {1.0f};
     int         group = -1;
-    std::string name;
 };
 
-constexpr terrain_t Terrain_field             = 39u; // For city gen
-constexpr terrain_t Terrain_default           = 31u;
+constexpr terrain_t Terrain_field   = 39u; // For city gen
+constexpr terrain_t Terrain_default = 31u;
 
 // Bridges
 constexpr terrain_t Terrain_bridges[] = {

@@ -48,8 +48,13 @@ void Map::read(File_read_stream& stream)
     m_map.shrink_to_fit();
     for (auto& cell : m_map)
     {
-        stream.op(cell.terrain);
-        stream.op(cell.unit_icon);
+        stream.op(cell.terrain_tile);
+        stream.op(cell.unit_tile);
+        /// XXX TODO FIXME
+        if (cell.terrain_tile > 55)
+        {
+            ++cell.terrain_tile;
+        }
     }
 }
 
@@ -59,12 +64,12 @@ void Map::write(File_write_stream& stream)
     stream.op(m_height);
     for (auto& cell : m_map)
     {
-        stream.op(cell.terrain);
-        stream.op(cell.unit_icon);
+        stream.op(cell.terrain_tile);
+        stream.op(cell.unit_tile);
     }
 }
 
-auto Map::get_terrain(Tile_coordinate tile_coordinate) const -> terrain_t
+auto Map::get_terrain_tile(Tile_coordinate tile_coordinate) const -> terrain_tile_t
 {
     Expects(tile_coordinate.x >= coordinate_t{0});
     Expects(tile_coordinate.y >= coordinate_t{0});
@@ -73,10 +78,10 @@ auto Map::get_terrain(Tile_coordinate tile_coordinate) const -> terrain_t
     const size_t index =
         static_cast<size_t>(tile_coordinate.x) +
         static_cast<size_t>(tile_coordinate.y) * static_cast<size_t>(m_width);
-    return m_map[index].terrain;
+    return m_map[index].terrain_tile;
 }
 
-void Map::set_terrain(Tile_coordinate tile_coordinate, terrain_t terrain_value)
+void Map::set_terrain_tile(Tile_coordinate tile_coordinate, terrain_tile_t terrain_tile)
 {
     Expects(tile_coordinate.x >= coordinate_t{0});
     Expects(tile_coordinate.y >= coordinate_t{0});
@@ -85,10 +90,10 @@ void Map::set_terrain(Tile_coordinate tile_coordinate, terrain_t terrain_value)
     const size_t index =
         static_cast<size_t>(tile_coordinate.x) +
         static_cast<size_t>(tile_coordinate.y) * static_cast<size_t>(m_width);
-    m_map[index].terrain = terrain_value;
+    m_map[index].terrain_tile = terrain_tile;
 }
 
-auto Map::get_unit_icon(Tile_coordinate tile_coordinate) const -> uint16_t
+auto Map::get_unit_tile(Tile_coordinate tile_coordinate) const -> unit_tile_t
 {
     Expects(tile_coordinate.x >= coordinate_t{0});
     Expects(tile_coordinate.y >= coordinate_t{0});
@@ -97,10 +102,10 @@ auto Map::get_unit_icon(Tile_coordinate tile_coordinate) const -> uint16_t
     const size_t index =
         static_cast<size_t>(tile_coordinate.x) +
         static_cast<size_t>(tile_coordinate.y) * static_cast<size_t>(m_width);
-    return m_map[index].unit_icon;
+    return m_map[index].unit_tile;
 }
 
-void Map::set_unit_icon(Tile_coordinate tile_coordinate, unit_t unit_icon_value)
+void Map::set_unit_tile(Tile_coordinate tile_coordinate, unit_tile_t unit_tile)
 {
     Expects(tile_coordinate.x >= coordinate_t{0});
     Expects(tile_coordinate.y >= coordinate_t{0});
@@ -109,10 +114,10 @@ void Map::set_unit_icon(Tile_coordinate tile_coordinate, unit_t unit_icon_value)
     const size_t index =
         static_cast<size_t>(tile_coordinate.x) +
         static_cast<size_t>(tile_coordinate.y) * static_cast<size_t>(m_width);
-    m_map[index].unit_icon = unit_icon_value;
+    m_map[index].unit_tile = unit_tile;
 }
 
-void Map::set(Tile_coordinate tile_coordinate, terrain_t terrain_value, unit_t unit_icon_value)
+void Map::set(Tile_coordinate tile_coordinate, terrain_tile_t terrain_tile, unit_tile_t unit_tile)
 {
     Expects(tile_coordinate.x >= coordinate_t{0});
     Expects(tile_coordinate.y >= coordinate_t{0});
@@ -122,8 +127,8 @@ void Map::set(Tile_coordinate tile_coordinate, terrain_t terrain_value, unit_t u
         static_cast<size_t>(tile_coordinate.x) +
         static_cast<size_t>(tile_coordinate.y) * static_cast<size_t>(m_width);
     auto& map_cell = m_map[index];
-    map_cell.terrain   = terrain_value;
-    map_cell.unit_icon = unit_icon_value;
+    map_cell.terrain_tile = terrain_tile;
+    map_cell.unit_tile    = unit_tile;
 }
 
 auto Map::wrap(Tile_coordinate in) const -> Tile_coordinate
@@ -255,10 +260,10 @@ auto Map::distance(
 
 void Map::update_group_terrain(const Tiles&tiles, Tile_coordinate position)
 {
-    const terrain_t terrain_     = get_terrain(position);
-    const terrain_t terrain      = tiles.get_base_terrain(terrain_);
-    const auto&     terrain_type = tiles.get_terrain_type(terrain);
-    int             group        = terrain_type.group;
+    const terrain_tile_t terrain_tile = get_terrain_tile(position);
+    const terrain_t      terrain      = tiles.get_terrain_from_tile(terrain_tile);
+    const auto&          terrain_type = tiles.get_terrain_type(terrain);
+    int                  group        = terrain_type.group;
     if (group < 0)
     {
         return;
@@ -281,9 +286,9 @@ void Map::update_group_terrain(const Tiles&tiles, Tile_coordinate position)
             ++direction
         )
         {
-            const Tile_coordinate neighbor_position = neighbor(position, direction);
-            const terrain_t       neighbor_terrain_ = get_terrain(neighbor_position);
-            const terrain_t       neighbor_terrain  = tiles.get_base_terrain(neighbor_terrain_);
+            const Tile_coordinate neighbor_position     = neighbor(position, direction);
+            const terrain_tile_t  neighbor_terrain_tile = get_terrain_tile(neighbor_position);
+            const terrain_t       neighbor_terrain      = tiles.get_terrain_from_tile(neighbor_terrain_tile);
             const int neighbor_group = tiles.get_terrain_type(neighbor_terrain).group;
             if (
                 (neighbor_group == group) ||
@@ -335,8 +340,8 @@ void Map::update_group_terrain(const Tiles&tiles, Tile_coordinate position)
         (++counter < 2U)
     );
 
-    const terrain_t updated_terrain = tiles.get_terrain_group_shape(group, neighbor_mask);
-    set_terrain(position, updated_terrain);
+    const terrain_tile_t updated_terrain_tile = tiles.get_terrain_group_tile(group, neighbor_mask);
+    set_terrain_tile(position, updated_terrain_tile);
 }
 
-}
+} // namespace hextiles

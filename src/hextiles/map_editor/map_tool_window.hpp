@@ -13,6 +13,7 @@ namespace hextiles
 class Map_editor;
 class Map_window;
 class Tiles;
+class Tile_renderer;
 
 class Map_tool_window
     : public erhe::components::Component
@@ -41,6 +42,7 @@ private:
     std::shared_ptr<Map_editor>                        m_map_editor;
     std::shared_ptr<Map_window>                        m_map_window;
     std::shared_ptr<Tiles>                             m_tiles;
+    std::shared_ptr<Tile_renderer>                     m_tile_renderer;
     std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
 };
 

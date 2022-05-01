@@ -1,9 +1,9 @@
 #include "type_editors/type_editor.hpp"
-#include "map_renderer.hpp"
 #include "map_window.hpp"
 #include "menu_window.hpp"
 #include "rendering.hpp"
 #include "tiles.hpp"
+#include "tile_renderer.hpp"
 #include "tile_shape.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
@@ -30,7 +30,7 @@ void Type_editor::connect()
 {
     require<erhe::application::Imgui_windows>();
     m_imgui_renderer = get<erhe::application::Imgui_renderer>();
-    m_map_renderer   = get<Map_renderer>();
+    m_tile_renderer   = get<Tile_renderer>();
     m_map_window     = get<Map_window  >();
     m_rendering      = get<Rendering   >();
     m_tiles          = get<Tiles       >();
@@ -122,9 +122,10 @@ void Type_editor::make_terrain_type_def(const char* tooltip_text, terrain_t& val
 {
     if (ImGui::TableNextColumn())
     {
-        const auto label   = fmt::format("##{}-{}", m_current_column, m_current_row);
-        const auto tooltip = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name, value);
-        m_rendering->terrain_image(value, 2);
+        terrain_tile_t terrain_tile = m_tiles->get_terrain_tile_from_terrain(value);
+        const auto     label        = fmt::format("##{}-{}", m_current_column, m_current_row);
+        const auto     tooltip      = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name, value);
+        m_rendering->terrain_image(terrain_tile, 2);
         ImGui::SameLine();
         if (m_current_column < m_value_colors.size())
         {
@@ -148,9 +149,10 @@ void Type_editor::make_unit_type_def(const char* tooltip_text, unit_t& value)
 {
     if (ImGui::TableNextColumn())
     {
-        const auto label   = fmt::format("##{}-{}", m_current_column, m_current_row);
-        const auto tooltip = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name, value);
-        m_rendering->unit_image(value, 2);
+        unit_tile_t unit_tile = m_tile_renderer->get_single_unit_tile(0, value);
+        const auto  label     = fmt::format("##{}-{}", m_current_column, m_current_row);
+        const auto  tooltip   = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name, value);
+        m_rendering->unit_image(unit_tile, 2);
         ImGui::SameLine();
         if (m_current_column < m_value_colors.size())
         {
@@ -244,13 +246,13 @@ void Type_editor::terrain_editor_imgui()
 {
     constexpr ImVec2 button_size{110.0f, 0.0f};
 
-    m_rendering->terrain_image(m_simulate_terrain_type, 2);
+    m_rendering->terrain_image(m_tiles->get_terrain_tile_from_terrain(m_simulate_terrain_type), 2);
     ImGui::SameLine();
     m_rendering->make_terrain_type_combo("##Terrain Type", m_simulate_terrain_type);
     ImGui::SameLine();
     ImGui::TextUnformatted("vs.");
     ImGui::SameLine();
-    m_rendering->unit_image(m_simulate_unit_type, 2);
+    m_rendering->unit_image(m_tile_renderer->get_single_unit_tile(0, m_simulate_unit_type), 2);
     ImGui::SameLine();
     m_rendering->make_unit_type_combo("##Unit Type", m_simulate_unit_type);
     ImGui::SameLine();
@@ -326,7 +328,7 @@ void Type_editor::terrain_editor_imgui()
                 ImGui::PopFont         ();
                 ImGui::SameLine        ();
                 const auto name_label = fmt::format("##name-{}", m_current_terrain_id);
-                m_rendering->terrain_image(m_current_terrain_id, 2);
+                m_rendering->terrain_image(m_tiles->get_terrain_tile_from_terrain(m_current_terrain_id), 2);
                 ImGui::SameLine        ();
                 ImGui::SetNextItemWidth(80.0f);
                 ImGui::InputText       (name_label.c_str(), &terrain.name);
@@ -527,13 +529,13 @@ void Type_editor::terrain_replacement_rule_editor_imgui()
 
 void Type_editor::unit_editor_imgui()
 {
-    m_rendering->unit_image(m_simulate_unit_type_a, 2);
+    m_rendering->unit_image(m_tile_renderer->get_single_unit_tile(0, m_simulate_unit_type_a), 2);
     ImGui::SameLine();
     m_rendering->make_unit_type_combo("##Type A", m_simulate_unit_type_a);
     ImGui::SameLine();
     ImGui::TextUnformatted("vs.");
     ImGui::SameLine();
-    m_rendering->unit_image(m_simulate_unit_type_b, 2);
+    m_rendering->unit_image(m_tile_renderer->get_single_unit_tile(1, m_simulate_unit_type_b), 2);
     ImGui::SameLine();
     m_rendering->make_unit_type_combo("##Type B", m_simulate_unit_type_b);
     ImGui::SameLine();
@@ -630,7 +632,7 @@ void Type_editor::unit_editor_imgui()
                 ImGui::PopFont         ();
                 ImGui::SameLine        ();
                 const auto name_label = fmt::format("##name-{}", m_current_row);
-                m_rendering->unit_image(m_current_unit_id, 2);
+                m_rendering->unit_image(m_tile_renderer->get_single_unit_tile(0, m_current_unit_id), 2);
                 ImGui::SameLine        ();
                 ImGui::SetNextItemWidth(80.0f);
                 ImGui::InputText       (name_label.c_str(), &unit.name);

@@ -4,6 +4,7 @@
 #include "menu_window.hpp"
 #include "rendering.hpp"
 #include "tiles.hpp"
+#include "tile_renderer.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
@@ -26,9 +27,10 @@ Game_window::~Game_window()
 
 void Game_window::connect()
 {
-    m_game      = get<Game>();
-    m_rendering = get<Rendering>();
-    m_tiles     = get<Tiles>();
+    m_game          = get<Game         >();
+    m_rendering     = get<Rendering    >();
+    m_tiles         = get<Tiles        >();
+    m_tile_renderer = get<Tile_renderer>();
     require<erhe::application::Imgui_windows>();
 }
 
@@ -56,9 +58,10 @@ void Game_window::imgui()
 
     Game_context context
     {
-        .game      = *m_game.get(),
-        .rendering = *m_rendering.get(),
-        .tiles     = *m_tiles.get()
+        .game          = *m_game.get(),
+        .rendering     = *m_rendering.get(),
+        .tiles         = *m_tiles.get(),
+        .tile_renderer = *m_tile_renderer.get()
     };
     player.imgui(context);
 

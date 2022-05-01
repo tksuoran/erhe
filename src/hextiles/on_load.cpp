@@ -1,11 +1,11 @@
 #include "game.hpp"
 #include "game_window.hpp"
-#include "map_renderer.hpp"
 #include "map_window.hpp"
 #include "menu_window.hpp"
 #include "new_game_window.hpp"
 #include "rendering.hpp"
 #include "tiles.hpp"
+#include "tile_renderer.hpp"
 #include "view_client.hpp"
 #include "map_editor/map_editor.hpp"
 #include "map_editor/map_tool_window.hpp"
@@ -82,7 +82,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<hextiles::Game_window                           >());
         m_components.add(make_shared<hextiles::Map_editor                            >());
         m_components.add(make_shared<hextiles::Map_generator                         >());
-        m_components.add(make_shared<hextiles::Map_renderer                          >());
+        m_components.add(make_shared<hextiles::Tile_renderer                          >());
         m_components.add(make_shared<hextiles::Map_tool_window                       >());
         m_components.add(make_shared<hextiles::Map_window                            >());
         m_components.add(make_shared<hextiles::Menu_window                           >());

@@ -72,6 +72,19 @@ public:
         const int                        y = 0,
         const int                        z = 0
     );
+    void upload_subimage(
+        const gl::Internal_format        internal_format,
+        const gsl::span<const std::byte> data,
+        const int                        src_row_length,
+        const int                        src_x,
+        const int                        src_y,
+        const int                        width,
+        const int                        height,
+        const int                        level,
+        const int                        x,
+        const int                        y,
+        const int                        z = 0
+    );
 
     void set_debug_label(const std::string& value);
 

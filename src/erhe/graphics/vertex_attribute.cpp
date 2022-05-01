@@ -27,6 +27,7 @@ auto Vertex_attribute::desc(
         case Usage_type::matrix_indices: return "matrix_indices";
         case Usage_type::tex_coord:      return "tex_coord";
         case Usage_type::id:             return "id";
+        case Usage_type::custom:         return "custom";
         default:
         {
             ERHE_FATAL("Bad vertex attribute usage\n");

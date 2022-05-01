@@ -1,8 +1,8 @@
 #include "map_editor/map_editor.hpp"
 #include "map.hpp"
-#include "map_renderer.hpp"
 #include "map_window.hpp"
 #include "tiles.hpp"
+#include "tile_renderer.hpp"
 
 #include "erhe/application/view.hpp"
 #include "erhe/application/commands/command_context.hpp"
@@ -65,7 +65,7 @@ Map_editor::~Map_editor()
 void Map_editor::connect()
 {
     m_map_window   = require<Map_window  >();
-    m_map_renderer = get    <Map_renderer>();
+    m_tile_renderer = get    <Tile_renderer>();
     m_tiles        = get    <Tiles       >();
 }
 
@@ -114,7 +114,7 @@ void Map_editor::primary_brush(glm::vec2 mouse_position)
     std::function<void(Tile_coordinate)> set_terrain_op =
     [this] (Tile_coordinate position) -> void
     {
-        m_map->set_terrain(position, m_left_brush);
+        m_map->set_terrain_tile(position, m_left_brush);
     };
 
     std::function<void(Tile_coordinate)> update_op =
@@ -134,7 +134,7 @@ void Map_editor::terrain_palette()
     ImGui::SameLine();
     ImGui::Text("%s", terrain_type.name.c_str());
 
-    terrain_t terrain = 0;
+    terrain_tile_t terrain = 0;
     for (int ty = 0; ty < Base_tiles::height; ++ty)
     {
         for (int tx = 0; tx < Base_tiles::width; ++tx)
@@ -155,7 +155,7 @@ void Map_editor::terrain_palette()
 
 void Map_editor::render()
 {
-    const auto& terrain_shapes = m_tiles->get_terrain_shapes();
+    const auto& terrain_shapes = m_tile_renderer->get_terrain_shapes();
 
     if (
         !m_hover_tile_position.has_value() ||
@@ -165,11 +165,12 @@ void Map_editor::render()
         return;
     }
 
-    const auto&             tile  = m_hover_tile_position.value();
-    const Pixel_coordinate& shape = terrain_shapes[m_left_brush];
-    const std::string       text  = fmt::format("{}, {}", tile.x, tile.y);
-    m_map_window->blit (tile, shape, 0x88888888u);
-    m_map_window->print(tile, text);
+    const auto&             location = m_hover_tile_position.value();
+    const Pixel_coordinate& shape    = terrain_shapes[m_left_brush];
+    //const tile_t      tile     = m_tile_renderer->get_terrain_tile(m_left_brush);
+    const std::string text  = fmt::format("{}, {}", location.x, location.y);
+    m_map_window->blit (shape, location, 0x88888888u);
+    m_map_window->print(text, location);
 }
 
 } // namespace hextiles

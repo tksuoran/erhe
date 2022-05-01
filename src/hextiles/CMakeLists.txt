@@ -16,8 +16,6 @@ erhe_target_sources_grouped(
     game_window.cpp
     game_window.hpp
     main.cpp
-    map_renderer.cpp
-    map_renderer.hpp
     map.cpp
     map.hpp
     map_window.cpp
@@ -35,6 +33,8 @@ erhe_target_sources_grouped(
     terrain_type.hpp
     texture_util.cpp
     texture_util.hpp
+    tile_renderer.cpp
+    tile_renderer.hpp
     tile_shape.cpp
     tile_shape.hpp
     tiles.cpp

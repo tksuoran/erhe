@@ -64,6 +64,7 @@ public:
 struct Unit_type
 {
     std::string name;
+    int         tile           {0};
     int         tech_level     {0};
     int         production_time{0};
     int         city_size      {0};

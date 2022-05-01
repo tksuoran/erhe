@@ -1,6 +1,6 @@
 #include "rendering.hpp"
-#include "map_renderer.hpp"
 #include "tiles.hpp"
+#include "tile_renderer.hpp"
 #include "tile_shape.hpp"
 
 #include "erhe/graphics/texture.hpp"
@@ -20,15 +20,15 @@ Rendering::~Rendering()
 void Rendering::connect()
 {
     m_imgui_renderer = get<erhe::application::Imgui_renderer>();
-    m_map_renderer   = get<Map_renderer>();
+    m_tile_renderer  = get<Tile_renderer>();
     m_tiles          = get<Tiles       >();
 }
 
-auto Rendering::terrain_image(terrain_t terrain, const int scale) -> bool
+auto Rendering::terrain_image(terrain_tile_t terrain_tile, const int scale) -> bool
 {
-    const auto&     texel           = m_tiles->get_terrain_shape(terrain);
-    const auto&     tileset_texture = m_map_renderer->tileset_texture();
-    const glm::vec2 uv0{
+    const Pixel_coordinate& texel           = m_tile_renderer->get_terrain_shape(terrain_tile);
+    const auto&             tileset_texture = m_tile_renderer->tileset_texture();
+    const glm::vec2         uv0{
         static_cast<float>(texel.x) / static_cast<float>(tileset_texture->width()),
         static_cast<float>(texel.y) / static_cast<float>(tileset_texture->height()),
     };
@@ -48,10 +48,10 @@ auto Rendering::terrain_image(terrain_t terrain, const int scale) -> bool
     );
 }
 
-auto Rendering::unit_image(unit_t unit, const int scale) -> bool
+auto Rendering::unit_image(unit_tile_t unit_tile, const int scale) -> bool
 {
-    const auto&     texel           = m_tiles->get_unit_shape(unit);
-    const auto&     tileset_texture = m_map_renderer->tileset_texture();
+    const auto&     texel           = m_tile_renderer->get_unit_shape(unit_tile);
+    const auto&     tileset_texture = m_tile_renderer->tileset_texture();
     const glm::vec2 uv0{
         static_cast<float>(texel.x) / static_cast<float>(tileset_texture->width()),
         static_cast<float>(texel.y) / static_cast<float>(tileset_texture->height()),
@@ -83,16 +83,17 @@ void Rendering::make_terrain_type_combo(const char* label, terrain_t& value)
         const terrain_t end = static_cast<unit_t>(m_tiles->get_terrain_type_count());
         for (terrain_t i = 0; i < end; i++)
         {
-            auto&      unit = m_tiles->get_terrain_type(i);
-            const auto id   = fmt::format("##{}-{}", label, i);
+            terrain_tile_t terrain_tile = m_tiles->get_terrain_tile_from_terrain(i);
+            auto&          terrain_type = m_tiles->get_terrain_type(i);
+            const auto     id           = fmt::format("##{}-{}", label, i);
             ImGui::PushID(id.c_str());
             bool is_selected = (value == i);
-            if (terrain_image(i, 1))
+            if (terrain_image(terrain_tile, 1))
             {
                 value = i;
             }
             ImGui::SameLine();
-            if (ImGui::Selectable(unit.name.c_str(), is_selected))
+            if (ImGui::Selectable(terrain_type.name.c_str(), is_selected))
             {
                 value = i;
             }
@@ -119,16 +120,17 @@ void Rendering::make_unit_type_combo(const char* label, unit_t& value)
         const unit_t end = static_cast<unit_t>(m_tiles->get_unit_type_count());
         for (unit_t i = 0; i < end; i++)
         {
-            auto&      unit = m_tiles->get_unit_type(i);
-            const auto id   = fmt::format("##{}-{}", label, i);
+            unit_tile_t unit_tile = m_tile_renderer->get_single_unit_tile(0, i);
+            Unit_type&  unit_type = m_tiles->get_unit_type(i);
+            const auto  id        = fmt::format("##{}-{}", label, i);
             ImGui::PushID(id.c_str());
             bool is_selected = (value == i);
-            if (unit_image(i, 1))
+            if (unit_image(unit_tile, 1))
             {
                 value = i;
             }
             ImGui::SameLine();
-            if (ImGui::Selectable(unit.name.c_str(), is_selected))
+            if (ImGui::Selectable(unit_type.name.c_str(), is_selected))
             {
                 value = i;
             }

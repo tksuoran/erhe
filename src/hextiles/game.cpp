@@ -1,28 +1,34 @@
 #include "game.hpp"
 #include "game_window.hpp"
 #include "map.hpp"
-#include "map_renderer.hpp"
 #include "map_window.hpp"
 #include "menu_window.hpp"
 #include "rendering.hpp"
 #include "tiles.hpp"
+#include "tile_renderer.hpp"
+
+#include "erhe/application/time.hpp"
 
 #include <imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
+
+#include <bit>
 
 namespace hextiles
 {
 
 void Player::city_imgui(Game_context& context)
 {
+    const int    player     = context.game.get_current_player().id;
     const size_t city_index = m_current_unit;
-    Unit& city = cities.at(city_index);
 
-    Unit_type& product = context.tiles.get_unit_type(city.production);
+    Unit& city = cities.at(city_index);
+    const unit_tile_t unit_tile = context.tile_renderer.get_single_unit_tile(player, city.type);
+    const Unit_type&  product   = context.tiles.get_unit_type(city.production);
 
     ImGui::Text("City %d", city_index);
     ImGui::SameLine();
-    context.rendering.unit_image(city.type, 2);
+    context.rendering.unit_image(unit_tile, 2);
     ImGui::SameLine();
     ImGui::InputText("##city_name", &city.name);
     //ImGui::Text("P: ", product.name.c_str());
@@ -32,15 +38,16 @@ void Player::city_imgui(Game_context& context)
 
 void Player::unit_imgui(Game_context& context)
 {
-    static_cast<void>(context);
-
+    const int    player     = context.game.get_current_player().id;
     const size_t unit_index = m_current_unit - cities.size();
+
     Unit& unit = units.at(unit_index);
-    const Unit_type& unit_type = context.tiles.get_unit_type(unit.type);
+    const unit_tile_t unit_tile = context.tile_renderer.get_single_unit_tile(player, unit.type);
+    const Unit_type&  unit_type = context.tiles.get_unit_type(unit.type);
 
     ImGui::Text("Unit %d", unit_index);
     ImGui::SameLine();
-    context.rendering.unit_image(unit.type, 2);
+    context.rendering.unit_image(unit_tile, 2);
     ImGui::SameLine();
     ImGui::Text("%s", unit_type.name.c_str());
     ImGui::Text("Hit Points: %d / %d", unit.hit_points, unit_type.hit_points);
@@ -120,8 +127,11 @@ Game::~Game()
 
 void Game::connect()
 {
-    m_rendering = get<Rendering>();
-    m_tiles     = get<Tiles>();
+    m_time = get<erhe::application::Time>();
+
+    m_rendering     = get<Rendering>();
+    m_tiles         = get<Tiles>();
+    m_tile_renderer = get<Tile_renderer>();
 }
 
 void Game::initialize_component()
@@ -133,18 +143,83 @@ void Game::reveal(Map& target_map, Tile_coordinate position, int radius) const
     std::function<void(Tile_coordinate)> reveal_op =
     [this, &target_map] (Tile_coordinate position) -> void
     {
-        const terrain_t terrain   = m_map->get_terrain(position);
-        const unit_t    unit_icon = m_map->get_unit_icon(position);
-        target_map.set(position, terrain, unit_icon);
+        const terrain_tile_t terrain_tile = m_map->get_terrain_tile(position);
+        const unit_tile_t    unit_tile    = m_map->get_unit_tile(position);
+        target_map.set(position, terrain_tile, unit_tile);
     };
 
     m_map->hex_circle(position, 0, radius, reveal_op);
 }
 
+auto Game::get_unit_tile(Tile_coordinate position) -> unit_tile_t
+{
+    uint32_t    occupied_player_mask     {0u};
+    uint32_t    occupied_battle_type_mask{0u};
+    unit_tile_t first_found_unit_tile    {0u};
+    size_t      found_unit_count         {0u};
+    std::array<int, Battle_type::bit_count> battle_type_player_id;
+
+    battle_type_player_id.fill(0);
+
+    //std::vector<Player_unit> player_units;
+
+    for (int player_index = 0; player_index < m_players.size(); ++player_index)
+    {
+        const int player_id = player_index + 1;
+        const Player& player = m_players[player_index];
+        for (const Unit& unit : player.cities)
+        {
+            if (unit.location != position)
+            {
+                continue;
+            }
+            const Unit_type& unit_type = m_tiles->get_unit_type(unit.type);
+            occupied_battle_type_mask |= (1u << unit_type.battle_type);
+            // Single city found
+            return m_tile_renderer->get_single_unit_tile(player_index, unit.type);
+        }
+
+        for (const Unit& unit : player.units)
+        {
+            if (unit.location != position)
+            {
+                continue;
+            }
+            const Unit_type& unit_type = m_tiles->get_unit_type(unit.type);
+            occupied_battle_type_mask |= (1u << unit_type.battle_type);
+            occupied_player_mask      |= (1u << player_index);
+
+            Expects(
+                (battle_type_player_id[unit_type.battle_type] == 0) ||
+                (battle_type_player_id[unit_type.battle_type] == player_id)
+            );
+            battle_type_player_id[unit_type.battle_type] = player_id;
+            if (found_unit_count == 0)
+            {
+                first_found_unit_tile = m_tile_renderer->get_single_unit_tile(player_index, unit.type);
+            }
+            ++found_unit_count;
+        }
+    }
+
+    if (found_unit_count == 0)
+    {
+        return m_tile_renderer->get_special_unit_tile(7);
+    }
+    if (found_unit_count == 1)
+    {
+        return first_found_unit_tile;
+    }
+    return m_tile_renderer->get_multi_unit_tile(
+        battle_type_player_id
+    );
+}
+
 auto Game::make_unit(unit_t unit_id, Tile_coordinate location) -> Unit
 {
     Unit_type& unit_type = m_tiles->get_unit_type(unit_id);
-    m_map->set_unit_icon(location, unit_id);
+    const unit_tile_t unit_tile = get_unit_tile(location);
+    m_map->set_unit_tile(location, unit_tile);
     return Unit{
         .location            = location,
         .type                = unit_id,
@@ -160,21 +235,25 @@ auto Game::make_unit(unit_t unit_id, Tile_coordinate location) -> Unit
 
 void Game::add_player(const std::string& name, Tile_coordinate location)
 {
-    const terrain_t     city_terrain      = m_map->get_terrain(location);
-    const Terrain_type& city_terrain_type = m_tiles->get_terrain_type(city_terrain);
-    const unit_t        city_unit_id      = m_tiles->get_city_unit_type(city_terrain_type.city_size);
+    const terrain_tile_t city_terrain_tile = m_map->get_terrain_tile(location);
+    const terrain_t      city_terrain      = m_tiles->get_terrain_from_tile(city_terrain_tile);
+    const Terrain_type&  city_terrain_type = m_tiles->get_terrain_type(city_terrain);
+    const unit_t         city_unit_id      = m_tiles->get_city_unit_type(city_terrain_type.city_size);
+    const int            player_id         = static_cast<int>(m_players.size());
+    const unit_tile_t    unit_tile         = m_tile_renderer->get_single_unit_tile(player_id, city_unit_id);
 
     m_players.emplace_back();
     Player& player = m_players.back();
+    player.id   = player_id;
     player.name = name;
-    player.map = std::make_shared<Map>();
+    player.map  = std::make_shared<Map>();
     player.map->reset(m_map->width(), m_map->height());
 
     Unit city = make_unit(city_unit_id, location);
     player.cities.push_back(city);
 
     auto& player_map = *player.map.get();
-    m_map->set_unit_icon(location, city_unit_id);
+    m_map->set_unit_tile(location, unit_tile);
     reveal(player_map, location, city_terrain_type.city_size);
 }
 
@@ -212,9 +291,10 @@ void Game::update_current_player()
 
     Game_context context
     {
-        .game      = *this,
-        .rendering = *m_rendering.get(),
-        .tiles     = *m_tiles.get()
+        .game          = *this,
+        .rendering     = *m_rendering.get(),
+        .tiles         = *m_tiles.get(),
+        .tile_renderer = *m_tile_renderer.get()
     };
 
     player.progress_production(context);

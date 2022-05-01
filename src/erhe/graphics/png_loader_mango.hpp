@@ -21,7 +21,7 @@ namespace mango {
 namespace erhe::graphics
 {
 
-enum Image_format
+enum class Image_format : int
 {
     srgb8 = 0,
     srgb8_alpha8,
@@ -35,7 +35,7 @@ public:
     int          depth      {0};
     int          level_count{0};
     int          row_stride {0};
-    Image_format format     {srgb8_alpha8};
+    Image_format format     {Image_format::srgb8_alpha8};
 };
 
 class PNG_loader final

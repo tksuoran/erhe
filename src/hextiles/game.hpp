@@ -7,6 +7,13 @@
 
 #include <string>
 
+namespace erhe::application
+{
+
+class Time;
+
+}
+
 namespace hextiles
 {
 
@@ -14,12 +21,14 @@ class Game;
 class Map;
 class Rendering;
 class Tiles;
+class Tile_renderer;
 
 struct Game_context
 {
-    Game&      game;
-    Rendering& rendering;
-    Tiles&     tiles;
+    Game&          game;
+    Rendering&     rendering;
+    Tiles&         tiles;
+    Tile_renderer& tile_renderer;
 };
 
 class Unit
@@ -44,6 +53,7 @@ public:
     void unit_imgui(Game_context& context);
     void imgui     (Game_context& context);
 
+    int                  id;
     std::shared_ptr<Map> map;
     std::string          name;
     std::vector<Unit>    cities;
@@ -60,7 +70,7 @@ private:
     size_t                 m_city_counter{0};
 };
 
-class Map_renderer;
+class Tile_renderer;
 class Tiles;
 
 struct Game_create_parameters
@@ -91,15 +101,17 @@ public:
     void new_game          (const Game_create_parameters& parameters);
     void next_turn         ();
     auto get_current_player() -> Player&;
+    auto get_unit_tile     (Tile_coordinate position) -> unit_tile_t;
 
 private:
     void add_player           (const std::string& name, Tile_coordinate start_city);
     void update_current_player();
     void reveal               (Map& target_map, Tile_coordinate position, int radius) const;
 
-    std::shared_ptr<Rendering>    m_rendering;
-    //std::shared_ptr<Map_renderer> m_map_renderer;
-    std::shared_ptr<Tiles>        m_tiles;
+    std::shared_ptr<erhe::application::Time> m_time;
+    std::shared_ptr<Rendering>               m_rendering;
+    std::shared_ptr<Tiles>                   m_tiles;
+    std::shared_ptr<Tile_renderer>           m_tile_renderer;
 
     std::shared_ptr<Map>         m_map;
     int                          m_turn          {0};

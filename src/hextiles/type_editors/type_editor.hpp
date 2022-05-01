@@ -17,7 +17,7 @@ namespace erhe::application
 namespace hextiles
 {
 
-class Map_renderer;
+class Tile_renderer;
 class Map_window;
 class Rendering;
 class Tiles;
@@ -43,11 +43,11 @@ public:
     void unit_editor_imgui();
 
 private:
-    void make_def               (const char* tooltip_text, bool& value);
-    void make_def               (const char* tooltip_text, int& value);
-    void make_def               (const char* tooltip_text, float& value, float min_value, float max_value);
-    void make_terrain_type_def  (const char* tooltip_text, terrain_t& value);
-    void make_unit_type_def     (const char* label, unit_t& value);
+    void make_def             (const char* tooltip_text, bool& value);
+    void make_def             (const char* tooltip_text, int& value);
+    void make_def             (const char* tooltip_text, float& value, float min_value, float max_value);
+    void make_terrain_type_def(const char* tooltip_text, terrain_t& value);
+    void make_unit_type_def   (const char* label, unit_t& value);
 
     template<typename T>
     void make_combo_def   (const char* tooltip_text, uint32_t& value);
@@ -65,7 +65,7 @@ private:
 
     // Component dependencies
     std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
-    std::shared_ptr<Map_renderer>                      m_map_renderer;
+    std::shared_ptr<Tile_renderer>                      m_tile_renderer;
     std::shared_ptr<Map_window  >                      m_map_window;
     std::shared_ptr<Rendering   >                      m_rendering;
     std::shared_ptr<Tiles       >                      m_tiles;

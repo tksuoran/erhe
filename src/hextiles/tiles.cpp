@@ -24,10 +24,13 @@ Tiles::~Tiles()
 {
 }
 
+void Tiles::connect()
+{
+}
+
 void Tiles::initialize_component()
 {
-    init_shapes();
-
+    // Multishape groups
     load_terrain_defs();
     load_terrain_group_defs();
     load_terrain_replacement_rule_defs();
@@ -38,16 +41,14 @@ using json = nlohmann::json;
 
 auto Tiles::get_terrain_type(terrain_t terrain) const -> const Terrain_type&
 {
-    const terrain_t base_terrain = get_base_terrain(terrain);
-    Expects(base_terrain < m_terrain_types.size());
-    return m_terrain_types[base_terrain];
+    Expects(terrain < m_terrain_types.size());
+    return m_terrain_types[terrain];
 }
 
 auto Tiles::get_terrain_type(terrain_t terrain) -> Terrain_type&
 {
-    const terrain_t base_terrain = get_base_terrain(terrain);
-    Expects(base_terrain < m_terrain_types.size());
-    return m_terrain_types[base_terrain];
+    Expects(terrain < m_terrain_types.size());
+    return m_terrain_types[terrain];
 }
 
 auto Tiles::get_terrain_type_count() const -> size_t
@@ -94,16 +95,6 @@ auto Tiles::get_city_unit_type(int city_size) const -> unit_t
     return 0;
 }
 
-auto Tiles::get_terrain_shapes() const -> const std::vector<Pixel_coordinate>&
-{
-    return m_terrain_shapes;
-}
-
-auto Tiles::get_unit_shapes() const -> const std::vector<Pixel_coordinate>&
-{
-    return m_unit_shapes;
-}
-
 auto Tiles::get_terrain_group(size_t group) const -> const Terrain_group&
 {
     Expects(group < m_terrain_groups.size());
@@ -128,20 +119,14 @@ auto Tiles::get_terrain_replacement_rule(size_t replacement_rule) -> Terrain_rep
     return m_terrain_replacement_rules.at(replacement_rule);
 }
 
-auto Tiles::get_grid_shape(int grid) const -> Pixel_coordinate
+auto Tiles::get_terrain_from_tile(terrain_tile_t terrain_tile) const -> terrain_t
 {
-    Expects(grid < m_grid_shapes.size());
-    return m_grid_shapes.at(grid);
-}
-
-auto Tiles::get_base_terrain(terrain_t terrain) const -> terrain_t
-{
-    if (terrain < m_multigroup_terrain_offset)
+    if (terrain_tile < Base_tiles::count)
     {
-        return terrain;
+        return static_cast<terrain_t>(terrain_tile);
     }
 
-    const int group_id = (terrain - m_multigroup_terrain_offset) / (Tile_group::width * Tile_group::height);
+    const int group_id = (terrain_tile - Base_tiles::count) / (Tile_group::width * Tile_group::height);
     Expects(group_id < Tile_group::count);
     Expects(group_id < m_terrain_groups.size());
 
@@ -151,19 +136,24 @@ auto Tiles::get_base_terrain(terrain_t terrain) const -> terrain_t
     const int       base_terrain_group = base_terrain_type.group;
     if (base_terrain_group != group_id)
     {
-        log_new_game.error("base terrain group != group");
+        log_tiles.error("base terrain group != group");
         //Expects(m_terrain_types[multishape.base_terrain_type].group == group);
     }
     return terrain_group.base_terrain_type;
 }
 
-auto Tiles::get_terrain_group_shape(int group, unsigned int neighbor_mask) const -> terrain_t
+auto Tiles::get_terrain_tile_from_terrain(terrain_t terrain) const -> terrain_tile_t
+{
+    return static_cast<terrain_tile_t>(terrain);
+}
+
+auto Tiles::get_terrain_group_tile(int group, unsigned int neighbor_mask) const -> terrain_tile_t
 {
     Expects(group < m_terrain_groups.size());
     const auto shape_group = m_terrain_groups[group].shape_group;
     Expects(shape_group < Tile_group::count);
-    return static_cast<terrain_t>(
-        m_multigroup_terrain_offset +
+    return static_cast<terrain_tile_t>(
+        Base_tiles::count +
         shape_group * Tile_group::width * Tile_group::height + neighbor_mask
     );
 }
@@ -281,7 +271,7 @@ void Tiles::update_terrain_groups()
     for (int group_id = 0; group_id < m_terrain_groups.size(); ++group_id)
     {
         Terrain_group& group = m_terrain_groups[group_id];
-        Expects(group.base_terrain_type < m_multigroup_terrain_offset);
+        Expects(group.base_terrain_type < Base_tiles::count);
         m_terrain_types[group.base_terrain_type].group = group_id;
     }
 }
@@ -809,10 +799,15 @@ void Tiles::load_unit_defs_v1()
         m_unit_types.push_back(unit_type);
     }
 
-    while (m_unit_types.size() < 70)
+    while (m_unit_types.size() < 63)
     {
         Unit_type placeholder;
         m_unit_types.push_back(placeholder);
+    }
+
+    if (m_unit_types.size() > 64)
+    {
+        m_unit_types.erase(m_unit_types.begin() + 64);
     }
 }
 
@@ -924,108 +919,13 @@ void Tiles::load_unit_defs_v2()
         unit_type.audio_frequency              = json_unit_type["Frequ"                       ];
         m_unit_types.push_back(unit_type);
     }
+
+    if (m_unit_types.size() > 56)
+    {
+        m_unit_types.erase(m_unit_types.begin() + 56, m_unit_types.end());
+    }
 }
 #pragma endregion Unit type IO
-
-auto Tiles::get_terrain_shape(const terrain_t terrain) -> Pixel_coordinate
-{
-    Expects(terrain < m_terrain_shapes.size());
-    return m_terrain_shapes[terrain];
-}
-
-auto Tiles::get_unit_shape(const unit_t unit) -> Pixel_coordinate
-{
-    Expects(unit < m_unit_shapes.size());
-    return m_unit_shapes[unit];
-}
-
-void Tiles::init_shapes()
-{
-    int ty_offset{0}; // in tiles
-
-    ty_offset += Tile_group::count * Tile_group::height;
-
-    // Edge shapes
-    for (int tx = 0; tx < Tile_group::width; ++tx)
-    {
-        m_edge_shapes.emplace_back(
-            tx * Tile_shape::full_width,
-            ty_offset * Tile_shape::height
-        );
-    }
-    ty_offset += 1;
-
-    // Extra shapes (map edge, brush size)
-    for (int tx = 0; tx < Tile_group::width; ++tx)
-    {
-        m_extra_shapes.emplace_back(
-            tx * Tile_shape::full_width,
-            ty_offset * Tile_shape::height
-        );
-    }
-    ty_offset += 1;
-
-    // Basetiles
-    for (int ty = 0; ty < Base_tiles::height; ++ty)
-    {
-        for (int tx = 0; tx < Base_tiles::width; ++tx)
-        {
-            m_terrain_shapes.emplace_back(
-                tx * Tile_shape::full_width,
-                (ty + ty_offset) * Tile_shape::height
-            );
-        }
-    }
-    ty_offset += Base_tiles::height;
-
-    // Multishape groups
-    m_multigroup_terrain_offset = static_cast<terrain_t>(m_terrain_shapes.size());
-    for (int ty = 0; ty < Tile_group::count * Tile_group::height; ++ty)
-    {
-        for (int tx = 0; tx < Tile_group::width; ++tx)
-        {
-            m_terrain_shapes.emplace_back(
-                tx * Tile_shape::full_width,
-                ty * Tile_shape::height
-            );
-        }
-    }
-
-    // Grid shapes
-    for (int tx = 0; tx < Tile_group::width; ++tx)
-    {
-        m_grid_shapes.emplace_back(
-            tx * Tile_shape::full_width,
-            ty_offset * Tile_shape::height
-        );
-    }
-    ty_offset += 1;
-
-    // Explosions
-    for (int ty = 0; ty < Explosion_tiles::height; ++ty)
-    {
-        for (int tx = 0; tx < Base_tiles::width; ++tx)
-        {
-            m_explosion_shapes.emplace_back(
-                tx * Tile_shape::full_width * 2,
-                (ty + ty_offset) * Tile_shape::height *2
-            );
-        }
-    }
-    ty_offset += Explosion_tiles::height * 2;
-
-    // Unit shapes
-    for (int ty = 0; ty < Unit_group::height; ++ty)
-    {
-        for (int tx = 0; tx < Unit_group::width; ++tx)
-        {
-            m_unit_shapes.emplace_back(
-                tx * Tile_shape::full_width,
-                (ty + ty_offset) * Tile_shape::height
-            );
-        }
-    }
-}
 
 auto Tiles::remove_terrain_group(int group_id) -> bool
 {

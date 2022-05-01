@@ -20,23 +20,33 @@ public:
 class Tile_group
 {
 public:
-    static constexpr int count  = 7;
     static constexpr int width  = 8;
     static constexpr int height = 8;
+    static constexpr int count  = 7;
 };
 
 class Base_tiles
 {
 public:
-    static constexpr int width  =  5;
-    static constexpr int height = 11;
+    static constexpr int width  = 8; // 5 * 11 = 55
+    static constexpr int height = 7; // 8 *  7 = 56
     static constexpr int count  = width * height;
+};
+
+class Extra_tiles
+{
+public:
+    static constexpr int width  = 8;
+    static constexpr int height = 1;
+
+    static constexpr int grid_offset       = 0;
+    static constexpr int brush_size_offset = 2;
 };
 
 class Explosion_tiles
 {
 public:
-    static constexpr int width  = 5;
+    static constexpr int width  = 4;
     static constexpr int height = 2;
     static constexpr int count  = width * height;
 };
@@ -44,8 +54,8 @@ public:
 class Unit_group
 {
 public:
-    static constexpr int width  =  7;
-    static constexpr int height = 10;
+    static constexpr int width  = 8;
+    static constexpr int height = 7;
 };
 
 } // namespace hextiles

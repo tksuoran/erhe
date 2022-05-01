@@ -4,20 +4,20 @@
 #include "erhe/log/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+#include <gsl/assert>
+#include <bit>
+
 namespace hextiles
 {
 
 erhe::log::Category log_image{0.6f, 1.0f, 0.6f, erhe::log::Console_color::GREEN, erhe::log::Level::LEVEL_INFO};
-
-namespace
-{
 
 auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format
 {
     switch (format)
     {
         //using enum erhe::graphics::Image_format;
-        case erhe::graphics::Image_format::srgb8:  return gl::Internal_format::srgb;
+        case erhe::graphics::Image_format::srgb8:        return gl::Internal_format::srgb;
         case erhe::graphics::Image_format::srgb8_alpha8: return gl::Internal_format::srgb8_alpha8;
         default:
         {
@@ -26,6 +26,9 @@ auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format
     }
     // std::unreachable() return gl::Internal_format::rgba8;
 }
+
+namespace
+{
 
 auto pixel_size(erhe::graphics::Image_format format) -> size_t
 {
@@ -46,6 +49,33 @@ auto get_buffer_size(const erhe::graphics::Image_info& info) -> size_t
 }
 
 } // anonymous namespce
+
+auto Image::get_pixel(size_t x, size_t y) const -> glm::vec4
+{
+    Expects(x < info.width);
+    Expects(y < info.height);
+    const size_t       index = y * info.row_stride + x * 4;
+    const std::uint8_t r_i   = std::bit_cast<uint8_t>(data[index]);
+    const std::uint8_t g_i   = std::bit_cast<uint8_t>(data[index + 1]);
+    const std::uint8_t b_i   = std::bit_cast<uint8_t>(data[index + 2]);
+    const std::uint8_t a_i   = std::bit_cast<uint8_t>(data[index + 3]);
+    const float        r     = static_cast<float>(r_i) / 255.0f;
+    const float        g     = static_cast<float>(g_i) / 255.0f;
+    const float        b     = static_cast<float>(b_i) / 255.0f;
+    const float        a     = static_cast<float>(a_i) / 255.0f;
+    return glm::vec4{r, g, b, a};
+}
+
+void Image::put_pixel(size_t x, size_t y, glm::vec4 color)
+{
+    Expects(x < info.width);
+    Expects(y < info.height);
+    const size_t index = y * info.row_stride + x * 4;
+    data[index    ] = std::bit_cast<std::byte>(static_cast<uint8_t>(color.r * 255.0f));
+    data[index + 1] = std::bit_cast<std::byte>(static_cast<uint8_t>(color.g * 255.0f));
+    data[index + 2] = std::bit_cast<std::byte>(static_cast<uint8_t>(color.b * 255.0f));
+    data[index + 3] = std::bit_cast<std::byte>(static_cast<uint8_t>(color.a * 255.0f));
+}
 
 auto load_png(const fs::path& path) -> Image
 {

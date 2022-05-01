@@ -1,6 +1,6 @@
 #include "view_client.hpp"
 #include "map_window.hpp"
-#include "map_renderer.hpp"
+#include "tile_renderer.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
@@ -22,7 +22,7 @@ void View_client::connect()
     m_imgui_windows          = get<erhe::application::Imgui_windows    >();
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 
-    m_map_renderer  = get<Map_renderer                    >();
+    m_tile_renderer  = get<Tile_renderer                    >();
     m_map_window    = get<Map_window                      >();
     require<erhe::application::View>();
 }
@@ -62,7 +62,7 @@ void View_client::update()
 void View_client::render()
 {
     m_map_window  ->render();
-    m_map_renderer->next_frame();
+    m_tile_renderer->next_frame();
 }
 
 void View_client::update_imgui_window(

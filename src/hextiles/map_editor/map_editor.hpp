@@ -16,7 +16,7 @@ namespace hextiles
 
 class Map;
 class Map_editor;
-class Map_renderer;
+class Tile_renderer;
 class Map_window;
 class Tiles;
 
@@ -83,7 +83,7 @@ public:
 private:
     // Component dependencies
     std::shared_ptr<Map_window>     m_map_window;
-    std::shared_ptr<Map_renderer>   m_map_renderer;
+    std::shared_ptr<Tile_renderer>  m_tile_renderer;
     std::shared_ptr<Tiles>          m_tiles;
 
     // Commands
@@ -92,7 +92,7 @@ private:
 
     std::shared_ptr<Map>            m_map;
     int                             m_brush_size{1};
-    terrain_t                       m_left_brush{Terrain_default};
+    terrain_tile_t                  m_left_brush{Terrain_default};
 
     std::optional<glm::vec2>        m_hover_window_position;
     std::optional<Tile_coordinate>  m_hover_tile_position;

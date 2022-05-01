@@ -77,16 +77,17 @@ auto New_game_window::try_create_city(uint32_t flags_match) -> bool
     const auto w = static_cast<coordinate_t>(map->width());
     const auto h = static_cast<coordinate_t>(map->height());
 
-    const Tile_coordinate position   = random_coordinate(w, h);
-    const terrain_t       terrain_id = map->get_terrain(position);
-    const Terrain_type    terrain    = tiles->get_terrain_type(terrain_id);
+    const Tile_coordinate position     = random_coordinate(w, h);
+    const terrain_tile_t  terrain_tile = map->get_terrain_tile(position);
+    const terrain_t       terrain      = tiles->get_terrain_from_tile(terrain_tile);
+    const Terrain_type    terrain_type = tiles->get_terrain_type(terrain);
 
     //if (terrain.city_size == terrain_city_size_match)
     //{
     //    log_new_game.info("{}, {} {}: {}\n", position.x, position.y, terrain.name, terrain.city_size);
     //}
 
-    if ((terrain.flags & flags_match) != flags_match)
+    if ((terrain_type.flags & flags_match) != flags_match)
     {
         return false;
     }
@@ -153,7 +154,7 @@ void New_game_window::place_cities()
     auto map   = get<Map_editor>()->get_map();
     auto tiles = get<Tiles>();
 
-    std::vector<terrain_t> city_tiles;
+    std::vector<terrain_tile_t> city_tiles;
 
     const auto end = tiles->get_terrain_type_count();
     for (terrain_t i = 0; i < end; ++i)
@@ -161,20 +162,21 @@ void New_game_window::place_cities()
         const auto& terrain = tiles->get_terrain_type(i);
         if (terrain.city_size > 0)
         {
-            city_tiles.push_back(i);
+            const terrain_tile_t city_terrain_tile = tiles->get_terrain_tile_from_terrain(i);
+            city_tiles.push_back(city_terrain_tile);
         }
     }
 
     for (auto& city_location : m_cities)
     {
         int city_tile = rand() % city_tiles.size();
-        map->set_terrain(city_location, city_tiles.at(city_tile));
+        map->set_terrain_tile(city_location, city_tiles.at(city_tile));
 
-        const Terrain_type& city_terrain_type = tiles->get_terrain_type(
-            map->get_terrain(city_location)
-        );
+        const terrain_tile_t terrain_tile = map->get_terrain_tile(city_location);
+        const terrain_t      terrain      = tiles->get_terrain_from_tile(terrain_tile);
+        const Terrain_type&  terrain_type = tiles->get_terrain_type(terrain);
 
-        int field_count = city_terrain_type.city_size;
+        int field_count = terrain_type.city_size;
         map->hex_circle(
             city_location,
             0,
@@ -186,11 +188,12 @@ void New_game_window::place_cities()
                     return;
                 }
 
-                const auto          t            = map->get_terrain(position);
-                const Terrain_type& terrain_type = tiles->get_terrain_type(t);
+                const terrain_tile_t terrain_tile = map->get_terrain_tile(position);
+                const terrain_t      terrain      = tiles->get_terrain_from_tile(terrain_tile);
+                const Terrain_type&  terrain_type = tiles->get_terrain_type(terrain);
                 if ((terrain_type.flags & Terrain_flags::bit_can_place_field) == Terrain_flags::bit_can_place_field)
                 {
-                    map->set_terrain(position, Terrain_field);
+                    map->set_terrain_tile(position, tiles->get_terrain_tile_from_terrain(Terrain_field));
                     --field_count;
                 }
             }
