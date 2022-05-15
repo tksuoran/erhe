@@ -188,7 +188,7 @@ public:
 
     auto open_new_viewport_window() -> bool;
 
-    void update();
+    void update_viewport_windows();
     void render();
 
 private:

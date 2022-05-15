@@ -800,7 +800,7 @@ auto Trs_tool::on_drag_ready() -> bool
         {
             log_trs_tool.trace("has intersection\n");
             const dvec3 direction = normalize(intersection.value() - center);
-            m_rotation = {
+            m_rotation = Rotation_context{
                 .normal               = n,
                 .reference_direction  = direction,
                 .center_of_rotation   = center,

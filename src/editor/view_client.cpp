@@ -1,6 +1,8 @@
 #include "view_client.hpp"
 #include "editor_rendering.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
+#include "windows/viewport_window.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
@@ -23,6 +25,8 @@ void View_client::connect()
     m_imgui_windows    = get<erhe::application::Imgui_windows>();
     m_editor_rendering = get<Editor_rendering                >();
     m_pointer_context  = get<Pointer_context                 >();
+    m_scene_root       = get<Scene_root                      >();
+    m_viewport_windows = get<Viewport_windows                >();
     require<erhe::application::View>();
 }
 
@@ -48,6 +52,12 @@ void View_client::clear()
 
 void View_client::update()
 {
+    m_viewport_windows->update_viewport_windows();
+    if (m_scene_root)
+    {
+        m_scene_root->scene().update_node_transforms();
+    }
+
 }
 
 void View_client::render()

@@ -24,13 +24,19 @@ void Vertex_input_state::on_thread_enter()
 {
     const std::lock_guard lock{s_mutex};
 
+    std::stringstream this_thread_id_ss;
+    this_thread_id_ss << std::this_thread::get_id();
+    const std::string this_thread_id_string = this_thread_id_ss.str();
+
     for (auto* vertex_input_state : s_all_vertex_input_states)
     {
+        std::stringstream owner_thread_ss;
+        owner_thread_ss << vertex_input_state->m_owner_thread;
         log_threads.trace(
             "{}: on thread enter: vertex input state @ {} owned by thread {}\n",
-            std::this_thread::get_id(),
+            this_thread_id_string, //std::this_thread::get_id(),
             fmt::ptr(vertex_input_state),
-            vertex_input_state->m_owner_thread
+            owner_thread_ss.str() //vertex_input_state->m_owner_thread
         );
         if (vertex_input_state->m_owner_thread == std::thread::id{})
         {
@@ -45,13 +51,18 @@ void Vertex_input_state::on_thread_exit()
 
     gl::bind_vertex_array(0);
     auto this_thread_id = std::this_thread::get_id();
+    std::stringstream this_thread_id_ss;
+    this_thread_id_ss << this_thread_id;
+    const std::string this_thread_id_string = this_thread_id_ss.str();
     for (auto* vertex_input_state : s_all_vertex_input_states)
     {
+        std::stringstream owner_thread_ss;
+        owner_thread_ss << vertex_input_state->m_owner_thread;
         log_threads.trace(
             "{}: on thread exit: vertex input state @ {} owned by thread {}\n",
-            std::this_thread::get_id(),
+            this_thread_id_string, //std::this_thread::get_id(),
             fmt::ptr(vertex_input_state),
-            vertex_input_state->m_owner_thread
+            owner_thread_ss.str() // vertex_input_state->m_owner_thread
         );
         if (vertex_input_state->m_owner_thread == this_thread_id)
         {
@@ -120,7 +131,10 @@ void Vertex_input_state::set(const Vertex_input_state_data& data)
 void Vertex_input_state::reset()
 {
     // Delete VAO
-    log_threads.trace("{}: reset @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
+    std::stringstream this_thread_id_ss;
+    this_thread_id_ss << std::this_thread::get_id();
+    //log_threads.trace("{}: reset @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
+    log_threads.trace("{}: reset @ {}\n", this_thread_id_ss.str(), fmt::ptr(this));
     m_owner_thread = {};
     m_gl_vertex_array.reset();
 
@@ -129,7 +143,10 @@ void Vertex_input_state::reset()
 
 void Vertex_input_state::create()
 {
-    log_threads.trace("{}: create @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
+    std::stringstream this_thread_id_ss;
+    this_thread_id_ss << std::this_thread::get_id();
+    //log_threads.trace("{}: create @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
+    log_threads.trace("{}: create @ {}\n", this_thread_id_ss.str(), fmt::ptr(this));
     if (m_gl_vertex_array.has_value())
     {
         ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());

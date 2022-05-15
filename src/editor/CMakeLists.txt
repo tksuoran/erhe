@@ -216,6 +216,7 @@ target_link_libraries(
     ghc_filesystem
     optional_lite
     nlohmann_json::nlohmann_json
+    RectangleBinPack
 )
 
 if (${ERHE_SVG_LIBRARY} STREQUAL "lunasvg")

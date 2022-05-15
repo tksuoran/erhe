@@ -11,10 +11,14 @@ erhe_target_sources_grouped(
     log.cpp
     log.hpp
     #FastNoiseLite.h
-    game.cpp
-    game.hpp
-    game_window.cpp
-    game_window.hpp
+    game/game.cpp
+    game/game.hpp
+    game/game_context.hpp
+    game/game_window.cpp
+    game/game_window.hpp
+    game/player.cpp
+    game/player.hpp
+    game/unit.hpp
     main.cpp
     map.cpp
     map.hpp
@@ -65,10 +69,10 @@ erhe_target_sources_grouped(
     map_generator/variations.hpp
     type_editors/terrain_editor_window.cpp
     type_editors/terrain_editor_window.hpp
-    type_editors/Terrain_replacement_rule_editor_window.cpp
-    type_editors/Terrain_replacement_rule_editor_window.hpp
-    type_editors/Terrain_group_editor_window.cpp
-    type_editors/Terrain_group_editor_window.hpp
+    type_editors/terrain_replacement_rule_editor_window.cpp
+    type_editors/terrain_replacement_rule_editor_window.hpp
+    type_editors/terrain_group_editor_window.cpp
+    type_editors/terrain_group_editor_window.hpp
     type_editors/type_editor.cpp
     type_editors/type_editor.hpp
     type_editors/unit_editor_window.cpp

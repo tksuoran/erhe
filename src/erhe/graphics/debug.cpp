@@ -6,6 +6,7 @@
 #include <fmt/ostream.h>
 #include <gsl/gsl>
 
+#include <sstream>
 #include <thread>
 
 namespace erhe::graphics
@@ -37,13 +38,19 @@ void Gpu_timer::on_thread_enter()
 {
     const std::lock_guard lock{s_mutex};
 
+    // Workaround for https://github.com/fmtlib/fmt/issues/2897
+    std::stringstream this_thread_id;
+    this_thread_id << std::this_thread::get_id();
+    const std::string this_thread_id_string = this_thread_id.str();
     for (auto* gpu_timer : s_all_gpu_timers)
     {
+        std::stringstream owner;
+        owner << gpu_timer->m_owner_thread;
         log_threads.trace(
             "{}: on thread enter: Gpu_timer @ {} owned by thread {}\n",
-            std::this_thread::get_id(),
+            this_thread_id_string,
             fmt::ptr(gpu_timer),
-            gpu_timer->m_owner_thread
+            owner.str()
         );
         if (gpu_timer->m_owner_thread == std::thread::id{})
         {
@@ -57,13 +64,22 @@ void Gpu_timer::on_thread_exit()
     const std::lock_guard lock{s_mutex};
 
     auto this_thread_id = std::this_thread::get_id();
+
+    // Workaround for https://github.com/fmtlib/fmt/issues/2897
+    std::stringstream this_thread_id_ss;
+    this_thread_id_ss << std::this_thread::get_id();
+    const std::string this_thread_id_string = this_thread_id_ss.str();
     for (auto* gpu_timer : s_all_gpu_timers)
     {
+        std::stringstream owner;
+        owner << gpu_timer->m_owner_thread;
         log_threads.trace(
             "{}: on thread exit: Gpu_timer @ {} owned by thread {}\n",
-            std::this_thread::get_id(),
+            this_thread_id_string,
+            //std::this_thread::get_id(),
             fmt::ptr(gpu_timer),
-            gpu_timer->m_owner_thread
+            //gpu_timer->m_owner_thread
+            owner.str()
         );
         if (gpu_timer->m_owner_thread == this_thread_id)
         {
@@ -98,7 +114,10 @@ Gpu_timer::~Gpu_timer()
 
 void Gpu_timer::create()
 {
-    log_threads.trace("{}: create @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
+    std::stringstream this_thread_id_ss;
+    this_thread_id_ss << std::this_thread::get_id();
+    //log_threads.trace("{}: create @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
+    log_threads.trace("{}: create @ {}\n", this_thread_id_ss.str(), fmt::ptr(this));
 
     for (auto& query : m_queries)
     {
@@ -118,7 +137,10 @@ void Gpu_timer::create()
 
 void Gpu_timer::reset()
 {
-    log_threads.trace("{}: reset @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
+    std::stringstream this_thread_id_ss;
+    this_thread_id_ss << std::this_thread::get_id();
+    //log_threads.trace("{}: reset @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
+    log_threads.trace("{}: reset @ {}\n", this_thread_id_ss.str(), fmt::ptr(this));
     m_owner_thread = {};
     for (auto& query : m_queries)
     {

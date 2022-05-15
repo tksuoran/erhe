@@ -89,10 +89,14 @@ auto Fly_camera_tool::try_ready() -> bool
 {
     // Exclude safe border near viewport edges from mouse interaction
     // to filter out viewport window resizing for example.
+    if (!m_pointer_context->position_in_viewport_window().has_value())
+    {
+        return false;
+    }
     constexpr float   border   = 32.0f;
-    const auto        position = m_pointer_context->position_in_viewport_window().value();
-    const auto* const window   = m_pointer_context->window();
-    const auto        viewport = window->viewport();
+    const glm::vec2   position = m_pointer_context->position_in_viewport_window().value();
+    const auto* const window = m_pointer_context->window();
+    const erhe::scene::Viewport viewport = window->viewport();
     if (
         (position.x <  border) ||
         (position.y <  border) ||
@@ -313,7 +317,7 @@ auto Fly_camera_tool::try_move(
         active
     )
     {
-        log_fly_camera.warn("rejected press because no pointer_context window");
+        log_fly_camera.warn("rejected press because no pointer_context window\n");
 
         return false;
     }

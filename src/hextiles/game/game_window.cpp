@@ -1,10 +1,10 @@
-#include "game_window.hpp"
-#include "game.hpp"
+#include "game/game_window.hpp"
 #include "map_window.hpp"
 #include "menu_window.hpp"
 #include "rendering.hpp"
 #include "tiles.hpp"
 #include "tile_renderer.hpp"
+#include "game/game.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
@@ -42,27 +42,23 @@ void Game_window::initialize_component()
 
 void Game_window::imgui()
 {
+    constexpr ImVec2 button_size{110.0f, 0.0f};
+
     auto game = get<Game>();
     Player& player = game->get_current_player();
     ImGui::Text("Player: %s", player.name.c_str());
-    if (ImGui::Button("End Turn"))
+    if (ImGui::Button("End Turn", button_size))
     {
         game->next_turn();
     }
-    if (ImGui::Button("Back to Menu"))
+    if (ImGui::Button("Back to Menu", button_size))
     {
         hide();
         get<Map_window >()->hide();
         get<Menu_window>()->show();
     }
 
-    Game_context context
-    {
-        .game          = *m_game.get(),
-        .rendering     = *m_rendering.get(),
-        .tiles         = *m_tiles.get(),
-        .tile_renderer = *m_tile_renderer.get()
-    };
+    Game_context context = m_game->get_context();
     player.imgui(context);
 
     // Blink (highlight) currently selected unit

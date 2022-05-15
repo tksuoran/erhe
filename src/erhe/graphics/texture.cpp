@@ -563,7 +563,7 @@ void Texture::upload(
 
     const auto row_stride = width * get_upload_pixel_byte_count(internal_format);
     const auto byte_count = row_stride * height;
-    Expects(data.size_bytes() == byte_count);
+    Expects(data.size_bytes() >= byte_count);
     const auto* data_pointer = reinterpret_cast<const void*>(data.data());
 
     switch (storage_dimensions(m_target))
@@ -619,18 +619,14 @@ void Texture::upload_subimage(
 
     const auto pixel_stride = get_upload_pixel_byte_count(internal_format);;
     const auto row_stride   = src_row_length * pixel_stride;
-    //const auto byte_count   = row_stride * height;
-    //Expects(data.size_bytes() == byte_count);
+    const auto byte_count   = row_stride * height;
+    Expects(data.size_bytes() >= byte_count);
     const size_t src_x_offset = src_x * pixel_stride;
     const size_t src_y_offset = src_y * row_stride;
     const char* data_pointer =
         reinterpret_cast<const char*>(data.data())
         + src_x_offset
         + src_y_offset;
-    //gl::pixel_store_i(gl::Pixel_store_parameter::pack_skip_pixels,  src_x);
-    //data_pointer += src_x * pixel_stride;
-    //data_pointer += src_y * row_stride;
-    //gl::pixel_store_i(gl::Pixel_store_parameter::unpack_skip_rows,  src_y);
     gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length, src_row_length);
 
     switch (storage_dimensions(m_target))
@@ -658,9 +654,7 @@ void Texture::upload_subimage(
             ERHE_FATAL("Bad texture target\n");
         }
     }
-    //gl::pixel_store_i(gl::Pixel_store_parameter::pack_skip_pixels,  0);
-    //gl::pixel_store_i(gl::Pixel_store_parameter::unpack_skip_rows,  0);
-    //gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length, 0);
+    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length, 0);
 }
 
 void Texture::set_debug_label(const std::string& value)

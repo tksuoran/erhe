@@ -108,9 +108,9 @@ public:
     [[nodiscard]] auto children                  () const -> const std::vector<std::shared_ptr<Node>>&;
     [[nodiscard]] auto attachments               () const -> const std::vector<std::shared_ptr<INode_attachment>>&;
     [[nodiscard]] auto get_visibility_mask       () const -> uint64_t;
-    [[nodiscard]] void set_visibility_mask       (const uint64_t value);
+                  void set_visibility_mask       (const uint64_t value);
     [[nodiscard]] auto get_flag_bits             () const -> uint64_t;
-    [[nodiscard]] void set_flag_bits             (const uint64_t value);
+                  void set_flag_bits             (const uint64_t value);
     [[nodiscard]] auto parent_from_node_transform() const -> const Transform&;
     [[nodiscard]] auto node_from_parent_transform() const -> const Transform;
     [[nodiscard]] auto parent_from_node          () const -> glm::mat4;

@@ -66,9 +66,6 @@ public:
     void save_terrain_replacement_rule_defs();
 
 private:
-    void init_shapes         ();
-    //void init_terrain_types  ();
-
     void load_terrain_defs_v4();
     void load_terrain_defs_v5();
     void save_terrain_defs_v5();

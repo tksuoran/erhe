@@ -521,17 +521,17 @@ private:
     class Primitive_context
     {
     public:
-        cgltf_mesh*                               mesh;
-        cgltf_primitive*                          primitive;
-        std::shared_ptr<erhe::geometry::Geometry> erhe_geometry;
-        cgltf_size                                primitive_min_index;
-        cgltf_size                                primitive_max_index;
-        std::vector<cgltf_size>                   primitive_used_indices;
-        std::vector<glm::vec3>                    vertex_positions;
-        std::vector<cgltf_size>                   sorted_vertex_indices;
-        std::vector<erhe::geometry::Point_id>     erhe_point_id_from_gltf_index;
-        std::vector<erhe::geometry::Corner_id>    erhe_corner_id_from_gltf_index;
-        std::shared_ptr<Raytrace_primitive>       erhe_raytrace_primitive;
+        cgltf_mesh*                               mesh                          {nullptr};
+        cgltf_primitive*                          primitive                     {nullptr};
+        std::shared_ptr<erhe::geometry::Geometry> erhe_geometry                 {};
+        cgltf_size                                primitive_min_index           {0};
+        cgltf_size                                primitive_max_index           {0};
+        std::vector<cgltf_size>                   primitive_used_indices        {};
+        std::vector<glm::vec3>                    vertex_positions              {};
+        std::vector<cgltf_size>                   sorted_vertex_indices         {};
+        std::vector<erhe::geometry::Point_id>     erhe_point_id_from_gltf_index {};
+        std::vector<erhe::geometry::Corner_id>    erhe_corner_id_from_gltf_index{};
+        std::shared_ptr<Raytrace_primitive>       erhe_raytrace_primitive       {};
     };
 
     void parse_primitive_attribute(
@@ -728,6 +728,15 @@ private:
                 }
                 break;
             }
+            case cgltf_type::cgltf_type_mat2:
+            case cgltf_type::cgltf_type_mat3:
+            case cgltf_type::cgltf_type_mat4:
+            case cgltf_type::cgltf_type_invalid:
+            default:
+            {
+                abort();
+                // TODO
+            }
         }
     }
 
@@ -816,6 +825,16 @@ private:
                 }
                 break;
             }
+            case cgltf_type::cgltf_type_mat2:
+            case cgltf_type::cgltf_type_mat3:
+            case cgltf_type::cgltf_type_mat4:
+            case cgltf_type::cgltf_type_invalid:
+            default:
+            {
+                abort();
+                // TODO
+            }
+
         }
 
         // Sort vertices

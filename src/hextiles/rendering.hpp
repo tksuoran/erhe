@@ -39,8 +39,9 @@ public:
     // Public API
     auto terrain_image          (terrain_tile_t terrain_tile, const int scale) -> bool;
     auto unit_image             (unit_tile_t unit_tile, const int scale) -> bool;
+    void show_texture           ();
     void make_terrain_type_combo(const char* label, terrain_t& value);
-    void make_unit_type_combo   (const char* label, unit_t& value);
+    void make_unit_type_combo   (const char* label, unit_t& value, int player = 0);
 
 private:
     // Component dependencies

@@ -120,10 +120,10 @@ void Map_window::connect()
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_renderer     >(); // required for Imgui_window
 
-    m_editor_view   = get    <erhe::application::View         >();
-    m_tile_renderer  = get    <Tile_renderer                    >();
-    m_tiles         = require<Tiles                           >();
+    m_editor_view   = require<erhe::application::View         >();
     m_text_renderer = get    <erhe::application::Text_renderer>();
+    m_tile_renderer = get    <Tile_renderer>();
+    m_tiles         = require<Tiles        >();
 }
 
 void Map_window::initialize_component()
@@ -148,12 +148,12 @@ void Map_window::initialize_component()
     view->bind_command_to_mouse_wheel(&m_free_zoom_command);
     view->bind_command_to_mouse_drag (&m_mouse_scroll_command, erhe::toolkit::Mouse_button_right);
 
-    view->bind_command_to_key(&m_scroll_left_command,  erhe::toolkit::Key_left,      false);
-    view->bind_command_to_key(&m_scroll_right_command, erhe::toolkit::Key_right,     false);
-    view->bind_command_to_key(&m_scroll_up_command,    erhe::toolkit::Key_up,        false);
-    view->bind_command_to_key(&m_scroll_down_command,  erhe::toolkit::Key_down,      false);
-    view->bind_command_to_key(&m_zoom_in_command,      erhe::toolkit::Key_page_down, false);
-    view->bind_command_to_key(&m_zoom_out_command,     erhe::toolkit::Key_page_up,   false);
+    view->bind_command_to_key(&m_scroll_up_command,    erhe::toolkit::Key_w, false);
+    view->bind_command_to_key(&m_scroll_left_command,  erhe::toolkit::Key_a, false);
+    view->bind_command_to_key(&m_scroll_down_command,  erhe::toolkit::Key_s, false);
+    view->bind_command_to_key(&m_scroll_right_command, erhe::toolkit::Key_d, false);
+    //view->bind_command_to_key(&m_zoom_in_command,      erhe::toolkit::Key_b,   false);
+    //view->bind_command_to_key(&m_zoom_out_command,     erhe::toolkit::Key_down, false);
 }
 #pragma endregion Component
 

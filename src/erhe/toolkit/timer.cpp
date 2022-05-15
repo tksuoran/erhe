@@ -1,5 +1,7 @@
 #include "erhe/toolkit/timer.hpp"
 
+#include <algorithm>
+
 namespace erhe::toolkit
 {
 

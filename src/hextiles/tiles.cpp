@@ -662,11 +662,11 @@ auto convert_btype(int value) -> uint32_t
 {
     switch (value)
     {
-        case 1:  return (1u << Battle_type::bit_air);
-        case 2:  return (1u << Battle_type::bit_ground);
-        case 3:  return (1u << Battle_type::bit_sea);
-        case 4:  return (1u << Battle_type::bit_underwater);
-        case 5:  return (1u << Battle_type::bit_city);
+        case 1:  return Battle_type::bit_air;
+        case 2:  return Battle_type::bit_ground;
+        case 3:  return Battle_type::bit_sea;
+        case 4:  return Battle_type::bit_underwater;
+        case 5:  return Battle_type::bit_city;
         default: return 0;
     }
 }
@@ -895,6 +895,7 @@ void Tiles::load_unit_defs_v2()
         unit_type.cargo_types                  = json_unit_type["cargo_types"                 ];
         unit_type.cargo_space                  = json_unit_type["cargo_space"                 ];
         unit_type.cargo_load_count_per_turn    = json_unit_type["cargo_load_count_per_turn"   ];
+        //unit_type.battle_type                  = get_bit_position(json_unit_type["battle_type"                 ]);
         unit_type.battle_type                  = json_unit_type["battle_type"                 ];
         unit_type.attack[0]                    = json_unit_type["attack"                      ][0];
         unit_type.attack[1]                    = json_unit_type["attack"                      ][1];

@@ -72,6 +72,23 @@ auto Rendering::unit_image(unit_tile_t unit_tile, const int scale) -> bool
     );
 }
 
+void Rendering::show_texture()
+{
+    const auto&     tileset_texture = m_tile_renderer->tileset_texture();
+    const glm::vec2 uv0{0.0f, 0.0f};
+    const glm::vec2 uv1{1.0f, 1.0f};
+
+    m_imgui_renderer->image(
+        tileset_texture,
+        tileset_texture->width(),
+        tileset_texture->height(),
+        uv0,
+        uv1,
+        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+        false
+    );
+}
+
 void Rendering::make_terrain_type_combo(const char* label, terrain_t& value)
 {
     auto&       preview_terrain = m_tiles->get_terrain_type(value);
@@ -109,7 +126,7 @@ void Rendering::make_terrain_type_combo(const char* label, terrain_t& value)
     }
 }
 
-void Rendering::make_unit_type_combo(const char* label, unit_t& value)
+void Rendering::make_unit_type_combo(const char* label, unit_t& value, int player)
 {
     auto&       preview_unit  = m_tiles->get_unit_type(value);
     const char* preview_value = preview_unit.name.c_str();
@@ -120,7 +137,7 @@ void Rendering::make_unit_type_combo(const char* label, unit_t& value)
         const unit_t end = static_cast<unit_t>(m_tiles->get_unit_type_count());
         for (unit_t i = 0; i < end; i++)
         {
-            unit_tile_t unit_tile = m_tile_renderer->get_single_unit_tile(0, i);
+            unit_tile_t unit_tile = m_tile_renderer->get_single_unit_tile(player, i);
             Unit_type&  unit_type = m_tiles->get_unit_type(i);
             const auto  id        = fmt::format("##{}-{}", label, i);
             ImGui::PushID(id.c_str());

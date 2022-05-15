@@ -4,66 +4,184 @@
 
 #include <glm/glm.hpp>
 
-template <>
-struct fmt::formatter<glm::vec4>
+template <> struct fmt::formatter<glm::vec2>
 {
-	constexpr auto parse(format_parse_context& ctx)
+    constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
     {
-        return ctx.begin();
+        auto it = ctx.begin(), end = ctx.end();
+        if (it != end && *it != '}')
+        {
+            throw format_error("invalid format");
+        }
+
+        return it;
     }
 
-	template <typename FormatContext>
-    auto format(const glm::vec4& vec, FormatContext& ctx)
+    template <typename FormatContext>
+    auto format(const glm::vec2& p, FormatContext& ctx) -> decltype(ctx.out())
     {
-        //return format_to(ctx.out(), "({: #08f}, {: #08f}, {: #08f}, {: #08f})", vec.x, vec.y, vec.z, vec.w);
-        return format_to(ctx.out(), "({: 14f}, {: 14f}, {: 14f}, {: 14f})", vec.x, vec.y, vec.z, vec.w);
+        return fmt::format_to(ctx.out(), "({:.1f}, {:.1f})", p.x, p.y);
     }
 };
 
-template <>
-struct fmt::formatter<glm::vec3>
+template <> struct fmt::formatter<glm::vec3>
 {
-	constexpr auto parse(format_parse_context& ctx)
+    constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
     {
-        return ctx.begin();
+        auto it = ctx.begin(), end = ctx.end();
+        if (it != end && *it != '}')
+        {
+            throw format_error("invalid format");
+        }
+
+        return it;
     }
 
-	template <typename FormatContext>
-    auto format(const glm::vec3& vec, FormatContext& ctx)
+    template <typename FormatContext>
+    auto format(const glm::vec3& p, FormatContext& ctx) -> decltype(ctx.out())
     {
-        //return format_to(ctx.out(), "({: #08f}, {: #08f}, {: #08f})", vec.x, vec.y, vec.z);
-        return format_to(ctx.out(), "({: 14f}, {: 14f}, {: 14f})", vec.x, vec.y, vec.z);
+        return fmt::format_to(ctx.out(), "({:.1f}, {:.1f}, {:.1f})", p.x, p.y, p.z);
     }
 };
 
-template <>
-struct fmt::formatter<glm::vec2>
+template <> struct fmt::formatter<glm::vec4>
 {
-	constexpr auto parse(format_parse_context& ctx)
+    constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
     {
-        return ctx.begin();
+        auto it = ctx.begin(), end = ctx.end();
+        if (it != end && *it != '}')
+        {
+            throw format_error("invalid format");
+        }
+
+        return it;
     }
 
-	template <typename FormatContext>
-    auto format(const glm::vec2& vec, FormatContext& ctx)
+    template <typename FormatContext>
+    auto format(const glm::vec4& p, FormatContext& ctx) -> decltype(ctx.out())
     {
-        //return format_to(ctx.out(), "({: #08f}, {: #08f})", vec.x, vec.y);
-        return format_to(ctx.out(), "({: 14f}, {: 14f})", vec.x, vec.y);
+        return fmt::format_to(ctx.out(), "({:.1f}, {:.1f}, {:.1f}, {:.1f})", p.x, p.y, p.z, p.w);
     }
 };
 
-template <>
-struct fmt::formatter<glm::ivec2>
-    : fmt::formatter<string_view>
+// dvec
+template <> struct fmt::formatter<glm::dvec2>
 {
-	constexpr auto parse(format_parse_context& ctx)
+    constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
     {
-        return ctx.begin();
+        auto it = ctx.begin(), end = ctx.end();
+        if (it != end && *it != '}')
+        {
+            throw format_error("invalid format");
+        }
+
+        return it;
     }
 
-	template <typename FormatContext>
-    auto format(const glm::ivec2& vec, FormatContext& ctx)
+    template <typename FormatContext>
+    auto format(const glm::dvec2& p, FormatContext& ctx) -> decltype(ctx.out())
     {
-        return format_to(ctx.out(), "({}, {})", vec.x, vec.y);
+        return fmt::format_to(ctx.out(), "({:.1f}, {:.1f})", p.x, p.y);
+    }
+};
+
+template <> struct fmt::formatter<glm::dvec3>
+{
+    constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
+    {
+        auto it = ctx.begin(), end = ctx.end();
+        if (it != end && *it != '}')
+        {
+            throw format_error("invalid format");
+        }
+
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const glm::dvec3& p, FormatContext& ctx) -> decltype(ctx.out())
+    {
+        return fmt::format_to(ctx.out(), "({:.1f}, {:.1f}, {:.1f})", p.x, p.y, p.z);
+    }
+};
+
+template <> struct fmt::formatter<glm::dvec4>
+{
+    constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
+    {
+        auto it = ctx.begin(), end = ctx.end();
+        if (it != end && *it != '}')
+        {
+            throw format_error("invalid format");
+        }
+
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const glm::dvec4& p, FormatContext& ctx) -> decltype(ctx.out())
+    {
+        return fmt::format_to(ctx.out(), "({:.1f}, {:.1f}, {:.1f}, {:.1f})", p.x, p.y, p.z, p.w);
+    }
+};
+
+// ivec
+template <> struct fmt::formatter<glm::ivec2>
+{
+    constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
+    {
+        auto it = ctx.begin(), end = ctx.end();
+        if (it != end && *it != '}')
+        {
+            throw format_error("invalid format");
+        }
+
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const glm::ivec2& p, FormatContext& ctx) -> decltype(ctx.out())
+    {
+        return fmt::format_to(ctx.out(), "({}, {})", p.x, p.y);
+    }
+};
+
+template <> struct fmt::formatter<glm::ivec3>
+{
+    constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
+    {
+        auto it = ctx.begin(), end = ctx.end();
+        if (it != end && *it != '}')
+        {
+            throw format_error("invalid format");
+        }
+
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const glm::dvec3& p, FormatContext& ctx) -> decltype(ctx.out())
+    {
+        return fmt::format_to(ctx.out(), "({}, {}, {})", p.x, p.y, p.z);
+    }
+};
+
+template <> struct fmt::formatter<glm::ivec4>
+{
+    constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
+    {
+        auto it = ctx.begin(), end = ctx.end();
+        if (it != end && *it != '}')
+        {
+            throw format_error("invalid format");
+        }
+
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const glm::dvec4& p, FormatContext& ctx) -> decltype(ctx.out())
+    {
+        return fmt::format_to(ctx.out(), "({}, {}, {}, {})", p.x, p.y, p.z, p.w);
     }
 };

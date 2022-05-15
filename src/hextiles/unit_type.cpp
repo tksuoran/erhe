@@ -17,6 +17,7 @@ auto Unit_flags::c_char(uint32_t value) -> char
         case bit_city_load          : return 'l';
         case bit_airdrop_unload     : return 'a';
         case bit_has_stealth_mode   : return 's';
+        case bit_count              : return ' ';
         default                     : return '?';
     }
 }
@@ -35,6 +36,7 @@ auto Unit_flags::c_str(uint32_t value) -> const char*
         case bit_city_load          : return "Can be loaded from city";
         case bit_airdrop_unload     : return "Can be Airdrop unloaded";
         case bit_has_stealth_mode   : return "Has stealth mode";
+        case bit_count              : return "None";
         default                     : return "";
     }
 }
@@ -48,6 +50,7 @@ auto Battle_type::c_char(uint32_t value) -> char
         case bit_sea        : return 's';
         case bit_underwater : return 'u';
         case bit_city       : return 'C';
+        case bit_count      : return ' ';
         default             : return '?';
     }
 }
@@ -61,6 +64,7 @@ auto Battle_type::c_str(uint32_t value) -> const char*
         case bit_sea        : return "Sea";
         case bit_underwater : return "Underwater";
         case bit_city       : return "City";
+        case bit_count      : return "None";
         default             : return "?";
     }
 }
@@ -76,6 +80,7 @@ auto Movement_type::c_char(uint32_t value) -> char
         case bit_light_sea   : return 's';
         case bit_heavy_sea   : return 'S';
         case bit_underwater  : return 'u';
+        case bit_count       : return ' ';
         default              : return '?';
     }
 }
@@ -92,6 +97,7 @@ auto Movement_type::c_str(uint32_t value) -> const char*
         case bit_light_sea   : return "Light Sea";
         case bit_heavy_sea   : return "Heavy Sea";
         case bit_underwater  : return "Underwater";
+        case bit_count       : return "None";
         default              : return "?";
     }
 }

@@ -147,7 +147,7 @@ auto Viewport_windows::open_new_viewport_window() -> bool
     return true;
 }
 
-void Viewport_windows::update()
+void Viewport_windows::update_viewport_windows()
 {
     ERHE_PROFILE_FUNCTION
 

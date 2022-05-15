@@ -1,10 +1,10 @@
 #pragma once
 
-//#include <renderdoc_app.h>
+#include "erhe/application/renderdoc_app.h"
 
-namespace editor {
+namespace erhe::application {
 
-//void initialize_renderdoc_capture_support();
-//auto get_renderdoc_api() -> RENDERDOC_API_1_1_2*;
+void initialize_renderdoc_capture_support();
+auto get_renderdoc_api() -> RENDERDOC_API_1_4_0*;
 
 }

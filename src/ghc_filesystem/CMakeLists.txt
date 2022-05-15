@@ -9,3 +9,6 @@ add_library(
 )
 
 target_include_directories(ghc_filesystem INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
+# TODO Enable where needed (gcc-8 on ubuntu 18.04 at least)
+#target_link_libraries(ghc_filesystem INTERFACE stdc++fs)

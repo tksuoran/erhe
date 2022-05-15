@@ -112,7 +112,7 @@ auto Scene_builder::make_camera(
     vec3             look_at
 ) -> std::shared_ptr<erhe::scene::Camera>
 {
-    auto camera = make_shared<erhe::scene::Camera>(name);
+    auto camera = std::make_shared<erhe::scene::Camera>(name);
     camera->projection()->fov_y           = glm::radians(35.0f);
     camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
     camera->projection()->z_near          = 0.03f;

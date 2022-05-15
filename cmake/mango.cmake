@@ -18,6 +18,9 @@ function (FetchContent_MakeAvailable_mango)
             option(MANGO_DISABLE_IMAGE_${format} "" ON)
         endforeach ()
 
+        OPTION(ENABLE_SSE2 "Enable SSE2 instructions"              ON)
+        OPTION(ENABLE_SSE4 "Enable SSE4.1 and SSE4.2 instructions" OFF)
+
         add_subdirectory(${${lc_mango}_SOURCE_DIR}/build ${${lc_mango}_BINARY_DIR})
     endif ()
 endfunction ()

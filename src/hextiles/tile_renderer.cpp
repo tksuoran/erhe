@@ -401,6 +401,8 @@ void Tile_renderer::compose_tileset_texture()
 
     m_tileset_texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
     m_tileset_texture->set_debug_label(texture_path.string());
+    float clear_rgba[4] = { 1.0f, 0.0f, 1.0f, 1.0f};
+    gl::clear_tex_image(m_tileset_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_rgba);
 
     // Upload everything before single unit tiles
     m_tileset_texture->upload_subimage(
@@ -450,7 +452,8 @@ void Tile_renderer::compose_tileset_texture()
                 .level_count = 1,
                 .row_stride  = 4 * Unit_group::width * Tile_shape::full_width,
                 .format      = m_tileset_image.info.format
-            }
+            },
+            .data = {}
         };
         scratch.data.resize(scratch.info.height * scratch.info.row_stride);
 
@@ -497,7 +500,8 @@ void Tile_renderer::compose_tileset_texture()
                 .level_count = 1,
                 .row_stride  = 4 * Tile_shape::full_width,
                 .format      = m_tileset_image.info.format
-            }
+            },
+            .data = {}
         };
         scratch.data.resize(scratch.info.height * scratch.info.row_stride);
         int tx = 0;
@@ -521,10 +525,10 @@ void Tile_renderer::compose_tileset_texture()
                             scratch.data,
                             scratch.info.width,
                             scratch.info.height,
-                            1,    // depth
-                            0,    // mipmap level
-                            tx * Tile_shape::full_width, // x
-                            ty * Tile_shape::height      // y
+                            1, // depth
+                            0, // mipmap level
+                            tx * Tile_shape::full_width,
+                            ty * Tile_shape::height
                         );
                         m_unit_shapes.emplace_back(
                             tx * Tile_shape::full_width,
@@ -560,7 +564,7 @@ auto Tile_renderer::get_multi_unit_tile(
         {
             continue;
         }
-        tile += s_multiple_unit_battle_type_multiplier[battle_type] * (player_id - 1);
+        tile += s_multiple_unit_battle_type_multiplier[battle_type] * player_id;
     }
     return static_cast<unit_tile_t>(tile);
 }
@@ -620,10 +624,6 @@ void Tile_renderer::compose_multiple_unit_tile
                     original_color.b * players_colors[player - 1].shades[1] +
                     original_color.r * players_colors[player - 1].shades[2] +
                     original_color.g * players_colors[player - 1].shades[3];
-                //log_tiles.info(
-                //    "Pixel @ {}, {} player {} rgba = {}\n",
-                //    x, y, i, original_color
-                //);
                 scratch.put_pixel(x, y, player_color);
                 ++contribution_count;
                 Expects(contribution_count < 2);

@@ -51,6 +51,18 @@ public:
     static constexpr int count  = width * height;
 };
 
+class Special_unit_tiles
+{
+public:
+    static constexpr unit_tile_t player_palette              = 0;
+    static constexpr unit_tile_t half_fog_of_war             = 1;
+    static constexpr unit_tile_t fog_of_war                  = 2;
+    static constexpr unit_tile_t half_fog_of_war_dither_even = 3;
+    static constexpr unit_tile_t half_fog_of_war_dither_odd  = 4;
+    static constexpr unit_tile_t dot_marker                  = 5;
+    static constexpr unit_tile_t corner_marker               = 6;
+};
+
 class Unit_group
 {
 public:

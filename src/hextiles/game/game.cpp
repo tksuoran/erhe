@@ -1,123 +1,45 @@
-#include "game.hpp"
-#include "game_window.hpp"
 #include "map.hpp"
 #include "map_window.hpp"
 #include "menu_window.hpp"
 #include "rendering.hpp"
 #include "tiles.hpp"
 #include "tile_renderer.hpp"
+#include "game/game.hpp"
+#include "game/game_window.hpp"
 
 #include "erhe/application/time.hpp"
+#include "erhe/application/view.hpp"
 
 #include <imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
-#include <bit>
+//#include <bit>
 
 namespace hextiles
 {
 
-void Player::city_imgui(Game_context& context)
+auto Move_unit_command::try_call(erhe::application::Command_context&) -> bool
 {
-    const int    player     = context.game.get_current_player().id;
-    const size_t city_index = m_current_unit;
-
-    Unit& city = cities.at(city_index);
-    const unit_tile_t unit_tile = context.tile_renderer.get_single_unit_tile(player, city.type);
-    const Unit_type&  product   = context.tiles.get_unit_type(city.production);
-
-    ImGui::Text("City %d", city_index);
-    ImGui::SameLine();
-    context.rendering.unit_image(unit_tile, 2);
-    ImGui::SameLine();
-    ImGui::InputText("##city_name", &city.name);
-    //ImGui::Text("P: ", product.name.c_str());
-    context.rendering.make_unit_type_combo("Product", city.production);
-    ImGui::Text("PT: %d/%d", city.production_progress, product.production_time);
+    m_game.move_unit(m_direction);
+    return true;
 }
 
-void Player::unit_imgui(Game_context& context)
+auto Select_unit_command::try_call(erhe::application::Command_context&) -> bool
 {
-    const int    player     = context.game.get_current_player().id;
-    const size_t unit_index = m_current_unit - cities.size();
-
-    Unit& unit = units.at(unit_index);
-    const unit_tile_t unit_tile = context.tile_renderer.get_single_unit_tile(player, unit.type);
-    const Unit_type&  unit_type = context.tiles.get_unit_type(unit.type);
-
-    ImGui::Text("Unit %d", unit_index);
-    ImGui::SameLine();
-    context.rendering.unit_image(unit_tile, 2);
-    ImGui::SameLine();
-    ImGui::Text("%s", unit_type.name.c_str());
-    ImGui::Text("Hit Points: %d / %d", unit.hit_points, unit_type.hit_points);
-    ImGui::Text("Move Points: %d / %d", unit.move_points, unit_type.move_points[0]);
-    ImGui::Text("Fuel: %d / %d", unit.fuel, unit_type.fuel);
-}
-
-void Player::next_unit()
-{
-    ++m_current_unit;
-    if (m_current_unit >= (cities.size() + units.size()))
-    {
-        m_current_unit = 0;
-    }
-}
-
-void Player::previous_unit()
-{
-    if (m_current_unit > 0)
-    {
-        --m_current_unit;
-    }
-    else
-    {
-        m_current_unit = cities.size() + units.size() - 1;
-    }
-}
-
-void Player::imgui(Game_context& context)
-{
-    if (ImGui::Button("Next Unit"))
-    {
-        next_unit();
-    }
-
-    if (ImGui::Button("Previous Unit"))
-    {
-        previous_unit();
-    }
-
-    if (m_current_unit < cities.size())
-    {
-        city_imgui(context);
-    }
-    else
-    {
-        unit_imgui(context);
-    }
-}
-
-void Player::progress_production(Game_context& context)
-{
-    for (Unit& city : cities)
-    {
-        if (city.production == unit_t{0})
-        {
-            continue;
-        }
-        Unit_type& product = context.tiles.get_unit_type(city.production);
-        ++city.production_progress;
-        if (city.production_progress >= product.production_time)
-        {
-            Unit unit = context.game.make_unit(city.production, city.location);
-            units.push_back(unit);
-        }
-    }
+    m_game.select_unit(m_direction);
+    return true;
 }
 
 Game::Game()
     : erhe::components::Component{c_label}
+    , m_move_unit_n_command {*this, direction_north     }
+    , m_move_unit_ne_command{*this, direction_north_east}
+    , m_move_unit_se_command{*this, direction_south_east}
+    , m_move_unit_s_command {*this, direction_south     }
+    , m_move_unit_sw_command{*this, direction_south_west}
+    , m_move_unit_nw_command{*this, direction_north_west}
+    , m_select_previous_unit_command{*this, -1}
+    , m_select_next_unit_command    {*this, 1}
 {
 }
 
@@ -129,13 +51,41 @@ void Game::connect()
 {
     m_time = get<erhe::application::Time>();
 
-    m_rendering     = get<Rendering>();
-    m_tiles         = get<Tiles>();
+    m_map_window    = get<Map_window   >();
+    m_rendering     = get<Rendering    >();
+    m_tiles         = get<Tiles        >();
     m_tile_renderer = get<Tile_renderer>();
+
+    require<erhe::application::View>();
 }
 
 void Game::initialize_component()
 {
+    const auto view = get<erhe::application::View>();
+
+    view->register_command(&m_move_unit_n_command );
+    view->register_command(&m_move_unit_ne_command);
+    view->register_command(&m_move_unit_se_command);
+    view->register_command(&m_move_unit_s_command );
+    view->register_command(&m_move_unit_sw_command);
+    view->register_command(&m_move_unit_nw_command);
+    view->register_command(&m_select_previous_unit_command);
+    view->register_command(&m_select_next_unit_command);
+
+    view->bind_command_to_key(&m_move_unit_n_command ,         erhe::toolkit::Key_home,      false);
+    view->bind_command_to_key(&m_move_unit_ne_command,         erhe::toolkit::Key_page_up,   false);
+    view->bind_command_to_key(&m_move_unit_se_command,         erhe::toolkit::Key_page_down, false);
+    view->bind_command_to_key(&m_move_unit_s_command ,         erhe::toolkit::Key_end,       false);
+    view->bind_command_to_key(&m_move_unit_sw_command,         erhe::toolkit::Key_delete,    false);
+    view->bind_command_to_key(&m_move_unit_nw_command,         erhe::toolkit::Key_insert,    false);
+    view->bind_command_to_key(&m_select_previous_unit_command, erhe::toolkit::Key_left,      false);
+    view->bind_command_to_key(&m_select_next_unit_command    , erhe::toolkit::Key_right,     false);
+}
+
+void Game::update_map_unit_tile(Tile_coordinate position)
+{
+    const unit_tile_t unit_tile = get_unit_tile(position);
+    m_map->set_unit_tile(position, unit_tile);
 }
 
 void Game::reveal(Map& target_map, Tile_coordinate position, int radius) const
@@ -151,7 +101,68 @@ void Game::reveal(Map& target_map, Tile_coordinate position, int radius) const
     m_map->hex_circle(position, 0, radius, reveal_op);
 }
 
-auto Game::get_unit_tile(Tile_coordinate position) -> unit_tile_t
+auto Game::get_context() -> Game_context
+{
+    return Game_context
+    {
+        .game          = *this,
+        .map_window    = *m_map_window.get(),
+        .rendering     = *m_rendering.get(),
+        .tiles         = *m_tiles.get(),
+        .tile_renderer = *m_tile_renderer.get(),
+        .time          = m_frame_time
+    };
+}
+
+void Game::update_once_per_frame(const erhe::components::Time_context& time_context)
+{
+    m_frame_time = time_context.time;
+    if (m_players.empty())
+    {
+        return;
+    }
+
+    Game_context context = get_context();
+    get_current_player().update(context);
+}
+
+auto Game::move_unit(direction_t direction) -> bool
+{
+    if (m_players.empty())
+    {
+        return false;
+    }
+    if (get<Game_window>()->is_visible() == false)
+    {
+        return false;
+    }
+
+    Game_context context = get_context();
+    get_current_player().move_unit(
+        context,
+        direction
+    );
+    return true;
+}
+
+auto Game::select_unit(int direction) -> bool
+{
+    if (m_players.empty())
+    {
+        return false;
+    }
+    if (get<Game_window>()->is_visible() == false)
+    {
+        return false;
+    }
+
+    Game_context context = get_context();
+    get_current_player().select_unit(context, direction);
+
+    return true;
+}
+
+auto Game::get_unit_tile(Tile_coordinate position, const Unit* ignore) -> unit_tile_t
 {
     uint32_t    occupied_player_mask     {0u};
     uint32_t    occupied_battle_type_mask{0u};
@@ -185,14 +196,18 @@ auto Game::get_unit_tile(Tile_coordinate position) -> unit_tile_t
             {
                 continue;
             }
+            if (&unit == ignore)
+            {
+                continue;
+            }
             const Unit_type& unit_type = m_tiles->get_unit_type(unit.type);
             occupied_battle_type_mask |= (1u << unit_type.battle_type);
             occupied_player_mask      |= (1u << player_index);
 
-            Expects(
-                (battle_type_player_id[unit_type.battle_type] == 0) ||
-                (battle_type_player_id[unit_type.battle_type] == player_id)
-            );
+            //Expects(
+            //    (battle_type_player_id[unit_type.battle_type] == 0) ||
+            //    (battle_type_player_id[unit_type.battle_type] == player_id)
+            //);
             battle_type_player_id[unit_type.battle_type] = player_id;
             if (found_unit_count == 0)
             {
@@ -228,6 +243,7 @@ auto Game::make_unit(unit_t unit_id, Tile_coordinate location) -> Unit
         .fuel                = unit_type.fuel,
         .ready_to_load       = false,
         .level               = 0,
+        .name                = "unit", // TODOfmt::format("{} {} {}"),
         .production          = unit_t{0},
         .production_progress = 0,
     };
@@ -289,15 +305,10 @@ void Game::update_current_player()
     map_window->set_map(player.map);
     map_window->scroll_to(first_city.location);
 
-    Game_context context
-    {
-        .game          = *this,
-        .rendering     = *m_rendering.get(),
-        .tiles         = *m_tiles.get(),
-        .tile_renderer = *m_tile_renderer.get()
-    };
-
-    player.progress_production(context);
+    Game_context context = get_context();
+    player.fog_of_war   (context);
+    player.update_units (context);
+    player.update_cities(context);
 }
 
 auto Game::get_current_player() -> Player&

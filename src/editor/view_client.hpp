@@ -8,6 +8,8 @@ namespace editor
 
 class Editor_rendering;
 class Pointer_context;
+class Scene_root;
+class Viewport_windows;
 
 class View_client
     : public erhe::application::View_client
@@ -44,6 +46,8 @@ private:
     std::shared_ptr<erhe::application::Imgui_windows> m_imgui_windows;
     std::shared_ptr<Editor_rendering                > m_editor_rendering;
     std::shared_ptr<Pointer_context                 > m_pointer_context;
+    std::shared_ptr<Scene_root                      > m_scene_root;
+    std::shared_ptr<Viewport_windows                > m_viewport_windows;
 };
 
 } // namespace editor

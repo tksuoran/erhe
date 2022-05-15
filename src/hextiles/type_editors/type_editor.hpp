@@ -3,6 +3,7 @@
 #include "types.hpp"
 
 #include "erhe/components/components.hpp"
+#include "erhe/application/renderers/imgui_renderer.hpp"
 
 #include <imgui.h>
 
@@ -47,10 +48,13 @@ private:
     void make_def             (const char* tooltip_text, int& value);
     void make_def             (const char* tooltip_text, float& value, float min_value, float max_value);
     void make_terrain_type_def(const char* tooltip_text, terrain_t& value);
-    void make_unit_type_def   (const char* label, unit_t& value);
+    void make_unit_type_def   (const char* label, unit_t& value, int player = 0);
 
     template<typename T>
-    void make_combo_def   (const char* tooltip_text, uint32_t& value);
+    void make_combo_def(const char* tooltip_text, uint32_t& value);
+
+    template<typename T>
+    void make_bit_combo_def(const char* tooltip_text, uint32_t& value);
 
     template<typename T>
     void make_bit_mask_def(const char* tooltip_text, uint32_t& value);
@@ -97,6 +101,82 @@ namespace hextiles
 
 template<typename T>
 void Type_editor::make_combo_def(const char* tooltip_text, uint32_t& value)
+{
+    if (ImGui::TableNextColumn())
+    {
+        const auto label   = fmt::format("##{}-{}", m_current_column, m_current_row);
+        const auto tooltip = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name, value);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        const char* combo_preview_value = T::c_str(value);//(value == 0)
+            //? "None"
+            //: T::c_str(value);
+
+        if (m_current_column < m_value_colors.size())
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, m_value_colors[m_current_column]);
+        }
+        const auto combo_pressed = ImGui::BeginCombo(
+            label.c_str(),
+            combo_preview_value,
+            ImGuiComboFlags_NoArrowButton |
+            ImGuiComboFlags_HeightLarge
+        );
+        if (m_current_column < m_value_colors.size())
+        {
+            ImGui::PopStyleColor();
+        }
+
+        if (combo_pressed)
+        {
+            //{
+            //    const auto id = fmt::format("##{}-{}-none", m_current_column, m_current_row);
+            //    ImGui::PushID(id.c_str());
+            //
+            //    bool is_selected = (value == 0);
+            //    if (ImGui::Selectable("None", is_selected))
+            //    {
+            //        value = 0;
+            //    }
+            //
+            //    if (is_selected)
+            //    {
+            //        ImGui::SetItemDefaultFocus();
+            //    }
+            //    ImGui::PopID();
+            //}
+
+            for (uint32_t bit_position = 0; bit_position < T::bit_count; ++bit_position)
+            {
+                const auto     id = fmt::format("##{}-{}-{}", m_current_column, m_current_row, bit_position);
+                ImGui::PushID(id.c_str());
+
+                //const uint32_t bit_value   = (1u << bit_position);
+                bool           is_selected = (value == bit_position);
+                if (ImGui::Selectable(T::c_str(bit_position), is_selected))
+                {
+                    value = bit_position;
+                }
+
+                // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+                if (is_selected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndCombo();
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("%s", tooltip.c_str());
+            }
+        }
+    }
+
+    ++m_current_column;
+}
+
+template<typename T>
+void Type_editor::make_bit_combo_def(const char* tooltip_text, uint32_t& value)
 {
     if (ImGui::TableNextColumn())
     {
@@ -172,7 +252,7 @@ void Type_editor::make_combo_def(const char* tooltip_text, uint32_t& value)
             ImGui::EndCombo();
             if (ImGui::IsItemHovered())
             {
-                ImGui::SetTooltip(tooltip.c_str());
+                ImGui::SetTooltip("%s", tooltip.c_str());
             }
         }
     }
@@ -224,7 +304,7 @@ void Type_editor::make_bit_mask_def(const char* tooltip_text, uint32_t& value)
         if (ImGui::BeginPopup(popup_label.c_str()))
         {
             const auto title = fmt::format("{} for {}", tooltip_text, m_current_element_name);
-            ImGui::LabelText(title.c_str(), "");
+            ImGui::LabelText(title.c_str(), "%s", "");
             ImGui::Separator();
             for (uint32_t bit_position = 0; bit_position < T::bit_count; ++bit_position)
             {

@@ -175,7 +175,8 @@ void Embree_scene::intersect(Ray& ray, Hit& hit)
             .time  = ray.time,
             .tfar  = ray.t_far,
             .mask  = ray.mask,
-            .id    = ray.id
+            .id    = ray.id,
+            .flags = 0
         },
         .hit = {
             .Ng_x   = 0,

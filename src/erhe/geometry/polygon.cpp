@@ -263,7 +263,7 @@ void Polygon::compute_planar_texture_coordinates(
     }
 
     // Second pass - generate texture coordinates
-    for (auto unscaled_uv : unscaled_uvs)
+    for (const auto& unscaled_uv : unscaled_uvs)
     {
         if (overwrite || !corner_texcoords.has(unscaled_uv.first))
         {

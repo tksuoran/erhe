@@ -61,7 +61,7 @@ void Type_editor::make_def(const char* tooltip_text, bool& value)
         }
         if (ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip(tooltip.c_str());
+            ImGui::SetTooltip("%s", tooltip.c_str());
         }
     }
 
@@ -86,7 +86,7 @@ void Type_editor::make_def(const char* tooltip_text, int& value)
         }
         if (ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip(tooltip.c_str());
+            ImGui::SetTooltip("%s", tooltip.c_str());
         }
     }
 
@@ -111,7 +111,7 @@ void Type_editor::make_def(const char* tooltip_text, float& value, float min_val
         }
         if (ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip(tooltip.c_str());
+            ImGui::SetTooltip("%s", tooltip.c_str());
         }
     }
 
@@ -138,18 +138,18 @@ void Type_editor::make_terrain_type_def(const char* tooltip_text, terrain_t& val
         }
         if (ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip(tooltip.c_str());
+            ImGui::SetTooltip("%s", tooltip.c_str());
         }
     }
 
     ++m_current_column;
 }
 
-void Type_editor::make_unit_type_def(const char* tooltip_text, unit_t& value)
+void Type_editor::make_unit_type_def(const char* tooltip_text, unit_t& value, int player)
 {
     if (ImGui::TableNextColumn())
     {
-        unit_tile_t unit_tile = m_tile_renderer->get_single_unit_tile(0, value);
+        unit_tile_t unit_tile = m_tile_renderer->get_single_unit_tile(player, value);
         const auto  label     = fmt::format("##{}-{}", m_current_column, m_current_row);
         const auto  tooltip   = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name, value);
         m_rendering->unit_image(unit_tile, 2);
@@ -158,14 +158,14 @@ void Type_editor::make_unit_type_def(const char* tooltip_text, unit_t& value)
         {
             ImGui::PushStyleColor(ImGuiCol_Text, m_value_colors[m_current_column]);
         }
-        m_rendering->make_unit_type_combo(label.c_str(), value);
+        m_rendering->make_unit_type_combo(label.c_str(), value, player);
         if (m_current_column < m_value_colors.size())
         {
             ImGui::PopStyleColor();
         }
         if (ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip(tooltip.c_str());
+            ImGui::SetTooltip("%s", tooltip.c_str());
         }
     }
 
@@ -245,6 +245,12 @@ namespace
 void Type_editor::terrain_editor_imgui()
 {
     constexpr ImVec2 button_size{110.0f, 0.0f};
+
+    static int show_tile = 0;
+    m_rendering->terrain_image(static_cast<terrain_tile_t>(show_tile), 4);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100.0f);
+    ImGui::InputInt("Show tile", &show_tile);
 
     m_rendering->terrain_image(m_tiles->get_terrain_tile_from_terrain(m_simulate_terrain_type), 2);
     ImGui::SameLine();
@@ -529,6 +535,20 @@ void Type_editor::terrain_replacement_rule_editor_imgui()
 
 void Type_editor::unit_editor_imgui()
 {
+    static int show_tile = 0;
+    m_rendering->unit_image(static_cast<unit_tile_t>(show_tile), 4);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100.0f);
+    ImGui::InputInt("Show tile", &show_tile);
+
+    static int player_base_one = 1;
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100.0f);
+    ImGui::SliderInt("Player", &player_base_one, 1, max_player_count);
+    const int player = player_base_one - 1;
+
+    //m_rendering->show_texture();
+
     m_rendering->unit_image(m_tile_renderer->get_single_unit_tile(0, m_simulate_unit_type_a), 2);
     ImGui::SameLine();
     m_rendering->make_unit_type_combo("##Type A", m_simulate_unit_type_a);
@@ -632,7 +652,7 @@ void Type_editor::unit_editor_imgui()
                 ImGui::PopFont         ();
                 ImGui::SameLine        ();
                 const auto name_label = fmt::format("##name-{}", m_current_row);
-                m_rendering->unit_image(m_tile_renderer->get_single_unit_tile(0, m_current_unit_id), 2);
+                m_rendering->unit_image(m_tile_renderer->get_single_unit_tile(player, m_current_unit_id), 2);
                 ImGui::SameLine        ();
                 ImGui::SetNextItemWidth(80.0f);
                 ImGui::InputText       (name_label.c_str(), &unit.name);
@@ -656,11 +676,11 @@ void Type_editor::unit_editor_imgui()
             make_def                   ("Defense Sea units",        unit.defense[2]);      // 14
             make_def                   ("Attack Underwater units",  unit.attack [3]);      // 15
             make_def                   ("Defense Underwater units", unit.defense[3]);      // 16
-            make_unit_type_def         ("Stealth Version",          unit.stealth_version); // 17
+            make_unit_type_def         ("Stealth Version",          unit.stealth_version, player); // 17
             make_def                   ("Stealth Attack",           unit.stealth_attack);  // 18
             make_def                   ("Stealth Defense",          unit.stealth_defense); // 19
 
-            make_combo_def<Movement_type>("Movement Type",                              unit.move_type_bits);  // 20
+            make_bit_combo_def<Movement_type>("Movement Type",                              unit.move_type_bits);  // 20
             make_def                     ("Movement Points per Turn (in normal mode)",  unit.move_points[0]);  // 21
             make_def                     ("Movement points per Turn (in stealth mode)", unit.move_points[1]);  // 22
             make_def                     ("Fuel Capacity",                              unit.fuel);            // 23

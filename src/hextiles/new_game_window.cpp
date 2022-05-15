@@ -1,11 +1,13 @@
 #include "menu_window.hpp"
-#include "game.hpp"
-#include "game_window.hpp"
 #include "new_game_window.hpp"
 #include "log.hpp"
 #include "map.hpp"
 #include "map_window.hpp"
+#include "rendering.hpp"
 #include "tiles.hpp"
+#include "tile_renderer.hpp"
+#include "game/game.hpp"
+#include "game/game_window.hpp"
 #include "map_editor/map_editor.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
@@ -103,6 +105,11 @@ auto New_game_window::try_create_city(uint32_t flags_match) -> bool
 
 void New_game_window::select_player_start_cities()
 {
+    if (m_cities.empty())
+    {
+        return;
+    }
+
     // TODO for now, map editor is used to select the map
     auto map = get<Map_editor>()->get_map();
 
@@ -201,30 +208,62 @@ void New_game_window::place_cities()
     }
 }
 
+namespace {
+
+void readonly_int(const char* label, int value)
+{
+    ImGui::DragInt(label, &value, 0, value, value, "%d", ImGuiSliderFlags_NoInput);
+}
+
+}
+
 void New_game_window::imgui()
 {
-    int player_number = 1;
+    constexpr ImVec2 button_size{110.0f, 0.0f};
+
+    int player_number    = 1;
     int player_to_remove = 0;
+    auto rendering     = get<Rendering    >();
+    auto tile_renderer = get<Tile_renderer>();
     for (auto& player : m_player_names)
     {
+        rendering->unit_image(tile_renderer->get_single_unit_tile(player_number - 1, 2), 2);
+        ImGui::SameLine();
+
         auto label = fmt::format("Name of player {}", player_number);
         ImGui::InputText(label.c_str(), &player);
-        ImGui::SameLine();
-        auto remove_button_label = fmt::format("Remove##remove-player-{}", player_number);
-        if (ImGui::Button(remove_button_label.c_str()))
+        if (m_player_names.size() > 2)
         {
-            player_to_remove = player_number;
+            ImGui::SameLine();
+            auto remove_button_label = fmt::format("Remove##remove-player-{}", player_number);
+            if (ImGui::SmallButton(remove_button_label.c_str()))
+            {
+                player_to_remove = player_number;
+            }
         }
         ++player_number;
     }
     if (player_to_remove > 0)
     {
         m_player_names.erase(m_player_names.begin() + player_to_remove - 1);
+        m_player_start_cities.clear();
+        m_minimum_player_start_city_distance = 0;
     }
-    if (ImGui::Button("Add Player"))
+    if (m_player_names.size() < max_player_count)
     {
-        m_player_names.push_back("Mr. Smith");
+        if (ImGui::SmallButton("Add Player"))
+        {
+            m_player_names.push_back("Mr. Smith");
+            m_player_start_cities.clear();
+            m_minimum_player_start_city_distance = 0;
+        }
     }
+
+    ImGui::PushItemWidth(80.0f);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
 
     constexpr float drag_speed = 0.2f;
 
@@ -283,11 +322,19 @@ void New_game_window::imgui()
         select_player_start_cities();
     }
 
-    ImGui::Text("Generated coastal cities: %d",           m_number_of_coastal_cities);
-    ImGui::Text("Generated land cities: %d",              m_number_of_land_cities);
-    ImGui::Text("Minimum player start city distance: %d", m_minimum_player_start_city_distance);
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
 
-    if (ImGui::Button("Start"))
+    readonly_int("Generated coastal cities",           m_number_of_coastal_cities);
+    readonly_int("Generated land cities",              m_number_of_land_cities);
+    readonly_int("Minimum player start city distance", m_minimum_player_start_city_distance);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (ImGui::Button("Start", button_size))
     {
         create();
         hide();
@@ -295,10 +342,12 @@ void New_game_window::imgui()
         get<Game_window>()->show();
     }
 
-    if (ImGui::Button("Back to Menu"))
+    if (ImGui::Button("Back to Menu", button_size))
     {
         get<Menu_window>()->show_menu();
     }
+
+    ImGui::PopItemWidth();
 }
 
 } // namespace hextiles

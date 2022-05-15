@@ -1,8 +1,6 @@
-#include "log.hpp"
-
+#include "erhe/application/renderdoc_app.h"
+#include "erhe/application/log.hpp"
 #include "erhe/toolkit/verify.hpp"
-
-//// #include <renderdoc_app.h>
 
 #if defined(_WIN32)
 #   ifndef _CRT_SECURE_NO_WARNINGS
@@ -25,14 +23,14 @@
 #   include <dlfcn.h>
 #endif
 
-namespace editor {
+namespace erhe::application {
 
-//// RENDERDOC_API_1_1_2* renderdoc_api{nullptr};
+RENDERDOC_API_1_4_0* renderdoc_api{nullptr};
 
 void initialize_renderdoc_capture_support()
 {
 
-#if 0 // defined(_WIN32) || defined(WIN32)
+#if defined(_WIN32) || defined(WIN32)
     HMODULE renderdoc_module = LoadLibraryExA("C:\\Program Files\\RenderDoc\\renderdoc.dll", NULL, 0);
     if (renderdoc_module)
     {
@@ -54,7 +52,7 @@ void initialize_renderdoc_capture_support()
         //    )
         //);
 
-        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&renderdoc_api);
+        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_4_0, (void **)&renderdoc_api);
         log_renderdoc.trace("Loaded RenderDoc DLL, RENDERDOC_GetAPI() return value = {}\n", ret);
         ERHE_VERIFY(ret == 1);
 
@@ -74,7 +72,7 @@ void initialize_renderdoc_capture_support()
     if (renderdoc_so != nullptr)
     {
         pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(renderdoc_so, "RENDERDOC_GetAPI");
-        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&renderdoc_api);
+        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_4_0, (void **)&renderdoc_api);
         log_renderdoc.trace("Loaded RenderDoc DLL, RENDERDOC_GetAPI() return value = {}\n", ret);
         ERHE_VERIFY(ret == 1);
     }

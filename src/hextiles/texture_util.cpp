@@ -5,7 +5,7 @@
 #include "erhe/toolkit/verify.hpp"
 
 #include <gsl/assert>
-#include <bit>
+//#include <bit>
 
 namespace hextiles
 {
@@ -55,10 +55,10 @@ auto Image::get_pixel(size_t x, size_t y) const -> glm::vec4
     Expects(x < info.width);
     Expects(y < info.height);
     const size_t       index = y * info.row_stride + x * 4;
-    const std::uint8_t r_i   = std::bit_cast<uint8_t>(data[index]);
-    const std::uint8_t g_i   = std::bit_cast<uint8_t>(data[index + 1]);
-    const std::uint8_t b_i   = std::bit_cast<uint8_t>(data[index + 2]);
-    const std::uint8_t a_i   = std::bit_cast<uint8_t>(data[index + 3]);
+    const std::uint8_t r_i   = static_cast<uint8_t>(data[index]);
+    const std::uint8_t g_i   = static_cast<uint8_t>(data[index + 1]);
+    const std::uint8_t b_i   = static_cast<uint8_t>(data[index + 2]);
+    const std::uint8_t a_i   = static_cast<uint8_t>(data[index + 3]);
     const float        r     = static_cast<float>(r_i) / 255.0f;
     const float        g     = static_cast<float>(g_i) / 255.0f;
     const float        b     = static_cast<float>(b_i) / 255.0f;
@@ -71,10 +71,10 @@ void Image::put_pixel(size_t x, size_t y, glm::vec4 color)
     Expects(x < info.width);
     Expects(y < info.height);
     const size_t index = y * info.row_stride + x * 4;
-    data[index    ] = std::bit_cast<std::byte>(static_cast<uint8_t>(color.r * 255.0f));
-    data[index + 1] = std::bit_cast<std::byte>(static_cast<uint8_t>(color.g * 255.0f));
-    data[index + 2] = std::bit_cast<std::byte>(static_cast<uint8_t>(color.b * 255.0f));
-    data[index + 3] = std::bit_cast<std::byte>(static_cast<uint8_t>(color.a * 255.0f));
+    data[index    ] = static_cast<std::byte>(static_cast<uint8_t>(color.r * 255.0f));
+    data[index + 1] = static_cast<std::byte>(static_cast<uint8_t>(color.g * 255.0f));
+    data[index + 2] = static_cast<std::byte>(static_cast<uint8_t>(color.b * 255.0f));
+    data[index + 3] = static_cast<std::byte>(static_cast<uint8_t>(color.a * 255.0f));
 }
 
 auto load_png(const fs::path& path) -> Image

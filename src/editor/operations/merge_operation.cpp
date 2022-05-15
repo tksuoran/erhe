@@ -135,10 +135,16 @@ Merge_operation::Merge_operation(Parameters&& parameters)
 
         if (node_physics && (rigid_body != nullptr))
         {
-            compound_shape_create_info.children.emplace_back(
-                collision_shape,
-                erhe::physics::Transform{transform}
-            );
+            //compound_shape_create_info.children.emplace_back(
+            //    collision_shape,
+            //    erhe::physics::Transform{transform}
+            //);
+            erhe::physics::Compound_child child{
+                .shape     = collision_shape,
+                .transform = erhe::physics::Transform{transform}
+            };
+            compound_shape_create_info.children.push_back(child);
+
             const auto child_mass = rigid_body->get_mass();
             child_masses.push_back(child_mass);
             m_state_after.mass += child_mass;
