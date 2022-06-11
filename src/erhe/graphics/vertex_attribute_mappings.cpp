@@ -3,7 +3,6 @@
 #include "erhe/graphics/log.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/log/log_fmt.hpp"
 
 namespace erhe::graphics
 {

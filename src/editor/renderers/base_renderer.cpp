@@ -11,7 +11,6 @@
 #include "erhe/graphics/span.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/camera.hpp"

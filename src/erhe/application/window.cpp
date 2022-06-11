@@ -7,7 +7,6 @@
 #include "erhe/graphics/png_loader.hpp"
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/filesystem.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/window.hpp"

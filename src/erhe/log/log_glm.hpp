@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/log/log_fmt.hpp"
+#include "erhe/log/log.hpp"
 
 #include <glm/glm.hpp>
 

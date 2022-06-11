@@ -2,7 +2,6 @@
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/log.hpp"
-#include "erhe/log/log_fmt.hpp"
 
 namespace erhe::application {
 

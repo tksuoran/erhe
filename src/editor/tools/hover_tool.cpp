@@ -12,7 +12,6 @@
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/mesh.hpp"

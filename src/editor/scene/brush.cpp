@@ -4,7 +4,6 @@
 #include "log.hpp"
 
 #include "erhe/geometry/operation/clone.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/irigid_body.hpp"
 #include "erhe/physics/iworld.hpp"

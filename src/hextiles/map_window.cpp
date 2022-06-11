@@ -18,7 +18,6 @@
 
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/framebuffer.hpp"
-#include "erhe/log/log_fmt.hpp"
 
 #include <imgui.h>
 

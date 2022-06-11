@@ -1,6 +1,5 @@
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/log.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <fmt/format.h>

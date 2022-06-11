@@ -2,7 +2,6 @@
 #include "erhe/graphics/log.hpp"
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <algorithm>

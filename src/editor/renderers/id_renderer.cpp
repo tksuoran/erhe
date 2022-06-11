@@ -18,7 +18,6 @@
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
@@ -130,6 +129,8 @@ void Id_renderer::next_frame()
 
 void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
 {
+    ERHE_PROFILE_FUNCTION
+
     ERHE_VERIFY(m_use_renderbuffers != m_use_textures);
 
     if (m_use_renderbuffers)
@@ -235,13 +236,19 @@ void Id_renderer::render(
     bind_primitive_buffer();
     bind_draw_indirect_buffer();
 
-    gl::multi_draw_elements_indirect(
-        m_pipeline.data.input_assembly.primitive_topology,
-        m_mesh_memory->gl_index_type(),
-        reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
-        static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
-        static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
-    );
+    {
+        static constexpr std::string_view c_draw{"draw"};
+
+        ERHE_PROFILE_SCOPE("mdi");
+        ERHE_PROFILE_GPU_SCOPE(c_draw)
+        gl::multi_draw_elements_indirect(
+            m_pipeline.data.input_assembly.primitive_topology,
+            m_mesh_memory->gl_index_type(),
+            reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
+            static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
+            static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
+        );
+    }
 }
 
 static constexpr std::string_view c_id_renderer_render_clear  {"Id_renderer::render() clear"  };

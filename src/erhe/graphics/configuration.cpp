@@ -1,7 +1,6 @@
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/graphics/log.hpp"
-#include "erhe/log/log_fmt.hpp"
 
 #if !defined(WIN32)
 # include <csignal>

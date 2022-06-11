@@ -17,7 +17,6 @@
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/graphics/debug.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/raytrace/mesh_intersect.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/camera.hpp"

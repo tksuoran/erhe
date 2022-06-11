@@ -1,6 +1,5 @@
 #include "erhe/application/renderdoc_app.h"
 #include "erhe/application/log.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #if defined(_WIN32)

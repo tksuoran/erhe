@@ -1,5 +1,6 @@
 #include "erhe/raytrace/null/null_scene.hpp"
 #include "erhe/raytrace/null/null_geometry.hpp"
+#include "erhe/raytrace/iinstance.hpp"
 #include "erhe/raytrace/log.hpp"
 
 namespace erhe::raytrace
@@ -34,7 +35,7 @@ void Null_scene::attach(IGeometry* geometry)
     const auto i = std::find(m_geometries.begin(), m_geometries.end(), geometry);
     if (i != m_geometries.end())
     {
-        log_scene.error("raytrace geometry already in scene\n");
+        log_scene->error("raytrace geometry already in scene");
     }
     else
 #endif
@@ -49,11 +50,12 @@ void Null_scene::attach(IInstance* instance)
     const auto i = std::find(m_instances.begin(), m_instances.end(), instance);
     if (i != m_instances.end())
     {
-        log_scene.error("raytrace instance already in scene\n");
+        log_scene->error("raytrace instance '{}' already in scene", instance->debug_label());
     }
     else
 #endif
     {
+        log_scene->info("raytrace instance '{}' attached to scene", instance->debug_label());
         m_instances.push_back(instance);
     }
 }
@@ -61,9 +63,9 @@ void Null_scene::attach(IInstance* instance)
 void Null_scene::detach(IGeometry* geometry)
 {
     const auto i = std::remove(m_geometries.begin(), m_geometries.end(), geometry);
-    if (i == m_geometries.end()) 
+    if (i == m_geometries.end())
     {
-        log_scene.error("raytrace geometry not in scene\n");
+        log_scene->error("raytrace geometry not in scene");
     }
     else
     {
@@ -74,9 +76,9 @@ void Null_scene::detach(IGeometry* geometry)
 void Null_scene::detach(IInstance* instance)
 {
     const auto i = std::remove(m_instances.begin(), m_instances.end(), instance);
-    if (i == m_instances.end()) 
+    if (i == m_instances.end())
     {
-        log_scene.error("raytrace instance not in scene\n");
+        log_scene->error("raytrace instance not in scene");
     }
     else
     {

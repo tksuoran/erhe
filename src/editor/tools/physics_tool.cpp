@@ -14,7 +14,6 @@
 #include "erhe/application/view.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/physics/iconstraint.hpp"
 #include "erhe/scene/mesh.hpp"

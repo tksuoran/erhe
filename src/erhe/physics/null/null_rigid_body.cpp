@@ -115,6 +115,12 @@ void Null_rigid_body::set_world_transform(const Transform transform)
     m_transform = transform;
 }
 
+void Null_rigid_body::move_world_transform(const Transform transform, float delta_time)
+{
+    static_cast<void>(delta_time);
+    m_transform = transform;
+}
+
 void Null_rigid_body::set_linear_velocity(const glm::vec3 velocity)
 {
     m_linear_velocity = velocity;

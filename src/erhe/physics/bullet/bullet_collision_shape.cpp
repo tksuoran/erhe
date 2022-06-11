@@ -160,7 +160,7 @@ void Bullet_collision_shape::calculate_principal_axis_transform(
     glm::vec3&                /*inertia*/
 )
 {
-    log_physics.error("Bullet_collision_shape::calculate_principal_axis_transform() called\n");
+    log_physics->error("Bullet_collision_shape::calculate_principal_axis_transform() called\n");
     assert(false);
 }
 

@@ -206,6 +206,12 @@ void Bullet_rigid_body::set_world_transform(const Transform transform)
     m_bullet_rigid_body.setWorldTransform(to_bullet(transform));
 }
 
+void Bullet_rigid_body::move_world_transform(const Transform transform, float delta_time)
+{
+    static_cast<void>(delta_time); // TODO How to take delta time into account?
+    m_bullet_rigid_body.setWorldTransform(to_bullet(transform));
+}
+
 void Bullet_rigid_body::set_linear_velocity(const glm::vec3 velocity)
 {
     m_bullet_rigid_body.setLinearVelocity(to_bullet(velocity));

@@ -17,7 +17,6 @@
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/scene/viewport.hpp"
 #include "erhe/gl/gl.hpp"

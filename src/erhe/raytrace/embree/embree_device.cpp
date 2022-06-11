@@ -1,6 +1,5 @@
 #include "erhe/raytrace/embree/embree_device.hpp"
 #include "erhe/raytrace/log.hpp"
-#include "erhe/log/log_fmt.hpp"
 
 namespace erhe::raytrace
 {

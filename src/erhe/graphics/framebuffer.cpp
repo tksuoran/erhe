@@ -3,7 +3,6 @@
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/configuration.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <thread>

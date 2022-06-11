@@ -2,7 +2,6 @@
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/log.hpp"
 #include "erhe/graphics/scoped_buffer_mapping.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 

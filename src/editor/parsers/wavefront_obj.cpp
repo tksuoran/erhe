@@ -2,7 +2,6 @@
 #include "log.hpp"
 
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/profile.hpp"
 

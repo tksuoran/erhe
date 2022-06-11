@@ -23,7 +23,6 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/verify.hpp"

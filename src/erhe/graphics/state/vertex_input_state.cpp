@@ -6,7 +6,6 @@
 #include "erhe/graphics/vertex_attribute.hpp"
 #include "erhe/graphics/vertex_attribute_mapping.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <fmt/ostream.h>

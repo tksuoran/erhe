@@ -1,6 +1,5 @@
 #include "erhe/raytrace/mesh_intersect.hpp"
 #include "erhe/raytrace/log.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/scene/mesh.hpp"
 

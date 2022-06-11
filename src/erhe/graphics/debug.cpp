@@ -2,7 +2,6 @@
 
 #include "erhe/gl/gl.hpp"
 #include "erhe/graphics/log.hpp"
-#include "erhe/log/log_fmt.hpp"
 
 #include <fmt/ostream.h>
 #include <gsl/gsl>

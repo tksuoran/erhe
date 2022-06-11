@@ -2,7 +2,6 @@
 #include "erhe/primitive/log.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/graphics/configuration.hpp"
-#include "erhe/log/log_fmt.hpp"
 
 #include <glm/glm.hpp>
 

@@ -4,7 +4,7 @@
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/dynamic_load.hpp"
 #include "erhe/gl/gl.hpp"
-#include "erhe/log/log_fmt.hpp"
+#include "erhe/log/log.hpp"
 
 #include <cassert>
 

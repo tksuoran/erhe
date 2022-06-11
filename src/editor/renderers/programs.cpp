@@ -6,7 +6,6 @@
 #include "erhe/application/graphics/shader_monitor.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/sampler.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 

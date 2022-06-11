@@ -4,7 +4,6 @@
 #include "scene/node_physics.hpp"
 #include "log.hpp"
 
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/scene/scene.hpp"
 
 #include <memory>

@@ -2,7 +2,6 @@
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/log.hpp"
 #include "erhe/graphics/debug.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/timer.hpp"
 

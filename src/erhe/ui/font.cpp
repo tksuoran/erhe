@@ -1,11 +1,10 @@
 #include "erhe/ui/font.hpp"
+#include "erhe/ui/glyph.hpp"
+#include "erhe/ui/log.hpp"
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/graphics/configuration.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/ui/glyph.hpp"
-#include "erhe/ui/log.hpp"
 
 #include <fmt/printf.h>
 
@@ -687,7 +686,11 @@ auto Font::print(
 {
     return 0;
 }
-void Font::measure(const std::string&, Rectangle&) const {}
+auto Font::measure(const std::string_view text) const -> Rectangle
+{
+    static_cast<void>(text);
+    return {};
+}
 #endif
 
 } // namespace erhe::ui

@@ -18,7 +18,6 @@
 #include "erhe/application/view.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"

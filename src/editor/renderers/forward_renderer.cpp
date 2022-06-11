@@ -106,11 +106,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     if (camera != nullptr)
     {
-        ERHE_PROFILE_MESSAGE_LITERAL("A");
         update_camera_buffer(*camera, viewport);
-        ERHE_PROFILE_MESSAGE_LITERAL("B");
         bind_camera_buffer  ();
-        ERHE_PROFILE_MESSAGE_LITERAL("C");
     }
     update_material_buffer(materials);
     bind_material_buffer();

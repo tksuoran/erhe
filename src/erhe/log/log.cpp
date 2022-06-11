@@ -88,10 +88,10 @@ void store_log_sink::flush_()
 
 namespace {
 
-//std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> sink_console;
-std::shared_ptr<spdlog::sinks::basic_file_sink_mt> sink_log_file;
-std::shared_ptr<store_log_sink>                    tail_store_log;
-std::shared_ptr<store_log_sink>                    frame_store_log;
+std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> sink_console;
+std::shared_ptr<spdlog::sinks::basic_file_sink_mt>   sink_log_file;
+std::shared_ptr<store_log_sink>                      tail_store_log;
+std::shared_ptr<store_log_sink>                      frame_store_log;
 
 }
 
@@ -106,7 +106,7 @@ auto get_frame_store_log() -> const std::shared_ptr<store_log_sink>&
 
 void initialize_log_sinks()
 {
-    //sink_console  = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    sink_console    = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
     sink_log_file   = std::make_shared<spdlog::sinks::basic_file_sink_mt>("log.txt", true);
     tail_store_log  = std::make_shared<store_log_sink>();
     frame_store_log = std::make_shared<store_log_sink>();

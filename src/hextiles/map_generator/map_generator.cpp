@@ -5,7 +5,6 @@
 #include "tiles.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
-#include "erhe/log/log_fmt.hpp"
 
 #include <imgui.h>
 

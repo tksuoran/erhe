@@ -8,7 +8,6 @@
 
 #include "erhe/application/time.hpp"
 #include "erhe/application/windows/log_window.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/igeometry.hpp"
@@ -341,7 +340,7 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
         entry.position = position_in_world_viewport_depth(id_query.depth);
         entry.valid    = id_query.valid;
 
-        trace_fmt(log_pointer, "position in world = {}", entry.position.value());
+        SPDLOG_LOGGER_TRACE(log_pointer, "position in world = {}", entry.position.value());
         if (id_query.valid)
         {
             entry.mesh        = id_query.mesh;
@@ -359,7 +358,7 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
                         polygon_id < entry.geometry->get_polygon_count()
                     )
                     {
-                        trace_fmt(log_pointer, "hover polygon = {}", polygon_id);
+                        SPDLOG_LOGGER_TRACE(log_pointer, "hover polygon = {}", polygon_id);
                         auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(c_polygon_normals);
                         if (
                             (polygon_normals != nullptr) &&
@@ -369,7 +368,7 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
                             const auto local_normal    = polygon_normals->get(polygon_id);
                             const auto world_from_node = entry.mesh->world_from_node();
                             entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
-                            trace_fmt(log_pointer, "hover normal = {}", entry.normal.value());
+                            SPDLOG_LOGGER_TRACE(log_pointer, "hover normal = {}", entry.normal.value());
                         }
                     }
                 }
@@ -378,7 +377,7 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
             const bool hover_tool    = id_query.mesh && (entry.mesh->get_visibility_mask() & erhe::scene::Node_visibility::tool   ) == erhe::scene::Node_visibility::tool;
             const bool hover_brush   = id_query.mesh && (entry.mesh->get_visibility_mask() & erhe::scene::Node_visibility::brush  ) == erhe::scene::Node_visibility::brush;
             const bool hover_gui     = id_query.mesh && (entry.mesh->get_visibility_mask() & erhe::scene::Node_visibility::gui    ) == erhe::scene::Node_visibility::gui;
-            trace_fmt(
+            SPDLOG_LOGGER_TRACE(
                 log_pointer,
                 "hover mesh = {} primitive = {} local index {} {}{}{}{}",
                 entry.mesh ? entry.mesh->name() : "()",
@@ -408,7 +407,7 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
         }
         else
         {
-            log_pointer.trace("pointer context hover not valid");
+            SPDLOG_LOGGER_TRACE(log_pointer, "pointer context hover not valid");
         }
     }
 #endif

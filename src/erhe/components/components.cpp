@@ -1,7 +1,6 @@
 #include "erhe/components/components.hpp"
 #include "erhe/concurrency/concurrent_queue.hpp"
 #include "erhe/components/log.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 

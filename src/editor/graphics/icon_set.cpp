@@ -5,7 +5,6 @@
 
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/renderers/imgui_renderer.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/toolkit/profile.hpp"

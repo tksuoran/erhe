@@ -16,7 +16,6 @@
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/state/color_blend_state.hpp"
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/profile.hpp"
 

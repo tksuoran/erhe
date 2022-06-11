@@ -2,7 +2,6 @@
 #include "erhe/application/log.hpp"
 
 #include "erhe/graphics/state/depth_stencil_state.hpp"
-#include "erhe/log/log_fmt.hpp"
 
 #include <cxxopts.hpp>
 
