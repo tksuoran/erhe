@@ -317,7 +317,7 @@ auto Fly_camera_tool::try_move(
         active
     )
     {
-        log_fly_camera.warn("rejected press because no pointer_context window\n");
+        log_fly_camera->warn("rejected press because no pointer_context window");
 
         return false;
     }

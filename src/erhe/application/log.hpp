@@ -4,16 +4,20 @@
 
 namespace erhe::application {
 
-extern erhe::log::Category log_command_state_transition;
-extern erhe::log::Category log_input;
-extern erhe::log::Category log_input_event;
-extern erhe::log::Category log_input_event_consumed;
-extern erhe::log::Category log_input_event_filtered;
-extern erhe::log::Category log_input_events;
-extern erhe::log::Category log_performance;
-extern erhe::log::Category log_renderdoc;
-extern erhe::log::Category log_startup;
-extern erhe::log::Category log_tools;
-extern erhe::log::Category log_windows;
+extern std::shared_ptr<spdlog::logger> log_command_state_transition;
+extern std::shared_ptr<spdlog::logger> log_input;
+extern std::shared_ptr<spdlog::logger> log_input_event;
+extern std::shared_ptr<spdlog::logger> log_input_event_consumed;
+extern std::shared_ptr<spdlog::logger> log_input_event_filtered;
+extern std::shared_ptr<spdlog::logger> log_input_events;
+extern std::shared_ptr<spdlog::logger> log_performance;
+extern std::shared_ptr<spdlog::logger> log_renderdoc;
+extern std::shared_ptr<spdlog::logger> log_startup;
+extern std::shared_ptr<spdlog::logger> log_tools;
+extern std::shared_ptr<spdlog::logger> log_windows;
+extern std::shared_ptr<spdlog::logger> log_shader_monitor;
+extern std::shared_ptr<spdlog::logger> log_imgui;
+
+void initialize_logging();
 
 }

@@ -29,7 +29,7 @@ void Gl_context_provider::provide_worker_contexts(
 {
     ERHE_PROFILE_FUNCTION
 
-    log_startup.info("Starting to provide worked GL contexts\n");
+    log_startup->info("Starting to provide worked GL contexts");
 
     ERHE_VERIFY(m_main_thread_id == std::this_thread::get_id());
     m_opengl_state_tracker = opengl_state_tracker;
@@ -49,7 +49,7 @@ void Gl_context_provider::provide_worker_contexts(
         if (!worker_contexts_still_needed_callback())
         {
             ERHE_PROFILE_MESSAGE_LITERAL("No more GL worker thread contexts needed");
-            log_startup.info("No more GL worker thread contexts needed\n");
+            log_startup->info("No more GL worker thread contexts needed");
             break;
         }
 
@@ -67,7 +67,7 @@ void Gl_context_provider::provide_worker_contexts(
     }
 
     ERHE_PROFILE_MESSAGE_LITERAL("Done creating GL worker thread contexts");
-    log_startup.info("Done creating GL worker thread contexts\n");
+    log_startup->info("Done creating GL worker thread contexts");
 
     {
         ERHE_PROFILE_SCOPE("main_window->make_current()");

@@ -8,7 +8,6 @@
 #include "erhe/components/components.hpp"
 
 #include <memory>
-#include <unordered_map>
 #include <vector>
 
 namespace hextiles

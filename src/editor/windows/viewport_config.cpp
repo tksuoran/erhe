@@ -4,6 +4,7 @@
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/imgui_helpers.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <imgui.h>
 
@@ -32,6 +33,8 @@ void Viewport_config::initialize_component()
 
 void Viewport_config::render_style_ui(Render_style& render_style)
 {
+    ERHE_PROFILE_FUNCTION
+
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_OpenOnArrow       |
         ImGuiTreeNodeFlags_OpenOnDoubleClick |
@@ -106,6 +109,8 @@ void Viewport_config::render_style_ui(Render_style& render_style)
 
 void Viewport_config::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     ImGui::ColorEdit4("Clear Color", &clear_color.x, ImGuiColorEditFlags_Float);
     ImGui::Checkbox  ("Post Processing", &post_processing_enable);
 

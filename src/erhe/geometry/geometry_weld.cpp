@@ -85,16 +85,16 @@ void Geometry::weld(const Weld_settings& weld_settings)
     bounding_box_size2[axis1] = 0.0f;
     const auto axis2 = erhe::toolkit::max_axis_index(bounding_box_size2);
 
-    log_weld.trace("Primary   axis = {} {}\n", axis0, c_str(axis0));
-    log_weld.trace("Secondary axis = {} {}\n", axis1, c_str(axis1));
-    log_weld.trace("Tertiary  axis = {} {}\n", axis2, c_str(axis2));
+    log_weld->trace("Primary   axis = {} {}", axis0, c_str(axis0));
+    log_weld->trace("Secondary axis = {} {}", axis1, c_str(axis1));
+    log_weld->trace("Tertiary  axis = {} {}", axis2, c_str(axis2));
 
     //debug_trace();
     sanity_check();
 
-    log_weld.trace("Polygon processing:\n");
+    log_weld->trace("Polygon processing:");
     {
-        const erhe::log::Indenter scope_indent;
+        //const erhe::log::Indenter scope_indent;
 
         Remapper<Polygon_id> polygon_remapper{m_next_polygon_id};
 
@@ -298,7 +298,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
         m_next_polygon_id = polygon_remapper.new_size;
 
         // Remap polygons
-        auto old_polygon_corners = polygon_corners;
+        auto old_polygon_corners = polygon_corners; // intentional copy
         uint32_t next_polygon_corner = 0;
         for (
             Polygon_id new_polygon_id = 0, new_polygon_id_end = get_polygon_count();
@@ -377,7 +377,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
 
     //log_weld.trace("Point processing:\n");
     {
-        const erhe::log::Indenter scope_indent;
+        //const erhe::log::Indenter scope_indent;
 
         Remapper<Point_id> point_remapper{m_next_point_id};
         std::sort(
@@ -557,13 +557,15 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 }
 #endif
 
-                log_weld.trace(
-                    "merging new point {:2} old point {:2} to new point {:2} old point {:2}\n",
+                SPDLOG_LOGGER_TRACE(
+                    log_weld,
+                    "merging new point {:2} old point {:2} to new point {:2} old point {:2}",
                     secondary_new_id, secondary_old_id, primary_new_id, primary_old_id
                 );
 
-                log_weld.trace(
-                    "position {} - {}\n",
+                SPDLOG_LOGGER_TRACE(
+                    log_weld,
+                    "position {} - {}",
                     primary_attributes  .position.value(),
                     secondary_attributes.position.value()
                 );
@@ -572,7 +574,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
             }
         }
 
-        log_weld.trace("Merged {} points\n", point_remapper.merge.size());
+        log_weld->trace("Merged {} points", point_remapper.merge.size());
         //log_weld.trace("Point remapping after merge, before removing duplicate points:\n");
         //point_remapper.dump();
         //debug_trace();
@@ -602,7 +604,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
         )
         {
             const Point_id old_point_id = point_remapper.old_id(new_point_id);
-            log_weld.trace("Point new {:2} from old {:2} corners:", new_point_id, old_point_id);
+            SPDLOG_LOGGER_TRACE(log_weld, "Point new {:2} from old {:2} corners:", new_point_id, old_point_id);
             Point& old_point = old_points[old_point_id];
             Point& new_point = points[new_point_id];
             points[new_point_id].first_point_corner_id = next_point_corner;
@@ -683,7 +685,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
     // Remove unused corners
     //log_weld.trace("Corner processing:\n");
     {
-        const log::Indenter scope_indent;
+        //const log::Indenter scope_indent;
 
         Remapper<Corner_id> corner_remapper{get_corner_count()};
         for (
@@ -759,7 +761,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
         // Remap corners
         //log_weld.trace("Corner renaming:\n");
         {
-            const log::Indenter scope_indent_inner;
+            //const log::Indenter scope_indent_inner;
 
             auto old_corners = corners; // copy intended
             for (
@@ -784,7 +786,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
             {
                 const Point& point = points[point_id];
                 //log_weld.trace("Point {:2} corners:", point_id);
-                const log::Indenter point_scope_indent;
+                //const log::Indenter point_scope_indent;
                 for (
                     Point_corner_id point_corner_id = point.first_point_corner_id,
                     end = point.first_point_corner_id + point.corner_count;
@@ -808,7 +810,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
             {
                 const Polygon& polygon = polygons[polygon_id];
                 //log_weld.trace("Polygon {:2} corners:", polygon_id);
-                const log::Indenter polygon_scope_indent;
+                //const log::Indenter polygon_scope_indent;
                 for (
                     Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id,
                     end = polygon.first_polygon_corner_id + polygon.corner_count;
@@ -832,7 +834,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
 
     build_edges();
 
-    log_weld.trace("merge done\n");
+    log_weld->info("merge done\n");
 }
 
 }

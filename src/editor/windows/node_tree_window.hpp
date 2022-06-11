@@ -8,7 +8,9 @@
 #include "erhe/toolkit/unique_id.hpp"
 
 #include <memory>
-#include <unordered_map>
+
+//#include <unordered_map>
+#include "robin_hood.h"
 
 namespace erhe::scene
 {
@@ -72,12 +74,12 @@ private:
     //nonstd::optional<int> m_range_select_start;
     //nonstd::optional<int> m_range_select_end;
 
-    std::unordered_map<
+    robin_hood::unordered_map<
         erhe::toolkit::Unique_id<erhe::scene::Node>::id_type,
         std::shared_ptr<erhe::scene::Node>
     > m_tree_nodes;
 
-    std::unordered_map<
+    robin_hood::unordered_map<
         erhe::toolkit::Unique_id<erhe::scene::Node>::id_type,
         std::shared_ptr<erhe::scene::Node>
     > m_tree_nodes_last_frame;

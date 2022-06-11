@@ -12,6 +12,7 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace editor
 {
@@ -78,6 +79,8 @@ template <typename T>
 
 void Debug_view_window::render()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (
         (m_viewport.width < 1) ||
         (m_viewport.height < 1)

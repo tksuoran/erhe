@@ -15,6 +15,7 @@
 #include "erhe/application/imgui_helpers.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <imgui.h>
 
@@ -71,6 +72,8 @@ void Operations::register_active_tool(Tool* tool)
 
 void Operations::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_selection_tool == nullptr)
     {
         return;

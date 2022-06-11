@@ -119,55 +119,57 @@ public:
     void dump()
     {
         bool error = false;
-        const erhe::log::Indenter scoped_indent;
+        //const erhe::log::Indenter scoped_indent;
+        std::stringstream ss;
         for (T old_id = 0; old_id < old_size; ++old_id)
         {
             const T new_id = new_from_old[old_id];
-            log_weld.trace("{:2}", new_id);
+            ss << fmt::format("{:2}", new_id);
             if (is_bijection && (old_id != std::numeric_limits<T>::max()) && (old_from_new[new_id] != old_id))
             {
                 error = true;
-                log_weld.trace("!");
+                ss << "!";
             }
             else
             {
-                log_weld.trace(" ");
+                ss << " ";
             }
         }
-        log_weld.trace("  < new from old\n");
+        ss << "  < new from old\n";
         for (T old_id = 0; old_id < old_size; ++old_id)
         {
-            log_weld.trace("{:2} ", old_id);
+            ss << fmt::format("{:2} ", old_id);
         }
-        log_weld.trace("  < old\n");
-        log_weld.trace("\n");
-        log_weld.trace("    \\/  \\/  \\/  \\/  \\/  \\/  \\/  \\/\n");
-        log_weld.trace("    /\\  /\\  /\\  /\\  /\\  /\\  /\\  /\\\n");
-        log_weld.trace("\n");
+        ss << "  < old\n";
+        ss << "\n";
+        ss << "    \\/  \\/  \\/  \\/  \\/  \\/  \\/  \\/\n";
+        ss << "    /\\  /\\  /\\  /\\  /\\  /\\  /\\  /\\\n";
+        ss << "\n";
 
         for (T new_id = 0; new_id < old_size; ++new_id)
         {
-            log_weld.trace("{:2} ", new_id);
+            ss << fmt::format("{:2} ", new_id);
         }
-        log_weld.trace("  < new\n");
+        ss << "  < new\n";
         for (T new_id = 0; new_id < new_size; ++new_id)
         {
             const T old_id = old_from_new[new_id];
-            log_weld.trace("{:2}", old_id);
+            ss << fmt::format("{:2}", old_id);
             if (is_bijection && (old_id != std::numeric_limits<T>::max()) && (new_from_old[old_id] != new_id))
             {
                 error = true;
-                log_weld.trace("!");
+                ss << "!";
             }
             else
             {
-                log_weld.trace(" ");
+                ss << " ";
             }
         }
-        log_weld.trace("  < old from new\n");
+        ss << "  < old from new\n";
+        log_weld->trace("{}", ss.str());
         if (error)
         {
-            log_weld.trace("Errors detected\n");
+            log_weld->error("Errors detected\n");
         }
     }
 

@@ -2,7 +2,7 @@
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/log.hpp"
-
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace erhe::application {
@@ -37,7 +37,10 @@ auto Command::state() const -> State
 
 void Command::set_inactive(Command_context& context)
 {
-    log_command_state_transition.trace("{} -> inactive\n", name());
+    log_command_state_transition->trace(
+        "{} -> inactive",
+        name()
+    );
     on_inactive(context);
     m_state = State::Inactive;
     context.view().command_inactivated(this);
@@ -45,7 +48,7 @@ void Command::set_inactive(Command_context& context)
 
 void Command::disable(Command_context& context)
 {
-    log_command_state_transition.trace("{} -> disabled\n", name());
+    log_command_state_transition->trace("{} -> disabled", name());
     if (m_state == State::Active)
     {
         set_inactive(context);
@@ -59,21 +62,21 @@ void Command::enable(Command_context& context)
     {
         return;
     }
-    log_command_state_transition.trace("{} -> enabled\n", name());
+    log_command_state_transition->trace("{} -> enabled", name());
     set_inactive(context);
 };
 
 void Command::set_ready(Command_context& context)
 {
     static_cast<void>(context);
-    log_command_state_transition.trace("{} -> ready\n", name());
+    log_command_state_transition->trace("{} -> ready", name());
     m_state = State::Ready;
 }
 
 void Command::set_active(Command_context& context)
 {
     static_cast<void>(context);
-    log_command_state_transition.trace("{} -> active\n", name());
+    log_command_state_transition->trace("{} -> active", name());
     m_state = State::Active;
 }
 

@@ -30,6 +30,7 @@ target_link_libraries(
     ${_target}
     PRIVATE
         erhe::gl
+        erhe::log
         fmt::fmt
         Microsoft.GSL::GSL
     PUBLIC

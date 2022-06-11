@@ -5,6 +5,8 @@
 namespace erhe::components
 {
 
-extern erhe::log::Category log_components;
+extern std::shared_ptr<spdlog::logger> log_components;
+
+void initialize_logging();
 
 } // namespace erhe::components

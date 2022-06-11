@@ -2,6 +2,7 @@
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/log.hpp"
+#include "erhe/log/log_fmt.hpp"
 
 namespace erhe::application {
 
@@ -78,8 +79,8 @@ auto Mouse_click_binding::on_button(
         if (command->state() == State::Ready)
         {
             consumed = command->try_call(context);
-            log_input_event_consumed.trace(
-                "{} consumed mouse button {} click\n",
+            log_input_event_consumed->trace(
+                "{} consumed mouse button {} click",
                 command->name(),
                 erhe::toolkit::c_str(button)
             );

@@ -16,6 +16,7 @@
 #include "erhe/physics/iworld.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/ext/matrix_common.hpp>
 
@@ -74,6 +75,8 @@ auto Physics_window::description() -> const char*
 
 void Physics_window::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_selection_tool == nullptr)
     {
         return;

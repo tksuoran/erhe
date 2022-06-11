@@ -27,6 +27,7 @@
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/gtx/transform.hpp>
 #include <imgui.h>
@@ -208,7 +209,7 @@ void Brushes::remove_brush_mesh()
 {
     if (m_brush_mesh)
     {
-        log_brush.trace("removing brush mesh\n");
+        log_brush->trace("removing brush mesh");
         m_scene_root->scene().remove(
             //*m_scene_root->brush_layer(),
             m_brush_mesh
@@ -357,28 +358,28 @@ void Brushes::update_mesh_node_transform()
     {
         if (brush_parent)
         {
-            log_brush.trace(
-                "m_brush_mesh->parent() = {} ({})\n",
+            log_brush->trace(
+                "m_brush_mesh->parent() = {} ({})",
                 brush_parent->name(),
                 brush_parent->node_type()
             );
         }
         else
         {
-            log_brush.trace("m_brush_mesh->parent() = (none)\n");
+            log_brush->trace("m_brush_mesh->parent() = (none)");
         }
 
         if (m_hover_mesh)
         {
-            log_brush.trace(
-                "m_hover_mesh = {} ({})\n",
+            log_brush->trace(
+                "m_hover_mesh = {} ({})",
                 m_hover_mesh->name(),
                 m_hover_mesh->node_type()
             );
         }
         else
         {
-            log_brush.trace("m_hover_mesh = (none)\n");
+            log_brush->trace("m_hover_mesh = (none)");
         }
 
         if (m_hover_mesh)
@@ -405,7 +406,11 @@ void Brushes::do_insert_operation()
         return;
     }
 
-    log_brush.trace("{} scale = {}\n", __func__, m_transform_scale);
+    log_brush->trace(
+        "{} scale = {}",
+        __func__,
+        m_transform_scale
+    );
 
     const auto hover_from_brush = get_brush_transform();
     //const auto world_from_brush = m_hover_mesh->world_from_node() * hover_from_brush;
@@ -502,6 +507,8 @@ void Brushes::update_mesh()
 
 void Brushes::tool_properties()
 {
+    ERHE_PROFILE_FUNCTION
+
     ImGui::InputFloat("Hover scale",     &debug_info.hover_frame_scale);
     ImGui::InputFloat("Brush scale",     &debug_info.brush_frame_scale);
     ImGui::InputFloat("Transform scale", &debug_info.transform_scale);
@@ -518,6 +525,8 @@ void Brushes::tool_properties()
 
 void Brushes::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     const size_t brush_count = m_brushes.size();
 
     {

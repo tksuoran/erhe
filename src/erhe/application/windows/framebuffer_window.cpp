@@ -8,6 +8,7 @@
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <imgui.h>
 
@@ -60,6 +61,8 @@ void Framebuffer_window::bind_framebuffer()
 
 void Framebuffer_window::update_framebuffer()
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto win_min = ImGui::GetWindowContentRegionMin();
     const auto win_max = ImGui::GetWindowContentRegionMax();
 
@@ -138,6 +141,8 @@ void Framebuffer_window::update_framebuffer()
 
 void Framebuffer_window::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (
         m_texture &&
         (m_texture->width() > 0) &&

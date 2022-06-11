@@ -1,17 +1,11 @@
 #include "erhe/toolkit/file.hpp"
-#include "erhe/log/log.hpp"
+#include "erhe/toolkit/log.hpp"
 #include "erhe/toolkit/filesystem.hpp"
 
 #include <fstream>
 
 namespace erhe::toolkit
 {
-
-using Category      = erhe::log::Category;
-using Console_color = erhe::log::Console_color;
-using Level         = erhe::log::Level;
-
-Category log{1.0f, 1.0f, 0.5f, Console_color::YELLOW, Level::LEVEL_INFO};
 
 auto read(const fs::path& path) -> nonstd::optional<std::string>
 {
@@ -33,7 +27,7 @@ auto read(const fs::path& path) -> nonstd::optional<std::string>
 #endif
             if (file == nullptr)
             {
-                log.error("Could not open file {} for reading\n", path.string());
+                log_file->error("Could not open file '{}' for reading", path.string());
                 return {};
             }
 
@@ -45,7 +39,7 @@ auto read(const fs::path& path) -> nonstd::optional<std::string>
                 const auto read_byte_count = std::fread(result.data() + bytes_read, 1, bytes_to_read, file);
                 if (read_byte_count == 0)
                 {
-                    log.error("Error reading file {}\n", path.string());
+                    log_file->error("Error reading file '{}'", path.string());
                     return {};
                 }
                 bytes_read += read_byte_count;
@@ -60,7 +54,7 @@ auto read(const fs::path& path) -> nonstd::optional<std::string>
     }
     catch (...)
     {
-        log.error("Error reading file {}\n", path.string());
+        log_file->error("Error reading file '{}'", path.string());
     }
     return {};
 }

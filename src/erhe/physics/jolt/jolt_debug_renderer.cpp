@@ -1,3 +1,4 @@
+#if 0
 #include "erhe/physics/jolt/jolt_debug_renderer.hpp"
 #include "erhe/physics/jolt/glm_conversions.hpp"
 
@@ -138,3 +139,4 @@ void Jolt_debug_renderer::DrawText3D(
 }
 
 } // namespace erhe::physics
+#endif

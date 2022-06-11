@@ -179,14 +179,18 @@ auto Geometry::compute_polygon_normals() -> bool
         return true;
     }
 
-    log_geometry.info("{} for {}\n", __func__, name);
+    log_geometry->info("{} for {}", __func__, name);
 
     auto*       const polygon_normals = polygon_attributes().find_or_create<vec3>(c_polygon_normals);
     const auto* const point_locations = point_attributes()  .find          <vec3>(c_point_locations);
 
     if (point_locations == nullptr)
     {
-        log_geometry.warn("{} {}: Point locations are required, but not found.\n", __func__, name);
+        log_geometry->warn(
+            "{} {}: Point locations are required, but not found.",
+            __func__,
+            name
+        );
         return false;
     }
 
@@ -224,14 +228,14 @@ auto Geometry::compute_polygon_centroids() -> bool
         return true;
     }
 
-    log_geometry.info("{} for {}\n", __func__, name);
+    log_geometry->info("{} for {}", __func__, name);
 
     auto*       const polygon_centroids = polygon_attributes().find_or_create<vec3>(c_polygon_centroids);
     const auto* const point_locations   = point_attributes()  .find          <vec3>(c_point_locations);
 
     if (point_locations == nullptr)
     {
-        log_geometry.warn("{} {}: Point locations are required, but not found.\n", __func__, name);
+        log_geometry->warn("{} {}: Point locations are required, but not found.", __func__, name);
         return false;
     }
 
@@ -259,7 +263,7 @@ auto Geometry::has_edges() const -> bool
     return false;
 }
 
-void Geometry::build_edges()
+void Geometry::build_edges(bool is_manifold)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -271,90 +275,101 @@ void Geometry::build_edges()
     edges.clear();
     m_next_edge_id = 0;
 
-    log_build_edges.trace("build_edges() : {} polygons\n", m_next_polygon_id);
+    log_build_edges->info("{} build_edges() : {} polygons", name, m_next_polygon_id);
 
-    const erhe::log::Indenter scope_indent;
-
-    // First pass - shared edges
+    //const erhe::log::Indenter scope_indent;
     size_t polygon_index{0};
-    for_each_polygon([&](auto& i)
+
+    size_t polygon_edge_count = 0;
+    // First pass - shared edges
     {
-        const erhe::log::Indenter scope_indent;
+        ERHE_PROFILE_SCOPE("first pass");
 
-        i.polygon.for_each_corner_neighborhood(*this, [&](auto& j)
+        for_each_polygon([&](auto& i)
         {
-            const Point_id a = j.prev_corner.point_id;
-            const Point_id b = j.corner.point_id;
-            if (a == b)
+            //const erhe::log::Indenter scope_indent;
+
+            i.polygon.for_each_corner_neighborhood(*this, [&](auto& j)
             {
-                log_build_edges.warn("Bad edge {} - {}\n", a, b);
-                return;
-            }
-            if (a < b) // This does not work for non-shared edges going wrong direction
-            {
-                const Edge_id edge_id = make_edge(a, b);
-                const Point&  pa      = points[a];
-                make_edge_polygon(edge_id, i.polygon_id);
-                ERHE_VERIFY(pa.corner_count > 0);
-                pa.for_each_corner_const(*this, [&](auto& k)
+                const Point_id a = j.prev_corner.point_id;
+                const Point_id b = j.corner.point_id;
+                ++polygon_edge_count;
+                if (a == b)
                 {
-                     const Polygon_id polygon_id_in_point = k.corner.polygon_id;
-                     const Polygon&   polygon_in_point    = polygons[polygon_id_in_point];
-                     const Corner_id  prev_corner_id      = polygon_in_point.prev_corner(*this, k.corner_id);
-                     const Corner&    prev_corner         = corners[prev_corner_id];
-                     const Point_id   prev_point_id       = prev_corner.point_id;
-                     if (prev_point_id == b)
-                     {
-                         make_edge_polygon(edge_id, polygon_id_in_point);
-                         ++polygon_index;
-                     }
-                });
-            }
-        });
-    });
-
-    // Second pass - non-shared edges wrong direction or non-manifold wornd direction
-    for_each_polygon([&](auto& i)
-    {
-        const erhe::log::Indenter scope_indent;
-
-        i.polygon.for_each_corner_neighborhood(*this, [&](auto& j)
-        {
-            const Point_id a_ = j.prev_corner.point_id;
-            const Point_id b_ = j.corner.point_id;
-            if (a_ == b_)
-            {
-                return;
-            }
-
-            auto edge = find_edge(a_, b_);
-            if (!edge)
-            {
-                // ERHE_VERIFY(b < a); This does not hold for non-manifold objects
+                    log_build_edges->warn("Bad edge {} - {}", a, b);
+                    return;
+                }
+                if (a < b) // This does not work for non-shared edges going wrong direction
                 {
-                    const Point_id a = std::max(a_, b_);
-                    const Point_id b = std::min(a_, b_);
-                    const Edge_id edge_id = make_edge(b, a); // Swapped a, b because b < a
-                    const Point&  pb      = points[b];
+                    const Edge_id edge_id = make_edge(a, b);
+                    const Point&  pa      = points[a];
                     make_edge_polygon(edge_id, i.polygon_id);
-                    ERHE_VERIFY(pb.corner_count > 0);
-                    pb.for_each_corner_const(*this, [&](auto& k)
+                    ERHE_VERIFY(pa.corner_count > 0);
+                    pa.for_each_corner_const(*this, [&](auto& k)
                     {
                          const Polygon_id polygon_id_in_point = k.corner.polygon_id;
                          const Polygon&   polygon_in_point    = polygons[polygon_id_in_point];
                          const Corner_id  prev_corner_id      = polygon_in_point.prev_corner(*this, k.corner_id);
                          const Corner&    prev_corner         = corners[prev_corner_id];
                          const Point_id   prev_point_id       = prev_corner.point_id;
-                         if (prev_point_id == a)
+                         if (prev_point_id == b)
                          {
                              make_edge_polygon(edge_id, polygon_id_in_point);
                              ++polygon_index;
                          }
                     });
                 }
-            }
+            });
         });
-    });
+    }
+
+    // Second pass - non-shared edges wrong direction or non-manifold wrong direction
+    if (!is_manifold || (get_edge_count() != polygon_edge_count / 2))
+    {
+        ERHE_PROFILE_SCOPE("second pass");
+
+        for_each_polygon([&](auto& i)
+        {
+            //const erhe::log::Indenter scope_indent;
+
+            i.polygon.for_each_corner_neighborhood(*this, [&](auto& j)
+            {
+                const Point_id a_ = j.prev_corner.point_id;
+                const Point_id b_ = j.corner.point_id;
+                if (a_ == b_)
+                {
+                    return;
+                }
+
+                auto edge = find_edge(a_, b_);
+                if (!edge)
+                {
+                    // ERHE_VERIFY(b < a); This does not hold for non-manifold objects
+                    {
+                        const Point_id a = std::max(a_, b_);
+                        const Point_id b = std::min(a_, b_);
+                        const Edge_id edge_id = make_edge(b, a); // Swapped a, b because b < a
+                        const Point&  pb      = points[b];
+                        make_edge_polygon(edge_id, i.polygon_id);
+                        ERHE_VERIFY(pb.corner_count > 0);
+                        pb.for_each_corner_const(*this, [&](auto& k)
+                        {
+                             const Polygon_id polygon_id_in_point = k.corner.polygon_id;
+                             const Polygon&   polygon_in_point    = polygons[polygon_id_in_point];
+                             const Corner_id  prev_corner_id      = polygon_in_point.prev_corner(*this, k.corner_id);
+                             const Corner&    prev_corner         = corners[prev_corner_id];
+                             const Point_id   prev_point_id       = prev_corner.point_id;
+                             if (prev_point_id == a)
+                             {
+                                 make_edge_polygon(edge_id, polygon_id_in_point);
+                                 ++polygon_index;
+                             }
+                        });
+                    }
+                }
+            });
+        });
+    }
 
     m_serial_edges = m_serial;
 }
@@ -365,66 +380,80 @@ void Geometry::debug_trace() const
 
     for_each_corner_const([](auto& i)
     {
-        log_geometry.info("corner {:2} = point {:2} polygon {:2}\n", i.corner_id, i.corner.point_id, i.corner.polygon_id);
+        log_geometry->info("corner {:2} = point {:2} polygon {:2}", i.corner_id, i.corner.point_id, i.corner.polygon_id);
     });
 
     for_each_point_const([&](auto& i)
     {
-        log_geometry.info("point {:2} corners  = ", i.point_id);
-        i.point.for_each_corner_const(*this, [&](auto& j)
         {
-            if (j.corner_id > i.point.first_point_corner_id)
+            std::stringstream ss;
+            ss << fmt::format("point {:2} corners  = ", i.point_id);
+            i.point.for_each_corner_const(*this, [&](auto& j)
             {
-                log_geometry.info(", ");
-            }
-            log_geometry.info("{:2}", j.corner_id);
-        });
-        log_geometry.info("\n");
-        log_geometry.info("point {:2} polygons = ", i.point_id);
-        i.point.for_each_corner_const(*this, [&](auto& j)
+                if (j.corner_id > i.point.first_point_corner_id)
+                {
+                    ss << ", ";
+                }
+                ss << fmt::format("{:2}", j.corner_id);
+            });
+            log_geometry->info("{}", ss.str());
+        }
+
         {
-            if (j.corner_id > i.point.first_point_corner_id)
+            std::stringstream ss;
+            ss << fmt::format("point {:2} polygons = ", i.point_id);
+            i.point.for_each_corner_const(*this, [&](auto& j)
             {
-                log_geometry.info(", ");
-            }
-            log_geometry.info("{:2}", j.corner.polygon_id);
-        });
-        log_geometry.info("\n");
+                if (j.corner_id > i.point.first_point_corner_id)
+                {
+                    ss << ", ";
+                }
+                ss << fmt::format("{:2}", j.corner.polygon_id);
+            });
+           log_geometry->info("{}", ss.str());
+        }
     });
 
     for_each_polygon_const([&](auto& i)
     {
-        log_geometry.info("polygon {:2} corners = ", i.polygon_id);
-        i.polygon.for_each_corner_const(*this, [&](auto& j)
         {
-            if (j.polygon_corner_id > i.polygon.first_polygon_corner_id)
+            std::stringstream ss;
+            ss << fmt::format("polygon {:2} corners = ", i.polygon_id);
+            i.polygon.for_each_corner_const(*this, [&](auto& j)
             {
-                log_geometry.info(", ");
-            }
-            log_geometry.info("{:2}", j.corner_id);
-        });
-        log_geometry.info("\n");
-        log_geometry.info("polygon {:2} points  = ", i.polygon_id);
-        i.polygon.for_each_corner_const(*this, [&](auto& j)
+                if (j.polygon_corner_id > i.polygon.first_polygon_corner_id)
+                {
+                    ss << ", ";
+                }
+                ss << fmt::format("{:2}", j.corner_id);
+            });
+            log_geometry->info("{}", ss.str());
+        }
         {
-            Point_id point_id = j.corner.point_id;
-            if (j.polygon_corner_id > i.polygon.first_polygon_corner_id)
+            std::stringstream ss;
+            ss << fmt::format("polygon {:2} points  = ", i.polygon_id);
+            i.polygon.for_each_corner_const(*this, [&](auto& j)
             {
-                log_geometry.info(", ");
-            }
-            log_geometry.info("{:2}", point_id);
-        });
-        log_geometry.info("\n");
+                Point_id point_id = j.corner.point_id;
+                if (j.polygon_corner_id > i.polygon.first_polygon_corner_id)
+                {
+                    ss << ", ";
+                }
+                ss << fmt::format("{:2}", point_id);
+            });
+            log_geometry->info("{}", ss.str());
+        }
     });
 
     for_each_edge_const([&](auto& i)
     {
-        log_geometry.info("edge {:2} = {:2} .. {:2} :", i.edge_id, i.edge.a, i.edge.b);
+        std::stringstream ss;
+        ss << fmt::format("edge {:2} = {:2} .. {:2} :", i.edge_id, i.edge.a, i.edge.b);
         i.edge.for_each_polygon_const(*this, [&](auto& j)
         {
-            log_geometry.info("{:2} ", j.polygon_id);
+            ss << fmt::format("{:2} ", j.polygon_id);
         });
-        log_geometry.info("\n");
+        log_geometry->info("{}", ss.str());
     });
 }
 
@@ -466,6 +495,8 @@ auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) 
     {
         return true;
     }
+
+    log_geometry->info("{} for {}", __func__, name);
 
     auto* const point_normals   = point_attributes().find_or_create<vec3>(descriptor);
     const auto* polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
@@ -557,21 +588,21 @@ void Geometry::flip_reversed_polygons()
     }
 }
 
-void Mesh_info::trace(erhe::log::Category& log) const
+void Mesh_info::trace(const std::shared_ptr<spdlog::logger>& log) const
 {
-    log.trace("{} vertex corners vertices\n", vertex_count_corners);
-    log.trace("{} centroid vertices\n",       vertex_count_centroids);
-    log.trace("{} fill triangles indices\n",  index_count_fill_triangles);
-    log.trace("{} edge lines indices\n",      index_count_edge_lines);
-    log.trace("{} corner points indices\n",   index_count_corner_points);
-    log.trace("{} centroid points indices\n", index_count_centroid_points);
+    log->trace("{} vertex corners vertices", vertex_count_corners);
+    log->trace("{} centroid vertices",       vertex_count_centroids);
+    log->trace("{} fill triangles indices",  index_count_fill_triangles);
+    log->trace("{} edge lines indices",      index_count_edge_lines);
+    log->trace("{} corner points indices",   index_count_corner_points);
+    log->trace("{} centroid points indices", index_count_centroid_points);
 }
 
 void Geometry::generate_texture_coordinates_spherical()
 {
     ERHE_PROFILE_FUNCTION
 
-    log_geometry.info("{} for {}\n", __func__, name);
+    log_geometry->info("{} for {}", __func__, name);
 
     compute_polygon_normals();
     compute_point_normals(c_point_normals);
@@ -658,7 +689,7 @@ auto Geometry::generate_polygon_texture_coordinates(const bool overwrite_existin
         return true;
     }
 
-    log_geometry.info("{} for {}\n", __func__, name);
+    log_geometry->info("{} for {}", __func__, name);
 
     compute_polygon_normals();
     compute_polygon_centroids();
@@ -669,19 +700,31 @@ auto Geometry::generate_polygon_texture_coordinates(const bool overwrite_existin
 
     if (point_locations == nullptr)
     {
-        log_polygon_texcoords.warn("{} geometry = {} - No point locations found. Skipping tangent generation.\n", __func__, name);
+        log_polygon_texcoords->warn(
+            "{} geometry = {} - No point locations found. Skipping generation.",
+            __func__,
+            name
+        );
         return false;
     }
 
     if (polygon_centroids == nullptr)
     {
-        log_polygon_texcoords.warn("{} geometry = {} - No polygon centroids found. Skipping tangent generation.\n", __func__, name);
+        log_polygon_texcoords->warn(
+            "{} geometry = {} - No polygon centroids found. Skipping generation.",
+            __func__,
+            name
+        );
         return false;
     }
 
     if (polygon_normals == nullptr)
     {
-        log_polygon_texcoords.warn("{} geometry = {} - No polygon normals found. Skipping tangent generation.\n", __func__, name);
+        log_polygon_texcoords->warn(
+            "{} geometry = {} - No polygon normals found. Skipping generation.",
+            __func__,
+            name
+        );
         return false;
     }
 
@@ -712,16 +755,16 @@ void Geometry::sanity_check() const
         {
             if (j.corner.point_id != i.point_id)
             {
-                log_geometry.error(
-                    "Sanity check failure: Point {} uses corner {} but corner {} point is {}\n",
+                log_geometry->error(
+                    "Sanity check failure: Point {} uses corner {} but corner {} point is {}",
                     i.point_id, j.corner_id, j.corner_id, j.corner.point_id
                 );
                 ++error_count;
             }
             if (j.corner.polygon_id >= m_next_polygon_id)
             {
-                log_geometry.error(
-                    "Sanity check failure: Point {} uses corner {} which points to invalid polygon {}\n",
+                log_geometry->error(
+                    "Sanity check failure: Point {} uses corner {} which points to invalid polygon {}",
                     i.point_id, j.corner_id, j.corner.polygon_id
                 );
                 ++error_count;
@@ -735,16 +778,16 @@ void Geometry::sanity_check() const
         {
             if (j.corner.polygon_id != i.polygon_id)
             {
-                log_geometry.error(
-                    "Sanity check failure: Polygon {} uses corner {} but corner {} polygon is {}\n",
+                log_geometry->error(
+                    "Sanity check failure: Polygon {} uses corner {} but corner {} polygon is {}",
                     i.polygon_id, j.corner_id, j.corner_id, j.corner.polygon_id
                 );
                 ++error_count;
             }
             if (j.corner.point_id >= m_next_point_id)
             {
-                log_geometry.error(
-                    "Sanity check failure: Polygon {} uses corner {} which points to invalid point {}\n",
+                log_geometry->error(
+                    "Sanity check failure: Polygon {} uses corner {} which points to invalid point {}",
                     i.polygon_id, j.corner_id, j.corner_id, j.corner.point_id
                 );
                 ++error_count;
@@ -763,8 +806,8 @@ void Geometry::sanity_check() const
                 });
                 if (!corner_found)
                 {
-                    log_geometry.error(
-                        "Sanity check failure: Polygon {} uses corner {} which uses point {} which does not point back to the corner\n",
+                    log_geometry->error(
+                        "Sanity check failure: Polygon {} uses corner {} which uses point {} which does not point back to the corner",
                         i.polygon_id, j.corner_id, j.corner.point_id
                     );
                     ++error_count;
@@ -779,16 +822,17 @@ void Geometry::sanity_check() const
         bool corner_polygon_found{false};
         if (i.corner.point_id >= m_next_point_id)
         {
-            log_geometry.error(
-                "Sanity check failure: Corner {} points to invalid point {}\n",
-                i.corner_id, i.corner.point_id
+            log_geometry->error(
+                "Sanity check failure: Corner {} points to invalid point {}",
+                i.corner_id,
+                i.corner.point_id
             );
             ++error_count;
         }
         else
         {
             //log_weld.trace("Corner {} point {} polygon {}\n", corner_id, corner.point_id, corner.polygon_id);
-            const erhe::log::Indenter scope_indent;
+            //const erhe::log::Indenter scope_indent;
 
             const Point& point = points[i.corner.point_id];
             point.for_each_corner_const(*this, [&](auto& j)
@@ -801,8 +845,8 @@ void Geometry::sanity_check() const
             });
             if (!corner_point_found)
             {
-                log_geometry.error(
-                    "Sanity check failure: Corner {} not found referenced by any point\n",
+                log_geometry->error(
+                    "Sanity check failure: Corner {} not found referenced by any point",
                     i.corner_id
                 );
                 ++error_count;
@@ -810,8 +854,8 @@ void Geometry::sanity_check() const
         }
         if (i.corner.polygon_id >= m_next_polygon_id)
         {
-            log_geometry.error(
-                "Sanity check failure: Corner {} points to invalid polygon {}\n",
+            log_geometry->error(
+                "Sanity check failure: Corner {} points to invalid polygon {}",
                 i.corner_id, i.corner.polygon_id
             );
             ++error_count;
@@ -831,8 +875,8 @@ void Geometry::sanity_check() const
             });
             if (!corner_polygon_found)
             {
-                log_geometry.error(
-                    "Sanity check failure: Corner {} not found referenced by any polygon\n",
+                log_geometry->error(
+                    "Sanity check failure: Corner {} not found referenced by any polygon",
                     i.corner_id
                 );
                 ++error_count;
@@ -840,8 +884,8 @@ void Geometry::sanity_check() const
         }
         if (corner_point_found != corner_polygon_found)
         {
-            log_geometry.error(
-                "Corner {} found in point mismatch found in polygon\n",
+            log_geometry->error(
+                "Corner {} found in point mismatch found in polygon",
                 i.corner_id
             );
             ++error_count;
@@ -849,9 +893,9 @@ void Geometry::sanity_check() const
     });
     if (error_count > 0)
     {
-         log_geometry.error(
-             "Sanity check failure: Detected {} errors\n",
-             error_count
+        log_geometry->error(
+            "Sanity check failure: Detected {} errors",
+            error_count
          );
     }
 }

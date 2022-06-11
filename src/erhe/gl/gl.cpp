@@ -1,5 +1,5 @@
 #include "erhe/gl/gl.hpp"
-#include "erhe/log/log.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/dynamic_load.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -17,13 +17,14 @@
 namespace gl
 {
 
-erhe::log::Category log_gl{
-    0.3f, 0.4f, 1.0f,
-    erhe::log::Console_color::BLUE,
-    erhe::log::Level::LEVEL_INFO
-};
+std::shared_ptr<spdlog::logger> log_gl;
 
 static bool enable_error_checking = true;
+
+void initialize_logging()
+{
+    log_gl = erhe::log::make_logger("gl", spdlog::level::info);
+}
 
 void set_error_checking(const bool enable)
 {
@@ -45,7 +46,8 @@ void check_error()
 
     if (error_code != gl::Error_code::no_error)
     {
-        log_gl.error("{}\n", gl::c_str(error_code));
+        log_gl->error("{}", gl::c_str(error_code));
+        //error_fmt(log_gl, "{}", gl::c_str(error_code));
 #if defined(WIN32)
         DebugBreak();
 #else

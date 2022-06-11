@@ -1,18 +1,15 @@
 #include "stream.hpp"
-
-#include "erhe/log/log.hpp"
+#include "log.hpp"
 
 namespace hextiles
 {
-
-erhe::log::Category log_stream{0.6f, 1.0f, 0.6f, erhe::log::Console_color::GREEN, erhe::log::Level::LEVEL_INFO};
 
 File_write_stream::File_write_stream(const char* path)
 {
     m_file = fopen(path, "wb");
     if (!m_file)
     {
-        log_stream.error("File open fail: {} - {}\n", path, strerror(errno));
+        log_stream->error("File open fail: {} - {}", path, strerror(errno));
         abort();
     }
 }
@@ -34,7 +31,7 @@ File_read_stream::File_read_stream(const char* path)
     m_file = fopen(path, "rb");
     if (!m_file)
     {
-        log_stream.error("File open fail: {} - {}", path, strerror(errno));
+        log_stream->error("File open fail: {} - {}", path, strerror(errno));
         abort();
     }
 }

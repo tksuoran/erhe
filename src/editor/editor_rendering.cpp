@@ -481,12 +481,31 @@ void Editor_rendering::render_viewport(
 
     if (m_forward_renderer)
     {
-        render_content  (context);
-        render_selection(context);
+        {
+            static constexpr std::string_view c_id_content{"content"};
+
+            ERHE_PROFILE_GPU_SCOPE(c_id_content);
+            render_content  (context);
+        }
+
+        {
+            static constexpr std::string_view c_id_selection{"selection"};
+
+            ERHE_PROFILE_GPU_SCOPE(c_id_selection);
+            render_selection(context);
+        }
         ////render_gui      (context);
-        render_brush    (context);
+        {
+            static constexpr std::string_view c_id_brush{"brush"};
+
+            ERHE_PROFILE_GPU_SCOPE(c_id_brush);
+            render_brush    (context);
+        }
         if (has_pointer)
         {
+            static constexpr std::string_view c_id_tool{"tool"};
+
+            ERHE_PROFILE_GPU_SCOPE(c_id_tool);
             render_tool_meshes(context);
         }
     }
@@ -803,14 +822,14 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
 //// void Editor_rendering::render_gui(const Render_context& context)
 //// {
 ////     ERHE_PROFILE_FUNCTION
-//// 
+////
 ////     if (context.camera == nullptr)
 ////     {
 ////         return;
 ////     }
-//// 
+////
 ////     erhe::graphics::Scoped_gpu_timer timer{*m_gui_timer.get()};
-//// 
+////
 ////     m_imgui_windows->render_rendertarget_gui_meshes(context);
 //// }
 

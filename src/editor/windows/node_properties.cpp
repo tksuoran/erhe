@@ -19,6 +19,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -62,6 +63,8 @@ void Node_properties::initialize_component()
 
 void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
 {
+    ERHE_PROFILE_FUNCTION
+
     const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
 
     auto* const projection = camera.projection();
@@ -201,6 +204,8 @@ void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
 
 void Node_properties::light_properties(erhe::scene::Light& light) const
 {
+    ERHE_PROFILE_FUNCTION
+
     const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
 
     ImGui::PushID("##light_properties");
@@ -242,6 +247,8 @@ void Node_properties::light_properties(erhe::scene::Light& light) const
 
 void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
 {
+    ERHE_PROFILE_FUNCTION
+
     auto& mesh_data = mesh.mesh_data;
 
     ImGui::PushID("##mesh_properties");
@@ -316,6 +323,8 @@ auto custom_drag_scalar(
     const char*      format  = "%.3f"
 ) -> Custom_drag_result
 {
+    ERHE_PROFILE_FUNCTION
+
     ImGuiDataType    data_type = ImGuiDataType_Float;
     ImGuiSliderFlags flags = 0;
     float*           p_min = &min;
@@ -435,6 +444,8 @@ auto Node_properties::make_scalar_button(
     const char* const imgui_label
 ) const -> Value_edit_state
 {
+    ERHE_PROFILE_FUNCTION
+
     ImGui::PushStyleColor  (ImGuiCol_Text,          text_color);
     ImGui::PushStyleColor  (ImGuiCol_Button,        background_color);
     ImGui::PushStyleColor  (ImGuiCol_ButtonHovered, background_color);
@@ -452,19 +463,19 @@ auto Node_properties::make_scalar_button(
     //const bool item_active   = ImGui::IsItemActive();
     //if (value_changed.drag_edited)
     //{
-    //    log_node_properties.trace("drag edited for {}\n", label);
+    //    log_node_properties->trace("drag edited for {}", label);
     //}
     //if (value_changed.text_edited)
     //{
-    //    log_node_properties.trace("text edited for {}\n", label);
+    //    log_node_properties->trace("text edited for {}", label);
     //}
     //if (item_edited)
     //{
-    //    log_node_properties.trace("item_edited for {}\n", label);
+    //    log_node_properties->trace("item_edited for {}", label);
     //}
     //if (edit_ended)
     //{
-    //    log_node_properties.trace("edit_ended for {}\n", label);
+    //    log_node_properties->trace("edit_ended for {}", label);
     //}
     return Value_edit_state{
         .value_changed = value_changed.drag_edited || (value_changed.text_edited && edit_ended),
@@ -480,6 +491,8 @@ auto Node_properties::make_angle_button(
     const char* const imgui_label
 ) const -> Value_edit_state
 {
+    ERHE_PROFILE_FUNCTION
+
     ImGui::PushStyleColor  (ImGuiCol_Text,          text_color);
     ImGui::PushStyleColor  (ImGuiCol_Button,        background_color);
     ImGui::PushStyleColor  (ImGuiCol_ButtonHovered, background_color);
@@ -552,6 +565,8 @@ auto Node_properties::drop_node_state(erhe::scene::Node& node)
 
 void Node_properties::transform_properties(erhe::scene::Node& node)
 {
+    ERHE_PROFILE_FUNCTION
+
     ImGui::PushID("##transform_properties");
 
     if (ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
@@ -673,6 +688,8 @@ void Node_properties::on_end()
 
 void Node_properties::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!m_selection_tool)
     {
         return;

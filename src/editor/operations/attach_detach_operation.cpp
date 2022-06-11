@@ -4,6 +4,7 @@
 #include "scene/node_physics.hpp"
 #include "log.hpp"
 
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/scene/scene.hpp"
 
 #include <memory>
@@ -41,8 +42,8 @@ Attach_detach_operation::Attach_detach_operation(Parameters&& parameters)
                 }
                 else
                 {
-                    log_scene.info(
-                        "Node {} is already attached and thus cannot be attached to {}\n",
+                    log_scene->info(
+                        "Node {} is already attached and thus cannot be attached to {}",
                         node->name(),
                         m_parent_node->name()
                     );
@@ -56,8 +57,8 @@ Attach_detach_operation::Attach_detach_operation(Parameters&& parameters)
                 }
                 else
                 {
-                    log_scene.info(
-                        "Node {} is not attached to {} and thus cannot be detached from it\n",
+                    log_scene->info(
+                        "Node {} is not attached to {} and thus cannot be detached from it",
                         node->name(),
                         m_parent_node->name()
                     );

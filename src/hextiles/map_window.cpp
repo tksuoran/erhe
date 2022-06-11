@@ -18,6 +18,7 @@
 
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/framebuffer.hpp"
+#include "erhe/log/log_fmt.hpp"
 
 #include <imgui.h>
 
@@ -92,6 +93,14 @@ auto Map_zoom_command::try_call(erhe::application::Command_context& context) -> 
     m_map_window.scale_zoom(m_scale);
     return true;
 }
+
+auto Map_grid_cycle_command::try_call(erhe::application::Command_context& context) -> bool
+{
+    static_cast<void>(context);
+    m_map_window.grid_cycle();
+    return true;
+}
+
 #pragma endregion commands
 
 
@@ -106,6 +115,7 @@ Map_window::Map_window()
     , m_scroll_down_command      {*this,  0.0f,  4.0f }
     , m_zoom_in_command          {*this, 0.5f}
     , m_zoom_out_command         {*this, 2.0f}
+    , m_grid_cycle_command       {*this}
 {
 }
 
@@ -144,6 +154,7 @@ void Map_window::initialize_component()
     view->register_command(&m_scroll_down_command);
     view->register_command(&m_zoom_in_command);
     view->register_command(&m_zoom_out_command);
+    view->register_command(&m_grid_cycle_command);
 
     view->bind_command_to_mouse_wheel(&m_free_zoom_command);
     view->bind_command_to_mouse_drag (&m_mouse_scroll_command, erhe::toolkit::Mouse_button_right);
@@ -152,8 +163,9 @@ void Map_window::initialize_component()
     view->bind_command_to_key(&m_scroll_left_command,  erhe::toolkit::Key_a, false);
     view->bind_command_to_key(&m_scroll_down_command,  erhe::toolkit::Key_s, false);
     view->bind_command_to_key(&m_scroll_right_command, erhe::toolkit::Key_d, false);
-    //view->bind_command_to_key(&m_zoom_in_command,      erhe::toolkit::Key_b,   false);
-    //view->bind_command_to_key(&m_zoom_out_command,     erhe::toolkit::Key_down, false);
+    view->bind_command_to_key(&m_zoom_in_command,      erhe::toolkit::Key_period, false);
+    view->bind_command_to_key(&m_zoom_out_command,     erhe::toolkit::Key_comma,  false);
+    view->bind_command_to_key(&m_grid_cycle_command,   erhe::toolkit::Key_g,  false);
 }
 #pragma endregion Component
 
@@ -222,6 +234,14 @@ void Map_window::scroll_tiles(glm::vec2 delta)
     );
 }
 
+void Map_window::grid_cycle()
+{
+    m_grid = m_grid + 1;
+    if (m_grid > 2)
+    {
+        m_grid = 0;
+    }
+}
 void Map_window::scroll_to(const Tile_coordinate center_tile)
 {
     m_center_tile = center_tile;
@@ -298,7 +318,7 @@ void Map_window::scale_zoom(float scale)
     }
     m_pixel_offset *= m_zoom;
 
-    log_map_window.trace("scale_zoom(scale = {}) final zoom = {}\n", scale, m_zoom);
+    log_map_window->trace("scale_zoom(scale = {}) final zoom = {}", scale, m_zoom);
 }
 
 void Map_window::set_zoom(float scale)
@@ -474,20 +494,21 @@ void Map_window::render()
                 );
             }
 
-            ///// if (m_grid > 0)
-            ///// {
-            /////     m_tile_renderer->blit(
-            /////         grid_shape.x,
-            /////         grid_shape.y,
-            /////         Tile_shape::full_width,
-            /////         Tile_shape::height,
-            /////         x0,
-            /////         y0,
-            /////         x1,
-            /////         y1,
-            /////         0x88888888u
-            /////     );
-            ///// }
+            if (m_grid > 0)
+            {
+                m_tile_renderer->blit(
+                    grid_shape.x,
+                    grid_shape.y,
+                    Tile_shape::full_width,
+                    Tile_shape::height,
+                    x0,
+                    y0,
+                    x1,
+                    y1,
+                    //0x88888888u
+                    0x44444444u
+                );
+            }
 
 #if 0
             if (

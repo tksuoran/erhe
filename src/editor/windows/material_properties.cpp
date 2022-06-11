@@ -3,6 +3,7 @@
 
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/primitive/material.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
@@ -31,6 +32,8 @@ void Material_properties::initialize_component()
 
 void Material_properties::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_materials == nullptr)
     {
         return;

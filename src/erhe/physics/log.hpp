@@ -5,7 +5,9 @@
 namespace erhe::physics
 {
 
-extern erhe::log::Category log_physics;
-extern erhe::log::Category log_physics_frame;
+extern std::shared_ptr<spdlog::logger> log_physics;
+extern std::shared_ptr<spdlog::logger> log_physics_frame;
+
+void initialize_logging();
 
 } // namespace erhe::physics

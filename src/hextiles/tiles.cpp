@@ -136,7 +136,7 @@ auto Tiles::get_terrain_from_tile(terrain_tile_t terrain_tile) const -> terrain_
     const int       base_terrain_group = base_terrain_type.group;
     if (base_terrain_group != group_id)
     {
-        log_tiles.error("base terrain group != group");
+        log_tiles->error("base terrain group != group");
         //Expects(m_terrain_types[multishape.base_terrain_type].group == group);
     }
     return terrain_group.base_terrain_type;

@@ -5,6 +5,8 @@
 namespace erhe::scene
 {
 
-extern erhe::log::Category log;
+extern std::shared_ptr<spdlog::logger> log;
+
+void initialize_logging();
 
 } // namespace erhe::scene

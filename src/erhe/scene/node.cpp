@@ -1,7 +1,10 @@
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/log.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
+
+#include <fmt/format.h>
 
 namespace erhe::scene
 {
@@ -92,8 +95,8 @@ void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
 
     ERHE_VERIFY(attachment);
 
-    log.trace(
-        "{} ({}).attach({})\n",
+    log->trace(
+        "{} ({}).attach({})",
         name(),
         node_type(),
         attachment->node_attachment_type()
@@ -103,7 +106,7 @@ void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
     const auto i = std::find(node_data.attachments.begin(), node_data.attachments.end(), attachment);
     if (i != node_data.attachments.end())
     {
-        log.error("Attachment {} already attached to {}\n", attachment->node_attachment_type(), name());
+        log->error("Attachment {} already attached to {}", attachment->node_attachment_type(), name());
         return;
     }
 #endif
@@ -122,12 +125,12 @@ auto Node::detach(INode_attachment* attachment) -> bool
 
     if (!attachment)
     {
-        log.warn("empty attachment, cannot detach\n");
+        log->warn("empty attachment, cannot detach");
         return false;
     }
 
-    log.trace(
-        "{} ({}).detach({})\n",
+    log->trace(
+        "{} ({}).detach({})",
         name(),
         node_type(),
         attachment->node_attachment_type()
@@ -136,8 +139,8 @@ auto Node::detach(INode_attachment* attachment) -> bool
     auto* node = attachment->get_node();
     if (node != this)
     {
-        log.warn(
-            "Attachment {} node {} != this {}\n",
+        log->warn(
+            "Attachment {} node {} != this {}",
             attachment->node_attachment_type(),
             node
                 ? node->name()
@@ -157,8 +160,8 @@ auto Node::detach(INode_attachment* attachment) -> bool
     );
     if (i != node_data.attachments.end())
     {
-        log.trace(
-            "Removing {} attachment from node\n",
+        log->trace(
+            "Removing {} attachment from node",
             attachment->node_attachment_type(),
             name()
         );
@@ -168,8 +171,8 @@ auto Node::detach(INode_attachment* attachment) -> bool
         return true;
     }
 
-    log.warn(
-        "Detaching {} from node {} failed - was not attached\n",
+    log->warn(
+        "Detaching {} from node {} failed - was not attached",
         attachment->node_attachment_type(),
         name()
     );
@@ -233,23 +236,24 @@ void Node::attach(
     const bool                   primary_operation
 )
 {
+    ERHE_PROFILE_FUNCTION
+
     if (child_node.get() == this)
     {
-        log.error("Cannot attach node to itself");
+        log->error("Cannot attach node to itself");
         return;
     }
     if (is_ancestor(child_node.get()))
     {
-        log.error("Cannot attach node to ancestor");
+        log->error("Cannot attach node to ancestor");
         return;
     }
 
-    ERHE_PROFILE_FUNCTION
-
     ERHE_VERIFY(child_node);
 
-    log.trace(
-        "{} ({}).attach({} ({}))\n",
+    SPDLOG_LOGGER_TRACE(
+        log,
+        "{} ({}).attach({} ({}))",
         name(),
         node_type(),
         child_node->name(),
@@ -260,7 +264,7 @@ void Node::attach(
     const auto i = std::find(node_data.children.begin(), node_data.children.end(), child_node);
     if (i != node_data.children.end())
     {
-        log.error("Node {} already attached to {}\n", child_node->name(), name());
+        log->error("Node {} already attached to {}", child_node->name(), name());
         return;
     }
 #endif
@@ -293,12 +297,12 @@ void Node::attach(
 {
     if (child_node.get() == this)
     {
-        log.error("Cannot attach node to itself");
+        log->error("Cannot attach node to itself");
         return;
     }
     if (is_ancestor(child_node.get()))
     {
-        log.error("Cannot attach ancestor to node");
+        log->error("Cannot attach ancestor to node");
         return;
     }
 
@@ -306,8 +310,8 @@ void Node::attach(
 
     ERHE_VERIFY(child_node);
 
-    log.trace(
-        "{} ({}).attach_at(child node = {} ({}), position = {})\n",
+    log->trace(
+        "{} ({}).attach_at(child node = {} ({}), position = {})",
         name(),
         node_type(),
         child_node->name(),
@@ -319,7 +323,7 @@ void Node::attach(
     const auto i = std::find(node_data.children.begin(), node_data.children.end(), child_node);
     if (i != node_data.children.end())
     {
-        log.error("Node {} already attached to {}\n", child_node->name(), name());
+        log->error("Node {} already attached to {}", child_node->name(), name());
         return;
     }
 #endif
@@ -353,7 +357,7 @@ auto Node::detach(
 
     if (!child_node)
     {
-        log.warn("empty child_node, cannot detach\n");
+        log->warn("empty child_node, cannot detach");
         return false;
     }
 
@@ -369,8 +373,8 @@ auto Node::detach(
         return true;
     }
 
-    log.trace(
-        "{} ({}).detach({} ({}))\n",
+    log->trace(
+        "{} ({}).detach({} ({}))",
         name(),
         node_type(),
         child_node->name(),
@@ -381,8 +385,8 @@ auto Node::detach(
 
     if (parent.get() != this)
     {
-        log.warn(
-            "Child node {} parent {} != this {}\n",
+        log->warn(
+            "Child node {} parent {} != this {}",
             child_node->name(),
             parent
                 ? parent->name()
@@ -402,17 +406,17 @@ auto Node::detach(
     );
     if (i != node_data.children.end())
     {
-        log.trace("Removing attachment {} from node\n", child_node->name());
+        log->trace("Removing attachment {} from node", child_node->name());
 
-        const auto world_from_node = child_node->world_from_node_transform();
+        const auto& world_from_node = child_node->world_from_node_transform();
 
         node_data.children.erase(i, node_data.children.end());
 
         const auto& current_parent = child_node->parent().lock();
         if (current_parent.get() != this)
         {
-            log.error(
-                "Cannot detach node {} from {} - parent is different ({})\n",
+            log->error(
+                "Cannot detach node {} from {} - parent is different ({})",
                 child_node->name(),
                 name(),
                 current_parent
@@ -443,14 +447,14 @@ auto Node::detach(
         return true;
     }
 
-    log.warn("Detaching {} from node {} failed - was not attached\n", child_node->name(), name());
+    log->warn("Detaching {} from node {} failed - was not attached", child_node->name(), name());
     return false;
 }
 
 void Node::set_parent(const std::weak_ptr<Node>& new_parent_node)
 {
-   node_data.parent = new_parent_node;
- }
+    node_data.parent = new_parent_node;
+}
 
 void Node::on_attached()
 {
@@ -459,6 +463,8 @@ void Node::on_attached()
 
 void Node::set_depth_recursive(const size_t depth)
 {
+    ERHE_PROFILE_FUNCTION
+
     if (node_data.depth == depth)
     {
         return;
@@ -478,6 +484,8 @@ void Node::on_detached_from(Node& node)
 
 void Node::on_transform_changed()
 {
+    ERHE_PROFILE_FUNCTION
+
     for (const auto& attachment : node_data.attachments)
     {
         attachment->on_node_transform_changed();
@@ -486,6 +494,8 @@ void Node::on_transform_changed()
 
 void Node::on_visibility_mask_changed()
 {
+    ERHE_PROFILE_FUNCTION
+
     for (const auto& attachment : node_data.attachments)
     {
         attachment->on_node_visibility_mask_changed(node_data.visibility_mask);
@@ -575,6 +585,8 @@ void Node::update_transform(const uint64_t serial)
 
 void Node::update_transform_recursive(const uint64_t serial)
 {
+    ERHE_PROFILE_FUNCTION
+
     update_transform(serial);
     for (auto& child_node : node_data.children)
     {
@@ -584,6 +596,7 @@ void Node::update_transform_recursive(const uint64_t serial)
 
 void Node::sanity_check() const
 {
+#if 0
     sanity_check_root_path(this);
 
     const auto& current_parent = parent().lock();
@@ -600,8 +613,8 @@ void Node::sanity_check() const
         }
         if (!child_found_in_parent)
         {
-            log.error(
-                "Node {} parent {} does not have node as child\n",
+            log->error(
+                "Node {} parent {} does not have node as child",
                 name(),
                 current_parent->name()
             );
@@ -612,8 +625,8 @@ void Node::sanity_check() const
     {
         if (child->parent().lock().get() != this)
         {
-            log.error(
-                "Node {} child {} parent == {}\n",
+            log->error(
+                "Node {} child {} parent == {}",
                 name(),
                 child->name(),
                 (child->parent().lock())
@@ -623,8 +636,8 @@ void Node::sanity_check() const
         }
         if (child->depth() != depth() + 1)
         {
-            log.error(
-                "Node {} depth = {}, child {} depth = {}\n",
+            log->error(
+                "Node {} depth = {}, child {} depth = {}",
                 name(),
                 depth(),
                 child->name(),
@@ -639,8 +652,8 @@ void Node::sanity_check() const
         auto* node = attachment->get_node();
         if (node != this)
         {
-            log.error(
-                "Node {} attachment {} node == {}\n",
+            log->error(
+                "Node {} attachment {} node == {}",
                 name(),
                 attachment->node_attachment_type(),
                 (node != nullptr)
@@ -649,6 +662,7 @@ void Node::sanity_check() const
             );
         }
     }
+#endif
 }
 
 void Node::sanity_check_root_path(const Node* node) const
@@ -658,7 +672,10 @@ void Node::sanity_check_root_path(const Node* node) const
     {
         if (current_parent.get() == node)
         {
-            log.error("Node {} has itself as an ancestor\n", node->name());
+            log->error(
+                "Node {} has itself as an ancestor",
+                node->name()
+            );
         }
         current_parent->sanity_check_root_path(node);
     }
@@ -793,6 +810,8 @@ void Node::set_parent_from_node(const glm::mat4 m)
 
 void Node::set_parent_from_node(const Transform& transform)
 {
+    ERHE_PROFILE_FUNCTION
+
     node_data.transforms.parent_from_node = transform;
     node_data.last_transform_update_serial = 0;
     on_transform_changed();

@@ -1,4 +1,4 @@
-#pragma once
+#if 0 //pragma once
 
 #include "erhe/components/components.hpp"
 #include "erhe/physics/idebug_draw.hpp"
@@ -38,3 +38,5 @@ private:
 };
 
 } // namespace erhe::physics
+
+#endif

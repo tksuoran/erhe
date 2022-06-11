@@ -2,6 +2,7 @@
 
 #include "erhe/toolkit/glfw_window.hpp"
 #include "erhe/gl/dynamic_load.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <fmt/printf.h>
@@ -374,6 +375,8 @@ auto Context_window::open(
     const Window_configuration& configuration
 ) -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     if (s_window_count == 0)
     {
         if (glfwInit() != GLFW_TRUE)
@@ -400,6 +403,11 @@ auto Context_window::open(
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE,        GLFW_OPENGL_CORE_PROFILE);
+    //glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT,  GLFW_TRUE);
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT,  GLFW_FALSE);
+    //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_FALSE);
+    glfwWindowHint(GLFW_CONTEXT_NO_ERROR,      GLFW_TRUE);
     glfwWindowHint(GLFW_VISIBLE,               primary ? GLFW_TRUE : GLFW_FALSE);
 
     GLFWwindow* const share_window = !primary
@@ -413,6 +421,8 @@ auto Context_window::open(
         (monitor != nullptr)
     )
     {
+        ERHE_PROFILE_SCOPE("main window");
+
         const GLFWvidmode* mode = glfwGetVideoMode(monitor);
         m_glfw_window = glfwCreateWindow(
             mode->width,
@@ -424,6 +434,8 @@ auto Context_window::open(
     }
     else
     {
+        ERHE_PROFILE_SCOPE("share window");
+
         m_glfw_window = glfwCreateWindow(
             configuration.width,
             configuration.height,

@@ -17,6 +17,7 @@
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/scene/viewport.hpp"
 #include "erhe/gl/gl.hpp"
@@ -430,8 +431,8 @@ void Tile_renderer::compose_tileset_texture()
             {
                 const glm::vec4 color = m_tileset_image.get_pixel(x0 + s, y0 + i);
                 player_colors.shades[s] = color;
-                log_tiles.info(
-                    "Player {} Shade {} Color: {}, {}, {}, {}\n",
+                log_tiles->info(
+                    "Player {} Shade {} Color: {}, {}, {}, {}",
                     i, s,
                     color.r, color.g, color.b, color.a
                 );

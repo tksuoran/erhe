@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe/geometry/operation/geometry_operation.hpp"
-#include <unordered_map>
 
 namespace erhe::geometry::operation
 {

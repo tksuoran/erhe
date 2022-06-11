@@ -3,11 +3,13 @@
 namespace erhe::physics
 {
 
-using Category      = erhe::log::Category;
-using Console_color = erhe::log::Console_color;
-using Level         = erhe::log::Level;
+std::shared_ptr<spdlog::logger> log_physics      ;
+std::shared_ptr<spdlog::logger> log_physics_frame;
 
-Category log_physics      {0.4f, 1.0f, 1.0f, Console_color::CYAN, Level::LEVEL_INFO};
-Category log_physics_frame{0.4f, 1.0f, 1.0f, Console_color::CYAN, Level::LEVEL_INFO};
+void initialize_logging()
+{
+    log_physics       = erhe::log::make_logger("erhe::physics::physics",       spdlog::level::info);
+    log_physics_frame = erhe::log::make_logger("erhe::physics::physics_frame", spdlog::level::info, false);
+}
 
 } // namespace erhe::physics

@@ -1,5 +1,6 @@
 #include "erhe/application/renderers/imgui_renderer.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/application/log.hpp"
 
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
@@ -10,21 +11,12 @@
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/toolkit/math_util.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <imgui.h>
 
 #include <deque>
-
-namespace {
-
-using Category      = erhe::log::Category;
-using Console_color = erhe::log::Console_color;
-using Level         = erhe::log::Level;
-
-Category log_imgui{0.0f, 1.0f, 1.0f, Console_color::CYAN, Level::LEVEL_INFO};
-
-}
 
 namespace erhe::application {
 
@@ -293,6 +285,8 @@ void Imgui_renderer::create_blocks()
 
 void Imgui_renderer::create_shader_stages()
 {
+    ERHE_PROFILE_FUNCTION
+
     m_fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 
     erhe::graphics::Shader_stages::Create_info create_info{
@@ -342,6 +336,8 @@ auto Imgui_renderer::mono_font() const -> ImFont*
 
 void Imgui_renderer::create_font_texture()
 {
+    ERHE_PROFILE_FUNCTION
+
     m_primary_font = m_font_atlas.AddFontFromFileTTF("res/fonts/SourceSansPro-Regular.otf", 17.0f);
     m_mono_font    = m_font_atlas.AddFontFromFileTTF("res/fonts/SourceCodePro-Semibold.otf", 17.0f);
 
@@ -395,6 +391,8 @@ void Imgui_renderer::create_font_texture()
 
 void Imgui_renderer::create_frame_resources()
 {
+    ERHE_PROFILE_FUNCTION
+
     for (size_t slot = 0; slot < frame_resources_count; ++slot)
     {
         m_frame_resources.emplace_back(
@@ -556,12 +554,16 @@ void Imgui_renderer::use(
     const uint64_t                                  handle
 )
 {
+    ERHE_PROFILE_FUNCTION
+
     m_used_textures.push_back(texture);
     m_used_texture_handles.push_back(handle);
 }
 
 void Imgui_renderer::render_draw_data()
 {
+    ERHE_PROFILE_FUNCTION
+
     // Also make font texture handle resident
     {
         const uint64_t handle = get_handle(
@@ -811,7 +813,7 @@ void ImGui_ImplErhe_assert_user_error(const bool condition, const char* message)
 {
     if (!condition)
     {
-        log_imgui.error("{}\n", message);
+        erhe::application::log_imgui->error("{}", message);
     }
 }
 

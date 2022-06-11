@@ -55,7 +55,7 @@ auto Geometry::compute_tangents(
         return true;
     }
 
-    log_tangent_gen.info("{} for {}\n", __func__, name);
+    log_tangent_gen->info("{} for {}", __func__, name);
 
     if (!compute_polygon_normals())
     {
@@ -295,12 +295,12 @@ auto Geometry::compute_tangents(
 
             if (polygon_tangents && (override_existing || !polygon_tangents->has(polygon_id)))
             {
-                log_tangent_gen.trace("put polygon_id {}, tangent = {}, sign = {}\n", polygon_id, tangent, sign);
+                SPDLOG_LOGGER_TRACE(log_tangent_gen, "put polygon_id {}, tangent = {}, sign = {}", polygon_id, tangent, sign);
                 polygon_tangents->put(polygon_id, vec4{tangent, sign});
             }
             if (corner_tangents && (override_existing || !corner_tangents->has(corner_id)))
             {
-                log_tangent_gen.trace("put polygon_id {}, corner_id = {} tangent = {}, sign = {}\n", polygon_id, corner_id, tangent, sign);
+                SPDLOG_LOGGER_TRACE(log_tangent_gen, "put polygon_id {}, corner_id = {} tangent = {}, sign = {}", polygon_id, corner_id, tangent, sign);
                 corner_tangents->put(corner_id, vec4{tangent, sign});
             }
         }
@@ -322,12 +322,12 @@ auto Geometry::compute_tangents(
 
             if (polygon_bitangents && (override_existing || !polygon_bitangents->has(polygon_id)))
             {
-                log_tangent_gen.trace("put polygon_id {}, bitangent = {}, sign = {}\n", polygon_id, bitangent, sign);
+                SPDLOG_LOGGER_TRACE(log_tangent_gen, "put polygon_id {}, bitangent = {}, sign = {}", polygon_id, bitangent, sign);
                 polygon_bitangents->put(polygon_id, vec4{bitangent, sign});
             }
             if (corner_bitangents && (override_existing || !corner_bitangents->has(corner_id)))
             {
-                log_tangent_gen.trace("put polygon_id {}, corner_id = {} bitangent = {}, sign = {}\n", polygon_id, corner_id, bitangent, sign);
+                SPDLOG_LOGGER_TRACE(log_tangent_gen, "put polygon_id {}, corner_id = {} bitangent = {}, sign = {}", polygon_id, corner_id, bitangent, sign);
                 corner_bitangents->put(corner_id, vec4{bitangent, sign});
             }
         }
@@ -353,7 +353,7 @@ auto Geometry::compute_tangents(
 
     if (g.point_locations == nullptr)
     {
-        log_tangent_gen.warn("{} geometry = {} - No point locations found. Skipping tangent generation.\n", __func__, name);
+        log_tangent_gen->warn("{} geometry = {} - No point locations found. Skipping tangent generation.", __func__, name);
         return false;
     }
 
@@ -473,7 +473,7 @@ auto Geometry::compute_tangents(
         const auto res = genTangSpaceDefault(&context);
         if (res == 0)
         {
-            log_tangent_gen.trace("genTangSpaceDefault() returned 0\n");
+            log_tangent_gen->trace("genTangSpaceDefault() returned 0");
             return false;
         }
     }
@@ -529,16 +529,16 @@ auto Geometry::compute_tangents(
                         bitangent_sum = bitangent.value();
                     }
                 }
-                log_tangent_gen.trace("polygon {} corner {} has tangent   {} value {}\n", polygon_id, i, tangent.  has_value(), tangent.  has_value() ? tangent.  value() : vec4{});
-                log_tangent_gen.trace("polygon {} corner {} has bitangent {} value {}\n", polygon_id, i, bitangent.has_value(), bitangent.has_value() ? bitangent.value() : vec4{});
+                log_tangent_gen->trace("polygon {} corner {} has tangent   {} value {}\n", polygon_id, i, tangent.  has_value(), tangent.  has_value() ? tangent.  value() : vec4{});
+                log_tangent_gen->trace("polygon {} corner {} has bitangent {} value {}\n", polygon_id, i, bitangent.has_value(), bitangent.has_value() ? bitangent.value() : vec4{});
                 if ((override_existing || !selected_tangent_corner_index.has_value()) && tangent.has_value())
                 {
-                    for (auto other : tangents)
+                    for (const auto other : tangents)
                     {
                         if (other.has_value())
                         {
                             const float dot = glm::dot(vec3{tangent.value()}, vec3{other.value()});
-                            log_tangent_gen.trace("tangent dot with other {} = {}\n", other.value(), dot);
+                            SPDLOG_LOGGER_TRACE(log_tangent_gen, "tangent dot with other {} = {}\n", other.value(), dot);
                             if (dot > 0.99f)
                             {
                                 selected_tangent_corner_index = i;
@@ -548,12 +548,12 @@ auto Geometry::compute_tangents(
                 }
                 if ((override_existing || !selected_bitangent_corner_index.has_value()) && bitangent.has_value())
                 {
-                    for (auto other : bitangents)
+                    for (const auto other : bitangents)
                     {
                         if (other.has_value())
                         {
                             const float dot = glm::dot(vec3{bitangent.value()}, vec3{other.value()});
-                            log_tangent_gen.trace("bitangent dot with other {} = {}\n", other.value(), dot);
+                            SPDLOG_LOGGER_TRACE(log_tangent_gen, "bitangent dot with other {} = {}\n", other.value(), dot);
                             if (dot > 0.99f)
                             {
                                 selected_bitangent_corner_index = i;

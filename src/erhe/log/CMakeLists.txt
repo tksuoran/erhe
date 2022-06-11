@@ -13,6 +13,7 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(${_target}
     PUBLIC
+        spdlog::spdlog
         fmt::fmt
         glm::glm
     PRIVATE

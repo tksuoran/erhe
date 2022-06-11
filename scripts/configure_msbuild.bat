@@ -9,7 +9,6 @@ cmake ^
     -S . ^
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ^
     -Wno-dev ^
-    -DERHE_PNG_LIBRARY=mango ^
     -DERHE_FONT_RASTERIZATION_LIBRARY=freetype ^
     -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz ^
     -DERHE_WINDOW_LIBRARY=glfw ^
@@ -18,6 +17,7 @@ cmake ^
     -DERHE_PROFILE_LIBRARY=none ^
     -DERHE_GLTF_LIBRARY=none ^
     -DERHE_XR_LIBRARY=none ^
+    -DERHE_PNG_LIBRARY=mango ^
     -DERHE_SVG_LIBRARY=lunasvg
 
 @rem    -DCMAKE_EXE_LINKER_FLAGS_DEBUG="/debug /incremental:no" ^

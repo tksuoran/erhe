@@ -212,18 +212,35 @@ void Shadow_renderer::render(const Render_parameters& parameters)
             {
                 update_camera_buffer(*light, m_viewport);
 
-                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffers[light_index]->gl_name());
-                gl::clear_buffer_fv(gl::Buffer::depth, 0, m_configuration->depth_clear_value_pointer());
+                {
+                    ERHE_PROFILE_SCOPE("bind fbo");
+                    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffers[light_index]->gl_name());
+                }
+
+                {
+                    static constexpr std::string_view c_id_clear{"clear"};
+
+                    ERHE_PROFILE_SCOPE("clear fbo");
+                    ERHE_PROFILE_GPU_SCOPE(c_id_clear);
+
+                    gl::clear_buffer_fv(gl::Buffer::depth, 0, m_configuration->depth_clear_value_pointer());
+                }
 
                 bind_camera_buffer();
 
-                gl::multi_draw_elements_indirect(
-                    m_pipeline.data.input_assembly.primitive_topology,
-                    m_mesh_memory->gl_index_type(),
-                    reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
-                    static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
-                    static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
-                );
+                {
+                    static constexpr std::string_view c_id_mdi{"mdi"};
+
+                    ERHE_PROFILE_SCOPE("mdi");
+                    ERHE_PROFILE_GPU_SCOPE(c_id_mdi);
+                    gl::multi_draw_elements_indirect(
+                        m_pipeline.data.input_assembly.primitive_topology,
+                        m_mesh_memory->gl_index_type(),
+                        reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
+                        static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
+                        static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
+                    );
+                }
             }
             ++light_index;
         }

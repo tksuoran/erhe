@@ -1,24 +1,22 @@
 #include "file_util.hpp"
 
-#include "erhe/log/log.hpp"
+#include "log.hpp"
 
 namespace hextiles
 {
-
-erhe::log::Category log_file{0.6f, 1.0f, 0.6f, erhe::log::Console_color::GREEN, erhe::log::Level::LEVEL_INFO};
 
 auto read_file(const char* const path) -> std::vector<unsigned char>
 {
     if (path == nullptr)
     {
-        log_file.error("read_file(): path = nullptr\n");
+        log_file->error("read_file(): path = nullptr");
         return {};
     }
 
     FILE* const file = std::fopen(path, "rb");
     if (file == nullptr)
     {
-        log_file.error("Failed to open '{}'\n", path);
+        log_file->error("Failed to open '{}'", path);
         return {};
     }
 
@@ -35,14 +33,14 @@ auto read_file_string(const char* const path) -> std::string
 {
     if (path == nullptr)
     {
-        log_file.error("read_file(): path = nullptr\n");
+        log_file->error("read_file(): path = nullptr");
         return {};
     }
 
     FILE* const file = std::fopen(path, "rb");
     if (file == nullptr)
     {
-        log_file.error("Failed to open '{}'\n", path);
+        log_file->error("Failed to open '{}' for reading", path);
         return {};
     }
     std::fseek(file, 0L, SEEK_END);
@@ -62,20 +60,20 @@ auto write_file(
 {
     if (path == nullptr)
     {
-        log_file.error("write_file(): path = nullptr\n");
+        log_file->error("write_file(): path = nullptr");
         return false;
     }
 
     FILE* const file = std::fopen(path, "wb");
     if (file == nullptr)
     {
-        log_file.error("Failed to open '{}'\n", path);
+        log_file->error("Failed to open '{}' for writing", path);
         return false;
     }
     const size_t res = std::fwrite(buffer, 1, length, file);
     if (res != length)
     {
-        log_file.error("Failed to write '{}'\n", path);
+        log_file->error("Failed to write '{}'", path);
         return false;
     }
     std::fclose(file);
@@ -89,20 +87,20 @@ auto write_file(
 {
     if (path == nullptr)
     {
-        log_file.error("write_file(): path = nullptr\n");
+        log_file->error("write_file(): path = nullptr");
         return false;
     }
 
     FILE* const file = std::fopen(path, "wb");
     if (file == nullptr)
     {
-        log_file.error("Failed to open '{}'\n", path);
+        log_file->error("Failed to open '{}' for writing", path);
         return false;
     }
     const size_t res = std::fwrite(text.data(), 1, text.size(), file);
     if (res != text.size())
     {
-        log_file.error("Failed to write '{}'\n", path);
+        log_file->error("Failed to write '{}'", path);
         return false;
     }
     std::fclose(file);

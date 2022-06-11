@@ -5,10 +5,12 @@
 namespace erhe::raytrace
 {
 
-extern erhe::log::Category log_buffer;
-extern erhe::log::Category log_device;
-extern erhe::log::Category log_geometry;
-extern erhe::log::Category log_scene;
-extern erhe::log::Category log_embree;
+extern std::shared_ptr<spdlog::logger> log_buffer;
+extern std::shared_ptr<spdlog::logger> log_device;
+extern std::shared_ptr<spdlog::logger> log_geometry;
+extern std::shared_ptr<spdlog::logger> log_scene;
+extern std::shared_ptr<spdlog::logger> log_embree;
+
+void initialize_logging();
 
 } // namespace erhe::primitive

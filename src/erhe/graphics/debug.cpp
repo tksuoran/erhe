@@ -2,6 +2,7 @@
 
 #include "erhe/gl/gl.hpp"
 #include "erhe/graphics/log.hpp"
+#include "erhe/log/log_fmt.hpp"
 
 #include <fmt/ostream.h>
 #include <gsl/gsl>
@@ -46,8 +47,8 @@ void Gpu_timer::on_thread_enter()
     {
         std::stringstream owner;
         owner << gpu_timer->m_owner_thread;
-        log_threads.trace(
-            "{}: on thread enter: Gpu_timer @ {} owned by thread {}\n",
+        log_threads->trace(
+            "{}: on thread enter: Gpu_timer @ {} owned by thread {}",
             this_thread_id_string,
             fmt::ptr(gpu_timer),
             owner.str()
@@ -73,8 +74,8 @@ void Gpu_timer::on_thread_exit()
     {
         std::stringstream owner;
         owner << gpu_timer->m_owner_thread;
-        log_threads.trace(
-            "{}: on thread exit: Gpu_timer @ {} owned by thread {}\n",
+        log_threads->trace(
+            "{}: on thread exit: Gpu_timer @ {} owned by thread {}",
             this_thread_id_string,
             //std::this_thread::get_id(),
             fmt::ptr(gpu_timer),
@@ -117,7 +118,11 @@ void Gpu_timer::create()
     std::stringstream this_thread_id_ss;
     this_thread_id_ss << std::this_thread::get_id();
     //log_threads.trace("{}: create @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
-    log_threads.trace("{}: create @ {}\n", this_thread_id_ss.str(), fmt::ptr(this));
+    log_threads->trace(
+        "{}: create @ {}",
+        this_thread_id_ss.str(),
+        fmt::ptr(this)
+    );
 
     for (auto& query : m_queries)
     {
@@ -140,7 +145,11 @@ void Gpu_timer::reset()
     std::stringstream this_thread_id_ss;
     this_thread_id_ss << std::this_thread::get_id();
     //log_threads.trace("{}: reset @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
-    log_threads.trace("{}: reset @ {}\n", this_thread_id_ss.str(), fmt::ptr(this));
+    log_threads->trace(
+        "{}: reset @ {}",
+        this_thread_id_ss.str(),
+        fmt::ptr(this)
+    );
     m_owner_thread = {};
     for (auto& query : m_queries)
     {

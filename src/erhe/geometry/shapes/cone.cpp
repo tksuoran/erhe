@@ -139,7 +139,8 @@ public:
         point_tangents  ->put(point_id, vec4{t_xyz, t_w});
         point_bitangents->put(point_id, vec4{b_xyz, b_w});
         point_texcoords ->put(point_id, vec2{static_cast<float>(s), static_cast<float>(t)});
-        log_cone.trace(
+        SPDLOG_LOGGER_TRACE(
+            log_cone,
             "point_id = {:3}, rel_slice = {: 3.1}, rel_stack = {: 3.1}, "
             "position = {}, texcoord = {}\n",
             point_id, static_cast<float>(rel_slice), static_cast<float>(rel_stack),
@@ -264,7 +265,7 @@ public:
                 //log_cone.trace(" forced top normal and tangent");
             }
         }
-        log_cone.trace("\n");
+        //SPDLOG_LOGGER_TRACE(log_cone.trace("\n");
         return corner_id;
     }
 
@@ -406,12 +407,12 @@ public:
             }
             else
             {
-                log_cone.trace("Bottom - none\n");
+                //log_cone.trace("Bottom - none\n");
             }
         }
 
         // Middle quads, bottom up
-        log_cone.trace("Middle quads, bottom up\n");
+        //log_cone.trace("Middle quads, bottom up\n");
         for (
             int stack = -stack_division - bottom_not_singular;
             stack < stack_division + top_not_singular;
@@ -444,7 +445,7 @@ public:
         // Top parts
         if (top_radius == 0.0)
         {
-            log_cone.trace("Top - point / triangle fan\n");
+            //log_cone.trace("Top - point / triangle fan\n");
             top_point_id = geometry.make_point(max_x, 0.0, 0.0); //  apex
 
             for (int slice = 0; slice < slice_count; ++slice)
@@ -494,7 +495,7 @@ public:
         {
             if (use_top)
             {
-                log_cone.trace("Top - flat polygon\n");
+                //log_cone.trace("Top - flat polygon\n");
                 const Polygon_id polygon_id = geometry.make_polygon();
                 if constexpr (use_geometric_centroids)
                 {
@@ -520,7 +521,7 @@ public:
             }
             else
             {
-                log_cone.trace("Top - none\n");
+                //log_cone.trace("Top - none\n");
             }
         }
         geometry.make_point_corners();

@@ -13,11 +13,6 @@
 #include <string_view>
 #include <vector>
 
-namespace erhe::log
-{
-    class Category;
-}
-
 namespace erhe::geometry
 {
 
@@ -422,7 +417,7 @@ public:
     size_t index_count_corner_points  {0};
     size_t index_count_centroid_points{0};
 
-    void trace(erhe::log::Category& log) const;
+    void trace(const std::shared_ptr<spdlog::logger>& log) const;
 };
 
 class Mass_properties
@@ -684,7 +679,7 @@ public:
 
     void make_point_corners();
 
-    void build_edges();
+    void build_edges(bool is_manifold = true);
 
     [[nodiscard]] auto has_edges() const -> bool;
 

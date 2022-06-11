@@ -3,10 +3,11 @@
 namespace erhe::components
 {
 
-using Category      = erhe::log::Category;
-using Console_color = erhe::log::Console_color;
-using Level         = erhe::log::Level;
+std::shared_ptr<spdlog::logger> log_components;
 
-Category log_components{0.8f, 0.8f, 0.8f, Console_color::WHITE, Level::LEVEL_INFO};
+void initialize_logging()
+{
+    log_components = erhe::log::make_logger("erhe::components::components", spdlog::level::info);
+}
 
 } // namespace erhe::components

@@ -1,5 +1,6 @@
 #include "erhe/application/windows/imgui_demo_window.hpp"
 #include "erhe/application/imgui_windows.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <imgui.h>
 
@@ -26,6 +27,8 @@ void Imgui_demo_window::initialize_component()
 
 void Imgui_demo_window::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     ImGui::ShowDemoWindow();
 }
 

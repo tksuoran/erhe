@@ -16,7 +16,9 @@
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/state/color_blend_state.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -591,6 +593,8 @@ void Imgui_windows::init_context()
 
 void Imgui_windows::begin_imgui_frame()
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto& editor_view    = *get<View  >().get();
     const auto& window         = *get<Window>().get();
     const auto& context_window = window.get_context_window();
@@ -644,11 +648,15 @@ void Imgui_windows::begin_imgui_frame()
 
 void Imgui_windows::end_imgui_frame()
 {
+    ERHE_PROFILE_FUNCTION
+
     ImGui::EndFrame();
 }
 
 void Imgui_windows::render_imgui_frame()
 {
+    ERHE_PROFILE_FUNCTION
+
     ImGui::Render();
 
     m_renderer->render_draw_data();
@@ -764,7 +772,7 @@ void Imgui_windows::register_imgui_window(Imgui_window* window)
     const auto i = std::find(m_imgui_windows.begin(), m_imgui_windows.end(), window);
     if (i != m_imgui_windows.end())
     {
-        log_windows.error("Window {} already registered as ImGui Window\n", window->title());
+        log_windows->error("Window {} already registered as ImGui Window", window->title());
     }
     else
 #endif
@@ -785,6 +793,8 @@ void Imgui_windows::rendertarget_imgui_windows()
 
 void Imgui_windows::imgui_windows()
 {
+    ERHE_PROFILE_FUNCTION
+
     Scoped_imgui_context scoped_context{m_imgui_context};
 
     begin_imgui_frame();
@@ -896,11 +906,15 @@ void Imgui_windows::on_mouse_wheel(
 
 void Imgui_windows::make_imgui_context_current()
 {
+    ERHE_PROFILE_FUNCTION
+
     ImGui::SetCurrentContext(m_imgui_context);
 }
 
 void Imgui_windows::make_imgui_context_uncurrent()
 {
+    ERHE_PROFILE_FUNCTION
+
     ImGui::SetCurrentContext(nullptr);
 }
 

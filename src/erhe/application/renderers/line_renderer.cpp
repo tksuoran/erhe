@@ -138,29 +138,33 @@ void Line_renderer_pipeline::initialize(Shader_monitor* shader_monitor)
     viewport_offset               = view_block->add_vec4("viewport"              )->offset_in_parent();
     fov_offset                    = view_block->add_vec4("fov"                   )->offset_in_parent();
 
-    const auto shader_path = fs::path("res") / fs::path("shaders");
-    const fs::path vs_path = shader_path / fs::path("line.vert");
-    const fs::path gs_path = shader_path / fs::path("line.geom");
-    const fs::path fs_path = shader_path / fs::path("line.frag");
-    Shader_stages::Create_info create_info{
-        .name                      = "line",
-        .vertex_attribute_mappings = &attribute_mappings,
-        .fragment_outputs          = &fragment_outputs,
-    };
-    create_info.defines.push_back({"ERHE_LINE_SHADER_SHOW_DEBUG_LINES",        "0"});
-    create_info.defines.push_back({"ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES", "0"});
-    create_info.defines.push_back({"ERHE_LINE_SHADER_STRIP",                   "1"});
-    create_info.add_interface_block(view_block.get());
-    create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
-    create_info.shaders.emplace_back(gl::Shader_type::geometry_shader, gs_path);
-    create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
-
-    Shader_stages::Prototype prototype(create_info);
-    shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
-
-    if (shader_monitor != nullptr)
     {
-        shader_monitor->add(create_info, shader_stages.get());
+        ERHE_PROFILE_SCOPE("shader");
+
+        const auto shader_path = fs::path("res") / fs::path("shaders");
+        const fs::path vs_path = shader_path / fs::path("line.vert");
+        const fs::path gs_path = shader_path / fs::path("line.geom");
+        const fs::path fs_path = shader_path / fs::path("line.frag");
+        Shader_stages::Create_info create_info{
+            .name                      = "line",
+            .vertex_attribute_mappings = &attribute_mappings,
+            .fragment_outputs          = &fragment_outputs,
+        };
+        create_info.defines.push_back({"ERHE_LINE_SHADER_SHOW_DEBUG_LINES",        "0"});
+        create_info.defines.push_back({"ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES", "0"});
+        create_info.defines.push_back({"ERHE_LINE_SHADER_STRIP",                   "1"});
+        create_info.add_interface_block(view_block.get());
+        create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
+        create_info.shaders.emplace_back(gl::Shader_type::geometry_shader, gs_path);
+        create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
+
+        Shader_stages::Prototype prototype(create_info);
+        shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
+
+        if (shader_monitor != nullptr)
+        {
+            shader_monitor->add(create_info, shader_stages.get());
+        }
     }
 }
 

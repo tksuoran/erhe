@@ -2,6 +2,7 @@
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/log.hpp"
+#include "erhe/log/log_fmt.hpp"
 
 #include "erhe/toolkit/verify.hpp"
 
@@ -58,8 +59,8 @@ auto Mouse_drag_binding::on_button(
     if (!context.accept_mouse_command(command))
     {
         ERHE_VERIFY(command->state() == State::Inactive);
-        log_input_event_filtered.trace(
-            "{} not active so button event ignored\n",
+        log_input_event_filtered->trace(
+            "{} not active so button event ignored",
             command->name()
         );
         return false;
@@ -83,8 +84,8 @@ auto Mouse_drag_binding::on_button(
             // if command was ini active state.
             consumed = command->state() == State::Active;
             command->set_inactive(context);
-            log_input_event_consumed.trace(
-                "{} consumed mouse drag release {}\n",
+            log_input_event_consumed->trace(
+                "{} consumed mouse drag release {}",
                 command->name(),
                 erhe::toolkit::c_str(button)
             );
@@ -110,8 +111,8 @@ auto Mouse_drag_binding::on_motion(Command_context& context) -> bool
     const bool consumed = command->try_call(context);;
     if (consumed)
     {
-        log_input_event_consumed.trace(
-            "{} consumed mouse drag motion\n",
+        log_input_event_consumed->trace(
+            "{} consumed mouse drag motion",
             command->name()
         );
     }

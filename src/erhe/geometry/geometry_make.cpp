@@ -238,7 +238,7 @@ void Geometry::sort_point_corners()
             }
             if (!found)
             {
-                log_geometry.trace("Could not sort point corners\n");
+                log_geometry->trace("Could not sort point corners");
             }
             const Point_corner_id point_corner_id = i.point.first_point_corner_id + j;
             point_corners[point_corner_id] = head.corner_id;

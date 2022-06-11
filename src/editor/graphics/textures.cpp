@@ -10,7 +10,6 @@ namespace editor {
 
 using erhe::graphics::Texture;
 using erhe::graphics::PNG_loader;
-using erhe::log::Log;
 using std::shared_ptr;
 
 Textures::Textures()

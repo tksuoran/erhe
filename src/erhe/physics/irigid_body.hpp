@@ -66,6 +66,7 @@ public:
     virtual void set_restitution             (float restitution)                                        = 0;
     virtual void set_center_of_mass_transform(const Transform transform)                                = 0;
     virtual void set_world_transform         (const Transform transform)                                = 0;
+    virtual void move_world_transform        (const Transform transform, float delta_time)              = 0;
     virtual void set_linear_velocity         (const glm::vec3 velocity)                                 = 0;
     virtual void set_angular_velocity        (const glm::vec3 velocity)                                 = 0;
     virtual void set_damping                 (const float linear_damping, const float angular_damping)  = 0;

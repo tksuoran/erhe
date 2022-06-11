@@ -1,16 +1,13 @@
 #include "texture_util.hpp"
+#include "log.hpp"
 
 #include "erhe/graphics/texture.hpp"
-#include "erhe/log/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <gsl/assert>
-//#include <bit>
 
 namespace hextiles
 {
-
-erhe::log::Category log_image{0.6f, 1.0f, 0.6f, erhe::log::Console_color::GREEN, erhe::log::Level::LEVEL_INFO};
 
 auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format
 {
@@ -84,7 +81,7 @@ auto load_png(const fs::path& path) -> Image
         fs::is_empty(path)
     )
     {
-        log_image.error("File not found (or empty) {}\n", path.string());
+        log_image->error("File `{}` not found (or empty)", path.string());
         return {};
     }
 
@@ -93,8 +90,23 @@ auto load_png(const fs::path& path) -> Image
 
     if (!loader.open(path, image.info))
     {
-        log_image.error("File PNG open error {}\n", path.string());
-        return {};
+#if defined(ERHE_PNG_LIBRARY_NONE)
+        log_image->error(
+            "Unable to load image '{}' due to ERHE_PNG_LIBRARY_NONE build configuration. Exiting program.\n",
+            path.string()
+        );
+#elif !defined(ERHE_PNG_LIBRARY_MANGO)
+        log_image->error(
+            "Unable to load image '{}', check ERHE_PNG_LIBRARY build configuration. Exiting program.\n",
+            path.string()
+        );
+#else
+        log_image->error(
+            "Unable to load image '{}', check program working directory. Exiting program.\n",
+            path.string()
+        );
+#endif
+        std::abort();
     }
 
     const auto byte_count = get_buffer_size(image.info);
@@ -104,7 +116,7 @@ auto load_png(const fs::path& path) -> Image
     loader.close();
     if (!ok)
     {
-        log_image.error("File PNG load error {}\n", path.string());
+        log_image->error("File PNG load error {}\n", path.string());
         return {};
     }
     return image;
@@ -117,7 +129,7 @@ auto load_texture(
     const Image image = load_png(path);
     if (image.data.size() == 0)
     {
-        log_image.error("Image empty {}\n", path.string());
+        log_image->error("Image empty {}\n", path.string());
         return {};
     }
     erhe::graphics::Texture_create_info texture_create_info{

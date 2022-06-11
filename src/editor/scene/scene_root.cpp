@@ -222,6 +222,8 @@ auto Scene_root::scene() const -> const erhe::scene::Scene&
 
 void Scene_root::add_instance(const Instance& instance)
 {
+    ERHE_PROFILE_FUNCTION
+
     scene().add_to_mesh_layer(
         *content_layer(),
         instance.mesh

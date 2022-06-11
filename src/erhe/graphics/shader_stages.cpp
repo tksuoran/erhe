@@ -1,5 +1,5 @@
 #include "erhe/graphics/shader_stages.hpp"
-
+#include <fmt/format.h>
 #include <sstream>
 
 namespace erhe::graphics

@@ -1,14 +1,15 @@
 #include "erhe/primitive/log.hpp"
 
-
 namespace erhe::primitive
 {
 
-using Category      = erhe::log::Category;
-using Console_color = erhe::log::Console_color;
-using Level         = erhe::log::Level;
+std::shared_ptr<spdlog::logger> log_primitive_builder;
+std::shared_ptr<spdlog::logger> log_primitive        ;
 
-Category log_primitive_builder{1.0f, 0.4f, 0.2f, Console_color::RED,     Level::LEVEL_INFO};
-Category log_primitive        {0.7f, 0.4f, 1.0f, Console_color::MAGENTA, Level::LEVEL_INFO};
+void initialize_logging()
+{
+    log_primitive_builder = erhe::log::make_logger("erhe::primitive::primitive_builder", spdlog::level::info);
+    log_primitive         = erhe::log::make_logger("erhe::primitive::primitive", spdlog::level::info);
+}
 
 } // namespace erhe::primitive

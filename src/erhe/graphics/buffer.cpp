@@ -1,5 +1,6 @@
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/log.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <fmt/format.h>
@@ -8,8 +9,6 @@
 
 namespace erhe::graphics
 {
-
-using erhe::log::Log;
 
 auto Buffer::gl_name() const noexcept -> unsigned int
 {
@@ -25,8 +24,8 @@ Buffer::Buffer(
     , m_capacity_byte_count{capacity_byte_count}
     , m_storage_mask       {storage_mask}
 {
-    log_buffer.trace(
-        "Buffer::Buffer(target = {}, capacity_byte_count = {}, storage_mask = {}) name = {}\n",
+    log_buffer->trace(
+        "Buffer::Buffer(target = {}, capacity_byte_count = {}, storage_mask = {}) name = {}",
         gl::c_str(target),
         capacity_byte_count,
         gl::to_string(storage_mask),
@@ -56,8 +55,8 @@ Buffer::Buffer(
     , m_capacity_byte_count{capacity_byte_count}
     , m_storage_mask       {storage_mask}
 {
-    log_buffer.trace(
-        "Buffer::Buffer(target = {}, capacity_byte_count = {}, storage_mask = {}, map_buffer_access_mask = {}) name = {}\n",
+    log_buffer->trace(
+        "Buffer::Buffer(target = {}, capacity_byte_count = {}, storage_mask = {}, map_buffer_access_mask = {}) name = {}",
         gl::c_str(target),
         capacity_byte_count,
         gl::to_string(storage_mask),
@@ -152,7 +151,7 @@ auto Buffer::allocate_bytes(
     m_next_free_byte += byte_count;
     ERHE_VERIFY(m_next_free_byte <= m_capacity_byte_count);
 
-    log_buffer.trace("buffer {}: allocated {} bytes at offset {}\n", gl_name(), byte_count, offset);
+    log_buffer->trace("buffer {}: allocated {} bytes at offset {}", gl_name(), byte_count, offset);
     return offset;
 }
 
@@ -163,13 +162,13 @@ auto Buffer::map_all_bytes(
     Expects(m_map.empty());
     Expects(gl_name() != 0);
 
-    log_buffer.trace(
-        "Buffer::map_all_bytes(access_mask = {}) target = {}, name = {}\n",
+    log_buffer->trace(
+        "Buffer::map_all_bytes(access_mask = {}) target = {}, name = {}",
         gl::to_string(access_mask),
         gl::c_str(m_target),
         gl_name()
     );
-    const log::Indenter indenter;
+    //const log::Indenter indenter;
 
     const size_t byte_count = m_capacity_byte_count;
 
@@ -186,8 +185,8 @@ auto Buffer::map_all_bytes(
     );
     ERHE_VERIFY(map_pointer != nullptr);
 
-    log_buffer.trace(
-        ":m_map_byte_offset = {}, m_map_byte_count = {}, m_map_pointer = {}\n",
+    log_buffer->trace(
+        ":m_map_byte_offset = {}, m_map_byte_count = {}, m_map_pointer = {}",
         m_map_byte_offset,
         byte_count,
         fmt::ptr(map_pointer)
@@ -210,15 +209,15 @@ auto Buffer::map_bytes(
     Expects(m_map.empty());
     Expects(gl_name() != 0);
 
-    log_buffer.trace(
-        "Buffer::map_bytes(byte_offset = {}, byte_count = {}, access_mask = {}) target = {}, name = {}\n",
+    log_buffer->trace(
+        "Buffer::map_bytes(byte_offset = {}, byte_count = {}, access_mask = {}) target = {}, name = {}",
         byte_offset,
         byte_count,
         gl::to_string(access_mask),
         gl::c_str(m_target),
         gl_name()
     );
-    const log::Indenter indenter;
+    //const log::Indenter indenter;
 
     ERHE_VERIFY(byte_offset + byte_count <= m_capacity_byte_count);
 
@@ -235,8 +234,8 @@ auto Buffer::map_bytes(
     );
     ERHE_VERIFY(map_pointer != nullptr);
 
-    log_buffer.trace(
-        ":m_map_byte_offset = {}, m_map_byte_count = {}, m_map_pointer = {}\n",
+    log_buffer->trace(
+        ":m_map_byte_offset = {}, m_map_byte_count = {}, m_map_pointer = {}",
         m_map_byte_offset,
         byte_count,
         fmt::ptr(map_pointer)
@@ -254,16 +253,16 @@ void Buffer::unmap() noexcept
     Expects(!m_map.empty());
     Expects(gl_name() != 0);
 
-    log_buffer.trace(
-        "Buffer::unmap() target = {}, byte_offset = {}, byte_count = {}, pointer = {}, name = {}\n",
+    log_buffer->trace(
+        "Buffer::unmap() target = {}, byte_offset = {}, byte_count = {}, pointer = {}, name = {}",
         gl::c_str(m_target),
         m_map_byte_offset,
         m_map.size(),
         reinterpret_cast<intptr_t>(m_map.data()),
         gl_name()
     );
-    const log::Indenter indented;
-    Log::set_text_color(erhe::log::Console_color::GREY);
+    //const log::Indenter indented;
+    //Log::set_text_color(erhe::log::Console_color::GREY);
 
     const auto res = gl::unmap_named_buffer(gl_name());
     ERHE_VERIFY(res == GL_TRUE);
@@ -286,8 +285,8 @@ void Buffer::flush_bytes(
     // unmap will do flush
     ERHE_VERIFY(byte_offset + byte_count <= m_capacity_byte_count);
 
-    log_buffer.trace(
-        "Buffer::flush(byte_offset = {}, byte_count = {}) target = {}, m_mapped_ptr = {} name = {}\n",
+    log_buffer->trace(
+       "Buffer::flush(byte_offset = {}, byte_count = {}) target = {}, m_mapped_ptr = {} name = {}",
         byte_offset,
         byte_count,
         gl::c_str(m_target),
@@ -340,21 +339,22 @@ void Buffer::dump() const noexcept
         gl::get_named_buffer_sub_data(gl_name(), 0, word_count * sizeof(uint32_t), data);
     }
 
+    std::stringstream ss;
     for (size_t i = 0; i < word_count; ++i)
     {
         if (i % 16u == 0)
         {
-            log_buffer.trace("%08x: ", static_cast<unsigned int>(i));
+            ss << fmt::format("%08x: ", static_cast<unsigned int>(i));
         }
 
-        log_buffer.trace("%08x ", data[i]);
+        ss << fmt::format("%08x ", data[i]);
 
         if (i % 16u == 15u)
         {
-            log_buffer.trace("\n");
+            ss << "\n";
         }
     }
-    log_buffer.trace("\n");
+    log_buffer->trace("\n{}", ss.str());
 
     if (unmap)
     {
@@ -369,7 +369,7 @@ void Buffer::flush_and_unmap_bytes(const size_t byte_count) noexcept
     const bool flush_explicit =
         (m_map_buffer_access_mask & gl::Map_buffer_access_mask::map_flush_explicit_bit) == gl::Map_buffer_access_mask::map_flush_explicit_bit;
 
-    log_buffer.trace("flush_and_unmap(byte_count = {}) name = {}\n", byte_count, gl_name());
+    log_buffer->trace("flush_and_unmap(byte_count = {}) name = {}", byte_count, gl_name());
 
     // If explicit is not selected, unmap will do full flush
     // so we do manual flush only if explicit is selected

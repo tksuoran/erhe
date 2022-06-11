@@ -141,7 +141,7 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(
 
     post_processing();
 
-    log_catmull_clark.trace("Done\n");
+    log_catmull_clark->trace("Done");
 }
 
 auto catmull_clark_subdivision(Geometry& source) -> Geometry

@@ -17,6 +17,7 @@
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/graphics/debug.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/raytrace/mesh_intersect.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/camera.hpp"
@@ -213,6 +214,7 @@ static constexpr std::string_view c_swap_buffers{"swap_buffers"};
 
 void View::run()
 {
+    m_imgui_windows->make_imgui_context_current();
     for (;;)
     {
         if (m_close_requested)
@@ -220,9 +222,8 @@ void View::run()
             break;
         }
 
-        m_imgui_windows->make_imgui_context_current();
         get<Window>()->get_context_window()->poll_events();
-        m_imgui_windows->make_imgui_context_uncurrent();
+        //m_imgui_windows->make_imgui_context_uncurrent();
 
         if (m_close_requested)
         {
@@ -253,10 +254,10 @@ void View::update()
         {
             m_view_client->bind_default_framebuffer();
             m_view_client->clear();
-            m_imgui_windows->make_imgui_context_current();
+            //m_imgui_windows->make_imgui_context_current();
             m_imgui_windows->imgui_windows();
             m_imgui_windows->render_imgui_frame();
-            m_imgui_windows->make_imgui_context_uncurrent();
+            //m_imgui_windows->make_imgui_context_uncurrent();
         }
     }
 
@@ -325,8 +326,8 @@ void View::on_key(
         }
     }
 
-    log_input_event_filtered.trace(
-        "key {} {} not consumed\n",
+    log_input_event_filtered->trace(
+        "key {} {} not consumed",
         erhe::toolkit::c_str(code),
         pressed ? "press" : "release"
     );
@@ -336,7 +337,7 @@ void View::on_char(
     const unsigned int codepoint
 )
 {
-    log_input_event.trace("char input codepoint = {}\n", codepoint);
+    log_input_event->trace("char input codepoint = {}", codepoint);
     m_imgui_windows->on_char(codepoint);
 }
 
@@ -521,8 +522,8 @@ void View::on_mouse_click(
         return;
     }
 
-    log_input_event.trace(
-        "mouse button {} {}\n",
+    log_input_event->trace(
+        "mouse button {} {}",
         erhe::toolkit::c_str(button),
         count
     );
@@ -572,7 +573,7 @@ void View::on_mouse_wheel(const double x, const double y)
     m_last_mouse_wheel_delta.x = x;
     m_last_mouse_wheel_delta.y = y;
 
-    log_input_event.trace("mouse wheel {}, {}\n", x, y);
+    log_input_event->trace("mouse wheel {}, {}", x, y);
 
     Command_context context{
         *this,

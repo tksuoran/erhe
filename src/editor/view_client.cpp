@@ -57,7 +57,6 @@ void View_client::update()
     {
         m_scene_root->scene().update_node_transforms();
     }
-
 }
 
 void View_client::render()

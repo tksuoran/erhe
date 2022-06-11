@@ -5,6 +5,7 @@
 #include "tiles.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
+#include "erhe/log/log_fmt.hpp"
 
 #include <imgui.h>
 
@@ -54,14 +55,14 @@ void Map_generator::update_elevation_terrains()
     }
     const float temperature_extent = static_cast<float>(max_temperature - min_temperature);
     const float humidity_extent    = static_cast<float>(max_humidity    - min_humidity);
-    log_map_generator.trace(
-        "temperature: min = {}, max = {}, extent = {}\n",
+    log_map_generator->trace(
+        "temperature: min = {}, max = {}, extent = {}",
         min_temperature,
         max_temperature,
         temperature_extent
     );
-    log_map_generator.trace(
-        "humidity: min = {}, max = {}, m_humidity_extent = {}\n",
+    log_map_generator->trace(
+        "humidity: min = {}, max = {}, m_humidity_extent = {}",
         min_humidity,
         max_humidity,
         humidity_extent

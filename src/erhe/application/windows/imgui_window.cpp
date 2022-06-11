@@ -1,6 +1,7 @@
 #include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/application/renderers/imgui_renderer.hpp"
 #include "erhe/components/components.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <imgui.h>
 
@@ -132,6 +133,8 @@ auto Rendertarget_imgui_window::flags() -> ImGuiWindowFlags
 
 void Rendertarget_imgui_window::on_begin()
 {
+    ERHE_PROFILE_FUNCTION
+
 #ifdef IMGUI_HAS_VIEWPORT
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->WorkPos);

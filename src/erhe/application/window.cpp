@@ -7,9 +7,12 @@
 #include "erhe/graphics/png_loader.hpp"
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/filesystem.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/window.hpp"
+
+#include <fmt/format.h>
 
 #if defined(ERHE_WINDOW_LIBRARY_GLFW)
 #   include <GLFW/glfw3.h>
@@ -76,7 +79,7 @@ auto Window::create_gl_window() -> bool
     erhe::graphics::Image_info image_info;
     const fs::path current_path = fs::current_path();
     const fs::path path         = current_path / "res" / "images" / "gl32w.png";
-    log_startup.trace("current directory is {}\n", current_path.string());
+    log_startup->trace("current directory is {}", current_path.string());
     const bool exists          = fs::exists(path);
     const bool is_regular_file = fs::is_regular_file(path);
     if (exists && is_regular_file)
@@ -123,7 +126,7 @@ auto Window::create_gl_window() -> bool
         m_context_window->swap_buffers();
     }
 
-    log_startup.info("Created OpenGL Window\n");
+    log_startup->info("Created OpenGL Window");
 
     return true;
 }

@@ -14,9 +14,10 @@
 #include "erhe/application/view.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
-#include "erhe/scene/mesh.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/physics/iconstraint.hpp"
+#include "erhe/scene/mesh.hpp"
 
 #include <imgui.h>
 
@@ -64,7 +65,7 @@ void Physics_tool_drag_command::on_inactive(
 {
     static_cast<void>(context);
 
-    log_physics.info("Physics_tool_drag_command::on_inactive() - command state = {}", c_str(state()));
+    log_physics->info("Physics_tool_drag_command::on_inactive() - command state = {}", c_str(state()));
     if (state() == erhe::application::State::Active)
     {
         m_physics_tool.release_target();
@@ -115,7 +116,7 @@ void Physics_tool_force_command::on_inactive(
 {
     static_cast<void>(context);
 
-    log_physics.info("Physics_tool_force_command::on_inactive() - command state = {}", c_str(state()));
+    log_physics->info("Physics_tool_force_command::on_inactive() - command state = {}", c_str(state()));
 
     if (state() == erhe::application::State::Active)
     {
@@ -222,14 +223,14 @@ auto Physics_tool::acquire_target() -> bool
         m_scene_root->physics_world().remove_constraint(m_target_constraint.get());
     }
 
-    log_physics.info("Physics_tool: Target acquired\n");
+    log_physics->info("Physics_tool: Target acquired");
 
     return true;
 }
 
 void Physics_tool::release_target()
 {
-    log_physics.info("Physics_tool: Target released\n");
+    log_physics->info("Physics_tool: Target released");
 
     m_target_mesh.reset();
     if (m_target_constraint)
@@ -250,7 +251,7 @@ void Physics_tool::release_target()
 
 void Physics_tool::begin_point_to_point_constraint()
 {
-    log_physics.info("Physics_tool: Begin point to point constraint\n");
+    log_physics->info("Physics_tool: Begin point to point constraint");
 
     m_target_constraint = erhe::physics::IConstraint::create_point_to_point_constraint_unique(
         m_target_node_physics->rigid_body(),
@@ -272,13 +273,13 @@ auto Physics_tool::on_drag_ready() -> bool
     }
     if (!acquire_target())
     {
-        log_physics.info("Physics tool drag - acquire target failed\n");
+        log_physics->info("Physics tool drag - acquire target failed");
         return false;
     }
 
     begin_point_to_point_constraint();
 
-    log_physics.info("Physics tool drag {} ready\n", m_target_mesh->name());
+    log_physics->info("Physics tool drag {} ready", m_target_mesh->name());
     return true;
 }
 
@@ -290,13 +291,13 @@ auto Physics_tool::on_force_ready() -> bool
     }
     if (!acquire_target())
     {
-        log_physics.info("Physics tool force - acquire target failed\n");
+        log_physics->info("Physics tool force - acquire target failed");
         return false;
     }
 
     begin_point_to_point_constraint();
 
-    log_physics.info("Physics tool force {} ready\n", m_target_mesh->name());
+    log_physics->info("Physics tool force {} ready", m_target_mesh->name());
     return true;
 }
 

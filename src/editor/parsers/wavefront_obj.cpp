@@ -2,6 +2,7 @@
 #include "log.hpp"
 
 #include "erhe/geometry/geometry.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -130,7 +131,7 @@ auto parse_obj_geometry(
 {
     ERHE_PROFILE_FUNCTION
 
-    log_parsers.trace("path = {}\n", path.generic_string());
+    log_parsers->trace("path = {}", path.generic_string());
 
     std::vector<std::shared_ptr<erhe::geometry::Geometry>> result;
     const auto opt_text = erhe::toolkit::read(path);
@@ -187,7 +188,7 @@ auto parse_obj_geometry(
                 line.erase(line.begin() + coment_pos, line.end());
             }
 
-            //log_parsers.trace("line: {}\n", line);
+            //log_parsers->trace("line: {}", line);
             if (line.length() == 0)
             {
                 line_last_pos = text.find_first_not_of(end_of_line, line_pos);
@@ -195,7 +196,7 @@ auto parse_obj_geometry(
                 continue;
             }
 
-            const erhe::log::Indenter scope_indent;
+            //const erhe::log::Indenter scope_indent;
 
             // process line
             std::string::size_type token_last_pos = line.find_first_not_of(delimiters, 0);
@@ -210,7 +211,7 @@ auto parse_obj_geometry(
             const auto command_text = line.substr(token_last_pos, token_pos - token_last_pos);
             const auto command      = tokenize(command_text);
 
-            //log_parsers.trace("command: {}\n", command_text);
+            //log_parsers->trace("command: {}", command_text);
             std::vector<float> float_args;
             std::vector<int>   int_args;
             std::vector<int>   face_vertex_position_indices;
@@ -237,7 +238,7 @@ auto parse_obj_geometry(
                             corner_texcoords = geometry->corner_attributes().create<glm::vec2>(c_corner_texcoords);
                             result.push_back(geometry);
                             obj_point_to_geometry_point.clear();
-                            log_parsers.trace("arg: {}\n", arg_text);
+                            log_parsers->trace("arg: {}", arg_text);
                         }
                         break;
                     }
@@ -256,7 +257,7 @@ auto parse_obj_geometry(
                             corner_texcoords = geometry->corner_attributes().create<glm::vec2>(c_corner_texcoords);
                             result.push_back(geometry);
                             obj_point_to_geometry_point.clear();
-                            //log_parsers.trace("arg: {}\n", arg_text);
+                            //log_parsers->trace("arg: {}", arg_text);
                         }
                         //token_pos = text.find_first_of(end_of_line, token_last_pos);
                         break;
@@ -272,7 +273,7 @@ auto parse_obj_geometry(
                         if (token_last_pos != std::string::npos || token_pos != std::string::npos)
                         {
                             const auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
-                            //log_parsers.trace("arg: {}\n", arg_text);
+                            //log_parsers->trace("arg: {}", arg_text);
                         }
                         //token_last_pos = line.find_first_not_of(end_of_line, token_pos);
                         //token_pos = text.find_first_of(end_of_line, token_last_pos);
@@ -307,7 +308,7 @@ auto parse_obj_geometry(
                         {
                             const auto  arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
                             const float value    = std::stof(arg_text);
-                            //log_parsers.trace("arg: {}\n", arg_text);
+                            //log_parsers->trace("arg: {}", arg_text);
                             float_args.push_back(value);
                         }
                         //token_last_pos = line.find_first_not_of(delimiters, token_pos);
@@ -321,14 +322,14 @@ auto parse_obj_geometry(
                         if (token_last_pos != std::string::npos || token_pos != std::string::npos)
                         {
                             const auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
-                            //log_parsers.trace("arg: {}\n", arg_text);
+                            //log_parsers->trace("arg: {}", arg_text);
                             std::string::size_type subtoken_last_pos = arg_text.find_first_not_of(slash, 0);
                             std::string::size_type subtoken_pos      = arg_text.find_first_of(slash, subtoken_last_pos);
                             int subtoken_slot = 0;
                             while ((subtoken_pos != std::string::npos) || (subtoken_last_pos != std::string::npos))
                             {
                                 const auto subtoken_text = arg_text.substr(subtoken_last_pos, subtoken_pos - subtoken_last_pos);
-                                //log_parsers.trace("subtoken: {}\n", subtoken_text);
+                                //log_parsers->trace("subtoken: {}", subtoken_text);
                                 if (arg_text.length() > 0)
                                 {
                                     const int value = std::stoi(subtoken_text);

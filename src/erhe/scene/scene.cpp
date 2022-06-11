@@ -4,6 +4,7 @@
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -123,7 +124,7 @@ void Scene::sanity_check() const
 
 void Scene::sort_transform_nodes()
 {
-    log.trace("sorting {} nodes\n", flat_node_vector.size());
+    log->trace("sorting {} nodes\n", flat_node_vector.size());
 
     std::sort(
         flat_node_vector.begin(),
@@ -167,15 +168,19 @@ void Scene::add_node(
     const std::shared_ptr<erhe::scene::Node>& node
 )
 {
+    ERHE_PROFILE_FUNCTION
+
 #ifndef NDEBUG
     const auto i = std::find(flat_node_vector.begin(), flat_node_vector.end(), node);
     if (i != flat_node_vector.end())
     {
-        log.error("{} {} already in scene nodes\n", node->node_type(), node->name());
+        log->error("{} {} already in scene nodes", node->node_type(), node->name());
     }
     else
 #endif
     {
+        ERHE_PROFILE_SCOPE("push_back");
+
         flat_node_vector.push_back(node);
         nodes_sorted = false;
     }
@@ -191,16 +196,18 @@ void Scene::add_to_mesh_layer(
     const std::shared_ptr<Mesh>& mesh
 )
 {
+    ERHE_PROFILE_FUNCTION
+
     ERHE_VERIFY(mesh);
 
-    log.trace("add_to_mesh_layer(mesh = {})\n", mesh->name());
+    SPDLOG_LOGGER_TRACE(log, "add_to_mesh_layer(mesh = {})", mesh->name());
 
     auto& meshes = layer.meshes;
 #ifndef NDEBUG
     const auto i = std::find(meshes.begin(), meshes.end(), mesh);
     if (i != meshes.end())
     {
-        log.error("mesh {} already in layer meshes\n", mesh->name());
+        log->error("mesh {} already in layer meshes", mesh->name());
     }
     else
 #endif
@@ -218,7 +225,7 @@ void Scene::add_to_light_layer(
 {
     ERHE_VERIFY(light);
 
-    log.trace("add_to_light_layer(light = {})\n", light->name());
+    log->trace("add_to_light_layer(light = {})", light->name());
 
     {
         auto& lights = layer.lights;
@@ -226,7 +233,7 @@ void Scene::add_to_light_layer(
         const auto i = std::find(lights.begin(), lights.end(), light);
         if (i != lights.end())
         {
-            log.error("light {} already in layer lights\n", light->name());
+            log->error("light {} already in layer lights", light->name());
         }
         else
 #endif
@@ -244,14 +251,14 @@ void Scene::add(
 {
     ERHE_VERIFY(camera);
 
-    log.trace("add_to_scene(camera = {})\n", camera->name());
+    log->trace("add_to_scene(camera = {})", camera->name());
 
     {
 #ifndef NDEBUG
         const auto i = std::find(cameras.begin(), cameras.end(), camera);
         if (i != cameras.end())
         {
-            log.error("camera {} already in scene cameras\n", camera->name());
+            log->error("camera {} already in scene cameras", camera->name());
         }
         else
 #endif
@@ -274,7 +281,7 @@ void Scene::remove_from_mesh_layer(
     const auto i = std::remove(meshes.begin(), meshes.end(), mesh);
     if (i == meshes.end())
     {
-        log.error("mesh {} not in layer meshes\n", mesh->name());
+        log->error("mesh {} not in layer meshes", mesh->name());
     }
     else
     {
@@ -289,7 +296,7 @@ void Scene::remove_node(
     const auto i = std::remove(flat_node_vector.begin(), flat_node_vector.end(), node);
     if (i == flat_node_vector.end())
     {
-        log.error("{} {} not in scene nodes\n", node->node_type(), node->name());
+        log->error("{} {} not in scene nodes", node->node_type(), node->name());
     }
     else
     {
@@ -321,14 +328,14 @@ void Scene::remove_from_light_layer(
 {
     ERHE_VERIFY(light);
 
-    log.trace("remove_from_scene_layer(light = {})\n", light->name());
+    log->trace("remove_from_scene_layer(light = {})`", light->name());
 
     auto& lights = layer.lights;
     const auto i = std::remove(lights.begin(), lights.end(), light);
 
     if (i == lights.end())
     {
-        log.error("light {} not in layer lights\n", light->name());
+        log->error("light {} not in layer lights", light->name());
     }
     else
     {
@@ -357,13 +364,13 @@ void Scene::remove(
 {
     ERHE_VERIFY(camera);
 
-    log.trace("remove(camera = {})\n", camera->name());
+    log->trace("remove(camera = {})", camera->name());
 
     const auto i = std::remove(cameras.begin(), cameras.end(), camera);
 
     if (i == cameras.end())
     {
-        log.error("camera {} not in scene cameras\n", camera->name());
+        log->error("camera {} not in scene cameras", camera->name());
     }
     else
     {

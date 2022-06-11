@@ -100,7 +100,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 
     if (!window->create_gl_window())
     {
-        log_startup.error("GL window creation failed, aborting\n");
+        log_startup->error("GL window creation failed, aborting");
         return false;
     }
 

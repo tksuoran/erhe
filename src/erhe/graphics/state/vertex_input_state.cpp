@@ -6,6 +6,7 @@
 #include "erhe/graphics/vertex_attribute.hpp"
 #include "erhe/graphics/vertex_attribute_mapping.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <fmt/ostream.h>
@@ -32,8 +33,8 @@ void Vertex_input_state::on_thread_enter()
     {
         std::stringstream owner_thread_ss;
         owner_thread_ss << vertex_input_state->m_owner_thread;
-        log_threads.trace(
-            "{}: on thread enter: vertex input state @ {} owned by thread {}\n",
+        log_threads->trace(
+            "{}: on thread enter: vertex input state @ {} owned by thread {}",
             this_thread_id_string, //std::this_thread::get_id(),
             fmt::ptr(vertex_input_state),
             owner_thread_ss.str() //vertex_input_state->m_owner_thread
@@ -58,8 +59,8 @@ void Vertex_input_state::on_thread_exit()
     {
         std::stringstream owner_thread_ss;
         owner_thread_ss << vertex_input_state->m_owner_thread;
-        log_threads.trace(
-            "{}: on thread exit: vertex input state @ {} owned by thread {}\n",
+        log_threads->trace(
+            "{}: on thread exit: vertex input state @ {} owned by thread {}",
             this_thread_id_string, //std::this_thread::get_id(),
             fmt::ptr(vertex_input_state),
             owner_thread_ss.str() // vertex_input_state->m_owner_thread
@@ -134,7 +135,7 @@ void Vertex_input_state::reset()
     std::stringstream this_thread_id_ss;
     this_thread_id_ss << std::this_thread::get_id();
     //log_threads.trace("{}: reset @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
-    log_threads.trace("{}: reset @ {}\n", this_thread_id_ss.str(), fmt::ptr(this));
+    log_threads->trace("{}: reset @ {}", this_thread_id_ss.str(), fmt::ptr(this));
     m_owner_thread = {};
     m_gl_vertex_array.reset();
 
@@ -146,7 +147,7 @@ void Vertex_input_state::create()
     std::stringstream this_thread_id_ss;
     this_thread_id_ss << std::this_thread::get_id();
     //log_threads.trace("{}: create @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
-    log_threads.trace("{}: create @ {}\n", this_thread_id_ss.str(), fmt::ptr(this));
+    log_threads->trace("{}: create @ {}", this_thread_id_ss.str(), fmt::ptr(this));
     if (m_gl_vertex_array.has_value())
     {
         ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
@@ -186,12 +187,12 @@ void Vertex_input_state::update()
     {
         if (attribute.vertex_buffer == nullptr)
         {
-            log_vertex_attribute_mappings.error("bad vertex input state: vbo == nullptr");
+            log_vertex_attribute_mappings->error("bad vertex input state: vbo == nullptr");
             continue;
         }
         if (attribute.layout_location >= max_attribute_count)
         {
-            log_vertex_attribute_mappings.error("bad vertex input state: layout location >= max attribute count");
+            log_vertex_attribute_mappings->error("bad vertex input state: layout location >= max attribute count");
             continue;
         }
 

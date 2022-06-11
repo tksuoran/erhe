@@ -48,6 +48,7 @@ public:
 
     void intersect(Ray& ray, Hit& out_hit) override;
 
+    void set_dirty();
     auto get_rtc_scene() -> RTCScene;
     auto get_geometry_from_id(const unsigned int id) -> Embree_geometry*;
 

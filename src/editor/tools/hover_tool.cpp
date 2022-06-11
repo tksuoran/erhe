@@ -12,9 +12,10 @@
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
-#include "erhe/scene/mesh.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/material.hpp"
+#include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <fmt/core.h>
@@ -273,8 +274,8 @@ void Hover_tool::select()
 
         // Replace primitive material with modified copy
         m_hover_mesh->mesh_data.primitives[m_hover_primitive_index].material = m_hover_material;
-        log_materials.info(
-            "hover mesh {} primitive {} set to {} with index {}\n",
+        log_materials->info(
+            "hover mesh {} primitive {} set to {} with index {}",
             m_hover_mesh->name(),
             m_hover_primitive_index,
             m_hover_material->name,

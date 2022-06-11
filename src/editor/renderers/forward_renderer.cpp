@@ -75,7 +75,7 @@ void Forward_renderer::initialize_component()
 
     erhe::graphics::Scoped_debug_group forward_renderer_initialization{c_forward_renderer_initialize_component};
 
-    create_frame_resources(256, 256, 256, 8000, 8000);
+    create_frame_resources(256, 256, 256, 20000, 20000);
 }
 
 
@@ -106,8 +106,11 @@ void Forward_renderer::render(const Render_parameters& parameters)
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     if (camera != nullptr)
     {
+        ERHE_PROFILE_MESSAGE_LITERAL("A");
         update_camera_buffer(*camera, viewport);
+        ERHE_PROFILE_MESSAGE_LITERAL("B");
         bind_camera_buffer  ();
+        ERHE_PROFILE_MESSAGE_LITERAL("C");
     }
     update_material_buffer(materials);
     bind_material_buffer();
@@ -123,6 +126,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     }
     if (enable_shadows)
     {
+        ERHE_PROFILE_SCOPE("shadow texture resident");
         gl::make_texture_handle_resident_arb(shadow_texture_handle);
     }
     for (auto& pass : passes)
@@ -137,6 +141,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
         if (pass->begin)
         {
+            ERHE_PROFILE_SCOPE("pass begin");
             pass->begin();
         }
 
@@ -145,6 +150,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         m_pipeline_state_tracker->execute(pipeline);
         for (const auto& meshes : mesh_spans)
         {
+            ERHE_PROFILE_SCOPE("mesh span");
             ERHE_PROFILE_GPU_SCOPE(c_forward_renderer_render);
 
             update_primitive_buffer(meshes, visibility_filter);
@@ -156,22 +162,27 @@ void Forward_renderer::render(const Render_parameters& parameters)
             bind_primitive_buffer();
             bind_draw_indirect_buffer();
 
-            gl::multi_draw_elements_indirect(
-                pipeline.data.input_assembly.primitive_topology,
-                m_mesh_memory->gl_index_type(),
-                reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
-                static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
-                static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
-            );
+            {
+                ERHE_PROFILE_SCOPE("mdi");
+                gl::multi_draw_elements_indirect(
+                    pipeline.data.input_assembly.primitive_topology,
+                    m_mesh_memory->gl_index_type(),
+                    reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
+                    static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
+                    static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
+                );
+            }
         }
 
         if (pass->end)
         {
+            ERHE_PROFILE_SCOPE("pass end");
             pass->end();
         }
     }
     if (enable_shadows)
     {
+        ERHE_PROFILE_SCOPE("shadow texture non resident");
         gl::make_texture_handle_non_resident_arb(shadow_texture_handle);
     }
 }

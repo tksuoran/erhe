@@ -197,6 +197,19 @@ void Jolt_rigid_body::set_center_of_mass_transform(const Transform transform)
     //const auto position = m_body->GetCenterOfMassPosition();
 }
 
+void Jolt_rigid_body::move_world_transform(const Transform transform, float delta_time)
+{
+    m_body_interface.MoveKinematic(
+        m_body->GetID(),
+        to_jolt(transform.origin),
+        to_jolt(glm::quat{transform.basis}),
+        delta_time
+        //(m_motion_mode != Motion_mode::e_static)
+        //    ? JPH::EActivation::Activate
+        //    : JPH::EActivation::DontActivate
+    );
+}
+
 void Jolt_rigid_body::set_world_transform(const Transform transform)
 {
     m_body_interface.SetPositionAndRotation(

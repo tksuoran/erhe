@@ -11,6 +11,7 @@
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
@@ -48,6 +49,8 @@ void Mesh_properties::initialize_component()
 
 void Mesh_properties::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     ImGui::SliderInt("Max Labels",    &m_max_labels, 0, 2000);
     ImGui::Checkbox ("Show Points",   &m_show_points);
     ImGui::Checkbox ("Show Polygons", &m_show_polygons);

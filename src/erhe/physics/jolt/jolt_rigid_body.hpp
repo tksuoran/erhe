@@ -40,6 +40,7 @@ public:
     auto get_center_of_mass_transform() const -> Transform                                     override;
     void set_center_of_mass_transform(const Transform transform)                               override;
     void set_world_transform         (const Transform transform)                               override;
+    void move_world_transform        (const Transform transform, float delta_time)             override;
     void set_linear_velocity         (const glm::vec3 velocity)                                override;
     void set_angular_velocity        (const glm::vec3 velocity)                                override;
     auto get_linear_damping          () const -> float                                         override;

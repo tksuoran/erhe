@@ -104,7 +104,7 @@ auto Polygon::compute_edge_midpoint(
             return midpoint;
         }
     }
-    log_geometry.warn("Could not compute edge midpoint for polygon with less than three corners\n");
+    log_geometry->warn("Could not compute edge midpoint for polygon with less than three corners");
     return glm::vec3{0.0f, 0.0f, 0.0f};
 }
 

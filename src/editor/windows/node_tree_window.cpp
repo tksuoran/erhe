@@ -16,6 +16,7 @@
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <gsl/gsl>
 #include <imgui.h>
@@ -56,7 +57,7 @@ void Node_tree_window::clear_selection()
 
 void Node_tree_window::select_all()
 {
-    //log_tools.warn("TODO: select_all\n");
+    //log_tools->warn("TODO: select_all");
 }
 
 template <typename T>
@@ -79,7 +80,7 @@ auto Node_tree_window::get_node_by_id(
     const auto i = m_tree_nodes_last_frame.find(id);
     if (i == m_tree_nodes_last_frame.end())
     {
-        //// log_tools.warn("node for id = {} not found\n", id);
+        //// log_tools->warn("node for id = {} not found", id);
         return {};
     }
     return i->second;
@@ -93,8 +94,8 @@ void Node_tree_window::move_selection_before(
     static_cast<void>(target_node);
     static_cast<void>(payload_id);
 
-    //// log_tools.warn(
-    ////     "TODO: move_selection_before(target_node = {}, payload_id = {})\n",
+    //// log_tools->warn(
+    ////     "TODO: move_selection_before(target_node = {}, payload_id = {})",
     ////     target_node->name(),
     ////     payload_id
     //// );
@@ -108,8 +109,8 @@ void Node_tree_window::move_selection_after(
     static_cast<void>(target_node);
     static_cast<void>(payload_id);
 
-    //// log_tools.warn(
-    ////     "TODO: move_selection_after(target_node = {}, payload_id = {})\n",
+    //// log_tools->warn(
+    ////     "TODO: move_selection_after(target_node = {}, payload_id = {})",
     ////     target_node->name(),
     ////     payload_id
     //// );
@@ -155,8 +156,8 @@ void Node_tree_window::attach_selection_to(
     const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id
 )
 {
-    //// log_tools.trace(
-    ////     "attach_selection_to(target_node = {}, payload_id = {})\n",
+    //// log_tools->trace(
+    ////     "attach_selection_to(target_node = {}, payload_id = {})",
     ////     target_node->name(),
     ////     payload_id
     //// );
@@ -186,6 +187,8 @@ void Node_tree_window::drag_and_drop_source(
     const std::shared_ptr<erhe::scene::Node>& node
 )
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto node_id = node->get_id();
     m_tree_nodes.emplace(node_id, node);
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
@@ -292,6 +295,8 @@ auto Node_tree_window::drag_and_drop_target(
     const std::shared_ptr<erhe::scene::Node>& node
 ) -> bool
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto  rect_min = ImGui::GetItemRectMin();
     const auto  rect_max = ImGui::GetItemRectMax();
     const float height   = rect_max.y - rect_min.y;
@@ -364,6 +369,8 @@ void Node_tree_window::imgui_node_update(
     const std::shared_ptr<erhe::scene::Node>& node
 )
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!m_selection_tool)
     {
         return;
@@ -389,23 +396,23 @@ void Node_tree_window::imgui_node_update(
             range_selection.reset();
             if (node->is_selected())
             {
-                log_node_properties.trace("click with ctrl down on selected node {} - deselecting\n", node->name());
+                log_node_properties->trace("click with ctrl down on selected node {} - deselecting", node->name());
                 m_selection_tool->remove_from_selection(node);
             }
             else
             {
-                log_node_properties.trace("click with ctrl down on node {} - selecting\n", node->name());
+                log_node_properties->trace("click with ctrl down on node {} - selecting", node->name());
                 range_selection.set_terminator(node);
             }
         }
         else if (shift_down)
         {
-            log_node_properties.trace("click with shift down on node {} - range select\n", node->name());
+            log_node_properties->trace("click with shift down on node {} - range select", node->name());
             range_selection.set_terminator(node);
         }
         else
         {
-            log_node_properties.trace("click without modifier keys on node {} - selecting it\n", node->name());
+            log_node_properties->trace("click without modifier keys on node {} - selecting it", node->name());
             const bool was_selected = node->is_selected();
             range_selection.reset();
             m_selection_tool->clear_selection();
@@ -423,12 +430,18 @@ void Node_tree_window::imgui_node_update(
         {
             if (shift_down)
             {
-                log_node_properties.trace("key with shift down on node {} - range select\n", node->name());
+                log_node_properties->trace(
+                    "key with shift down on node {} - range select",
+                    node->name()
+                );
                 range_selection.set_terminator(node);
             }
             else
             {
-                log_node_properties.trace("key without modifier key on node {} - clearing range select and select\n", node->name());
+                log_node_properties->trace(
+                    "key without modifier key on node {} - clearing range select and select",
+                    node->name()
+                );
                 range_selection.reset();
                 range_selection.set_terminator(node);
             }
@@ -441,7 +454,7 @@ void Node_tree_window::imgui_node_update(
         const bool a_pressed = ImGui::IsKeyPressed(ImGuiKey_A);
         if (ctrl_down && a_pressed)
         {
-            log_node_properties.trace("ctrl a pressed - select all\n");
+            log_node_properties->trace("ctrl a pressed - select all");
             select_all();
         }
     }
@@ -452,30 +465,36 @@ auto Node_tree_window::node_items(
     const bool                                update
 ) -> bool
 {
-    if (is_empty(node))
+    ERHE_PROFILE_FUNCTION
+
     {
-        m_icon_set->icon(*node);
-    }
-    else if (is_mesh(node))
-    {
-        m_icon_set->icon(*as_mesh(node));
-    }
-    else if (is_light(node)) // note light is before camera - light is also camera
-    {
-        m_icon_set->icon(*as_light(node));
-    }
-    else if (is_camera(node))
-    {
-        m_icon_set->icon(*as_camera(node));
-    }
-    //else if (is_physics(node))
-    //{
-    //    //log_tools.info("P {}\n", node->name());
-    //    m_icon_set->icon(*node);
-    //}
-    else
-    {
-        m_icon_set->icon(*node);
+        ERHE_PROFILE_SCOPE("icon");
+
+        if (is_empty(node))
+        {
+            m_icon_set->icon(*node);
+        }
+        else if (is_mesh(node))
+        {
+            m_icon_set->icon(*as_mesh(node));
+        }
+        else if (is_light(node)) // note light is before camera - light is also camera
+        {
+            m_icon_set->icon(*as_light(node));
+        }
+        else if (is_camera(node))
+        {
+            m_icon_set->icon(*as_camera(node));
+        }
+        //else if (is_physics(node))
+        //{
+        //    //log_tools->info("P {}", node->name());
+        //    m_icon_set->icon(*node);
+        //}
+        else
+        {
+            m_icon_set->icon(*node);
+        }
     }
     //if (update)
     //{
@@ -497,12 +516,20 @@ auto Node_tree_window::node_items(
             ? ImGuiTreeNodeFlags_Selected
             : ImGuiTreeNodeFlags_None)};
 
-    const auto label     = fmt::format("{} {}##{}", node->name(), node->get_id(), node->get_id());
-    const auto node_open = ImGui::TreeNodeEx(label.c_str(), node_flags);
+    //const auto label     = fmt::format("{} {}##{}", node->name(), node->get_id(), node->get_id());
+    bool node_open;
+    {
+        ERHE_PROFILE_SCOPE("TreeNodeEx");
+        node_open = ImGui::TreeNodeEx(node->label().c_str(), node_flags);
+    }
 
     if (update)
     {
-        drag_and_drop_target(node);
+        ERHE_PROFILE_SCOPE("update");
+        if (ImGui::IsDragDropPayloadBeingAccepted())
+        {
+            drag_and_drop_target(node);
+        }
         imgui_node_update(node);
     }
 
@@ -513,6 +540,8 @@ void Node_tree_window::imgui_tree_node(
     const std::shared_ptr<erhe::scene::Node>& node
 )
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_selection_tool)
     {
         m_selection_tool->range_selection().entry(node);
@@ -547,18 +576,27 @@ void Node_tree_window::on_end()
 
 void Node_tree_window::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto& scene = m_scene_root->scene();
     m_tree_nodes_last_frame = m_tree_nodes;
-    m_tree_nodes.clear();
+
+    {
+        ERHE_PROFILE_SCOPE("map clear");
+        m_tree_nodes.clear();
+    }
 
     if (m_selection_tool)
     {
         m_selection_tool->range_selection().begin();
     }
 
-    for (const auto& node : scene.root_node->children())
     {
-        imgui_tree_node(node);
+        ERHE_PROFILE_SCOPE("nodes");
+        for (const auto& node : scene.root_node->children())
+        {
+            imgui_tree_node(node);
+        }
     }
 
     if (m_drag_and_drop_operation)

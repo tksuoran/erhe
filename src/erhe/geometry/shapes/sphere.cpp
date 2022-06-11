@@ -29,8 +29,10 @@ constexpr bool use_flat_centroids      = true;
 class Sphere_builder
 {
 public:
+    using scalar = float;
+
     Geometry&    geometry;
-    const double radius;
+    const scalar radius;
     const int    slice_count;
     const int    stack_division;
     const int    stack_count;
@@ -64,17 +66,17 @@ public:
         points[std::make_pair(slice, stack)] = point_id;
     }
 
-    auto sphere_point(const double rel_slice, const double rel_stack) -> Point_id
+    auto sphere_point(const scalar rel_slice, const scalar rel_stack) -> Point_id
     {
-        const double phi     = glm::pi<double>() * 2.0 * rel_slice;
-        const double sin_phi = std::sin(phi);
-        const double cos_phi = std::cos(phi);
+        const scalar phi     = glm::pi<scalar>() * scalar{2.0} * rel_slice;
+        const scalar sin_phi = std::sin(phi);
+        const scalar cos_phi = std::cos(phi);
 
-        const double theta     = glm::pi<double>() * 0.5 * rel_stack;
-        const double sin_theta = std::sin(theta);
-        const double cos_theta = std::cos(theta);
+        const scalar theta     = glm::pi<scalar>() * scalar{0.5} * rel_stack;
+        const scalar sin_theta = std::sin(theta);
+        const scalar cos_theta = std::cos(theta);
 
-        const double stack_radius = cos_theta;
+        const scalar stack_radius = cos_theta;
 
         const auto xVN = static_cast<float>(stack_radius * cos_phi);
         const auto yVN = static_cast<float>(sin_theta);
@@ -85,7 +87,7 @@ public:
         const auto zP = static_cast<float>(radius * zVN);
 
         const auto s = 1.0f - static_cast<float>(rel_slice);
-        const auto t = 1.0f - static_cast<float>(0.5 * (1.0 + rel_stack));
+        const auto t = 1.0f - static_cast<float>(scalar{0.5} * (scalar{1.0} + rel_stack));
 
         const vec3     N{xVN, yVN, zVN};
         const vec3     axis{0.0f, 1.0f, 0.0f};
@@ -133,8 +135,8 @@ public:
 
         //int stack_base0 = stack + stackDivision;
         const int    stack               = stack_base0 - stack_division;
-        const double rel_slice           = static_cast<double>(slice) / static_cast<double>(slice_count);
-        const double rel_stack           = static_cast<double>(stack) / (static_cast<double>(stack_division) + 1);
+        const scalar rel_slice           = static_cast<scalar>(slice) / static_cast<scalar>(slice_count);
+        const scalar rel_stack           = static_cast<scalar>(stack) / (static_cast<scalar>(stack_division) + 1);
         const bool   is_slice_seam       = /*(slice == 0) ||*/ (slice == slice_count);
         const bool   is_bottom           = (stack_base0 == stack_base0_bottom);
         const bool   is_top              = (stack_base0 == stack_base0_top);
@@ -181,7 +183,7 @@ public:
 
     Sphere_builder(
         Geometry&    geometry,
-        const double radius,
+        const scalar radius,
         const int    slice_count,
         const int    stack_division
     )
@@ -220,10 +222,10 @@ public:
 
         for (int slice = 0; slice < slice_count; ++slice)
         {
-            const double rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
+            const scalar rel_slice = static_cast<scalar>(slice) / static_cast<scalar>(slice_count);
             for (int stack = -stack_division; stack <= stack_division; ++stack)
             {
-                const double   rel_stack = static_cast<double>(stack) / static_cast<double>(stack_division);
+                const scalar   rel_stack = static_cast<scalar>(stack) / static_cast<scalar>(stack_division);
                 const Point_id point_id  = sphere_point(rel_slice, rel_stack);
                 set_point(slice, stack, point_id);
                 //log_sphere.trace("point id {:2} is rel slice {: #08f} rel stack {: #08f}\n", point_id, rel_slice, rel_stack);
@@ -234,15 +236,15 @@ public:
         //log_sphere.trace("top point id    = {}\n", top_point_id);
 
         // Bottom fan
-        log_sphere.trace("bottom fan\n");
+        log_sphere->trace("bottom fan");
         {
             for (int slice = 0; slice < slice_count; ++slice)
             {
                 const int        next_slice  = slice + 1;
                 const int        stack       = -stack_division;
                 const int        stack_base0 = stack + stack_division;
-                const double     rel_slice   = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
-                const double     rel_stack   = 1.0 - (0.5 / (static_cast<double>(stack) + 1));
+                const scalar     rel_slice   = (static_cast<scalar>(slice) + scalar{0.5}) / static_cast<scalar>(slice_count);
+                const scalar     rel_stack   = scalar{1.0} - (scalar{0.5} / (static_cast<scalar>(stack) + scalar{1}));
                 const Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
                 const Polygon_id polygon_id  = geometry.make_polygon();
 
@@ -287,11 +289,11 @@ public:
         {
             const int    stack_base0      = stack + stack_division;
             const int    next_stack_base0 = stack_base0 + 1;
-            const double rel_stack        = (static_cast<double>(stack) + 0.5) / (static_cast<double>(stack_division) + 1);
+            const scalar rel_stack        = (static_cast<scalar>(stack) + scalar{0.5}) / (static_cast<scalar>(stack_division) + scalar{1});
             for (int slice = 0; slice < slice_count; ++slice)
             {
                 const int        next_slice  = (slice + 1);
-                const double     rel_slice   = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
+                const scalar     rel_slice   = (static_cast<scalar>(slice) + scalar{0.5}) / static_cast<scalar>(slice_count);
                 const Point_id   centroid_id = sphere_point(rel_slice, rel_stack);
                 const Polygon_id polygon_id  = geometry.make_polygon();
 
@@ -310,14 +312,14 @@ public:
         }
 
         // Top fan
-        log_sphere.trace("top fan\n");
+        log_sphere->trace("top fan");
         for (int slice = 0; slice < slice_count; ++slice)
         {
             const int        next_slice    = (slice + 1);
             const int        stack         = stack_division;
             const int        stack_base0   = stack + stack_division;
-            const double     rel_slice     = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
-            const double     rel_stack     = 1.0 - (0.5 / (static_cast<double>(stack) + 1));
+            const scalar     rel_slice     = (static_cast<scalar>(slice) + scalar{0.5}) / static_cast<scalar>(slice_count);
+            const scalar     rel_stack     = scalar{1.0} - (scalar{0.5} / (static_cast<scalar>(stack) + scalar{1}));
             const Point_id   centroid_id   = sphere_point(rel_slice, rel_stack);
             const Polygon_id polygon_id    = geometry.make_polygon();
 
@@ -384,7 +386,12 @@ auto make_sphere(
         "sphere",
         [=](auto& geometry)
         {
-            Sphere_builder builder{geometry, radius, static_cast<int>(slice_count), static_cast<int>(stack_division)};
+            Sphere_builder builder{
+                geometry,
+                static_cast<Sphere_builder::scalar>(radius),
+                static_cast<int>(slice_count),
+                static_cast<int>(stack_division)
+            };
             builder.build();
         }
     };

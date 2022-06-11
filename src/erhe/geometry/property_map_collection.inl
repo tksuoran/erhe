@@ -208,7 +208,7 @@ Property_map_collection<Key_type>::interpolate(
         }
         Property_map_base<Key_type>* destination_map = src_map->constructor(descriptor);
 
-        log_interpolate.trace("\ninterpolating {}\n", src_map->descriptor().name);
+        SPDLOG_LOGGER_TRACE(log_interpolate, "interpolating {}", src_map->descriptor().name);
         src_map->interpolate(destination_map, key_new_to_olds);
 
         destination.insert(destination_map);

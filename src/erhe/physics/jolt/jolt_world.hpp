@@ -20,7 +20,7 @@ namespace erhe::physics
 
 class ICollision_shape;
 class Jolt_rigid_body;
-class Jolt_debug_renderer;
+//class Jolt_debug_renderer;
 
 // Layer that objects can be in, determines which other objects it can collide with
 // Typically you at least want to have 1 layer for moving bodies and 1 layer for static bodies, but you can have more
@@ -85,7 +85,7 @@ private:
     JPH::TempAllocatorImpl                         m_temp_allocator{10 * 1024 * 1024};
     JPH::JobSystemThreadPool                       m_job_system    {JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, 10};
     std::unique_ptr<JPH::BroadPhaseLayerInterface> m_broad_phase_layer_interface;
-    std::unique_ptr<Jolt_debug_renderer>           m_debug_renderer;
+    //std::unique_ptr<Jolt_debug_renderer>           m_debug_renderer;
 
     std::vector<Jolt_rigid_body*> m_rigid_bodies;
     //std::vector<IConstraint*> m_constraints;

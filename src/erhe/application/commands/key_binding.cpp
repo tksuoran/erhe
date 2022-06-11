@@ -2,6 +2,7 @@
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/log.hpp"
+#include "erhe/log/log_fmt.hpp"
 
 namespace erhe::application {
 
@@ -62,10 +63,11 @@ auto Key_binding::on_key(
 
     if (
         m_modifier_mask.has_value() &&
-        m_modifier_mask.value() != modifier_mask)
+        m_modifier_mask.value() != modifier_mask
+    )
     {
-        log_input_event_filtered.trace(
-            "{} rejected key {} due to modifier mask mismatch\n",
+        log_input_event_filtered->trace(
+            "{} rejected key {} due to modifier mask mismatch",
             command->name(),
             pressed ? "press" : "release",
             erhe::toolkit::c_str(code)
@@ -81,8 +83,8 @@ auto Key_binding::on_key(
     const bool consumed = command->try_call(context);
     if (consumed)
     {
-        log_input_event_consumed.trace(
-            "{} consumed key {} {}\n",
+        log_input_event_consumed->trace(
+            "{} consumed key {} {}",
             command->name(),
             erhe::toolkit::c_str(code),
             pressed ? "press" : "release"

@@ -3,10 +3,11 @@
 namespace erhe::scene
 {
 
-using Category      = erhe::log::Category;
-using Console_color = erhe::log::Console_color;
-using Level         = erhe::log::Level;
+std::shared_ptr<spdlog::logger> log;
 
-Category log{1.0f, 1.0f, 0.4f, Console_color::YELLOW, Level::LEVEL_INFO};
+void initialize_logging()
+{
+    log = erhe::log::make_logger("erhe::scene::log", spdlog::level::info);
+}
 
 } // namespace erhe::scene

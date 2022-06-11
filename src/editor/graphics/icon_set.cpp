@@ -5,8 +5,10 @@
 
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/renderers/imgui_renderer.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/light.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)
 #   include <lunasvg.h>
@@ -83,7 +85,7 @@ auto Icon_set::load(const fs::path& path) -> ImVec2
     const auto  document = lunasvg::Document::loadFromFile(path.string());
     if (!document)
     {
-        log_svg.error("Unable to load {}\n", path.string());
+        log_svg->error("Unable to load {}", path.string());
         return ImVec2{0.0f, 0.0f};
     }
 
@@ -179,6 +181,8 @@ void Icon_set::icon(
     const glm::vec4 tint_color
 ) const
 {
+    ERHE_PROFILE_FUNCTION
+
     //const float size      = ImGui::GetTextLineHeight();
     //const auto  icon_size = ImVec2{size, size};
     const auto icon_size = ImVec2{

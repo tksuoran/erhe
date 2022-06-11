@@ -146,7 +146,7 @@ auto PNG_writer::write(
     const auto status = m_image_encoder->encode(file_stream, surface, encode_options);
     if (!status.success)
     {
-        log_save_png.error("{}", status.info);
+        log_save_png->error("{}", status.info);
         return false;
     }
 

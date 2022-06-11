@@ -2,6 +2,7 @@
 #include "erhe/application/log.hpp"
 
 #include "erhe/graphics/state/depth_stencil_state.hpp"
+#include "erhe/log/log_fmt.hpp"
 
 #include <cxxopts.hpp>
 
@@ -18,14 +19,16 @@ auto str(const bool value) -> const char*
 Configuration::Configuration(int argc, char** argv)
     : erhe::components::Component      {c_label}
     , viewports_hosted_in_imgui_windows{true}
+//    , viewports_hosted_in_imgui_windows{false}
     , openxr                           {false}
     , show_window                      {true}
+    //, parallel_initialization          {false}
     , parallel_initialization          {true}
     , reverse_depth                    {true}
     , fullscreen                       {false}
 #if 1
-    , window_width                     {1920}//{1280}
-    , window_height                    {1080}//{720}
+    , window_width                     {1920}
+    , window_height                    {1080}
 #else
     , window_width                     {1280}
     , window_height                    {720}
@@ -55,7 +58,10 @@ Configuration::Configuration(int argc, char** argv)
     }
     catch (const std::exception& e)
     {
-        log_startup.error("Error parsing command line argumenst: {}\n", e.what());
+        log_startup->error(
+            "Error parsing command line argumenst: {}",
+            e.what()
+        );
     }
 }
 

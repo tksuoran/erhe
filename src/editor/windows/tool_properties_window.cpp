@@ -4,6 +4,7 @@
 #include "windows/operations.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <gsl/gsl>
 #include <imgui.h>
@@ -34,6 +35,8 @@ void Tool_properties_window::initialize_component()
 
 void Tool_properties_window::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!m_operations)
     {
         return;

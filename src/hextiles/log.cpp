@@ -2,14 +2,27 @@
 
 namespace hextiles {
 
-using Category      = erhe::log::Category;
-using Console_color = erhe::log::Console_color;
-using Level         = erhe::log::Level;
+std::shared_ptr<spdlog::logger> log_map_window;
+std::shared_ptr<spdlog::logger> log_map_generator;
+std::shared_ptr<spdlog::logger> log_map_editor;
+std::shared_ptr<spdlog::logger> log_new_game;
+std::shared_ptr<spdlog::logger> log_tiles;
+std::shared_ptr<spdlog::logger> log_file;
+std::shared_ptr<spdlog::logger> log_stream;
+std::shared_ptr<spdlog::logger> log_image;
+std::shared_ptr<spdlog::logger> log_pixel_lookup;
 
-Category log_map_window   {0.6f, 1.0f, 0.0f, Console_color::GREEN,  Level::LEVEL_INFO};
-Category log_map_generator{0.4f, 1.0f, 0.6f, Console_color::CYAN,   Level::LEVEL_INFO};
-Category log_map_editor   {1.0f, 0.5f, 0.2f, Console_color::YELLOW, Level::LEVEL_INFO};
-Category log_new_game     {0.6f, 1.0f, 0.0f, Console_color::GREEN,  Level::LEVEL_INFO};
-Category log_tiles        {0.0f, 0.0f, 1.0f, Console_color::BLUE,   Level::LEVEL_INFO};
+void initialize_logging()
+{
+    log_map_window    = erhe::log::make_logger("map_window",    spdlog::level::info);
+    log_map_generator = erhe::log::make_logger("map_generator", spdlog::level::info);
+    log_map_editor    = erhe::log::make_logger("map_editor",    spdlog::level::info);
+    log_new_game      = erhe::log::make_logger("new_game",      spdlog::level::info);
+    log_tiles         = erhe::log::make_logger("tiles",         spdlog::level::info);
+    log_file          = erhe::log::make_logger("file",          spdlog::level::info);
+    log_stream        = erhe::log::make_logger("stream",        spdlog::level::info);
+    log_image         = erhe::log::make_logger("image",         spdlog::level::info);
+    log_pixel_lookup  = erhe::log::make_logger("pixel_lookup",  spdlog::level::info);
+}
 
 }

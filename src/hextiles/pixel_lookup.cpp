@@ -1,7 +1,6 @@
 #include "pixel_lookup.hpp"
 #include "texture_util.hpp"
-
-#include "erhe/log/log.hpp"
+#include "log.hpp"
 
 #include <bitset>
 #include <limits>
@@ -9,8 +8,6 @@
 
 namespace hextiles
 {
-
-erhe::log::Category log_pixel_lookup{0.6f, 1.0f, 0.6f, erhe::log::Console_color::GREEN, erhe::log::Level::LEVEL_INFO};
 
 using tile_mask_t = std::bitset<Tile_shape::full_size>;
 
@@ -22,6 +19,17 @@ auto get_mask_bits() -> tile_mask_t
 
     tile_mask_t res;
     const std::byte* const mask_pixels = mask.data.data();
+    if (mask_pixels == nullptr)
+    {
+#if defined(ERHE_PNG_LIBRARY_NONE)
+        log_pixel_lookup->error("Unable to load image due to ERHE_PNG_LIBRARY_NONE build configuration. Exiting program.");
+#elif !defined(ERHE_PNG_LIBRARY_MANGO)
+        log_pixel_lookup->error("Unable to load image, check ERHE_PNG_LIBRARY build configuration. Exiting program.");
+#else
+        log_pixel_lookup->error("Unable to load image, check program working directory. Exiting program.");
+#endif
+        std::abort();
+    }
     for (size_t y = 0; y < Tile_shape::height; ++y)
     {
         for (size_t x = 0; x < Tile_shape::full_width; ++x)
@@ -87,7 +95,7 @@ Pixel_lookup::Pixel_lookup()
                                 (old.y != unset_coordinate)
                             )
                             {
-                                log_pixel_lookup.error("bad\n");
+                                log_pixel_lookup->error("logic error");
                                 std::abort();
                             }
                         }
@@ -96,12 +104,13 @@ Pixel_lookup::Pixel_lookup()
             }
             if (!any_set)
             {
-                log_pixel_lookup.error("lut: nothing set for tile {}, {}\n", tx, ty);
+                log_pixel_lookup->error("lut: nothing set for tile {}, {}", tx, ty);
             }
         }
     }
 
-    log_pixel_lookup.error("--- lut:\n");
+    log_pixel_lookup->info("--- lut:");
+    std::stringstream ss;
     const char* glyphs = ":.*#+";
     size_t used_glyphs{0};
     std::map<Tile_coordinate, char> tiles;
@@ -109,7 +118,7 @@ Pixel_lookup::Pixel_lookup()
     for (pixel_t ly = 0; ly < lut_height; ++ly)
     {
         //pixel_t ly = lut_height - 1 - ly_;
-        log_pixel_lookup.info("{:2}: ", ly);
+        ss << fmt::format("{:2}: ", ly);
         for (pixel_t lx = 0; lx < lut_width; ++lx)
         {
             const int             lut_index = (int)lx + (int)ly * lut_width;
@@ -137,16 +146,17 @@ Pixel_lookup::Pixel_lookup()
                     tiles[value] = glyph;
                 }
             }
-            log_pixel_lookup.info("{}", glyph);
+            ss << glyph;
         }
-        log_pixel_lookup.info("\n");
+        ss << "\n";
     }
-    log_pixel_lookup.info("---\n");
+    ss << "---\n";
     for (auto& i : tiles)
     {
-        log_pixel_lookup.info("{} = {}, {}\n", i.second, i.first.x, i.first.y);
+        ss << fmt::format("{} = {}, {}\n", i.second, i.first.x, i.first.y);
     }
-    log_pixel_lookup.info("---\n");
+    ss << "---";
+    log_pixel_lookup->info("{}", ss.str());
 }
 
 template <typename T> int mod(T a, T b)

@@ -2,6 +2,7 @@
 #include "erhe/graphics/log.hpp"
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <algorithm>
@@ -367,8 +368,8 @@ template <typename T>
     const char* const c_source = source.c_str();
     std::array<const char* , 1> sources{ c_source };
 
-    log_glsl.trace(
-        "Shader_stage source:\n{}\n",
+    log_glsl->trace(
+        "Shader_stage source:{}\n",
         format(create_info.final_source(shader))
     );
 
@@ -386,11 +387,11 @@ template <typename T>
         string log(static_cast<size_t>(length) + 1, 0);
         gl::get_shader_info_log(gl_name, length, nullptr, &log[0]);
         string f_source = format(sources[0]);
-        log_program.error("Shader_stage compilation failed: \n");
-        log_program.error("{}", log);
-        log_glsl.error("\n{}\n", f_source);
-        log_program.error("Shader_stage compilation failed: \n");
-        log_program.error("{}", &log[0]);
+        log_program->error("Shader_stage compilation failed:");
+        log_program->error("{}", log);
+        log_glsl->error("{}", f_source);
+        log_program->error("Shader_stage compilation failed:");
+        log_program->error("{}", log);
         return {};
     }
     return {std::move(gl_shader)};
@@ -469,26 +470,24 @@ Shader_stages::Prototype::Prototype(
     {
         string log(static_cast<size_t>(info_log_length) + 1, 0);
         gl::get_program_info_log(gl_name, info_log_length, nullptr, &log[0]);
-        log_program.error("Shader_stages linking failed:\n");
-        log_program.error(log);
-        log_program.error("\n");
+        log_program->error("Shader_stages linking failed:");
+        log_program->error("{}", log);
         for (const auto& s : create_info.shaders)
         {
             const string f_source = format(create_info.final_source(s));
-            log_glsl.error("\n{}\n", f_source);
+            log_glsl->error("\n{}", f_source);
         }
-        log_program.error("Shader_stages linking failed: \n");
-        log_program.error(log);
-        log_program.error("\n");
+        log_program->error("Shader_stages linking failed:");
+        log_program->error("{}", log);
         return;
     }
     else
     {
-        log_program.trace("Shader_stages linking succeeded: \n");
+        log_program->trace("Shader_stages linking succeeded:");
         for (const auto& s : create_info.shaders)
         {
             const string f_source = format(create_info.final_source(s));
-            log_glsl.trace("\n{}\n", f_source);
+            log_glsl->trace("\n{}", f_source);
         }
         m_link_succeeded = true;
         if (create_info.dump_reflection)
@@ -498,14 +497,14 @@ Shader_stages::Prototype::Prototype(
         if (create_info.dump_interface)
         {
             const string f_source = format(create_info.interface_source());
-            log_glsl.info("\n{}\n", f_source);
+            log_glsl->info("\n{}", f_source);
         }
         if (create_info.dump_final_source)
         {
             for (const auto& s : create_info.shaders)
             {
                 const string f_source = format(create_info.final_source(s));
-                log_glsl.info("\n{}\n", f_source);
+                log_glsl->info("\n{}", f_source);
             }
         }
     }
@@ -626,7 +625,7 @@ void Shader_stages::Prototype::dump_reflection() const
             continue;
 
         }
-        log_program.trace("{:<40} : {} resources\n", c_str(interface), active_resource_count);
+        log_program->trace("{:<40} : {} resources", c_str(interface), active_resource_count);
 
         std::string name;
         for (int i = 0; i < active_resource_count; ++i)
@@ -647,11 +646,11 @@ void Shader_stages::Prototype::dump_reflection() const
                 {
                     continue;
                 }
-                log_program.trace("\t{:<40} : {}\n", i, name);
+                log_program->trace("\t{:<40} : {}", i, name);
             }
             else
             {
-                log_program.trace("\t{:<40} :\n", i);
+                log_program->trace("\t{:<40} :", i);
             }
 
             gl::Program_resource_property property_num_active_variables = gl::Program_resource_property::num_active_variables;
@@ -673,8 +672,8 @@ void Shader_stages::Prototype::dump_reflection() const
                     &length,
                     &num_active_variables
                 );
-                log_program.trace(
-                    "\t\t{:<40} = {}\n",
+                log_program->trace(
+                    "\t\t{:<40} = {}",
                     c_str(property_num_active_variables),
                     num_active_variables
                 );
@@ -693,7 +692,8 @@ void Shader_stages::Prototype::dump_reflection() const
                         &length,
                         indices.data()
                     );
-                    log_program.trace("\t\t{:<40} = [ ", c_str(property_active_variables));
+                    std::stringstream ss;
+                    ss << fmt::format("\t\t{:<40} = [ ", c_str(property_active_variables));
                     bool first{true};
                     bool skipped{false};
                     for (int j = 0; j < num_active_variables; ++j)
@@ -718,22 +718,23 @@ void Shader_stages::Prototype::dump_reflection() const
                             }
                             if (skipped)
                             {
-                                log_program.trace(" ... ");
+                                ss << " ... ";
                                 skipped = false;
                             }
                             if (!first)
                             {
-                                log_program.trace(", ");
+                                ss << ", ";
                             }
-                            log_program.trace("{} {}", indices[j], name);
+                            ss << fmt::format("{} {}", indices[j], name);
                             first = false;
                         }
                         else
                         {
-                            log_program.trace("{}", indices[j]);
+                            ss << fmt::format("{}", indices[j]);
                         }
                     }
-                    log_program.trace(" ]\n");
+                    ss << " ]";
+                    log_program->trace("{}", ss.str());
                 }
             }
 
@@ -758,11 +759,11 @@ void Shader_stages::Prototype::dump_reflection() const
                 );
                 if (property != gl::Program_resource_property::type)
                 {
-                    log_program.trace("\t\t{:<40} = {}\n", c_str(property), param);
+                    log_program->trace("\t\t{:<40} = {}", c_str(property), param);
                 }
                 else
                 {
-                    log_program.trace("\t\t{:<40} = {}\n", c_str(property), gl::enum_string(param));
+                    log_program->trace("\t\t{:<40} = {}", c_str(property), gl::enum_string(param));
                 }
             }
         }
@@ -792,11 +793,11 @@ void Shader_stages::Prototype::dump_reflection() const
 
             if (size2 > 1)
             {
-                log_program.info("transform feedback varying {} {} {}[{}]\n", i, gl::c_str(type2), &buffer_[0], size2);
+                log_program->info("transform feedback varying {} {} {}[{}]", i, gl::c_str(type2), &buffer_[0], size2);
             }
             else
             {
-                log_program.info("Transform feedback varying {} {} {}\n", i, gl::c_str(type2), &buffer_[0]);
+                log_program->info("Transform feedback varying {} {} {}", i, gl::c_str(type2), &buffer_[0]);
             }
         }
     }

@@ -106,7 +106,7 @@ void Debug_draw::report_error_warning(const char* warning)
     {
         return;
     }
-    log_physics.warn("{}", warning);
+    log_physics->warn(warning);
 }
 
 }

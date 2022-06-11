@@ -11,6 +11,7 @@
 #include "erhe/graphics/span.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/vertex_format.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/camera.hpp"
@@ -114,7 +115,7 @@ auto Base_renderer::update_primitive_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
-    log_render.trace("{}(meshes.size() = {})\n", __func__, meshes.size());
+    //log_render->trace("{}(meshes.size() = {})", __func__, meshes.size());
 
     m_primitive_writer.begin(current_frame_resources().primitive_buffer.target());
     const auto&  shader_resources   = *m_program_interface->shader_resources.get();
@@ -136,7 +137,7 @@ auto Base_renderer::update_primitive_buffer(
         for (const auto& primitive : mesh_data.primitives)
         {
             const auto& primitive_geometry = primitive.gl_primitive_geometry;
-            //log_render.trace("primitive_index = {}\n", primitive_index);
+            //log_render->trace("primitive_index = {}", primitive_index);
 
             const uint32_t count        = static_cast<uint32_t>(primitive_geometry.triangle_fill_indices.index_count);
             const uint32_t power_of_two = erhe::toolkit::next_power_of_two(count);
@@ -210,7 +211,7 @@ auto Base_renderer::update_light_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
-    log_render.trace("{}(lights.size() = {})\n", __func__, lights.size());
+    log_render->trace("{}(lights.size() = {})", __func__, lights.size());
 
     const auto&    shader_resources = *m_program_interface->shader_resources.get();
     const size_t   entry_size       = shader_resources.light_struct.size_bytes();
@@ -239,7 +240,6 @@ auto Base_renderer::update_light_buffer(
     {
         ERHE_VERIFY(light);
 
-        log_render.trace("light_index = {}\n", light_index);
         switch (light->type)
         {
             //using enum erhe::scene::Light_type;
@@ -285,8 +285,6 @@ auto Base_renderer::update_material_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
-    log_render.trace("{}(materials.size() = {})\n", __func__, materials.size());
-
     const auto&  shader_resources  = *m_program_interface->shader_resources.get();
     const size_t entry_size        = shader_resources.material_struct.size_bytes();
     const auto&  offsets           = shader_resources.material_block_offsets;
@@ -295,7 +293,6 @@ auto Base_renderer::update_material_buffer(
     m_material_writer.begin(current_frame_resources().material_buffer.target());
     for (const auto& material : materials)
     {
-        log_render.trace("material_index = {}\n", material_index);
         memset(reinterpret_cast<uint8_t*>(material_gpu_data.data()) + m_material_writer.write_offset, 0, entry_size);
         using erhe::graphics::as_span;
         using erhe::graphics::write;
@@ -385,7 +382,7 @@ auto Base_renderer::update_draw_indirect_buffer(
     uint32_t   base_instance      {0};
     size_t     draw_indirect_count{0};
     m_draw_indirect_writer.begin(current_frame_resources().draw_indirect_buffer.target());
-    for (auto mesh : meshes)
+    for (const auto& mesh : meshes)
     {
         if (!visibility_filter(mesh->get_visibility_mask()))
         {
@@ -436,6 +433,8 @@ auto Base_renderer::update_draw_indirect_buffer(
 
 void Base_renderer::bind_material_buffer()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_material_writer.range.byte_count == 0)
     {
         return;
@@ -454,6 +453,8 @@ void Base_renderer::bind_material_buffer()
 
 void Base_renderer::bind_light_buffer()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_light_writer.range.byte_count == 0)
     {
         return;
@@ -472,6 +473,8 @@ void Base_renderer::bind_light_buffer()
 
 void Base_renderer::bind_camera_buffer()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_camera_writer.range.byte_count == 0)
     {
         return;
@@ -490,6 +493,8 @@ void Base_renderer::bind_camera_buffer()
 
 void Base_renderer::bind_primitive_buffer()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_primitive_writer.range.byte_count == 0)
     {
         return;
@@ -508,6 +513,8 @@ void Base_renderer::bind_primitive_buffer()
 
 void Base_renderer::bind_draw_indirect_buffer()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_draw_indirect_writer.range.byte_count == 0)
     {
         return;

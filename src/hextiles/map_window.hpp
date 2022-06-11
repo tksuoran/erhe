@@ -94,7 +94,7 @@ class Map_zoom_command
     : public erhe::application::Command
 {
 public:
-    explicit Map_zoom_command(
+    Map_zoom_command(
         Map_window& map_window,
         const float scale
     )
@@ -103,13 +103,30 @@ public:
         , m_scale     {scale}
     {
     }
-    //~Map_zoom_command() noexcept final {}
 
     auto try_call(erhe::application::Command_context& context) -> bool override;
 
 private:
     Map_window& m_map_window;
     float       m_scale;
+};
+
+class Map_grid_cycle_command
+    : public erhe::application::Command
+{
+public:
+    explicit Map_grid_cycle_command(
+        Map_window& map_window
+    )
+        : Command     {"Map.grid_cycle"}
+        , m_map_window{map_window}
+    {
+    }
+
+    auto try_call(erhe::application::Command_context& context) -> bool override;
+
+private:
+    Map_window& m_map_window;
 };
 
 class Map_window
@@ -146,6 +163,7 @@ public:
     auto mouse_scroll_try_ready() const -> bool;
     void scroll                (glm::vec2 delta);
     void scroll_tiles          (glm::vec2 delta);
+    void grid_cycle            ();
 
     void scroll_to    (const Tile_coordinate center_tile);
 
@@ -182,6 +200,7 @@ private:
     Map_scroll_command            m_scroll_down_command;
     Map_zoom_command              m_zoom_in_command;
     Map_zoom_command              m_zoom_out_command;
+    Map_grid_cycle_command        m_grid_cycle_command;
 
     std::unique_ptr<Pixel_lookup> m_pixel_lookup;
     int                           m_grid        {2};

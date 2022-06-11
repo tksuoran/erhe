@@ -2,6 +2,7 @@
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/pipeline.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace erhe::graphics
 {
@@ -32,6 +33,8 @@ void OpenGL_state_tracker::on_thread_enter()
 
 void OpenGL_state_tracker::reset()
 {
+    ERHE_PROFILE_FUNCTION
+
     shader_stages .reset();
     vertex_input  .reset();
     input_assembly.reset();
@@ -46,6 +49,8 @@ void OpenGL_state_tracker::reset()
 
 void OpenGL_state_tracker::execute(const Pipeline& pipeline)
 {
+    ERHE_PROFILE_FUNCTION
+
     shader_stages .execute(pipeline.data.shader_stages);
     vertex_input  .execute(pipeline.data.vertex_input);
     input_assembly.execute(pipeline.data.input_assembly);

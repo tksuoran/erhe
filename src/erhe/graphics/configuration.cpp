@@ -1,6 +1,7 @@
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/graphics/log.hpp"
+#include "erhe/log/log_fmt.hpp"
 
 #if !defined(WIN32)
 # include <csignal>
@@ -12,8 +13,6 @@
 
 namespace erhe::graphics
 {
-
-using erhe::log::Log;
 
 Instance::Info                   Instance::info;
 Instance::Limits                 Instance::limits;
@@ -66,13 +65,13 @@ void opengl_callback(
         return;
     }
 
-    log_configuration.info(
+    log_configuration->info(
         "GL debug message:\n"
         "source:   {}\n"
         "type:     {}\n"
         "id:       {:#08x}\n"
         "severity: {}\n"
-        "{}\n",
+        "{}",
         gl::c_str(source),
         gl::c_str(type),
         id,
@@ -168,9 +167,9 @@ void Instance::initialize()
     const auto gl_renderer    = (get_string)(gl::String_name::renderer);
     const auto gl_version_str = (get_string)(gl::String_name::version);
 
-    log_configuration.info("GL Vendor:     {}\n", gl_vendor);
-    log_configuration.info("GL Renderer:   {}\n", gl_renderer);
-    log_configuration.info("GL Version:    {}\n", gl_version_str.c_str());
+    log_configuration->info("GL Vendor:     {}", gl_vendor);
+    log_configuration->info("GL Renderer:   {}", gl_renderer);
+    log_configuration->info("GL Version:    {}", gl_version_str.c_str());
 
     auto versions = split(gl_version_str, '.');
 
@@ -180,12 +179,12 @@ void Instance::initialize()
     info.gl_version = (major * 100) + (minor * 10);
 
     gl::get_integer_v(gl::Get_p_name::max_texture_size, &limits.max_texture_size);
-    log_configuration.trace("max texture size: {}\n", limits.max_texture_size);
+    log_configuration->trace("max texture size: {}", limits.max_texture_size);
 
     gl::get_integer_v(gl::Get_p_name::max_vertex_attribs, &limits.max_vertex_attribs);
-    log_configuration.trace("max vertex attribs: {}\n", limits.max_vertex_attribs);
+    log_configuration->trace("max vertex attribs: {}", limits.max_vertex_attribs);
 
-    log_configuration.trace("GL Extensions:\n");
+    log_configuration->trace("GL Extensions:");
     {
         int num_extensions{0};
 
@@ -199,14 +198,14 @@ void Instance::initialize()
                 auto e = std::string(reinterpret_cast<const char*>(extension));
 
                 extensions.push_back(e);
-                log_configuration.trace("    {}\n", e);
+                log_configuration->trace("    {}", e);
             }
         }
     }
 
     {
         auto shading_language_version = (get_string)(gl::String_name::shading_language_version);
-        log_configuration.info("GLSL Version:  {}\n", shading_language_version);
+        log_configuration->info("GLSL Version:  {}", shading_language_version);
         versions = split(shading_language_version, '.');
 
         major = !versions.empty() ? to_int(digits_only(versions[0])) : 0;
@@ -214,8 +213,8 @@ void Instance::initialize()
         info.glsl_version = (major * 100) + minor;
     }
 
-    log_configuration.trace("glVersion:   {}\n", info.gl_version);
-    log_configuration.trace("glslVersion: {}\n", info.glsl_version);
+    log_configuration->trace("glVersion:   {}", info.gl_version);
+    log_configuration->trace("glslVersion: {}", info.glsl_version);
 
     gl::get_integer_v(gl::Get_p_name::max_3d_texture_size,              &limits.max_3d_texture_size);
     gl::get_integer_v(gl::Get_p_name::max_cube_map_texture_size,        &limits.max_cube_map_texture_size);
@@ -228,7 +227,7 @@ void Instance::initialize()
     if ((static_cast<unsigned int>(context_flags) & static_cast<unsigned int>(GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT)) != 0)
     {
         info.forward_compatible = true;
-        log_configuration.info("forwardCompatible\n");
+        log_configuration->info("forward compatible");
     }
 
     // GL 3.3 introduced context profile mask
@@ -237,12 +236,12 @@ void Instance::initialize()
     if ((static_cast<unsigned int>(context_profile_mask) & static_cast<unsigned int>(GL_CONTEXT_CORE_PROFILE_BIT)) != 0)
     {
         info.core_profile = true;
-        log_configuration.info("core_profile\n");
+        log_configuration->info("core profile");
     }
     if ((static_cast<unsigned int>(context_profile_mask) & static_cast<unsigned int>(GL_CONTEXT_COMPATIBILITY_PROFILE_BIT)) != 0)
     {
         info.compatibility_profile = true;
-        log_configuration.info("compatibility_profile\n");
+        log_configuration->info("compatibility profile");
     }
 
     gl::get_integer_v(gl::Get_p_name::max_texture_buffer_size, &limits.max_texture_buffer_size);
@@ -279,27 +278,27 @@ void Instance::initialize()
 
     implementation_defined.shader_storage_buffer_offset_alignment = static_cast<unsigned int>(shader_storage_buffer_offset_alignment);
     implementation_defined.uniform_buffer_offset_alignment        = static_cast<unsigned int>(uniform_buffer_offset_alignment);
-    log_configuration.info(
+    log_configuration->info(
         "uniform block ("
         "max size = {}, "
         "offset alignment = {}. "
         "max bindings = {}, "
         "max vertex blocks = {}, "
         "max fragment blocks = {}"
-        ")\n",
+        ")",
         limits.max_uniform_block_size,
         implementation_defined.uniform_buffer_offset_alignment,
         limits.max_uniform_buffer_bindings,
         limits.max_vertex_uniform_blocks,
         limits.max_fragment_uniform_blocks
     );
-    log_configuration.info(
+    log_configuration->info(
         "shader storage block ("
         "offset alignment = {}"
         ", max bindings = {}"
         ", max vertex blocks = {}"
         ", max fragment blocks = {}"
-        ")\n",
+        ")",
         implementation_defined.shader_storage_buffer_offset_alignment,
         limits.max_shader_storage_buffer_bindings,
         limits.max_vertex_shader_storage_blocks,
@@ -307,8 +306,6 @@ void Instance::initialize()
     );
 
     extensions.clear();
-
-    Log::set_text_color(log::Console_color::GRAY);
 }
 
 } // namespace erhe::graphics

@@ -2,6 +2,7 @@
 #include "erhe/graphics/log.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -179,23 +180,23 @@ auto Shader_stages::Create_info::final_source(
         {
             if (!fs::exists(shader.path))
             {
-                log_program.warn("Cannot load shader from non-existing file '{}'\n", shader.path.string());
+                log_program->warn("Cannot load shader from non-existing file '{}'", shader.path.string());
             }
             else
             {
                 if (!fs::is_regular_file(shader.path))
                 {
-                    log_program.warn("Cannot load shader from non-regular file '{}'\n", shader.path.string());
+                    log_program->warn("Cannot load shader from non-regular file '{}'", shader.path.string());
                 }
                 if (fs::is_empty(shader.path))
                 {
-                    log_program.warn("Cannot load shader from empty path\n");
+                    log_program->warn("Cannot load shader from empty path");
                 }
             }
         }
         catch (...)
         {
-            log_program.warn("Unspecified exception trying to load shader from empty path\n");
+            log_program->warn("Unspecified exception trying to load shader from empty path");
         }
 
         auto source = erhe::toolkit::read(shader.path);

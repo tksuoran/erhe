@@ -1,5 +1,6 @@
 #include "erhe/raytrace/embree/embree_device.hpp"
 #include "erhe/raytrace/log.hpp"
+#include "erhe/log/log_fmt.hpp"
 
 namespace erhe::raytrace
 {
@@ -35,11 +36,11 @@ void s_rtc_error_function(
 
 Embree_device::Embree_device()
 {
-    log_embree.trace("rtcNewDevice(nullptr)\n");
+    log_embree->trace("rtcNewDevice(nullptr)");
     m_device = rtcNewDevice("verbose=0");
     if (m_device == nullptr)
     {
-        log_scene.error("rtcNewDevice() failed\n");
+        log_scene->error("rtcNewDevice() failed");
         check_device_error();
         return;
     }
@@ -60,7 +61,7 @@ void Embree_device::check_device_error()
     //log_embree.trace("rtcGetDeviceError() = {}\n", error_code);
     if (error_code != RTC_ERROR_NONE)
     {
-        log_scene.error("error: {}\n", c_str(error_code));
+        log_scene->error("error: {}", c_str(error_code));
     }
 }
 
@@ -69,7 +70,7 @@ void Embree_device::rtc_error_function(
     const char* message
 )
 {
-    log_scene.error("error: {} - {}\n", c_str(error_code), message);
+    log_scene->error("error: {} - {}", c_str(error_code), message);
 }
 
 auto Embree_device::get_rtc_device() -> RTCDevice

@@ -9,6 +9,7 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <imgui.h>
 
@@ -163,6 +164,8 @@ void Post_processing::connect()
 
 void Post_processing::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     using erhe::graphics::Shader_stages;
 
     const erhe::application::Scoped_gl_context gl_context{
@@ -188,50 +191,55 @@ void Post_processing::initialize_component()
     m_reserved1_offset      = m_parameter_block->add_float("reserver1"         )->offset_in_parent();
     m_source_texture_offset = m_parameter_block->add_uvec2("source_texture", 32)->offset_in_parent();
 
-    const auto shader_path = fs::path("res") / fs::path("shaders");
-    const fs::path vs_path         = shader_path / fs::path("post_processing.vert");
-    const fs::path x_fs_path       = shader_path / fs::path("downsample_x.frag");
-    const fs::path y_fs_path       = shader_path / fs::path("downsample_y.frag");
-    const fs::path compose_fs_path = shader_path / fs::path("compose.frag");
-    Shader_stages::Create_info x_create_info{
-        .name             = "downsample_x",
-        .fragment_outputs = &m_fragment_outputs,
-    };
-    Shader_stages::Create_info y_create_info{
-        .name             = "downsample_y",
-        .fragment_outputs = &m_fragment_outputs,
-    };
-    Shader_stages::Create_info compose_create_info{
-        .name             = "compose",
-        .fragment_outputs = &m_fragment_outputs,
-    };
-
-    // GL_ARB_gpu_shader_int64
-    x_create_info      .extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-    y_create_info      .extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-    compose_create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-    x_create_info      .shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
-    y_create_info      .shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
-    compose_create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
-    x_create_info      .shaders.emplace_back(gl::Shader_type::fragment_shader, x_fs_path);
-    y_create_info      .shaders.emplace_back(gl::Shader_type::fragment_shader, y_fs_path);
-    compose_create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, compose_fs_path);
-    x_create_info      .add_interface_block(m_parameter_block.get());
-    y_create_info      .add_interface_block(m_parameter_block.get());
-    compose_create_info.add_interface_block(m_parameter_block.get());
-
-    Shader_stages::Prototype x_prototype      {x_create_info};
-    Shader_stages::Prototype y_prototype      {y_create_info};
-    Shader_stages::Prototype compose_prototype{compose_create_info};
-    m_downsample_x_shader_stages = std::make_unique<Shader_stages>(std::move(x_prototype));
-    m_downsample_y_shader_stages = std::make_unique<Shader_stages>(std::move(y_prototype));
-    m_compose_shader_stages      = std::make_unique<Shader_stages>(std::move(compose_prototype));
-    if (m_shader_monitor)
     {
-        m_shader_monitor->add(x_create_info,       m_downsample_x_shader_stages.get());
-        m_shader_monitor->add(y_create_info,       m_downsample_y_shader_stages.get());
-        m_shader_monitor->add(compose_create_info, m_compose_shader_stages.get());
+        ERHE_PROFILE_SCOPE("shader");
+
+        const auto shader_path = fs::path("res") / fs::path("shaders");
+        const fs::path vs_path         = shader_path / fs::path("post_processing.vert");
+        const fs::path x_fs_path       = shader_path / fs::path("downsample_x.frag");
+        const fs::path y_fs_path       = shader_path / fs::path("downsample_y.frag");
+        const fs::path compose_fs_path = shader_path / fs::path("compose.frag");
+        Shader_stages::Create_info x_create_info{
+            .name             = "downsample_x",
+            .fragment_outputs = &m_fragment_outputs,
+        };
+        Shader_stages::Create_info y_create_info{
+            .name             = "downsample_y",
+            .fragment_outputs = &m_fragment_outputs,
+        };
+        Shader_stages::Create_info compose_create_info{
+            .name             = "compose",
+            .fragment_outputs = &m_fragment_outputs,
+        };
+
+        // GL_ARB_gpu_shader_int64
+        x_create_info      .extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
+        y_create_info      .extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
+        compose_create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
+        x_create_info      .shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
+        y_create_info      .shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
+        compose_create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
+        x_create_info      .shaders.emplace_back(gl::Shader_type::fragment_shader, x_fs_path);
+        y_create_info      .shaders.emplace_back(gl::Shader_type::fragment_shader, y_fs_path);
+        compose_create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, compose_fs_path);
+        x_create_info      .add_interface_block(m_parameter_block.get());
+        y_create_info      .add_interface_block(m_parameter_block.get());
+        compose_create_info.add_interface_block(m_parameter_block.get());
+
+        Shader_stages::Prototype x_prototype      {x_create_info};
+        Shader_stages::Prototype y_prototype      {y_create_info};
+        Shader_stages::Prototype compose_prototype{compose_create_info};
+        m_downsample_x_shader_stages = std::make_unique<Shader_stages>(std::move(x_prototype));
+        m_downsample_y_shader_stages = std::make_unique<Shader_stages>(std::move(y_prototype));
+        m_compose_shader_stages      = std::make_unique<Shader_stages>(std::move(compose_prototype));
+        if (m_shader_monitor)
+        {
+            m_shader_monitor->add(x_create_info,       m_downsample_x_shader_stages.get());
+            m_shader_monitor->add(y_create_info,       m_downsample_y_shader_stages.get());
+            m_shader_monitor->add(compose_create_info, m_compose_shader_stages.get());
+        }
     }
+
     m_downsample_x_pipeline.data =
     {
         .name           = "Post Procesisng Downsample X",
@@ -306,10 +314,27 @@ Rendertarget::Rendertarget(
 
 void Rendertarget::bind_framebuffer()
 {
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
-    gl::viewport        (0, 0, texture->width(), texture->height());
-    const auto invalidate_attachment = gl::Invalidate_framebuffer_attachment::color_attachment0;
-    gl::invalidate_framebuffer(gl::Framebuffer_target::draw_framebuffer, 1, &invalidate_attachment);
+    ERHE_PROFILE_FUNCTION
+
+    {
+        ERHE_PROFILE_SCOPE("bind");
+        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
+    }
+
+    static constexpr std::string_view c_invalidate_framebuffer{"invalidate framebuffer"};
+
+    ERHE_PROFILE_GPU_SCOPE(c_invalidate_framebuffer)
+
+    {
+        ERHE_PROFILE_SCOPE("viewport");
+        gl::viewport        (0, 0, texture->width(), texture->height());
+    }
+
+    //{
+    //    ERHE_PROFILE_SCOPE("invalidate");
+    //    const auto invalidate_attachment = gl::Invalidate_framebuffer_attachment::color_attachment0;
+    //    gl::invalidate_framebuffer(gl::Framebuffer_target::draw_framebuffer, 1, &invalidate_attachment);
+    //}
 }
 
 void Post_processing::create_frame_resources()
@@ -337,6 +362,8 @@ auto Post_processing::current_frame_resources() -> Frame_resources&
 
 void Post_processing::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     //ImGui::DragInt("Taps",   &m_taps,   1.0f, 1, 32);
     //ImGui::DragInt("Expand", &m_expand, 1.0f, 0, 32);
     //ImGui::DragInt("Reduce", &m_reduce, 1.0f, 0, 32);
@@ -402,10 +429,15 @@ void Post_processing::imgui()
     return m_rendertargets.front().texture;
 }
 
+static constexpr std::string_view c_post_processing{"Post_processing"};
+
 void Post_processing::post_process(
     erhe::graphics::Texture* source_texture
 )
 {
+    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_GPU_SCOPE(c_post_processing)
+
     if (
         (source_texture == nullptr)    ||
         (source_texture->width () < 1) ||
@@ -489,12 +521,17 @@ void Post_processing::post_process(
     compose(source_texture);
 }
 
+static constexpr std::string_view c_downsample{"Post_processing::downsample"};
+
 void Post_processing::downsample(
     const erhe::graphics::Texture*  source_texture,
     Rendertarget&                   rendertarget,
     const erhe::graphics::Pipeline& pipeline
 )
 {
+    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_GPU_SCOPE(c_downsample)
+
     auto& parameter_buffer   = current_frame_resources().parameter_buffer;
     auto  parameter_gpu_data = parameter_buffer.map();
 
@@ -525,22 +562,47 @@ void Post_processing::downsample(
 
     m_pipeline_state_tracker->execute(pipeline);
 
-    gl::bind_buffer_range(
-        parameter_buffer.target(),
-        static_cast<GLuint>    (m_parameter_block->binding_point()),
-        static_cast<GLuint>    (parameter_buffer.gl_name()),
-        static_cast<GLintptr>  (m_parameter_writer.range.first_byte_offset),
-        static_cast<GLsizeiptr>(m_parameter_writer.range.byte_count)
-    );
-    gl::make_texture_handle_resident_arb(handle);
+    {
+        ERHE_PROFILE_SCOPE("bind parameter buffer");
 
-    gl::draw_arrays     (pipeline.data.input_assembly.primitive_topology, 0, 4);
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
-    gl::make_texture_handle_non_resident_arb(handle);
+        gl::bind_buffer_range(
+            parameter_buffer.target(),
+            static_cast<GLuint>    (m_parameter_block->binding_point()),
+            static_cast<GLuint>    (parameter_buffer.gl_name()),
+            static_cast<GLintptr>  (m_parameter_writer.range.first_byte_offset),
+            static_cast<GLsizeiptr>(m_parameter_writer.range.byte_count)
+        );
+    }
+
+    {
+        ERHE_PROFILE_SCOPE("make input texture resident");
+        gl::make_texture_handle_resident_arb(handle);
+    }
+
+    {
+        static constexpr std::string_view c_draw_arrays{"draw arrays"};
+
+        ERHE_PROFILE_GPU_SCOPE(c_draw_arrays)
+        gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, 4);
+    }
+    {
+        ERHE_PROFILE_SCOPE("bind fbo");
+        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+    }
+
+    {
+        ERHE_PROFILE_SCOPE("make input texture non resident");
+        gl::make_texture_handle_non_resident_arb(handle);
+    }
 }
+
+static constexpr std::string_view c_compose{"Post_processing::compose"};
 
 void Post_processing::compose(const erhe::graphics::Texture* source_texture)
 {
+    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_GPU_SCOPE(c_compose)
+
     auto& parameter_buffer   = current_frame_resources().parameter_buffer;
     auto  parameter_gpu_data = parameter_buffer.map();
 
@@ -559,37 +621,40 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
     gpu_float_data[word_offset++] = 0.0f;
 
     {
-        const uint64_t handle = erhe::graphics::get_handle(
-            *source_texture,
-            *m_programs->linear_sampler.get()
-        );
+        ERHE_PROFILE_SCOPE("make textures resident");
+        {
+            const uint64_t handle = erhe::graphics::get_handle(
+                *source_texture,
+                *m_programs->linear_sampler.get()
+            );
 
-        gl::make_texture_handle_resident_arb(handle);
+            gl::make_texture_handle_resident_arb(handle);
 
-        gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
-        gpu_uint_data[word_offset++] = handle >> 32u;
-        gpu_uint_data[word_offset++] = 0; // padding in uvec2 array in uniform buffer (std140)
-        gpu_uint_data[word_offset++] = 0;
-    }
+            gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
+            gpu_uint_data[word_offset++] = handle >> 32u;
+            gpu_uint_data[word_offset++] = 0; // padding in uvec2 array in uniform buffer (std140)
+            gpu_uint_data[word_offset++] = 0;
+        }
 
-    for (
-        size_t i = 1, end = std::min(m_rendertargets.size(), size_t{31});
-        i < end;
-        ++i
-    )
-    {
-        const auto&    source = m_rendertargets.at(i);
-        const uint64_t handle = erhe::graphics::get_handle(
-            *source.texture.get(),
-            *m_programs->linear_sampler.get()
-        );
+        for (
+            size_t i = 1, end = std::min(m_rendertargets.size(), size_t{31});
+            i < end;
+            ++i
+        )
+        {
+            const auto&    source = m_rendertargets.at(i);
+            const uint64_t handle = erhe::graphics::get_handle(
+                *source.texture.get(),
+                *m_programs->linear_sampler.get()
+            );
 
-        gl::make_texture_handle_resident_arb(handle);
+            gl::make_texture_handle_resident_arb(handle);
 
-        gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
-        gpu_uint_data[word_offset++] = handle >> 32u;
-        gpu_uint_data[word_offset++] = 0; // padding in uvec2 array in uniform buffer (std140)
-        gpu_uint_data[word_offset++] = 0;
+            gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
+            gpu_uint_data[word_offset++] = handle >> 32u;
+            gpu_uint_data[word_offset++] = 0; // padding in uvec2 array in uniform buffer (std140)
+            gpu_uint_data[word_offset++] = 0;
+        }
     }
     m_parameter_writer.write_offset += m_parameter_block->size_bytes();
     m_parameter_writer.end();
@@ -601,16 +666,26 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
 
     m_pipeline_state_tracker->execute(pipeline);
 
-    gl::bind_buffer_range(
-        parameter_buffer.target(),
-        static_cast<GLuint>    (m_parameter_block->binding_point()),
-        static_cast<GLuint>    (parameter_buffer.gl_name()),
-        static_cast<GLintptr>  (m_parameter_writer.range.first_byte_offset),
-        static_cast<GLsizeiptr>(m_parameter_writer.range.byte_count)
-    );
+    {
+        ERHE_PROFILE_SCOPE("bind parameter buffer");
+        gl::bind_buffer_range(
+            parameter_buffer.target(),
+            static_cast<GLuint>    (m_parameter_block->binding_point()),
+            static_cast<GLuint>    (parameter_buffer.gl_name()),
+            static_cast<GLintptr>  (m_parameter_writer.range.first_byte_offset),
+            static_cast<GLsizeiptr>(m_parameter_writer.range.byte_count)
+        );
+    }
 
-    gl::draw_arrays     (pipeline.data.input_assembly.primitive_topology, 0, 4);
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+    {
+        ERHE_PROFILE_SCOPE("draw arrays");
+        gl::draw_arrays     (pipeline.data.input_assembly.primitive_topology, 0, 4);
+    }
+
+    {
+        ERHE_PROFILE_SCOPE("unbind fbo");
+        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+    }
 
     {
         const uint64_t handle = erhe::graphics::get_handle(
@@ -621,19 +696,22 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
         gl::make_texture_handle_non_resident_arb(handle);
     }
 
-    for (
-        size_t i = 1, end = std::min(m_rendertargets.size(), size_t{32});
-        i < end;
-        ++i
-    )
     {
-        const auto&    source = m_rendertargets.at(i);
-        const uint64_t handle = erhe::graphics::get_handle(
-            *source.texture.get(),
-            *m_programs->linear_sampler.get()
-        );
+        ERHE_PROFILE_SCOPE("make textures non resident");
+        for (
+            size_t i = 1, end = std::min(m_rendertargets.size(), size_t{32});
+            i < end;
+            ++i
+        )
+        {
+            const auto&    source = m_rendertargets.at(i);
+            const uint64_t handle = erhe::graphics::get_handle(
+                *source.texture.get(),
+                *m_programs->linear_sampler.get()
+            );
 
-        gl::make_texture_handle_non_resident_arb(handle);
+            gl::make_texture_handle_non_resident_arb(handle);
+        }
     }
 }
 

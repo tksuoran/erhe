@@ -3,6 +3,7 @@
 #include "erhe/raytrace/embree/embree_scene.hpp"
 #include "erhe/raytrace/log.hpp"
 #include "erhe/log/log_glm.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace erhe::raytrace
 {
@@ -80,6 +81,8 @@ auto Embree_instance::get_mask() const -> uint32_t
 
 void Embree_instance::set_transform(const glm::mat4 transform)
 {
+    ERHE_PROFILE_FUNCTION
+
     const unsigned int time_step{0};
     //log_embree.trace(
     //    "rtcSetGeometryTransform(\n"
@@ -102,6 +105,7 @@ void Embree_instance::set_transform(const glm::mat4 transform)
         RTC_FORMAT_FLOAT4X4_COLUMN_MAJOR,
         &transform[0][0]
     );
+    m_scene->set_dirty();
 }
 
 void Embree_instance::set_scene(IScene* scene)
@@ -130,6 +134,8 @@ auto Embree_instance::get_embree_scene() const -> Embree_scene*
 
 void Embree_instance::commit()
 {
+    ERHE_PROFILE_FUNCTION
+
     //log_embree.trace("rtcCommitGeometry(instance = {})\n", m_debug_label);
     rtcCommitGeometry(m_geometry);
 }

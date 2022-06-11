@@ -3,11 +3,11 @@
 #include "erhe/graphics/log.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/graphics/vertex_format.hpp"
+#include "erhe/log/log_fmt.hpp"
 
 namespace erhe::graphics
 {
 
-using erhe::log::Log;
 using std::string;
 using std::string_view;
 
@@ -31,7 +31,7 @@ void Vertex_attribute_mappings::collect_attributes(
 
     if (vertex_buffer == nullptr)
     {
-        log_vertex_attribute_mappings.error("error: vertex buffer == nullptr");
+        log_vertex_attribute_mappings->error("error: vertex buffer == nullptr");
         return;
     }
 
@@ -44,12 +44,12 @@ void Vertex_attribute_mappings::collect_attributes(
             )
         )
         {
-            auto attribute = vertex_format.find_attribute(
+            const auto& attribute = vertex_format.find_attribute(
                 mapping.src_usage.type,
                 static_cast<unsigned int>(mapping.src_usage.index)
             );
-            log_vertex_attribute_mappings.trace(
-                "vertex attribute: shader type = {}, name = {}, usage = {}, data_type = {}, dimension = {}, index = {}\n",
+            log_vertex_attribute_mappings->trace(
+                "vertex attribute: shader type = {}, name = {}, usage = {}, data_type = {}, dimension = {}, index = {}",
                 gl::c_str(mapping.shader_type),
                 mapping.name,
                 Vertex_attribute::desc(attribute->usage.type),
@@ -60,12 +60,12 @@ void Vertex_attribute_mappings::collect_attributes(
 
                 if (attribute == nullptr)
             {
-                log_vertex_attribute_mappings.error("bad vertex input state: attribute == nullptr");
+                log_vertex_attribute_mappings->error("bad vertex input state: attribute == nullptr");
                 continue;
             }
             if (mapping.layout_location >= max_attribute_count)
             {
-                log_vertex_attribute_mappings.error("bad vertex input state: layout location >= max attribute count");
+                log_vertex_attribute_mappings->error("bad vertex input state: layout location >= max attribute count");
                 continue;
             }
 

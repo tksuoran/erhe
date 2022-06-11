@@ -1,16 +1,12 @@
 #include "erhe/toolkit/space_mouse.hpp"
-#include "erhe/log/log.hpp"
+#include "erhe/toolkit/log.hpp"
+
+#include <array>
 
 #pragma comment(lib, "Setupapi.lib")
 
 namespace erhe::toolkit
 {
-
-using Category      = erhe::log::Category;
-using Console_color = erhe::log::Console_color;
-using Level         = erhe::log::Level;
-
-Category log_space_mouse{1.0f, 1.0f, 0.6f, Console_color::YELLOW, Level::LEVEL_INFO};
 
 static constexpr uint16_t USB_VENDOR_ID_LOGITECH                = 0x046du;
 static constexpr uint16_t USB_VENDOR_ID_3DCONNECTION            = 0x256Fu;
@@ -58,23 +54,37 @@ auto Space_mouse_controller::initialize() -> bool
 
     while (device)
     {
-        if ((device->vendor_id == USB_VENDOR_ID_LOGITECH ||
-             device->vendor_id == USB_VENDOR_ID_3DCONNECTION) &&
-            (device->product_id == USB_DEVICE_ID_TRAVELER                ||
-             device->product_id == USB_DEVICE_ID_NAVIGATOR               ||
-             device->product_id == USB_DEVICE_ID_NAVIGATOR_FOR_NOTEBOOKS ||
-             device->product_id == USB_DEVICE_ID_SPACEEXPLORER           ||
-             device->product_id == USB_DEVICE_ID_SPACEMOUSE              ||
-             device->product_id == USB_DEVICE_ID_SPACEMOUSEPRO           ||
-             device->product_id == USB_DEVICE_ID_SPACEBALL5000           ||
-             device->product_id == USB_DEVICE_ID_SPACEPILOT              ||
-             device->product_id == USB_DEVICE_ID_SPACEPILOTPRO))
+        if (
+            (
+                device->vendor_id == USB_VENDOR_ID_LOGITECH ||
+                device->vendor_id == USB_VENDOR_ID_3DCONNECTION
+            ) &&
+            (
+                device->product_id == USB_DEVICE_ID_TRAVELER                ||
+                device->product_id == USB_DEVICE_ID_NAVIGATOR               ||
+                device->product_id == USB_DEVICE_ID_NAVIGATOR_FOR_NOTEBOOKS ||
+                device->product_id == USB_DEVICE_ID_SPACEEXPLORER           ||
+                device->product_id == USB_DEVICE_ID_SPACEMOUSE              ||
+                device->product_id == USB_DEVICE_ID_SPACEMOUSEPRO           ||
+                device->product_id == USB_DEVICE_ID_SPACEBALL5000           ||
+                device->product_id == USB_DEVICE_ID_SPACEPILOT              ||
+                device->product_id == USB_DEVICE_ID_SPACEPILOTPRO
+            )
+        )
         {
-            log_space_mouse.trace("3D mouse: vendor = {:04x}, product = {:04x}\n", device->vendor_id, device->product_id);
+            log_space_mouse->trace(
+                "3D mouse: vendor = {:04x}, product = {:04x}",
+                device->vendor_id,
+                device->product_id
+            );
             m_device = hid_open(device->vendor_id, device->product_id, nullptr);
             if (m_device != nullptr)
             {
-                log_space_mouse.trace("3D mouse: vendor = {:04x}, product = {:04x} open failed\n", device->vendor_id, device->product_id);
+                log_space_mouse->warn(
+                    "3D mouse: vendor = {:04x}, product = {:04x} open failed",
+                    device->vendor_id,
+                    device->product_id
+                );
                 break;
             }
         }
@@ -85,7 +95,7 @@ auto Space_mouse_controller::initialize() -> bool
 
     if (m_device == nullptr)
     {
-        log_space_mouse.trace("3D mouse: no supported device found\n");
+        log_space_mouse->info("3D mouse: no supported device found");
         return false;
     }
 
@@ -113,11 +123,11 @@ void Space_mouse_controller::run()
 
     while (m_listener.is_active())
     {
-        std::array<unsigned char, 7> data;
+        std::array<unsigned char, 7> data{};
         const int result = hid_read_timeout(m_device, data.data(), data.size(), 400); //when timeout
         if (result < 0)
         {
-            log_space_mouse.error("3D mouse: read() error\n");
+            log_space_mouse->error("3D mouse: read() error");
             stop();
         }
         if (result > 0)

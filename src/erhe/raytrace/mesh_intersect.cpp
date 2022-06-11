@@ -1,5 +1,6 @@
 #include "erhe/raytrace/mesh_intersect.hpp"
 #include "erhe/raytrace/log.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/scene/mesh.hpp"
 
@@ -136,8 +137,8 @@ auto intersect(
                 const bool hit = ray_triangle_intersect(origin_in_mesh, direction_in_mesh, v0, v1, v2, hit_t, hit_u, hit_v);
                 if (hit)
                 {
-                    log_geometry.trace(
-                        "hit polygon {} {}-{}-{} with t = {}\n",
+                    log_geometry->trace(
+                        "hit polygon {} {}-{}-{} with t = {}",
                         i.polygon_id,
                         first_point_id,
                         point_id,
@@ -159,7 +160,7 @@ auto intersect(
 
     if (out_t != std::numeric_limits<float>::max())
     {
-        log_geometry.trace("final hit polygon {} with t = {}\n", out_polygon_id, out_t);
+        log_geometry->trace("final hit polygon {} with t = {}", out_polygon_id, out_t);
     }
     return out_t != std::numeric_limits<float>::max();
 }

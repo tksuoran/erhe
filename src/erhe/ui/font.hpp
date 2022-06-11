@@ -16,6 +16,7 @@
 struct FT_LibraryRec_;
 struct FT_FaceRec_;
 struct hb_font_t;
+struct hb_buffer_t;
 
 namespace erhe::ui
 {
@@ -188,6 +189,7 @@ private:
 #endif
 #if defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
     hb_font_t*                               m_harfbuzz_font{nullptr};
+    hb_buffer_t*                             m_harfbuzz_buffer{nullptr};
 #endif
 };
 

@@ -23,6 +23,7 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -185,6 +186,8 @@ void Viewport_windows::update_viewport_windows()
 
 void Viewport_windows::render()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!m_configuration->viewports_hosted_in_imgui_windows)
     {
         const int   total_width  = m_editor_view->width();
@@ -239,11 +242,15 @@ Viewport_window::Viewport_window(
 
 void Viewport_window::try_hover(const int px, const int py)
 {
+    ERHE_PROFILE_FUNCTION
+
     m_is_hovered = m_viewport.hit_test(px, py);
 }
 
 void Viewport_window::update()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_camera != nullptr)
     {
         m_projection_transforms = m_camera->projection_transforms(m_viewport);
@@ -255,6 +262,8 @@ void Viewport_window::render(
     erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker
 )
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!should_render())
     {
         return;
@@ -288,6 +297,9 @@ void Viewport_window::render(
         {
             gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
         }
+
+        static constexpr std::string_view c_clear{"clear"};
+        ERHE_PROFILE_GPU_SCOPE(c_clear);
         clear(pipeline_state_tracker);
     }
     else
@@ -341,6 +353,8 @@ void Viewport_window::on_end()
 
 void Viewport_window::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     ImGui::SetNextItemWidth(150.0f);
     m_scene_root->camera_combo("Camera", m_camera);
     ImGui::SameLine();
@@ -476,7 +490,7 @@ auto Viewport_window::bind_multisample_framebuffer() -> bool
     );
     if (status != gl::Framebuffer_status::framebuffer_complete)
     {
-        log_framebuffer.error("draw framebuffer status = {}\n", c_str(status));
+        log_framebuffer->error("draw framebuffer status = {}", c_str(status));
     }
     ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
 
@@ -498,21 +512,12 @@ void Viewport_window::multisample_resolve()
 
     erhe::graphics::Scoped_debug_group pass_scope{c_multisample_resolve};
 
-    gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_framebuffer_multisample->gl_name());
-    if constexpr (true)
     {
-        const auto status = gl::check_named_framebuffer_status(
-            m_framebuffer_multisample->gl_name(),
-            gl::Framebuffer_target::draw_framebuffer
-        );
-        if (status != gl::Framebuffer_status::framebuffer_complete)
-        {
-            log_framebuffer.error("read framebuffer status = {}\n", c_str(status));
-        }
-        ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
+        ERHE_PROFILE_SCOPE("bind read")
+        gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_framebuffer_multisample->gl_name());
     }
 
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer_resolved->gl_name());
+#if !defined(NDEBUG)
     if constexpr (true)
     {
         const auto status = gl::check_named_framebuffer_status(
@@ -521,17 +526,41 @@ void Viewport_window::multisample_resolve()
         );
         if (status != gl::Framebuffer_status::framebuffer_complete)
         {
-            log_framebuffer.error("draw framebuffer status = {}\n", c_str(status));
+            log_framebuffer->error("read framebuffer status = {}", c_str(status));
         }
         ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
     }
+#endif
+
+    {
+        ERHE_PROFILE_SCOPE("bind draw")
+        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer_resolved->gl_name());
+    }
+
+#if !defined(NDEBUG)
+    if constexpr (true)
+    {
+        const auto status = gl::check_named_framebuffer_status(
+            m_framebuffer_multisample->gl_name(),
+            gl::Framebuffer_target::draw_framebuffer
+        );
+        if (status != gl::Framebuffer_status::framebuffer_complete)
+        {
+            log_framebuffer->error("draw framebuffer status = {}", c_str(status));
+        }
+        ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
+    }
+#endif
 
     gl::disable(gl::Enable_cap::scissor_test);
-    gl::blit_framebuffer(
-        0, 0, m_color_texture_multisample->width(), m_color_texture_multisample->height(),
-        0, 0, m_color_texture_resolved   ->width(), m_color_texture_resolved   ->height(),
-        gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
-    );
+    {
+        ERHE_PROFILE_SCOPE("blit")
+        gl::blit_framebuffer(
+            0, 0, m_color_texture_multisample->width(), m_color_texture_multisample->height(),
+            0, 0, m_color_texture_resolved   ->width(), m_color_texture_resolved   ->height(),
+            gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
+        );
+    }
 
     m_color_texture_resolved_for_present = m_color_texture_resolved;
 }
@@ -629,10 +658,10 @@ void Viewport_window::update_framebuffer()
         gl::named_framebuffer_draw_buffers(m_framebuffer_multisample->gl_name(), 1, &draw_buffers[0]);
         gl::named_framebuffer_read_buffer (m_framebuffer_multisample->gl_name(), gl::Color_buffer::color_attachment0);
 
-        log_framebuffer.trace("Multisample framebuffer:\n");
+        log_framebuffer->trace("Multisample framebuffer:");
         if (!m_framebuffer_multisample->check_status())
         {
-            log_framebuffer.error("Multisample framebuffer not complete");
+            log_framebuffer->error("Multisample framebuffer not complete");
             m_framebuffer_multisample.reset();
         }
     }
@@ -649,10 +678,10 @@ void Viewport_window::update_framebuffer()
         constexpr gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0};
         gl::named_framebuffer_draw_buffers(m_framebuffer_resolved->gl_name(), 1, &draw_buffers[0]);
 
-        log_framebuffer.trace("Multisample resolved framebuffer:\n");
+        log_framebuffer->trace("Multisample resolved framebuffer:");
         if (!m_framebuffer_resolved->check_status())
         {
-            log_framebuffer.error("Multisample resolved framebuffer not complete");
+            log_framebuffer->error("Multisample resolved framebuffer not complete");
             m_framebuffer_resolved.reset();
         }
     }

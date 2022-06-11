@@ -2,6 +2,8 @@
 
 #include "erhe/toolkit/verify.hpp"
 
+#include <fmt/format.h>
+
 #include <gsl/span>
 
 #include <cassert>
@@ -118,6 +120,7 @@ public:
 
     [[nodiscard]] auto get(const int x, const int y, const component_t c) const -> value_t
     {
+#ifndef NDEBUG
         if (
             (x < 0) ||
             (y < 0) ||
@@ -129,6 +132,7 @@ public:
         {
             ERHE_FATAL("invalid index\n");
         }
+#endif
 
         const size_t offset = static_cast<size_t>(
             (static_cast<size_t>(x) * static_cast<size_t>(m_components)) +
@@ -151,6 +155,7 @@ public:
         const component_t dst_component_offset
     )
     {
+#ifndef NDEBUG
         if (
             (src == nullptr)                 ||
             (width  < 0)                     ||
@@ -167,6 +172,7 @@ public:
         {
             ERHE_FATAL("invalid input\n");
         }
+#endif
 
         for (int iy = 0; iy < height; ++iy)
         {
@@ -333,6 +339,7 @@ public:
         const component_t           dst_component_offset
     )
     {
+#ifndef NDEBUG
         if (
             (width < 0) ||
             (height < 0) ||
@@ -341,6 +348,7 @@ public:
         {
             ERHE_FATAL("invalid index\n");
         }
+#endif
 
         // fmt::print(
         //     "blit: w:{} h:{} dx:{} dy:{} sp: {} sbw: {} sc:{} dco: {}\n",
@@ -422,6 +430,7 @@ public:
         const component_t           dst_component_offset
     )
     {
+#ifndef NDEBUG
         if (
             (width < 0) ||
             (height < 0) ||
@@ -430,6 +439,7 @@ public:
         {
             ERHE_FATAL("invalid index\n");
         }
+#endif
 
         const int dst_width {height};
         const int dst_height{width};

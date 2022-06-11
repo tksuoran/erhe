@@ -2,6 +2,7 @@
 #include "erhe/primitive/log.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/log/log_fmt.hpp"
 
 #include <glm/glm.hpp>
 
@@ -19,8 +20,11 @@ Property_maps::Property_maps(
 {
     ERHE_PROFILE_FUNCTION
 
-    log_primitive_builder.trace("Property_maps::Property_maps() for geometry = {}\n", geometry.name);
-    const erhe::log::Indenter indenter;
+    log_primitive_builder->trace(
+        "Property_maps::Property_maps() for geometry = {}\n",
+        geometry.name
+    );
+    //const erhe::log::Indenter indenter;
 
     polygon_normals      = geometry.polygon_attributes().find<vec3>(erhe::geometry::c_polygon_normals     );
     polygon_centroids    = geometry.polygon_attributes().find<vec3>(erhe::geometry::c_polygon_centroids   );
@@ -40,19 +44,19 @@ Property_maps::Property_maps(
 
     if (point_locations == nullptr)
     {
-        log_primitive_builder.error("geometry has no point locations\n");
+        log_primitive_builder->error("geometry has no point locations");
         return;
     }
 
     if (format_info.features.id)
     {
         polygon_ids_vector3 = polygon_attributes.create<vec3>(erhe::geometry::c_polygon_ids_vec3);
-        log_primitive_builder.trace("-created polygon_ids_vec3\n");
+        log_primitive_builder->trace("created polygon_ids_vec3");
 
         if (erhe::graphics::Instance::info.use_integer_polygon_ids)
         {
             polygon_ids_uint32 = polygon_attributes.create<unsigned int>(erhe::geometry::c_polygon_ids_uint);
-            log_primitive_builder.trace("-created polygon_ids_uint\n");
+            log_primitive_builder->trace("created polygon_ids_uint");
         }
     }
 
@@ -83,7 +87,7 @@ Property_maps::Property_maps(
 
     if (format_info.features.normal_smooth && (point_normals_smooth == nullptr))
     {
-        log_primitive_builder.trace("-computing point_normals_smooth\n");
+        log_primitive_builder->trace("computing point_normals_smooth");
         point_normals_smooth = point_attributes.create<vec3>(erhe::geometry::c_point_normals_smooth);
         geometry.for_each_point_const(
             [this, &geometry](auto& i)

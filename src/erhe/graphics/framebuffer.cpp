@@ -3,6 +3,7 @@
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <thread>
@@ -64,8 +65,8 @@ void dump_fbo_attachment(
             );
         }
 
-        log_framebuffer.trace(
-            "\t{} {} attachment {} samples = {} size = {} x {} format = {}\n",
+        log_framebuffer->trace(
+            "\t{} {} attachment {} samples = {} size = {} x {} format = {}",
             c_str(attachment),
             gl::enum_string(type),
             name,
@@ -84,7 +85,12 @@ void dump_fbo(int fbo_name)
     gl::get_named_framebuffer_parameter_iv(fbo_name, gl::Get_framebuffer_parameter::samples, &samples);
     gl::get_named_framebuffer_parameter_iv(fbo_name, gl::Get_framebuffer_parameter::sample_buffers, &sample_buffers);
 
-    log_framebuffer.trace("FBO {} uses {} samples {} sample buffers\n", fbo_name, samples, sample_buffers);
+    log_framebuffer->trace(
+        "FBO {} uses {} samples {} sample buffers",
+        fbo_name,
+        samples,
+        sample_buffers
+    );
 
     dump_fbo_attachment(fbo_name, gl::Framebuffer_attachment::color_attachment0);
     dump_fbo_attachment(fbo_name, gl::Framebuffer_attachment::depth_attachment);
@@ -228,7 +234,11 @@ auto Framebuffer::check_status() const -> bool
     );
     if (status != gl::Framebuffer_status::framebuffer_complete)
     {
-        log_framebuffer.warn("Framebuffer {} not complete: {}\n", gl_name(), gl::c_str(status));
+        log_framebuffer->warn(
+            "Framebuffer {} not complete: {}",
+            gl_name(),
+            gl::c_str(status)
+        );
         dump_fbo(gl_name());
         return false;
     }

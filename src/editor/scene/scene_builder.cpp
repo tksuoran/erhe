@@ -189,7 +189,7 @@ void Scene_builder::make_brushes()
 
     Task_queue execution_queue{get<erhe::application::Configuration>()->parallel_initialization};
 
-    constexpr float floor_size = 40.0f;
+    constexpr float floor_size = 400.0f;
 
     auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
         0.5f * vec3{floor_size, 1.0f, floor_size}
@@ -261,9 +261,9 @@ void Scene_builder::make_brushes()
     constexpr bool gltf_files              = false;
     constexpr bool obj_files               = false;
     constexpr bool platonic_solids         = true;
-    constexpr bool sphere                  = true;
+    constexpr bool sphere                  = false;
     constexpr bool torus                   = false;
-    constexpr bool cylinder                = true;
+    constexpr bool cylinder                = false;
     //constexpr bool cone                    = false;
     constexpr bool johnson_solids          = false;
     constexpr bool anisotropic_test_object = false;
@@ -712,115 +712,135 @@ void Scene_builder::make_mesh_nodes()
 
     const std::lock_guard<std::mutex> lock{m_scene_brushes_mutex};
 
-    std::sort(
-        m_scene_brushes.begin(),
-        m_scene_brushes.end(),
-        [](
-            const std::shared_ptr<Brush>& lhs,
-            const std::shared_ptr<Brush>& rhs
-        )
-        {
-            return lhs->name() < rhs->name();
-        }
-    );
+    {
+        ERHE_PROFILE_SCOPE("sort");
+
+        std::sort(
+            m_scene_brushes.begin(),
+            m_scene_brushes.end(),
+            [](
+                const std::shared_ptr<Brush>& lhs,
+                const std::shared_ptr<Brush>& rhs
+            )
+            {
+                return lhs->name() < rhs->name();
+            }
+        );
+    }
 
     std::vector<Pack_entry> pack_entries;
-    for (const auto& brush : m_scene_brushes)
+
     {
-        pack_entries.emplace_back(brush.get());
+        ERHE_PROFILE_SCOPE("emplace pack");
+
+        for (const auto& brush : m_scene_brushes)
+        {
+            //for (size_t i = 0; i < 100; ++i)
+            {
+                pack_entries.emplace_back(brush.get());
+            }
+        }
     }
 
     rbp::SkylineBinPack packer;
-    int group_width = 2;
-    int group_depth = 2;
+    int group_width = 10;
+    int group_depth = 10;
 
     constexpr float gap          = 0.4f;
     constexpr float bottom_y_pos = 0.01f;
 
     glm::ivec2 max_corner;
-    for (;;)
     {
-        max_corner = glm::ivec2{0, 0};
-        packer.Init(group_width, group_depth, false);
-
-        bool pack_failed = false;
-        for (auto& entry : pack_entries)
+        ERHE_PROFILE_SCOPE("pack");
+        for (;;)
         {
-            const auto* brush = entry.brush;
-            const vec3  size  = brush->gl_primitive_geometry.bounding_box.diagonal();
-            const int   width = static_cast<int>(256.0f * (size.x + gap));
-            const int   depth = static_cast<int>(256.0f * (size.z + gap));
-            entry.rectangle = packer.Insert(
-                width + 1,
-                depth + 1,
-                rbp::SkylineBinPack::LevelBottomLeft
-            );
-            if (
-                (entry.rectangle.width  == 0) ||
-                (entry.rectangle.height == 0)
-            )
+            ERHE_PROFILE_SCOPE("iteration");
+            max_corner = glm::ivec2{0, 0};
+            packer.Init(group_width, group_depth, false);
+
+            bool pack_failed = false;
+            for (auto& entry : pack_entries)
             {
-                pack_failed = true;
+                const auto* brush = entry.brush;
+                const vec3  size  = brush->gl_primitive_geometry.bounding_box.diagonal();
+                const int   width = static_cast<int>(256.0f * (size.x + gap));
+                const int   depth = static_cast<int>(256.0f * (size.z + gap));
+                entry.rectangle = packer.Insert(
+                    width + 1,
+                    depth + 1,
+                    rbp::SkylineBinPack::LevelBottomLeft
+                );
+                if (
+                    (entry.rectangle.width  == 0) ||
+                    (entry.rectangle.height == 0)
+                )
+                {
+                    pack_failed = true;
+                    break;
+                }
+                max_corner.x = std::max(max_corner.x, entry.rectangle.x + entry.rectangle.width);
+                max_corner.y = std::max(max_corner.y, entry.rectangle.y + entry.rectangle.height);
+            }
+
+            if (!pack_failed)
+            {
                 break;
             }
-            max_corner.x = std::max(max_corner.x, entry.rectangle.x + entry.rectangle.width);
-            max_corner.y = std::max(max_corner.y, entry.rectangle.y + entry.rectangle.height);
-        }
 
-        if (!pack_failed)
-        {
-            break;
-        }
+            //if (group_width <= group_depth)
+            {
+                group_width *= 3;
+            }
+            //else
+            {
+                group_depth *= 3;
+            }
 
-        if (group_width <= group_depth)
-        {
-            group_width *= 2;
+            //ERHE_VERIFY(group_width <= 16384);
         }
-        else
-        {
-            group_depth *= 2;
-        }
-
-        ERHE_VERIFY(group_width <= 16384);
     }
 
     size_t material_index = 0;
-    for (auto& entry : pack_entries)
     {
-        auto* brush = entry.brush;
-        float x     = static_cast<float>(entry.rectangle.x) / 256.0f;
-        float z     = static_cast<float>(entry.rectangle.y) / 256.0f;
-              x    += 0.5f * static_cast<float>(entry.rectangle.width ) / 256.0f;
-              z    += 0.5f * static_cast<float>(entry.rectangle.height) / 256.0f;
-              x    -= 0.5f * static_cast<float>(max_corner.x) / 256.0f;
-              z    -= 0.5f * static_cast<float>(max_corner.y) / 256.0f;
-        float y     = bottom_y_pos - brush->gl_primitive_geometry.bounding_box.min.y;
-        //x -= 0.5f * static_cast<float>(group_width);
-        //z -= 0.5f * static_cast<float>(group_depth);
-        //const auto& material = m_scene_root->materials().at(material_index);
-        const Instance_create_info brush_instance_create_info
-        {
-            .node_visibility_flags = (
-                erhe::scene::Node_visibility::visible |
-                erhe::scene::Node_visibility::content |
-                erhe::scene::Node_visibility::id      |
-                erhe::scene::Node_visibility::shadow_cast
-            ),
-            .physics_world         = m_scene_root->physics_world(),
-            .world_from_node       = erhe::toolkit::create_translation(x, y, z),
-            .material              = m_scene_root->materials().at(material_index),
-            .scale                 = 1.0f
-        };
-        auto instance = brush->make_instance(brush_instance_create_info);
-        m_scene_root->add_instance(instance);
+        ERHE_PROFILE_SCOPE("make instances");
 
-        do
+        for (auto& entry : pack_entries)
         {
-            material_index = (material_index + 1) % m_scene_root->materials().size();
+            auto* brush = entry.brush;
+            float x     = static_cast<float>(entry.rectangle.x) / 256.0f;
+            float z     = static_cast<float>(entry.rectangle.y) / 256.0f;
+                  x    += 0.5f * static_cast<float>(entry.rectangle.width ) / 256.0f;
+                  z    += 0.5f * static_cast<float>(entry.rectangle.height) / 256.0f;
+                  x    -= 0.5f * static_cast<float>(max_corner.x) / 256.0f;
+                  z    -= 0.5f * static_cast<float>(max_corner.y) / 256.0f;
+            float y     = bottom_y_pos - brush->gl_primitive_geometry.bounding_box.min.y;
+            //x -= 0.5f * static_cast<float>(group_width);
+            //z -= 0.5f * static_cast<float>(group_depth);
+            //const auto& material = m_scene_root->materials().at(material_index);
+            const Instance_create_info brush_instance_create_info
+            {
+                .node_visibility_flags = (
+                    erhe::scene::Node_visibility::visible |
+                    erhe::scene::Node_visibility::content |
+                    erhe::scene::Node_visibility::id      |
+                    erhe::scene::Node_visibility::shadow_cast
+                ),
+                .physics_world         = m_scene_root->physics_world(),
+                .world_from_node       = erhe::toolkit::create_translation(x, y, z),
+                .material              = m_scene_root->materials().at(material_index),
+                .scale                 = 1.0f
+            };
+            auto instance = brush->make_instance(brush_instance_create_info);
+            m_scene_root->add_instance(instance);
+
+            do
+            {
+                material_index = (material_index + 1) % m_scene_root->materials().size();
+            }
+            while (!m_scene_root->materials().at(material_index)->visible);
+
+            m_scene_root->scene().sanity_check();
         }
-        while (!m_scene_root->materials().at(material_index)->visible);
-
-        m_scene_root->scene().sanity_check();
     }
 }
 

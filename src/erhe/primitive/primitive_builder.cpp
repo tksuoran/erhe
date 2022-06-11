@@ -42,7 +42,7 @@ using Edge              = erhe::geometry::Edge;
 using Mesh_info         = erhe::geometry::Mesh_info;
 using erhe::graphics::Vertex_attribute;
 using gl::size_of_type;
-using erhe::log::Log;
+//using erhe::log::Log;
 
 using glm::vec2;
 using glm::vec3;
@@ -274,14 +274,14 @@ void Build_context_root::get_mesh_info()
     total_vertex_count += mi.vertex_count_corners;
     if (features.centroid_points)
     {
-        log_primitive_builder.trace("{} centroid point indices\n", mi.vertex_count_centroids);
+        //trace_fmt(log_primitive_builder, "{} centroid point indices\n", mi.vertex_count_centroids);
         total_vertex_count += mi.vertex_count_centroids;
     }
 
     // Count indices
     if (features.fill_triangles)
     {
-        log_primitive_builder.trace("{} triangle fill indices\n", mi.index_count_fill_triangles);
+        //trace_fmt(log_primitive_builder, "{} triangle fill indices\n", mi.index_count_fill_triangles);
         total_index_count += mi.index_count_fill_triangles;
         allocate_index_range(
             gl::Primitive_type::triangles,
@@ -294,7 +294,7 @@ void Build_context_root::get_mesh_info()
 
     if (features.edge_lines)
     {
-        log_primitive_builder.trace("{} edge line indices\n", mi.index_count_edge_lines);
+        //trace_fmt(log_primitive_builder, "{} edge line indices\n", mi.index_count_edge_lines);
         total_index_count += mi.index_count_edge_lines;
         allocate_index_range(
             gl::Primitive_type::lines,
@@ -305,7 +305,7 @@ void Build_context_root::get_mesh_info()
 
     if (features.corner_points)
     {
-        log_primitive_builder.trace("{} corner point indices\n", mi.index_count_corner_points);
+        //trace_fmt(log_primitive_builder, "{} corner point indices\n", mi.index_count_corner_points);
         total_index_count += mi.index_count_corner_points;
         allocate_index_range(
             gl::Primitive_type::points,
@@ -316,7 +316,7 @@ void Build_context_root::get_mesh_info()
 
     if (features.centroid_points)
     {
-        log_primitive_builder.trace("{} centroid point indices\n", mi.index_count_centroid_points);
+        //trace_fmt(log_primitive_builder, "{} centroid point indices\n", mi.index_count_centroid_points);
         total_index_count += mi.index_count_centroid_points;
         allocate_index_range(
             gl::Primitive_type::points,
@@ -325,7 +325,7 @@ void Build_context_root::get_mesh_info()
         );
     }
 
-    log_primitive_builder.trace("Total {} vertices\n", total_vertex_count);
+    //trace_fmt(log_primitive_builder, "Total {} vertices\n", total_vertex_count);
 }
 
 void Build_context_root::get_vertex_attributes()
@@ -365,9 +365,9 @@ void Build_context_root::allocate_index_buffer()
     const gl::Draw_elements_type index_type = build_info.buffer.index_type;
     const size_t index_type_size{size_of_type(index_type)};
 
-    log_primitive_builder.trace(
+    log_primitive_builder->trace(
         "allocating index buffer "
-        "total_index_count = {}, index type size = {}\n",
+        "total_index_count = {}, index type size = {}",
         total_index_count,
         index_type_size
     );
@@ -430,116 +430,6 @@ void Build_context_root::calculate_bounding_volume(
         primitive_geometry->bounding_box,
         primitive_geometry->bounding_sphere
     );
-#if 0
-    primitive_geometry->bounding_box_min = vec3{std::numeric_limits<float>::max()};
-    primitive_geometry->bounding_box_max = vec3{std::numeric_limits<float>::lowest()};
-
-    glm::vec3 x_min{std::numeric_limits<float>::max()};
-    glm::vec3 y_min{std::numeric_limits<float>::max()};
-    glm::vec3 z_min{std::numeric_limits<float>::max()};
-    glm::vec3 x_max{std::numeric_limits<float>::lowest()};
-    glm::vec3 y_max{std::numeric_limits<float>::lowest()};
-    glm::vec3 z_max{std::numeric_limits<float>::lowest()};
-
-    if (
-        (geometry.get_point_count() == 0) ||
-        (point_locations == nullptr)
-    )
-    {
-        primitive_geometry->bounding_box_min = vec3{0.0f};
-        primitive_geometry->bounding_box_max = vec3{0.0f};
-    }
-    else
-    {
-        for (
-            Point_id point_id = 0, end = geometry.get_point_count();
-            point_id < end;
-            ++point_id
-        )
-        {
-            if (point_locations->has(point_id))
-            {
-                const vec3 position = point_locations->get(point_id);
-                primitive_geometry->bounding_box_min = glm::min(primitive_geometry->bounding_box_min, position);
-                primitive_geometry->bounding_box_max = glm::max(primitive_geometry->bounding_box_max, position);
-
-                if (position.x < x_min.x) x_min = position;
-                if (position.x > x_max.x) x_max = position;
-                if (position.y < y_min.y) y_min = position;
-                if (position.y > y_max.y) y_max = position;
-                if (position.z < z_min.z) z_min = position;
-                if (position.z > z_max.z) z_max = position;
-            }
-        }
-
-        // Ritter's bounding sphere
-        // - Pick a point x from P, search a point y in P, which has the largest distance from x;
-        // - Search a point z in P, which has the largest distance from y.
-        //   Set up an initial ball B, with its centre as the midpoint of y and z,
-        //   the radius as half of the distance between y and z;
-        // - If all points in P are within ball B, then we get a bounding sphere.
-        //   Otherwise, let p be a point outside the ball, construct a new ball
-        //   covering both point p and previous ball.
-        //   Repeat this step until all points are covered.
-        const auto x_span_v = x_max - x_min;
-        const auto y_span_v = y_max - y_min;
-        const auto z_span_v = z_max - z_min;
-        const auto x_span   = glm::dot(x_span_v, x_span_v);
-        const auto y_span   = glm::dot(y_span_v, y_span_v);
-        const auto z_span   = glm::dot(z_span_v, z_span_v);
-
-        auto dia_1    = x_min;
-        auto dia_2    = x_max;
-        auto max_span = x_span;
-        if (y_span > max_span)
-        {
-            max_span = y_span;
-            dia_1    = y_min;
-            dia_2    = y_max;
-        }
-        if (z_span > max_span)
-        {
-            dia_1 = z_min;
-            dia_2 = z_max;
-        }
-
-        auto       center = (dia_1 + dia_2) / 2.0f;
-        const auto d0     = dia_2 - center;
-        auto       rad_sq = glm::dot(d0, d0);
-        auto       rad    = std::sqrt(rad_sq);
-
-        for (
-            Point_id point_id = 0, end = geometry.get_point_count();
-            point_id < end;
-            ++point_id
-        )
-        {
-            if (point_locations->has(point_id))
-            {
-                const vec3 position    = point_locations->get(point_id);
-                const auto d           = position - center;
-                const auto old_to_p_sq = glm::dot(d, d);
-                if (old_to_p_sq > rad_sq)
-                {
-                    const auto old_to_p = std::sqrt(old_to_p_sq);
-                    rad    = (rad + old_to_p) / 2.0f;
-                    rad_sq = rad * rad;
-                    const auto old_to_new = old_to_p - rad;
-                    center = (rad * center + old_to_new * position) / old_to_p;
-                }
-            }
-        }
-        primitive_geometry->bounding_sphere_center = center;
-        primitive_geometry->bounding_sphere_radius = rad;
-    }
-
-    log_primitive_builder.trace(
-        "calculated bounding box "
-        "min = {}, max = {}\n",
-        primitive_geometry->bounding_box_min,
-        primitive_geometry->bounding_box_max
-    );
-#endif
 }
 
 auto Primitive_builder::build() -> Primitive_geometry
@@ -556,13 +446,13 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
     Expects(primitive_geometry != nullptr);
 
     //m_primitive_geometry = primitive_geometry;
-    log_primitive_builder.trace(
-        "Primitive_builder::build(usage = {}, normal_style = {}) geometry = {}\n",
+    log_primitive_builder->trace(
+        "Primitive_builder::build(usage = {}, normal_style = {}) geometry = {}",
         gl::c_str(m_build_info.buffer.usage),
         c_str(m_normal_style),
         m_geometry.name
     );
-    const erhe::log::Indenter indenter;
+    //const erhe::log::Indenter indenter;
 
     Build_context build_context{
         m_geometry,
@@ -613,6 +503,8 @@ Build_context::~Build_context()
 
 void Build_context::build_polygon_id()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!root.build_info.format.features.id)
     {
         return;
@@ -646,6 +538,8 @@ auto Build_context::get_polygon_normal() -> vec3
 
 void Build_context::build_vertex_position()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (
         !root.build_info.format.features.position ||
         !root.attributes.position.is_valid()
@@ -658,40 +552,41 @@ void Build_context::build_vertex_position()
     const vec3 position = property_maps.point_locations->get(point_id);
     vertex_writer.write(root.attributes.position, position);
 
-    log_primitive_builder.trace(
-        "polygon {} point {} corner {} vertex {} location {}\n",
-        polygon_index, corner_id, point_id, vertex_index, position
-    );
+    //trace_fmt(
+    //    log_primitive_builder,
+    //    "polygon {} point {} corner {} vertex {} location {}\n",
+    //    polygon_index, corner_id, point_id, vertex_index, position
+    //);
 }
 
 void Build_context::build_vertex_normal()
 {
+    ERHE_PROFILE_FUNCTION
+
     const vec3 polygon_normal = get_polygon_normal();
     vec3 normal{0.0f, 1.0f, 0.0f};
 
     const auto& features = root.build_info.format.features;
 
-    if ((property_maps.corner_normals != nullptr) && property_maps.corner_normals->has(corner_id))
+    vec3 point_normal{0.0f, 1.0f, 0.0f};
+    bool found_point_normal{false};
+    if (property_maps.point_normals != nullptr)
     {
-        normal = property_maps.corner_normals->get(corner_id);
+        found_point_normal = property_maps.point_normals->maybe_get(point_id, point_normal);
     }
-    else if ((property_maps.point_normals != nullptr) && property_maps.point_normals->has(point_id))
+    if (!found_point_normal && (property_maps.point_normals_smooth != nullptr))
     {
-        normal = property_maps.point_normals->get(point_id);
-    }
-    else if ((property_maps.point_normals_smooth != nullptr) && property_maps.point_normals_smooth->has(point_id))
-    {
-        normal = property_maps.point_normals_smooth->get(point_id);
+        found_point_normal = property_maps.point_normals_smooth->maybe_get(point_id, point_normal);
     }
 
-    vec3 point_normal{0.0f, 1.0f, 0.0f};
-    if ((property_maps.point_normals != nullptr) && property_maps.point_normals->has(point_id))
+    bool found_normal{false};
+    if (property_maps.corner_normals != nullptr)
     {
-        point_normal = property_maps.point_normals->get(point_id);
+        found_normal = property_maps.corner_normals->maybe_get(corner_id, normal);
     }
-    else if ((property_maps.point_normals_smooth != nullptr) && property_maps.point_normals_smooth->has(point_id))
+    if (!found_normal)
     {
-        point_normal = property_maps.point_normals_smooth->get(point_id);
+        normal = point_normal;
     }
 
     if (features.normal && root.attributes.normal.is_valid())
@@ -708,21 +603,21 @@ void Build_context::build_vertex_normal()
             case Normal_style::corner_normals:
             {
                 vertex_writer.write(root.attributes.normal, normal);
-                log_primitive_builder.trace("point {} corner {} normal {}\n", point_id, corner_id, normal);
+                //trace_fmt(log_primitive_builder, "point {} corner {} normal {}\n", point_id, corner_id, normal);
                 break;
             }
 
             case Normal_style::point_normals:
             {
                 vertex_writer.write(root.attributes.normal, point_normal);
-                log_primitive_builder.trace("point {} corner {} point normal {}\n", point_id, corner_id, point_normal);
+                //trace_fmt(log_primitive_builder, "point {} corner {} point normal {}\n", point_id, corner_id, point_normal);
                 break;
             }
 
             case Normal_style::polygon_normals:
             {
                 vertex_writer.write(root.attributes.normal, polygon_normal);
-                log_primitive_builder.trace("point {} corner {} polygon normal {}\n", point_id, corner_id, polygon_normal);
+                //trace_fmt(log_primitive_builder, "point {} corner {} polygon normal {}\n", point_id, corner_id, polygon_normal);
                 break;
             }
 
@@ -736,7 +631,7 @@ void Build_context::build_vertex_normal()
     if (features.normal_flat && root.attributes.normal_flat.is_valid())
     {
         vertex_writer.write(root.attributes.normal_flat, polygon_normal);
-        log_primitive_builder.trace("point {} corner {} flat polygon normal {}\n", point_id, corner_id, polygon_normal);
+        //trace_fmt(log_primitive_builder, "point {} corner {} flat polygon normal {}\n", point_id, corner_id, polygon_normal);
     }
 
     if (features.normal_smooth && root.attributes.normal_smooth.is_valid())
@@ -746,7 +641,7 @@ void Build_context::build_vertex_normal()
         if ((property_maps.point_normals_smooth != nullptr) && property_maps.point_normals_smooth->has(point_id))
         {
             smooth_point_normal = property_maps.point_normals_smooth->get(point_id);
-            log_primitive_builder.trace("point {} corner {} smooth point normal {}\n", point_id, corner_id, smooth_point_normal);
+            //trace_fmt(log_primitive_builder, "point {} corner {} smooth point normal {}\n", point_id, corner_id, smooth_point_normal);
         }
         else
         {
@@ -760,23 +655,26 @@ void Build_context::build_vertex_normal()
 
 void Build_context::build_vertex_tangent()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!root.build_info.format.features.tangent || !root.attributes.tangent.is_valid())
     {
         return;
     }
 
     vec4 tangent{1.0f, 0.0f, 0.0, 1.0f};
-    if ((property_maps.corner_tangents != nullptr) && property_maps.corner_tangents->has(corner_id))
+    bool found{false};
+    if (property_maps.corner_tangents != nullptr)
     {
-        tangent = property_maps.corner_tangents->get(corner_id);
-        log_primitive_builder.trace("point {} corner {} tangent {}\n", point_id, corner_id, tangent);
+        found = property_maps.corner_tangents->maybe_get(corner_id, tangent);
+        //trace_fmt(log_primitive_builder, "point {} corner {} tangent {}\n", point_id, corner_id, tangent);
     }
-    else if ((property_maps.point_tangents != nullptr) && property_maps.point_tangents->has(point_id))
+    if (!found && (property_maps.point_tangents != nullptr))
     {
-        tangent = property_maps.point_tangents->get(point_id);
-        log_primitive_builder.trace("point {} corner {} point tangent {}\n", point_id, corner_id, tangent);
+        found = property_maps.point_tangents->maybe_get(point_id, tangent);
+        //trace_fmt(log_primitive_builder, "point {} corner {} point tangent {}\n", point_id, corner_id, tangent);
     }
-    else
+    if (!found)
     {
         //log_primitive_builder.warn("point_id {} corner {} unit x tangent\n", point_id, corner_id);
         used_fallback_tangent = true;
@@ -787,23 +685,26 @@ void Build_context::build_vertex_tangent()
 
 void Build_context::build_vertex_bitangent()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!root.build_info.format.features.bitangent || !root.attributes.bitangent.is_valid())
     {
         return;
     }
 
     vec4 bitangent{0.0f, 0.0f, 1.0, 1.0f};
-    if ((property_maps.corner_bitangents != nullptr) && property_maps.corner_bitangents->has(corner_id))
+    bool found{false};
+    if (property_maps.corner_bitangents != nullptr)
     {
-        bitangent = property_maps.corner_bitangents->get(corner_id);
-        log_primitive_builder.trace("point {} corner {} bitangent {}\n", point_id, corner_id, bitangent);
+        found = property_maps.corner_bitangents->maybe_get(corner_id, bitangent);
+        //trace_fmt(log_primitive_builder, "point {} corner {} bitangent {}\n", point_id, corner_id, bitangent);
     }
-    else if ((property_maps.point_bitangents != nullptr) && property_maps.point_bitangents->has(point_id))
+    if (!found && (property_maps.point_bitangents != nullptr))
     {
-        bitangent = property_maps.point_bitangents->get(point_id);
-        log_primitive_builder.trace("point {} corner {} point bitangent {}\n", point_id, corner_id, bitangent);
+        found = property_maps.point_bitangents->maybe_get(point_id, bitangent);
+        //trace_fmt(log_primitive_builder, "point {} corner {} point bitangent {}\n", point_id, corner_id, bitangent);
     }
-    else
+    if (!found)
     {
         //log_primitive_builder.warn("point {} corner {} unit z bitangent\n", point_id, corner_id);
         used_fallback_bitangent = true;
@@ -814,23 +715,25 @@ void Build_context::build_vertex_bitangent()
 
 void Build_context::build_vertex_texcoord()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!root.build_info.format.features.texcoord || !root.attributes.texcoord.is_valid())
     {
         return;
     }
 
     vec2 texcoord{0.0f, 0.0f};
-    if ((property_maps.corner_texcoords != nullptr) && property_maps.corner_texcoords->has(corner_id))
+    bool found{false};
+    if (property_maps.corner_texcoords != nullptr)
     {
-        texcoord = property_maps.corner_texcoords->get(corner_id);
-        log_primitive_builder.trace("point {} corner {} texcoord {}\n", point_id, corner_id, texcoord);
+        found = property_maps.corner_texcoords->maybe_get(corner_id, texcoord);
     }
-    else if ((property_maps.point_texcoords != nullptr) && property_maps.point_texcoords->has(point_id))
+    if (!found && (property_maps.point_texcoords != nullptr))
     {
-        texcoord = property_maps.point_texcoords->get(point_id);
-        log_primitive_builder.trace("point {} corner {} point texcoord {}\n", point_id, corner_id, texcoord);
+        found = property_maps.point_texcoords->maybe_get(point_id, texcoord);
+        //trace_fmt(log_primitive_builder, "point {} corner {} point texcoord {}\n", point_id, corner_id, texcoord);
     }
-    else
+    if (!found)
     {
         //log_primitive_builder.warn("point {} corner {} origo texcoord\n", point_id, corner_id);
         used_fallback_texcoord = true;
@@ -862,36 +765,39 @@ void Build_context::build_vertex_texcoord()
 
 void Build_context::build_vertex_color(const uint32_t /*polygon_corner_count*/)
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!root.build_info.format.features.color || !root.attributes.color.is_valid())
     {
         return;
     }
 
-    vec4 color;
-    if ((property_maps.corner_colors != nullptr) && property_maps.corner_colors->has(corner_id))
+    vec4 color{root.build_info.format.constant_color};
+    bool found{false};
+    if (property_maps.corner_colors != nullptr)
     {
-        color = property_maps.corner_colors->get(corner_id);
-        log_primitive_builder.trace("point {} corner {} corner color {}\n", point_id, corner_id, color);
+        found = property_maps.corner_colors->maybe_get(corner_id, color);
+        //trace_fmt(log_primitive_builder, "point {} corner {} corner color {}\n", point_id, corner_id, color);
     }
-    else if ((property_maps.point_colors != nullptr) && property_maps.point_colors->has(point_id))
+    if (!found && (property_maps.point_colors != nullptr))
     {
-        color = property_maps.point_colors->get(point_id);
-        log_primitive_builder.trace("point {} corner {} point color {}\n", point_id, corner_id, color);
+        found = property_maps.point_colors->maybe_get(point_id, color);
+        //trace_fmt(log_primitive_builder, "point {} corner {} point color {}\n", point_id, corner_id, color);
     }
-    else if ((property_maps.polygon_colors != nullptr) && property_maps.polygon_colors->has(polygon_id))
+    if (!found && (property_maps.polygon_colors != nullptr))
     {
-        color = property_maps.polygon_colors->get(polygon_id);
-        log_primitive_builder.trace("point {} corner {} polygon {} polygon color {}\n", point_id, corner_id, polygon_id, color);
+        found = property_maps.polygon_colors->maybe_get(polygon_id, color);
+        //trace_fmt(log_primitive_builder, "point {} corner {} polygon {} polygon color {}\n", point_id, corner_id, polygon_id, color);
     }
-    else
-    {
-        color = root.build_info.format.constant_color;
-        log_primitive_builder.trace("point {} corner {} constant color {}\n", point_id, corner_id, color);
-        //if (polygon_corner_count > 3)
-        //{
-        //    color = glm::vec4{unique_colors[(polygon_corner_count - 3) % 13], 1.0f};
-        //}
-    }
+    //if (!found)
+    //{
+    //    color = root.build_info.format.constant_color;
+    //    //trace_fmt(log_primitive_builder, "point {} corner {} constant color {}\n", point_id, corner_id, color);
+    //    //if (polygon_corner_count > 3)
+    //    //{
+    //    //    color = glm::vec4{unique_colors[(polygon_corner_count - 3) % 13], 1.0f};
+    //    //}
+    //}
 
     vertex_writer.write(root.attributes.color, color);
 }
@@ -922,9 +828,11 @@ void Build_context::build_centroid_normal()
     }
 
     vec3 normal{0.0f, 1.0f, 0.0f};
-    if ((property_maps.polygon_normals != nullptr) && property_maps.polygon_normals->has(polygon_id))
+    //bool found{false};
+    if (property_maps.polygon_normals != nullptr)
     {
-        normal = property_maps.polygon_normals->get(polygon_id);
+        //found =
+        property_maps.polygon_normals->maybe_get(polygon_id, normal);
     }
 
     if (features.normal && root.attributes.normal.is_valid())
@@ -963,6 +871,8 @@ void Build_context::build_triangle_fill_index()
 
 void Build_context::build_polygon_fill()
 {
+    ERHE_PROFILE_FUNCTION
+
     // TODO property_maps.corner_indices needs to be setup
     //      also if edge lines are wanted.
 
@@ -1031,24 +941,26 @@ void Build_context::build_polygon_fill()
 
     if (used_fallback_smooth_normal)
     {
-        log_primitive_builder.warn("Warning: Used fallback smooth normal\n");
+        log_primitive_builder->warn("Warning: Used fallback smooth normal");
     }
     if (used_fallback_tangent)
     {
-        log_primitive_builder.warn("Warning: Used fallback tangent\n");
+        log_primitive_builder->warn("Warning: Used fallback tangent");
     }
     if (used_fallback_bitangent)
     {
-        log_primitive_builder.warn("Warning: Used fallback bitangent\n");
+        log_primitive_builder->warn("Warning: Used fallback bitangent");
     }
     if (used_fallback_texcoord)
     {
-        log_primitive_builder.warn("Warning: Used fallback texcoord\n");
+        log_primitive_builder->warn("Warning: Used fallback texcoord");
     }
 }
 
 void Build_context::build_edge_lines()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!root.build_info.format.features.edge_lines)
     {
         return;
@@ -1076,12 +988,13 @@ void Build_context::build_edge_lines()
         {
             const auto v0 = property_maps.corner_indices->get(corner_id_a);
             const auto v1 = property_maps.corner_indices->get(corner_id_b);
-            log_primitive_builder.trace(
-                "edge {} point {} corner {} vertex {} - point {} corner {} vertex {}\n",
-                edge_id,
-                edge.a, corner_id_a, v0,
-                edge.b, corner_id_b, v1
-            );
+            //trace_fmt(
+            //    log_primitive_builder,
+            //    "edge {} point {} corner {} vertex {} - point {} corner {} vertex {}\n",
+            //    edge_id,
+            //    edge.a, corner_id_a, v0,
+            //    edge.b, corner_id_b, v1
+            //);
             index_writer.write_edge(v0, v1);
         }
     }
@@ -1089,6 +1002,8 @@ void Build_context::build_edge_lines()
 
 void Build_context::build_centroid_points()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!root.build_info.format.features.centroid_points)
     {
         return;

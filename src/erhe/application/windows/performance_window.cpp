@@ -1,12 +1,9 @@
 #include "erhe/application/windows/performance_window.hpp"
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/log.hpp"
-//#include "rendering.hpp"
-//#include "erhe/application/graphics/gradients.hpp"
-//#include "renderers/id_renderer.hpp"
-//#include "renderers/imgui_renderer.hpp"
-//#include "renderers/shadow_renderer.hpp"
 #include "erhe/graphics/debug.hpp"
+#include "erhe/log/log_fmt.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/timer.hpp"
 
 #include <gsl/gsl>
@@ -135,6 +132,8 @@ static inline T clamp(T value, T min_value, T max_value)
 
 void Plot::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     //ImGuiContext& g = *GImGui;
     ImGuiWindow* window = ImGui::GetCurrentWindow();
     if (window->SkipItems)
@@ -315,6 +314,7 @@ void Plot::imgui()
 
 void Performance_window::imgui()
 {
+    ERHE_PROFILE_FUNCTION
 
     const auto all_gpu_timers = erhe::graphics::Gpu_timer::all_gpu_timers();
     for (auto* timer : all_gpu_timers)
@@ -330,7 +330,7 @@ void Performance_window::imgui()
         }
         if (!found)
         {
-            log_performance.info("Added new GPU timer plot {}\n", timer->label());
+            log_performance->trace("Added new GPU timer plot {}", timer->label());
             m_gpu_timer_plots.emplace_back(timer);
         }
     }
@@ -352,7 +352,7 @@ void Performance_window::imgui()
                 const bool do_remove = !found;
                 if (do_remove)
                 {
-                    log_performance.info("Removed old GPU timer plot\n");
+                    log_performance->trace("Removed old GPU timer plot");
                 }
                 return do_remove;
             }
@@ -374,7 +374,7 @@ void Performance_window::imgui()
         }
         if (!found)
         {
-            log_performance.info("Added new CPU timer plot {}\n", timer->label());
+            log_performance->trace("Added new CPU timer plot {}", timer->label());
             m_cpu_timer_plots.emplace_back(timer);
         }
     }
@@ -396,7 +396,7 @@ void Performance_window::imgui()
                 const bool do_remove = !found;
                 if (do_remove)
                 {
-                    log_performance.info("Removed old CPU timer plot\n");
+                    log_performance->trace("Removed old CPU timer plot");
                 }
                 return do_remove;
             }

@@ -1,6 +1,7 @@
 #include "erhe/components/components.hpp"
 #include "erhe/concurrency/concurrent_queue.hpp"
 #include "erhe/components/log.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -69,7 +70,10 @@ void Components::deitialize_component(Component* component)
             const auto erase_count = m_fixed_step_updates.erase(fixed_step_update);
             if (erase_count == 0)
             {
-                log_components.error("Component/IUpdate_fixed_step {} not found\n", component->name());
+                log_components->error(
+                    "Component/IUpdate_fixed_step {} not found",
+                    component->name()
+                );
             }
         }
     }
@@ -81,7 +85,10 @@ void Components::deitialize_component(Component* component)
             const auto erase_count = m_once_per_frame_updates.erase(once_per_frame_update);
             if (erase_count == 0)
             {
-                log_components.error("Component/IUpdate_once_per_frame {} not found\n", component->name());
+                log_components->error(
+                    "Component/IUpdate_once_per_frame {} not found",
+                    component->name()
+                );
             }
         }
     }
@@ -90,7 +97,10 @@ void Components::deitialize_component(Component* component)
         const auto erase_count = m_components_to_process.erase(component);
         if (erase_count != 1)
         {
-            log_components.error("Component {} not found in components to process\n", component->name());
+            log_components->error(
+                "Component {} not found in components to process",
+                component->name()
+            );
         }
     }
 
@@ -108,11 +118,18 @@ void Components::deitialize_component(Component* component)
         m_components.erase(erase_it, m_components.end());
         if (erase_count == 0)
         {
-            log_components.error("Component {} not found\n", component->name());
+            log_components->error(
+                "Component {} not found",
+                component->name()
+            );
         }
         else if (erase_count != 1)
         {
-            log_components.error("Component {} found more than once: {}\n", component->name(), erase_count);
+            log_components->error(
+                "Component {} found more than once: {}",
+                component->name(),
+                erase_count
+            );
         }
     }
 }
@@ -123,7 +140,10 @@ void Components::cleanup_components()
 
     queue_all_components_to_be_processed();
 
-    log_components.info("Deinitializing {} Components:\n", m_components_to_process.size());
+    log_components->info(
+        "Deinitializing {} Components:",
+        m_components_to_process.size()
+    );
 
     for (;;)
     {
@@ -132,12 +152,12 @@ void Components::cleanup_components()
         {
             break;
         }
-        log_components.info("Deinitializing {}\n", component->name());
+        log_components->info("Deinitializing {}", component->name());
         deitialize_component(component);
     }
     if (m_components.size() > 0)
     {
-        log_components.error("Not all components were deinitialized\n");
+        log_components->error("Not all components were deinitialized");
         m_components.clear();
     }
 }
@@ -192,11 +212,13 @@ void Serial_execution_queue::wait()
 
 void Components::show_dependencies() const
 {
-    log_components.info("Component dependencies:\n");
+    ERHE_PROFILE_FUNCTION
+
+    log_components->info("Component dependencies:");
     for (auto const& component : m_components)
     {
-        log_components.info(
-            "    {} - {}:\n",
+        log_components->info(
+            "    {} - {}:",
             component->name(),
             component->processing_requires_main_thread()
                 ? "main"
@@ -204,8 +226,8 @@ void Components::show_dependencies() const
         );
         for (auto const& dependency : component->dependencies())
         {
-            log_components.info(
-                "        {} - {}\n",
+            log_components->info(
+                "        {} - {}",
                 dependency->name(),
                 dependency->processing_requires_main_thread()
                     ? "main"
@@ -225,8 +247,8 @@ void Components::initialize_component(const bool in_worker_thread)
         return;
     }
 
-    log_components.info(
-        "Initializing {} {}\n",
+    log_components->info(
+        "Initializing {} {}",
         component->name(),
         in_worker_thread
             ? "in worker thread"
@@ -258,6 +280,8 @@ void Components::initialize_component(const bool in_worker_thread)
 
 void Components::queue_all_components_to_be_processed()
 {
+    ERHE_PROFILE_FUNCTION
+
     std::transform(
         m_components.begin(),
         m_components.end(),
@@ -276,27 +300,35 @@ void Components::launch_component_initialization(const bool parallel)
     m_parallel_initialization                  = parallel;
     m_initialize_component_count_worker_thread = 0;
     m_initialize_component_count_main_thread   = 0;
-    for (auto const& component : m_components)
+
     {
-        component->connect();
-        component->set_connected();
-        if (
-            !parallel ||
-            component->processing_requires_main_thread()
-        )
+        ERHE_PROFILE_SCOPE("connect");
+
+        for (auto const& component : m_components)
         {
-            ++m_initialize_component_count_main_thread;
-        }
-        else
-        {
-            ++m_initialize_component_count_worker_thread;
+            component->connect();
+            component->set_connected();
+            if (
+                !parallel ||
+                component->processing_requires_main_thread()
+            )
+            {
+                ++m_initialize_component_count_main_thread;
+            }
+            else
+            {
+                ++m_initialize_component_count_worker_thread;
+            }
         }
     }
 
     show_dependencies();
     queue_all_components_to_be_processed();
 
-    log_components.info("Initializing {} Components:\n", m_components_to_process.size());
+    log_components->info(
+        "Initializing {} Components:",
+        m_components_to_process.size()
+    );
 
     if (parallel)
     {
@@ -307,15 +339,19 @@ void Components::launch_component_initialization(const bool parallel)
         m_execution_queue = std::make_unique<Serial_execution_queue>();
     }
 
-    const bool in_worker_thread = parallel;
-    for (size_t i = 0; i < m_initialize_component_count_worker_thread; ++i)
     {
-        m_execution_queue->enqueue(
-            [this, in_worker_thread]()
-            {
-                initialize_component(in_worker_thread);
-            }
-        );
+        ERHE_PROFILE_SCOPE("enqueue");
+
+        const bool in_worker_thread = parallel;
+        for (size_t i = 0; i < m_initialize_component_count_worker_thread; ++i)
+        {
+            m_execution_queue->enqueue(
+                [this, in_worker_thread]()
+                {
+                    initialize_component(in_worker_thread);
+                }
+            );
+        }
     }
 }
 
@@ -353,7 +389,7 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
 
         if (!m_parallel_initialization)
         {
-            log_components.error("no component to initialize\n");
+            log_components->error("no component to initialize");
             abort();
         }
 
@@ -379,7 +415,7 @@ auto Components::get_component_to_deinitialize() -> Component*
     );
     if (i == m_components_to_process.end())
     {
-        log_components.error("Unable to find component to deinitialize\n");
+        log_components->error("Unable to find component to deinitialize");
         return nullptr;
     }
     auto component = *i;

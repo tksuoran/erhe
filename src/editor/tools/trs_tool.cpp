@@ -55,7 +55,7 @@ void Trs_tool_drag_command::try_ready(
     erhe::application::Command_context& context
 )
 {
-    log_trs_tool.trace("try_ready\n");
+    log_trs_tool->trace("try_ready");
     if (m_trs_tool.on_drag_ready())
     {
         set_ready(context);
@@ -66,10 +66,10 @@ auto Trs_tool_drag_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
-    log_trs_tool.trace("try_call\n");
+    log_trs_tool->trace("try_call");
     if (!m_trs_tool.is_enabled())
     {
-        log_trs_tool.trace("not enabled\n");
+        log_trs_tool->trace("not enabled");
         return false;
     }
 
@@ -95,7 +95,7 @@ void Trs_tool_drag_command::on_inactive(
 )
 {
     static_cast<void>(context);
-    log_trs_tool.trace("on_inactive\n");
+    log_trs_tool->trace("on_inactive");
 
     if (state() != erhe::application::State::Inactive)
     {
@@ -228,7 +228,7 @@ void Trs_tool::initialize_component()
 
 void Trs_tool::set_translate(const bool enabled)
 {
-    log_trs_tool.trace("set_translate(enabled = {})\n", enabled);
+    log_trs_tool->trace("set_translate(enabled = {})", enabled);
 
     m_visualization.show_translate = enabled;
     update_visibility();
@@ -236,7 +236,7 @@ void Trs_tool::set_translate(const bool enabled)
 
 void Trs_tool::set_rotate(const bool enabled)
 {
-    log_trs_tool.trace("set_rotate(enabled = {})\n", enabled);
+    log_trs_tool->trace("set_rotate(enabled = {})", enabled);
 
     m_visualization.show_rotate = enabled;
     update_visibility();
@@ -251,8 +251,8 @@ void Trs_tool::set_node(
     const std::shared_ptr<erhe::scene::Node>& node
 )
 {
-    log_trs_tool.trace(
-        "set_node(node = {})\n",
+    log_trs_tool->trace(
+        "set_node(node = {})",
         node ? node->name() : "()"
     );
 
@@ -283,7 +283,7 @@ void Trs_tool::set_node(
 
     if (rigid_body != nullptr)
     {
-        log_trs_tool.trace("node has rigid_body\n");
+        log_trs_tool->trace("node has rigid_body");
         m_original_motion_mode = rigid_body->get_motion_mode();
         rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic);
         rigid_body->begin_move();
@@ -291,12 +291,12 @@ void Trs_tool::set_node(
 
     if (m_target_node)
     {
-        log_trs_tool.trace("has target node\n");
+        log_trs_tool->trace("has target node");
         m_visualization.root = m_target_node.get();
     }
     else
     {
-        log_trs_tool.trace("no target\n");
+        log_trs_tool->trace("no target");
         m_visualization.root = nullptr;
     }
 
@@ -364,10 +364,6 @@ void Trs_tool::Visualization::update_visibility(
     const bool visible
 )
 {
-    ERHE_PROFILE_FUNCTION
-
-    log_trs_tool.trace("update_visibility()\n");
-
     is_visible = visible;
     update_mesh_visibility(x_arrow_cylinder_mesh);
     update_mesh_visibility(x_arrow_cone_mesh    );
@@ -555,6 +551,8 @@ void Trs_tool::Visualization::initialize(
     Scene_root&  scene_root
 )
 {
+    ERHE_PROFILE_FUNCTION
+
     x_material         = scene_root.make_material("x",         vec3{1.00f, 0.00f, 0.0f});
     y_material         = scene_root.make_material("y",         vec3{0.23f, 1.00f, 0.0f});
     z_material         = scene_root.make_material("z",         vec3{0.00f, 0.23f, 1.0f});
@@ -567,9 +565,16 @@ void Trs_tool::Visualization::initialize(
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
 
+    ERHE_PROFILE_MESSAGE_LITERAL("arrow_cylinder")
     const auto arrow_cylinder = make_arrow_cylinder(mesh_memory);
+
+    ERHE_PROFILE_MESSAGE_LITERAL("arrow_cone")
     const auto arrow_cone     = make_arrow_cone    (mesh_memory);
+
+    ERHE_PROFILE_MESSAGE_LITERAL("box")
     const auto box            = make_box           (mesh_memory);
+
+    ERHE_PROFILE_MESSAGE_LITERAL("rotate_ring")
     const auto rotate_ring    = make_rotate_ring   (mesh_memory);
 
     x_arrow_cylinder_mesh  = make_mesh(scene_root, "X arrow cylinder", x_material, arrow_cylinder);
@@ -606,8 +611,6 @@ void Trs_tool::Visualization::initialize(
 
 void Trs_tool::imgui()
 {
-    ERHE_PROFILE_FUNCTION
-
     const bool   show_translate = m_visualization.show_translate;
     const bool   show_rotate    = m_visualization.show_rotate;
     const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};
@@ -697,8 +700,6 @@ void Trs_tool::imgui()
 
 auto Trs_tool::on_hover() -> bool
 {
-    log_trs_tool.trace("on_hover()\n");
-
     const auto& tool = m_pointer_context->get_hover(Pointer_context::tool_slot);
     if (!tool.valid || !tool.mesh)
     {
@@ -717,8 +718,6 @@ void Trs_tool::end_hover()
 
 auto Trs_tool::on_drag() -> bool
 {
-    log_trs_tool.trace("on_drag()\n");
-
     auto handle_type = get_handle_type(m_active_handle);
     switch (handle_type)
     {
@@ -744,7 +743,6 @@ auto Trs_tool::on_drag() -> bool
         case Handle_type::e_handle_type_none:
         default:
         {
-            log_trs_tool.trace("e_handle_type_none\n");
             return false;
         }
     }
@@ -752,12 +750,9 @@ auto Trs_tool::on_drag() -> bool
 
 auto Trs_tool::on_drag_ready() -> bool
 {
-    log_trs_tool.trace("on_drag_ready()\n");
-
     const auto& tool = m_pointer_context->get_hover(Pointer_context::tool_slot);
     if (!tool.valid || !tool.mesh)
     {
-        log_trs_tool.trace("false -> !valid || !mesh\n");
         return false;
     }
 
@@ -769,7 +764,6 @@ auto Trs_tool::on_drag_ready() -> bool
         !m_pointer_context->position_in_viewport_window().has_value()
     )
     {
-        log_trs_tool.trace("false -> no handle || no root || no position || no viewport\n");
         return false;
     }
 
@@ -790,7 +784,6 @@ auto Trs_tool::on_drag_ready() -> bool
     // For rotation
     if (is_rotate_active())
     {
-        log_trs_tool.trace("rotate active\n");
         const bool  world        = !m_local;
         const dvec3 n            = get_plane_normal(world);
         const dvec3 side         = get_plane_side  (world);
@@ -798,7 +791,6 @@ auto Trs_tool::on_drag_ready() -> bool
         const auto  intersection = project_pointer_to_plane(n, center);
         if (intersection.has_value())
         {
-            log_trs_tool.trace("has intersection\n");
             const dvec3 direction = normalize(intersection.value() - center);
             m_rotation = Rotation_context{
                 .normal               = n,
@@ -810,12 +802,10 @@ auto Trs_tool::on_drag_ready() -> bool
         }
         else
         {
-            log_trs_tool.trace("no intersection\n");
             return false;
         }
     }
 
-    log_trs_tool.trace("Trs tool state = Ready\n");
     //Tool::set_ready();
     update_visibility();
 
@@ -857,12 +847,9 @@ void Trs_tool::update_axis_translate()
 {
     ERHE_PROFILE_FUNCTION
 
-    log_trs_tool.trace("update_axis_translate()\n");
-
     const auto* window = m_pointer_context->window();
     if (window == nullptr)
     {
-        log_trs_tool.trace("no window\n");
         return;
     }
 
@@ -1134,25 +1121,25 @@ void Trs_tool::update_rotate()
 {
     ERHE_PROFILE_FUNCTION
 
-    // log_trs_tool.trace("update_rotate()\n");
+    // log_trs_tool->trace("update_rotate()");
 
     if (root() == nullptr)
     {
-        log_trs_tool.trace("no root\n");
+        log_trs_tool->trace("no root");
         return;
     }
 
     auto* const window = m_pointer_context->window();
     if (window == nullptr)
     {
-        log_trs_tool.trace("no window\n");
+        log_trs_tool->trace("no window");
         return;
     }
 
     auto* const camera = window->camera();
     if (camera == nullptr)
     {
-        log_trs_tool.trace("no camera\n");
+        log_trs_tool->trace("no camera");
         return;
     }
 
@@ -1161,11 +1148,11 @@ void Trs_tool::update_rotate()
     //const dvec3  V       = normalize(m_drag.initial_local_from_world * vec4{V0, 0.0});
     //const double v_dot_n = dot(V, m_rotation.normal);
     bool ready_to_rotate{false};
-    //log_trs_tool.trace("R: {} @ {}\n", root()->name(), root()->position_in_world());
-    //log_trs_tool.trace("C: {} @ {}\n", camera->name(), camera->position_in_world());
-    //log_trs_tool.trace("V: {}\n", vec3{V});
-    //log_trs_tool.trace("N: {}\n", vec3{m_rotation.normal});
-    //log_trs_tool.trace("V.N = {}\n", v_dot_n);
+    //log_trs_tool->trace("R: {} @ {}", root()->name(), root()->position_in_world());
+    //log_trs_tool->trace("C: {} @ {}", camera->name(), camera->position_in_world());
+    //log_trs_tool->trace("V: {}", vec3{V});
+    //log_trs_tool->trace("N: {}", vec3{m_rotation.normal});
+    //log_trs_tool->trace("V.N = {}", v_dot_n);
     //if (std::abs(v_dot_n) > c_parallel_threshold) TODO
     {
         ready_to_rotate = update_rotate_circle_around();
@@ -1174,7 +1161,6 @@ void Trs_tool::update_rotate()
     if (!ready_to_rotate)
     {
         ready_to_rotate = update_rotate_parallel();
-        log_trs_tool.trace("Trs parallel: {}\n", ready_to_rotate);
     }
     if (ready_to_rotate)
     {
@@ -1397,8 +1383,6 @@ void Trs_tool::tool_render(
 
 void Trs_tool::end_drag()
 {
-    log_trs_tool.info("Trs_tool::end_drag()\n");
-
     m_active_handle                  = Handle::e_handle_none;
     m_drag.initial_position_in_world = dvec3{0.0};
     m_drag.initial_world_from_local  = dmat4{1};
@@ -1523,7 +1507,7 @@ void Trs_tool::update_transforms()
 
 void Trs_tool::on_enable_state_changed()
 {
-    log_trs_tool.info("on_enable_state_changed()\n");
+    log_trs_tool->info("on_enable_state_changed()");
 
     update_visibility();
 }

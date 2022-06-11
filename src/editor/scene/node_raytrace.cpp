@@ -112,6 +112,8 @@ Node_raytrace::Node_raytrace(
 
 void Node_raytrace::initialize()
 {
+    ERHE_PROFILE_FUNCTION
+
     m_flag_bits |= INode_attachment::c_flag_bit_is_raytrace;
 
     m_geometry = erhe::raytrace::IGeometry::create_unique(
@@ -147,12 +149,19 @@ void Node_raytrace::initialize()
         triangle_size,
         triangle_count
     );
-    log_raytrace.info("{}:\n", m_source_geometry->name);
-    m_geometry->commit();
+    SPDLOG_LOGGER_INFO(log_raytrace, "{}:", m_source_geometry->name);
 
-    m_scene = erhe::raytrace::IScene::create_unique(
-        m_source_geometry->name + "_scene"
-    );
+    {
+        ERHE_PROFILE_SCOPE("geometry commit");
+        m_geometry->commit();
+    }
+
+    {
+        ERHE_PROFILE_SCOPE("create scene");
+        m_scene = erhe::raytrace::IScene::create_unique(
+            m_source_geometry->name + "_scene"
+        );
+    }
 
     m_scene->attach(m_geometry.get());
 
@@ -161,7 +170,10 @@ void Node_raytrace::initialize()
     );
 
     m_instance->set_scene(m_scene.get());
-    m_instance->commit();
+    {
+        ERHE_PROFILE_SCOPE("instance commit");
+        m_instance->commit();
+    }
     m_instance->set_user_data(this);
 }
 
@@ -198,6 +210,8 @@ void Node_raytrace::on_attached_to(erhe::scene::Node* node)
 
 void Node_raytrace::on_node_transform_changed()
 {
+    ERHE_PROFILE_FUNCTION
+
     auto* node = get_node();
     m_instance->set_transform(node->world_from_node());
     m_instance->commit();
@@ -208,17 +222,18 @@ void Node_raytrace::on_node_visibility_mask_changed(const uint64_t mask)
     const bool node_visible = (mask & erhe::scene::Node_visibility::visible) != 0;
     if (node_visible && !m_instance->is_enabled())
     {
-        log_raytrace.trace("enabling {} node raytrace\n", get_node()->name());
+        SPDLOG_LOGGER_TRACE(log_raytrace, "enabling {} node raytrace", get_node()->name());
         m_instance->enable();
     }
     else if (!node_visible && m_instance->is_enabled())
     {
-        log_raytrace.trace("disable {} node raytrace\n", get_node()->name());
+        SPDLOG_LOGGER_TRACE(log_raytrace, "disable {} node raytrace", get_node()->name());
         m_instance->disable();
     }
 
-    log_raytrace.trace(
-        "node {} visible = {}, node raytrace enabled = {}\n",
+    SPDLOG_LOGGER_TRACE(
+        log_raytrace,
+        "node {} visible = {}, node raytrace enabled = {}",
         get_node()->name(),
         node_visible,
         m_instance->is_enabled()
@@ -297,9 +312,7 @@ auto as_raytrace(
     return std::dynamic_pointer_cast<Node_raytrace>(attachment);
 }
 
-auto get_raytrace(
-    erhe::scene::Node* node
-) -> std::shared_ptr<Node_raytrace>
+auto get_raytrace(erhe::scene::Node* node) -> std::shared_ptr<Node_raytrace>
 {
     for (const auto& attachment : node->attachments())
     {

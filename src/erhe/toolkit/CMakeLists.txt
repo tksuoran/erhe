@@ -9,6 +9,8 @@ erhe_target_sources_grouped(
     filesystem.hpp
     math_util.cpp
     math_util.hpp
+    log.cpp
+    log.hpp
     optional.hpp
     profile.hpp
     timer.cpp
@@ -46,6 +48,7 @@ target_link_libraries(
         optional_lite
     PRIVATE
         erhe::gl
+        erhe::log
         fmt::fmt
         glm::glm
         Microsoft.GSL::GSL

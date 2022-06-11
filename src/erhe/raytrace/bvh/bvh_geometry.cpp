@@ -7,6 +7,7 @@
 #include "erhe/raytrace/log.hpp"
 #include "erhe/raytrace/ray.hpp"
 
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/timer.hpp"
 
 #include <fmt/chrono.h>
@@ -190,20 +191,20 @@ void Bvh_geometry::commit()
     const auto duration = build_timer.duration().value();
     if (duration >= std::chrono::milliseconds(1))
     {
-        log_geometry.info("build time:             {}\n", std::chrono::duration_cast<std::chrono::milliseconds>(build_timer.duration().value()));
+        info_fmt(log_geometry, "build time:             {}\n", std::chrono::duration_cast<std::chrono::milliseconds>(build_timer.duration().value()));
     }
     else if (duration >= std::chrono::microseconds(1))
     {
-        log_geometry.info("build time:             {}\n", std::chrono::duration_cast<std::chrono::microseconds>(build_timer.duration().value()));
+        info_fmt(log_geometry, "build time:             {}\n", std::chrono::duration_cast<std::chrono::microseconds>(build_timer.duration().value()));
     }
     else
     {
-        log_geometry.info("build time:             {}\n", build_timer.duration().value());
+        info_fmt(log_geometry, "build time:             {}\n", build_timer.duration().value());
     }
-    log_geometry.info("bvh triangle count:     {}\n", m_triangles.size());
-    log_geometry.info("bvh point count:        {}\n", m_points.size());
-    log_geometry.info("bounding box volume:    {}\n", m_bounding_box.volume());
-    log_geometry.info("bounding sphere volume: {}\n", m_bounding_sphere.volume());
+    info_fmt(log_geometry, "bvh triangle count:     {}\n", m_triangles.size());
+    info_fmt(log_geometry, "bvh point count:        {}\n", m_points.size());
+    info_fmt(log_geometry, "bounding box volume:    {}\n", m_bounding_box.volume());
+    info_fmt(log_geometry, "bounding sphere volume: {}\n", m_bounding_sphere.volume());
 }
 
 void Bvh_geometry::enable()

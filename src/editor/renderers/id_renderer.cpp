@@ -16,10 +16,11 @@
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/scene.hpp"
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
+#include "erhe/log/log_fmt.hpp"
+#include "erhe/scene/camera.hpp"
+#include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -300,7 +301,7 @@ void Id_renderer::render(const Render_parameters& parameters)
             const auto status = gl::check_named_framebuffer_status(m_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
             if (status != gl::Framebuffer_status::framebuffer_complete)
             {
-                log_framebuffer.error("draw framebuffer status = {}\n", c_str(status));
+                log_framebuffer->error("draw framebuffer status = {}", c_str(status));
             }
             ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
         }
@@ -310,7 +311,7 @@ void Id_renderer::render(const Render_parameters& parameters)
             const auto status = gl::check_named_framebuffer_status(m_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
             if (status != gl::Framebuffer_status::framebuffer_complete)
             {
-                log_framebuffer.error("read framebuffer status = {}\n", c_str(status));
+                log_framebuffer->error("read framebuffer status = {}", c_str(status));
             }
             ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
         }

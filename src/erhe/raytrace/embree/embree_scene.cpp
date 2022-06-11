@@ -4,6 +4,7 @@
 #include "erhe/raytrace/embree/embree_instance.hpp"
 #include "erhe/raytrace/log.hpp"
 #include "erhe/raytrace/ray.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace erhe::raytrace
 {
@@ -35,7 +36,7 @@ Embree_scene::Embree_scene(const std::string_view debug_label)
     //log_embree.trace("rtcNewScene() = {}\n", debug_label);
     if (m_scene == nullptr)
     {
-        log_scene.error("rtcNewDevice() failed\n");
+        log_scene->error("rtcNewDevice() failed");
         Embree_device::get_instance().check_device_error();
         return;
     }
@@ -56,6 +57,8 @@ constexpr size_t s_grow = 256;
 
 void Embree_scene::attach(IGeometry* geometry)
 {
+    ERHE_PROFILE_FUNCTION
+
     auto* const embree_geometry = reinterpret_cast<Embree_geometry*>(geometry);
     const auto hgeometry        = embree_geometry->get_rtc_geometry();
     embree_geometry->geometry_id = rtcAttachGeometry(
@@ -85,6 +88,8 @@ void Embree_scene::attach(IGeometry* geometry)
 
 void Embree_scene::attach(IInstance* instance)
 {
+    ERHE_PROFILE_FUNCTION
+
     auto* const embree_instance = reinterpret_cast<Embree_instance*>(instance);
     const auto  hgeometry       = embree_instance->get_rtc_geometry();
     embree_instance->geometry_id = rtcAttachGeometry(
@@ -133,6 +138,8 @@ void Embree_scene::detach(IGeometry* geometry)
 
 void Embree_scene::detach(IInstance* instance)
 {
+    ERHE_PROFILE_FUNCTION
+
     auto* const embree_instance = reinterpret_cast<Embree_instance*>(instance);
     const auto  geometry_id     = embree_instance->geometry_id;
     //if (geometry_id < m_instance_map.size())
@@ -152,16 +159,20 @@ void Embree_scene::detach(IInstance* instance)
 
 void Embree_scene::commit()
 {
+    ERHE_PROFILE_FUNCTION
+
     //log_embree.trace("rtcCommitScene({})\n", m_debug_label);
-    //if (m_dirty)
-    //{
+    if (m_dirty)
+    {
         rtcCommitScene(m_scene);
-    //m_dirty = false;
-    //}
+        m_dirty = false;
+    }
 }
 
 void Embree_scene::intersect(Ray& ray, Hit& hit)
 {
+    ERHE_PROFILE_FUNCTION
+
     RTCIntersectContext context;
     RTCRayHit ray_hit{
         .ray = {
@@ -232,6 +243,11 @@ void Embree_scene::intersect(Ray& ray, Hit& hit)
             ? get_geometry_from_id(ray_hit.hit.geomID)
             : nullptr;
     }
+}
+
+void Embree_scene::set_dirty()
+{
+    m_dirty = true;
 }
 
 auto Embree_scene::get_rtc_scene() -> RTCScene

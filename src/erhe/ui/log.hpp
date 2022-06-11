@@ -5,7 +5,9 @@
 namespace erhe::ui
 {
 
-extern erhe::log::Category log_text_buffer;
-extern erhe::log::Category log_font;
+extern std::shared_ptr<spdlog::logger> log_text_buffer;
+extern std::shared_ptr<spdlog::logger> log_font;
+
+void initialize_logging();
 
 } // namespace erhe::ui

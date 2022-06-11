@@ -5,7 +5,9 @@
 namespace erhe::primitive
 {
 
-extern erhe::log::Category log_primitive_builder;
-extern erhe::log::Category log_primitive;
+extern std::shared_ptr<spdlog::logger> log_primitive_builder;
+extern std::shared_ptr<spdlog::logger> log_primitive;
+
+void initialize_logging();
 
 } // namespace erhe::primitive

@@ -12,6 +12,7 @@
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <gsl/gsl>
 #include <imgui.h>
@@ -47,6 +48,8 @@ void Layers_window::initialize_component()
 
 void Layers_window::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     const ImGuiTreeNodeFlags parent_flags{
         ImGuiTreeNodeFlags_OpenOnArrow       |
         ImGuiTreeNodeFlags_OpenOnDoubleClick |

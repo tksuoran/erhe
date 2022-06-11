@@ -5,6 +5,7 @@
 #include "erhe/physics/jolt/glm_conversions.hpp"
 #include "erhe/physics/idebug_draw.hpp"
 #include "erhe/physics/log.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -23,7 +24,7 @@ static void TraceImpl(const char* inFMT, ...)
     std::array<char, 1024> buffer{};
     vsnprintf(buffer.data(), buffer.size(), inFMT, list);
 
-    log_physics.info("{}", buffer.data());
+    log_physics->info("{}", buffer.data());
 }
 
 #ifdef JPH_ENABLE_ASSERTS
@@ -36,8 +37,12 @@ static auto AssertFailedImpl(
     unsigned int inLine
 ) -> bool
 {
-    log_physics.error(
-        "{}:{} ({}) {}", inFile, inLine, inExpression, (inMessage != nullptr) ? inMessage : ""
+    log_physics->error(
+        "{}:{} ({}) {}",
+        inFile,
+        inLine,
+        inExpression,
+        (inMessage != nullptr) ? inMessage : ""
     );
 	// Breakpoint
 	return true;
@@ -165,14 +170,15 @@ Jolt_world::Jolt_world()
     JPH::Trace = TraceImpl;
 	JPH_IF_ENABLE_ASSERTS(JPH::AssertFailed = AssertFailedImpl;)
 
+    JPH::Factory::sInstance = new JPH::Factory();
     JPH::RegisterTypes();
 
-	const unsigned int cMaxBodies             = 1024;
+	const unsigned int cMaxBodies             = 1024 * 32;
 	const unsigned int cNumBodyMutexes        = 0;
-	const unsigned int cMaxBodyPairs          = 1024;
+	const unsigned int cMaxBodyPairs          = 1024 * 8;
 	const unsigned int cMaxContactConstraints = 1024;
 
-    m_debug_renderer              = std::make_unique<Jolt_debug_renderer             >();
+    //m_debug_renderer              = std::make_unique<Jolt_debug_renderer             >();
     m_broad_phase_layer_interface = std::make_unique<Broad_phase_layer_interface_impl>();
 	m_physics_system.Init(
         cMaxBodies,
@@ -240,12 +246,12 @@ void Jolt_world::update_fixed_step(const double dt)
     const auto body_stats = m_physics_system.GetBodyStats();
     //log_physics_frame.info("num active bodies = {}", num_active_bodies);
     //log_physics_frame.info("num bodies = {}", num_bodies);
-    log_physics_frame.info("num active dynamic = {}\n",   body_stats.mNumActiveBodiesDynamic);
-    log_physics_frame.info("num dynamic = {}\n",          body_stats.mNumBodiesDynamic);
-    log_physics_frame.info("num active kinematic = {}\n", body_stats.mNumActiveBodiesKinematic);
-    log_physics_frame.info("num kinematic = {}\n",        body_stats.mNumBodiesKinematic);
-    log_physics_frame.info("num static = {}\n",           body_stats.mNumBodiesStatic);
-    log_physics_frame.info("num bodies = {}\n",           body_stats.mNumBodies);
+    //// info_fmt(log_physics_frame, "num active dynamic = {}\n",   body_stats.mNumActiveBodiesDynamic);
+    //// info_fmt(log_physics_frame, "num dynamic = {}\n",          body_stats.mNumBodiesDynamic);
+    //// info_fmt(log_physics_frame, "num active kinematic = {}\n", body_stats.mNumActiveBodiesKinematic);
+    //// info_fmt(log_physics_frame, "num kinematic = {}\n",        body_stats.mNumBodiesKinematic);
+    //// info_fmt(log_physics_frame, "num static = {}\n",           body_stats.mNumBodiesStatic);
+    //// info_fmt(log_physics_frame, "num bodies = {}\n",           body_stats.mNumBodies);
 }
 
 void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
@@ -309,7 +315,8 @@ auto Jolt_world::get_gravity() const -> glm::vec3
 
 void Jolt_world::set_debug_drawer(IDebug_draw* debug_draw)
 {
-    m_debug_renderer->set_debug_draw(debug_draw);
+    static_cast<void>(debug_draw);
+    // TODO m_debug_renderer->set_debug_draw(debug_draw);
 }
 
 void Jolt_world::debug_draw()
@@ -327,8 +334,8 @@ void Jolt_world::OnBodyActivated(const JPH::BodyID& inBodyID, JPH::uint64 inBody
     //const auto userdata = m_physics_system.GetBodyInterface().GetUserData(inBodyID);
     auto* body = reinterpret_cast<Jolt_rigid_body*>(inBodyUserData);
 
-    log_physics.info(
-        "Body activated ID = {}, name = {}\n",
+    log_physics->info(
+        "Body activated ID = {}, name = {}",
         inBodyID.GetIndex(),
         (body != nullptr)
             ? body->get_debug_label()
@@ -343,8 +350,8 @@ void Jolt_world::OnBodyDeactivated(
 {
     auto* body = reinterpret_cast<Jolt_rigid_body*>(inBodyUserData);
 
-    log_physics.info(
-        "Body deactivated ID = {}, name = {}\n",
+    log_physics->info(
+        "Body deactivated ID = {}, name = {}",
         inBodyID.GetIndex(),
         (body != nullptr)
             ? body->get_debug_label()
@@ -359,7 +366,11 @@ void Jolt_world::OnContactAdded(
     JPH::ContactSettings&       ioSettings
 )
 {
-    log_physics.trace("contact added\n");
+    log_physics->trace("contact added");
+    static_cast<void>(inBody1);
+    static_cast<void>(inBody2);
+    static_cast<void>(inManifold);
+    static_cast<void>(ioSettings);
     //auto* jolt_body1 = reinterpret_cast<Jolt_rigid_body*>(inBody1.GetUserData());
     //auto* jolt_body2 = reinterpret_cast<Jolt_rigid_body*>(inBody1.GetUserData());
     //log_physics.info(
@@ -377,6 +388,10 @@ void Jolt_world::OnContactPersisted(
 )
 {
     //log_physics.info("contact persisted\n");
+    static_cast<void>(inBody1);
+    static_cast<void>(inBody2);
+    static_cast<void>(inManifold);
+    static_cast<void>(ioSettings);
     //auto* jolt_body1 = reinterpret_cast<Jolt_rigid_body*>(inBody1.GetUserData());
     //auto* jolt_body2 = reinterpret_cast<Jolt_rigid_body*>(inBody1.GetUserData());
     //log_physics.info(
@@ -390,7 +405,8 @@ void Jolt_world::OnContactRemoved(
     const JPH::SubShapeIDPair& inSubShapePair
 )
 {
-    log_physics.trace("contact removed\n");
+    static_cast<void>(inSubShapePair);
+    log_physics->trace("contact removed");
     //auto& body_interface = m_physics_system.GetBodyInterface();
     //auto* jolt_body1 = reinterpret_cast<Jolt_rigid_body*>(body_interface.GetUserData(inSubShapePair.GetBody1ID()));
     //auto* jolt_body2 = reinterpret_cast<Jolt_rigid_body*>(body_interface.GetUserData(inSubShapePair.GetBody2ID()));

@@ -30,7 +30,7 @@ void add_to_physics_world(
 {
     ERHE_VERIFY(node_physics);
 
-    log_scene.trace("add_to_physics_world()\n");
+    log_scene->trace("add_to_physics_world()");
 
     physics_world.add_rigid_body(node_physics->rigid_body());
     node_physics->on_attached_to(&physics_world);

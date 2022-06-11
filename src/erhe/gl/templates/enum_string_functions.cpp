@@ -28,7 +28,8 @@ std::unordered_map<std::string, unsigned int> enum_map
 auto enum_value(const std::string& name) -> unsigned int
 {{
     const auto i = enum_map.find(name);
-    if (i != enum_map.end()) {{
+    if (i != enum_map.end())
+    {{
         return i->second;
     }}
     return 0;

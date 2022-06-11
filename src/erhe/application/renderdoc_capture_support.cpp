@@ -1,5 +1,6 @@
 #include "erhe/application/renderdoc_app.h"
 #include "erhe/application/log.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #if defined(_WIN32)
@@ -42,7 +43,7 @@ void initialize_renderdoc_capture_support()
         );
         if (RENDERDOC_GetAPI == nullptr)
         {
-            log_renderdoc.trace("RenderDoc: RENDERDOC_GetAPI() not found in renderdoc.dll\n");
+            log_renderdoc->trace("RenderDoc: RENDERDOC_GetAPI() not found in renderdoc.dll");
             return;
         }
         //auto RENDERDOC_MaskOverlayBits = reinterpret_cast<pRENDERDOC_MaskOverlayBits>(
@@ -53,12 +54,12 @@ void initialize_renderdoc_capture_support()
         //);
 
         int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_4_0, (void **)&renderdoc_api);
-        log_renderdoc.trace("Loaded RenderDoc DLL, RENDERDOC_GetAPI() return value = {}\n", ret);
+        log_renderdoc->trace("Loaded RenderDoc DLL, RENDERDOC_GetAPI() return value = {}", ret);
         ERHE_VERIFY(ret == 1);
 
         if (renderdoc_api->MaskOverlayBits == nullptr)
         {
-            log_renderdoc.trace("RenderDoc: RENDERDOC_MaskOverlayBits() not found in renderdoc.dll\n");
+            log_renderdoc->warn("RenderDoc: RENDERDOC_MaskOverlayBits() not found in renderdoc.dll");
         }
         else
         {

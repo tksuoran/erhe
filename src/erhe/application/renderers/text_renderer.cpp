@@ -236,20 +236,24 @@ void Text_renderer::initialize_component()
 
     m_font = std::make_unique<erhe::ui::Font>("res/fonts/SourceSansPro-Regular.otf", 12, 0.4f);
 
-    const auto shader_path = fs::path("res") / fs::path("shaders");
-    const fs::path vs_path = shader_path / fs::path("text.vert");
-    const fs::path fs_path = shader_path / fs::path("text.frag");
-    Shader_stages::Create_info create_info{
-        .name                      = "text",
-        .vertex_attribute_mappings = &m_attribute_mappings,
-        .fragment_outputs          = &m_fragment_outputs,
-    };
-    create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-    create_info.add_interface_block(m_projection_block.get());
-    create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
-    create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
-    Shader_stages::Prototype prototype{create_info};
-    m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
+    {
+        ERHE_PROFILE_SCOPE("shader");
+
+        const auto shader_path = fs::path("res") / fs::path("shaders");
+        const fs::path vs_path = shader_path / fs::path("text.vert");
+        const fs::path fs_path = shader_path / fs::path("text.frag");
+        Shader_stages::Create_info create_info{
+            .name                      = "text",
+            .vertex_attribute_mappings = &m_attribute_mappings,
+            .fragment_outputs          = &m_fragment_outputs,
+        };
+        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
+        create_info.add_interface_block(m_projection_block.get());
+        create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
+        create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
+        Shader_stages::Prototype prototype{create_info};
+        m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
+    }
 
     create_frame_resources();
 }

@@ -131,6 +131,8 @@ include(vscode)
 
 # Dependencies
 message("Fetching dependencies")
+message("Fetching spdlog")
+FetchContent_MakeAvailable(spdlog)
 message("Fetching concurrentqueue")
 FetchContent_MakeAvailable(concurrentqueue)
 message("Fetching cxxopts")

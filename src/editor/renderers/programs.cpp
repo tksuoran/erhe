@@ -6,6 +6,7 @@
 #include "erhe/application/graphics/shader_monitor.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/sampler.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -34,7 +35,7 @@ void Programs::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    const erhe::log::Indenter indenter;
+    //const erhe::log::Indenter indenter;
 
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()
@@ -104,8 +105,8 @@ auto Programs::make_program(
 {
     ERHE_PROFILE_FUNCTION
 
-    log_programs.trace("Programs::make_program({})\n", name);
-    log_programs.trace("current directory is {}\n", fs::current_path().string());
+    log_programs->trace("Programs::make_program({})", name);
+    log_programs->trace("current directory is {}", fs::current_path().string());
 
     const fs::path vs_path = m_shader_path / fs::path(std::string(name) + ".vert");
     const fs::path gs_path = m_shader_path / fs::path(std::string(name) + ".geom");
@@ -134,7 +135,7 @@ auto Programs::make_program(
     create_info.struct_types.push_back(&shader_resources.light_struct);
     create_info.struct_types.push_back(&shader_resources.camera_struct);
     create_info.struct_types.push_back(&shader_resources.primitive_struct);
-    for (auto j : defines)
+    for (const auto& j : defines)
     {
         create_info.defines.emplace_back(j, "1");
     }
@@ -158,7 +159,7 @@ auto Programs::make_program(
     Shader_stages::Prototype prototype{create_info};
     if (!prototype.is_valid())
     {
-        log_programs.error("Compiling shader program {} failed\n", name);
+        log_programs->error("Compiling shader program {} failed", name);
         return {};
     }
 

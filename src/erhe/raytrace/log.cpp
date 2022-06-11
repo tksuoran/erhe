@@ -1,17 +1,21 @@
 #include "erhe/raytrace/log.hpp"
 
-
 namespace erhe::raytrace
 {
 
-using Category      = erhe::log::Category;
-using Console_color = erhe::log::Console_color;
-using Level         = erhe::log::Level;
+std::shared_ptr<spdlog::logger> log_buffer  ;
+std::shared_ptr<spdlog::logger> log_device  ;
+std::shared_ptr<spdlog::logger> log_geometry;
+std::shared_ptr<spdlog::logger> log_scene   ;
+std::shared_ptr<spdlog::logger> log_embree  ;
 
-Category log_buffer  {1.0f, 0.3f, 0.4f, Console_color::RED,    Level::LEVEL_TRACE};
-Category log_device  {1.0f, 1.0f, 0.0f, Console_color::YELLOW, Level::LEVEL_TRACE};
-Category log_geometry{0.0f, 1.0f, 0.0f, Console_color::GREEN,  Level::LEVEL_TRACE};
-Category log_scene   {0.0f, 0.0f, 1.0f, Console_color::BLUE,   Level::LEVEL_TRACE};
-Category log_embree  {0.0f, 1.0f, 0.0f, Console_color::GREEN,  Level::LEVEL_TRACE};
+void initialize_logging()
+{
+    log_buffer   = erhe::log::make_logger("erhe::raytrace::buffer",   spdlog::level::info);
+    log_device   = erhe::log::make_logger("erhe::raytrace::device",   spdlog::level::info);
+    log_geometry = erhe::log::make_logger("erhe::raytrace::geometry", spdlog::level::info);
+    log_scene    = erhe::log::make_logger("erhe::raytrace::scene",    spdlog::level::info);
+    log_embree   = erhe::log::make_logger("erhe::raytrace::embree",   spdlog::level::info);
+}
 
 } // namespace erhe::raytrace

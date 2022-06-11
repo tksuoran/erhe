@@ -4,6 +4,7 @@
 #include "log.hpp"
 
 #include "erhe/geometry/operation/clone.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/irigid_body.hpp"
 #include "erhe/physics/iworld.hpp"
@@ -115,7 +116,7 @@ void Brush::initialize(const Create_info& create_info)
     ERHE_VERIFY(geometry.get() != nullptr);
 
     {
-        ERHE_PROFILE_SCOPE("make brush primitive");
+        ERHE_PROFILE_SCOPE("gl primitive");
 
         gl_primitive_geometry = make_primitive(
             *create_info.geometry.get(),
@@ -124,14 +125,17 @@ void Brush::initialize(const Create_info& create_info)
         );
     }
 
-    rt_primitive = std::make_shared<Raytrace_primitive>(geometry);
+    {
+        ERHE_PROFILE_SCOPE("rt primitive");
+        rt_primitive = std::make_shared<Raytrace_primitive>(geometry);
+    }
 
     if (
         !collision_shape &&
         !collision_shape_generator
     )
     {
-        ERHE_PROFILE_SCOPE("make brush concex hull collision shape");
+        ERHE_PROFILE_SCOPE("make brush convex hull collision shape");
 
         this->collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
             reinterpret_cast<const float*>(
@@ -241,7 +245,7 @@ auto Brush::get_reference_frame(const uint32_t corner_count) -> Reference_frame
         }
     }
 
-    log_brush.error("{} invalid code path\n", __func__);
+    log_brush->error("{} invalid code path", __func__);
     return Reference_frame{};
 }
 
@@ -311,7 +315,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
         }
     }
 
-    log_brush.trace("create_scaled() scale = {}\n", scale);
+    log_brush->trace("create_scaled() scale = {}", scale);
 
     auto scaled_geometry = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::operation::clone(

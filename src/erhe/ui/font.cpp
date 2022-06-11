@@ -2,6 +2,7 @@
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/ui/glyph.hpp"
 #include "erhe/ui/log.hpp"
@@ -40,6 +41,7 @@ Font::~Font()
     ERHE_PROFILE_FUNCTION
 
 #if defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
+    hb_buffer_destroy(m_harfbuzz_buffer);
     hb_font_destroy(m_harfbuzz_font);
 #endif
 
@@ -62,10 +64,10 @@ Font::Font(
     ERHE_PROFILE_FUNCTION
 
     const auto current_path = fs::current_path();
-    log_font.info("current path = {}\n", current_path.string());
+    log_font->info("current path = {}", current_path.string());
 
-    log_font.info(
-        "Font::Font(path = {}, size = {}, outline_thickness = {})\n",
+    log_font->info(
+        "Font::Font(path = {}, size = {}, outline_thickness = {})",
         path.string(),
         size,
         outline_thickness
@@ -103,8 +105,6 @@ void Font::render()
 {
     ERHE_PROFILE_FUNCTION
 
-    log_font.trace("Font::render()\n");
-
     validate(FT_Init_FreeType(&m_freetype_library));
 
     {
@@ -112,7 +112,7 @@ void Font::render()
         FT_Int minor{0};
         FT_Int patch{0};
         FT_Library_Version(m_freetype_library, &major, &minor, &patch);
-        log_font.trace("Freetype version {}.{}.{}\n", major, minor, patch);
+        log_font->trace("Freetype version {}.{}.{}", major, minor, patch);
     }
 
     validate(FT_New_Face(m_freetype_library, m_path.string().c_str(), 0, &m_freetype_face));
@@ -125,6 +125,7 @@ void Font::render()
     validate(FT_Set_Char_Size(m_freetype_face, xsize, ysize, m_dpi, m_dpi));
 
     m_harfbuzz_font = hb_ft_font_create(m_freetype_face, nullptr);
+    m_harfbuzz_buffer = hb_buffer_create();
 
     trace_info();
 
@@ -221,7 +222,7 @@ void Font::render()
         ERHE_VERIFY(m_texture_width <= 16384);
     }
 
-    log_font.trace("packing glyps to {} x {} succeeded\n", m_texture_width, m_texture_height);
+    log_font->trace("packing glyps to {} x {} succeeded", m_texture_width, m_texture_height);
 
     // Third pass: render glyphs
     m_bitmap = make_unique<Bitmap>(m_texture_width, m_texture_height, 2);
@@ -240,7 +241,7 @@ void Font::render()
         bool  render     = (box_width != 0) && (box_height != 0);
 
         const auto& r = g->atlas_rect;
-        log_font.trace("char '{}' blit size {} * {}\n", c, face->glyph->bitmap.width, face->glyph->bitmap.rows);
+        log_font->trace("char '{}' blit size {} * {}", c, face->glyph->bitmap.width, face->glyph->bitmap.rows);
 
         bool  rotated = (r.width != r.height) && ((box_width + 1) == r.height) && ((box_height + 1) == r.width);
         float x_scale = 1.0f / static_cast<float>(m_texture_width);
@@ -326,117 +327,130 @@ void Font::render()
     //m_bitmap->dump();
 }
 
+namespace {
+
+auto c_str_charmap(FT_Encoding encoding) -> const char*
+{
+    switch (encoding)
+    {
+        case FT_ENCODING_NONE:           return "none";
+        case FT_ENCODING_MS_SYMBOL:      return "MS Symbol";
+        case FT_ENCODING_UNICODE:        return "Unicode";
+        case FT_ENCODING_SJIS:           return "SJIS";
+        case FT_ENCODING_GB2312:         return "GB2312 Simplified Chinese";
+        case FT_ENCODING_BIG5:           return "BIG5 Traditional Chinese";
+        case FT_ENCODING_WANSUNG:        return "WANSUNG";                  // Korean
+        case FT_ENCODING_JOHAB:          return "JOHAB KS C 5601-1992";     // Korean, MS Windows code page 1361
+        case FT_ENCODING_ADOBE_STANDARD: return "Adobe Standard";           // Type 1, CFF, and OpenType/CFF (256)
+        case FT_ENCODING_ADOBE_EXPERT:   return "Adobe Expert";             // Type 1, CFF, and OpenType/CFF (256)
+        case FT_ENCODING_ADOBE_CUSTOM:   return "Adobe Custom";             // Type 1, CFF, and OpenType/CFF (256)
+        case FT_ENCODING_ADOBE_LATIN_1:  return "Adobe Latin 1";            // Type 1 PostScript (256)
+        case FT_ENCODING_OLD_LATIN_2:    return "Old Latin 2";
+        case FT_ENCODING_APPLE_ROMAN:    return "Apple Roman";
+        default: return "unknown";
+    }
+}
+
+}
+
 void Font::trace_info() const
 {
     FT_Face face = m_freetype_face;
-    log_font.trace("num faces     {}\n", face->num_faces);
-    log_font.trace("face index    {}\n", face->face_index);
-    log_font.trace("face flags    ");
-    if (face->face_flags & FT_FACE_FLAG_SCALABLE)
+    log_font->trace("num faces     {}", face->num_faces);
+    log_font->trace("face index    {}", face->face_index);
+
     {
-        log_font.trace("scalable ");
+        std::stringstream ss;
+        ss << "face flags    ";
+        if (face->face_flags & FT_FACE_FLAG_SCALABLE)
+        {
+            ss << "scalable ";
+        }
+        if (face->face_flags & FT_FACE_FLAG_FIXED_WIDTH)
+        {
+            ss << "fixed_width ";
+        }
+        if (face->face_flags & FT_FACE_FLAG_SFNT)
+        {
+            ss << "sfnt ";
+        }
+        if (face->face_flags & FT_FACE_FLAG_HORIZONTAL)
+        {
+            ss << "horizontal ";
+        }
+        if (face->face_flags & FT_FACE_FLAG_VERTICAL)
+        {
+            ss << "vertical ";
+        }
+        if (face->face_flags & FT_FACE_FLAG_KERNING)
+        {
+            ss << "kerning ";
+        }
+        if (face->face_flags & FT_FACE_FLAG_FAST_GLYPHS)
+        {
+            ss << "fast_glyphs ";
+        }
+        if (face->face_flags & FT_FACE_FLAG_MULTIPLE_MASTERS)
+        {
+            ss << "multiple_masters ";
+        }
+        if (face->face_flags & FT_FACE_FLAG_GLYPH_NAMES)
+        {
+            ss << "glyph_names ";
+        }
+        if (face->face_flags & FT_FACE_FLAG_EXTERNAL_STREAM)
+        {
+            ss << "external_stream ";
+        }
+        if (face->face_flags & FT_FACE_FLAG_HINTER)
+        {
+            ss << "hinter ";
+        }
+        if (face->face_flags & FT_FACE_FLAG_CID_KEYED)
+        {
+            ss << "cid_keyed ";
+        }
+        if (face->face_flags & FT_FACE_FLAG_TRICKY)
+        {
+            ss << "tricky ";
+        }
+        log_font->trace("{}", ss.str());
     }
-    if (face->face_flags & FT_FACE_FLAG_FIXED_WIDTH)
+
     {
-        log_font.trace("fixed_width ");
+        std::stringstream ss;
+        ss << "style flags   ";
+        if (face->style_flags & FT_STYLE_FLAG_ITALIC)
+        {
+            ss << "italic ";
+        }
+        if (face->style_flags & FT_STYLE_FLAG_BOLD)
+        {
+            ss << "bold ";
+        }
+        log_font->trace("{}", ss.str());
     }
-    if (face->face_flags & FT_FACE_FLAG_SFNT)
-    {
-        log_font.trace("sfnt ");
-    }
-    if (face->face_flags & FT_FACE_FLAG_HORIZONTAL)
-    {
-        log_font.trace("horizontal ");
-    }
-    if (face->face_flags & FT_FACE_FLAG_VERTICAL)
-    {
-        log_font.trace("vertical ");
-    }
-    if (face->face_flags & FT_FACE_FLAG_KERNING)
-    {
-        log_font.trace("kerning ");
-    }
-    if (face->face_flags & FT_FACE_FLAG_FAST_GLYPHS)
-    {
-        log_font.trace("fast_glyphs ");
-    }
-    if (face->face_flags & FT_FACE_FLAG_MULTIPLE_MASTERS)
-    {
-        log_font.trace("multiple_masters ");
-    }
-    if (face->face_flags & FT_FACE_FLAG_GLYPH_NAMES)
-    {
-        log_font.trace("glyph_names ");
-    }
-    if (face->face_flags & FT_FACE_FLAG_EXTERNAL_STREAM)
-    {
-        log_font.trace("external_stream ");
-    }
-    if (face->face_flags & FT_FACE_FLAG_HINTER)
-    {
-        log_font.trace("hinter ");
-    }
-    if (face->face_flags & FT_FACE_FLAG_CID_KEYED)
-    {
-        log_font.trace("cid_keyed ");
-    }
-    if (face->face_flags & FT_FACE_FLAG_TRICKY)
-    {
-        log_font.trace("tricky ");
-    }
-    log_font.trace("\n");
-    log_font.trace("style flags   ");
-    if (face->style_flags & FT_STYLE_FLAG_ITALIC)
-    {
-        log_font.trace("italic ");
-    }
-    if (face->style_flags & FT_STYLE_FLAG_BOLD)
-    {
-        log_font.trace("bold ");
-    }
-    log_font.trace("\n");
-    log_font.trace("num glyphs    {}\n", face->num_glyphs);
-    log_font.trace("family name   {}\n", face->family_name);
-    log_font.trace("style name    {}\n", face->style_name);
-    log_font.trace("fixed sizes   {}\n", face->num_fixed_sizes);
+    log_font->trace("num glyphs    {}", face->num_glyphs);
+    log_font->trace("family name   {}", face->family_name);
+    log_font->trace("style name    {}", face->style_name);
+
+    log_font->trace("fixed sizes   {}", face->num_fixed_sizes);
     for (int i = 0; i < face->num_fixed_sizes; ++i)
     {
-        log_font.trace("\t{} * {}, ", face->available_sizes[i].width, face->available_sizes[i].height);
+        log_font->trace("\t{} * {}", face->available_sizes[i].width, face->available_sizes[i].height);
     }
 
-    log_font.trace("\n");
-    log_font.trace("num charmaps  {}\n", face->num_charmaps);
-    log_font.trace("units per em  {}\n", face->units_per_EM);
-    log_font.trace("ascender      {}\n", face->ascender);
-    log_font.trace("descender     {}\n", face->descender);
-    log_font.trace("height        {}\n", face->height);
-    log_font.trace("max a. width  {}\n", face->max_advance_width);
-    log_font.trace("max a. height {}\n", face->max_advance_height);
-    log_font.trace("underline pos {}\n", face->underline_position);
-    log_font.trace("underline thk {}\n", face->underline_thickness);
-    log_font.trace("charmap       ");
-    switch (face->charmap->encoding)
-    {
-        case FT_ENCODING_NONE:           log_font.trace("none\n"); break;
-        case FT_ENCODING_MS_SYMBOL:      log_font.trace("MS Symbol\n"); break;
-        case FT_ENCODING_UNICODE:        log_font.trace("Unicode\n"); break;
-        case FT_ENCODING_SJIS:           log_font.trace("SJIS\n"); break;
-        case FT_ENCODING_GB2312:         log_font.trace("GB2312 Simplified Chinese\n"); break;
-        case FT_ENCODING_BIG5:           log_font.trace("BIG5 Traditional Chinese\n"); break;
-        case FT_ENCODING_WANSUNG:        log_font.trace("WANSUNG\n"); break;               // Korean
-        case FT_ENCODING_JOHAB:          log_font.trace("JOHAB KS C 5601-1992\n"); break;    // Korean, MS Windows code page 1361
-        case FT_ENCODING_ADOBE_STANDARD: log_font.trace("Adobe Standard\n"); break; // Type 1, CFF, and OpenType/CFF (256)
-        case FT_ENCODING_ADOBE_EXPERT:   log_font.trace("Adobe Expert\n"); break;     // Type 1, CFF, and OpenType/CFF (256)
-        case FT_ENCODING_ADOBE_CUSTOM:   log_font.trace("Adobe Custom\n"); break;     // Type 1, CFF, and OpenType/CFF (256)
-        case FT_ENCODING_ADOBE_LATIN_1:  log_font.trace("Adobe Latin 1\n"); break;   // Type 1 PostScript (256)
-        case FT_ENCODING_OLD_LATIN_2:    log_font.trace("Old Latin 2\n"); break;
-        case FT_ENCODING_APPLE_ROMAN:    log_font.trace("Apple Roman\n"); break;
-        default: log_font.trace("unknown\n"); break;
-    }
-
-    log_font.trace("patents       ");
-    FT_Bool res = FT_Face_CheckTrueTypePatents(face);
-    log_font.trace((res == 1) ? "yes\n" : "no\n");
+    log_font->trace("num charmaps  {}", face->num_charmaps);
+    log_font->trace("units per em  {}", face->units_per_EM);
+    log_font->trace("ascender      {}", face->ascender);
+    log_font->trace("descender     {}", face->descender);
+    log_font->trace("height        {}", face->height);
+    log_font->trace("max a. width  {}", face->max_advance_width);
+    log_font->trace("max a. height {}", face->max_advance_height);
+    log_font->trace("underline pos {}", face->underline_position);
+    log_font->trace("underline thk {}", face->underline_thickness);
+    log_font->trace("charmap       {}", c_str_charmap(face->charmap->encoding));
+    log_font->trace("patents       {}", (FT_Face_CheckTrueTypePatents(face) == 1) ? "yes" : "no");
 }
 #else
 Font::Font(const fs::path&, const unsigned int, const float) {}
@@ -507,28 +521,36 @@ auto Font::print(
 {
     ERHE_PROFILE_FUNCTION
 
-    log_font.trace("Font::print(text = {}, x = {}, y = {}, z = {})\n", text, text_position.x, text_position.y, text_position.z);
+    SPDLOG_LOGGER_TRACE(
+        log_font,
+        "Font::print(text = {}, x = {}, y = {}, z = {})",
+        text,
+        text_position.x,
+        text_position.y,
+        text_position.z
+    );
 
     if (text.empty())
     {
         return 0;
     }
 
-    hb_buffer_t* buf = hb_buffer_create();
-    hb_buffer_add_utf8     (buf, text.data(), -1, 0, -1);
-    hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
-    hb_buffer_set_script   (buf, HB_SCRIPT_LATIN);
-    hb_buffer_set_language (buf, hb_language_from_string("en", -1));
+    //hb_buffer_t* buf = hb_buffer_create();
+    hb_buffer_clear_contents(m_harfbuzz_buffer);
+    hb_buffer_set_direction(m_harfbuzz_buffer, HB_DIRECTION_LTR);
+    hb_buffer_set_script   (m_harfbuzz_buffer, HB_SCRIPT_LATIN);
+    hb_buffer_set_language (m_harfbuzz_buffer, hb_language_from_string("en", -1));
+    hb_buffer_add_utf8(m_harfbuzz_buffer, text.data(), -1, 0, -1);
 
     hb_feature_t userfeatures[1]; // clig, dlig
     userfeatures[0].tag   = HB_TAG('l','i','g','a');
     userfeatures[0].value = 0;
     userfeatures[0].start = HB_FEATURE_GLOBAL_START;
     userfeatures[0].end   = HB_FEATURE_GLOBAL_END;
-    hb_shape               (m_harfbuzz_font, buf, &userfeatures[0], 1);
+    hb_shape               (m_harfbuzz_font, m_harfbuzz_buffer, &userfeatures[0], 1);
     unsigned int glyph_count{0};
-    hb_glyph_info_t*     glyph_info = hb_buffer_get_glyph_infos    (buf, &glyph_count);
-    hb_glyph_position_t* glyph_pos  = hb_buffer_get_glyph_positions(buf, &glyph_count);
+    hb_glyph_info_t*     glyph_info = hb_buffer_get_glyph_infos    (m_harfbuzz_buffer, &glyph_count);
+    hb_glyph_position_t* glyph_pos  = hb_buffer_get_glyph_positions(m_harfbuzz_buffer, &glyph_count);
 
     size_t chars_printed{0};
     size_t word_offset{0};
@@ -591,7 +613,6 @@ auto Font::print(
         text_position.x += x_advance;
         text_position.y += y_advance;
     }
-    hb_buffer_destroy(buf);
 
     return chars_printed;
 }
@@ -599,8 +620,6 @@ auto Font::print(
 auto Font::measure(const std::string_view text) const -> Rectangle
 {
     ERHE_PROFILE_FUNCTION
-
-    log_font.trace("Font::measure(text = {}\n", text);
 
     if (text.empty())
     {

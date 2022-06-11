@@ -322,14 +322,14 @@ void Vertex_buffer_writer::move(const size_t relative_offset)
 
 void Index_buffer_writer::write_corner(const uint32_t v0)
 {
-    log_primitive_builder.trace("point {}\n", v0);
+    //trace_fmt(log_primitive_builder, "point {}\n", v0);
     write_low(corner_point_index_data_span.subspan(corner_point_indices_written * index_type_size, index_type_size), index_type, v0);
     ++corner_point_indices_written;
 }
 
 void Index_buffer_writer::write_triangle(const uint32_t v0, const uint32_t v1, const uint32_t v2)
 {
-    log_primitive_builder.trace("triangle {}, {}, {}\n", v0, v1, v2);
+    //trace_fmt(log_primitive_builder, "triangle {}, {}, {}\n", v0, v1, v2);
     write_low(triangle_fill_index_data_span.subspan((triangle_indices_written + 0) * index_type_size, index_type_size), index_type, v0);
     write_low(triangle_fill_index_data_span.subspan((triangle_indices_written + 1) * index_type_size, index_type_size), index_type, v1);
     write_low(triangle_fill_index_data_span.subspan((triangle_indices_written + 2) * index_type_size, index_type_size), index_type, v2);
@@ -338,7 +338,7 @@ void Index_buffer_writer::write_triangle(const uint32_t v0, const uint32_t v1, c
 
 void Index_buffer_writer::write_edge(const uint32_t v0, const uint32_t v1)
 {
-    log_primitive_builder.trace("edge {}, {}\n", v0, v1);
+    //trace_fmt(log_primitive_builder, "edge {}, {}\n", v0, v1);
     write_low(edge_line_index_data_span.subspan((edge_line_indices_written + 0) * index_type_size, index_type_size), index_type, v0);
     write_low(edge_line_index_data_span.subspan((edge_line_indices_written + 1) * index_type_size, index_type_size), index_type, v1);
     edge_line_indices_written += 2;

@@ -8,6 +8,7 @@
 
 #include "erhe/application/time.hpp"
 #include "erhe/application/windows/log_window.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/igeometry.hpp"
@@ -15,6 +16,7 @@
 #include "erhe/raytrace/ray.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 #include <fmt/format.h>
@@ -63,7 +65,7 @@ void Pointer_context::update_mouse(
     const int                         count
 )
 {
-    log_pointer.trace("mouse {} count = {}\n", static_cast<int>(button), count);
+    log_pointer->trace("mouse {} count = {}", static_cast<int>(button), count);
     m_mouse_button[button].pressed  = (count > 0);
     m_mouse_button[button].released = (count == 0);
 }
@@ -73,7 +75,7 @@ void Pointer_context::update_mouse(
     const double y
 )
 {
-    log_pointer.trace("mouse x = {} y = {}\n", x, y);
+    log_pointer->trace("mouse x = {} y = {}", x, y);
     m_mouse_x = x;
     m_mouse_y = y;
 }
@@ -81,6 +83,8 @@ void Pointer_context::update_mouse(
 #if !defined(ERHE_RAYTRACE_LIBRARY_NONE)
 void Pointer_context::raytrace()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (m_window == nullptr)
     {
         return;
@@ -105,6 +109,8 @@ void Pointer_context::raytrace()
     m_nearest_slot = 0;
     float nearest_t_far = 9999.0f;
     {
+        ERHE_PROFILE_SCOPE("raytrace inner");
+
         erhe::toolkit::Scoped_timer scoped_timer{m_ray_traverse_timer};
 
         for (size_t i = 0; i < slot_count; ++i)
@@ -132,19 +138,19 @@ void Pointer_context::raytrace()
                 entry.geometry      = nullptr;
                 entry.local_index   = 0;
 
-                log_pointer.trace("{}: Hit position: {}\n", slot_names[i], entry.position.value());
+                log_pointer->trace("{}: Hit position: {}", slot_names[i], entry.position.value());
 
                 if (entry.raytrace_node != nullptr)
                 {
                     auto* node = entry.raytrace_node->get_node();
                     if (node != nullptr)
                     {
-                        log_pointer.trace("{}: Hit node: {} {}\n", slot_names[i], node->node_type(), node->name());
+                        log_pointer->trace("{}: Hit node: {} {}", slot_names[i], node->node_type(), node->name());
                         const auto* rt_instance = entry.raytrace_node->raytrace_instance();
                         if (rt_instance != nullptr)
                         {
-                            log_pointer.trace(
-                                "{}: RT instance: {}\n",
+                            log_pointer->trace(
+                                "{}: RT instance: {}",
                                 slot_names[i],
                                 rt_instance->is_enabled()
                                     ? "enabled"
@@ -162,12 +168,12 @@ void Pointer_context::raytrace()
                             entry.geometry = entry.raytrace_node->source_geometry().get();
                             if (entry.geometry != nullptr)
                             {
-                                log_pointer.trace("{}: Hit geometry: {}\n", slot_names[i], entry.geometry->name);
+                                log_pointer->trace("{}: Hit geometry: {}", slot_names[i], entry.geometry->name);
                             }
                             if (hit.primitive_id < primitive->primitive_geometry.primitive_id_to_polygon_id.size())
                             {
                                 const auto polygon_id = primitive->primitive_geometry.primitive_id_to_polygon_id[hit.primitive_id];
-                                log_pointer.trace("{}: Hit polygon: {}\n", slot_names[i], polygon_id);
+                                log_pointer->trace("{}: Hit polygon: {}", slot_names[i], polygon_id);
                                 entry.local_index = polygon_id;
                             }
                         }
@@ -182,25 +188,25 @@ void Pointer_context::raytrace()
             }
             else
             {
-                log_pointer.trace("{}: no hit\n", slot_names[i]);
+                log_pointer->trace("{}: no hit", slot_names[i]);
             }
         }
     }
 
-    log_pointer.trace("Nearest slot: {}\n", slot_names[m_nearest_slot]);
+    log_pointer->trace("Nearest slot: {}", slot_names[m_nearest_slot]);
 
     const auto duration = m_ray_traverse_timer.duration().value();
     if (duration >= std::chrono::milliseconds(1))
     {
-        log_pointer.trace("ray intersect time: {}\n", std::chrono::duration_cast<std::chrono::milliseconds>(duration));
+        log_pointer->trace("ray intersect time: {}", std::chrono::duration_cast<std::chrono::milliseconds>(duration));
     }
     else if (duration >= std::chrono::microseconds(1))
     {
-        log_pointer.trace("ray intersect time: {}\n", std::chrono::duration_cast<std::chrono::microseconds>(duration));
+        log_pointer->trace("ray intersect time: {}", std::chrono::duration_cast<std::chrono::microseconds>(duration));
     }
     else
     {
-        log_pointer.trace("ray intersect time: {}\n", duration);
+        log_pointer->trace("ray intersect time: {}", duration);
     }
 
 #if 0
@@ -271,6 +277,8 @@ void Pointer_context::raytrace()
 
 void Pointer_context::update_viewport(Viewport_window* viewport_window)
 {
+    ERHE_PROFILE_FUNCTION
+
     std::fill(
         m_hover_entries.begin(),
         m_hover_entries.end(),
@@ -333,7 +341,7 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
         entry.position = position_in_world_viewport_depth(id_query.depth);
         entry.valid    = id_query.valid;
 
-        log_pointer.trace("position in world = {}", entry.position.value());
+        trace_fmt(log_pointer, "position in world = {}", entry.position.value());
         if (id_query.valid)
         {
             entry.mesh        = id_query.mesh;
@@ -351,7 +359,7 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
                         polygon_id < entry.geometry->get_polygon_count()
                     )
                     {
-                        log_pointer.trace("hover polygon = {}", polygon_id);
+                        trace_fmt(log_pointer, "hover polygon = {}", polygon_id);
                         auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(c_polygon_normals);
                         if (
                             (polygon_normals != nullptr) &&
@@ -361,7 +369,7 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
                             const auto local_normal    = polygon_normals->get(polygon_id);
                             const auto world_from_node = entry.mesh->world_from_node();
                             entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
-                            log_pointer.trace("hover normal = {}", entry.normal.value());
+                            trace_fmt(log_pointer, "hover normal = {}", entry.normal.value());
                         }
                     }
                 }
@@ -370,7 +378,8 @@ void Pointer_context::update_viewport(Viewport_window* viewport_window)
             const bool hover_tool    = id_query.mesh && (entry.mesh->get_visibility_mask() & erhe::scene::Node_visibility::tool   ) == erhe::scene::Node_visibility::tool;
             const bool hover_brush   = id_query.mesh && (entry.mesh->get_visibility_mask() & erhe::scene::Node_visibility::brush  ) == erhe::scene::Node_visibility::brush;
             const bool hover_gui     = id_query.mesh && (entry.mesh->get_visibility_mask() & erhe::scene::Node_visibility::gui    ) == erhe::scene::Node_visibility::gui;
-            log_pointer.trace(
+            trace_fmt(
+                log_pointer,
                 "hover mesh = {} primitive = {} local index {} {}{}{}{}",
                 entry.mesh ? entry.mesh->name() : "()",
                 entry.primitive,

@@ -188,7 +188,7 @@ auto Geometry_operation::get_edge_new_point(
         }
     }
 
-    log_catmull_clark.error("edge point {}-{} not found", point_a, point_b);
+    log_catmull_clark->error("edge point {}-{} not found", point_a, point_b);
     // log_catmull_clark.error("point {} edge end points: ", a);
     // for (
     //     uint32_t slot = a * s_max_edge_point_slots,

@@ -18,6 +18,7 @@
 #include "erhe/application/view.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
+#include "erhe/log/log_fmt.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
@@ -44,7 +45,7 @@ void Range_selection::set_terminator(
 {
     if (!m_primary_terminator)
     {
-        log_selection.trace("setting primary terminator to {} {}\n", node->node_type(), node->name());
+        log_selection->trace("setting primary terminator to {} {}", node->node_type(), node->name());
         m_primary_terminator = node;
         m_edited = true;
         return;
@@ -53,7 +54,7 @@ void Range_selection::set_terminator(
     {
         return;
     }
-    log_selection.trace("setting secondary terminator to {} {}\n", node->node_type(), node->name());
+    log_selection->trace("setting secondary terminator to {} {}", node->node_type(), node->name());
     m_secondary_terminator = node;
     m_edited = true;
 }
@@ -78,7 +79,7 @@ void Range_selection::end()
         m_entries.clear();
         return;
     }
-    log_selection.trace("setting selection since range was modified\n");
+    log_selection->trace("setting selection since range was modified");
 
     std::vector<std::shared_ptr<erhe::scene::Node>> selection;
     bool                                            between_terminators{false};
@@ -89,19 +90,19 @@ void Range_selection::end()
             (node == m_secondary_terminator)
         )
         {
-            log_selection.trace("    ! {} {} {}\n", node->node_type(), node->name(), node->get_id());
+            log_selection->trace("    ! {} {} {}", node->node_type(), node->name(), node->get_id());
             selection.push_back(node);
             between_terminators = !between_terminators;
             continue;
         }
         if (between_terminators)
         {
-            log_selection.trace("    + {} {} {}\n", node->node_type(), node->name(), node->get_id());
+            log_selection->trace("    + {} {} {}", node->node_type(), node->name(), node->get_id());
             selection.push_back(node);
         }
         else
         {
-            log_selection.trace("    - {} {} {}\n", node->node_type(), node->name(), node->get_id());
+            log_selection->trace("    - {} {} {}", node->node_type(), node->name(), node->get_id());
         }
     }
     if (selection.empty())
@@ -116,7 +117,7 @@ void Range_selection::end()
 
 void Range_selection::reset()
 {
-    log_selection.trace("resetting range selection\n");
+    log_selection->trace("resetting range selection");
     if (m_primary_terminator && m_secondary_terminator)
     {
         m_selection_tool.clear_selection();
@@ -394,7 +395,7 @@ auto Selection_tool::clear_selection() -> bool
         item->set_visibility_mask(mask & ~erhe::scene::Node_visibility::selected);
     }
 
-    log_selection.trace("Clearing selection ({} items were selected)\n", m_selection.size());
+    log_selection->trace("Clearing selection ({} items were selected)", m_selection.size());
     m_selection.clear();
     m_range_selection.reset();
     sanity_check();
@@ -455,7 +456,7 @@ auto Selection_tool::add_to_selection(
 {
     if (!item)
     {
-        log_selection.warn("Trying to add empty item to selection\n");
+        log_selection->warn("Trying to add empty item to selection");
         return false;
     }
 
@@ -466,13 +467,13 @@ auto Selection_tool::add_to_selection(
 
     if (!is_in_selection(item))
     {
-        log_selection.trace("Adding {} to selection\n", item->name());
+        log_selection->trace("Adding {} to selection", item->name());
         m_selection.push_back(item);
         call_selection_change_subscriptions();
         return true;
     }
 
-    log_selection.warn("Adding {} to selection failed - was already in selection\n", item->name());
+    log_selection->warn("Adding {} to selection failed - was already in selection", item->name());
     return false;
 }
 
@@ -482,7 +483,7 @@ auto Selection_tool::remove_from_selection(
 {
     if (!item)
     {
-        log_selection.warn("Trying to remove empty item from selection\n");
+        log_selection->warn("Trying to remove empty item from selection");
         return false;
     }
 
@@ -496,13 +497,13 @@ auto Selection_tool::remove_from_selection(
     );
     if (i != m_selection.end())
     {
-        log_selection.trace("Removing item {} from selection\n", item->name());
+        log_selection->trace("Removing item {} from selection", item->name());
         m_selection.erase(i, m_selection.end());
         call_selection_change_subscriptions();
         return true;
     }
 
-    log_selection.info("Removing item {} from selection failed - was not in selection\n", item->name());
+    log_selection->info("Removing item {} from selection failed - was not in selection", item->name());
     return false;
 }
 
@@ -545,18 +546,18 @@ void Selection_tool::sanity_check()
     {
         if (node->is_selected() && !is_in(node, m_selection))
         {
-            log_selection.error("Node has selection flag set without being in selection\n");
+            log_selection->error("Node has selection flag set without being in selection");
             ++error_count;
         }
         else if (!node->is_selected() && is_in(node, m_selection))
         {
-            log_selection.error("Node does not have selection flag set while being in selection\n");
+            log_selection->error("Node does not have selection flag set while being in selection");
             ++error_count;
         }
     }
     if (error_count > 0)
     {
-        log_selection.error("Selection errors: {}\n", error_count);
+        log_selection->error("Selection errors: {}", error_count);
     }
 }
 

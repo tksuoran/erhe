@@ -3,22 +3,33 @@
 namespace erhe::graphics
 {
 
-using Category      = erhe::log::Category;
-using Console_color = erhe::log::Console_color;
-using Level         = erhe::log::Level;
-using Colorizer     = erhe::log::Colorizer;
+std::shared_ptr<spdlog::logger> log_buffer                   ;
+std::shared_ptr<spdlog::logger> log_configuration            ;
+std::shared_ptr<spdlog::logger> log_framebuffer              ;
+std::shared_ptr<spdlog::logger> log_fragment_outputs         ;
+std::shared_ptr<spdlog::logger> log_glsl                     ;
+std::shared_ptr<spdlog::logger> log_load_png                 ;
+std::shared_ptr<spdlog::logger> log_program                  ;
+std::shared_ptr<spdlog::logger> log_save_png                 ;
+std::shared_ptr<spdlog::logger> log_texture                  ;
+std::shared_ptr<spdlog::logger> log_threads                  ;
+std::shared_ptr<spdlog::logger> log_vertex_attribute_mappings;
+std::shared_ptr<spdlog::logger> log_vertex_stream            ;
 
-Category log_buffer                   {0.9f, 0.9f, 0.6f,Console_color::YELLOW, Level::LEVEL_INFO};
-Category log_configuration            {0.4f, 1.0f, 0.3f,Console_color::GREEN,  Level::LEVEL_INFO};
-Category log_framebuffer              {0.2f, 0.9f, 0.4f,Console_color::GREEN,  Level::LEVEL_INFO};
-Category log_fragment_outputs         {0.0f, 1.0f, 0.0f,Console_color::GREEN,  Level::LEVEL_INFO};
-Category log_glsl                     {0.8f, 0.6f, 0.4f,Console_color::YELLOW, Level::LEVEL_INFO, Colorizer::glsl};
-Category log_load_png                 {0.5f, 0.8f, 1.0f,Console_color::CYAN,   Level::LEVEL_INFO};
-Category log_program                  {1.0f, 0.9f, 0.8f,Console_color::YELLOW, Level::LEVEL_INFO};
-Category log_save_png                 {0.6f, 1.0f, 1.0f,Console_color::CYAN,   Level::LEVEL_INFO};
-Category log_texture                  {0.5f, 0.4f, 1.0f,Console_color::BLUE,   Level::LEVEL_INFO};
-Category log_threads                  {0.0f, 0.0f, 1.0f,Console_color::BLUE,   Level::LEVEL_INFO};
-Category log_vertex_attribute_mappings{0.3f, 1.0f, 0.0f,Console_color::GREEN,  Level::LEVEL_INFO};
-Category log_vertex_stream            {0.0f, 1.0f, 0.3f,Console_color::GREEN,  Level::LEVEL_INFO};
+void initialize_logging()
+{
+    log_buffer                   = erhe::log::make_logger("erhe::graphics::buffer",           spdlog::level::info);
+    log_configuration            = erhe::log::make_logger("erhe::graphics::configuration",    spdlog::level::info);
+    log_framebuffer              = erhe::log::make_logger("erhe::graphics::framebuffer",      spdlog::level::info);
+    log_fragment_outputs         = erhe::log::make_logger("erhe::graphics::fragment_outputs", spdlog::level::info);
+    log_glsl                     = erhe::log::make_logger("erhe::graphics::glsl",             spdlog::level::info);
+    log_load_png                 = erhe::log::make_logger("erhe::graphics::load_png",         spdlog::level::info);
+    log_program                  = erhe::log::make_logger("erhe::graphics::program",          spdlog::level::info);
+    log_save_png                 = erhe::log::make_logger("erhe::graphics::save_png",         spdlog::level::info);
+    log_texture                  = erhe::log::make_logger("erhe::graphics::texture",          spdlog::level::info);
+    log_threads                  = erhe::log::make_logger("erhe::graphics::threads",          spdlog::level::info);
+    log_vertex_attribute_mappings= erhe::log::make_logger("erhe::graphics::vertex_attribute", spdlog::level::info);
+    log_vertex_stream            = erhe::log::make_logger("erhe::graphics::vertex_stream",    spdlog::level::info);
+}
 
 } // namespace erhe::graphics

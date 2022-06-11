@@ -4,6 +4,8 @@
 
 #include <gsl/assert>
 
+#include <array>
+
 namespace erhe::graphics
 {
 

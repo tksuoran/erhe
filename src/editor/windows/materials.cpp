@@ -5,6 +5,7 @@
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/imgui_helpers.hpp"
 #include "erhe/primitive/material.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
@@ -94,6 +95,8 @@ void Materials::initialize_component()
 
 void Materials::imgui()
 {
+    ERHE_PROFILE_FUNCTION
+
     // TODO We take a copy here
     const auto& materials = m_scene_root->materials();
 

@@ -4,25 +4,27 @@
 
 namespace editor {
 
-extern erhe::log::Category log_brush;
-extern erhe::log::Category log_framebuffer;
-extern erhe::log::Category log_gl;
-extern erhe::log::Category log_headset;
-extern erhe::log::Category log_id_render;
-extern erhe::log::Category log_materials;
-extern erhe::log::Category log_node_properties;
-extern erhe::log::Category log_parsers;
-extern erhe::log::Category log_physics;
-extern erhe::log::Category log_pointer;
-extern erhe::log::Category log_programs;
-extern erhe::log::Category log_raytrace;
-extern erhe::log::Category log_render;
-extern erhe::log::Category log_scene;
-extern erhe::log::Category log_selection;
-extern erhe::log::Category log_svg;
-extern erhe::log::Category log_textures;
-extern erhe::log::Category log_trs_tool;
-extern erhe::log::Category log_fly_camera;
-extern erhe::log::Category log_windows;
+extern std::shared_ptr<spdlog::logger> log_brush;
+extern std::shared_ptr<spdlog::logger> log_framebuffer;
+extern std::shared_ptr<spdlog::logger> log_gl;
+extern std::shared_ptr<spdlog::logger> log_headset;
+extern std::shared_ptr<spdlog::logger> log_id_render;
+extern std::shared_ptr<spdlog::logger> log_materials;
+extern std::shared_ptr<spdlog::logger> log_node_properties;
+extern std::shared_ptr<spdlog::logger> log_parsers;
+extern std::shared_ptr<spdlog::logger> log_physics;
+extern std::shared_ptr<spdlog::logger> log_pointer;
+extern std::shared_ptr<spdlog::logger> log_programs;
+extern std::shared_ptr<spdlog::logger> log_raytrace;
+extern std::shared_ptr<spdlog::logger> log_render;
+extern std::shared_ptr<spdlog::logger> log_scene;
+extern std::shared_ptr<spdlog::logger> log_selection;
+extern std::shared_ptr<spdlog::logger> log_svg;
+extern std::shared_ptr<spdlog::logger> log_textures;
+extern std::shared_ptr<spdlog::logger> log_trs_tool;
+extern std::shared_ptr<spdlog::logger> log_fly_camera;
+extern std::shared_ptr<spdlog::logger> log_windows;
+
+void initialize_logging();
 
 }

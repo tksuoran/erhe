@@ -1,19 +1,13 @@
 #include "erhe/application/graphics/shader_monitor.hpp"
+#include "erhe/application/log.hpp"
 
 #include "erhe/toolkit/profile.hpp"
 
-#include "erhe/log/log.hpp"
 #include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace erhe::application
 {
-
-using Category      = erhe::log::Category;
-using Console_color = erhe::log::Console_color;
-using Level         = erhe::log::Level;
-
-Category log_shader_monitor{0.0f, 1.0f, 1.0f, Console_color::CYAN, Level::LEVEL_WARN};
 
 using std::string;
 
@@ -27,11 +21,11 @@ Shader_monitor::~Shader_monitor()
 {
     ERHE_PROFILE_FUNCTION
 
-    log_shader_monitor.info("Shader_monitor shutting down");
+    log_shader_monitor->info("Shader_monitor shutting down");
     set_run(false);
-    log_shader_monitor.info("Joining shader monitor poll thread");
+    log_shader_monitor->info("Joining shader monitor poll thread");
     m_poll_filesystem_thread.join();
-    log_shader_monitor.info("Shader_monitor shut down complete");
+    log_shader_monitor->info("Shader_monitor shut down complete");
 }
 
 void Shader_monitor::initialize_component()
@@ -122,13 +116,16 @@ void Shader_monitor::poll_thread()
                 }
                 catch (...)
                 {
-                    log_shader_monitor.warn("Failed to poll file {}", f.path.generic_string());
+                    log_shader_monitor->warn(
+                        "Failed to poll file {}",
+                        f.path.generic_string()
+                    );
                     // Never mind exceptions.
                 }
             }
         }
     }
-    log_shader_monitor.info("Exiting shader monitor poll thread");
+    log_shader_monitor->info("Exiting shader monitor poll thread");
 }
 
 // static constexpr const char* c_shader_monitor_poll = "shader monitor poll";
