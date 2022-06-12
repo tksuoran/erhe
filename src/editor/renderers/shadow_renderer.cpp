@@ -39,8 +39,8 @@ using erhe::graphics::Rasterization_state;
 using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 
-constexpr size_t s_max_light_count    = 10;
-constexpr size_t s_texture_resolution = 4 * 1024;
+constexpr size_t s_max_light_count    = 4;
+constexpr size_t s_texture_resolution = 1 * 1024;
 constexpr bool   s_enable             = true;
 
 Shadow_renderer::Shadow_renderer()

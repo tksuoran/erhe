@@ -17,8 +17,8 @@ auto str(const bool value) -> const char*
 
 Configuration::Configuration(int argc, char** argv)
     : erhe::components::Component      {c_label}
-    , viewports_hosted_in_imgui_windows{true}
-//    , viewports_hosted_in_imgui_windows{false}
+//    , viewports_hosted_in_imgui_windows{true}
+    , viewports_hosted_in_imgui_windows{false}
     , openxr                           {false}
     , show_window                      {true}
     //, parallel_initialization          {false}

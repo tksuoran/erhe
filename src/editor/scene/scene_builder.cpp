@@ -983,7 +983,7 @@ void Scene_builder::setup_lights()
     //    }
     //);
 
-    constexpr int directional_light_count = 6;
+    constexpr int directional_light_count = 4;
     if constexpr (directional_light_count > 0)
     {
         for (int i = 0; i < directional_light_count; ++i)
@@ -1007,7 +1007,7 @@ void Scene_builder::setup_lights()
         }
     }
 
-    constexpr int spot_light_count = 3;
+    constexpr int spot_light_count = 0;
     if constexpr (spot_light_count > 0)
     {
         for (int i = 0; i < spot_light_count; ++i)

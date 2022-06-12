@@ -75,7 +75,7 @@ void Forward_renderer::initialize_component()
 
     erhe::graphics::Scoped_debug_group forward_renderer_initialization{c_forward_renderer_initialize_component};
 
-    create_frame_resources(256, 256, 256, 20000, 20000);
+    create_frame_resources(256, 256, 256, 8000, 8000);
 }
 
 
