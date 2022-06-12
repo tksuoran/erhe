@@ -2,6 +2,7 @@
 #include "log.hpp"
 #include "renderers/program_interface.hpp"
 
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
 #include "erhe/graphics/configuration.hpp"
@@ -25,6 +26,7 @@ Programs::~Programs()
 void Programs::connect()
 {
     require<erhe::application::Gl_context_provider>();
+    require<erhe::application::Configuration>();
 
     m_program_interface = require<Program_interface>();
     m_shader_monitor    = require<erhe::application::Shader_monitor>();
@@ -62,7 +64,9 @@ void Programs::initialize_component()
     //standard      = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
 
     m_dump_interface = true;
+
     standard            = make_program("standard");
+
     m_dump_interface = false;
 
     textured            = make_program("textured");
@@ -138,6 +142,13 @@ auto Programs::make_program(
     {
         create_info.defines.emplace_back(j, "1");
     }
+
+    const bool simpler_shaders = Component::get<erhe::application::Configuration>()->graphics.simpler_shaders;
+    if (simpler_shaders)
+    {
+        create_info.defines.emplace_back("ERHE_SIMPLER_SHADERS", "1");
+    }
+
     if (vs_exists)
     {
         create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);

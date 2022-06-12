@@ -67,6 +67,8 @@ auto Operations::count_selected_meshes() const -> size_t
 void Operations::register_active_tool(Tool* tool)
 {
     tool->set_enable_state(false);
+
+    std::lock_guard<std::mutex> lock{m_mutex};
     m_active_tools.push_back(tool);
 }
 

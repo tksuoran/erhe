@@ -33,7 +33,7 @@ Embree_scene::Embree_scene(const std::string_view debug_label)
         m_scene = nullptr;
     }
     m_scene = rtcNewScene(device);
-    //log_embree.trace("rtcNewScene() = {}\n", debug_label);
+    SPDLOG_LOGGER_TRACE(log_embree, "rtcNewScene() = {}", debug_label);
     if (m_scene == nullptr)
     {
         log_scene->error("rtcNewDevice() failed");
@@ -45,7 +45,7 @@ Embree_scene::Embree_scene(const std::string_view debug_label)
 
 Embree_scene::~Embree_scene()
 {
-    //log_embree.trace("rtcReleaseScene({})\n", m_debug_label);
+    SPDLOG_LOGGER_TRACE(log_embree, "rtcReleaseScene({})", m_debug_label);
     rtcReleaseScene(m_scene);
 }
 
@@ -66,7 +66,7 @@ void Embree_scene::attach(IGeometry* geometry)
         hgeometry
     );
 
-    m_dirty = true;
+    //m_dirty = true;
     //if (embree_geometry->geometry_id >= m_geometry_map.size())
     //{
     //    const auto old_size{embree_geometry->geometry_id};
@@ -78,12 +78,13 @@ void Embree_scene::attach(IGeometry* geometry)
     //    }
     //}
     //m_geometry_map[embree_geometry->geometry_id] = geometry;
-    //log_embree.info(
-    //    "rtcAttachGeometry(scene = {}, geometry = {}) id = {}\n",
-    //    m_debug_label,
-    //    embree_geometry->debug_label(),
-    //    embree_geometry->geometry_id
-    //);
+    SPDLOG_LOGGER_TRACE(
+        log_embree,
+        "rtcAttachGeometry(scene = {}, geometry = {}) id = {}",
+        m_debug_label,
+        embree_geometry->debug_label(),
+        embree_geometry->geometry_id
+    );
 }
 
 void Embree_scene::attach(IInstance* instance)
@@ -107,14 +108,15 @@ void Embree_scene::attach(IInstance* instance)
     //    }
     //}
     //m_instance_map[embree_instance->geometry_id] = instance;
-    //log_embree.trace(
-    //    "rtcAttachGeometry(scene = {}, instance = {}) id = {}\n",
-    //    m_debug_label,
-    //    embree_instance->debug_label(),
-    //    embree_instance->geometry_id
-    //);
+    SPDLOG_LOGGER_TRACE(
+        log_embree,
+        "rtcAttachGeometry(scene = {}, instance = {}) id = {}",
+        m_debug_label,
+        embree_instance->debug_label(),
+        embree_instance->geometry_id
+    );
 
-    m_dirty = true;
+    //m_dirty = true;
 }
 
 void Embree_scene::detach(IGeometry* geometry)
@@ -125,15 +127,16 @@ void Embree_scene::detach(IGeometry* geometry)
     //{
     //    m_geometry_map[geometry_id] = nullptr;
     //}
-    //log_embree.trace(
-    //    "rtcDetachGeometry(scene = {}, geometry = {}, id = {})\n",
-    //    m_debug_label,
-    //    embree_geometry->debug_label(),
-    //    geometry_id
-    //);
+    SPDLOG_LOGGER_TRACE(
+        log_embree,
+        "rtcDetachGeometry(scene = {}, geometry = {}, id = {})",
+        m_debug_label,
+        embree_geometry->debug_label(),
+        geometry_id
+    );
     rtcDetachGeometry(m_scene, geometry_id);
 
-    m_dirty = true;
+    //m_dirty = true;
 }
 
 void Embree_scene::detach(IInstance* instance)
@@ -146,26 +149,27 @@ void Embree_scene::detach(IInstance* instance)
     //{
     //    m_instance_map[geometry_id] = nullptr;
     //}
-    //log_embree.trace(
-    //    "rtcDetachGeometry(scene = {}, geometry_id = {} {})\n",
-    //    m_debug_label,
-    //    embree_instance->debug_label(),
-    //    geometry_id
-    //);
+    SPDLOG_LOGGER_TRACE(
+        log_embree,
+        "rtcDetachGeometry(scene = {}, geometry_id = {} {})",
+        m_debug_label,
+        embree_instance->debug_label(),
+        geometry_id
+    );
     rtcDetachGeometry(m_scene, geometry_id);
 
-    m_dirty = true;
+    //m_dirty = true;
 }
 
 void Embree_scene::commit()
 {
     ERHE_PROFILE_FUNCTION
 
-    //log_embree.trace("rtcCommitScene({})\n", m_debug_label);
-    if (m_dirty)
+    //if (m_dirty)
     {
+        SPDLOG_LOGGER_TRACE(log_embree, "rtcCommitScene({})\n", m_debug_label);
         rtcCommitScene(m_scene);
-        m_dirty = false;
+        //m_dirty = false;
     }
 }
 
@@ -203,9 +207,9 @@ void Embree_scene::intersect(Ray& ray, Hit& hit)
         }
     };
 
-    //log_embree.trace("rtcInitIntersectContext()\n");
+    SPDLOG_LOGGER_TRACE(log_embree, "rtcInitIntersectContext()");
     rtcInitIntersectContext(&context);
-    //  log_embree.trace("rtcIntersect1({})\n", m_debug_label);
+    SPDLOG_LOGGER_TRACE(log_embree, "rtcIntersect1({})", m_debug_label);
     rtcIntersect1(
         m_scene,
         &context,
@@ -245,10 +249,10 @@ void Embree_scene::intersect(Ray& ray, Hit& hit)
     }
 }
 
-void Embree_scene::set_dirty()
-{
-    m_dirty = true;
-}
+//void Embree_scene::set_dirty()
+//{
+//    m_dirty = true;
+//}
 
 auto Embree_scene::get_rtc_scene() -> RTCScene
 {

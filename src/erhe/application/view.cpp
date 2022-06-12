@@ -601,7 +601,7 @@ void View::on_mouse_move(const double x, const double y)
         (m_active_mouse_command == nullptr)
     )
     {
-        //log_input_event_filtered.trace("ImGui WantCaptureMouse\n");
+        SPDLOG_LOGGER_TRACE(log_input_event_filtered, "ImGui WantCaptureMouse");
         return;
     }
 

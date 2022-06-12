@@ -3,7 +3,7 @@
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/toolkit/filesystem.hpp"
 
-#include <nlohmann/json.hpp>
+#include "rapidjson/document.h"
 
 #include <string>
 #include <vector>
@@ -24,6 +24,7 @@ public:
         std::vector<std::string> key_names;
     };
 
+    Json_library();
     explicit Json_library(const fs::path& path);
 
     [[nodiscard]] auto make_geometry(
@@ -34,12 +35,7 @@ public:
     std::vector<Category>    categories;  // categories
 
 private:
-    nlohmann::json m_json;
+    rapidjson::Document m_json;
 };
-
-auto make_json_polyhedron(
-    const fs::path&    path,
-    const std::string& entry
-) -> erhe::geometry::Geometry;
 
 }

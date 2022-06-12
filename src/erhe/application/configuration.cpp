@@ -115,7 +115,8 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("graphics"))
         {
             const auto& section = ini["graphics"];
-            ini_get(section, "reverse_depth",            graphics.reverse_depth);
+            ini_get(section, "reverse_depth",   graphics.reverse_depth);
+            ini_get(section, "simpler_shaders", graphics.simpler_shaders);
         }
         if (ini.has("mesh_memory"))
         {
@@ -154,6 +155,35 @@ Configuration::Configuration(int argc, char** argv)
         {
             const auto& section = ini["physics"];
             ini_get(section, "enabled", physics.enabled);
+        }
+
+        if (ini.has("windows"))
+        {
+            const auto& section = ini["windows"];
+
+            ini_get(section, "brushes",             windows.brushes            );
+            ini_get(section, "debug_view",          windows.debug_view         );
+            ini_get(section, "fly_camera",          windows.fly_camera         );
+            ini_get(section, "grid",                windows.grid               );
+            ini_get(section, "layers",              windows.layers             );
+            ini_get(section, "log",                 windows.log                );
+            ini_get(section, "materials",           windows.materials          );
+            ini_get(section, "material_properties", windows.material_properties);
+            ini_get(section, "mesh_properties",     windows.mesh_properties    );
+            ini_get(section, "node_properties",     windows.node_properties    );
+            ini_get(section, "node_tree",           windows.node_tree          );
+            ini_get(section, "operation_stack",     windows.operation_stack    );
+            ini_get(section, "operations",          windows.operations         );
+            ini_get(section, "performance",         windows.performance        );
+            ini_get(section, "pipelines",           windows.pipelines          );
+            ini_get(section, "physics",             windows.physics            );
+            ini_get(section, "physics_tool",        windows.physics_tool       );
+            ini_get(section, "post_processing",     windows.post_processing    );
+            ini_get(section, "tool_properties",     windows.tool_properties    );
+            ini_get(section, "trs",                 windows.trs                );
+            ini_get(section, "view",                windows.view               );
+            ini_get(section, "viewport",            windows.viewport           );
+            ini_get(section, "viewport_config",     windows.viewport_config    );
         }
 
         if (ini.has("scene"))

@@ -42,7 +42,6 @@ using Edge              = erhe::geometry::Edge;
 using Mesh_info         = erhe::geometry::Mesh_info;
 using erhe::graphics::Vertex_attribute;
 using gl::size_of_type;
-//using erhe::log::Log;
 
 using glm::vec2;
 using glm::vec3;
@@ -274,14 +273,14 @@ void Build_context_root::get_mesh_info()
     total_vertex_count += mi.vertex_count_corners;
     if (features.centroid_points)
     {
-        //trace_fmt(log_primitive_builder, "{} centroid point indices\n", mi.vertex_count_centroids);
+        SPDLOG_LOGGER_INFO(log_primitive_builder, "{} centroid point indices", mi.vertex_count_centroids);
         total_vertex_count += mi.vertex_count_centroids;
     }
 
     // Count indices
     if (features.fill_triangles)
     {
-        //trace_fmt(log_primitive_builder, "{} triangle fill indices\n", mi.index_count_fill_triangles);
+        SPDLOG_LOGGER_INFO(log_primitive_builder, "{} triangle fill indices", mi.index_count_fill_triangles);
         total_index_count += mi.index_count_fill_triangles;
         allocate_index_range(
             gl::Primitive_type::triangles,
@@ -294,7 +293,7 @@ void Build_context_root::get_mesh_info()
 
     if (features.edge_lines)
     {
-        //trace_fmt(log_primitive_builder, "{} edge line indices\n", mi.index_count_edge_lines);
+        SPDLOG_LOGGER_INFO(log_primitive_builder, "{} edge line indices", mi.index_count_edge_lines);
         total_index_count += mi.index_count_edge_lines;
         allocate_index_range(
             gl::Primitive_type::lines,
@@ -305,7 +304,7 @@ void Build_context_root::get_mesh_info()
 
     if (features.corner_points)
     {
-        //trace_fmt(log_primitive_builder, "{} corner point indices\n", mi.index_count_corner_points);
+        SPDLOG_LOGGER_INFO(log_primitive_builder, "{} corner point indices", mi.index_count_corner_points);
         total_index_count += mi.index_count_corner_points;
         allocate_index_range(
             gl::Primitive_type::points,
@@ -316,7 +315,7 @@ void Build_context_root::get_mesh_info()
 
     if (features.centroid_points)
     {
-        //trace_fmt(log_primitive_builder, "{} centroid point indices\n", mi.index_count_centroid_points);
+        SPDLOG_LOGGER_INFO(log_primitive_builder, "{} centroid point indices", mi.index_count_centroid_points);
         total_index_count += mi.index_count_centroid_points;
         allocate_index_range(
             gl::Primitive_type::points,
@@ -325,7 +324,7 @@ void Build_context_root::get_mesh_info()
         );
     }
 
-    //trace_fmt(log_primitive_builder, "Total {} vertices\n", total_vertex_count);
+    SPDLOG_LOGGER_INFO(log_primitive_builder, "Total {} vertices", total_vertex_count);
 }
 
 void Build_context_root::get_vertex_attributes()
@@ -446,7 +445,8 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
     Expects(primitive_geometry != nullptr);
 
     //m_primitive_geometry = primitive_geometry;
-    log_primitive_builder->trace(
+    SPDLOG_LOGGER_INFO(
+        log_primitive_builder,
         "Primitive_builder::build(usage = {}, normal_style = {}) geometry = {}",
         gl::c_str(m_build_info.buffer.usage),
         c_str(m_normal_style),
@@ -552,11 +552,11 @@ void Build_context::build_vertex_position()
     const vec3 position = property_maps.point_locations->get(point_id);
     vertex_writer.write(root.attributes.position, position);
 
-    //trace_fmt(
-    //    log_primitive_builder,
-    //    "polygon {} point {} corner {} vertex {} location {}\n",
-    //    polygon_index, corner_id, point_id, vertex_index, position
-    //);
+    SPDLOG_LOGGER_TRACE(
+        log_primitive_builder,
+        "polygon {} point {} corner {} vertex {} location {}\n",
+        polygon_index, corner_id, point_id, vertex_index, position
+    );
 }
 
 void Build_context::build_vertex_normal()
@@ -603,21 +603,21 @@ void Build_context::build_vertex_normal()
             case Normal_style::corner_normals:
             {
                 vertex_writer.write(root.attributes.normal, normal);
-                //trace_fmt(log_primitive_builder, "point {} corner {} normal {}\n", point_id, corner_id, normal);
+                SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} normal {}", point_id, corner_id, normal);
                 break;
             }
 
             case Normal_style::point_normals:
             {
                 vertex_writer.write(root.attributes.normal, point_normal);
-                //trace_fmt(log_primitive_builder, "point {} corner {} point normal {}\n", point_id, corner_id, point_normal);
+                SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point normal {}", point_id, corner_id, point_normal);
                 break;
             }
 
             case Normal_style::polygon_normals:
             {
                 vertex_writer.write(root.attributes.normal, polygon_normal);
-                //trace_fmt(log_primitive_builder, "point {} corner {} polygon normal {}\n", point_id, corner_id, polygon_normal);
+                SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} polygon normal {}", point_id, corner_id, polygon_normal);
                 break;
             }
 
@@ -631,7 +631,7 @@ void Build_context::build_vertex_normal()
     if (features.normal_flat && root.attributes.normal_flat.is_valid())
     {
         vertex_writer.write(root.attributes.normal_flat, polygon_normal);
-        //trace_fmt(log_primitive_builder, "point {} corner {} flat polygon normal {}\n", point_id, corner_id, polygon_normal);
+        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} flat polygon normal {}", point_id, corner_id, polygon_normal);
     }
 
     if (features.normal_smooth && root.attributes.normal_smooth.is_valid())
@@ -641,11 +641,11 @@ void Build_context::build_vertex_normal()
         if ((property_maps.point_normals_smooth != nullptr) && property_maps.point_normals_smooth->has(point_id))
         {
             smooth_point_normal = property_maps.point_normals_smooth->get(point_id);
-            //trace_fmt(log_primitive_builder, "point {} corner {} smooth point normal {}\n", point_id, corner_id, smooth_point_normal);
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} smooth point normal {}", point_id, corner_id, smooth_point_normal);
         }
         else
         {
-            //log_primitive_builder.warn("point {} corner {} smooth unit y normal\n", point_id, corner_id);
+            SPDLOG_LOGGER_WARN(log_primitive_builder, "point {} corner {} smooth unit y normal", point_id, corner_id);
             used_fallback_smooth_normal = true;
         }
 
@@ -667,16 +667,16 @@ void Build_context::build_vertex_tangent()
     if (property_maps.corner_tangents != nullptr)
     {
         found = property_maps.corner_tangents->maybe_get(corner_id, tangent);
-        //trace_fmt(log_primitive_builder, "point {} corner {} tangent {}\n", point_id, corner_id, tangent);
+        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} tangent {}", point_id, corner_id, tangent);
     }
     if (!found && (property_maps.point_tangents != nullptr))
     {
         found = property_maps.point_tangents->maybe_get(point_id, tangent);
-        //trace_fmt(log_primitive_builder, "point {} corner {} point tangent {}\n", point_id, corner_id, tangent);
+        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point tangent {}", point_id, corner_id, tangent);
     }
     if (!found)
     {
-        //log_primitive_builder.warn("point_id {} corner {} unit x tangent\n", point_id, corner_id);
+        SPDLOG_LOGGER_WARN(log_primitive_builder, "point_id {} corner {} unit x tangent", point_id, corner_id);
         used_fallback_tangent = true;
     }
 
@@ -697,16 +697,16 @@ void Build_context::build_vertex_bitangent()
     if (property_maps.corner_bitangents != nullptr)
     {
         found = property_maps.corner_bitangents->maybe_get(corner_id, bitangent);
-        //trace_fmt(log_primitive_builder, "point {} corner {} bitangent {}\n", point_id, corner_id, bitangent);
+        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} bitangent {}", point_id, corner_id, bitangent);
     }
     if (!found && (property_maps.point_bitangents != nullptr))
     {
         found = property_maps.point_bitangents->maybe_get(point_id, bitangent);
-        //trace_fmt(log_primitive_builder, "point {} corner {} point bitangent {}\n", point_id, corner_id, bitangent);
+        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point bitangent {}", point_id, corner_id, bitangent);
     }
     if (!found)
     {
-        //log_primitive_builder.warn("point {} corner {} unit z bitangent\n", point_id, corner_id);
+        SPDLOG_LOGGER_WARN(log_primitive_builder, "point {} corner {} unit z bitangent", point_id, corner_id);
         used_fallback_bitangent = true;
     }
 
@@ -731,11 +731,11 @@ void Build_context::build_vertex_texcoord()
     if (!found && (property_maps.point_texcoords != nullptr))
     {
         found = property_maps.point_texcoords->maybe_get(point_id, texcoord);
-        //trace_fmt(log_primitive_builder, "point {} corner {} point texcoord {}\n", point_id, corner_id, texcoord);
+        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point texcoord {}", point_id, corner_id, texcoord);
     }
     if (!found)
     {
-        //log_primitive_builder.warn("point {} corner {} origo texcoord\n", point_id, corner_id);
+        SPDLOG_LOGGER_WARN(log_primitive_builder, "point {} corner {} default texcoord", point_id, corner_id);
         used_fallback_texcoord = true;
     }
 
@@ -777,17 +777,17 @@ void Build_context::build_vertex_color(const uint32_t /*polygon_corner_count*/)
     if (property_maps.corner_colors != nullptr)
     {
         found = property_maps.corner_colors->maybe_get(corner_id, color);
-        //trace_fmt(log_primitive_builder, "point {} corner {} corner color {}\n", point_id, corner_id, color);
+        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} corner color {}", point_id, corner_id, color);
     }
     if (!found && (property_maps.point_colors != nullptr))
     {
         found = property_maps.point_colors->maybe_get(point_id, color);
-        //trace_fmt(log_primitive_builder, "point {} corner {} point color {}\n", point_id, corner_id, color);
+        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point color {}", point_id, corner_id, color);
     }
     if (!found && (property_maps.polygon_colors != nullptr))
     {
         found = property_maps.polygon_colors->maybe_get(polygon_id, color);
-        //trace_fmt(log_primitive_builder, "point {} corner {} polygon {} polygon color {}\n", point_id, corner_id, polygon_id, color);
+        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} polygon {} polygon color {}", point_id, corner_id, polygon_id, color);
     }
     //if (!found)
     //{
@@ -988,9 +988,9 @@ void Build_context::build_edge_lines()
         {
             const auto v0 = property_maps.corner_indices->get(corner_id_a);
             const auto v1 = property_maps.corner_indices->get(corner_id_b);
-            //trace_fmt(
+            //SPDLOG_LOGGER_TRACE(
             //    log_primitive_builder,
-            //    "edge {} point {} corner {} vertex {} - point {} corner {} vertex {}\n",
+            //    "edge {} point {} corner {} vertex {} - point {} corner {} vertex {}",
             //    edge_id,
             //    edge.a, corner_id_a, v0,
             //    edge.b, corner_id_b, v1

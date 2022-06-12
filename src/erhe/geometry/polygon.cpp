@@ -250,12 +250,15 @@ void Polygon::compute_planar_texture_coordinates(
         const Point_id          point_id          = corner.point_id;
         const glm::vec3         position          = point_locations.get(point_id);
         const glm::vec3         planar_position   = glm::vec3{inverse_transform * glm::vec4{position, 1.0f}};
-        // log_polygon_texcoords.trace("polygon {:2} corner {:2} point {:2} "
-        //                             "{} -> "
-        //                             "{}\n",
-        //                             this_polygon_id, corner_id, point_id,
-        //                             position,
-        //                             planar_position);
+        SPDLOG_LOGGER_TRACE(
+            log_polygon_texcoords,
+            "polygon {:2} corner {:2} point {:2} "
+            "{} -> "
+            "{}",
+            this_polygon_id, corner_id, point_id,
+            position,
+            planar_position
+        );
         const glm::vec2 uv = glm::vec2{planar_position};
         unscaled_uvs.emplace_back(corner_id, uv);
         const float distance = glm::length(uv);

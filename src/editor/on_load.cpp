@@ -180,30 +180,33 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 
     component_initialization_complete(true);
 
+    const auto& config = configuration->windows;
+
     if (m_components.get<erhe::application::Imgui_demo_window >()) m_components.get<erhe::application::Imgui_demo_window >()->hide();
-    if (m_components.get<erhe::application::Log_window        >()) m_components.get<erhe::application::Log_window        >()->hide();
-    if (m_components.get<erhe::application::Performance_window>()) m_components.get<erhe::application::Performance_window>()->hide();
-    if (m_components.get<erhe::application::Pipelines         >()) m_components.get<erhe::application::Pipelines         >()->hide();
-    if (m_components.get<erhe::application::View              >()) m_components.get<erhe::application::View              >()->hide();
+    if (m_components.get<erhe::application::Log_window        >() && !config.log        ) m_components.get<erhe::application::Log_window        >()->hide();
+    if (m_components.get<erhe::application::Performance_window>() && !config.performance) m_components.get<erhe::application::Performance_window>()->hide();
+    if (m_components.get<erhe::application::Pipelines         >() && !config.pipelines  ) m_components.get<erhe::application::Pipelines         >()->hide();
+    if (m_components.get<erhe::application::View              >() && !config.view       ) m_components.get<erhe::application::View              >()->hide();
     //if (m_components.get<erhe::application::Tool_properties_window>()) m_components.get<Terhe::application::ool_properties_window>()->hide();
 
-    if (m_components.get<editor::Debug_view_window  >()) m_components.get<editor::Debug_view_window >()->hide();
-    if (m_components.get<editor::Fly_camera_tool    >()) m_components.get<editor::Fly_camera_tool   >()->hide();
-    if (m_components.get<editor::Grid_tool          >()) m_components.get<editor::Grid_tool         >()->hide();
-    if (m_components.get<editor::Layers_window      >()) m_components.get<editor::Layers_window     >()->hide();
-    if (m_components.get<editor::Mesh_properties    >()) m_components.get<editor::Mesh_properties   >()->hide();
-    if (m_components.get<editor::Operation_stack    >()) m_components.get<editor::Operation_stack   >()->hide();
-    if (m_components.get<editor::Physics_window     >()) m_components.get<editor::Physics_window    >()->hide();
-    if (m_components.get<editor::Post_processing    >()) m_components.get<editor::Post_processing   >()->hide();
-    //if (m_components.get<editor::Node_tree_window   >()) m_components.get<editor::Node_tree_window   >()->hide();
-    //if (m_components.get<editor::Node_properties    >()) m_components.get<editor::Node_properties    >()->hide();
-    //if (m_components.get<editor::Materials          >()) m_components.get<editor::Materials          >()->hide();
-    //if (m_components.get<editor::Material_properties>()) m_components.get<editor::Material_properties>()->hide();
-    //if (m_components.get<editor::Brushes            >()) m_components.get<editor::Brushes            >()->hide();
-    //if (m_components.get<editor::Operations         >()) m_components.get<editor::Operations         >()->hide();
-    //if (m_components.get<editor::Trs_tool           >()) m_components.get<editor::Trs_tool           >()->hide();
-    if (m_components.get<editor::Viewport_config       >()) m_components.get<editor::Viewport_config       >()->hide();
-    //if (m_components.get<editor::Scene_root>()) m_components.get<editor::Scene_root>()->physics_world().enable_physics_updates();
+    if (m_components.get<editor::Brushes               >() && !config.brushes            ) m_components.get<editor::Brushes               >()->hide();
+    if (m_components.get<editor::Debug_view_window     >() && !config.debug_view         ) m_components.get<editor::Debug_view_window     >()->hide();
+    if (m_components.get<editor::Fly_camera_tool       >() && !config.fly_camera         ) m_components.get<editor::Fly_camera_tool       >()->hide();
+    if (m_components.get<editor::Grid_tool             >() && !config.grid               ) m_components.get<editor::Grid_tool             >()->hide();
+    if (m_components.get<editor::Layers_window         >() && !config.layers             ) m_components.get<editor::Layers_window         >()->hide();
+    if (m_components.get<editor::Material_properties   >() && !config.material_properties) m_components.get<editor::Material_properties   >()->hide();
+    if (m_components.get<editor::Materials             >() && !config.materials          ) m_components.get<editor::Materials             >()->hide();
+    if (m_components.get<editor::Mesh_properties       >() && !config.mesh_properties    ) m_components.get<editor::Mesh_properties       >()->hide();
+    if (m_components.get<editor::Node_properties       >() && !config.node_properties    ) m_components.get<editor::Node_properties       >()->hide();
+    if (m_components.get<editor::Node_tree_window      >() && !config.node_tree          ) m_components.get<editor::Node_tree_window      >()->hide();
+    if (m_components.get<editor::Operation_stack       >() && !config.operation_stack    ) m_components.get<editor::Operation_stack       >()->hide();
+    if (m_components.get<editor::Operations            >() && !config.operations         ) m_components.get<editor::Operations            >()->hide();
+    if (m_components.get<editor::Physics_window        >() && !config.physics            ) m_components.get<editor::Physics_window        >()->hide();
+    if (m_components.get<editor::Post_processing       >() && !config.post_processing    ) m_components.get<editor::Post_processing       >()->hide();
+    if (m_components.get<editor::Trs_tool              >() && !config.trs                ) m_components.get<editor::Trs_tool              >()->hide();
+    if (m_components.get<editor::Tool_properties_window>() && !config.tool_properties    ) m_components.get<editor::Tool_properties_window>()->hide();
+    if (m_components.get<editor::Viewport_config       >() && !config.viewport_config    ) m_components.get<editor::Viewport_config       >()->hide();
+    if (m_components.get<editor::Scene_root>()) m_components.get<editor::Scene_root>()->physics_world().enable_physics_updates();
 
     opengl_state_tracker->on_thread_enter();
 

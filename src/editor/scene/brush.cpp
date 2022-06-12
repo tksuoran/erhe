@@ -113,6 +113,7 @@ void Brush::initialize(const Create_info& create_info)
     collision_shape_generator   = create_info.collision_shape_generator;
 
     ERHE_VERIFY(geometry.get() != nullptr);
+    ERHE_PROFILE_MESSAGE(create_info.geometry->name.data(), create_info.geometry->name.size());
 
     {
         ERHE_PROFILE_SCOPE("gl primitive");

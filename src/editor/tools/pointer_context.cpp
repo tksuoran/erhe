@@ -64,7 +64,7 @@ void Pointer_context::update_mouse(
     const int                         count
 )
 {
-    log_pointer->trace("mouse {} count = {}", static_cast<int>(button), count);
+    SPDLOG_LOGGER_TRACE(log_pointer, "mouse {} count = {}", static_cast<int>(button), count);
     m_mouse_button[button].pressed  = (count > 0);
     m_mouse_button[button].released = (count == 0);
 }
@@ -74,7 +74,7 @@ void Pointer_context::update_mouse(
     const double y
 )
 {
-    log_pointer->trace("mouse x = {} y = {}", x, y);
+    SPDLOG_LOGGER_TRACE(log_pointer, "mouse x = {} y = {}", x, y);
     m_mouse_x = x;
     m_mouse_y = y;
 }
@@ -137,18 +137,19 @@ void Pointer_context::raytrace()
                 entry.geometry      = nullptr;
                 entry.local_index   = 0;
 
-                log_pointer->trace("{}: Hit position: {}", slot_names[i], entry.position.value());
+                SPDLOG_LOGGER_TRACE(log_pointer, "{}: Hit position: {}", slot_names[i], entry.position.value());
 
                 if (entry.raytrace_node != nullptr)
                 {
                     auto* node = entry.raytrace_node->get_node();
                     if (node != nullptr)
                     {
-                        log_pointer->trace("{}: Hit node: {} {}", slot_names[i], node->node_type(), node->name());
+                        SPDLOG_LOGGER_TRACE(log_pointer, "{}: Hit node: {} {}", slot_names[i], node->node_type(), node->name());
                         const auto* rt_instance = entry.raytrace_node->raytrace_instance();
                         if (rt_instance != nullptr)
                         {
-                            log_pointer->trace(
+                            SPDLOG_LOGGER_TRACE(
+                                log_pointer,
                                 "{}: RT instance: {}",
                                 slot_names[i],
                                 rt_instance->is_enabled()
@@ -167,12 +168,12 @@ void Pointer_context::raytrace()
                             entry.geometry = entry.raytrace_node->source_geometry().get();
                             if (entry.geometry != nullptr)
                             {
-                                log_pointer->trace("{}: Hit geometry: {}", slot_names[i], entry.geometry->name);
+                                SPDLOG_LOGGER_TRACE(log_pointer, "{}: Hit geometry: {}", slot_names[i], entry.geometry->name);
                             }
                             if (hit.primitive_id < primitive->primitive_geometry.primitive_id_to_polygon_id.size())
                             {
                                 const auto polygon_id = primitive->primitive_geometry.primitive_id_to_polygon_id[hit.primitive_id];
-                                log_pointer->trace("{}: Hit polygon: {}", slot_names[i], polygon_id);
+                                SPDLOG_LOGGER_TRACE(log_pointer, "{}: Hit polygon: {}", slot_names[i], polygon_id);
                                 entry.local_index = polygon_id;
                             }
                         }
@@ -187,25 +188,25 @@ void Pointer_context::raytrace()
             }
             else
             {
-                log_pointer->trace("{}: no hit", slot_names[i]);
+                SPDLOG_LOGGER_TRACE(log_pointer, "{}: no hit", slot_names[i]);
             }
         }
     }
 
-    log_pointer->trace("Nearest slot: {}", slot_names[m_nearest_slot]);
+    SPDLOG_LOGGER_TRACE(log_pointer, "Nearest slot: {}", slot_names[m_nearest_slot]);
 
     const auto duration = m_ray_traverse_timer.duration().value();
     if (duration >= std::chrono::milliseconds(1))
     {
-        log_pointer->trace("ray intersect time: {}", std::chrono::duration_cast<std::chrono::milliseconds>(duration));
+        SPDLOG_LOGGER_TRACE(log_pointer, "ray intersect time: {}", std::chrono::duration_cast<std::chrono::milliseconds>(duration));
     }
     else if (duration >= std::chrono::microseconds(1))
     {
-        log_pointer->trace("ray intersect time: {}", std::chrono::duration_cast<std::chrono::microseconds>(duration));
+        SPDLOG_LOGGER_TRACE(log_pointer, "ray intersect time: {}", std::chrono::duration_cast<std::chrono::microseconds>(duration));
     }
     else
     {
-        log_pointer->trace("ray intersect time: {}", duration);
+        SPDLOG_LOGGER_TRACE(log_pointer, "ray intersect time: {}", duration);
     }
 
 #if 0

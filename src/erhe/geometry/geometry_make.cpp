@@ -27,7 +27,7 @@ auto Geometry::make_corner(const Point_id point_id, const Polygon_id polygon_id)
     Corner& corner = corners[corner_id];
     corner.point_id   = point_id;
     corner.polygon_id = polygon_id;
-    //log.trace("\tmake_corner(point_id = {}, polygon_id = {}) = corner_id = {}\n", point_id, polygon_id, corner_id);
+    SPDLOG_LOGGER_TRACE(log, "\tmake_corner(point_id = {}, polygon_id = {}) = corner_id = {}", point_id, polygon_id, corner_id);
     return corner_id;
 }
 
@@ -49,7 +49,7 @@ auto Geometry::make_point() -> Point_id
     ERHE_VERIFY(point_id < points.size());
     //points[point_id].first_point_corner_id = m_next_point_corner;
     points[point_id].corner_count = 0;
-    //log.trace("\tmake_point() point_id = {}\n", point_id);
+    SPDLOG_LOGGER_TRACE(log, "\tmake_point() point_id = {}", point_id);
     return point_id;
 }
 
@@ -70,7 +70,7 @@ auto Geometry::make_polygon() -> Polygon_id
 
     ERHE_VERIFY(polygon_id < polygons.size());
     polygons[polygon_id].corner_count = 0;
-    //log.trace("\tmake_polygon() polygon_id = {}\n", polygon_id);
+    SPDLOG_LOGGER_TRACE(log, "\tmake_polygon() polygon_id = {}", polygon_id);
     return polygon_id;
 }
 
@@ -99,7 +99,7 @@ auto Geometry::make_edge(const Point_id a, const Point_id b) -> Edge_id
     edge.b = b;
     edge.first_edge_polygon_id = m_next_edge_polygon_id;
     edge.polygon_count = 0;
-    //log.trace("\tmake_edge(a = {}, b = {}) edge_id = {}\n", a, b, edge_id);
+    SPDLOG_LOGGER_TRACE(log, "\tmake_edge(a = {}, b = {}) edge_id = {}", a, b, edge_id);
     return edge_id;
 }
 
@@ -238,7 +238,7 @@ void Geometry::sort_point_corners()
             }
             if (!found)
             {
-                log_geometry->trace("Could not sort point corners");
+                log_geometry->warn("Could not sort point corners");
             }
             const Point_corner_id point_corner_id = i.point.first_point_corner_id + j;
             point_corners[point_corner_id] = head.corner_id;
@@ -271,8 +271,14 @@ auto Geometry::make_edge_polygon(const Edge_id edge_id, const Polygon_id polygon
     ++m_next_edge_polygon_id;
     const Edge_polygon_id edge_polygon_id = edge.first_edge_polygon_id + edge.polygon_count;
     ++edge.polygon_count;
-    //log.trace("\tmake_edge_polygon(edge = {}, polygon = {}) first_edge_polygon_id = {}, edge.polygon_count = {}\n",
-    //          edge_id, polygon_id, edge.first_edge_polygon_id, edge.polygon_count);
+    SPDLOG_LOGGER_TRACE(
+        log,
+        "\tmake_edge_polygon(edge = {}, polygon = {}) first_edge_polygon_id = {}, edge.polygon_count = {}",
+        edge_id,
+        polygon_id,
+        edge.first_edge_polygon_id,
+        edge.polygon_count
+    );
 
     if (edge_polygon_id >= edge_polygons.size())
     {
@@ -312,8 +318,14 @@ auto Geometry::make_polygon_corner_(
     const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + polygon.corner_count;
     ++polygon.corner_count;
 
-    //log.trace("\tmake_polygon_corner_(polygon_id = {}, corner_id = {}) first_polygon_corner_id = {}, polygon.corner_count = {}\n",
-    //          polygon_id, corner_id, polygon.first_polygon_corner_id, polygon.corner_count);
+    SPDLOG_LOGGER_TRACE(
+        log,
+        "\tmake_polygon_corner_(polygon_id = {}, corner_id = {}) first_polygon_corner_id = {}, polygon.corner_count = {}",
+        polygon_id,
+        corner_id,
+        polygon.first_polygon_corner_id,
+        polygon.corner_count
+    );
 
     if (polygon_corner_id >= polygon_corners.size())
     {
@@ -342,7 +354,7 @@ auto Geometry::make_polygon_corner(
     const Corner_id corner_id = make_corner(point_id, polygon_id);
     make_polygon_corner_(polygon_id, corner_id);
     reserve_point_corner(point_id, corner_id);
-    //log.trace("polygon {} adding point {} as corner {}\n", polygon_id, point_id, corner_id);
+    SPDLOG_LOGGER_TRACE(log, "polygon {} adding point {} as corner {}", polygon_id, point_id, corner_id);
     return corner_id;
 }
 

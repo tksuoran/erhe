@@ -4,7 +4,7 @@
 #include "erhe/components/components.hpp"
 
 #include <memory>
-
+#include <mutex>
 
 namespace editor
 {
@@ -53,6 +53,7 @@ private:
     std::shared_ptr<Selection_tool>  m_selection_tool;
 
     Tool*              m_current_active_tool{nullptr};
+    std::mutex         m_mutex;
     std::vector<Tool*> m_active_tools;
 };
 

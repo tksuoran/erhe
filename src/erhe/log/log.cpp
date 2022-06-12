@@ -121,7 +121,7 @@ auto make_logger(
     auto logger = std::make_shared<spdlog::logger>(
         name,
         spdlog::sinks_init_list{
-            sink_console,
+            //sink_console,
             sink_log_file,
             tail ? tail_store_log : frame_store_log
         }

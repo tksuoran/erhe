@@ -217,6 +217,7 @@ target_link_libraries(
     optional_lite
     nlohmann_json::nlohmann_json
     RectangleBinPack
+    rapidjson
     spdlog
 )
 

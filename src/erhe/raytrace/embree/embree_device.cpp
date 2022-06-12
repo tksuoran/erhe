@@ -44,23 +44,23 @@ Embree_device::Embree_device()
         return;
     }
 
-    //log_embree.trace("rtcSetDeviceErrorFunction()");
+    SPDLOG_LOGGER_TRACE(log_embree, "rtcSetDeviceErrorFunction()");
     rtcSetDeviceErrorFunction(m_device, s_rtc_error_function, this);
 }
 
 Embree_device::~Embree_device()
 {
-    //log_embree.trace("rtcReleaseDevice()");
+    SPDLOG_LOGGER_TRACE(log_embree, "rtcReleaseDevice()");
     rtcReleaseDevice(m_device);
 }
 
 void Embree_device::check_device_error()
 {
     const auto error_code = rtcGetDeviceError(m_device);
-    //log_embree.trace("rtcGetDeviceError() = {}\n", error_code);
+    SPDLOG_LOGGER_TRACE(log_embree, "rtcGetDeviceError() = {}", error_code);
     if (error_code != RTC_ERROR_NONE)
     {
-        log_scene->error("error: {}", c_str(error_code));
+        log_embree->error("error: {}", c_str(error_code));
     }
 }
 
@@ -69,7 +69,7 @@ void Embree_device::rtc_error_function(
     const char* message
 )
 {
-    log_scene->error("error: {} - {}", c_str(error_code), message);
+    log_embree->error("error: {} - {}", c_str(error_code), message);
 }
 
 auto Embree_device::get_rtc_device() -> RTCDevice

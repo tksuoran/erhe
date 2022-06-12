@@ -149,6 +149,38 @@ vec3 F_Schlick(vec3 f0, vec3 f90, float V_dot_H)
     return f0 + (f90 - f0) * pow(clamp(1.0 - V_dot_H, 0.0, 1.0), 5.0);
 }
 
+float V_GGX(
+    float N_dot_L,
+    float N_dot_V,
+    float alpha_roughness
+)
+{
+    float alpha_roughness_sq = alpha_roughness * alpha_roughness;
+    float GGX_V              = N_dot_L * sqrt(N_dot_V * N_dot_V * (1.0 - alpha_roughness_sq) + alpha_roughness_sq);
+    float GGX_L              = N_dot_V * sqrt(N_dot_L * N_dot_L * (1.0 - alpha_roughness_sq) + alpha_roughness_sq);
+    float GGX                = GGX_V + GGX_L;
+    if (GGX > 0.0)
+    {
+        return 0.5 / GGX;
+    }
+    return 0.0;
+}
+
+float D_GGX(float N_dot_H, float alpha_roughness)
+{
+    float alpha_roughness_sq = alpha_roughness * alpha_roughness;
+    float f                  = (N_dot_H * N_dot_H) * (alpha_roughness_sq - 1.0) + 1.0;
+    return alpha_roughness_sq / (M_PI * f * f);
+}
+
+vec3 BRDF_specularGGX(vec3 f0, vec3 f90, float alphaRoughness, float VdotH, float NdotL, float NdotV, float NdotH)
+{
+    vec3   F   = F_Schlick(f0, f90, VdotH);
+    float  Vis = V_GGX(NdotL, NdotV, alphaRoughness);
+    float  D   = D_GGX(NdotH, alphaRoughness);
+    return F * Vis * D;
+}
+
 vec3 BRDF_lambertian(vec3 f0, vec3 f90, vec3 diffuseColor, float V_dot_H)
 {
     return (1.0 - F_Schlick(f0, f90, V_dot_H)) * (diffuseColor / M_PI);
@@ -242,6 +274,18 @@ void main()
         {
             vec3  intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, N_dot_L);
 
+#if defined(ERHE_SIMPLER_SHADERS)
+            vec3  H= normalize(L + V);
+            float N_dot_H   = clamped_dot(L, H);
+            float L_dot_H   = clamped_dot(L, H);
+            float V_dot_H   = clamped_dot(V, H);
+            color += intensity * N_dot_L * BRDF_lambertian(m_f0, m_f90, m_albedo_color, V_dot_H);
+            color += intensity * N_dot_L * BRDF_specularGGX(
+                m_f0, m_f90, roughness,
+                V_dot_H, N_dot_L, N_dot_V, N_dot_H
+            );
+#else
+
             vec3  wi        = normalize(TBN_t * L);
             vec3  wh        = normalize(wo + wi);   // ( could check it not zero)
             float wi_dot_wh = clamp(dot(wi, wh), 0.0, 1.0);     // saturate(dot(L,H))
@@ -257,6 +301,7 @@ void main()
                 wg_dot_wi * intensity * (D * F * G) / (4.0 * cos_theta(wi) * cos_theta(wo)),
                 vec3(0.0, 0.0, 0.0)
             );
+#endif
         }
     }
 
@@ -276,6 +321,17 @@ void main()
             float light_visibility  = sample_light_visibility(v_position, light_index, N_dot_L);
             vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
 
+#if defined(ERHE_SIMPLER_SHADERS)
+            vec3  H       = normalize(L + V);
+            float N_dot_H = clamped_dot(N, H);
+            float L_dot_H = clamped_dot(L, H);
+            float V_dot_H = clamped_dot(V, H);
+            color += intensity * N_dot_L * BRDF_lambertian(m_f0, m_f90, m_albedo_color, V_dot_H);
+            color += intensity * N_dot_L * BRDF_specularGGX(
+                m_f0, m_f90, roughness,
+                V_dot_H, N_dot_L, N_dot_V, N_dot_H
+            );
+#else
             vec3  wi        = normalize(TBN_t * L);
             vec3  wh        = normalize(wo + wi);
             float wi_dot_wh = clamp(dot(wi, wh), 0.0, 1.0);
@@ -291,6 +347,7 @@ void main()
                 wg_dot_wi * intensity * (D * F * G) / (4.0 * cos_theta(wi) * cos_theta(wo)),
                 vec3(0.0, 0.0, 0.0)
             );
+#endif
        }
     }
 

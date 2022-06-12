@@ -63,7 +63,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
 
     vec3 min_corner{std::numeric_limits<float>::max(),    std::numeric_limits<float>::max(),    std::numeric_limits<float>::max()};
     vec3 max_corner{std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()};
-    //log_weld.trace("Points before sort:\n");
+    SPDLOG_LOGGER_TRACE(log_weld, "Points before sort:");
     for (Point_id point_id = 0; point_id < m_next_point_id; ++point_id)
     {
         if (!point_attribute_maps.locations->has(point_id))
@@ -71,7 +71,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
             continue;
         }
         const vec3 position = point_attribute_maps.locations->get(point_id);
-        //log_weld.trace("    {:2}: {}\n", point_id, position);
+        SPDLOG_LOGGER_TRACE(log_weld, "    {:2}: {}", point_id, position);
         min_corner = glm::min(min_corner, position);
         max_corner = glm::max(max_corner, position);
     }
@@ -85,14 +85,14 @@ void Geometry::weld(const Weld_settings& weld_settings)
     bounding_box_size2[axis1] = 0.0f;
     const auto axis2 = erhe::toolkit::max_axis_index(bounding_box_size2);
 
-    log_weld->trace("Primary   axis = {} {}", axis0, c_str(axis0));
-    log_weld->trace("Secondary axis = {} {}", axis1, c_str(axis1));
-    log_weld->trace("Tertiary  axis = {} {}", axis2, c_str(axis2));
+    SPDLOG_LOGGER_TRACE(log_weld, "Primary   axis = {} {}", axis0, c_str(axis0));
+    SPDLOG_LOGGER_TRACE(log_weld, "Secondary axis = {} {}", axis1, c_str(axis1));
+    SPDLOG_LOGGER_TRACE(log_weld, "Tertiary  axis = {} {}", axis2, c_str(axis2));
 
     //debug_trace();
     sanity_check();
 
-    log_weld->trace("Polygon processing:");
+    SPDLOG_LOGGER_TRACE(log_weld, "Polygon processing:");
     {
         //const erhe::log::Indenter scope_indent;
 
@@ -129,7 +129,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
 
         polygon_remapper.create_new_from_old_mapping();
 
-        //log_weld.trace("Sorted polygon centroids:\n");
+        //SPDLOG_LOGGER_TRACE(log_weld, "Sorted polygon centroids:");
         for (Polygon_id new_polygon_id = 0; new_polygon_id < m_next_polygon_id; ++new_polygon_id)
         {
             const Polygon_id old_polygon_id = polygon_remapper.old_id(new_polygon_id);

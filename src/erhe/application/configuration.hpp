@@ -47,7 +47,8 @@ public:
 
     struct Graphics
     {
-        bool reverse_depth{true};
+        bool reverse_depth  {true};
+        bool simpler_shaders{true};
     };
     Graphics graphics;
 
@@ -111,6 +112,34 @@ public:
         bool  johnson_solids         {false};
     };
     Scene scene;
+
+    struct Windows
+    {
+        bool brushes            {true};
+        bool debug_view         {false};
+        bool fly_camera         {false};
+        bool grid               {false};
+        bool layers             {false};
+        bool log                {false};
+        bool materials          {true};
+        bool material_properties{true};
+        bool mesh_properties    {false};
+        bool node_properties    {true};
+        bool node_tree          {true};
+        bool operation_stack    {true};
+        bool operations         {true};
+        bool performance        {false};
+        bool pipelines          {false};
+        bool physics            {false};
+        bool physics_tool       {false};
+        bool post_processing    {false};
+        bool tool_properties    {true};
+        bool trs                {false};
+        bool view               {false};
+        bool viewport           {true};
+        bool viewport_config    {false};
+    };
+    Windows windows;
 };
 
 } // namespace erhe::application

@@ -28,6 +28,7 @@
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/physics/irigid_body.hpp"
 #include "erhe/primitive/material.hpp"
+#include "erhe/raytrace/iscene.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
@@ -228,7 +229,7 @@ void Trs_tool::initialize_component()
 
 void Trs_tool::set_translate(const bool enabled)
 {
-    log_trs_tool->trace("set_translate(enabled = {})", enabled);
+    SPDLOG_LOGGER_TRACE(log_trs_tool, "set_translate(enabled = {})", enabled);
 
     m_visualization.show_translate = enabled;
     update_visibility();
@@ -236,7 +237,7 @@ void Trs_tool::set_translate(const bool enabled)
 
 void Trs_tool::set_rotate(const bool enabled)
 {
-    log_trs_tool->trace("set_rotate(enabled = {})", enabled);
+    SPDLOG_LOGGER_TRACE(log_trs_tool, "set_rotate(enabled = {})", enabled);
 
     m_visualization.show_rotate = enabled;
     update_visibility();
@@ -251,7 +252,8 @@ void Trs_tool::set_node(
     const std::shared_ptr<erhe::scene::Node>& node
 )
 {
-    log_trs_tool->trace(
+    SPDLOG_LOGGER_TRACE(
+        log_trs_tool,
         "set_node(node = {})",
         node ? node->name() : "()"
     );
@@ -565,16 +567,9 @@ void Trs_tool::Visualization::initialize(
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
 
-    ERHE_PROFILE_MESSAGE_LITERAL("arrow_cylinder")
     const auto arrow_cylinder = make_arrow_cylinder(mesh_memory);
-
-    ERHE_PROFILE_MESSAGE_LITERAL("arrow_cone")
     const auto arrow_cone     = make_arrow_cone    (mesh_memory);
-
-    ERHE_PROFILE_MESSAGE_LITERAL("box")
     const auto box            = make_box           (mesh_memory);
-
-    ERHE_PROFILE_MESSAGE_LITERAL("rotate_ring")
     const auto rotate_ring    = make_rotate_ring   (mesh_memory);
 
     x_arrow_cylinder_mesh  = make_mesh(scene_root, "X arrow cylinder", x_material, arrow_cylinder);
@@ -1125,21 +1120,21 @@ void Trs_tool::update_rotate()
 
     if (root() == nullptr)
     {
-        log_trs_tool->trace("no root");
+        SPDLOG_LOGGER_TRACE(log_trs_tool, "no root");
         return;
     }
 
     auto* const window = m_pointer_context->window();
     if (window == nullptr)
     {
-        log_trs_tool->trace("no window");
+        SPDLOG_LOGGER_TRACE(log_trs_tool, "no window");
         return;
     }
 
     auto* const camera = window->camera();
     if (camera == nullptr)
     {
-        log_trs_tool->trace("no camera");
+        SPDLOG_LOGGER_TRACE(log_trs_tool, "no camera");
         return;
     }
 

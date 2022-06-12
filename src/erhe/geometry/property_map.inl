@@ -160,7 +160,7 @@ Property_map<Key_type, Value_type>::interpolate(
 
     if (m_descriptor.interpolation_mode == Interpolation_mode::none)
     {
-        log_interpolate->trace("\tinterpolation mode none, skipping this map");
+        SPDLOG_LOGGER_TRACE(log_interpolate, "\tinterpolation mode none, skipping this map");
         return;
     }
 
@@ -172,12 +172,12 @@ Property_map<Key_type, Value_type>::interpolate(
     {
         const std::vector<std::pair<float, Key_type>>& old_keys = key_new_to_olds[new_key];
 
-        //trace_fmt(log_interpolate, "\tkey = {} from\n", new_key);
+        SPDLOG_LOGGER_TRACE(log_interpolate, "\tkey = {} from", new_key);
         float sum_weights{0.0f};
         for (auto j : old_keys)
         {
             const Key_type old_key = j.second;
-            //trace_fmt(log_interpolate, "\told key {} weight {}\n", static_cast<unsigned int>(old_key), static_cast<float>(j.first));
+            SPDLOG_LOGGER_TRACE(log_interpolate, "\t\told key {} weight {}\n", static_cast<unsigned int>(old_key), static_cast<float>(j.first));
             if (has(old_key))
             {
                 sum_weights += j.first;
@@ -186,7 +186,7 @@ Property_map<Key_type, Value_type>::interpolate(
 
         if (sum_weights == 0.0f)
         {
-            //trace_fmt(log_interpolate, "\tzero sum\n");
+            SPDLOG_LOGGER_TRACE(log_interpolate, "\t\tzero sum");
             continue;
         }
 
@@ -199,13 +199,13 @@ Property_map<Key_type, Value_type>::interpolate(
             if (has(old_key))
             {
                 const Value_type old_value = get(old_key);
-                //log_interpolate->trace("\told value {} weight {}", old_value, (weight / sum_weights));
+                SPDLOG_LOGGER_TRACE(log_interpolate, "\told value {} weight {}", old_value, (weight / sum_weights));
                 new_value += static_cast<Value_type>((weight / sum_weights) * old_value);
             }
-            //else
-            //{
-            //    trace_fmt(log_interpolate, "\told value not found\n");
-            //}
+            else
+            {
+                SPDLOG_LOGGER_TRACE(log_interpolate, "\told value not found");
+            }
         }
 
         // Special treatment for normal and other direction vectors
@@ -214,7 +214,7 @@ Property_map<Key_type, Value_type>::interpolate(
             if (m_descriptor.interpolation_mode == Interpolation_mode::normalized)
             {
                 new_value = glm::normalize(new_value);
-                //log_interpolate->trace("\tnormalized", new_value);
+                SPDLOG_LOGGER_TRACE(log_interpolate, "\tnormalized", new_value);
             }
         }
 
@@ -229,11 +229,11 @@ Property_map<Key_type, Value_type>::interpolate(
                     ),
                     new_value.z
                 };
-                //log_interpolate->trace("\tnormalized vec3-float", new_value);
+                SPDLOG_LOGGER_TRACE(log_interpolate, "\tnormalized vec3-float", new_value);
             }
         }
 
-        //log_interpolate->trace("\tvalue = {}", new_value);
+        SPDLOG_LOGGER_TRACE(log_interpolate, "\tvalue = {}", new_value);
 
         destination->put(static_cast<Key_type>(new_key), new_value);
     }

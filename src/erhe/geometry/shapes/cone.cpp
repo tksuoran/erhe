@@ -177,31 +177,39 @@ public:
 
         Point_id point_id{0};
 
-        //log_cone.trace("polygon_id = {:2}, slice = {: 3}, stack = {: 3}, rel_slice = {: 3.1}, rel_stack = {: 3.1}, "
-        //               "base = {:>5}, point_id = ", polygon_id, slice, stack, rel_slice, rel_stack, base);
+        SPDLOG_LOGGER_TRACE(log_cone,
+            "polygon_id = {:2}, slice = {: 3}, stack = {: 3}, rel_slice = {: 3.1}, rel_stack = {: 3.1}, "
+            "base = {:>5}, point_id = ",
+            polygon_id,
+            slice,
+            stack,
+            rel_slice,
+            rel_stack,
+            base
+        );
         if (is_top && (top_radius == 0.0))
         {
             point_id = top_point_id;
-            //log_cone.trace("{:2} (top)        ", point_id);
+            SPDLOG_LOGGER_TRACE(log_cone, "{:2} (top)        ", point_id);
         }
         else if (is_bottom && (bottom_radius == 0.0))
         {
             point_id = bottom_point_id;
-            //log_cone.trace("{:2} (bottom)     ", point_id);
+            SPDLOG_LOGGER_TRACE(log_cone, "{:2} (bottom)     ", point_id);
         }
         else if (slice == slice_count)
         {
             point_id = points[std::make_pair(0, stack)];
-            //log_cone.trace("{:2} (slice seam) ", point_id);
+            SPDLOG_LOGGER_TRACE(log_cone, "{:2} (slice seam) ", point_id);
         }
         else
         {
             point_id = points[std::make_pair(slice, stack)];
-            //log_cone.trace("{:2}              ", point_id);
+            SPDLOG_LOGGER_TRACE(log_cone, "{:2}              ", point_id);
         }
 
         const Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
-        //log_cone.trace("corner = {:2}", corner_id);
+        SPDLOG_LOGGER_TRACE(log_cone, "corner = {:2}", corner_id);
 
         if (is_uv_discontinuity)
         {
@@ -215,16 +223,16 @@ public:
 
                 s = static_cast<float>(one_minus_rel_stack * sin_phi + rel_stack * sin_phi);
                 t = static_cast<float>(one_minus_rel_stack * cos_phi + rel_stack * cos_phi);
-                //log_cone.trace(" base");
+                SPDLOG_LOGGER_TRACE(log_cone, " base");
             }
             else
             {
                 s = static_cast<float>(rel_slice);
                 t = static_cast<float>(rel_stack);
-                //log_cone.trace(" slice seam rel_slice = {: 3.1} rel_stack = {: 3.1}", rel_slice, rel_stack);
+                SPDLOG_LOGGER_TRACE(log_cone, " slice seam rel_slice = {: 3.1} rel_stack = {: 3.1}", rel_slice, rel_stack);
             }
             corner_texcoords->put(corner_id, vec2{s, t});
-            //log_cone.trace(" UV discontinuity, texcoord = {: 3.1}, {: 3.1}", s, t);
+            SPDLOG_LOGGER_TRACE(log_cone, " UV discontinuity, texcoord = {: 3.1}, {: 3.1}", s, t);
         }
 
         if (is_top || is_bottom)
@@ -262,10 +270,9 @@ public:
                         ? vec4{0.0f, 0.0f, 1.0f, 1.0f}
                         : vec4{0.0f, 0.0f, 0.0f, 0.0f}
                 );
-                //log_cone.trace(" forced top normal and tangent");
+                SPDLOG_LOGGER_TRACE(log_cone, " forced top normal and tangent");
             }
         }
-        //SPDLOG_LOGGER_TRACE(log_cone.trace("\n");
         return corner_id;
     }
 
@@ -312,7 +319,7 @@ public:
         const glm::vec4 color_no_tangent_map{1.0f, 1.0f, 1.0f, 0.0f};
 
         // Points
-        //log_cone.trace("Points:\n");
+        SPDLOG_LOGGER_TRACE(log_cone, "Points:");
         for (int slice = 0; slice < slice_count; ++slice)
         {
             const auto rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
@@ -324,7 +331,7 @@ public:
             {
                 const auto rel_stack = static_cast<double>(stack) / (static_cast<double>(stack_division) + 1);
 
-                //log_cone.trace("\tslice {:2} stack {: 2}: ", slice, stack);
+                SPDLOG_LOGGER_TRACE(log_cone, "\tslice {:2} stack {: 2}: ", slice, stack);
                 points[std::make_pair(slice, stack)] = cone_point(rel_slice, rel_stack);
             }
         }
@@ -332,7 +339,7 @@ public:
         // Bottom parts
         if (bottom_radius == 0.0)
         {
-            //log_cone.trace("Bottom - point / triangle fan\n");
+            SPDLOG_LOGGER_TRACE(log_cone, "Bottom - point / triangle fan");
             bottom_point_id = geometry.make_point(min_x, 0.0, 0.0); // Apex
             for (int slice = 0; slice < slice_count; ++slice)
             {
@@ -382,7 +389,7 @@ public:
         {
             if (use_bottom)
             {
-                //log_cone.trace("Bottom - flat polygon\n");
+                SPDLOG_LOGGER_TRACE(log_cone, "Bottom - flat polygon");
                 const Polygon_id polygon_id = geometry.make_polygon();
                 if constexpr (use_geometric_centroids)
                 {
@@ -407,12 +414,12 @@ public:
             }
             else
             {
-                //log_cone.trace("Bottom - none\n");
+                SPDLOG_LOGGER_TRACE(log_cone, "Bottom - none");
             }
         }
 
         // Middle quads, bottom up
-        //log_cone.trace("Middle quads, bottom up\n");
+        SPDLOG_LOGGER_TRACE(log_cone, "Middle quads, bottom up");
         for (
             int stack = -stack_division - bottom_not_singular;
             stack < stack_division + top_not_singular;
@@ -495,7 +502,7 @@ public:
         {
             if (use_top)
             {
-                //log_cone.trace("Top - flat polygon\n");
+                SPDLOG_LOGGER_TRACE(log_cone, "Top - flat polygon");
                 const Polygon_id polygon_id = geometry.make_polygon();
                 if constexpr (use_geometric_centroids)
                 {
@@ -521,7 +528,7 @@ public:
             }
             else
             {
-                //log_cone.trace("Top - none\n");
+                SPDLOG_LOGGER_TRACE(log_cone, "Top - none");
             }
         }
         geometry.make_point_corners();

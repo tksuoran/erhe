@@ -316,6 +316,7 @@ private:
     auto update_rotate_parallel     () -> bool;
     void update_rotate_final        ();
     void set_node_world_transform   (const glm::dmat4 world_from_node);
+    void set_scene_changed          ();
     void update_transforms          ();
     void update_visibility          ();
 

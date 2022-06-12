@@ -28,13 +28,13 @@ Embree_buffer::Embree_buffer(const std::string_view debug_label, const size_t ca
         Embree_device::get_instance().get_rtc_device(),
         capacity_byte_count
     );
-    //log_embree.trace("rtcNewBuffer(byteSize = {}) = {} {}\n", capacity_byte_count, debug_label, fmt::ptr(m_buffer));
+    SPDLOG_LOGGER_TRACE(log_embree, "rtcNewBuffer(byteSize = {}) = {} {}", capacity_byte_count, debug_label, fmt::ptr(m_buffer));
     m_capacity_byte_count = capacity_byte_count;
 }
 
 Embree_buffer::~Embree_buffer()
 {
-    //log_embree.trace("rtcReleaseBuffer(hbuffer = {} {)}\n", m_debug_label, fmt::ptr(m_buffer));
+    SPDLOG_LOGGER_TRACE(log_embree, "rtcReleaseBuffer(hbuffer = {} {)}", m_debug_label, fmt::ptr(m_buffer));
     rtcReleaseBuffer(m_buffer);
 }
 
@@ -62,7 +62,7 @@ auto Embree_buffer::allocate_bytes(
 auto Embree_buffer::span() noexcept -> gsl::span<std::byte>
 {
     auto* const ptr = reinterpret_cast<std::byte*>(rtcGetBufferData(m_buffer));
-    //log_embree.trace("rtcGetBufferData(hbuffer = {} {})\n", m_debug_label, fmt::ptr(ptr));
+    SPDLOG_LOGGER_TRACE(log_embree, "rtcGetBufferData(hbuffer = {} {})", m_debug_label, fmt::ptr(ptr));
     return gsl::span<std::byte>{
         ptr,
         m_capacity_byte_count

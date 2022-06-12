@@ -32,7 +32,7 @@ Property_map_collection<Key_type>::insert(Property_map_base<Key_type>* map)
         ERHE_VERIFY(entry.key != map->descriptor().name);
     }
     m_entries.emplace_back(map->descriptor().name, map);
-    //log_attribute_maps.trace("Added attribute map {}\n", map->descriptor().name);
+    SPDLOG_LOGGER_TRACE(log_attribute_maps, "Added attribute map {}", map->descriptor().name);
 }
 
 template <typename Key_type>
@@ -108,7 +108,7 @@ Property_map_collection<Key_type>::create(
 
     const auto p = new Property_map<Key_type, Value_type>(descriptor);
     m_entries.emplace_back(descriptor.name, p);
-    //log_attribute_maps.trace("Added attribute map {}\n", descriptor.name);
+    SPDLOG_LOGGER_TRACE(log_attribute_maps, "Added attribute map {}", descriptor.name);
 
     return p;
 }
@@ -162,7 +162,7 @@ Property_map_collection<Key_type>::find_or_create(
     // New entry
     const auto p = new Property_map<Key_type, Value_type>(descriptor);
     m_entries.emplace_back(descriptor.name, p);
-    //log_attribute_maps.trace("Added attribute map {}\n", descriptor.name);
+    SPDLOG_LOGGER_TRACE(log_attribute_maps, "Added attribute map {}", descriptor.name);
     return p;
 }
 

@@ -1,3 +1,5 @@
+#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_OFF
+
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/log.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -529,16 +531,16 @@ auto Geometry::compute_tangents(
                         bitangent_sum = bitangent.value();
                     }
                 }
-                log_tangent_gen->trace("polygon {} corner {} has tangent   {} value {}\n", polygon_id, i, tangent.  has_value(), tangent.  has_value() ? tangent.  value() : vec4{});
-                log_tangent_gen->trace("polygon {} corner {} has bitangent {} value {}\n", polygon_id, i, bitangent.has_value(), bitangent.has_value() ? bitangent.value() : vec4{});
+                //SPDLOG_LOGGER_TRACE(log_tangent_gen, "polygon {} corner {} has tangent   {} value {}", polygon_id, i, tangent.  has_value(), tangent.  has_value() ? tangent.  value() : vec4{});
+                //SPDLOG_LOGGER_TRACE(log_tangent_gen, "polygon {} corner {} has bitangent {} value {}", polygon_id, i, bitangent.has_value(), bitangent.has_value() ? bitangent.value() : vec4{});
                 if ((override_existing || !selected_tangent_corner_index.has_value()) && tangent.has_value())
                 {
-                    for (const auto other : tangents)
+                    for (const auto& other : tangents)
                     {
                         if (other.has_value())
                         {
                             const float dot = glm::dot(vec3{tangent.value()}, vec3{other.value()});
-                            SPDLOG_LOGGER_TRACE(log_tangent_gen, "tangent dot with other {} = {}\n", other.value(), dot);
+                            //SPDLOG_LOGGER_TRACE(log_tangent_gen, "tangent dot with other {} = {}", other.value(), dot);
                             if (dot > 0.99f)
                             {
                                 selected_tangent_corner_index = i;
@@ -548,12 +550,12 @@ auto Geometry::compute_tangents(
                 }
                 if ((override_existing || !selected_bitangent_corner_index.has_value()) && bitangent.has_value())
                 {
-                    for (const auto other : bitangents)
+                    for (const auto& other : bitangents)
                     {
                         if (other.has_value())
                         {
                             const float dot = glm::dot(vec3{bitangent.value()}, vec3{other.value()});
-                            SPDLOG_LOGGER_TRACE(log_tangent_gen, "bitangent dot with other {} = {}\n", other.value(), dot);
+                            SPDLOG_LOGGER_TRACE(log_tangent_gen, "bitangent dot with other {} = {}", other.value(), dot);
                             if (dot > 0.99f)
                             {
                                 selected_bitangent_corner_index = i;

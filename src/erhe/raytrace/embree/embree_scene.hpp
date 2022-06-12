@@ -48,14 +48,14 @@ public:
 
     void intersect(Ray& ray, Hit& out_hit) override;
 
-    void set_dirty();
+    //void set_dirty();
     auto get_rtc_scene() -> RTCScene;
     auto get_geometry_from_id(const unsigned int id) -> Embree_geometry*;
 
 private:
     RTCScene    m_scene{nullptr};
     std::string m_debug_label;
-    bool        m_dirty{true};
+    //bool        m_dirty{true};
 };
 
 }

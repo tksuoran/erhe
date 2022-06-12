@@ -577,33 +577,41 @@ void Scene_builder::make_brushes()
         make_mesh_node("Z ring", Transform::create_rotation(-glm::pi<float>() / 2.0f, glm::vec3{0.0f, 1.0f, 0.0f}));
     }
 
+    Json_library library;//("res/polyhedra/johnson.json");
     if (config.johnson_solids)
     {
-        execution_queue.enqueue(
-            [this]()
+        // TODO When tasks can have dependencies we could queue this as well
+        library = Json_library("res/polyhedra/johnson.json");
+        {
+            ERHE_PROFILE_SCOPE("Johnson solids");
+
+            const Brush_create_context context{
+                .build_info   = build_info(),
+                .normal_style = Normal_style::polygon_normals
+            };
+
             {
-                ERHE_PROFILE_SCOPE("Johnson solids");
+                ERHE_PROFILE_SCOPE("make brushes");
 
-                const Brush_create_context context{
-                    .build_info   = build_info(),
-                    .normal_style = Normal_style::polygon_normals
-                };
-                constexpr bool instantiate = true;
-
-                const Json_library library("res/polyhedra/johnson.json");
                 for (const auto& key_name : library.names)
                 {
-                    auto geometry = library.make_geometry(key_name);
-                    if (geometry.get_polygon_count() == 0)
-                    {
-                        continue;
-                    }
-                    geometry.compute_polygon_normals();
+                    execution_queue.enqueue(
+                        [this, &library, &key_name, &context]()
+                        {
+                            constexpr bool instantiate = true;
+                            auto geometry = library.make_geometry(key_name);
+                            if (geometry.get_polygon_count() == 0)
+                            {
+                                return;
+                            }
+                            geometry.compute_polygon_normals();
 
-                    make_brush(instantiate, std::move(geometry), context);
+                            make_brush(instantiate, std::move(geometry), context);
+                        }
+                    );
                 }
             }
-        );
+        }
     }
 
     execution_queue.wait();
