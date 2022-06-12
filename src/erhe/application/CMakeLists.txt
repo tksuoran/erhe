@@ -89,6 +89,7 @@ target_link_libraries(${_target}
         erhe::toolkit
         erhe::ui
         imgui
+        mINI
         ghc_filesystem
         #mango
         optional_lite

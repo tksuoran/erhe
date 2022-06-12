@@ -1,6 +1,7 @@
 #include "renderers/mesh_memory.hpp"
 #include "renderers/program_interface.hpp"
 
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
@@ -21,6 +22,7 @@ Mesh_memory::~Mesh_memory() = default;
 
 void Mesh_memory::connect()
 {
+    require<erhe::application::Configuration>();
     require<erhe::application::Gl_context_provider>();
     require<Program_interface  >();
 }
@@ -35,8 +37,10 @@ void Mesh_memory::initialize_component()
 
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 
-    constexpr size_t vertex_byte_count = 256 * 1024 * 1024;
-    constexpr size_t index_byte_count  =  64 * 1024 * 1024;
+    const auto& config = Component::get<erhe::application::Configuration>()->mesh_memory;
+
+    const size_t vertex_byte_count = static_cast<size_t>(config.vertex_buffer_size) * 1024 * 1024;
+    const size_t index_byte_count  = static_cast<size_t>(config.index_buffer_size) * 1024 * 1024;
 
     gl_buffer_transfer_queue = std::make_unique<erhe::graphics::Buffer_transfer_queue>();
 

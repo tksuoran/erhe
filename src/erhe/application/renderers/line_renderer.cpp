@@ -181,7 +181,7 @@ void Line_renderer::create_frame_resources(
     ERHE_PROFILE_FUNCTION
 
     m_pipeline = pipeline;
-    const auto       reverse_depth = configuration.reverse_depth;
+    const auto       reverse_depth = configuration.graphics.reverse_depth;
     constexpr size_t vertex_count  = 65536;
     constexpr size_t view_stride   = 256;
     constexpr size_t view_count    = 16;

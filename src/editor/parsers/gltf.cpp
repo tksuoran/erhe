@@ -293,14 +293,14 @@ private:
 
         if (parse_result != cgltf_result::cgltf_result_success)
         {
-            log_parsers.error("glTF parse error: {}\n", c_str(parse_result));
+            log_parsers->error("glTF parse error: {}", c_str(parse_result));
             return false;
         }
 
         const cgltf_result load_buffers_result = cgltf_load_buffers(&parse_options, m_data, path.string().c_str());
         if (load_buffers_result != cgltf_result::cgltf_result_success)
         {
-            log_parsers.error("glTF load buffers error: {}\n", c_str(load_buffers_result));
+            log_parsers->error("glTF load buffers error: {}", c_str(load_buffers_result));
             return false;
         }
 
@@ -310,51 +310,51 @@ private:
     {
         if (m_data->asset.version != nullptr)
         {
-            log_parsers.trace("Asset Version:    {}\n", m_data->asset.version);
+            log_parsers->trace("Asset Version:    {}", m_data->asset.version);
         }
         if (m_data->asset.min_version != nullptr)
         {
-            log_parsers.trace("Asset MinVersion: {}\n", m_data->asset.min_version);
+            log_parsers->trace("Asset MinVersion: {}", m_data->asset.min_version);
         }
         if (m_data->asset.generator != nullptr)
         {
-            log_parsers.trace("Asset Generator:  {}\n", m_data->asset.generator);
+            log_parsers->trace("Asset Generator:  {}", m_data->asset.generator);
         }
         if (m_data->asset.copyright != nullptr)
         {
-            log_parsers.trace("Asset Copyright:  {}\n", m_data->asset.copyright);
+            log_parsers->trace("Asset Copyright:  {}", m_data->asset.copyright);
         }
-        log_parsers.trace("Node Count:       {}\n", m_data->nodes_count);
-        log_parsers.trace("Camera Count:     {}\n", m_data->cameras_count);
-        log_parsers.trace("Light Count:      {}\n", m_data->lights_count);
-        log_parsers.trace("Material Count:   {}\n", m_data->materials_count);
-        log_parsers.trace("Mesh Count:       {}\n", m_data->meshes_count);
-        log_parsers.trace("Skin Count:       {}\n", m_data->skins_count);
-        log_parsers.trace("Image Count:      {}\n", m_data->images_count);
-        log_parsers.trace("Texture Count:    {}\n", m_data->textures_count);
-        log_parsers.trace("Sampler Count:    {}\n", m_data->samplers_count);
-        log_parsers.trace("Buffer Count:     {}\n", m_data->buffers_count);
-        log_parsers.trace("BufferView Count: {}\n", m_data->buffer_views_count);
-        log_parsers.trace("Accessor Count:   {}\n", m_data->accessors_count);
-        log_parsers.trace("Animation Count:  {}\n", m_data->animations_count);
-        log_parsers.trace("Scene Count:      {}\n", m_data->scenes_count);
+        log_parsers->trace("Node Count:       {}", m_data->nodes_count);
+        log_parsers->trace("Camera Count:     {}", m_data->cameras_count);
+        log_parsers->trace("Light Count:      {}", m_data->lights_count);
+        log_parsers->trace("Material Count:   {}", m_data->materials_count);
+        log_parsers->trace("Mesh Count:       {}", m_data->meshes_count);
+        log_parsers->trace("Skin Count:       {}", m_data->skins_count);
+        log_parsers->trace("Image Count:      {}", m_data->images_count);
+        log_parsers->trace("Texture Count:    {}", m_data->textures_count);
+        log_parsers->trace("Sampler Count:    {}", m_data->samplers_count);
+        log_parsers->trace("Buffer Count:     {}", m_data->buffers_count);
+        log_parsers->trace("BufferView Count: {}", m_data->buffer_views_count);
+        log_parsers->trace("Accessor Count:   {}", m_data->accessors_count);
+        log_parsers->trace("Animation Count:  {}", m_data->animations_count);
+        log_parsers->trace("Scene Count:      {}", m_data->scenes_count);
 
         for (cgltf_size i = 0; i < m_data->extensions_used_count; ++i)
         {
-            log_parsers.trace("Extension Used: {}\n", m_data->extensions_used[i]);
+            log_parsers->trace("Extension Used: {}", m_data->extensions_used[i]);
         }
 
         for (cgltf_size i = 0; i < m_data->extensions_required_count; ++i)
         {
-            log_parsers.trace("Extension Required: {}\n", m_data->extensions_required[i]);
+            log_parsers->trace("Extension Required: {}", m_data->extensions_required[i]);
         }
     }
 
     void parse_material(cgltf_material* material)
     {
         const cgltf_size material_index = material - m_data->materials;
-        log_parsers.trace(
-            "Primitive material: id = {}, name = {}\n",
+        log_parsers->trace(
+            "Primitive material: id = {}, name = {}",
             material_index,
             safe_str(material->name)
         );
@@ -375,43 +375,43 @@ private:
             new_material->roughness.y = pbr_metallic_roughness.roughness_factor;
             new_material->emissive    = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f};
             new_material->visible     = true;
-            log_parsers.trace(
-                "Material PBR metallic roughness base color factor = {}, {}, {}, {}\n",
+            log_parsers->trace(
+                "Material PBR metallic roughness base color factor = {}, {}, {}, {}",
                 pbr_metallic_roughness.base_color_factor[0],
                 pbr_metallic_roughness.base_color_factor[1],
                 pbr_metallic_roughness.base_color_factor[2],
                 pbr_metallic_roughness.base_color_factor[3]
             );
-            log_parsers.trace(
-                "Material PBR metallic roughness metallic factor = {}\n",
+            log_parsers->trace(
+                "Material PBR metallic roughness metallic factor = {}",
                 pbr_metallic_roughness.metallic_factor
             );
-            log_parsers.trace(
-                "Material PBR metallic roughness roughness factor = {}\n",
+            log_parsers->trace(
+                "Material PBR metallic roughness roughness factor = {}",
                 pbr_metallic_roughness.roughness_factor
             );
         }
         if (material->has_pbr_specular_glossiness)
         {
             const cgltf_pbr_specular_glossiness& pbr_specular_glossiness = material->pbr_specular_glossiness;
-            log_parsers.trace(
-                "Material PBR specular glossiness diffuse factor = {}, {}, {}, {}\n",
+            log_parsers->trace(
+                "Material PBR specular glossiness diffuse factor = {}, {}, {}, {}",
                 pbr_specular_glossiness.diffuse_factor[0],
                 pbr_specular_glossiness.diffuse_factor[1],
                 pbr_specular_glossiness.diffuse_factor[2],
                 pbr_specular_glossiness.diffuse_factor[3]
             );
-            log_parsers.trace(
-                "Material PBR specular glossiness specular factor = {}, {}, {}\n",
+            log_parsers->trace(
+                "Material PBR specular glossiness specular factor = {}, {}, {}",
                 pbr_specular_glossiness.specular_factor[0],
                 pbr_specular_glossiness.specular_factor[1],
                 pbr_specular_glossiness.specular_factor[2]
             );
-            log_parsers.trace(
-                "Material PBR specular glossiness glossiness factor = {}\n",
+            log_parsers->trace(
+                "Material PBR specular glossiness glossiness factor = {}",
                 pbr_specular_glossiness.glossiness_factor
             );
-            log_parsers.warn("Material PBR specular glossiness is not yet implemented\n");
+            log_parsers->warn("Material PBR specular glossiness is not yet implemented");
         }
     }
     void parse_node_transform(
@@ -434,8 +434,8 @@ private:
         cgltf_camera* camera = node->camera;
         const cgltf_size node_index   = node   - m_data->nodes;
         const cgltf_size camera_index = camera - m_data->cameras;
-        log_parsers.trace(
-            "Camera: node_index = {}, camera index = {}, name = {}\n",
+        log_parsers->trace(
+            "Camera: node_index = {}, camera index = {}, name = {}",
             node_index, camera_index, safe_str(camera->name)
         );
 
@@ -446,12 +446,12 @@ private:
             case cgltf_camera_type::cgltf_camera_type_perspective:
             {
                 const cgltf_camera_perspective& perspective = camera->data.perspective;
-                log_parsers.trace("Camera.has_aspect_ration: {}\n", perspective.has_aspect_ratio);
-                log_parsers.trace("Camera.aspect_ratio:      {}\n", perspective.aspect_ratio);
-                log_parsers.trace("Camera.yfov:              {}\n", perspective.yfov);
-                log_parsers.trace("Camera.has_zfar:          {}\n", perspective.has_zfar);
-                log_parsers.trace("Camera.zfar:              {}\n", perspective.zfar);
-                log_parsers.trace("Camera.znear:             {}\n", perspective.znear);
+                log_parsers->trace("Camera.has_aspect_ration: {}", perspective.has_aspect_ratio);
+                log_parsers->trace("Camera.aspect_ratio:      {}", perspective.aspect_ratio);
+                log_parsers->trace("Camera.yfov:              {}", perspective.yfov);
+                log_parsers->trace("Camera.has_zfar:          {}", perspective.has_zfar);
+                log_parsers->trace("Camera.zfar:              {}", perspective.zfar);
+                log_parsers->trace("Camera.znear:             {}", perspective.znear);
                 projection->projection_type = erhe::scene::Projection::Type::perspective_vertical;
                 projection->fov_y           = perspective.yfov;
                 projection->z_far           = (perspective.has_zfar != 0)
@@ -463,10 +463,10 @@ private:
             case cgltf_camera_type::cgltf_camera_type_orthographic:
             {
                 const cgltf_camera_orthographic& orthographic = camera->data.orthographic;
-                log_parsers.trace("Camera.xmag:              {}\n", orthographic.xmag);
-                log_parsers.trace("Camera.ymag:              {}\n", orthographic.ymag);
-                log_parsers.trace("Camera.zfar:              {}\n", orthographic.zfar);
-                log_parsers.trace("Camera.znear:             {}\n", orthographic.znear);
+                log_parsers->trace("Camera.xmag:              {}", orthographic.xmag);
+                log_parsers->trace("Camera.ymag:              {}", orthographic.ymag);
+                log_parsers->trace("Camera.zfar:              {}", orthographic.zfar);
+                log_parsers->trace("Camera.znear:             {}", orthographic.znear);
                 projection->projection_type = erhe::scene::Projection::Type::orthogonal;
                 projection->ortho_width     = orthographic.xmag;
                 projection->ortho_height    = orthographic.ymag;
@@ -477,7 +477,7 @@ private:
 
             default:
             {
-                log_parsers.warn("Camera.Projection: unknown projection type {}\n");
+                log_parsers->warn("Camera.Projection: unknown projection type {}");
                 break;
             }
         }
@@ -491,8 +491,8 @@ private:
         cgltf_light* light = node->light;
         const cgltf_size node_index  = node  - m_data->nodes;
         const cgltf_size light_index = light - m_data->lights;
-        log_parsers.trace(
-            "Light: node_index = {}, camera index = {}, name = {}\n",
+        log_parsers->trace(
+            "Light: node_index = {}, camera index = {}, name = {}",
             node_index, light_index, safe_str(light->name)
         );
 
@@ -545,16 +545,16 @@ private:
         const intptr_t           accessor_id     = accessor    - m_data->accessors;
         const intptr_t           buffer_view_id  = buffer_view - m_data->buffer_views;
 
-        log_parsers.trace(
-            "Primitive attribute {}: index = {}, name = {}, type = {}\n",
+        log_parsers->trace(
+            "Primitive attribute {}: index = {}, name = {}, type = {}",
             attribute_index,
             attribute->index,
             safe_str(attribute->name),
             c_str(attribute->type)
         );
 
-        log_parsers.trace(
-            "    Accessor: id = {}, normalized = {}, type = {}, offset = {}, count = {}, stride = {}\n",
+        log_parsers->trace(
+            "    Accessor: id = {}, normalized = {}, type = {}, offset = {}, count = {}, stride = {}",
             accessor_id,
             accessor->normalized,
             c_str(accessor->type),
@@ -563,8 +563,8 @@ private:
             accessor->stride
         );
 
-        log_parsers.trace(
-            "    Buffer view: id = {}, offset = {}, size = {}, stride = {}, type = {}\n",
+        log_parsers->trace(
+            "    Buffer view: id = {}, offset = {}, size = {}, stride = {}, type = {}",
             buffer_view_id,
             buffer_view->offset,
             buffer_view->size,
@@ -575,7 +575,7 @@ private:
         auto property_descriptor_opt = to_erhe(attribute->type);
         if (!property_descriptor_opt.has_value())
         {
-            log_parsers.warn("    Attribute not yet supported\n");
+            log_parsers->warn("    Attribute not yet supported");
             return;
         }
 
@@ -766,10 +766,10 @@ private:
             context.primitive_min_index = std::min(index, context.primitive_min_index);
             context.primitive_max_index = std::max(index, context.primitive_max_index);
         }
-        log_parsers.trace("min index = {}\n", context.primitive_min_index);
-        log_parsers.trace("max index = {}\n", context.primitive_max_index);
-        log_parsers.trace("index ranges size = {}\n", context.primitive_max_index - context.primitive_min_index + 1);
-        log_parsers.trace("unique index count = {}\n", context.primitive_used_indices.size());
+        log_parsers->trace("min index = {}", context.primitive_min_index);
+        log_parsers->trace("max index = {}", context.primitive_max_index);
+        log_parsers->trace("index ranges size = {}", context.primitive_max_index - context.primitive_min_index + 1);
+        log_parsers->trace("unique index count = {}", context.primitive_used_indices.size());
     }
 
     void parse_primitive_make_points(Primitive_context& context)
@@ -791,7 +791,7 @@ private:
         }
         if (position_attribute == nullptr)
         {
-            log_parsers.error("No vertex position attribute found\n");
+            log_parsers->error("No vertex position attribute found");
             return;
         }
 
@@ -866,10 +866,10 @@ private:
         available_axis.erase(axis2);
         used_axis.insert(axis2);
 
-        log_parsers.trace("Bounding box   = {}\n", bounding_box_size0);
-        log_parsers.trace("Primary   axis = {} {}\n", axis0, c_str(axis0));
-        log_parsers.trace("Secondary axis = {} {}\n", axis1, c_str(axis1));
-        log_parsers.trace("Tertiary  axis = {} {}\n", axis2, c_str(axis2));
+        log_parsers->trace("Bounding box   = {}", bounding_box_size0);
+        log_parsers->trace("Primary   axis = {} {}", axis0, c_str(axis0));
+        log_parsers->trace("Secondary axis = {} {}", axis1, c_str(axis1));
+        log_parsers->trace("Tertiary  axis = {} {}", axis2, c_str(axis2));
 
         context.sorted_vertex_indices         .resize(vertex_count);
         context.erhe_corner_id_from_gltf_index.resize(vertex_count * max_vertex_valency);
@@ -947,8 +947,8 @@ private:
             }
             context.erhe_point_id_from_gltf_index[index - context.primitive_min_index] = point_id;
         }
-        log_parsers.trace(
-            "point count = {}, point share count = {}\n",
+        log_parsers->trace(
+            "point count = {}, point share count = {}",
             context.erhe_geometry->get_point_count(),
             point_share_count
         );
@@ -956,19 +956,19 @@ private:
 
     void parse_points()
     {
-        log_parsers.error("parse_points() - not yet implemented\n");
+        log_parsers->error("parse_points() - not yet implemented");
     }
     void parse_lines()
     {
-        log_parsers.error("parse_lines() - not yet implemented\n");
+        log_parsers->error("parse_lines() - not yet implemented");
     }
     void parse_line_loop()
     {
-        log_parsers.error("parse_line_loop() - not yet implemented\n");
+        log_parsers->error("parse_line_loop() - not yet implemented");
     }
     void parse_line_strip()
     {
-        log_parsers.error("parse_line_strip() - not yet implemented\n");
+        log_parsers->error("parse_line_strip() - not yet implemented");
     }
     void parse_triangles(Primitive_context& context)
     {
@@ -976,8 +976,8 @@ private:
 
         const cgltf_size triangle_count = accessor->count / 3;
 
-        log_parsers.trace(
-            "index count = {}, unique vertex count = {}, triangle count = {}\n",
+        log_parsers->trace(
+            "index count = {}, unique vertex count = {}, triangle count = {}",
             accessor->count,
             context.primitive_used_indices.size(),
             triangle_count
@@ -1041,18 +1041,18 @@ private:
             context.erhe_corner_id_from_gltf_index[index_for_c0] = c0;
             context.erhe_corner_id_from_gltf_index[index_for_c1] = c1;
             context.erhe_corner_id_from_gltf_index[index_for_c2] = c2;
-            log_parsers.trace("vertex {} corner {} for polygon {}\n", v0, c0, polygon_id);
-            log_parsers.trace("vertex {} corner {} for polygon {}\n", v1, c1, polygon_id);
-            log_parsers.trace("vertex {} corner {} for polygon {}\n", v2, c2, polygon_id);
+            SPDLOG_LOGGER_TRACE(log_parsers, "vertex {} corner {} for polygon {}", v0, c0, polygon_id);
+            SPDLOG_LOGGER_TRACE(log_parsers, "vertex {} corner {} for polygon {}", v1, c1, polygon_id);
+            SPDLOG_LOGGER_TRACE(log_parsers, "vertex {} corner {} for polygon {}", v2, c2, polygon_id);
         }
     }
     void parse_triangle_strip()
     {
-        log_parsers.error("parse_triangle_strip() - not yet implemented\n");
+        log_parsers->error("parse_triangle_strip() - not yet implemented");
     }
     void parse_triangle_fan()
     {
-        log_parsers.error("parse_triangle_fan() - not yet implemented\n");
+        log_parsers->error("parse_triangle_fan() - not yet implemented");
     }
     void parse_primitive(
         const std::shared_ptr<erhe::scene::Mesh>& erhe_mesh,
@@ -1066,7 +1066,7 @@ private:
             ? fmt::format("{}[{}]", mesh->name, primitive_index)
             : fmt::format("primitive[{}]", primitive_index);
 
-        log_parsers.trace("Primitive type: {}\n", c_str(primitive->type));
+        log_parsers->trace("Primitive type: {}", c_str(primitive->type));
 
         Primitive_context context
         {
@@ -1143,8 +1143,8 @@ private:
         cgltf_mesh* mesh = node->mesh;
         const cgltf_size node_index = node - m_data->nodes;
         const cgltf_size mesh_index = mesh - m_data->meshes;
-        log_parsers.trace(
-            "Mesh: node index = {}, mesh index = {}, name = {}\n",
+        log_parsers->trace(
+            "Mesh: node index = {}, mesh index = {}, name = {}",
             node_index, mesh_index, safe_str(mesh->name)
         );
 
@@ -1172,7 +1172,7 @@ private:
     void parse_empty_node(cgltf_node* node)
     {
         const cgltf_size node_index = node - m_data->nodes;
-        log_parsers.trace("Empty node: node_index = {}, name = {}\n", node_index, safe_str(node->name));
+        log_parsers->trace("Empty node: node_index = {}, name = {}", node_index, safe_str(node->name));
         auto empty_node = std::make_shared<erhe::scene::Node>(node->name);
         m_nodes[node_index] = empty_node;
         m_scene_root->scene().add_node(empty_node);
@@ -1182,7 +1182,7 @@ private:
     {
         const cgltf_size node_index = node - m_data->nodes;
 
-        log_parsers.trace("Node: node index = {}, name = {}\n", node_index, safe_str(node->name));
+        log_parsers->trace("Node: node index = {}, name = {}", node_index, safe_str(node->name));
 
         size_t node_count = 0;
         if (node->camera != nullptr)
@@ -1236,7 +1236,7 @@ private:
     void parse_scene(cgltf_scene* scene)
     {
         const cgltf_size scene_index = scene - m_data->scenes;
-        log_parsers.trace("Scene: id = {}, name = {}\n", scene_index, safe_str(scene->name));
+        log_parsers->trace("Scene: id = {}, name = {}", scene_index, safe_str(scene->name));
 
         m_nodes.resize(m_data->nodes_count);
         std::fill(

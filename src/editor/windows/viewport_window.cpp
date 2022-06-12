@@ -119,7 +119,7 @@ auto Viewport_windows::create_window(
 
     auto& configuration = *m_configuration.get();
 
-    if (configuration.viewports_hosted_in_imgui_windows)
+    if (configuration.imgui.enabled)
     {
         get<erhe::application::Imgui_windows>()->register_imgui_window(new_window.get());
     }
@@ -151,7 +151,7 @@ void Viewport_windows::update_viewport_windows()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (!m_configuration->viewports_hosted_in_imgui_windows)
+    if (!m_configuration->imgui.enabled)
     {
         for (const auto& window : m_windows)
         {
@@ -187,7 +187,7 @@ void Viewport_windows::render()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (!m_configuration->viewports_hosted_in_imgui_windows)
+    if (!m_configuration->imgui.enabled)
     {
         const int   total_width  = m_editor_view->width();
         const int   total_height = m_editor_view->height();
@@ -741,7 +741,7 @@ auto Viewport_window::should_render() const -> bool
         (m_viewport.width  > 0) &&
         (m_viewport.height > 0) &&
         (
-            !m_configuration->viewports_hosted_in_imgui_windows ||
+            !m_configuration->imgui.enabled ||
             is_framebuffer_ready()
         ) &&
         (m_camera != nullptr);

@@ -21,6 +21,7 @@ if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
     add_subdirectory(miniaudio)
 endif ()
 
+add_subdirectory(mINI)
 add_subdirectory(optional_lite)
 add_subdirectory(RectangleBinPack)
 add_subdirectory(erhe)

@@ -7,6 +7,7 @@
 #include "scene/node_raytrace.hpp"
 #include "tools/selection_tool.hpp"
 
+#include "erhe/application/Configuration.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/primitive/material.hpp"
@@ -92,6 +93,7 @@ Scene_root::~Scene_root() = default;
 
 void Scene_root::connect()
 {
+    require<erhe::application::Configuration>();
     require<erhe::application::View>();
 }
 
@@ -120,6 +122,15 @@ void Scene_root::initialize_component()
 
     m_physics_world  = erhe::physics::IWorld::create_unique();
     m_raytrace_scene = erhe::raytrace::IScene::create_unique("root");
+
+    if (get<erhe::application::Configuration>()->physics.enabled)
+    {
+        m_physics_world->enable_physics_updates();
+    }
+    else
+    {
+        m_physics_world->disable_physics_updates();
+    }
 
     auto view = get<erhe::application::View>();
 

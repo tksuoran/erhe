@@ -186,7 +186,7 @@ void View::command_inactivated(Command* const command)
 
 void View::on_refresh()
 {
-    if (!m_configuration->show_window)
+    if (!m_configuration->window.show)
     {
         return;
     }
@@ -249,7 +249,7 @@ void View::update()
         m_view_client->update();
         m_view_client->render();
 
-        if (get<Configuration>()->viewports_hosted_in_imgui_windows)
+        if (get<Configuration>()->imgui.enabled)
         {
             m_view_client->bind_default_framebuffer();
             m_view_client->clear();
@@ -260,7 +260,7 @@ void View::update()
         }
     }
 
-    if (m_configuration->show_window)
+    if (m_configuration->window.show)
     {
         ERHE_PROFILE_SCOPE(c_swap_buffers.data());
 
@@ -481,8 +481,8 @@ void View::update_active_mouse_command(
 auto View::get_imgui_capture_mouse() const -> bool
 {
     const bool viewports_hosted_in_imgui =
-        m_configuration->show_window &&
-        m_configuration->viewports_hosted_in_imgui_windows;
+        m_configuration->window.show &&
+        m_configuration->imgui.enabled;
 
     if (!viewports_hosted_in_imgui)
     {

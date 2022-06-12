@@ -104,9 +104,9 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         return false;
     }
 
-    m_components.launch_component_initialization(configuration->parallel_initialization);
+    m_components.launch_component_initialization(configuration->threading.parallel_initialization);
 
-    if (configuration->parallel_initialization)
+    if (configuration->threading.parallel_initialization)
     {
         gl_context_provider->provide_worker_contexts(
             opengl_state_tracker,

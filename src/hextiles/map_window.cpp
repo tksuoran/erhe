@@ -544,7 +544,7 @@ void Map_window::render()
         .y             = 0,
         .width         = static_cast<int>(extent_x),
         .height        = static_cast<int>(extent_y),
-        .reverse_depth = get<erhe::application::Configuration>()->reverse_depth
+        .reverse_depth = get<erhe::application::Configuration>()->graphics.reverse_depth
 
     };
     m_tile_renderer->render(viewport);

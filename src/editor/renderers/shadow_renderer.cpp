@@ -39,10 +39,6 @@ using erhe::graphics::Rasterization_state;
 using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 
-constexpr size_t s_max_light_count    = 4;
-constexpr size_t s_texture_resolution = 1 * 1024;
-constexpr bool   s_enable             = true;
-
 Shadow_renderer::Shadow_renderer()
     : Component    {c_label}
     , Base_renderer{std::string{c_label}}
@@ -70,6 +66,8 @@ void Shadow_renderer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
+    const auto& config = m_configuration->shadow_renderer;
+
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()
     };
@@ -94,7 +92,7 @@ void Shadow_renderer::initialize_component()
         .vertex_input   = m_vertex_input.get(),
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_none,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->graphics.reverse_depth),
         .color_blend    = Color_blend_state::color_writes_disabled
     };
 
@@ -106,9 +104,9 @@ void Shadow_renderer::initialize_component()
             {
                 .target          = gl::Texture_target::texture_2d_array,
                 .internal_format = gl::Internal_format::depth_component32f,
-                .width           = s_enable ? s_texture_resolution : 1,
-                .height          = s_enable ? s_texture_resolution : 1,
-                .depth           = s_max_light_count,
+                .width           = config.enabled ? config.shadow_map_resolution : 1,
+                .height          = config.enabled ? config.shadow_map_resolution : 1,
+                .depth           = config.shadow_map_max_light_count,
             }
         );
         m_texture->set_debug_label("Shadowmaps");
@@ -116,7 +114,7 @@ void Shadow_renderer::initialize_component()
         //gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
     }
 
-    for (size_t i = 0; i < s_max_light_count; ++i)
+    for (size_t i = 0; i < config.shadow_map_max_light_count; ++i)
     {
         ERHE_PROFILE_SCOPE("framebuffer creation");
 
@@ -132,7 +130,7 @@ void Shadow_renderer::initialize_component()
         .y             = 0,
         .width         = m_texture->width(),
         .height        = m_texture->height(),
-        .reverse_depth = m_configuration->reverse_depth
+        .reverse_depth = m_configuration->graphics.reverse_depth
     };
 
     m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Shadow_renderer");
@@ -142,7 +140,7 @@ static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::ren
 
 void Shadow_renderer::render(const Render_parameters& parameters)
 {
-    if constexpr (!s_enable)
+    if (!m_configuration->shadow_renderer.enabled)
     {
         return;
     }
@@ -198,7 +196,7 @@ void Shadow_renderer::render(const Render_parameters& parameters)
         size_t light_index = 0;
         for (const auto& light : lights)
         {
-            if (light_index >= s_max_light_count)
+            if (light_index >= m_configuration->shadow_renderer.shadow_map_max_light_count)
             {
                 break; // TODO
             }

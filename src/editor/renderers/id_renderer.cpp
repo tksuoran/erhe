@@ -74,9 +74,11 @@ void Id_renderer::initialize_component()
         Component::get<erhe::application::Gl_context_provider>()
     };
 
-    create_frame_resources(1, 1, 1, 1000, 1000);
+    const auto& config = Component::get<erhe::application::Configuration>();
 
-    const auto reverse_depth = erhe::components::Component::get<erhe::application::Configuration>()->reverse_depth;
+    create_frame_resources(1, 1, 1, config->forward_renderer.max_primitive_count, config->forward_renderer.max_draw_count);
+
+    const auto reverse_depth = erhe::components::Component::get<erhe::application::Configuration>()->graphics.reverse_depth;
 
     m_pipeline.data = {
         .name           = "ID Renderer",

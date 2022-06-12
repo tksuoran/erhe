@@ -188,7 +188,7 @@ void Pipelines::rasterization(
     );
     ImGui::Text(
         "Reverse Depth: %s",
-        get<Configuration>()->reverse_depth
+        get<Configuration>()->graphics.reverse_depth
             ? "Yes"
             : "No"
     );

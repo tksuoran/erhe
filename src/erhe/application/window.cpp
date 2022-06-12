@@ -65,10 +65,10 @@ auto Window::create_gl_window() -> bool
 
     m_context_window = std::make_unique<erhe::toolkit::Context_window>(
         erhe::toolkit::Window_configuration{
-            .fullscreen        = configuration.fullscreen,
-            .width             = configuration.window_width,
-            .height            = configuration.window_height,
-            .msaa_sample_count = configuration.window_msaa_sample_count,
+            .fullscreen        = configuration.window.fullscreen,
+            .width             = configuration.window.width,
+            .height            = configuration.window.height,
+            .msaa_sample_count = configuration.window.msaa_sample_count,
             .title             = title.c_str()
         }
     );

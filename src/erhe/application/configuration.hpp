@@ -27,15 +27,90 @@ public:
     [[nodiscard]] auto depth_clear_value_pointer() const -> const float *; // reverse_depth ? 0.0f : 1.0f;
     [[nodiscard]] auto depth_function           (const gl::Depth_function depth_function) const -> gl::Depth_function;
 
-    bool viewports_hosted_in_imgui_windows;
-    bool openxr;
-    bool show_window;
-    bool parallel_initialization;
-    bool reverse_depth;
-    bool fullscreen;
-    int  window_width;
-    int  window_height;
-    int  window_msaa_sample_count;
+    struct Imgui
+    {
+        bool enabled{true};
+    };
+    Imgui imgui;
+
+    struct Headset
+    {
+        bool openxr{false};
+    };
+    Headset headset;
+
+    struct Threading
+    {
+        bool parallel_initialization{true};
+    };
+    Threading threading;
+
+    struct Graphics
+    {
+        bool reverse_depth{true};
+    };
+    Graphics graphics;
+
+    struct Mesh_memory
+    {
+        int vertex_buffer_size{32}; // in megabytes
+        int index_buffer_size  {8}; // in megabytes
+    };
+    Mesh_memory mesh_memory;
+
+    struct Window
+    {
+        bool show             {true};
+        bool fullscreen       {false};
+        int  width            {1920};
+        int  height           {1080};
+        int  msaa_sample_count{0};
+    };
+    Window window;
+
+    struct Shadow_renderer
+    {
+        bool enabled{true};
+        int  shadow_map_resolution     {2048};
+        int  shadow_map_max_light_count{8};
+    };
+    Shadow_renderer shadow_renderer;
+
+    struct Forward_renderer
+    {
+        int max_material_count  {256};
+        int max_light_count     {256};
+        int max_camera_count    {256};
+        int max_primitive_count {8000}; // GLTF primitives
+        int max_draw_count      {8000};
+    };
+    Forward_renderer forward_renderer;
+
+    struct Physics
+    {
+        bool enabled{false};
+    };
+    Physics physics;
+
+    struct Scene
+    {
+        int   directional_light_count{4};
+        int   spot_light_count       {3};
+        float floor_size             {40.0f};
+        int   floor_div              {4};
+        int   instance_count         {1};
+        float instance_gap           {0.4f};
+        bool  floor                  {true};
+        bool  gltf_files             {false};
+        bool  obj_files              {false};
+        bool  sphere                 {false};
+        bool  torus                  {false};
+        bool  cylinder               {false};
+        bool  cone                   {false};
+        bool  platonic_solids        {true};
+        bool  johnson_solids         {false};
+    };
+    Scene scene;
 };
 
 } // namespace erhe::application

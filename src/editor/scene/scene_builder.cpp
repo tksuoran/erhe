@@ -187,12 +187,12 @@ void Scene_builder::make_brushes()
 {
     ERHE_PROFILE_FUNCTION
 
-    Task_queue execution_queue{get<erhe::application::Configuration>()->parallel_initialization};
+    Task_queue execution_queue{get<erhe::application::Configuration>()->threading.parallel_initialization};
 
-    constexpr float floor_size = 400.0f;
+    const auto& config = get<erhe::application::Configuration>()->scene;
 
     auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
-        0.5f * vec3{floor_size, 1.0f, floor_size}
+        0.5f * vec3{config.floor_size, 1.0f, config.floor_size}
     );
     //auto table_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(vec3{1.0f, 0.5f, 0.5f});
 
@@ -202,10 +202,10 @@ void Scene_builder::make_brushes()
     //m_scene_root->physics_world().collision_shapes.push_back(floor_box_shape);
 
     // Floor
-    if constexpr (true)
+    if (config.floor)
     {
         execution_queue.enqueue(
-            [this, /*floor_size,*/ &floor_box_shape/*, &table_box_shape*/]()
+            [this, /*floor_size,*/ &floor_box_shape/*, &table_box_shape*/, &config]()
             {
                 ERHE_PROFILE_SCOPE("Floor brush");
 
@@ -217,9 +217,9 @@ void Scene_builder::make_brushes()
 
                 auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
                     make_box(
-                        vec3{floor_size, 1.0f, floor_size},
+                        vec3{config.floor_size, 1.0f, config.floor_size},
                         //ivec3{static_cast<int>(floor_size), 1, static_cast<int>(floor_size)}
-                        ivec3{4, 1, 4}
+                        ivec3{config.floor_div, 1, config.floor_div}
                     )
                 );
                 floor_geometry->name = "floor";
@@ -258,19 +258,12 @@ void Scene_builder::make_brushes()
         );
     }
 
-    constexpr bool gltf_files              = false;
-    constexpr bool obj_files               = false;
-    constexpr bool platonic_solids         = true;
-    constexpr bool sphere                  = false;
-    constexpr bool torus                   = false;
-    constexpr bool cylinder                = false;
     //constexpr bool cone                    = false;
-    constexpr bool johnson_solids          = false;
     constexpr bool anisotropic_test_object = false;
 
     constexpr float object_scale = 1.0f;
 
-    if constexpr (gltf_files)
+    if (config.gltf_files)
     {
 #if !defined(ERHE_GLTF_LIBRARY_NONE)
         //execution_queue.enqueue(
@@ -301,7 +294,7 @@ void Scene_builder::make_brushes()
 #endif
     }
 
-    if constexpr (obj_files)
+    if (config.obj_files)
     {
         execution_queue.enqueue(
             [this]()
@@ -341,7 +334,7 @@ void Scene_builder::make_brushes()
         );
     }
 
-    if constexpr (platonic_solids)
+    if (config.platonic_solids)
     {
         execution_queue.enqueue(
             [this]()
@@ -371,7 +364,7 @@ void Scene_builder::make_brushes()
         );
     }
 
-    if constexpr (sphere)
+    if (config.sphere)
     {
         execution_queue.enqueue(
             [this]()
@@ -395,7 +388,7 @@ void Scene_builder::make_brushes()
         );
     }
 
-    if constexpr (torus)
+    if (config.torus)
     {
         execution_queue.enqueue(
             [this]()
@@ -469,7 +462,7 @@ void Scene_builder::make_brushes()
         );
     }
 
-    if constexpr (cylinder)
+    if (config.cylinder)
     {
         execution_queue.enqueue(
             [this]()
@@ -501,34 +494,34 @@ void Scene_builder::make_brushes()
         );
     }
 
-    //if constexpr (cone)
-    //{
-    //    execution_queue.enqueue(
-    //        [this]()
-    //        {
-    //            ERHE_PROFILE_SCOPE("Cone");
-    //
-    //            const Brush_create_context context{
-    //                .build_info   = build_info(),
-    //                .normal_style = Normal_style::corner_normals
-    //            };
-    //            constexpr bool instantiate = true;
-    //            auto cone_geometry = make_cone(-object_scale, object_scale, object_scale, true, 42, 4); // always axis = x
-    //            cone_geometry.transform(erhe::toolkit::mat4_swap_xy); // convert to axis = y
-    //
-    //            make_brush(
-    //                instantiate,
-    //                std::move(cone_geometry),
-    //                context,
-    //                erhe::physics::ICollision_shape::create_cone_shape_shared(
-    //                    erhe::physics::Axis::Y,
-    //                    object_scale,
-    //                    2.0f * object_scale
-    //                )
-    //            );
-    //        }
-    //    );
-    //}
+    if (config.cone)
+    {
+        execution_queue.enqueue(
+            [this]()
+            {
+                ERHE_PROFILE_SCOPE("Cone");
+
+                const Brush_create_context context{
+                    .build_info   = build_info(),
+                    .normal_style = Normal_style::corner_normals
+                };
+                constexpr bool instantiate = true;
+                auto cone_geometry = make_cone(-object_scale, object_scale, object_scale, true, 42, 4); // always axis = x
+                cone_geometry.transform(erhe::toolkit::mat4_swap_xy); // convert to axis = y
+
+                make_brush(
+                    instantiate,
+                    std::move(cone_geometry),
+                    context
+                    //erhe::physics::ICollision_shape::create_cone_shape_shared(
+                    //    erhe::physics::Axis::Y,
+                    //    object_scale,
+                    //    2.0f * object_scale
+                    //)
+                );
+            }
+        );
+    }
 
     if constexpr (anisotropic_test_object)
     {
@@ -584,7 +577,7 @@ void Scene_builder::make_brushes()
         make_mesh_node("Z ring", Transform::create_rotation(-glm::pi<float>() / 2.0f, glm::vec3{0.0f, 1.0f, 0.0f}));
     }
 
-    if constexpr (johnson_solids)
+    if (config.johnson_solids)
     {
         execution_queue.enqueue(
             [this]()
@@ -628,6 +621,11 @@ auto Scene_builder::buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_q
 void Scene_builder::add_room()
 {
     ERHE_PROFILE_FUNCTION
+
+    if (!m_floor_brush)
+    {
+        return;
+    }
 
     auto floor_material = m_scene_root->make_material(
         "Floor",
@@ -694,6 +692,8 @@ void Scene_builder::make_mesh_nodes()
 {
     ERHE_PROFILE_FUNCTION
 
+    const auto& config = get<erhe::application::Configuration>()->scene;
+
     m_scene_root->scene().sanity_check();
 
     class Pack_entry
@@ -735,7 +735,7 @@ void Scene_builder::make_mesh_nodes()
 
         for (const auto& brush : m_scene_brushes)
         {
-            //for (size_t i = 0; i < 100; ++i)
+            for (size_t i = 0; i < config.instance_count; ++i)
             {
                 pack_entries.emplace_back(brush.get());
             }
@@ -743,10 +743,10 @@ void Scene_builder::make_mesh_nodes()
     }
 
     rbp::SkylineBinPack packer;
-    int group_width = 10;
-    int group_depth = 10;
+    int group_width = 2;
+    int group_depth = 2;
 
-    constexpr float gap          = 0.4f;
+    const     float gap          = config.instance_gap;
     constexpr float bottom_y_pos = 0.01f;
 
     glm::ivec2 max_corner;
@@ -787,13 +787,13 @@ void Scene_builder::make_mesh_nodes()
                 break;
             }
 
-            //if (group_width <= group_depth)
+            if (group_width <= group_depth)
             {
-                group_width *= 3;
+                group_width *= 2;
             }
-            //else
+            else
             {
-                group_depth *= 3;
+                group_depth *= 2;
             }
 
             //ERHE_VERIFY(group_width <= 16384);
@@ -957,6 +957,8 @@ auto Scene_builder::make_spot_light(
 
 void Scene_builder::setup_lights()
 {
+    const auto& config = get<erhe::application::Configuration>()->scene;
+
     m_scene_root->light_layer()->ambient_light = vec4{0.042f, 0.044f, 0.049f, 0.0f};
 
     //make_directional_light(
@@ -983,58 +985,50 @@ void Scene_builder::setup_lights()
     //    }
     //);
 
-    constexpr int directional_light_count = 4;
-    if constexpr (directional_light_count > 0)
+    for (int i = 0; i < config.directional_light_count; ++i)
     {
-        for (int i = 0; i < directional_light_count; ++i)
-        {
-            const float rel = static_cast<float>(i) / static_cast<float>(directional_light_count);
-            const float R   = 6.0f;
-            const float h   = rel * 360.0f;
-            const float s   = 0.5f;
-            const float v   = 1.0f;
-            float r, g, b;
+        const float rel = static_cast<float>(i) / static_cast<float>(config.directional_light_count);
+        const float R   = 6.0f;
+        const float h   = rel * 360.0f;
+        const float s   = 0.5f;
+        const float v   = 1.0f;
+        float r, g, b;
 
-            erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
+        erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
 
-            const vec3        color     = vec3{r, g, b};
-            const float       intensity = 20.0f / static_cast<float>(directional_light_count);
-            const std::string name      = fmt::format("Directional light {}", i);
-            const float       x_pos     = R * sin(rel * glm::two_pi<float>());
-            const float       z_pos     = R * cos(rel * glm::two_pi<float>());
-            const vec3        position  = vec3{x_pos, 10.0f, z_pos};
-            make_directional_light(name, position, color, intensity);
-        }
+        const vec3        color     = vec3{r, g, b};
+        const float       intensity = 20.0f / static_cast<float>(config.directional_light_count);
+        const std::string name      = fmt::format("Directional light {}", i);
+        const float       x_pos     = R * sin(rel * glm::two_pi<float>());
+        const float       z_pos     = R * cos(rel * glm::two_pi<float>());
+        const vec3        position  = vec3{x_pos, 10.0f, z_pos};
+        make_directional_light(name, position, color, intensity);
     }
 
-    constexpr int spot_light_count = 0;
-    if constexpr (spot_light_count > 0)
+    for (int i = 0; i < config.spot_light_count; ++i)
     {
-        for (int i = 0; i < spot_light_count; ++i)
-        {
-            const float rel   = static_cast<float>(i) / static_cast<float>(spot_light_count);
-            const float theta = rel * glm::two_pi<float>();
-            const float R     = 0.5f + 20.0f * rel;
-            const float h     = glm::fract(theta) * 360.0f;
-            const float s     = 0.9f;
-            const float v     = 1.0f;
-            float r, g, b;
+        const float rel   = static_cast<float>(i) / static_cast<float>(config.spot_light_count);
+        const float theta = rel * glm::two_pi<float>();
+        const float R     = 0.5f + 20.0f * rel;
+        const float h     = glm::fract(theta) * 360.0f;
+        const float s     = 0.9f;
+        const float v     = 1.0f;
+        float r, g, b;
 
-            erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
+        erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
 
-            const vec3        color           = vec3{r, g, b};
-            const float       intensity       = 150.0f;
-            const std::string name            = fmt::format("Spot {}", i);
-            const float       x_pos           = R * sin(rel * 6.0f * glm::two_pi<float>());
-            const float       z_pos           = R * cos(rel * 6.0f * glm::two_pi<float>());
-            const vec3        position        = vec3{x_pos, 10.0f, z_pos};
-            const vec3        target          = vec3{x_pos * 0.5, 0.0f, z_pos * 0.5f};
-            const vec2        spot_cone_angle = vec2{
-                glm::pi<float>() / 5.0f,
-                glm::pi<float>() / 4.0f
-            };
-            make_spot_light(name, position, target, color, intensity, spot_cone_angle);
-        }
+        const vec3        color           = vec3{r, g, b};
+        const float       intensity       = 150.0f;
+        const std::string name            = fmt::format("Spot {}", i);
+        const float       x_pos           = R * sin(rel * 6.0f * glm::two_pi<float>());
+        const float       z_pos           = R * cos(rel * 6.0f * glm::two_pi<float>());
+        const vec3        position        = vec3{x_pos, 10.0f, z_pos};
+        const vec3        target          = vec3{x_pos * 0.5, 0.0f, z_pos * 0.5f};
+        const vec2        spot_cone_angle = vec2{
+            glm::pi<float>() / 5.0f,
+            glm::pi<float>() / 4.0f
+        };
+        make_spot_light(name, position, target, color, intensity, spot_cone_angle);
     }
 }
 

@@ -89,13 +89,15 @@ void Editor_rendering::initialize_component()
     auto& programs     = *get<Programs>().get();
     auto* vertex_input = get<Mesh_memory>()->vertex_input.get();
 
+    const bool reverse_depth = m_configuration->graphics.reverse_depth;
+
     m_rp_polygon_fill_standard.pipeline.data = {
         .name           = "Polygon fill",
         .shader_stages  = programs.standard.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     };
 
@@ -106,7 +108,7 @@ void Editor_rendering::initialize_component()
         .shader_stages           = programs.tool.get(),
         .vertex_input            = vertex_input,
         .input_assembly          = Input_assembly_state::triangles,
-        .rasterization           = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+        .rasterization           = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
@@ -141,7 +143,7 @@ void Editor_rendering::initialize_component()
         .shader_stages           = programs.tool.get(),
         .vertex_input            = vertex_input,
         .input_assembly          = Input_assembly_state::triangles,
-        .rasterization           = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+        .rasterization           = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
@@ -176,7 +178,7 @@ void Editor_rendering::initialize_component()
         .shader_stages  = programs.tool.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
         .color_blend    = Color_blend_state::color_writes_disabled
     };
@@ -190,8 +192,8 @@ void Editor_rendering::initialize_component()
         .shader_stages  = programs.tool.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_writes_disabled
     };
 
@@ -202,7 +204,7 @@ void Editor_rendering::initialize_component()
         .shader_stages           = programs.tool.get(),
         .vertex_input            = vertex_input,
         .input_assembly          = Input_assembly_state::triangles,
-        .rasterization           = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+        .rasterization           = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
@@ -237,7 +239,7 @@ void Editor_rendering::initialize_component()
         .shader_stages              = programs.tool.get(),
         .vertex_input               = vertex_input,
         .input_assembly             = Input_assembly_state::triangles,
-        .rasterization              = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+        .rasterization              = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil = {
             .depth_test_enable      = true,
             .depth_write_enable     = true,
@@ -283,8 +285,8 @@ void Editor_rendering::initialize_component()
         .shader_stages  = programs.wide_lines.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::lines,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     };
     m_rp_edge_lines.primitive_mode = erhe::primitive::Primitive_mode::edge_lines;
@@ -294,8 +296,8 @@ void Editor_rendering::initialize_component()
         .shader_stages  = programs.points.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::points,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     };
     m_rp_corner_points.primitive_mode = erhe::primitive::Primitive_mode::corner_points;
@@ -305,8 +307,8 @@ void Editor_rendering::initialize_component()
         .shader_stages  = programs.points.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::points,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     };
     m_rp_polygon_centroids.primitive_mode = erhe::primitive::Primitive_mode::polygon_centroids;
@@ -316,7 +318,7 @@ void Editor_rendering::initialize_component()
         .shader_stages              = programs.wide_lines.get(),
         .vertex_input               = vertex_input,
         .input_assembly             = Input_assembly_state::lines,
-        .rasterization              = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
+        .rasterization              = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil  = {
             .depth_test_enable      = true,
             .depth_write_enable     = false,
@@ -345,8 +347,8 @@ void Editor_rendering::initialize_component()
         .shader_stages  = programs.brush.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_front_ccw(m_configuration->reverse_depth),
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+        .rasterization  = Rasterization_state::cull_mode_front_ccw(reverse_depth),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     };
 
@@ -355,8 +357,8 @@ void Editor_rendering::initialize_component()
         .shader_stages  = programs.brush.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(m_configuration->reverse_depth),
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(m_configuration->reverse_depth),
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     };
 
