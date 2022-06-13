@@ -35,7 +35,7 @@ cmake ^
         -DEMBREE_ISA_AVX=OFF ^
         -DEMBREE_ISA_AVX2=OFF ^
         -DEMBREE_ISA_AVX512=OFF ^
-    -DERHE_SVG_LIBRARY=lunasvg
+    -DERHE_SVG_LIBRARY=lunasvg ^
     -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz ^
     -DERHE_WINDOW_LIBRARY=glfw ^
     -DERHE_XR_LIBRARY=openxr

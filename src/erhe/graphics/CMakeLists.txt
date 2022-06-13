@@ -65,8 +65,8 @@ erhe_target_sources_grouped(
 if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        png_loader_mango.cpp
-        png_loader_mango.hpp
+        png_loader_mango_spng.cpp
+        png_loader_mango_spng.hpp
     )
 elseif (${ERHE_PNG_LIBRARY} STREQUAL "fpng")
     erhe_target_sources_grouped(
@@ -106,7 +106,7 @@ if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
 endif ()
 
 if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
-    target_link_libraries(${_target} PUBLIC mango)
+    target_link_libraries(${_target} PUBLIC mango spng)
 endif()
 if (${ERHE_PNG_LIBRARY} STREQUAL "fpng")
     target_link_libraries(${_target} PUBLIC fpng)
