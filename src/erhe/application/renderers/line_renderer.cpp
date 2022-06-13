@@ -42,7 +42,9 @@ Line_renderer_set::Line_renderer_set()
 {
 }
 
-Line_renderer_set::~Line_renderer_set() = default;
+Line_renderer_set::~Line_renderer_set() noexcept
+{
+}
 
 void Line_renderer_set::connect()
 {

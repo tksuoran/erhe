@@ -16,7 +16,7 @@ Timer::Timer(const char* label)
     s_all_timers.push_back(this);
 }
 
-Timer::~Timer()
+Timer::~Timer() noexcept
 {
     const std::lock_guard<std::mutex> lock{s_mutex};
 
@@ -68,11 +68,11 @@ Scoped_timer::Scoped_timer(Timer& timer)
     timer.begin();
 }
 
-Scoped_timer::~Scoped_timer()
+Scoped_timer::~Scoped_timer() noexcept
 {
     m_timer.end();
 }
 
-static auto all_timers() -> std::vector<Timer*>;
+//static auto all_timers() -> std::vector<Timer*>;
 
 }

@@ -42,9 +42,13 @@ Null_rigid_body::Null_rigid_body(
 {
 }
 
-IRigid_body::~IRigid_body() = default;
+IRigid_body::~IRigid_body() noexcept
+{
+}
 
-Null_rigid_body::~Null_rigid_body() = default;
+Null_rigid_body::~Null_rigid_body() noexcept
+{
+}
 
 auto Null_rigid_body::get_motion_mode() const -> Motion_mode
 {

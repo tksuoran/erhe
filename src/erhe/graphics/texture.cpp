@@ -245,7 +245,7 @@ auto Texture::mipmap_dimensions(const gl::Texture_target target) -> int
     }
 }
 
-Texture::~Texture()
+Texture::~Texture() noexcept
 {
 }
 

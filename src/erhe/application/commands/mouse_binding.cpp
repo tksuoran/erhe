@@ -12,7 +12,7 @@ Mouse_binding::Mouse_binding()
 {
 }
 
-Mouse_binding::~Mouse_binding()
+Mouse_binding::~Mouse_binding() noexcept
 {
 }
 

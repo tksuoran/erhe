@@ -8,7 +8,7 @@
 namespace erhe::scene
 {
 
-INode_attachment::~INode_attachment()
+INode_attachment::~INode_attachment() noexcept
 {
     auto* const host = get_node();
     if (host != nullptr)
@@ -39,7 +39,7 @@ Node::Node(std::string_view name)
     node_data.label = fmt::format("{}##Node{}", name, m_id.get_id());
 }
 
-Node::~Node()
+Node::~Node() noexcept
 {
     sanity_check();
 

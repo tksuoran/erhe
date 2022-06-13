@@ -45,7 +45,9 @@ Shadow_renderer::Shadow_renderer()
 {
 }
 
-Shadow_renderer::~Shadow_renderer() = default;
+Shadow_renderer::~Shadow_renderer() noexcept
+{
+}
 
 void Shadow_renderer::connect()
 {
@@ -114,7 +116,7 @@ void Shadow_renderer::initialize_component()
         //gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
     }
 
-    for (size_t i = 0; i < config.shadow_map_max_light_count; ++i)
+    for (int i = 0; i < config.shadow_map_max_light_count; ++i)
     {
         ERHE_PROFILE_SCOPE("framebuffer creation");
 
@@ -193,7 +195,7 @@ void Shadow_renderer::render(const Render_parameters& parameters)
         bind_primitive_buffer();
         bind_draw_indirect_buffer();
 
-        size_t light_index = 0;
+        int light_index = 0;
         for (const auto& light : lights)
         {
             if (light_index >= m_configuration->shadow_renderer.shadow_map_max_light_count)

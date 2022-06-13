@@ -42,7 +42,7 @@ Editor_rendering::Editor_rendering()
 {
 }
 
-Editor_rendering::~Editor_rendering()
+Editor_rendering::~Editor_rendering() noexcept
 {
 }
 

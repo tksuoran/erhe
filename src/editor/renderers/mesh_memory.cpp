@@ -18,7 +18,9 @@ Mesh_memory::Mesh_memory()
 {
 }
 
-Mesh_memory::~Mesh_memory() = default;
+Mesh_memory::~Mesh_memory() noexcept
+{
+}
 
 void Mesh_memory::connect()
 {

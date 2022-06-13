@@ -26,7 +26,9 @@ Light_mesh::Light_mesh()
 {
 }
 
-Light_mesh::~Light_mesh() = default;
+Light_mesh::~Light_mesh() noexcept
+{
+}
 
 void Light_mesh::connect()
 {

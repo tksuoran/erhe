@@ -37,7 +37,7 @@ auto Pipeline::operator=(const Pipeline& other) -> Pipeline&
     return *this;
 }
 
-Pipeline::~Pipeline()
+Pipeline::~Pipeline() noexcept
 {
     const std::lock_guard<std::mutex> lock{s_mutex};
 

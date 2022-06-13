@@ -48,7 +48,7 @@ Embree_device::Embree_device()
     rtcSetDeviceErrorFunction(m_device, s_rtc_error_function, this);
 }
 
-Embree_device::~Embree_device()
+Embree_device::~Embree_device() noexcept
 {
     SPDLOG_LOGGER_TRACE(log_embree, "rtcReleaseDevice()");
     rtcReleaseDevice(m_device);

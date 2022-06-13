@@ -13,7 +13,9 @@ Imgui_demo_window::Imgui_demo_window()
 {
 }
 
-Imgui_demo_window::~Imgui_demo_window() = default;
+Imgui_demo_window::~Imgui_demo_window() noexcept
+{
+}
 
 void Imgui_demo_window::connect()
 {

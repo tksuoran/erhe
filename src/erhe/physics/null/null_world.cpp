@@ -25,9 +25,13 @@ auto IWorld::create_unique() -> std::unique_ptr<IWorld>
     return std::make_unique<Null_world>();
 }
 
-IWorld::~IWorld() = default;
+IWorld::~IWorld() noexcept
+{
+}
 
-Null_world::~Null_world() = default;
+Null_world::~Null_world() noexcept
+{
+}
 
 void Null_world::enable_physics_updates()
 {

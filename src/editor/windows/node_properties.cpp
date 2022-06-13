@@ -46,7 +46,9 @@ Node_properties::Node_properties()
 {
 }
 
-Node_properties::~Node_properties() = default;
+Node_properties::~Node_properties() noexcept
+{
+}
 
 void Node_properties::connect()
 {
@@ -299,10 +301,10 @@ static inline ImVec2 operator+(const ImVec2& lhs, const ImVec2& rhs)
     return ImVec2{lhs.x + rhs.x, lhs.y + rhs.y};
 }
 
-static inline ImVec2 operator-(const ImVec2& lhs, const ImVec2& rhs)
-{
-    return ImVec2{lhs.x - rhs.x, lhs.y - rhs.y};
-}
+//static inline ImVec2 operator-(const ImVec2& lhs, const ImVec2& rhs)
+//{
+//    return ImVec2{lhs.x - rhs.x, lhs.y - rhs.y};
+//}
 
 static const float DRAG_MOUSE_THRESHOLD_FACTOR = 0.50f;    // Multiplier for the default value of io.MouseDragThreshold to make DragFloat/DragInt react faster to mouse drags.
 

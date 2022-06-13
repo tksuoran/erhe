@@ -17,7 +17,9 @@ Textures::Textures()
 {
 }
 
-Textures::~Textures() = default;
+Textures::~Textures() noexcept
+{
+}
 
 void Textures::connect()
 {

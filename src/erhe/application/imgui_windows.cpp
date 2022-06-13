@@ -535,7 +535,7 @@ Imgui_windows::Imgui_windows()
     );
 }
 
-Imgui_windows::~Imgui_windows()
+Imgui_windows::~Imgui_windows() noexcept
 {
     ImGui::DestroyContext(m_imgui_context);
 }

@@ -14,7 +14,7 @@ Buffer_transfer_queue::Buffer_transfer_queue()
 {
 }
 
-Buffer_transfer_queue::~Buffer_transfer_queue()
+Buffer_transfer_queue::~Buffer_transfer_queue() noexcept
 {
     flush();
 }

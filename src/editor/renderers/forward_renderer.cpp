@@ -46,7 +46,7 @@ Forward_renderer::Forward_renderer()
 {
 }
 
-Forward_renderer::~Forward_renderer()
+Forward_renderer::~Forward_renderer() noexcept
 {
 }
 

@@ -25,7 +25,7 @@ public:
     void commit                    () override {}
     void enable                    () override { m_enabled = true; }
     void disable                   () override { m_enabled = false; }
-    void set_mask                  (const uint32_t mask) { m_mask = mask; }
+    void set_mask                  (const uint32_t mask) override { m_mask = mask; }
     void set_vertex_attribute_count(const unsigned int) override {}
     void set_buffer(
         const Buffer_type ,

@@ -12,7 +12,7 @@ Mouse_motion_binding::Mouse_motion_binding()
 {
 }
 
-Mouse_motion_binding::~Mouse_motion_binding()
+Mouse_motion_binding::~Mouse_motion_binding() noexcept
 {
 }
 

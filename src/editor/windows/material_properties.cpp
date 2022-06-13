@@ -17,7 +17,9 @@ Material_properties::Material_properties()
 {
 }
 
-Material_properties::~Material_properties() = default;
+Material_properties::~Material_properties() noexcept
+{
+}
 
 void Material_properties::connect()
 {

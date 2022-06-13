@@ -29,7 +29,7 @@ Quad_renderer::Quad_renderer()
 {
 }
 
-Quad_renderer::~Quad_renderer()
+Quad_renderer::~Quad_renderer() noexcept
 {
 }
 

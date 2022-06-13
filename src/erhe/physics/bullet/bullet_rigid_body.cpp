@@ -90,11 +90,11 @@ Bullet_rigid_body::Bullet_rigid_body(
     m_bullet_rigid_body.setRollingFriction(0.1f);
 }
 
-IRigid_body::~IRigid_body()
+IRigid_body::~IRigid_body() noexcept
 {
 }
 
-Bullet_rigid_body::~Bullet_rigid_body()
+Bullet_rigid_body::~Bullet_rigid_body() noexcept
 {
 }
 

@@ -12,7 +12,9 @@ Light::Light(const std::string_view name)
     node_data.flag_bits |= (Node_flag_bit::is_light | Node_flag_bit::is_transform);
 }
 
-Light::~Light() = default;
+Light::~Light() noexcept
+{
+}
 
 auto Light::node_type() const -> const char*
 {

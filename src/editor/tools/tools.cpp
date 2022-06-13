@@ -11,7 +11,9 @@ Tools::Tools()
 {
 }
 
-Tools::~Tools() = default;
+Tools::~Tools() noexcept
+{
+}
 
 void Tools::connect()
 {

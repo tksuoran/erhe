@@ -17,7 +17,7 @@ Shader_monitor::Shader_monitor()
 {
 }
 
-Shader_monitor::~Shader_monitor()
+Shader_monitor::~Shader_monitor() noexcept
 {
     ERHE_PROFILE_FUNCTION
 

@@ -12,7 +12,9 @@ OpenGL_state_tracker::OpenGL_state_tracker()
 {
 }
 
-OpenGL_state_tracker::~OpenGL_state_tracker() = default;
+OpenGL_state_tracker::~OpenGL_state_tracker() noexcept
+{
+}
 
 void OpenGL_state_tracker::on_thread_exit()
 {

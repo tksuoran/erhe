@@ -242,7 +242,9 @@ Selection_tool::Selection_tool()
 {
 }
 
-Selection_tool::~Selection_tool() = default;
+Selection_tool::~Selection_tool() noexcept
+{
+}
 
 void Selection_tool::connect()
 {

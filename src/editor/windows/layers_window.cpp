@@ -28,7 +28,9 @@ Layers_window::Layers_window()
 {
 }
 
-Layers_window::~Layers_window() = default;
+Layers_window::~Layers_window() noexcept
+{
+}
 
 void Layers_window::connect()
 {

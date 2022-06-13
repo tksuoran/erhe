@@ -80,7 +80,9 @@ Scene_builder::Scene_builder()
 {
 }
 
-Scene_builder::~Scene_builder() = default;
+Scene_builder::~Scene_builder() noexcept
+{
+}
 
 void Scene_builder::connect()
 {
@@ -439,11 +441,18 @@ void Scene_builder::make_brushes()
                         const glm::dmat3 m        = glm::toMat3(q);
 
                         torus_shape_create_info.children.emplace_back(
-                            capsule,
-                            erhe::physics::Transform{
-                                mat3{m},
-                                vec3{position}
+                            erhe::physics::Compound_child{
+                                .shape = capsule,
+                                .transform = erhe::physics::Transform{
+                                    mat3{m},
+                                    vec3{position}
+                                }
                             }
+                            //capsule,
+                            //erhe::physics::Transform{
+                            //    mat3{m},
+                            //    vec3{position}
+                            //}
                         );
                     }
                     return erhe::physics::ICollision_shape::create_compound_shape_shared(torus_shape_create_info);
@@ -541,7 +550,7 @@ void Scene_builder::make_brushes()
         auto make_mesh_node =
         [
             &aniso_material,
-            &ring_geometry,
+            //&ring_geometry,
             &rotate_ring_pg,
             &shared_geometry,
             this
@@ -743,7 +752,7 @@ void Scene_builder::make_mesh_nodes()
 
         for (const auto& brush : m_scene_brushes)
         {
-            for (size_t i = 0; i < config.instance_count; ++i)
+            for (int i = 0; i < config.instance_count; ++i)
             {
                 pack_entries.emplace_back(brush.get());
             }

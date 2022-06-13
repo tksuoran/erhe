@@ -20,7 +20,9 @@ Grid_tool::Grid_tool()
 {
 }
 
-Grid_tool::~Grid_tool() = default;
+Grid_tool::~Grid_tool() noexcept
+{
+}
 
 void Grid_tool::connect()
 {

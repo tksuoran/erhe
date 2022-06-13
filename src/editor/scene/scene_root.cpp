@@ -7,7 +7,7 @@
 #include "scene/node_raytrace.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe/application/Configuration.hpp"
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/primitive/material.hpp"
@@ -49,7 +49,7 @@ Instance::Instance(
 {
 }
 
-Instance::~Instance()
+Instance::~Instance() noexcept
 {
 }
 
@@ -89,7 +89,9 @@ Scene_root::Scene_root()
 {
 }
 
-Scene_root::~Scene_root() = default;
+Scene_root::~Scene_root() noexcept
+{
+}
 
 void Scene_root::connect()
 {

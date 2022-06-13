@@ -15,7 +15,7 @@ View_client::View_client()
 {
 }
 
-View_client::~View_client()
+View_client::~View_client() noexcept
 {
 
 }

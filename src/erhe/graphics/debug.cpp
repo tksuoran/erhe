@@ -24,7 +24,7 @@ Scoped_debug_group::Scoped_debug_group(
     );
 }
 
-Scoped_debug_group::~Scoped_debug_group()
+Scoped_debug_group::~Scoped_debug_group() noexcept
 {
     gl::pop_debug_group();
 }
@@ -98,7 +98,7 @@ Gpu_timer::Gpu_timer(const char* label)
     create();
 }
 
-Gpu_timer::~Gpu_timer()
+Gpu_timer::~Gpu_timer() noexcept
 {
     const std::lock_guard<std::mutex> lock{s_mutex};
 
@@ -267,7 +267,7 @@ Scoped_gpu_timer::Scoped_gpu_timer(Gpu_timer& timer)
     m_timer.begin();
 }
 
-Scoped_gpu_timer::~Scoped_gpu_timer()
+Scoped_gpu_timer::~Scoped_gpu_timer() noexcept
 {
     m_timer.end();
 }

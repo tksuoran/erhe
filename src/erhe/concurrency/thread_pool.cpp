@@ -70,7 +70,7 @@ Thread_pool::Thread_pool(size_t size)
     }
 }
 
-Thread_pool::~Thread_pool()
+Thread_pool::~Thread_pool() noexcept
 {
     m_stop = true;
     m_condition.notify_all();

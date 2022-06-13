@@ -50,7 +50,9 @@ Null_buffer& Null_buffer::operator=(Null_buffer&& other) noexcept
     return *this;
 }
 
-Null_buffer::~Null_buffer() = default;
+Null_buffer::~Null_buffer() noexcept
+{
+}
 
 auto Null_buffer::capacity_byte_count() const noexcept
 -> size_t

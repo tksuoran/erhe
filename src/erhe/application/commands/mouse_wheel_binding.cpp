@@ -12,7 +12,7 @@ Mouse_wheel_binding::Mouse_wheel_binding()
 {
 }
 
-Mouse_wheel_binding::~Mouse_wheel_binding()
+Mouse_wheel_binding::~Mouse_wheel_binding() noexcept
 {
 }
 

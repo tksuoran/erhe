@@ -128,7 +128,7 @@ Framebuffer::Framebuffer(const Create_info& create_info)
     create();
 }
 
-Framebuffer::~Framebuffer()
+Framebuffer::~Framebuffer() noexcept
 {
     const std::lock_guard lock{s_mutex};
 

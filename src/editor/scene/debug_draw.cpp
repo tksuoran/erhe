@@ -19,7 +19,9 @@ Debug_draw::Debug_draw()
 
 }
 
-Debug_draw::~Debug_draw() = default;
+Debug_draw::~Debug_draw() noexcept
+{
+}
 
 void Debug_draw::connect()
 {

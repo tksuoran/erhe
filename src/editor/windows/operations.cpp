@@ -28,7 +28,9 @@ Operations::Operations()
 {
 }
 
-Operations::~Operations() = default;
+Operations::~Operations() noexcept
+{
+}
 
 void Operations::connect()
 {

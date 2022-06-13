@@ -22,7 +22,7 @@ Key_binding::Key_binding()
 {
 }
 
-Key_binding::~Key_binding()
+Key_binding::~Key_binding() noexcept
 {
 }
 

@@ -3,9 +3,13 @@
 namespace erhe::primitive
 {
 
-Material::Material() = default;
+Material::Material()
+{
+}
 
-Material::~Material() = default;
+Material::~Material() noexcept
+{
+}
 
 Material::Material(
     const std::string_view name,

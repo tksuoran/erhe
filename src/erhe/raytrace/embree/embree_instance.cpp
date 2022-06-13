@@ -37,7 +37,7 @@ Embree_instance::Embree_instance(const std::string_view debug_label)
     }
 }
 
-Embree_instance::~Embree_instance()
+Embree_instance::~Embree_instance() noexcept
 {
     SPDLOG_LOGGER_TRACE(log_embree, "rtcReleaseGeometry(instance = {})", m_debug_label);
     rtcReleaseGeometry(m_geometry);

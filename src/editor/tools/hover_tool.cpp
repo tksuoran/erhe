@@ -57,7 +57,9 @@ Hover_tool::Hover_tool()
 {
 }
 
-Hover_tool::~Hover_tool() = default;
+Hover_tool::~Hover_tool() noexcept
+{
+}
 
 auto Hover_tool::description() -> const char*
 {

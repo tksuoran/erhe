@@ -12,7 +12,7 @@ Command_binding::Command_binding()
 {
 }
 
-Command_binding::~Command_binding()
+Command_binding::~Command_binding() noexcept
 {
 }
 

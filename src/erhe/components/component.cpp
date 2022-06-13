@@ -27,7 +27,7 @@ Component::Component(const std::string_view name)
     ERHE_PROFILE_FUNCTION
 }
 
-Component::~Component()
+Component::~Component() noexcept
 {
     unregister();
 }

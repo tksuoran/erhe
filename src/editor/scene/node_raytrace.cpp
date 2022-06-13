@@ -187,7 +187,7 @@ Node_raytrace::Node_raytrace(
     initialize();
 }
 
-Node_raytrace::~Node_raytrace()
+Node_raytrace::~Node_raytrace() noexcept
 {
     // TODO
 }

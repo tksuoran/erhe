@@ -187,7 +187,7 @@ Vertex_buffer_writer::Vertex_buffer_writer(
     vertex_data_span = gsl::make_span(vertex_data);
 }
 
-Vertex_buffer_writer::~Vertex_buffer_writer()
+Vertex_buffer_writer::~Vertex_buffer_writer() noexcept
 {
     buffer_sink->buffer_ready(*this);
 }
@@ -245,7 +245,7 @@ Index_buffer_writer::Index_buffer_writer(
     }
 }
 
-Index_buffer_writer::~Index_buffer_writer()
+Index_buffer_writer::~Index_buffer_writer() noexcept
 {
     buffer_sink->buffer_ready(*this);
 }

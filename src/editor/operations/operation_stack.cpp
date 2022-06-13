@@ -52,7 +52,9 @@ Operation_stack::Operation_stack()
 {
 }
 
-Operation_stack::~Operation_stack() = default;
+Operation_stack::~Operation_stack() noexcept
+{
+}
 
 void Operation_stack::connect()
 {

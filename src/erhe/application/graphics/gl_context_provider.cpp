@@ -19,7 +19,9 @@ Gl_context_provider::Gl_context_provider()
 {
 }
 
-Gl_context_provider::~Gl_context_provider() = default;
+Gl_context_provider::~Gl_context_provider() noexcept
+{
+}
 
 void Gl_context_provider::provide_worker_contexts(
     const std::shared_ptr<erhe::graphics::OpenGL_state_tracker>& opengl_state_tracker,
@@ -129,7 +131,7 @@ Scoped_gl_context::Scoped_gl_context(
 {
 }
 
-Scoped_gl_context::~Scoped_gl_context()
+Scoped_gl_context::~Scoped_gl_context() noexcept
 {
     ERHE_PROFILE_FUNCTION
 

@@ -23,7 +23,7 @@ Null_instance::Null_instance(const std::string_view debug_label)
 {
 }
 
-Null_instance::~Null_instance()
+Null_instance::~Null_instance() noexcept
 {
 }
 

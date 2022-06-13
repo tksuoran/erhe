@@ -10,7 +10,9 @@
 namespace erhe::primitive
 {
 
-Buffer_sink::~Buffer_sink() = default;
+Buffer_sink::~Buffer_sink() noexcept
+{
+}
 
 Gl_buffer_sink::Gl_buffer_sink(
     erhe::graphics::Buffer_transfer_queue& buffer_transfer_queue,

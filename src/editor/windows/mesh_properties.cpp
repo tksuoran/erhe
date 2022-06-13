@@ -31,7 +31,9 @@ Mesh_properties::Mesh_properties()
 {
 }
 
-Mesh_properties::~Mesh_properties() = default;
+Mesh_properties::~Mesh_properties() noexcept
+{
+}
 
 void Mesh_properties::connect()
 {

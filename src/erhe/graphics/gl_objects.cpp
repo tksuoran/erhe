@@ -41,7 +41,7 @@ auto Gl_texture::operator=(Gl_texture&& other) noexcept -> Gl_texture&
 }
 
 
-Gl_texture::~Gl_texture()
+Gl_texture::~Gl_texture() noexcept
 {
     if (m_owned && (m_gl_name != 0))
     {
@@ -74,7 +74,7 @@ auto Gl_program::operator=(Gl_program&& other) noexcept -> Gl_program&
     return *this;
 }
 
-Gl_program::~Gl_program()
+Gl_program::~Gl_program() noexcept
 {
     if (m_gl_name != 0)
     {
@@ -94,7 +94,7 @@ Gl_shader::Gl_shader(gl::Shader_type shader_type)
     Ensures(m_gl_name != 0);
 }
 
-Gl_shader::~Gl_shader()
+Gl_shader::~Gl_shader() noexcept
 {
     if (m_gl_name != 0)
     {
@@ -127,7 +127,7 @@ Gl_sampler::Gl_sampler()
     Ensures(m_gl_name != 0);
 }
 
-Gl_sampler::~Gl_sampler()
+Gl_sampler::~Gl_sampler() noexcept
 {
     if (m_gl_name != 0)
     {
@@ -160,7 +160,7 @@ Gl_framebuffer::Gl_framebuffer()
     Ensures(m_gl_name != 0);
 }
 
-Gl_framebuffer::~Gl_framebuffer()
+Gl_framebuffer::~Gl_framebuffer() noexcept
 {
     if (m_gl_name != 0)
     {
@@ -193,7 +193,7 @@ Gl_renderbuffer::Gl_renderbuffer()
     Ensures(m_gl_name != 0);
 }
 
-Gl_renderbuffer::~Gl_renderbuffer()
+Gl_renderbuffer::~Gl_renderbuffer() noexcept
 {
     if (m_gl_name != 0)
     {
@@ -226,7 +226,7 @@ Gl_buffer::Gl_buffer()
     Ensures(m_gl_name != 0);
 }
 
-Gl_buffer::~Gl_buffer()
+Gl_buffer::~Gl_buffer() noexcept
 {
     if (m_gl_name != 0)
     {
@@ -260,7 +260,7 @@ Gl_transform_feedback::Gl_transform_feedback()
     Ensures(m_gl_name != 0);
 }
 
-Gl_transform_feedback::~Gl_transform_feedback()
+Gl_transform_feedback::~Gl_transform_feedback() noexcept
 {
     if (m_gl_name != 0)
     {
@@ -293,7 +293,7 @@ Gl_query::Gl_query(gl::Query_target target)
     Ensures(m_gl_name != 0);
 }
 
-Gl_query::~Gl_query()
+Gl_query::~Gl_query() noexcept
 {
     if (m_gl_name != 0)
     {
@@ -326,7 +326,7 @@ Gl_vertex_array::Gl_vertex_array()
     Ensures(m_gl_name != 0);
 }
 
-Gl_vertex_array::~Gl_vertex_array()
+Gl_vertex_array::~Gl_vertex_array() noexcept
 {
     if (m_gl_name != 0)
     {

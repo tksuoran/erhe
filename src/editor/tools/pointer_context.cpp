@@ -36,7 +36,9 @@ Pointer_context::Pointer_context()
 {
 }
 
-Pointer_context::~Pointer_context() = default;
+Pointer_context::~Pointer_context() noexcept
+{
+}
 
 void Pointer_context::connect()
 {

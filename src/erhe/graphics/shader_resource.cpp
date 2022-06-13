@@ -449,7 +449,9 @@ Shader_resource::Shader_resource()
 {
 }
 
-Shader_resource::~Shader_resource() = default;
+Shader_resource::~Shader_resource() noexcept
+{
+}
 
 auto Shader_resource::is_array() const -> bool
 {

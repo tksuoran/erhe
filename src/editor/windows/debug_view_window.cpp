@@ -23,7 +23,9 @@ Debug_view_window::Debug_view_window()
 {
 }
 
-Debug_view_window::~Debug_view_window() = default;
+Debug_view_window::~Debug_view_window() noexcept
+{
+}
 
 void Debug_view_window::connect()
 {

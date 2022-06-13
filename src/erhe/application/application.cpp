@@ -15,7 +15,7 @@ void Application::run()
     view->run();
 }
 
-Application::~Application()
+Application::~Application() noexcept
 {
     m_components.cleanup_components();
 }

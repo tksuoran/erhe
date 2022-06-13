@@ -34,7 +34,7 @@ Bullet_compound_shape::Bullet_compound_shape(const Compound_shape_create_info& c
     }
 }
 
-Bullet_compound_shape::~Bullet_compound_shape()
+Bullet_compound_shape::~Bullet_compound_shape() noexcept
 {
 }
 
@@ -65,7 +65,7 @@ void Bullet_compound_shape::calculate_principal_axis_transform(
     /// This also necessitates a correction of the world transform
 	/// of the collision object by the principal transform.
     const int child_count = m_compound_shape.getNumChildShapes();
-    ERHE_VERIFY(child_masses.size() == child_count);
+    ERHE_VERIFY(child_masses.size() == static_cast<size_t>(child_count));
 
     btTransform bullet_principal_transform;
     btVector3 bullet_inertia;

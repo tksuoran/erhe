@@ -18,7 +18,9 @@ Performance_window::Performance_window()
 {
 }
 
-Performance_window::~Performance_window() = default;
+Performance_window::~Performance_window() noexcept
+{
+}
 
 void Performance_window::connect()
 {
@@ -127,6 +129,10 @@ static inline T clamp(T value, T min_value, T max_value)
             : value;
 }
 
+}
+
+Plot::~Plot() noexcept
+{
 }
 
 void Plot::imgui()

@@ -18,7 +18,7 @@ Mouse_click_binding::Mouse_click_binding()
 {
 }
 
-Mouse_click_binding::~Mouse_click_binding()
+Mouse_click_binding::~Mouse_click_binding() noexcept
 {
 }
 

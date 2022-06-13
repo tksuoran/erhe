@@ -17,8 +17,9 @@ Program_interface::Program_interface()
 {
 }
 
-Program_interface::~Program_interface() = default;
-
+Program_interface::~Program_interface() noexcept
+{
+}
 
 void Program_interface::connect()
 {

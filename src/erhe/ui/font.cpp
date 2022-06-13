@@ -35,7 +35,7 @@ using std::unique_ptr;
 using std::make_shared;
 using std::make_unique;
 
-Font::~Font()
+Font::~Font() noexcept
 {
     ERHE_PROFILE_FUNCTION
 

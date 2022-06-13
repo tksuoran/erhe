@@ -19,7 +19,7 @@ Programs::Programs()
 {
 }
 
-Programs::~Programs()
+Programs::~Programs() noexcept
 {
 }
 

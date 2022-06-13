@@ -33,7 +33,9 @@ Node_tree_window::Node_tree_window()
 {
 }
 
-Node_tree_window::~Node_tree_window() = default;
+Node_tree_window::~Node_tree_window() noexcept
+{
+}
 
 void Node_tree_window::connect()
 {
@@ -266,27 +268,6 @@ void drag_and_drop_gradient_preview(
             bottom
         );
     }
-}
-
-template<typename T>
-void apply_permutation_in_place(
-    std::vector<T>&         v,
-    const std::vector<int>& p
-)
-{
-   for (size_t i = 0 ; i < v.size(); ++i)
-   {
-        const size_t curr = i;
-        const size_t next = p[curr];
-        while (next != i)
-        {
-            swap(v[curr], v[next]);
-            p[curr] = curr;
-            curr = next;
-            next = p[next];
-        }
-        p[curr] = curr;
-   }
 }
 
 }

@@ -9,10 +9,11 @@
 #include "erhe/toolkit/verify.hpp"
 
 #include <fmt/ostream.h>
+#include <gsl/assert>
 
 #include <bitset>
-#include <gsl/assert>
 #include <memory>
+#include <sstream>
 
 namespace erhe::graphics
 {
@@ -103,7 +104,7 @@ Vertex_input_state::Vertex_input_state(Vertex_input_state_data&& create_info)
     s_all_vertex_input_states.push_back(this);
 }
 
-Vertex_input_state::~Vertex_input_state()
+Vertex_input_state::~Vertex_input_state() noexcept
 {
     if (!m_gl_vertex_array.has_value())
     {

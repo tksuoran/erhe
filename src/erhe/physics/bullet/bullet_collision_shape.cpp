@@ -132,7 +132,7 @@ Bullet_collision_shape::Bullet_collision_shape(btCollisionShape* shape)
 {
 }
 
-Bullet_collision_shape::~Bullet_collision_shape()
+Bullet_collision_shape::~Bullet_collision_shape() noexcept
 {
 }
 

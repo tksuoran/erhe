@@ -37,7 +37,9 @@ Null_geometry::Null_geometry(
     static_cast<void>(geometry_type);
 }
 
-Null_geometry::~Null_geometry() = default;
+Null_geometry::~Null_geometry() noexcept
+{
+}
 
 //void Null_geometry::set_user_data(void* ptr)
 //{

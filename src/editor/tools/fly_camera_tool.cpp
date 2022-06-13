@@ -168,7 +168,7 @@ Fly_camera_tool::Fly_camera_tool()
 {
 }
 
-Fly_camera_tool::~Fly_camera_tool()
+Fly_camera_tool::~Fly_camera_tool() noexcept
 {
 #if defined(_WIN32) && 0
     m_space_mouse_listener.set_active(false);

@@ -13,7 +13,9 @@ Image_transfer::Image_transfer()
 {
 }
 
-Image_transfer::~Image_transfer() = default;
+Image_transfer::~Image_transfer() noexcept
+{
+}
 
 void Image_transfer::connect()
 {

@@ -31,7 +31,7 @@ Node_physics::Node_physics(
     m_flag_bits |= INode_attachment::c_flag_bit_is_physics;
 }
 
-Node_physics::~Node_physics()
+Node_physics::~Node_physics() noexcept
 {
     if (m_physics_world != nullptr)
     {

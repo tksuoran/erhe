@@ -61,7 +61,9 @@ Viewport_windows::Viewport_windows()
 {
 }
 
-Viewport_windows::~Viewport_windows() = default;
+Viewport_windows::~Viewport_windows() noexcept
+{
+}
 
 void Viewport_windows::connect()
 {

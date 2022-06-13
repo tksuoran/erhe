@@ -15,7 +15,9 @@ Node_transform_operation::Node_transform_operation(const Parameters& parameters)
 {
 }
 
-Node_transform_operation::~Node_transform_operation() = default;
+Node_transform_operation::~Node_transform_operation() noexcept
+{
+}
 
 auto Node_transform_operation::describe() const -> std::string
 {
@@ -53,7 +55,9 @@ Mesh_insert_remove_operation::Mesh_insert_remove_operation(const Parameters& par
 {
 }
 
-Mesh_insert_remove_operation::~Mesh_insert_remove_operation() = default;
+Mesh_insert_remove_operation::~Mesh_insert_remove_operation() noexcept
+{
+}
 
 void Mesh_insert_remove_operation::execute(const Operation_context& context)
 {
@@ -139,7 +143,9 @@ Light_insert_remove_operation::Light_insert_remove_operation(const Parameters& p
 {
 }
 
-Light_insert_remove_operation::~Light_insert_remove_operation() = default;
+Light_insert_remove_operation::~Light_insert_remove_operation() noexcept
+{
+}
 
 void Light_insert_remove_operation::execute(const Operation_context& context)
 {
@@ -205,7 +211,9 @@ Camera_insert_remove_operation::Camera_insert_remove_operation(const Parameters&
 {
 }
 
-Camera_insert_remove_operation::~Camera_insert_remove_operation() = default;
+Camera_insert_remove_operation::~Camera_insert_remove_operation() noexcept
+{
+}
 
 void Camera_insert_remove_operation::execute(const Operation_context& context)
 {

@@ -13,6 +13,7 @@
 
 #include <cmath>
 #include <stdexcept>
+#include <sstream>
 
 namespace erhe::geometry
 {
@@ -42,7 +43,7 @@ Geometry::Geometry(std::string_view name)
 {
 }
 
-Geometry::~Geometry()
+Geometry::~Geometry() noexcept
 {
     // TODO Debug how to enable named return value optimization
     // log_geometry.warn("Geometry {} destructor\n", name);
@@ -539,7 +540,7 @@ auto Geometry::transform(const mat4& m) -> Geometry&
         return *this;
     }
 
-    const mat4 it = glm::transpose(glm::inverse(m));
+    //const mat4 it = glm::transpose(glm::inverse(m));
 
     polygon_attributes().transform(m);
     point_attributes  ().transform(m);

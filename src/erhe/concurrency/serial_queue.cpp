@@ -24,7 +24,7 @@ Serial_queue::Serial_queue(const std::string_view name)
     );
 }
 
-Serial_queue::~Serial_queue()
+Serial_queue::~Serial_queue() noexcept
 {
     wait();
 

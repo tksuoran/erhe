@@ -56,9 +56,11 @@ namespace erhe::graphics
     ERHE_FATAL("unsupported PNG image color type");
 }
 
-PNG_loader::PNG_loader() = default;
+PNG_loader::PNG_loader()
+{
+}
 
-PNG_loader::~PNG_loader()
+PNG_loader::~PNG_loader() noexcept
 {
     close();
 }
@@ -131,9 +133,13 @@ auto PNG_loader::load(gsl::span<std::byte> transfer_buffer) -> bool
     return (result == 0);
 }
 
-PNG_writer::PNG_writer() = default;
+PNG_writer::PNG_writer()
+{
+}
 
-PNG_writer::~PNG_writer() = default;
+PNG_writer::~PNG_writer() noexcept
+{
+}
 
 int spng_rw(spng_ctx* ctx, void* user, void* dst_src, size_t length)
 {

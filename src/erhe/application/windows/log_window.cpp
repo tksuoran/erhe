@@ -29,7 +29,9 @@ Log_window::Log_window()
 {
 }
 
-Log_window::~Log_window() = default;
+Log_window::~Log_window() noexcept
+{
+}
 
 void Log_window::connect()
 {

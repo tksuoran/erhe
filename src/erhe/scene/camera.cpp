@@ -104,7 +104,9 @@ Camera::Camera(const std::string_view name)
     node_data.flag_bits |= (Node_flag_bit::is_camera | Node_flag_bit::is_transform);
 }
 
-Camera::~Camera() = default;
+Camera::~Camera() noexcept
+{
+}
 
 auto Camera::projection_transforms(const Viewport& viewport) const -> Projection_transforms
 {

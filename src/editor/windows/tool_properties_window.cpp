@@ -18,7 +18,7 @@ Tool_properties_window::Tool_properties_window()
 {
 }
 
-Tool_properties_window::~Tool_properties_window()
+Tool_properties_window::~Tool_properties_window() noexcept
 {
 }
 

@@ -43,17 +43,17 @@ Embree_scene::Embree_scene(const std::string_view debug_label)
     rtcSetSceneBuildQuality(m_scene, RTC_BUILD_QUALITY_LOW);
 }
 
-Embree_scene::~Embree_scene()
+Embree_scene::~Embree_scene() noexcept
 {
     SPDLOG_LOGGER_TRACE(log_embree, "rtcReleaseScene({})", m_debug_label);
     rtcReleaseScene(m_scene);
 }
 
-namespace {
-
-constexpr size_t s_grow = 256;
-
-}
+// namespace {
+// 
+// constexpr size_t s_grow = 256;
+// 
+// }
 
 void Embree_scene::attach(IGeometry* geometry)
 {

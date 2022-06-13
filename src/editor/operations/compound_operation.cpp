@@ -10,7 +10,7 @@ Compound_operation::Compound_operation(Parameters&& parameters)
 {
 }
 
-Compound_operation::~Compound_operation()
+Compound_operation::~Compound_operation() noexcept
 {
 }
 

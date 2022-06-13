@@ -50,7 +50,9 @@ Renderbuffer::Renderbuffer(
     );
 }
 
-Renderbuffer::~Renderbuffer() = default;
+Renderbuffer::~Renderbuffer() noexcept
+{
+}
 
 void Renderbuffer::set_debug_label(const std::string& label)
 {

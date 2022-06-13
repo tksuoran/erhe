@@ -32,7 +32,9 @@ Physics_window::Physics_window()
 {
 }
 
-Physics_window::~Physics_window() = default;
+Physics_window::~Physics_window() noexcept
+{
+}
 
 void Physics_window::connect()
 {
@@ -116,7 +118,7 @@ void Physics_window::imgui()
                 ImGui::Checkbox("Frames",            &m_debug_draw.frames           );
             }
 
-            const ImVec2 color_button_size{32.0f, 32.0f};
+            //const ImVec2 color_button_size{32.0f, 32.0f};
             ImGui::SliderFloat("Line Width", &debug_drawer->line_width, 0.0f, 10.0f);
             ImGui::ColorEdit3("Active",                &m_debug_draw.colors.active_object               .x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);
             ImGui::ColorEdit3("Deactivated",           &m_debug_draw.colors.deactivated_object          .x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);

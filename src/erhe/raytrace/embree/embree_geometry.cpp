@@ -51,7 +51,7 @@ Embree_geometry::Embree_geometry(
     rtcSetGeometryBuildQuality(m_geometry, RTC_BUILD_QUALITY_LOW);
 }
 
-Embree_geometry::~Embree_geometry()
+Embree_geometry::~Embree_geometry() noexcept
 {
     SPDLOG_LOGGER_TRACE(log_embree, "rtcReleaseGeometry({})", m_debug_label);
     rtcReleaseGeometry(m_geometry);

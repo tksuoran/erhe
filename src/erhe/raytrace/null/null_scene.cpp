@@ -27,7 +27,9 @@ Null_scene::Null_scene(const std::string_view debug_label)
 {
 }
 
-Null_scene::~Null_scene() = default;
+Null_scene::~Null_scene() noexcept
+{
+}
 
 void Null_scene::attach(IGeometry* geometry)
 {

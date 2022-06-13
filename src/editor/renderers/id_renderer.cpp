@@ -49,7 +49,9 @@ Id_renderer::Id_renderer()
 {
 }
 
-Id_renderer::~Id_renderer() = default;
+Id_renderer::~Id_renderer() noexcept
+{
+}
 
 void Id_renderer::connect()
 {

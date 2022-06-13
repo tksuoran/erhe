@@ -523,7 +523,7 @@ auto Context_window::open(
     return true;
 }
 
-Context_window::~Context_window()
+Context_window::~Context_window() noexcept
 {
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
     if (window != nullptr)

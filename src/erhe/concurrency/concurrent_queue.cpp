@@ -14,7 +14,7 @@ Concurrent_queue::Concurrent_queue(const std::string_view name, Priority priorit
 {
 }
 
-Concurrent_queue::~Concurrent_queue()
+Concurrent_queue::~Concurrent_queue() noexcept
 {
     wait();
 }

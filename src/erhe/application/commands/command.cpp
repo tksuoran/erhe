@@ -11,7 +11,9 @@ Command::Command(const char* name)
 {
 }
 
-Command::~Command() = default;
+Command::~Command() noexcept
+{
+}
 
 auto Command::try_call(Command_context& context) -> bool
 {

@@ -31,7 +31,9 @@ Icon_set::Icon_set(
 {
 }
 
-Icon_set::~Icon_set() = default;
+Icon_set::~Icon_set() noexcept
+{
+}
 
 void Icon_set::connect()
 {

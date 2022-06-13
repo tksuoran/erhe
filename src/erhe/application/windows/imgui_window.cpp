@@ -22,7 +22,9 @@ Imgui_window::Imgui_window(
 {
 }
 
-Imgui_window::~Imgui_window() = default;
+Imgui_window::~Imgui_window() noexcept
+{
+}
 
 void Imgui_window::initialize(
     const erhe::components::Components& components

@@ -132,7 +132,7 @@ Physics_tool::Physics_tool()
 {
 }
 
-Physics_tool::~Physics_tool()
+Physics_tool::~Physics_tool() noexcept
 {
     if (m_target_constraint)
     {

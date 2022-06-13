@@ -23,16 +23,11 @@ namespace erhe::toolkit
 namespace erhe::application
 {
 
-//class Editor_rendering;
-//class Id_renderer;
-//class Imgui_renderer;
-//class Line_renderer;
-//class Shadow_renderer;
-//class Text_renderer;
-
 class Plot
 {
 public:
+    virtual ~Plot() noexcept;
+
     void imgui();
     void clear();
 
@@ -109,24 +104,14 @@ public:
     void imgui() override;
 
 private:
-
-    // Component dependencies
-    //std::shared_ptr<Editor_rendering> m_editor_rendering;
-    //std::shared_ptr<Shadow_renderer>  m_shadow_renderer;
-    //std::shared_ptr<Id_renderer>      m_id_renderer;
-    //std::shared_ptr<Imgui_renderer>   m_imgui_renderer;
-    //std::shared_ptr<Line_renderer>    m_line_renderer;
-    //std::shared_ptr<Text_renderer>    m_text_renderer;
-
     std::vector<Gpu_timer_plot> m_gpu_timer_plots;
     std::vector<Cpu_timer_plot> m_cpu_timer_plots;
     bool m_pause{false};
 
-    int  m_taps   = 1;
-    int  m_expand = 0;
-    int  m_reduce = 0;
-    bool m_linear = true;
-
+    //int  m_taps   = 1;
+    //int  m_expand = 0;
+    //int  m_reduce = 0;
+    //bool m_linear = true;
 };
 
 } // namespace editor

@@ -20,7 +20,7 @@ Mouse_drag_binding::Mouse_drag_binding()
 {
 }
 
-Mouse_drag_binding::~Mouse_drag_binding()
+Mouse_drag_binding::~Mouse_drag_binding() noexcept
 {
 }
 

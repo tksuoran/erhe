@@ -20,7 +20,9 @@ Components::Components()
 {
 }
 
-Components::~Components() = default;
+Components::~Components() noexcept
+{
+}
 
 auto Components::add(
     const shared_ptr<Component>& component
@@ -161,7 +163,9 @@ void Components::cleanup_components()
     }
 }
 
-IExecution_queue::~IExecution_queue() = default;
+IExecution_queue::~IExecution_queue() noexcept
+{
+}
 
 // Optimized queue which executes tasks concurrently
 class Concurrent_execution_queue

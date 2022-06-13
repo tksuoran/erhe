@@ -12,7 +12,9 @@ Time::Time()
 {
 }
 
-Time::~Time() = default;
+Time::~Time() noexcept
+{
+}
 
 void Time::start_time()
 {

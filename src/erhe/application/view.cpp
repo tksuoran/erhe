@@ -28,9 +28,9 @@
 
 namespace erhe::application {
 
-const ImVec4 log_color          {0.8f, 0.8f, 1.0f, 0.7f};
-const ImVec4 consume_event_color{1.0f, 1.0f, 8.0f, 0.6f};
-const ImVec4 filter_event_color {1.0f, 0.8f, 7.0f, 0.6f};
+//// const ImVec4 log_color          {0.8f, 0.8f, 1.0f, 0.7f};
+//// const ImVec4 consume_event_color{1.0f, 1.0f, 8.0f, 0.6f};
+//// const ImVec4 filter_event_color {1.0f, 0.8f, 7.0f, 0.6f};
 
 View::View()
     : erhe::components::Component{c_label}
@@ -38,7 +38,9 @@ View::View()
 {
 }
 
-View::~View() = default;
+View::~View() noexcept
+{
+}
 
 void View::connect()
 {

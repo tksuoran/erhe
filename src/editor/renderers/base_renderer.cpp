@@ -39,7 +39,9 @@ Base_renderer::Base_renderer(const std::string& name)
 {
 }
 
-Base_renderer::~Base_renderer() = default;
+Base_renderer::~Base_renderer() noexcept
+{
+}
 
 void Base_renderer::base_connect(const erhe::components::Component* component)
 {

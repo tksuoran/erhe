@@ -60,8 +60,9 @@ Primitive_builder::Primitive_builder(
 {
 }
 
-Primitive_builder::~Primitive_builder() = default;
-
+Primitive_builder::~Primitive_builder() noexcept
+{
+}
 
 void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 {
@@ -496,7 +497,7 @@ Build_context::Build_context(
     root.calculate_bounding_volume(property_maps.point_locations);
 }
 
-Build_context::~Build_context()
+Build_context::~Build_context() noexcept
 {
     ERHE_VERIFY(vertex_index == root.total_vertex_count);
 }

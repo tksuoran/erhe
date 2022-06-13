@@ -151,7 +151,9 @@ Trs_tool::Trs_tool()
 {
 }
 
-Trs_tool::~Trs_tool() = default;
+Trs_tool::~Trs_tool() noexcept
+{
+}
 
 auto Trs_tool::description() -> const char*
 {
@@ -440,7 +442,7 @@ auto Trs_tool::Visualization::make_arrow_cylinder(
 ) -> Part
 {
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
-        std::move(
+        //std::move(
             erhe::geometry::shapes::make_cylinder(
                 0.0,
                 arrow_cylinder_length,
@@ -450,7 +452,7 @@ auto Trs_tool::Visualization::make_arrow_cylinder(
                 32,
                 4
             )
-        )
+        //)
     );
 
     return Part{
@@ -465,7 +467,7 @@ auto Trs_tool::Visualization::make_arrow_cone(
 ) -> Part
 {
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
-        std::move(
+        //std::move(
             erhe::geometry::shapes::make_cone(
                 arrow_cylinder_length,
                 arrow_tip,
@@ -474,7 +476,7 @@ auto Trs_tool::Visualization::make_arrow_cone(
                 32,
                 4
             )
-        )
+        //)
     );
 
     return Part{
@@ -489,7 +491,7 @@ auto Trs_tool::Visualization::make_box(
 ) -> Part
 {
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
-        std::move(
+        //std::move(
             erhe::geometry::shapes::make_box(
                 0.0,
                 box_length,
@@ -498,7 +500,7 @@ auto Trs_tool::Visualization::make_box(
                 -box_half_thickness,
                 box_half_thickness
             )
-        )
+        //)
     );
 
     return Part{
@@ -513,14 +515,14 @@ auto Trs_tool::Visualization::make_rotate_ring(
 ) -> Part
 {
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
-        std::move(
+        //std::move(
             erhe::geometry::shapes::make_torus(
                 rotate_ring_major_radius,
                 rotate_ring_minor_radius,
                 80,
                 32
             )
-        )
+        //)
     );
 
     return Part{

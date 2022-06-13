@@ -29,7 +29,9 @@ Mesh::Mesh(
     mesh_data.primitives.emplace_back(primitive);
 }
 
-Mesh::~Mesh() = default;
+Mesh::~Mesh() noexcept
+{
+}
 
 auto Mesh::node_type() const -> const char*
 {

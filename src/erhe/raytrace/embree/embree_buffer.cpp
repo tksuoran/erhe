@@ -32,7 +32,7 @@ Embree_buffer::Embree_buffer(const std::string_view debug_label, const size_t ca
     m_capacity_byte_count = capacity_byte_count;
 }
 
-Embree_buffer::~Embree_buffer()
+Embree_buffer::~Embree_buffer() noexcept
 {
     SPDLOG_LOGGER_TRACE(log_embree, "rtcReleaseBuffer(hbuffer = {} {)}", m_debug_label, fmt::ptr(m_buffer));
     rtcReleaseBuffer(m_buffer);

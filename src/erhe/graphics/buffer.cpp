@@ -4,6 +4,7 @@
 
 #include <fmt/format.h>
 
+#include <sstream>
 #include <vector>
 
 namespace erhe::graphics
@@ -78,9 +79,13 @@ Buffer::Buffer(
     Ensures(m_capacity_byte_count > 0);
 }
 
-Buffer::Buffer() = default;
+Buffer::Buffer()
+{
+}
 
-Buffer::~Buffer() = default;
+Buffer::~Buffer() noexcept
+{
+}
 
 Buffer::Buffer(Buffer&& other) noexcept
 {

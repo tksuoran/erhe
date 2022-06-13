@@ -91,7 +91,9 @@ Brushes::Brushes()
 {
 }
 
-Brushes::~Brushes() = default;
+Brushes::~Brushes() noexcept
+{
+}
 
 void Brushes::connect()
 {

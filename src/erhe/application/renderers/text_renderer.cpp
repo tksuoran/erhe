@@ -84,7 +84,9 @@ Text_renderer::Text_renderer()
     ERHE_PROFILE_FUNCTION
 }
 
-Text_renderer::~Text_renderer() = default;
+Text_renderer::~Text_renderer() noexcept
+{
+}
 
 void Text_renderer::connect()
 {

@@ -127,7 +127,7 @@ void Debug_draw_adapter::reportErrorWarning(const char* warningString)
     }
 }
 
-IWorld::~IWorld()
+IWorld::~IWorld() noexcept
 {
 }
 
@@ -161,7 +161,7 @@ Bullet_world::Bullet_world()
     m_bullet_dynamics_world.setGravity(btVector3(0, -10, 0));
 }
 
-Bullet_world::~Bullet_world()
+Bullet_world::~Bullet_world() noexcept
 {
 }
 

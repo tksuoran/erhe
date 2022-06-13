@@ -34,7 +34,9 @@ auto Mesh_operation::describe() const -> std::string
     return ss.str();
 }
 
-Mesh_operation::~Mesh_operation() = default;
+Mesh_operation::~Mesh_operation() noexcept
+{
+}
 
 void Mesh_operation::execute(const Operation_context&)
 {
