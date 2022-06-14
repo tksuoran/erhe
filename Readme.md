@@ -15,6 +15,45 @@ erhe is a C++ library for modern OpenGL experiments.
 
 erhe is evolution of RenderStack <https://github.com/tksuoran/RenderStack>
 
+## Building
+
+### Windows
+
+Requirements:
+
+-   C++ compiler. Visual Studio 2022 with msbuild has been tested.
+    Ninjabuild GCC and clang may also work, and some older versions
+    of Visual Studio.
+
+-   Python 3.
+
+-   CMake.
+
+Build steps:
+
+-   `git clone https://github.com/tksuoran/erhe`
+-   In *x64 native tools command prompt for vs 2022*, cd to the *erhe* directory
+-   `scripts\configure_msbuild.bat`
+-   Open solution from the *build* directory with Visual Studio
+-   Build solution, or editor executable
+
+### Linux
+
+Requirements:
+
+-   *Ubuntu 20.04* has been tested, Ubuntu 18.04 likely also works
+-   *Visual Studio Code* with *CMake extensions* has been tested.
+-   GCC-8 or newer and clang-10 or newer has been tested
+-   python 3
+-   packages such xorg-dev
+
+Build steps:
+
+-   `git clone https://github.com/tksuoran/erhe`
+-   Open erhe folder in Visual Studio code
+-   Execute command: *CMake: Select Configure Preset*
+-   Execute command: *CMake: Configure*
+-   Execute command: *CMake: Build*
 ## erhe::components namespace
 
 erhe::components namespace provides classes to manage components.
