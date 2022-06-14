@@ -26,7 +26,7 @@ add_subdirectory(rapidjson)
 add_subdirectory(optional_lite)
 add_subdirectory(RectangleBinPack)
 add_subdirectory(spng)
-add_subdirectory(mango/build)
+add_subdirectory(mango)
 
 #add_definitions(-DERHE_PROFILE_LIBRARY_TRACY)
 #set(TRACY_ENABLE ON CACHE BOOL "Enable profiling")
