@@ -1,73 +1,45 @@
 {
     "version": "0.2.0",
     "configurations": [
+        
         {
-            "name": "Python: Current File",
-            "type": "python",
+            "name":    "editor",
+            "type":    "cppdbg",
             "request": "launch",
-            "program": "${file}",
-            "args": ["${workspaceFolder}/build/src/erhe/gl"],
-            "console": "integratedTerminal"
+            "cwd":     "${workspaceFolder}/src/editor",
+            "windows": {
+                "program": "${workspaceFolder}/build/src/editor/editor.exe",
+            },
+            "linux": {
+                "program": "${workspaceFolder}/build/src/editor/editor",
+            },
         },
         {
-            "name": "editor VS Ninja",
-            "type": "cppvsdbg",
+            "name":    "editor LLDB",
+            "type":    "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/src/editor/editor",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/src/editor",
-            "externalConsole": false
+            "cwd":     "${workspaceFolder}/src/editor",
+            "windows": {
+                "program": "${workspaceFolder}/build/src/editor/editor.exe",
+            },
+            "linux": {
+                "program": "${workspaceFolder}/build/src/editor/editor",
+            },
         },
         {
-            "name": "editor MSVC",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/out/build/Windows_VisualStudio_17_2022_Embree/src/editor/Debug/editor.exe",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/src/editor",
-            "externalConsole": false
-        },
-        {
-            "name": "editor Ninja (Windows)",
-            "type": "cppdbg",
+            "name":    "editor VS",
+            "type":    "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/src/editor/editor.exe",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/src/editor",
-            "externalConsole": false
+            "cwd":     "${workspaceFolder}/src/editor",
         },
         {
-            "name": "editor Ninja (Linux) GCC 9 LLDB",
-            "type": "cppdbg",
+            "name":    "Python: Current File",
+            "type":    "python",
             "request": "launch",
-            "program": "${workspaceFolder}/out/build/Linux_Debug_Ninja_GCC_9_Embree/src/editor/editor",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/src/editor",
-            "externalConsole": false
-        },
-        {
-            "name": "editor Ninja (Linux) GCC 11 LLDB",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/out/build/Linux_Debug_Ninja_GCC_11_Embree/src/editor/editor",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/src/editor",
-            "externalConsole": false
-        },
-        {
-            "name": "editor Ninja (Linux) Clang 14 GDB",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/out/build/Linux_Debug_Ninja_Clang_14/src/editor/editor",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/src/editor",
-            "externalConsole": false
+            "program": "${file}",
+            "args":    ["${workspaceFolder}/build/src/erhe/gl"],
+            "console": "integratedTerminal"
         }
     ]
 }

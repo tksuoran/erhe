@@ -7,6 +7,31 @@
     },
     "configurePresets": [
         {
+            "hidden":    true,
+            "name":      "base",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables":
+            {
+                "CMAKE_EXPORT_COMPILE_COMMANDS":   "1",
+                "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
+                "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
+                "ERHE_GLTF_LIBRARY":               "cgltf",
+                "ERHE_PHYSICS_LIBRARY":            "bullet",
+                "ERHE_PNG_LIBRARY":                "mango",
+                "ERHE_PROFILE_LIBRARY":            "tracy",
+                "ERHE_RAYTRACE_LIBRARY":           "none",
+                "ERHE_SVG_LIBRARY":                "lunasvg",
+                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
+                "ERHE_WINDOW_LIBRARY":             "glfw",
+                "ERHE_XR_LIBRARY":                 "none"
+            }
+        },
+        {
+            "hidden":        true,
+            "name":          "gcc",
+            "toolchainFile": "${sourceDir}/cmake/toolchain/linux-gnu-gcc.cmake"
+        },
+        {
             "hidden":        true,
             "name":          "gcc-8",
             "toolchainFile": "${sourceDir}/cmake/toolchain/linux-gnu-gcc-8.cmake"
@@ -28,8 +53,18 @@
         },
         {
             "hidden":        true,
+            "name":          "clang",
+            "toolchainFile": "${sourceDir}/cmake/toolchain/linux-clang.cmake"
+        },
+        {
+            "hidden":        true,
             "name":          "clang-10",
             "toolchainFile": "${sourceDir}/cmake/toolchain/linux-clang-10.cmake"
+        },
+        {
+            "hidden":        true,
+            "name":          "clang-11",
+            "toolchainFile": "${sourceDir}/cmake/toolchain/linux-clang-11.cmake"
         },
         {
             "hidden":        true,
@@ -45,13 +80,6 @@
             "hidden":        true,
             "name":          "clang-14",
             "toolchainFile": "${sourceDir}/cmake/toolchain/linux-clang-14.cmake"
-        },
-        {
-            "hidden": true,
-            "name":   "global",
-            "cacheVariables": {
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "1"
-            }
         },
         {
             "hidden":    true,
@@ -73,6 +101,13 @@
         },
         {
             "hidden": true,
+            "name":   "release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "hidden": true,
             "name":   "bullet",
             "cacheVariables": {
                 "ERHE_PHYSICS_LIBRARY": "bullet"
@@ -80,7 +115,7 @@
         },
         {
             "hidden": true,
-            "name":   "embree-sse",
+            "name":   "embree",
             "cacheVariables": {
                 "ERHE_RAYTRACE_LIBRARY":       "embree",
                 "EMBREE_ISPC_SUPPORT":         "FALSE",
@@ -98,32 +133,6 @@
                 "EMBREE_MAX_ISA":              "NONE",
                 "EMBREE_ISA_NEON":             "OFF",
                 "EMBREE_ISA_SSE2":             "OFF",
-                "EMBREE_ISA_SSE42":            "ON",
-                "EMBREE_ISA_AVX":              "OFF",
-                "EMBREE_ISA_AVX2":             "OFF",
-                "EMBREE_ISA_AVX512":           "OFF"
-            }
-        },
-        {
-            "hidden": true,
-            "name":   "embree-neon",
-            "cacheVariables": {
-                "ERHE_RAYTRACE_LIBRARY":       "embree",
-                "EMBREE_ISPC_SUPPORT":         "FALSE",
-                "EMBREE_TASKING_SYSTEM":       "INTERNAL",
-                "EMBREE_TUTORIALS":            "OFF",
-                "EMBREE_STATIC_LIB":           "ON",
-                "EMBREE_GEOMETRY_TRIANGLE":    "ON",
-                "EMBREE_GEOMETRY_QUAD":        "OFF",
-                "EMBREE_GEOMETRY_CURVE":       "OFF",
-                "EMBREE_GEOMETRY_SUBDIVISION": "OFF",
-                "EMBREE_GEOMETRY_USER":        "OFF",
-                "EMBREE_GEOMETRY_INSTANCE":    "ON",
-                "EMBREE_GEOMETRY_GRID":        "OFF",
-                "EMBREE_GEOMETRY_POINT":       "OFF",
-                "EMBREE_MAX_ISA":              "NONE",
-                "EMBREE_ISA_NEON":             "ON",
-                "EMBREE_ISA_SSE2":             "OFF",
                 "EMBREE_ISA_SSE42":            "OFF",
                 "EMBREE_ISA_AVX":              "OFF",
                 "EMBREE_ISA_AVX2":             "OFF",
@@ -131,221 +140,71 @@
             }
         },
         {
+            "hidden":         true,
+            "name":           "embree-sse",
+            "inherits":       ["embree"],
+            "cacheVariables": { "EMBREE_ISA_SSE42": "ON" }
+        },
+        {
+            "hidden":         true,
+            "name":           "embree-neon",
+            "inherits":       ["embree"],
+            "cacheVariables": { "EMBREE_ISA_NEON": "ON" }
+        },
+        {
             "name":        "Windows_VisualStudio_17_2022",
-            "inherits":    ["global", "debug", "visual_studio_17"],
-            "displayName": "Windows Debug Visual Studio 17 2022",
-            "binaryDir":   "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
-                "ERHE_PNG_LIBRARY":                "mango",
-                "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
-                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
-                "ERHE_WINDOW_LIBRARY":             "glfw",
-                "ERHE_PHYSICS_LIBRARY":            "none",
-                "ERHE_PROFILE_LIBRARY":            "none",
-                "ERHE_GLTF_LIBRARY":               "none",
-                "ERHE_XR_LIBRARY":                 "none"
-            }
+            "inherits":    ["base", "debug", "visual_studio_17"],
+            "displayName": "Windows Debug Visual Studio 17 2022"
         },
         {
-            "name":        "Windows_VisualStudio_17_2022_Bullet_Embree",
-            "inherits":    ["global", "debug", "visual_studio_17", "bullet", "embree-sse"],
-            "displayName": "Windows Debug Visual Studio 17 2022 Bullet Embree",
-            "binaryDir":   "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
-                "ERHE_PNG_LIBRARY":                "mango",
-                "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
-                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
-                "ERHE_WINDOW_LIBRARY":             "glfw",
-                "ERHE_PHYSICS_LIBRARY":            "bullet",
-                "ERHE_PROFILE_LIBRARY":            "none",
-                "ERHE_GLTF_LIBRARY":               "none",
-                "ERHE_XR_LIBRARY":                 "none"
-            }
+            "name":        "Linux_Debug_Ninja_GCC",
+            "inherits":    ["base", "ninja", "debug", "gcc"],
+            "displayName": "Linux Debug Ninja GCC"
         },
         {
-            "name":        "Linux_Debug_Ninja_GCC_8",
-            "inherits":    ["global", "ninja", "debug", "gcc-8"],
-            "displayName": "Linux Debug Ninja GCC 8",
-            "binaryDir":   "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
-                "ERHE_PNG_LIBRARY":                "mango",
-                "ERHE_SVG_LIBRARY":                "lunasvg",
-                "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
-                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
-                "ERHE_WINDOW_LIBRARY":             "glfw",
-                "ERHE_PHYSICS_LIBRARY":            "none",
-                "ERHE_RAYTRACE_LIBRARY":           "none",
-                "ERHE_PROFILE_LIBRARY":            "none",
-                "ERHE_GLTF_LIBRARY":               "cgltf",
-                "ERHE_XR_LIBRARY":                 "none"
-            }
+            "name":        "Linux_Debug_Ninja_GCC_9",
+            "inherits":    ["base", "ninja", "debug", "gcc-9"],
+            "displayName": "Linux Debug Ninja GCC 9"
         },
         {
-            "name":        "Linux_Debug_Ninja_GCC_8_Embree_SSE",
-            "inherits":    ["global", "ninja", "debug", "gcc-8", "embree-sse"],
-            "displayName": "Linux Debug Ninja GCC 8 Embree SSE",
-            "binaryDir":   "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
-                "ERHE_PNG_LIBRARY":                "mango",
-                "ERHE_SVG_LIBRARY":                "lunasvg",
-                "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
-                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
-                "ERHE_WINDOW_LIBRARY":             "glfw",
-                "ERHE_PHYSICS_LIBRARY":            "none",
-                "ERHE_PROFILE_LIBRARY":            "none",
-                "ERHE_GLTF_LIBRARY":               "cgltf",
-                "ERHE_XR_LIBRARY":                 "none"
-            }
+            "name":        "Linux_Debug_Ninja_GCC_10",
+            "inherits":    ["base", "ninja", "debug", "gcc-10"],
+            "displayName": "Linux Debug Ninja GCC 10"
         },
         {
-            "name":        "Linux_Debug_Ninja_clang_10",
-            "inherits":    ["global", "ninja", "debug", "clang-10"],
-            "displayName": "Linux Debug Ninja clang 10",
-            "binaryDir":   "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
-                "ERHE_PNG_LIBRARY":                "mango",
-                "ERHE_SVG_LIBRARY":                "lunasvg",
-                "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
-                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
-                "ERHE_WINDOW_LIBRARY":             "glfw",
-                "ERHE_PHYSICS_LIBRARY":            "none",
-                "ERHE_RAYTRACE_LIBRARY":           "none",
-                "ERHE_PROFILE_LIBRARY":            "none",
-                "ERHE_GLTF_LIBRARY":               "cgltf",
-                "ERHE_XR_LIBRARY":                 "none"
-            }
+            "name":        "Linux_Debug_Ninja_GCC_11",
+            "inherits":    ["base", "ninja", "debug", "gcc-11"],
+            "displayName": "Linux Debug Ninja GCC 11"
         },
         {
-            "name":        "Linux_Debug_Ninja_GCC_9_Embree_sse",
-            "inherits":    ["global", "ninja", "debug", "gcc-9", "embree-sse"],
-            "displayName": "Linux Debug Ninja GCC 9 Embree SSE",
-            "binaryDir":   "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
-                "ERHE_PNG_LIBRARY":                "mango",
-                "ERHE_SVG_LIBRARY":                "lunasvg",
-                "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
-                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
-                "ERHE_WINDOW_LIBRARY":             "glfw",
-                "ERHE_PHYSICS_LIBRARY":            "bullet",
-                "ERHE_PROFILE_LIBRARY":            "tracy",
-                "ERHE_GLTF_LIBRARY":               "cgltf",
-                "ERHE_XR_LIBRARY":                 "none"
-            }
+            "name":        "Linux_Debug_Ninja_clang",
+            "inherits":    ["base", "ninja", "debug", "clang"],
+            "displayName": "Linux Debug Ninja clang"
         },
         {
-            "name":        "Linux_Debug_Ninja_GCC_10_Embree_sse",
-            "inherits":    ["global", "ninja", "debug", "gcc-10", "embree-sse"],
-            "displayName": "Linux Debug Ninja GCC 10 Embree SSE",
-            "binaryDir":   "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
-                "ERHE_PNG_LIBRARY":                "mango",
-                "ERHE_SVG_LIBRARY":                "lunasvg",
-                "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
-                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
-                "ERHE_WINDOW_LIBRARY":             "glfw",
-                "ERHE_PHYSICS_LIBRARY":            "bullet",
-                "ERHE_PROFILE_LIBRARY":            "tracy",
-                "ERHE_GLTF_LIBRARY":               "cgltf",
-                "ERHE_XR_LIBRARY":                 "none"
-            }
+            "name":        "Linux_Debug_Ninja_Clang_10",
+            "inherits":    ["base", "ninja", "debug", "clang-10"],
+            "displayName": "Linux Debug Ninja Clang 10"
         },
         {
-            "name":        "Linux_Debug_Ninja_GCC_11_Embree_sse",
-            "inherits":    ["global", "ninja", "debug", "gcc-11", "embree-sse"],
-            "displayName": "Linux Debug Ninja GCC 11 Embree SSE",
-            "binaryDir":   "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
-                "ERHE_PNG_LIBRARY":                "mango",
-                "ERHE_SVG_LIBRARY":                "lunasvg",
-                "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
-                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
-                "ERHE_WINDOW_LIBRARY":             "glfw",
-                "ERHE_PHYSICS_LIBRARY":            "bullet",
-                "ERHE_PROFILE_LIBRARY":            "tracy",
-                "ERHE_GLTF_LIBRARY":               "cgltf",
-                "ERHE_XR_LIBRARY":                 "none"
-            }
+            "name":        "Linux_Debug_Ninja_Clang_11",
+            "inherits":    ["base", "ninja", "debug", "clang-11"],
+            "displayName": "Linux Debug Ninja Clang 11"
         },
         {
-            "name":        "Linux_Debug_Ninja_Clang_12_Embree_neon",
-            "inherits":    ["global", "ninja", "debug", "clang-12", "embree-neon"],
-            "displayName": "Linux Debug Ninja Clang 12 Embree neon",
-            "binaryDir":   "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
-                "ERHE_PNG_LIBRARY":                "mango",
-                "ERHE_SVG_LIBRARY":                "lunasvg",
-                "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
-                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
-                "ERHE_WINDOW_LIBRARY":             "glfw",
-                "ERHE_PHYSICS_LIBRARY":            "bullet",
-                "ERHE_PROFILE_LIBRARY":            "none",
-                "ERHE_GLTF_LIBRARY":               "cgltf",
-                "ERHE_XR_LIBRARY":                 "none"
-            }
+            "name":        "Linux_Debug_Ninja_Clang_12",
+            "inherits":    ["base", "ninja", "debug", "clang-12"],
+            "displayName": "Linux Debug Ninja Clang 12"
         },
         {
-            "name":        "Linux_Debug_Ninja_Clang_13_Embree_neon",
-            "inherits":    ["global", "ninja", "debug", "clang-13", "embree-neon"],
-            "displayName": "Linux Debug Ninja Clang 13 Embree neon",
-            "binaryDir":   "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
-                "ERHE_PNG_LIBRARY":                "mango",
-                "ERHE_SVG_LIBRARY":                "lunasvg",
-                "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
-                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
-                "ERHE_WINDOW_LIBRARY":             "glfw",
-                "ERHE_PHYSICS_LIBRARY":            "bullet",
-                "ERHE_PROFILE_LIBRARY":            "none",
-                "ERHE_GLTF_LIBRARY":               "cgltf",
-                "ERHE_XR_LIBRARY":                 "none"
-            }
-        },
-        {
-            "name":        "Linux_Debug_Ninja_Clang_14_Embree_sse",
-            "inherits":    ["global", "ninja", "debug", "clang-14", "embree-sse"],
-            "displayName": "Linux Debug Ninja Clang 14 Embree sse",
-            "binaryDir":   "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
-                "ERHE_PNG_LIBRARY":                "mango",
-                "ERHE_SVG_LIBRARY":                "lunasvg",
-                "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
-                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
-                "ERHE_WINDOW_LIBRARY":             "glfw",
-                "ERHE_PHYSICS_LIBRARY":            "bullet",
-                "ERHE_PROFILE_LIBRARY":            "none",
-                "ERHE_GLTF_LIBRARY":               "cgltf",
-                "ERHE_XR_LIBRARY":                 "none"
-            }
+            "name":        "Linux_Debug_Ninja_Clang_13",
+            "inherits":    ["base", "ninja", "debug", "clang-13"],
+            "displayName": "Linux Debug Ninja Clang 13"
         },
         {
             "name":        "Linux_Debug_Ninja_Clang_14",
-            "inherits":    ["global", "ninja", "debug", "clang-14"],
-            "displayName": "Linux Debug Ninja Clang 14",
-            "binaryDir":   "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
-                "ERHE_PNG_LIBRARY":                "mango",
-                "ERHE_SVG_LIBRARY":                "lunasvg",
-                "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
-                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
-                "ERHE_WINDOW_LIBRARY":             "glfw",
-                "ERHE_PHYSICS_LIBRARY":            "none",
-                "ERHE_RAYTRACE_LIBRARY":           "none",
-                "ERHE_PROFILE_LIBRARY":            "none",
-                "ERHE_GLTF_LIBRARY":               "cgltf",
-                "ERHE_XR_LIBRARY":                 "none"
-            }
+            "inherits":    ["base", "ninja", "debug", "clang-14"],
+            "displayName": "Linux Debug Ninja Clang 14"
         }
     ]
 }
