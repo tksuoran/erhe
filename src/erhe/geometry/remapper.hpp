@@ -167,7 +167,7 @@ public:
             }
         }
         ss << "  < old from new\n";
-        log_weld->trace("{}", ss.str());
+        SPDLOG_LOGGER_TRACE(log_weld, "{}", ss.str());
         if (error)
         {
             log_weld->error("Errors detected\n");
@@ -189,9 +189,12 @@ public:
         ERHE_VERIFY(secondary_new_id != keep_new_id);
         const T secondary_old_id = old_from_new[secondary_new_id];
         const T keep_old_id      = old_from_new[keep_new_id];
-        //log_weld.trace("New {:2} old {:2} is being removed - swapping with new {:2} old {:2}\n",
-        //                secondary_new_id, secondary_old_id,
-        //                keep_new_id, keep_old_id);
+        SPDLOG_LOGGER_TRACE(
+            log_weld,
+            "New {:2} old {:2} is being removed - swapping with new {:2} old {:2}",
+            secondary_new_id, secondary_old_id,
+            keep_new_id, keep_old_id
+        );
         std::swap(
             old_from_new[secondary_new_id],
             old_from_new[keep_new_id]
@@ -234,68 +237,107 @@ public:
 
     void reorder_to_drop_duplicates()
     {
-        //log_weld.trace("Merge list:");
-        //for (auto entry : merge.entries)
-        //{
-        //    log_weld.trace(" {}->{}", entry.secondary, entry.primary);
-        //}
-        //log_weld.trace("\n");
-
-        //log_weld.trace("Dropped due to merge:");
-        for (size_t i = 0, end = merge.size(); i < end; ++i)
         {
-            const auto& entry = merge.entries[i];
-            const T secondary_new_id = entry.secondary;
-            if (secondary_new_id >= new_end)
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+            std::stringstream ss;
+            for (auto entry : merge.entries)
             {
-                //log_weld.trace(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
-                continue;
+                ss << fmt::format(" {}->{}", entry.secondary, entry.primary);
             }
-            const T keep_new_id = get_next_end();
-            if (secondary_new_id == keep_new_id)
-            {
-                //log_weld.trace(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
-                continue;
-            }
-            //log_weld.trace(" {:2} -> {:2} ", secondary_new_id, keep_new_id);
-            swap(secondary_new_id, keep_new_id);
+            SPDLOG_LOGGER_TRACE(log_weld, "Merge list:\n{}", ss.str());
+#endif
         }
-        //log_weld.trace("\n");
 
-        //log_weld.trace("Dropped due to eliminate:");
-        for (size_t i = 0, end = eliminate.size(); i < end; ++i)
         {
-            T secondary_new_id = eliminate[i];
-            if (secondary_new_id >= new_end)
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+            std::stringstream ss;
+#endif
+            for (size_t i = 0, end = merge.size(); i < end; ++i)
             {
-                //log_weld.trace(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
-                continue;
+                const auto& entry = merge.entries[i];
+                const T secondary_new_id = entry.secondary;
+                if (secondary_new_id >= new_end)
+                {
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+                    ss << fmt::format(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
+#endif
+                    continue;
+                }
+                const T keep_new_id = get_next_end();
+                if (secondary_new_id == keep_new_id)
+                {
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+                    ss << fmt::format(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
+#endif
+                    continue;
+                }
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+                ss << fmt::format(" {:2} -> {:2} ", secondary_new_id, keep_new_id);
+#endif
+                swap(secondary_new_id, keep_new_id);
             }
-            T keep_new_id = get_next_end();
-            if (secondary_new_id == keep_new_id)
-            {
-                //log_weld.trace(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
-                continue;
-            }
-            //log_weld.trace(" {:2} -> {:2} ", secondary_new_id, keep_new_id);
-            swap(secondary_new_id, keep_new_id);
+            SPDLOG_LOGGER_TRACE(log_weld, "Dropped due to merge:{}", ss.str());
         }
-        //log_weld.trace("\n");
+
+        {
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+            std::stringstream ss;
+#endif
+            for (size_t i = 0, end = eliminate.size(); i < end; ++i)
+            {
+                T secondary_new_id = eliminate[i];
+                if (secondary_new_id >= new_end)
+                {
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+                    ss << fmt::format(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
+#endif
+                    continue;
+                }
+                T keep_new_id = get_next_end();
+                if (secondary_new_id == keep_new_id)
+                {
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+                    ss << fmt::format(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
+#endif
+                    continue;
+                }
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+                ss << fmt::format(" {:2} -> {:2} ", secondary_new_id, keep_new_id);
+#endif
+                swap(secondary_new_id, keep_new_id);
+            }
+            SPDLOG_LOGGER_TRACE(log_weld, "Dropped due to eliminate:{}", ss.str());
+        }
     }
 
     void reorder_to_drop_unused()
     {
-        //log_weld.trace("Usage:\n");
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        std::stringstream ss;
+#endif
+        SPDLOG_LOGGER_TRACE(log_weld, "Usage:");
         new_end = 0;
         for (T new_id = 0, end = new_size; new_id < end; ++new_id)
         {
             const T old_id = old_from_new[new_id];
-            //log_weld.trace("new {:2} old {:2} : {}\n", new_id, old_id, (old_used[old_id] ? "true" : "false"));
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+            ss << fmt::format(
+                "new {:2} old {:2} : {}",
+                new_id,
+                old_id,
+                (
+                    old_used[old_id]
+                        ? "true"
+                        : "false"
+                )
+            );
+#endif
             if (old_used[old_id])
             {
                 new_end = new_id + 1;
             }
         }
+        SPDLOG_LOGGER_TRACE(log_weld, "Usage:{}", ss.str());
 
         for (T new_id = 0, end = new_size; new_id < end; ++new_id)
         {
@@ -305,23 +347,24 @@ public:
                 T secondary_new_id = new_id;
                 if (secondary_new_id >= new_end)
                 {
-                    //log_weld.trace("Dropping unused, end {:2} new {:2} old {:2}\n", new_end, secondary_new_id, old_id);
+                    SPDLOG_LOGGER_TRACE(log_weld, "Dropping unused, end {:2} new {:2} old {:2}", new_end, secondary_new_id, old_id);
                     continue;
                 }
                 T keep_new_id = get_next_end(true);
                 if (secondary_new_id == keep_new_id)
                 {
-                    //log_weld.trace("Dropping unused, end {:2} new {:2} old {:2}\n", new_end, secondary_new_id, old_id);
+                    SPDLOG_LOGGER_TRACE(log_weld, "Dropping unused, end {:2} new {:2} old {:2}", new_end, secondary_new_id, old_id);
                     continue;
                 }
-                //log_weld.trace(
-                //    "Dropping unused, end {:2} new {:2} old {:2} -> new {:2} old {:2}\n",
-                //    new_end,
-                //    secondary_new_id,
-                //    old_id,
-                //    keep_new_id,
-                //    old_from_new[keep_new_id]
-                //);
+                SPDLOG_LOGGER_TRACE(
+                    log_weld,
+                    "Dropping unused, end {:2} new {:2} old {:2} -> new {:2} old {:2}",
+                    new_end,
+                    secondary_new_id,
+                    old_id,
+                    keep_new_id,
+                    old_from_new[keep_new_id]
+                );
                 swap(secondary_new_id, keep_new_id);
             }
         }
@@ -347,7 +390,6 @@ public:
             {
                 continue;
             }
-            //const T primary_new_id   = entry.primary;
             ERHE_VERIFY(primary_new_id == entry.primary);
             const T primary_old_id   = old_from_new[primary_new_id];
             const T secondary_new_id = entry.secondary;
@@ -388,7 +430,6 @@ public:
         {
             const auto& entry = merge.entries[i];
             const T primary_new_id   = entry.primary;
-            //const T primary_old_id   = old_from_new[primary_new_id];
             const T secondary_new_id = entry.secondary;
             const T secondary_old_id = old_from_new[secondary_new_id];
             new_from_old[secondary_old_id] = primary_new_id;
@@ -402,11 +443,11 @@ public:
         {
             for (T new_id = new_end; new_id < old_size; ++new_id)
             {
-                //log_weld.trace("Removing new {} old {}\n", new_id, old_id(new_id));
-                //for (T keep_id : new_from_old) // old may may not be mapped to new which is being deleted
-                //{
-                //    ERHE_VERIFY(new_id != keep_id);
-                //}
+                SPDLOG_LOGGER_TRACE(log_weld, "Removing new {} old {}", new_id, old_id(new_id));
+                for (T keep_id : new_from_old) // old may may not be mapped to new which is being deleted
+                {
+                    ERHE_VERIFY(new_id != keep_id);
+                }
                 remove_callback(new_id, old_id(new_id));
             }
         }
@@ -417,12 +458,14 @@ public:
     {
         //for (T new_id = merge_end; new_id < old_size; ++new_id)
         //{
-        //    log_weld.trace("Removing new {} old {}\n", new_id, old_id(new_id));
+        //    SPDLOG_LOGGER_TRACE(log_weld, "Removing new {} old {}", new_id, old_id(new_id));
         //    for (T keep_id : new_from_old) // old may may not be mapped to new which is being deleted
         //    {
         //        ERHE_VERIFY(new_id != keep_id);
         //    }
         //}
+        SPDLOG_LOGGER_TRACE(log_weld, "is_bijection {} -> false", is_bijection);
+        SPDLOG_LOGGER_TRACE(log_weld, "new_size {} -> {}", new_size, new_end);
         is_bijection = false;
         new_size = new_end;
     }

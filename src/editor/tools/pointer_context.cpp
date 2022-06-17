@@ -40,7 +40,7 @@ Pointer_context::~Pointer_context() noexcept
 {
 }
 
-void Pointer_context::connect()
+void Pointer_context::post_initialize()
 {
     m_editor_rendering = get<Editor_rendering>();
     m_scene_root       = get<Scene_root>();

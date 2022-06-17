@@ -54,7 +54,7 @@ auto Frame_controller::get_controller(
         case Control::rotate_z   : return rotate_z;
         default:
         {
-            ERHE_FATAL("bad control %04x\n", static_cast<unsigned int>(control));
+            ERHE_FATAL("bad control %04x", static_cast<unsigned int>(control));
         }
     }
 }

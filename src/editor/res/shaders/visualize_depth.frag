@@ -134,7 +134,9 @@ vec3 temperature(float x)
 
 void main(void)
 {
+#if defined(ERHE_BINDLESS_TEXTURE)
     sampler2DArray s_shadow = sampler2DArray(light_block.shadow_texture);
+#endif
 
     float sampled_depth = texture(
         s_shadow,

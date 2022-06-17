@@ -9,6 +9,8 @@
 #include <sstream>
 #include <thread>
 
+#define ERHE_USE_TIME_QUERY 1
+
 namespace erhe::graphics
 {
 
@@ -19,7 +21,7 @@ Scoped_debug_group::Scoped_debug_group(
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
         0,
-        static_cast<GLsizei>(debug_label.length()),
+        static_cast<GLsizei>(debug_label.length() + 1),
         debug_label.data()
     );
 }
@@ -36,6 +38,7 @@ size_t                  Gpu_timer::s_index       {0};
 
 void Gpu_timer::on_thread_enter()
 {
+#if defined(ERHE_USE_TIME_QUERY)
     const std::lock_guard lock{s_mutex};
 
     // Workaround for https://github.com/fmtlib/fmt/issues/2897
@@ -57,10 +60,12 @@ void Gpu_timer::on_thread_enter()
             gpu_timer->create();
         }
     }
+#endif
 }
 
 void Gpu_timer::on_thread_exit()
 {
+#if defined(ERHE_USE_TIME_QUERY)
     const std::lock_guard lock{s_mutex};
 
     auto this_thread_id = std::this_thread::get_id();
@@ -86,20 +91,24 @@ void Gpu_timer::on_thread_exit()
             gpu_timer->reset();
         }
     }
+#endif
 }
 
 Gpu_timer::Gpu_timer(const char* label)
     : m_label{label}
 {
+#if defined(ERHE_USE_TIME_QUERY)
     const std::lock_guard<std::mutex> lock{s_mutex};
 
     s_all_gpu_timers.push_back(this);
 
     create();
+#endif
 }
 
 Gpu_timer::~Gpu_timer() noexcept
 {
+#if defined(ERHE_USE_TIME_QUERY)
     const std::lock_guard<std::mutex> lock{s_mutex};
 
     s_all_gpu_timers.erase(
@@ -110,10 +119,12 @@ Gpu_timer::~Gpu_timer() noexcept
         ),
         s_all_gpu_timers.end()
     );
+#endif
 }
 
 void Gpu_timer::create()
 {
+#if defined(ERHE_USE_TIME_QUERY)
     std::stringstream this_thread_id_ss;
     this_thread_id_ss << std::this_thread::get_id();
     //log_threads.trace("{}: create @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
@@ -136,11 +147,13 @@ void Gpu_timer::create()
             );
         }
     }
+#endif
     m_owner_thread = std::this_thread::get_id();
 }
 
 void Gpu_timer::reset()
 {
+#if defined(ERHE_USE_TIME_QUERY)
     std::stringstream this_thread_id_ss;
     this_thread_id_ss << std::this_thread::get_id();
     //log_threads.trace("{}: reset @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
@@ -154,10 +167,12 @@ void Gpu_timer::reset()
     {
         query.query_object.reset();
     }
+#endif
 }
 
 void Gpu_timer::begin()
 {
+#if defined(ERHE_USE_TIME_QUERY)
     const std::lock_guard<std::mutex> lock{s_mutex};
 
     Expects(m_owner_thread == std::this_thread::get_id());
@@ -172,10 +187,12 @@ void Gpu_timer::begin()
 
     query.begin    = true;
     s_active_timer = this;
+#endif
 }
 
 void Gpu_timer::end()
 {
+#if defined(ERHE_USE_TIME_QUERY)
     const std::lock_guard<std::mutex> lock{s_mutex};
 
     Expects(m_owner_thread == std::this_thread::get_id());
@@ -188,10 +205,12 @@ void Gpu_timer::end()
     query.end      = true;
     query.pending  = true;
     s_active_timer = nullptr;
+#endif
 }
 
 void Gpu_timer::read()
 {
+#if defined(ERHE_USE_TIME_QUERY)
     Expects(m_owner_thread == std::this_thread::get_id());
 
     for (size_t i = 0; i <= s_count; ++i)
@@ -228,6 +247,7 @@ void Gpu_timer::read()
         query.begin = false;
         query.end   = false;
     }
+#endif
 }
 
 auto Gpu_timer::last_result() const -> uint64_t
@@ -242,6 +262,7 @@ auto Gpu_timer::label() const -> const char*
 
 void Gpu_timer::end_frame()
 {
+#if defined(ERHE_USE_TIME_QUERY)
     const std::lock_guard<std::mutex> lock{s_mutex};
 
     for (auto* timer : s_all_gpu_timers)
@@ -252,6 +273,7 @@ void Gpu_timer::end_frame()
         }
     }
     ++s_index;
+#endif
 }
 
 auto Gpu_timer::all_gpu_timers() -> std::vector<Gpu_timer*>
@@ -264,12 +286,16 @@ auto Gpu_timer::all_gpu_timers() -> std::vector<Gpu_timer*>
 Scoped_gpu_timer::Scoped_gpu_timer(Gpu_timer& timer)
     : m_timer{timer}
 {
+#if defined(ERHE_USE_TIME_QUERY)
     m_timer.begin();
+#endif
 }
 
 Scoped_gpu_timer::~Scoped_gpu_timer() noexcept
 {
+#if defined(ERHE_USE_TIME_QUERY)
     m_timer.end();
+#endif
 }
 
 } // namespace erhe::graphics

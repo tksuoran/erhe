@@ -140,12 +140,9 @@ Physics_tool::~Physics_tool() noexcept
     }
 }
 
-void Physics_tool::connect()
+void Physics_tool::declare_required_components()
 {
-    m_fly_camera        = get<Fly_camera_tool  >();
-    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_pointer_context   = get<Pointer_context  >();
-    m_scene_root        = require<Scene_root   >();
+    m_scene_root = require<Scene_root>();
     require<Tools                  >();
     require<erhe::application::View>();
     require<Operations             >();
@@ -165,6 +162,13 @@ void Physics_tool::initialize_component()
     set_active_command(c_command_drag);
 
     get<Operations>()->register_active_tool(this);
+}
+
+void Physics_tool::post_initialize()
+{
+    m_fly_camera        = get<Fly_camera_tool>();
+    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
+    m_pointer_context   = get<Pointer_context>();
 }
 
 auto Physics_tool::description() -> const char*

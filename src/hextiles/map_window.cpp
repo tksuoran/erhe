@@ -57,7 +57,7 @@ auto Map_mouse_scroll_command::try_call(erhe::application::Command_context& cont
         return false;
     }
 
-    const auto window_position = context.view().to_window_top_left(context.get_vec2_absolute_value());
+    //const auto window_position = context.view().to_window_top_left(context.get_vec2_absolute_value());
     //m_map_window.hover(
     //    window_position
     //);
@@ -118,21 +118,19 @@ Map_window::Map_window()
 {
 }
 
-Map_window::~Map_window()
+Map_window::~Map_window() noexcept
 {
 }
 
 #pragma region Component
-void Map_window::connect()
+void Map_window::declare_required_components()
 {
     require<erhe::application::Imgui_windows      >();
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_renderer     >(); // required for Imgui_window
 
-    m_editor_view   = require<erhe::application::View         >();
-    m_text_renderer = get    <erhe::application::Text_renderer>();
-    m_tile_renderer = get    <Tile_renderer>();
-    m_tiles         = require<Tiles        >();
+    m_editor_view = require<erhe::application::View>();
+    m_tiles       = require<Tiles>();
 }
 
 void Map_window::initialize_component()
@@ -166,6 +164,13 @@ void Map_window::initialize_component()
     view->bind_command_to_key(&m_zoom_out_command,     erhe::toolkit::Key_comma,  false);
     view->bind_command_to_key(&m_grid_cycle_command,   erhe::toolkit::Key_g,  false);
 }
+
+void Map_window::post_initialize()
+{
+    m_text_renderer = get<erhe::application::Text_renderer>();
+    m_tile_renderer = get<Tile_renderer>();
+}
+
 #pragma endregion Component
 
 auto Map_window::flags() -> ImGuiWindowFlags
@@ -329,12 +334,12 @@ void Map_window::set_zoom(float scale)
     }
 }
 
-static constexpr const char* c_grid_mode_strings[] =
-{
-    "Off",
-    "Grid 1",
-    "Grid 2"
-};
+// static constexpr const char* c_grid_mode_strings[] =
+// {
+//     "Off",
+//     "Grid 1",
+//     "Grid 2"
+// };
 
 auto Map_window::tile_image(terrain_tile_t terrain_tile, const int scale) -> bool
 {

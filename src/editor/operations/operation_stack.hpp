@@ -60,9 +60,9 @@ public:
     ~Operation_stack() noexcept override;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    auto get_type_hash              () const -> uint32_t override { return hash; }
+    void declare_required_components() override;
+    void initialize_component       () override;
 
     // Implements Tool
     [[nodiscard]] auto description() -> const char* override;

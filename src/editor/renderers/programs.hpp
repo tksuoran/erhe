@@ -1,7 +1,10 @@
 #pragma once
 
+#include "task_queue.hpp"
+
 #include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
+#include "erhe/graphics/shader_stages.hpp"
 #include "erhe/toolkit/filesystem.hpp"
 
 #include <string_view>
@@ -39,13 +42,15 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    void declare_required_components() override;
+    void initialize_component       () override;
 
     // Public members
-    std::unique_ptr<erhe::graphics::Shader_resource> default_uniform_block; // containing sampler uniforms
-    int                                              shadow_sampler_location{-1};
-    int                                              gui_sampler_location   {-1};
+    std::unique_ptr<erhe::graphics::Shader_resource> shadow_map_default_uniform_block; // for non-bindless textures
+    std::unique_ptr<erhe::graphics::Shader_resource> textured_default_uniform_block;   // for non-bindless textures
+    int                                              base_texture_unit  {0};
+    int                                              shadow_texture_unit{1};
+    int                                              gui_texture_unit   {2};
     std::unique_ptr<erhe::graphics::Sampler>         nearest_sampler;
     std::unique_ptr<erhe::graphics::Sampler>         linear_sampler;
     std::unique_ptr<erhe::graphics::Sampler>         linear_mipmap_linear_sampler;
@@ -65,27 +70,19 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages> visualize_bitangent;
 
 private:
-    [[nodiscard]] auto make_program(
-        std::string_view                                            name,
-        const std::vector<std::string>&                             defines,
-        const std::vector<std::pair<gl::Shader_type, std::string>>& extensions = {}
-    ) -> std::unique_ptr<erhe::graphics::Shader_stages>;
+    void queue(
+        std::unique_ptr<erhe::graphics::Shader_stages>& program,
+        erhe::graphics::Shader_stages::Create_info      create_info
+    );
 
-    [[nodiscard]] auto make_program(
-        const std::string_view name,
-        const std::string_view define
-    ) -> std::unique_ptr<erhe::graphics::Shader_stages>;
-
-    [[nodiscard]] auto make_program(const std::string_view name) -> std::unique_ptr<erhe::graphics::Shader_stages>;
+    [[nodiscard]] auto make_program(erhe::graphics::Shader_stages::Create_info create_info) -> std::unique_ptr<erhe::graphics::Shader_stages>;
 
     // Component dependencies
     std::shared_ptr<Program_interface>                 m_program_interface;
     std::shared_ptr<erhe::application::Shader_monitor> m_shader_monitor;
-    bool     m_dump_reflection  {false};
-    bool     m_dump_interface   {false};
-    bool     m_dump_final_source{false};
-
     fs::path m_shader_path;
+
+    Task_queue m_queue;
 };
 
 }

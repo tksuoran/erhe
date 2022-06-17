@@ -225,7 +225,7 @@ auto Geometry::compute_tangents(
                 const vec3 normal = polygon_normals->get(polygon_id);
                 return normal;
             }
-            ERHE_FATAL("No normal source\n");
+            ERHE_FATAL("No normal source");
             // unreachable return vec3{0.0f, 1.0f, 0.0f};
         }
 
@@ -258,7 +258,7 @@ auto Geometry::compute_tangents(
                     }
                     else
                     {
-                        ERHE_FATAL("No texcoord\n");
+                        ERHE_FATAL("No texcoord");
                     }
                 }
                 const vec2 average_texcoord = texcoord / static_cast<float>(polygon.corner_count);
@@ -276,7 +276,7 @@ auto Geometry::compute_tangents(
                 const vec2 texcoord = point_texcoords->get(point_id);
                 return texcoord;
             }
-            ERHE_FATAL("No texture coordinate\n");
+            ERHE_FATAL("No texture coordinate");
             // unreachable return vec2{0.0f, 0.0f};
         }
 

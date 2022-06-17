@@ -32,7 +32,7 @@ class Pixel_lookup;
 class Tiles;
 
 
-class Map_scroll_command
+class Map_scroll_command final
     : public erhe::application::Command
 {
 public:
@@ -55,7 +55,7 @@ private:
     glm::vec2   m_offset;
 };
 
-class Map_free_zoom_command
+class Map_free_zoom_command final
     : public erhe::application::Command
 {
 public:
@@ -72,7 +72,7 @@ private:
     Map_window& m_map_window;
 };
 
-class Map_mouse_scroll_command
+class Map_mouse_scroll_command final
     : public erhe::application::Command
 {
 public:
@@ -143,8 +143,9 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    void declare_required_components() override;
+    void initialize_component       () override;
+    void post_initialize            () override;
 
     // Implements Framebuffer_window
     auto get_size(glm::vec2 available_size) const -> glm::vec2 override;

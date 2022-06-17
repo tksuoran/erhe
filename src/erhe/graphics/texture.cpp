@@ -50,7 +50,7 @@ auto component_count(const gl::Pixel_format pixel_format) -> size_t
 
         default:
         {
-            ERHE_FATAL("Bad pixel format\n");
+            ERHE_FATAL("Bad pixel format");
         }
     }
 }
@@ -81,7 +81,7 @@ auto byte_count(const gl::Pixel_type pixel_type) -> size_t
 
         default:
         {
-            ERHE_FATAL("Bad pixel type\n");
+            ERHE_FATAL("Bad pixel type");
         }
     }
 };
@@ -146,7 +146,7 @@ auto get_upload_pixel_byte_count(
             return component_count(entry.format) * byte_count(entry.type);
         }
     }
-    ERHE_FATAL("Bad internal format\n");
+    ERHE_FATAL("Bad internal format");
 }
 
 auto get_format_and_type(
@@ -201,7 +201,7 @@ auto Texture::storage_dimensions(const gl::Texture_target target) -> int
 
         default:
         {
-            ERHE_FATAL("Bad texture target\n");
+            ERHE_FATAL("Bad texture target");
         }
     }
 }
@@ -240,7 +240,7 @@ auto Texture::mipmap_dimensions(const gl::Texture_target target) -> int
 
         default:
         {
-            ERHE_FATAL("Bad texture target\n");
+            ERHE_FATAL("Bad texture target");
         }
     }
 }
@@ -293,10 +293,33 @@ auto get_handle(
     const Sampler& sampler
 ) -> uint64_t
 {
-    return gl::get_texture_sampler_handle_arb(
-        texture.gl_name(),
-        sampler.gl_name()
-    );
+    if (erhe::graphics::Instance::info.use_bindless_texture)
+    {
+        return gl::get_texture_sampler_handle_arb(
+            texture.gl_name(),
+            sampler.gl_name()
+        );
+    }
+    else
+    {
+        return
+            (
+                static_cast<uint64_t>(texture.gl_name())
+            ) |
+            (
+                (static_cast<uint64_t>(sampler.gl_name()) << 32)
+            );
+    }
+}
+
+auto get_texture_from_handle(uint64_t handle) -> GLuint
+{
+    return static_cast<GLuint>(handle & 0xffffu);
+}
+
+auto get_sampler_from_handle(uint64_t handle) -> GLuint
+{
+    return static_cast<GLuint>((handle & 0xffff0000u) >> 32);
 }
 
 auto Texture::size_level_count(int size) -> int
@@ -331,7 +354,7 @@ auto Texture_create_info::calculate_level_count() const -> int
     {
         if (width == 0)
         {
-            ERHE_FATAL("zero texture width\n");
+            ERHE_FATAL("zero texture width");
         }
     }
 
@@ -339,7 +362,7 @@ auto Texture_create_info::calculate_level_count() const -> int
     {
         if (height == 0)
         {
-            ERHE_FATAL("zero texture height\n");
+            ERHE_FATAL("zero texture height");
         }
     }
 
@@ -347,7 +370,7 @@ auto Texture_create_info::calculate_level_count() const -> int
     {
         if (depth == 0)
         {
-            ERHE_FATAL("zero texture depth\n");
+            ERHE_FATAL("zero texture depth");
         }
     }
 
@@ -491,7 +514,7 @@ Texture::Texture(const Create_info& create_info)
 
         default:
         {
-            ERHE_FATAL("Bad texture target\n");
+            ERHE_FATAL("Bad texture target");
         }
     }
 }
@@ -534,7 +557,7 @@ void Texture::upload(
 
         default:
         {
-            ERHE_FATAL("Bad texture target\n");
+            ERHE_FATAL("Bad texture target");
         }
     }
 }
@@ -588,7 +611,7 @@ void Texture::upload(
 
         default:
         {
-            ERHE_FATAL("Bad texture target\n");
+            ERHE_FATAL("Bad texture target");
         }
     }
 }
@@ -651,7 +674,7 @@ void Texture::upload_subimage(
 
         default:
         {
-            ERHE_FATAL("Bad texture target\n");
+            ERHE_FATAL("Bad texture target");
         }
     }
     gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length, 0);
@@ -704,7 +727,7 @@ auto Texture::is_layered() const -> bool
 
         default:
         {
-            ERHE_FATAL("Bad texture target\n");
+            ERHE_FATAL("Bad texture target");
         }
     }
 }
@@ -740,6 +763,74 @@ auto operator==(const Texture& lhs, const Texture& rhs) noexcept -> bool
 auto operator!=(const Texture& lhs, const Texture& rhs) noexcept -> bool
 {
     return !(lhs == rhs);
+}
+
+auto create_dummy_texture() -> std::shared_ptr<Texture>
+{
+    const erhe::graphics::Texture::Create_info create_info{
+        .width  = 2,
+        .height = 2
+    };
+
+    auto texture = std::make_shared<Texture>(create_info);
+    texture->set_debug_label("dummy");
+    const std::array<uint8_t, 16> dummy_pixel{
+        0xee, 0x11, 0xdd, 0xff,
+        0xcc, 0x11, 0xbb, 0xff,
+        0xee, 0x11, 0xdd, 0xff,
+        0xcc, 0x11, 0xbb, 0xff
+    };
+    const gsl::span<const std::byte> image_data{
+        reinterpret_cast<const std::byte*>(&dummy_pixel[0]),
+        dummy_pixel.size()
+    };
+
+    texture->upload(
+        create_info.internal_format,
+        image_data,
+        create_info.width,
+        create_info.height
+    );
+
+    return texture;
+}
+
+void Texture_unit_cache::reset()
+{
+    m_texture_units.clear();
+}
+
+auto Texture_unit_cache::allocate_texture_unit(uint64_t handle) -> std::optional<std::size_t>
+{
+    for (size_t texture_unit = 0, end = m_texture_units.size(); texture_unit < end; ++texture_unit)
+    {
+        if (m_texture_units[texture_unit] == handle)
+        {
+            return texture_unit;
+        }
+    }
+
+    const size_t result = m_texture_units.size();
+    m_texture_units.push_back(handle);
+    return result;
+}
+
+Texture_unit_cache s_texture_unit_cache;
+
+auto Texture_unit_cache::bind() -> size_t
+{
+    GLuint i{};
+    GLuint end = std::min(
+        static_cast<GLuint>(m_texture_units.size()),
+        static_cast<GLuint>(erhe::graphics::Instance::limits.max_texture_image_units)
+    );
+
+    for (i = 0; i < end; ++i)
+    {
+        gl::bind_texture_unit(i, erhe::graphics::get_texture_from_handle(m_texture_units[i]));
+        gl::bind_sampler     (i, erhe::graphics::get_sampler_from_handle(m_texture_units[i]));
+    }
+    return m_texture_units.size();
 }
 
 } // namespace erhe::graphics

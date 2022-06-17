@@ -20,6 +20,7 @@
 
 #include <deque>
 #include <memory>
+#include <set>
 #include <string_view>
 #include <vector>
 
@@ -81,19 +82,21 @@ public:
     Imgui_renderer();
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    void declare_required_components() override;
+    void initialize_component       () override;
 
     //static constexpr size_t vec2_size   = 2 * sizeof(float);
-    static constexpr size_t s_uvec2_size = 2 * sizeof(uint32_t);
-    static constexpr size_t s_vec4_size  = 4 * sizeof(float);
+    static constexpr size_t s_uivec4_size = 4 * sizeof(uint32_t); // for non bindless textures
+    static constexpr size_t s_uvec2_size  = 2 * sizeof(uint32_t);
+    static constexpr size_t s_vec4_size   = 4 * sizeof(float);
 
     // scale, translation, clip rectangle, texture indices
     //static constexpr size_t draw_parameters_block_size = vec2_size + vec2_size + vec4_size + uivec4_size;
-    static constexpr size_t s_max_draw_count   =   6'000;
-    static constexpr size_t s_max_index_count  = 300'000;
-    static constexpr size_t s_max_vertex_count = 800'000;
+    static constexpr size_t s_max_draw_count     =   6'000;
+    static constexpr size_t s_max_index_count    = 300'000;
+    static constexpr size_t s_max_vertex_count   = 800'000;
+    static constexpr size_t s_texture_unit_count = 16; // for non bindless textures
 
     // Public API
     [[nodiscard]] auto get_font_atlas() -> ImFontAtlas*;
@@ -131,27 +134,32 @@ private:
     ImFont*                                               m_primary_font{nullptr};
     ImFont*                                               m_mono_font   {nullptr};
     ImFontAtlas                                           m_font_atlas;
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<erhe::graphics::Texture>              m_font_texture;
-    std::unique_ptr<erhe::graphics::Shader_stages>        m_shader_stages;
-    std::unique_ptr<erhe::graphics::Shader_resource>      m_projection_block;
-    std::unique_ptr<erhe::graphics::Shader_resource>      m_draw_parameter_block;
-    erhe::graphics::Shader_resource                       m_draw_parameter_struct{"Draw_parameters"};
-    erhe::graphics::Vertex_attribute_mappings             m_attribute_mappings;
-    erhe::graphics::Vertex_format                         m_vertex_format;
-    std::unique_ptr<erhe::graphics::Sampler>              m_nearest_sampler;
-    std::unique_ptr<erhe::graphics::Sampler>              m_linear_sampler;
-    std::unique_ptr<erhe::graphics::Sampler>              m_linear_mipmap_linear_sampler;
-    size_t                                                m_u_scale_offset       {0};
-    size_t                                                m_u_translate_offset   {0};
-    size_t                                                m_u_clip_rect_offset   {0};
-    size_t                                                m_u_texture_offset     {0};
-    size_t                                                m_u_extra_offset       {0};
-    erhe::graphics::Fragment_outputs                      m_fragment_outputs;
-    std::vector<std::shared_ptr<erhe::graphics::Texture>> m_used_textures;
-    std::vector<uint64_t>                                 m_used_texture_handles;
 
-    std::unique_ptr<erhe::graphics::Gpu_timer>            m_gpu_timer;
+    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
+
+    std::shared_ptr<erhe::graphics::Texture>           m_dummy_texture;
+    std::shared_ptr<erhe::graphics::Texture>           m_font_texture;
+    std::unique_ptr<erhe::graphics::Shader_stages>     m_shader_stages;
+    std::unique_ptr<erhe::graphics::Shader_resource>   m_projection_block;
+    std::unique_ptr<erhe::graphics::Shader_resource>   m_draw_parameter_block;
+
+    erhe::graphics::Shader_resource                    m_draw_parameter_struct{"Draw_parameters"};
+    erhe::graphics::Shader_resource                    m_default_uniform_block; // containing sampler uniforms for non bindless textures
+    erhe::graphics::Vertex_attribute_mappings          m_attribute_mappings;
+    erhe::graphics::Vertex_format                      m_vertex_format;
+    std::unique_ptr<erhe::graphics::Sampler>           m_nearest_sampler;
+    std::unique_ptr<erhe::graphics::Sampler>           m_linear_sampler;
+    std::unique_ptr<erhe::graphics::Sampler>           m_linear_mipmap_linear_sampler;
+    size_t                                             m_u_scale_offset          {0};
+    size_t                                             m_u_translate_offset      {0};
+    size_t                                             m_u_clip_rect_offset      {0};
+    size_t                                             m_u_texture_offset        {0};
+    size_t                                             m_u_extra_offset          {0};
+    size_t                                             m_u_texture_indices_offset{0}; // for non bindless textures
+    erhe::graphics::Fragment_outputs                   m_fragment_outputs;
+    std::set<std::shared_ptr<erhe::graphics::Texture>> m_used_textures;
+    std::set<uint64_t>                                 m_used_texture_handles;
+    std::unique_ptr<erhe::graphics::Gpu_timer>         m_gpu_timer;
 
     std::deque<Frame_resources> m_frame_resources;
     size_t                      m_current_frame_resource_slot{0};

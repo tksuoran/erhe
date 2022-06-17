@@ -17,7 +17,7 @@ Image_transfer::~Image_transfer() noexcept
 {
 }
 
-void Image_transfer::connect()
+void Image_transfer::declare_required_components()
 {
     require<erhe::application::Gl_context_provider>();
 }

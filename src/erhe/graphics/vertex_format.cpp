@@ -124,7 +124,7 @@ auto Vertex_format::find_attribute(
         }
     }
 
-    ERHE_FATAL("vertex_attribute not found\n");
+    ERHE_FATAL("vertex_attribute not found");
 }
 
 } // namespace erhe::graphics

@@ -160,18 +160,13 @@ auto Trs_tool::description() -> const char*
     return c_title.data();
 }
 
-void Trs_tool::connect()
+void Trs_tool::declare_required_components()
 {
     require<erhe::application::Gl_context_provider>();
 
-    m_line_renderer_set = get    <erhe::application::Line_renderer_set>();
-    m_text_renderer     = get    <erhe::application::Text_renderer    >();
-
-    m_mesh_memory       = require<Mesh_memory    >();
-    m_operation_stack   = get    <Operation_stack>();
-    m_pointer_context   = get    <Pointer_context>();
-    m_scene_root        = require<Scene_root     >();
-    m_selection_tool    = require<Selection_tool >();
+    m_mesh_memory    = require<Mesh_memory   >();
+    m_scene_root     = require<Scene_root    >();
+    m_selection_tool = require<Selection_tool>();
 
     require<erhe::application::Imgui_windows>();
     require<erhe::application::View>();
@@ -227,6 +222,14 @@ void Trs_tool::initialize_component()
     view->register_command(&m_hover_command);
     view->bind_command_to_mouse_drag  (&m_drag_command, erhe::toolkit::Mouse_button_left);
     view->bind_command_to_mouse_motion(&m_hover_command);
+}
+
+void Trs_tool::post_initialize()
+{
+    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
+    m_text_renderer     = get<erhe::application::Text_renderer    >();
+    m_operation_stack   = get<Operation_stack>();
+    m_pointer_context   = get<Pointer_context>();
 }
 
 void Trs_tool::set_translate(const bool enabled)
@@ -834,7 +837,7 @@ auto Trs_tool::get_axis_direction() const -> dvec3
         case Handle::e_handle_rotate_z:     return m_local ? m_drag.initial_world_from_local[2] : dvec3{0.0, 0.0, 1.0};
         default:
         {
-            ERHE_FATAL("bad axis\n");
+            ERHE_FATAL("bad axis");
             break;
         }
     }
@@ -1001,7 +1004,7 @@ auto Trs_tool::get_plane_normal(const bool world) const -> dvec3
 
         default:
         {
-            ERHE_FATAL("bad handle for plane %04x\n", static_cast<unsigned int>(m_active_handle));
+            ERHE_FATAL("bad handle for plane %04x", static_cast<unsigned int>(m_active_handle));
             break;
         }
     }
@@ -1019,7 +1022,7 @@ auto Trs_tool::get_plane_side(const bool world) const -> dvec3
         case Handle::e_handle_rotate_z:
         case Handle::e_handle_translate_xy: return world ? dvec3{1.0, 0.0, 0.0} : m_drag.initial_world_from_local[0];
         default:
-            ERHE_FATAL("bad handle for plane %04x\n", static_cast<unsigned int>(m_active_handle));
+            ERHE_FATAL("bad handle for plane %04x", static_cast<unsigned int>(m_active_handle));
             break;
     }
 }
@@ -1068,7 +1071,7 @@ auto Trs_tool::offset_plane_origo(const Handle handle, const dvec3 p) const -> d
         case Handle::e_handle_rotate_y: return dvec3{0.0f,  p.y, 0.0f};
         case Handle::e_handle_rotate_z: return dvec3{0.0f, 0.0f,  p.z};
         default:
-            ERHE_FATAL("bad handle for rotate %04x\n", static_cast<unsigned int>(handle));
+            ERHE_FATAL("bad handle for rotate %04x", static_cast<unsigned int>(handle));
             break;
     }
 }
@@ -1086,7 +1089,7 @@ auto Trs_tool::project_to_offset_plane(
         case Handle::e_handle_rotate_y: return dvec3{Q.x, P.y, Q.z};
         case Handle::e_handle_rotate_z: return dvec3{Q.x, Q.y, P.z};
         default:
-            ERHE_FATAL("bad handle for rotate %04x\n", static_cast<unsigned int>(handle));
+            ERHE_FATAL("bad handle for rotate %04x", static_cast<unsigned int>(handle));
             break;
     }
 }
@@ -1443,7 +1446,7 @@ auto Trs_tool::get_handle_type(const Handle handle) const -> Handle_type
         case Handle::e_handle_none: return Handle_type::e_handle_type_none;
         default:
         {
-            ERHE_FATAL("bad handle %04x\n", static_cast<unsigned int>(handle));
+            ERHE_FATAL("bad handle %04x", static_cast<unsigned int>(handle));
         }
     }
 }
@@ -1462,7 +1465,7 @@ auto Trs_tool::get_axis_color(const Handle handle) const -> uint32_t
         case Handle::e_handle_none:
         default:
         {
-            ERHE_FATAL("bad handle %04x\n", static_cast<unsigned int>(handle));
+            ERHE_FATAL("bad handle %04x", static_cast<unsigned int>(handle));
         }
     }
 }

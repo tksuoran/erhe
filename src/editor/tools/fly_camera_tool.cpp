@@ -175,12 +175,10 @@ Fly_camera_tool::~Fly_camera_tool() noexcept
 #endif
 }
 
-void Fly_camera_tool::connect()
+void Fly_camera_tool::declare_required_components()
 {
-    m_editor_tools    = require<Tools>();
-    m_pointer_context = get    <Pointer_context>();
-    m_scene_root      = require<Scene_root>();
-    m_trs_tool        = get    <Trs_tool>();
+    m_editor_tools = require<Tools>();
+    m_scene_root   = require<Scene_root>();
 
     require<erhe::application::Imgui_windows>();
     require<erhe::application::View>();
@@ -220,6 +218,12 @@ void Fly_camera_tool::initialize_component()
     view->bind_command_to_mouse_drag(&m_turn_command, erhe::toolkit::Mouse_button_left);
 
     m_camera_controller = std::make_shared<Frame_controller>();
+}
+
+void Fly_camera_tool::post_initialize()
+{
+    m_pointer_context = get<Pointer_context>();
+    m_trs_tool        = get<Trs_tool>();
 }
 
 void Fly_camera_tool::update_camera()

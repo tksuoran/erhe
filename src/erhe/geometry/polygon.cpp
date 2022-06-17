@@ -139,7 +139,7 @@ auto Polygon::corner(const Geometry& geometry, const Point_id point) const -> Co
     {
         return result.value();
     }
-    ERHE_FATAL("corner not found\n");
+    ERHE_FATAL("corner not found");
     // unreachable return {};
 }
 
@@ -156,7 +156,7 @@ auto Polygon::next_corner(const Geometry& geometry, const Corner_id anchor_corne
             return next_corner_id;
         }
     }
-    ERHE_FATAL("corner not found\n");
+    ERHE_FATAL("corner not found");
     // unreachable return {};
 }
 
@@ -173,7 +173,7 @@ auto Polygon::prev_corner(const Geometry& geometry, const Corner_id anchor_corne
             return prev_corner_id;
         }
     }
-    ERHE_FATAL("corner not found\n");
+    ERHE_FATAL("corner not found");
     // unreachable return {};
 }
 

@@ -83,16 +83,14 @@ Tile_renderer::Tile_renderer()
 {
 }
 
-Tile_renderer::~Tile_renderer()
+Tile_renderer::~Tile_renderer() noexcept
 {
 }
 
-void Tile_renderer::connect()
+void Tile_renderer::declare_required_components()
 {
     require<erhe::application::Gl_context_provider>();
-
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-    m_tiles                  = get<Tiles>();
+    require<erhe::application::Shader_monitor     >();
 }
 
 static constexpr std::string_view c_text_renderer_initialize_component{"Tile_renderer::initialize_component()"};
@@ -283,6 +281,12 @@ void Tile_renderer::initialize_component()
     create_frame_resources(max_quad_count * per_quad_vertex_count);
 
     compose_tileset_texture();
+}
+
+void Tile_renderer::post_initialize()
+{
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
+    m_tiles                  = get<Tiles>();
 }
 
 void Tile_renderer::compose_tileset_texture()

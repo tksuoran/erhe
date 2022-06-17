@@ -27,13 +27,9 @@ Debug_view_window::~Debug_view_window() noexcept
 {
 }
 
-void Debug_view_window::connect()
+void Debug_view_window::declare_required_components()
 {
-    m_forward_renderer       = get    <Forward_renderer                    >();
-    m_pipeline_state_tracker = get    <erhe::graphics::OpenGL_state_tracker>();
-    m_programs               = require<Programs                            >();
-    m_scene_root             = get    <Scene_root                          >();
-    m_shadow_renderer        = get    <Shadow_renderer                     >();
+    m_programs = require<Programs>();
 
     require<erhe::application::Imgui_windows>();
     require<erhe::application::Gl_context_provider>();
@@ -54,6 +50,14 @@ void Debug_view_window::initialize_component()
         .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
         .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
     };
+}
+
+void Debug_view_window::post_initialize()
+{
+    m_forward_renderer       = get<Forward_renderer                    >();
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
+    m_scene_root             = get<Scene_root                          >();
+    m_shadow_renderer        = get<Shadow_renderer                     >();
 }
 
 auto Debug_view_window::get_size(

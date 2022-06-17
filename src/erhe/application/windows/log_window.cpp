@@ -33,9 +33,10 @@ Log_window::~Log_window() noexcept
 {
 }
 
-void Log_window::connect()
+void Log_window::declare_required_components()
 {
     require<Imgui_windows>();
+    require<View         >();
 }
 
 void Log_window::initialize_component()

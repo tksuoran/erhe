@@ -37,19 +37,21 @@ Node_tree_window::~Node_tree_window() noexcept
 {
 }
 
-void Node_tree_window::connect()
+void Node_tree_window::declare_required_components()
 {
-    m_scene_root     = get    <Scene_root    >();
     m_selection_tool = require<Selection_tool>();
-    m_icon_set       = get    <Icon_set      >();
     require<erhe::application::Imgui_windows>();
-    Expects(m_scene_root != nullptr);
-    Expects(m_icon_set   != nullptr);
 }
 
 void Node_tree_window::initialize_component()
 {
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+}
+
+void Node_tree_window::post_initialize()
+{
+    m_scene_root = get<Scene_root>();
+    m_icon_set   = get<Icon_set  >();
 }
 
 void Node_tree_window::clear_selection()

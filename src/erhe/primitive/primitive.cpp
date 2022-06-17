@@ -22,7 +22,7 @@ auto c_str(const Primitive_mode primitive_mode) -> const char*
         case Primitive_mode::count:             return "count";
         default:
         {
-            ERHE_FATAL("Bad mesh mode\n");
+            ERHE_FATAL("Bad mesh mode");
         }
     }
 }
@@ -38,7 +38,7 @@ auto c_str(const Normal_style normal_style) -> const char*
         case Normal_style::point_normals:   return "point_normals";
         default:
         {
-            ERHE_FATAL("Bad mesh normal style\n");
+            ERHE_FATAL("Bad mesh normal style");
         }
     }
 }

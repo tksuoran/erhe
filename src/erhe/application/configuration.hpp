@@ -47,8 +47,13 @@ public:
 
     struct Graphics
     {
-        bool reverse_depth  {true};
-        bool simpler_shaders{true};
+        bool low_hdr          {false};
+        bool reverse_depth    {true};
+        bool simpler_shaders  {true};
+        bool post_processing  {true};
+        bool use_time_query   {true};
+        bool force_no_bindless{false};
+        int  msaa_sample_count{4};
     };
     Graphics graphics;
 
@@ -65,7 +70,6 @@ public:
         bool fullscreen       {false};
         int  width            {1920};
         int  height           {1080};
-        int  msaa_sample_count{0};
     };
     Window window;
 
@@ -76,6 +80,12 @@ public:
         int  shadow_map_max_light_count{8};
     };
     Shadow_renderer shadow_renderer;
+
+    struct Text_renderer
+    {
+        bool enabled{true};
+    };
+    Text_renderer text_renderer;
 
     struct Forward_renderer
     {
@@ -101,6 +111,7 @@ public:
         int   floor_div              {4};
         int   instance_count         {1};
         float instance_gap           {0.4f};
+        int   detail                 {2};
         bool  floor                  {true};
         bool  gltf_files             {false};
         bool  obj_files              {false};
@@ -140,6 +151,15 @@ public:
         bool viewport_config    {false};
     };
     Windows windows;
+
+    struct Viewport
+    {
+        bool polygon_fill     {true};
+        bool edge_lines       {false};
+        bool corner_points    {false};
+        bool polygon_centroids{false};
+    };
+    Viewport viewport;
 };
 
 } // namespace erhe::application

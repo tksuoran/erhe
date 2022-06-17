@@ -69,7 +69,11 @@ float sample_light_visibility(
     float N_dot_L
 )
 {
+#if defined(ERHE_SHADOW_MAPS)
+
+#if defined(ERHE_BINDLESS_TEXTURE)
     sampler2DArray s_shadow = sampler2DArray(light_block.shadow_texture);
+#endif
 
     Light light = light_block.lights[light_index];
     vec4  position_in_light_texture_homogeneous = light.texture_from_world * position;
@@ -84,7 +88,7 @@ float sample_light_visibility(
         )
     ).x;
 
-    float bias = 0.0005 * sqrt(1.0 - N_dot_L * N_dot_L) / N_dot_L; // tan(acos(N_dot_L))
+    float bias = 0.005 * sqrt(1.0 - N_dot_L * N_dot_L) / N_dot_L; // tan(acos(N_dot_L))
     bias = clamp(bias, 0.0, 0.01);
     if (camera.cameras[0].clip_depth_direction < 0.0)
     {
@@ -101,6 +105,9 @@ float sample_light_visibility(
         }
     }
     return 0.0;
+#else
+    return 1.0;
+#endif
 }
 
 float srgb_to_linear(float x)

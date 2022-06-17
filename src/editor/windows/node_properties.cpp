@@ -50,17 +50,21 @@ Node_properties::~Node_properties() noexcept
 {
 }
 
-void Node_properties::connect()
+void Node_properties::declare_required_components()
 {
-    m_operation_stack = get<Operation_stack>();
-    m_scene_root      = get<Scene_root     >();
-    m_selection_tool  = get<Selection_tool >();
     require<erhe::application::Imgui_windows>();
 }
 
 void Node_properties::initialize_component()
 {
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+}
+
+void Node_properties::post_initialize()
+{
+    m_operation_stack = get<Operation_stack>();
+    m_scene_root      = get<Scene_root     >();
+    m_selection_tool  = get<Selection_tool >();
 }
 
 void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const

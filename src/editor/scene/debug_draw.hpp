@@ -24,13 +24,14 @@ public:
     ~Debug_draw() noexcept override;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    void declare_required_components() override;
+    void initialize_component       () override;
+    void post_initialize            () override;
 
     // Implemnents IDebug_draw
-	auto get_colors          () const -> Colors                                                override;
-	void set_colors          (const Colors& colors)                                            override;
+    auto get_colors          () const -> Colors                                                override;
+    void set_colors          (const Colors& colors)                                            override;
     void draw_line           (const glm::vec3 from, const glm::vec3 to, const glm::vec3 color) override;
     void draw_3d_text        (const glm::vec3 location, const char* text)                      override;
     void set_debug_mode      (int debug_mode)                                                  override;

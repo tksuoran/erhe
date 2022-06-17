@@ -7,6 +7,7 @@
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/pipeline.hpp"
+#include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 
@@ -35,6 +36,7 @@ class Programs;
 class Rendertarget
 {
 public:
+    Rendertarget();
     Rendertarget(
         const std::string& label,
         const int          width,
@@ -60,8 +62,9 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    void declare_required_components() override;
+    void initialize_component       () override;
+    void post_initialize            () override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -134,12 +137,19 @@ private:
     std::unique_ptr<erhe::graphics::Shader_stages>      m_downsample_x_shader_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>      m_downsample_y_shader_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>      m_compose_shader_stages;
+    std::shared_ptr<erhe::graphics::Texture>            m_dummy_texture;
+    size_t                                              m_source_texture_count {24};
     size_t                                              m_source_texture_offset{0};
     size_t                                              m_texel_scale_offset   {0};
     size_t                                              m_texture_count_offset {0};
     size_t                                              m_reserved0_offset     {0};
     size_t                                              m_reserved1_offset     {0};
     std::unique_ptr<erhe::graphics::Gpu_timer>          m_gpu_timer;
+
+    const erhe::graphics::Shader_resource*              m_downsample_source_texture{nullptr}; // for non bindless textures
+    const erhe::graphics::Shader_resource*              m_compose_source_textures{nullptr}; // for non bindless textures
+    erhe::graphics::Shader_resource                     m_downsample_default_uniform_block; // containing sampler uniforms for non bindless textures
+    erhe::graphics::Shader_resource                     m_compose_default_uniform_block;    // containing sampler uniforms for non bindless textures
 
     erhe::graphics::Fragment_outputs m_fragment_outputs;
     erhe::graphics::Pipeline         m_downsample_x_pipeline;
@@ -149,6 +159,7 @@ private:
     int                       m_source_width {0};
     int                       m_source_height{0};
     std::vector<Rendertarget> m_rendertargets;
+
 };
 
 } // namespace editor

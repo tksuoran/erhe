@@ -37,7 +37,8 @@ auto Window::create_gl_window() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& configuration = *get<Configuration>();
+    const auto& configuration = *m_components->get<Configuration>(); // by-passing get safety checks
+        //*get<Configuration>();
 
     const char* month_name[] = {
         "January",
@@ -68,7 +69,9 @@ auto Window::create_gl_window() -> bool
             .fullscreen        = configuration.window.fullscreen,
             .width             = configuration.window.width,
             .height            = configuration.window.height,
-            .msaa_sample_count = configuration.window.msaa_sample_count,
+            .msaa_sample_count = (configuration.imgui.enabled || configuration.graphics.post_processing)
+                ? 0
+                : configuration.graphics.msaa_sample_count,
             .title             = title.c_str()
         }
     );
@@ -117,6 +120,15 @@ auto Window::create_gl_window() -> bool
     ERHE_PROFILE_GPU_CONTEXT
 
     erhe::graphics::Instance::initialize();
+
+    if (configuration.graphics.force_no_bindless)
+    {
+        if (erhe::graphics::Instance::info.use_bindless_texture)
+        {
+            erhe::graphics::Instance::info.use_bindless_texture = false;
+            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini setting");
+        }
+    }
 
     for (size_t i = 0; i < 3; ++i)
     {

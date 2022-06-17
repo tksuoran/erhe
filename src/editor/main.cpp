@@ -45,7 +45,7 @@ auto main(int argc, char** argv) -> int
 {
     ERHE_PROFILE_SUPPORT
 
-    erhe::log::console_init();
+    //erhe::log::console_init();
     erhe::log::initialize_log_sinks();
     erhe::application::initialize_logging();
     erhe::components::initialize_logging();

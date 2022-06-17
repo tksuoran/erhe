@@ -16,8 +16,13 @@ Unit_editor_window::Unit_editor_window()
 {
 }
 
-Unit_editor_window::~Unit_editor_window()
+Unit_editor_window::~Unit_editor_window() noexcept
 {
+}
+
+void Unit_editor_window::declare_required_components()
+{
+    require<erhe::application::Imgui_windows>();
 }
 
 void Unit_editor_window::initialize_component()

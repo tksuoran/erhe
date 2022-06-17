@@ -43,19 +43,12 @@ Game::Game()
 {
 }
 
-Game::~Game()
+Game::~Game() noexcept
 {
 }
 
-void Game::connect()
+void Game::declare_required_components()
 {
-    m_time = get<erhe::application::Time>();
-
-    m_map_window    = get<Map_window   >();
-    m_rendering     = get<Rendering    >();
-    m_tiles         = get<Tiles        >();
-    m_tile_renderer = get<Tile_renderer>();
-
     require<erhe::application::View>();
 }
 
@@ -80,6 +73,15 @@ void Game::initialize_component()
     view->bind_command_to_key(&m_move_unit_nw_command,         erhe::toolkit::Key_insert,    false);
     view->bind_command_to_key(&m_select_previous_unit_command, erhe::toolkit::Key_left,      false);
     view->bind_command_to_key(&m_select_next_unit_command    , erhe::toolkit::Key_right,     false);
+}
+
+void Game::post_initialize()
+{
+    m_time          = get<erhe::application::Time>();
+    m_map_window    = get<Map_window   >();
+    m_rendering     = get<Rendering    >();
+    m_tiles         = get<Tiles        >();
+    m_tile_renderer = get<Tile_renderer>();
 }
 
 void Game::update_map_unit_tile(Tile_coordinate position)

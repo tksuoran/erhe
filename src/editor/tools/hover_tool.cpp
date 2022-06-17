@@ -12,6 +12,7 @@
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
+#include "erhe/application/imgui_windows.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -66,13 +67,12 @@ auto Hover_tool::description() -> const char*
     return c_title.data();
 }
 
-void Hover_tool::connect()
+void Hover_tool::declare_required_components()
 {
-    m_line_renderer_set = get    <erhe::application::Line_renderer_set>();
-    m_pointer_context   = get    <Pointer_context                     >();
-    m_scene_root        = require<Scene_root                          >();
-    m_text_renderer     = get    <erhe::application::Text_renderer    >();
+    m_scene_root = require<Scene_root>();
     require<Tools>();
+    require<erhe::application::View>();
+    require<erhe::application::Imgui_windows>();
 }
 
 void Hover_tool::initialize_component()
@@ -84,7 +84,13 @@ void Hover_tool::initialize_component()
     const auto view = get<erhe::application::View>();
     view->register_command(&m_hover_command);
     view->bind_command_to_mouse_motion(&m_hover_command);
+}
 
+void Hover_tool::post_initialize()
+{
+    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
+    m_pointer_context   = get<Pointer_context                     >();
+    m_text_renderer     = get<erhe::application::Text_renderer    >();
 }
 
 void Hover_tool::on_inactive()

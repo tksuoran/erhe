@@ -39,7 +39,7 @@ struct Game_create_parameters
     std::vector<Tile_coordinate> city_positions;
 };
 
-class Move_unit_command
+class Move_unit_command final
     : public erhe::application::Command
 {
 public:
@@ -58,7 +58,7 @@ private:
     direction_t m_direction;
 };
 
-class Select_unit_command
+class Select_unit_command final
     : public erhe::application::Command
 {
 public:
@@ -90,8 +90,9 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    void declare_required_components() override;
+    void initialize_component       () override;
+    void post_initialize            () override;
 
     // Implements IUpdate_once_per_frame
     void update_once_per_frame(const erhe::components::Time_context&) override;

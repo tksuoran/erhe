@@ -46,8 +46,11 @@ public:
 enum class Component_state : unsigned int
 {
     Constructed,
-    Connected,
+    Declaring_initialization_requirements,
+    Initialization_requirements_declared,
     Initializing,
+    Initialized,
+    Post_initializing,
     Ready,
     Deinitializing,
     Deinitialized
@@ -68,8 +71,6 @@ protected:
     virtual ~Component() noexcept;
 
 public:
-    virtual void connect() {};
-
     template<typename T>
     [[nodiscard]] auto get() const -> std::shared_ptr<T>;
 
@@ -79,9 +80,11 @@ public:
     // Public interface
     [[nodiscard]] virtual auto get_type_hash                  () const -> uint32_t = 0;
     [[nodiscard]] virtual auto processing_requires_main_thread() const -> bool;
-    virtual void initialize_component() {}
-    virtual void on_thread_exit      () {}
-    virtual void on_thread_enter     () {}
+    virtual void declare_required_components() {}
+    virtual void initialize_component       () {}
+    virtual void post_initialize            () {}
+    virtual void on_thread_exit             () {}
+    virtual void on_thread_enter            () {}
 
     // Public non-virtual API
     [[nodiscard]] auto name                    () const -> std::string_view;
@@ -93,10 +96,10 @@ public:
     void register_as_component(Components* components);
     void component_initialized(Component* component);
     void depends_on           (const std::shared_ptr<Component>& dependency);
-    void set_connected        ();
-    void set_initializing     ();
-    void set_ready            ();
-    void set_deinitializing   ();
+    void is_depended_by       (Component* component); // WARNING - not multithreading safe
+    void set_state            (Component_state state);
+
+    auto get_depended_by() const -> const std::vector<Component*>&;
 
 protected:
     Components* m_components{nullptr};
@@ -107,13 +110,15 @@ private:
     std::string_view                        m_name;
     Component_state                         m_state{Component_state::Constructed};
     std::vector<std::shared_ptr<Component>> m_dependencies;
+    std::vector<std::shared_ptr<Component>> m_initialized_dependencies;
+    std::vector<Component*>                 m_depended_by;
 };
 
 /// Components is a collection of Components.
 /// Typically you have only one instance of Components in your application.
 ///
 /// Usage:
-///  * In each Component connect(), declare dependencies to other Components
+///  * In each Component declare_required_components(), declare dependencies to other Components
 ///    with require<T>()
 ///  * Register all components, in any order, with Components::add()
 ///  * Once all components have been registered, call Components::initialize_components().
@@ -159,11 +164,14 @@ public:
     template<typename T>
     [[nodiscard]] auto get() const -> std::shared_ptr<T>;
 
+    void collect_uninitialized_depended_by(Component* component, std::set<Component*>& result);
+
 private:
     [[nodiscard]] auto get_component_to_initialize(const bool in_worker_thread) -> Component*;
     void queue_all_components_to_be_processed();
     void initialize_component                (const bool in_worker_thread);
     void deitialize_component                (Component* component);
+    void post_initialize_components          ();
 
     std::mutex                              m_mutex;
     std::vector<std::shared_ptr<Component>> m_components;
@@ -181,20 +189,48 @@ private:
 template<typename T>
 [[nodiscard]] auto Component::get() const -> std::shared_ptr<T>
 {
-    if (m_components == nullptr)
+    switch (m_state)
     {
-        return nullptr;
-    }
+        case Component_state::Initializing:
+        {
+            for (const auto& component : m_initialized_dependencies)
+            {
+                if (component->get_type_hash() == T::hash)
+                {
+                    return std::dynamic_pointer_cast<T>(component);
+                }
+            }
+            ERHE_FATAL("component was not declared required");
+        }
 
-    return m_components->get<T>();
+        case Component_state::Post_initializing: // fall-through
+        case Component_state::Ready:
+        {
+            ERHE_VERIFY(m_components != nullptr);
+            auto get_result = m_components->get<T>();
+            ERHE_VERIFY(
+                (get_result->get_state() == Component_state::Initialized) ||
+                (get_result->get_state() == Component_state::Ready)
+            );
+            return get_result;
+        }
+        default:
+        {
+            ERHE_FATAL("invalid get");
+        }
+    }
+    // unreachable
 }
 
 template<typename T>
 auto Component::require() -> std::shared_ptr<T>
 {
-    const auto component = get<T>();
-    //ERHE_VERIFY(component != nullptr);
-    if (component != nullptr)
+    ERHE_VERIFY(get_state() == Component_state::Declaring_initialization_requirements);
+
+    const auto component = (m_components == nullptr)
+        ? std::shared_ptr<T>{}
+        : m_components->get<T>();
+    if (component)
     {
         depends_on(component);
     }
@@ -208,7 +244,6 @@ template<typename T>
     {
         if (component->get_type_hash() == T::hash)
         {
-            //return dynamic_pointer_cast<T>(component);
             return std::dynamic_pointer_cast<T>(component);
         }
     }

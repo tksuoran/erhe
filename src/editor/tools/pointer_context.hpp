@@ -47,7 +47,7 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect() override;
+    void post_initialize() override;
 
     // Public API
     void update_viewport(Viewport_window* viewport_window);

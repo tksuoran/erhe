@@ -403,7 +403,7 @@ auto Context_window::open(
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE,        GLFW_OPENGL_CORE_PROFILE);
-#if 0
+#if !defined(NDEBUG)
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT,  GLFW_TRUE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
     glfwWindowHint(GLFW_CONTEXT_NO_ERROR,      GLFW_FALSE);
@@ -670,7 +670,7 @@ auto Context_window::is_mouse_captured() const -> bool
         {
             return false;
         }
-        ERHE_FATAL("unexpected GLFW_CURSOR_MODE\n");
+        ERHE_FATAL("unexpected GLFW_CURSOR_MODE");
     }
     return false;
 }

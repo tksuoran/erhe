@@ -6,6 +6,10 @@
 #include <spdlog/sinks/basic_file_sink.h>
 
 #if defined _WIN32
+#   include <spdlog/sinks/msvc_sink.h>
+#endif
+
+#if defined _WIN32
 #   include <windows.h>
 #else
 #   include <unistd.h>
@@ -88,6 +92,9 @@ void store_log_sink::flush_()
 
 namespace {
 
+#if defined _WIN32
+std::shared_ptr<spdlog::sinks::msvc_sink_mt>         sink_msvc;
+#endif
 std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> sink_console;
 std::shared_ptr<spdlog::sinks::basic_file_sink_mt>   sink_log_file;
 std::shared_ptr<store_log_sink>                      tail_store_log;
@@ -106,6 +113,9 @@ auto get_frame_store_log() -> const std::shared_ptr<store_log_sink>&
 
 void initialize_log_sinks()
 {
+#if defined _WIN32
+    sink_msvc       = std::make_shared<spdlog::sinks::msvc_sink_mt>();
+#endif
     sink_console    = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
     sink_log_file   = std::make_shared<spdlog::sinks::basic_file_sink_mt>("log.txt", true);
     tail_store_log  = std::make_shared<store_log_sink>();
@@ -121,6 +131,9 @@ auto make_logger(
     auto logger = std::make_shared<spdlog::logger>(
         name,
         spdlog::sinks_init_list{
+#if defined _WIN32
+            sink_msvc,
+#endif
             //sink_console,
             sink_log_file,
             tail ? tail_store_log : frame_store_log

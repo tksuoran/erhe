@@ -36,7 +36,7 @@ void initialize_logging()
     log_physics         = erhe::log::make_logger("editor::physics"        , spdlog::level::info);
     log_pointer         = erhe::log::make_logger("editor::pointer"        , spdlog::level::info, false);
     log_programs        = erhe::log::make_logger("editor::programs"       , spdlog::level::info);
-    log_raytrace        = erhe::log::make_logger("editor::raytrace"       , spdlog::level::info);
+    log_raytrace        = erhe::log::make_logger("editor::raytrace"       , spdlog::level::warn);
     log_render          = erhe::log::make_logger("editor::render"         , spdlog::level::info, false);
     log_scene           = erhe::log::make_logger("editor::scene"          , spdlog::level::info);
     log_selection       = erhe::log::make_logger("editor::selection"      , spdlog::level::info);

@@ -1,5 +1,7 @@
 #pragma once
 
+//#include "erhe/gl/command_info.hpp"
+
 namespace erhe::graphics
 {
 
@@ -22,6 +24,7 @@ public:
 
         bool use_binary_shaders     {false};
         bool use_integer_polygon_ids{false};
+        bool use_bindless_texture   {false};
     };
 
     class Limits

@@ -1,4 +1,7 @@
-#pragma warning( disable : 4701 ) // glm
+#ifdef _MSC_VER
+#   pragma warning(push, 0)
+#   pragma warning( disable : 4701 ) // glm
+#endif
 
 #include "map_generator/fbm_noise.hpp"
 
@@ -63,3 +66,7 @@ auto Fbm_noise::generate(float x, float y, float z, float w, glm::vec4 seed) -> 
 }
 
 } // namespace hextiles
+
+#ifdef _MSC_VER
+#   pragma warning(pop)
+#endif

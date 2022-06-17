@@ -46,13 +46,11 @@ Line_renderer_set::~Line_renderer_set() noexcept
 {
 }
 
-void Line_renderer_set::connect()
+void Line_renderer_set::declare_required_components()
 {
     require<Gl_context_provider>();
     require<Configuration>();
     require<Shader_monitor>();
-
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 }
 
 static constexpr std::string_view c_line_renderer_initialize_component{"Line_renderer_set::initialize_component()"};
@@ -70,6 +68,11 @@ void Line_renderer_set::initialize_component()
     const Configuration& configuration = *get<Configuration>().get();
     visible.create_frame_resources(&m_pipeline, configuration);
     hidden.create_frame_resources(&m_pipeline, configuration);
+}
+
+void Line_renderer_set::post_initialize()
+{
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 }
 
 void Line_renderer_pipeline::initialize(Shader_monitor* shader_monitor)

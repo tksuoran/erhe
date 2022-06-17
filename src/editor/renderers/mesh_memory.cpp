@@ -22,11 +22,11 @@ Mesh_memory::~Mesh_memory() noexcept
 {
 }
 
-void Mesh_memory::connect()
+void Mesh_memory::declare_required_components()
 {
     require<erhe::application::Configuration>();
     require<erhe::application::Gl_context_provider>();
-    require<Program_interface  >();
+    require<Program_interface>();
 }
 
 void Mesh_memory::initialize_component()

@@ -11,12 +11,15 @@ auto c_str(const Component_state state) -> const char*
     switch (state)
     {
         // using enum Component_state;
-        case Component_state::Constructed:    return "Constructed";
-        case Component_state::Connected:      return "Connected";
-        case Component_state::Initializing:   return "Initializing";
-        case Component_state::Ready:          return "Ready";
-        case Component_state::Deinitializing: return "Deinitializing";
-        case Component_state::Deinitialized:  return "Deinitialized";
+        case Component_state::Constructed:                           return "Constructed";
+        case Component_state::Declaring_initialization_requirements: return "Declaring_initialization_requirements";
+        case Component_state::Initialization_requirements_declared:  return "Initialization_requirements_declared";
+        case Component_state::Initializing:                          return "Initializing";
+        case Component_state::Initialized:                           return "Initialized";
+        case Component_state::Post_initializing:                     return "Post_initializing";
+        case Component_state::Ready:                                 return "Ready";
+        case Component_state::Deinitializing:                        return "Deinitializing";
+        case Component_state::Deinitialized:                         return "Deinitialized";
         default: return "?";
     }
 }
@@ -78,24 +81,77 @@ void Component::depends_on(const std::shared_ptr<Component>& dependency)
     m_dependencies.push_back(dependency);
 }
 
-void Component::set_connected()
+void Component::is_depended_by(Component* component)
 {
-    m_state = Component_state::Connected;
+    // WARNING - not multithreading safe
+    ERHE_VERIFY(component != nullptr);
+    m_depended_by.push_back(component);
 }
 
-void Component::set_initializing()
+auto Component::get_depended_by() const -> const std::vector<Component*>&
 {
-    m_state = Component_state::Initializing;
+    return m_depended_by;
 }
 
-void Component::set_ready()
+void Component::set_state(Component_state state)
 {
-    m_state = Component_state::Ready;
-}
-
-void Component::set_deinitializing()
-{
-    m_state = Component_state::Initializing;
+    switch (m_state)
+    {
+        case Component_state::Constructed:
+        {
+            ERHE_VERIFY(state == Component_state::Declaring_initialization_requirements);
+            m_state = state;
+            break;
+        }
+        case Component_state::Declaring_initialization_requirements:
+        {
+            ERHE_VERIFY(state == Component_state::Initialization_requirements_declared);
+            m_state = state;
+            break;
+        }
+        case Component_state::Initialization_requirements_declared:
+        {
+            ERHE_VERIFY(state == Component_state::Initializing);
+            m_state = state;
+            break;
+        }
+        case Component_state::Initializing:
+        {
+            ERHE_VERIFY(state == Component_state::Initialized);
+            m_state = state;
+            break;
+        }
+        case Component_state::Initialized:
+        {
+            ERHE_VERIFY(state == Component_state::Post_initializing);
+            m_state = state;
+            break;
+        }
+        case Component_state::Post_initializing:
+        {
+            ERHE_VERIFY(state == Component_state::Ready);
+            m_state = state;
+            break;
+        }
+        case Component_state::Ready:
+        {
+            ERHE_VERIFY(state == Component_state::Deinitializing);
+            m_state = state;
+            break;
+        }
+        case Component_state::Deinitializing:
+        {
+            ERHE_VERIFY(state == Component_state::Deinitialized);
+            m_state = state;
+            m_initialized_dependencies.clear();
+            break;
+        }
+        default:
+        {
+            ERHE_FATAL("invalid state transition");
+            break;
+        }
+    }
 }
 
 auto Component::get_state() const -> Component_state
@@ -107,7 +163,7 @@ auto Component::is_ready_to_initialize(
     const bool in_worker_thread
 ) const -> bool
 {
-    if (m_state != Component_state::Connected)
+    if (m_state != Component_state::Initialization_requirements_declared)
     {
         log_components->trace(
             "{} is not ready to initialize: state {} is not Connected\n",
@@ -160,6 +216,20 @@ auto Component::is_ready_to_deinitialize() const -> bool
 
 void Component::component_initialized(Component* component)
 {
+    std::shared_ptr<Component> shared_dependency;
+    for (const auto& dependency : m_dependencies)
+    {
+        if (dependency.get() == component)
+        {
+            shared_dependency = dependency;
+            break;
+        }
+    }
+    if (!shared_dependency)
+    {
+        return;
+    }
+
     const auto remove_it = std::remove_if(
         m_dependencies.begin(),
         m_dependencies.end(),
@@ -169,8 +239,8 @@ void Component::component_initialized(Component* component)
         }
     );
 
-    //auto r = std::distance(remove_it, m_dependencies.end());
-
+    ERHE_VERIFY(remove_it != m_dependencies.end());
+    m_initialized_dependencies.push_back(shared_dependency);
     m_dependencies.erase(
         remove_it,
         m_dependencies.end()

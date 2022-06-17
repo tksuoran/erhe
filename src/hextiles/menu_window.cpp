@@ -30,11 +30,11 @@ Menu_window::Menu_window()
 {
 }
 
-Menu_window::~Menu_window()
+Menu_window::~Menu_window() noexcept
 {
 }
 
-void Menu_window::connect()
+void Menu_window::declare_required_components()
 {
     require<erhe::application::Imgui_windows>();
 }

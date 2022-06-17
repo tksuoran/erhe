@@ -30,7 +30,7 @@ Light_mesh::~Light_mesh() noexcept
 {
 }
 
-void Light_mesh::connect()
+void Light_mesh::declare_required_components()
 {
     m_program_interface = require<Program_interface>();
 }

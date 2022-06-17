@@ -1,4 +1,6 @@
 #include "renderers/shadow_renderer.hpp"
+
+#include "log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/program_interface.hpp"
 #include "renderers/programs.hpp"
@@ -49,17 +51,16 @@ Shadow_renderer::~Shadow_renderer() noexcept
 {
 }
 
-void Shadow_renderer::connect()
+void Shadow_renderer::declare_required_components()
 {
-    base_connect(this);
+    base_require(this);
 
     require<erhe::application::Gl_context_provider>();
     require<Program_interface>();
     require<Programs>();
 
-    m_mesh_memory            = require<Mesh_memory>();
-    m_configuration          = require<erhe::application::Configuration>();
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
+    m_mesh_memory   = require<Mesh_memory>();
+    m_configuration = require<erhe::application::Configuration>();
 }
 
 static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow_renderer::initialize_component()"};
@@ -70,13 +71,33 @@ void Shadow_renderer::initialize_component()
 
     const auto& config = m_configuration->shadow_renderer;
 
+    if (!config.enabled)
+    {
+        log_render->info("Shadow renderer disabled due to erhe.ini setting");
+        return;
+    }
+    else
+    {
+        log_render->info(
+            "Shadow renderer using shadow map resolution {0}x{0}, max {1} lights",
+            config.shadow_map_resolution,
+            config.shadow_map_max_light_count
+        );
+    }
+
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()
     };
 
     erhe::graphics::Scoped_debug_group debug_group{c_shadow_renderer_initialize_component};
 
-    create_frame_resources(1, 256, 256, 1000, 1000);
+    create_frame_resources(
+        1,
+        m_configuration->shadow_renderer.shadow_map_max_light_count,
+        m_configuration->shadow_renderer.shadow_map_max_light_count,
+        m_configuration->forward_renderer.max_primitive_count,
+        m_configuration->forward_renderer.max_draw_count
+    );
 
     const auto& shader_resources = *get<Program_interface>()->shader_resources.get();
     m_vertex_input = std::make_unique<Vertex_input_state>(
@@ -136,6 +157,11 @@ void Shadow_renderer::initialize_component()
     };
 
     m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Shadow_renderer");
+}
+
+void Shadow_renderer::post_initialize()
+{
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 }
 
 static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::render()"};

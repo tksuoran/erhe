@@ -24,7 +24,7 @@ auto Materials::selected_material() const -> std::shared_ptr<erhe::primitive::Ma
     return m_selected_material;
 }
 
-void Materials::connect()
+void Materials::declare_required_components()
 {
     m_scene_root = require<Scene_root>();
     require<erhe::application::Imgui_windows>();
@@ -90,7 +90,6 @@ void Materials::initialize_component()
     //    );
     //    m->visible = true;
     //}
-
 }
 
 void Materials::imgui()

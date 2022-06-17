@@ -25,7 +25,6 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect             () override;
     void initialize_component() override;
 
     // Public API

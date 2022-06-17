@@ -65,11 +65,11 @@ public:
     void on_end              () override;
 
     // Public API
-    void try_hover                   (const int px, const int py);
-    void update                      ();
-    auto bind_multisample_framebuffer() -> bool;
-    void multisample_resolve         ();
-    void set_viewport                (const int x, const int y, const int width, const int height);
+    void try_hover       (const int px, const int py);
+    void update          ();
+    void bind_framebuffer();
+    void resolve         ();
+    void set_viewport    (const int x, const int y, const int width, const int height);
     void render(
         Editor_rendering&                     editor_rendering,
         erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker
@@ -86,7 +86,8 @@ public:
     [[nodiscard]] auto camera              () const -> erhe::scene::ICamera*;
 
 private:
-    [[nodiscard]] auto should_render() const -> bool;
+    [[nodiscard]] auto should_render      () const -> bool;
+    [[nodiscard]] auto should_post_process() const -> bool;
 
     void update_framebuffer();
 
@@ -119,7 +120,8 @@ private:
     std::unique_ptr<erhe::graphics::Texture>      m_color_texture_multisample;
     std::shared_ptr<erhe::graphics::Texture>      m_color_texture_resolved;
     std::shared_ptr<erhe::graphics::Texture>      m_color_texture_resolved_for_present;
-    std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_stencil_renderbuffer;
+    std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_stencil_multisample_renderbuffer;
+    std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_stencil_resolved_renderbuffer;
     std::unique_ptr<erhe::graphics::Framebuffer>  m_framebuffer_multisample;
     std::unique_ptr<erhe::graphics::Framebuffer>  m_framebuffer_resolved;
 };
@@ -177,8 +179,9 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    void declare_required_components() override;
+    void initialize_component       () override;
+    void post_initialize            () override;
 
     // Public API
     auto create_window(

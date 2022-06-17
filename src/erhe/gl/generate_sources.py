@@ -582,7 +582,7 @@ class GLGenerator:
         for extension in sorted(set(self.extensions)):
             quoted_extension = '"' + extension + '"'
             declaration  = f'    Extension_{extension:{extension_name_max_len}} = {enum_value:>6}'
-            map_entry    = '    {{ {0:{1}}, Extension::Extension_{2:{3}} }}'.format(
+            map_entry    = '    g_extension_map.insert(std::pair<std::string, Extension>({0:{1}}, Extension::Extension_{2:{3}}));'.format(
                 quoted_extension, extension_name_max_len + 2, extension, extension_name_max_len
             )
             case_entry = '        case Extension::Extension_{0:{1}}: return "{0}";'.format(
@@ -595,7 +595,7 @@ class GLGenerator:
 
         declarations.append(f'    Extension_Count = {enum_value:>6}')
         self.extension_enum_declarations = ',\n'.join(declarations)
-        self.extension_map_entries       = ',\n'.join(map_entries)
+        self.extension_map_entries       = '\n'.join(map_entries)
         self.extension_case_entries      = '\n'.join(case_entries)
 
         commands = set(self.command_list)
@@ -612,8 +612,8 @@ class GLGenerator:
         case_entries = []
         for command in commands:
             declaration = f'    Command_{command:{command_name_max_len}} = {enum_value:>6}'
-            map_entry   = '    {{ "{0:{1}}, Command::Command_{2:{1}} }}'.format(
-                command + '"', command_name_max_len, command
+            map_entry   = '    g_command_map.insert(std::pair<std::string, Command>({0:{1}}, Command::Command_{2:{1}}));'.format(
+                '"' + command + '"', command_name_max_len, command
             )
             case_entry  = '        case Command::Command_{0:{1}}: return "{0}";'.format(
                 command, command_name_max_len
@@ -625,7 +625,7 @@ class GLGenerator:
 
         declarations.append('    Command_Count = {:>6}'.format(enum_value))
         self.command_enum_declarations = ',\n'.join(declarations)
-        self.command_map_entries       = ',\n'.join(map_entries)
+        self.command_map_entries       = '\n'.join(map_entries)
         self.command_case_entries      = '\n'.join(case_entries)
 
     def _enum_should_collect(self, enum):

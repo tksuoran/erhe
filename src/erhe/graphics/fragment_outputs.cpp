@@ -32,7 +32,7 @@ static auto gl_fragment_output_type_name(
         case gl::Fragment_shader_output_type::double_vec4:       return "dvec4  ";
         default:
         {
-            ERHE_FATAL("Bad fragment outout type\n");
+            ERHE_FATAL("Bad fragment outout type");
         }
     }
 }

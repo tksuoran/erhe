@@ -68,27 +68,33 @@ public:
     auto operator*(const int scale) const -> Tile_coordinate
     {
         return Tile_coordinate{
-            x * static_cast<coordinate_t>(scale),
-            y * static_cast<coordinate_t>(scale)
+            static_cast<coordinate_t>(x * scale),
+            static_cast<coordinate_t>(y * scale)
         };
     }
 
     auto operator/(const int scale) const -> Tile_coordinate
     {
         return Tile_coordinate{
-            x / static_cast<coordinate_t>(scale),
-            y / static_cast<coordinate_t>(scale)
+            static_cast<coordinate_t>(x / scale),
+            static_cast<coordinate_t>(y / scale)
         };
     }
 
     auto operator-(const Tile_coordinate& other) const -> Tile_coordinate
     {
-        return Tile_coordinate{x - other.x, y - other.y};
+        return Tile_coordinate{
+            static_cast<coordinate_t>(x - other.x),
+            static_cast<coordinate_t>(y - other.y)
+        };
     }
 
     auto operator+(const Tile_coordinate& other) const -> Tile_coordinate
     {
-        return Tile_coordinate{x + other.x, y + other.y};
+        return Tile_coordinate{
+            static_cast<coordinate_t>(x + other.x),
+            static_cast<coordinate_t>(y + other.y)
+        };
     }
 
     auto neighbor(const direction_t direction) const -> Tile_coordinate
@@ -97,8 +103,8 @@ public:
         Expects(direction <= direction_last);
 
         Tile_coordinate res{
-            this->x + hex_neighbors[direction].x,
-            this->y + hex_neighbors[direction].y
+            static_cast<coordinate_t>(this->x + hex_neighbors[direction].x),
+            static_cast<coordinate_t>(this->y + hex_neighbors[direction].y)
         };
         if (res.is_even() && (hex_neighbors[direction].l == -1))
         {

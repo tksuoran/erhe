@@ -17,11 +17,11 @@ Map_generator::Map_generator()
 {
 }
 
-Map_generator::~Map_generator()
+Map_generator::~Map_generator() noexcept
 {
 }
 
-void Map_generator::connect()
+void Map_generator::declare_required_components()
 {
     m_tiles = require<Tiles>();
     require<erhe::application::Imgui_windows>();
@@ -371,13 +371,13 @@ void Map_generator::generate_group_fix_pass(Map& map)
     const Tiles& tiles = *m_tiles.get();
 
     map.for_each_tile(
-        [this, &map, &tiles](Tile_coordinate tile_position)
+        [&map, &tiles](Tile_coordinate tile_position)
         {
             map.update_group_terrain(tiles, tile_position);
         }
     );
     map.for_each_tile(
-        [this, &map, &tiles](Tile_coordinate tile_position)
+        [&map, &tiles](Tile_coordinate tile_position)
         {
             map.update_group_terrain(tiles, tile_position);
         }

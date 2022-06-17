@@ -1,6 +1,7 @@
 #include "renderers/post_processing.hpp"
 #include "renderers/programs.hpp"
 
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
@@ -18,7 +19,7 @@
 namespace editor
 {
 
-
+#if 0
 auto factorial(const int input) -> int
 {
     int result = 1;
@@ -145,6 +146,7 @@ auto kernel_binom_linear(const Kernel& discrete_data) -> Kernel
 
     return result;
 }
+#endif
 
 Post_processing::Post_processing()
     : Component   {c_label}
@@ -152,12 +154,11 @@ Post_processing::Post_processing()
 {
 }
 
-void Post_processing::connect()
+void Post_processing::declare_required_components()
 {
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-    m_programs               = get<Programs>();
-    m_shader_monitor         = require<erhe::application::Shader_monitor>();
+    m_shader_monitor = require<erhe::application::Shader_monitor>();
 
+    require<erhe::application::Configuration      >();
     require<erhe::application::Imgui_windows      >();
     require<erhe::application::Gl_context_provider>();
 }
@@ -185,11 +186,11 @@ void Post_processing::initialize_component()
         0,
         erhe::graphics::Shader_resource::Type::uniform_block
     );
-    m_texel_scale_offset    = m_parameter_block->add_float("texel_scale"       )->offset_in_parent();
-    m_texture_count_offset  = m_parameter_block->add_uint ("texture_count"     )->offset_in_parent();
-    m_reserved0_offset      = m_parameter_block->add_float("reserved0"         )->offset_in_parent();
-    m_reserved1_offset      = m_parameter_block->add_float("reserver1"         )->offset_in_parent();
-    m_source_texture_offset = m_parameter_block->add_uvec2("source_texture", 32)->offset_in_parent();
+    m_texel_scale_offset    = m_parameter_block->add_float("texel_scale"                           )->offset_in_parent();
+    m_texture_count_offset  = m_parameter_block->add_uint ("texture_count"                         )->offset_in_parent();
+    m_reserved0_offset      = m_parameter_block->add_float("reserved0"                             )->offset_in_parent();
+    m_reserved1_offset      = m_parameter_block->add_float("reserver1"                             )->offset_in_parent();
+    m_source_texture_offset = m_parameter_block->add_uvec2("source_texture", m_source_texture_count)->offset_in_parent();
 
     {
         ERHE_PROFILE_SCOPE("shader");
@@ -212,10 +213,41 @@ void Post_processing::initialize_component()
             .fragment_outputs = &m_fragment_outputs,
         };
 
+        if (erhe::graphics::Instance::info.use_bindless_texture)
+        {
+            x_create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
+            y_create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
+            compose_create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
+            x_create_info      .extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
+            y_create_info      .extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
+            compose_create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
+        }
+        else
+        {
+            m_source_texture_count = std::min(
+                m_source_texture_count,
+                static_cast<size_t>(erhe::graphics::Instance::limits.max_texture_image_units)
+            );
+
+            m_downsample_source_texture = m_downsample_default_uniform_block.add_sampler(
+                "s_source",
+                gl::Uniform_type::sampler_2d,
+                0
+            );
+            m_compose_source_textures = m_compose_default_uniform_block.add_sampler(
+                "s_source_textures",
+                gl::Uniform_type::sampler_2d,
+                0,
+                m_source_texture_count
+            );
+
+            m_dummy_texture = erhe::graphics::create_dummy_texture();
+            x_create_info.default_uniform_block       = &m_downsample_default_uniform_block;
+            y_create_info.default_uniform_block       = &m_downsample_default_uniform_block;
+            compose_create_info.default_uniform_block = &m_compose_default_uniform_block;
+        }
+
         // GL_ARB_gpu_shader_int64
-        x_create_info      .extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-        y_create_info      .extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-        compose_create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
         x_create_info      .shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
         y_create_info      .shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
         compose_create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
@@ -278,6 +310,16 @@ void Post_processing::initialize_component()
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 }
 
+void Post_processing::post_initialize()
+{
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
+    m_programs               = get<Programs>();
+}
+
+Rendertarget::Rendertarget()
+{
+}
+
 Rendertarget::Rendertarget(
     const std::string& label,
     const int          width,
@@ -327,7 +369,7 @@ void Rendertarget::bind_framebuffer()
 
     {
         ERHE_PROFILE_SCOPE("viewport");
-        gl::viewport        (0, 0, texture->width(), texture->height());
+        gl::viewport      (0, 0, texture->width(), texture->height());
     }
 
     //{
@@ -450,6 +492,8 @@ void Post_processing::post_process(
     erhe::graphics::Scoped_debug_group pass_scope{"Post Processing"};
     erhe::graphics::Scoped_gpu_timer   timer     {*m_gpu_timer.get()};
 
+    const auto& configuration = get<erhe::application::Configuration>();
+
     if (
         (m_source_width  != source_texture->width ()) ||
         (m_source_height != source_texture->height())
@@ -458,9 +502,18 @@ void Post_processing::post_process(
         m_source_width  = source_texture->width ();
         m_source_height = source_texture->height();
         m_rendertargets.clear();
+
         int width  = source_texture->width ();
         int height = source_texture->height();
-        m_rendertargets.emplace_back("Post Processing Compose", width, height);
+        if (configuration->imgui.enabled)
+        {
+            m_rendertargets.emplace_back("Post Processing Compose", width, height);
+        }
+        else
+        {
+            m_rendertargets.emplace_back();
+        }
+
         for (;;)
         {
             if (width > 1)
@@ -518,6 +571,7 @@ void Post_processing::post_process(
             }
         }
     }
+
     compose(source_texture);
 }
 
@@ -574,9 +628,15 @@ void Post_processing::downsample(
         );
     }
 
+    if (erhe::graphics::Instance::info.use_bindless_texture)
     {
         ERHE_PROFILE_SCOPE("make input texture resident");
         gl::make_texture_handle_resident_arb(handle);
+    }
+    else
+    {
+        gl::bind_texture_unit(0, source_texture->gl_name());
+        gl::bind_sampler     (0, m_programs->linear_sampler->gl_name());
     }
 
     {
@@ -590,6 +650,7 @@ void Post_processing::downsample(
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     }
 
+    if (erhe::graphics::Instance::info.use_bindless_texture)
     {
         ERHE_PROFILE_SCOPE("make input texture non resident");
         gl::make_texture_handle_non_resident_arb(handle);
@@ -628,7 +689,15 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
                 *m_programs->linear_sampler.get()
             );
 
-            gl::make_texture_handle_resident_arb(handle);
+            if (erhe::graphics::Instance::info.use_bindless_texture)
+            {
+                gl::make_texture_handle_resident_arb(handle);
+            }
+            else
+            {
+                gl::bind_texture_unit(0, source_texture->gl_name());
+                gl::bind_sampler     (0, m_programs->nearest_sampler->gl_name()); // check if this is good
+            }
 
             gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
             gpu_uint_data[word_offset++] = handle >> 32u;
@@ -636,11 +705,8 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
             gpu_uint_data[word_offset++] = 0;
         }
 
-        for (
-            size_t i = 1, end = std::min(m_rendertargets.size(), size_t{31});
-            i < end;
-            ++i
-        )
+        const auto end = std::min(m_rendertargets.size(), m_source_texture_count);
+        for (size_t i = 1; i < end; ++i)
         {
             const auto&    source = m_rendertargets.at(i);
             const uint64_t handle = erhe::graphics::get_handle(
@@ -648,22 +714,51 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
                 *m_programs->linear_sampler.get()
             );
 
-            gl::make_texture_handle_resident_arb(handle);
+            if (erhe::graphics::Instance::info.use_bindless_texture)
+            {
+                gl::make_texture_handle_resident_arb(handle);
+            }
+            else
+            {
+                gl::bind_texture_unit(static_cast<GLuint>(i), source.texture->gl_name());
+                gl::bind_sampler     (static_cast<GLuint>(i), m_programs->linear_sampler->gl_name());
+            }
 
             gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
             gpu_uint_data[word_offset++] = handle >> 32u;
             gpu_uint_data[word_offset++] = 0; // padding in uvec2 array in uniform buffer (std140)
             gpu_uint_data[word_offset++] = 0;
         }
+        if (!erhe::graphics::Instance::info.use_bindless_texture)
+        {
+            for (size_t i = end; i < m_source_texture_count; ++i)
+            {
+                gl::bind_texture_unit(static_cast<GLuint>(i), m_dummy_texture->gl_name());
+                gl::bind_sampler     (static_cast<GLuint>(i), m_programs->nearest_sampler->gl_name());
+            }
+        }
+
     }
     m_parameter_writer.write_offset += m_parameter_block->size_bytes();
     m_parameter_writer.end();
 
-    auto&       rendertarget = m_rendertargets.at(0);
-    const auto& pipeline     = m_compose_pipeline;
+    const auto& configuration = get<erhe::application::Configuration>();
 
-    rendertarget.bind_framebuffer();
+    if (configuration->imgui.enabled)
+    {
+        auto& rendertarget = m_rendertargets.at(0);
+        rendertarget.bind_framebuffer();
+    }
+    else
+    {
+        // Compose output directly to default framebuffer
+        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+        gl::clear_color     (0.0f, 0.0f, 0.0f, 0.0f);
+        gl::clear           (gl::Clear_buffer_mask::color_buffer_bit);
+        gl::viewport        (0, 0, source_texture->width(), source_texture->height());
+    }
 
+    const auto& pipeline = m_compose_pipeline;
     m_pipeline_state_tracker->execute(pipeline);
 
     {
@@ -679,7 +774,7 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
 
     {
         ERHE_PROFILE_SCOPE("draw arrays");
-        gl::draw_arrays     (pipeline.data.input_assembly.primitive_topology, 0, 4);
+        gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, 4);
     }
 
     {
@@ -687,17 +782,19 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     }
 
-    {
-        const uint64_t handle = erhe::graphics::get_handle(
-            *source_texture,
-            *m_programs->linear_sampler.get()
-        );
-
-        gl::make_texture_handle_non_resident_arb(handle);
-    }
-
+    if (erhe::graphics::Instance::info.use_bindless_texture)
     {
         ERHE_PROFILE_SCOPE("make textures non resident");
+
+        {
+            const uint64_t handle = erhe::graphics::get_handle(
+                *source_texture,
+                *m_programs->linear_sampler.get()
+            );
+
+            gl::make_texture_handle_non_resident_arb(handle);
+        }
+
         for (
             size_t i = 1, end = std::min(m_rendertargets.size(), size_t{32});
             i < end;

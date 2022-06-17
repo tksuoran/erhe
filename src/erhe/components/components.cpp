@@ -35,7 +35,7 @@ auto Components::add(
         if (c->get_type_hash() == component->get_type_hash())
         {
             ERHE_FATAL(
-                "Component %s type has collision with %s\n",
+                "Component %s type has collision with %s",
                 c->name().data(),
                 component->name().data()
             );
@@ -135,6 +135,25 @@ void Components::deitialize_component(Component* component)
     }
 }
 
+void Components::post_initialize_components()
+{
+    ERHE_PROFILE_FUNCTION
+
+    log_components->info(
+        "Post-initializing {} Components:",
+        m_components.size()
+    );
+
+    for (const auto& component : m_components)
+    {
+        ERHE_VERIFY(component->get_state() == Component_state::Initialized);
+        log_components->info("Post initializing {}", component->name());
+        component->set_state(Component_state::Post_initializing);
+        component->post_initialize();
+        component->set_state(Component_state::Ready);
+    }
+}
+
 void Components::cleanup_components()
 {
     ERHE_PROFILE_FUNCTION
@@ -155,6 +174,7 @@ void Components::cleanup_components()
         }
         log_components->info("Deinitializing {}", component->name());
         deitialize_component(component);
+        component->set_state(Component_state::Deinitialized);
     }
     if (m_components.size() > 0)
     {
@@ -240,6 +260,21 @@ void Components::show_dependencies() const
     }
 }
 
+void Components::collect_uninitialized_depended_by(Component* component, std::set<Component*>& result)
+{
+    ERHE_PROFILE_FUNCTION
+
+    for (Component* dependend_by_component : component->get_depended_by())
+    {
+        if (dependend_by_component->get_state() == Component_state::Initialized)
+        {
+            continue;
+        }
+        result.insert(dependend_by_component);
+        collect_uninitialized_depended_by(dependend_by_component, result);
+    }
+}
+
 void Components::initialize_component(const bool in_worker_thread)
 {
     ERHE_PROFILE_FUNCTION
@@ -258,13 +293,13 @@ void Components::initialize_component(const bool in_worker_thread)
             : "in main thread"
     );
     component->initialize_component();
+    component->set_state(Component_state::Initialized);
 
     {
         ERHE_PROFILE_DATA("init component", component->name().data(), component->name().length())
 
         const std::lock_guard<std::mutex> lock{m_mutex};
 
-        component->set_ready();
         m_components_to_process.erase(component);
         for (auto component_ : m_components_to_process)
         {
@@ -305,12 +340,17 @@ void Components::launch_component_initialization(const bool parallel)
     m_initialize_component_count_main_thread   = 0;
 
     {
-        ERHE_PROFILE_SCOPE("connect");
+        ERHE_PROFILE_SCOPE("declare_required_components");
 
         for (auto const& component : m_components)
         {
-            component->connect();
-            component->set_connected();
+            component->set_state(Component_state::Declaring_initialization_requirements);
+            component->declare_required_components();
+            component->set_state(Component_state::Initialization_requirements_declared);
+            if (component->get_state() == Component_state::Ready)
+            {
+                continue;
+            }
             if (
                 !parallel ||
                 component->processing_requires_main_thread()
@@ -365,7 +405,7 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
 
         if (m_components_to_process.empty())
         {
-            ERHE_FATAL("No uninitialized component found\n");
+            ERHE_FATAL("No uninitialized component found");
         }
     }
 
@@ -374,19 +414,30 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
         {
             const std::lock_guard<std::mutex> lock{m_mutex};
 
-            const auto i = std::find_if(
-                m_components_to_process.begin(),
-                m_components_to_process.end(),
-                [in_worker_thread](auto& component)
-                {
-                    return component->is_ready_to_initialize(in_worker_thread);
-                }
-            );
-            if (i != m_components_to_process.end())
+            size_t     most_uninitialized_depended_by = 0;
+            Component* selected_component{nullptr};
+
+            for (Component* component : m_components_to_process)
             {
-                auto component = *i;
-                component->set_initializing();
-                return component;
+                if (!component->is_ready_to_initialize(in_worker_thread))
+                {
+                    continue;
+                }
+                std::set<Component*> depended_by;
+                collect_uninitialized_depended_by(component, depended_by);
+                if (
+                    (selected_component == nullptr) ||
+                    (depended_by.size() > most_uninitialized_depended_by)
+                )
+                {
+                    most_uninitialized_depended_by = depended_by.size();
+                    selected_component = component;
+                }
+            }
+            if (selected_component != nullptr)
+            {
+                selected_component->set_state(Component_state::Initializing);
+                return selected_component;
             }
         }
 
@@ -422,7 +473,7 @@ auto Components::get_component_to_deinitialize() -> Component*
         return nullptr;
     }
     auto component = *i;
-    component->set_deinitializing();
+    component->set_state(Component_state::Deinitializing);
     return component;
 }
 
@@ -448,6 +499,9 @@ void Components::wait_component_initialization_complete()
     }
 
     m_execution_queue->wait();
+
+    post_initialize_components();
+
     const std::lock_guard<std::mutex> lock{m_mutex};
     m_is_ready = true;
 }

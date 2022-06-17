@@ -282,7 +282,7 @@ void Vertex_input_state::update()
 
             default:
             {
-                ERHE_FATAL("Bad vertex attrib pointer type\n");
+                ERHE_FATAL("Bad vertex attrib pointer type");
             }
         }
 

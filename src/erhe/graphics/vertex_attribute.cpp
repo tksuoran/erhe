@@ -30,7 +30,7 @@ auto Vertex_attribute::desc(
         case Usage_type::custom:         return "custom";
         default:
         {
-            ERHE_FATAL("Bad vertex attribute usage\n");
+            ERHE_FATAL("Bad vertex attribute usage");
         }
     }
 }

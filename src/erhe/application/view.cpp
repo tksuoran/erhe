@@ -42,11 +42,9 @@ View::~View() noexcept
 {
 }
 
-void View::connect()
+void View::declare_required_components()
 {
-    m_configuration = get    <Configuration>();
     m_imgui_windows = require<Imgui_windows>();
-    m_time          = get    <Time         >();
     m_window        = require<Window       >();
 }
 
@@ -58,6 +56,12 @@ void View::initialize_component()
     double mouse_y;
     m_window->get_context_window()->get_cursor_position(mouse_x, mouse_y);
     m_last_mouse_position = glm::dvec2{mouse_x, mouse_y};
+}
+
+void View::post_initialize()
+{
+    m_configuration = get<Configuration>();
+    m_time          = get<Time         >();
 }
 
 void View::set_client(View_client* view_client)
@@ -407,7 +411,10 @@ void View::inactivate_ready_commands()
 void View::set_mouse_input_sink(Imgui_window* mouse_input_sink)
 {
     m_mouse_input_sink = mouse_input_sink;
-    if (mouse_input_sink != nullptr)
+    if (
+        m_configuration->imgui.enabled &&
+        (mouse_input_sink != nullptr)
+    )
     {
         m_window_position           = glm::vec2{ImGui::GetWindowPos()};
         m_window_size               = glm::vec2{ImGui::GetWindowSize()};

@@ -22,16 +22,13 @@ Map_tool_window::Map_tool_window()
 {
 }
 
-Map_tool_window::~Map_tool_window()
+Map_tool_window::~Map_tool_window() noexcept
 {
 }
 
-void Map_tool_window::connect()
+void Map_tool_window::declare_required_components()
 {
-    m_imgui_renderer = get<erhe::application::Imgui_renderer>();
-    m_map_editor     = get<Map_editor>();
-    m_map_window     = get<Map_window>();
-    m_tile_renderer  = get<Tile_renderer>();
+    require<erhe::application::Imgui_windows>();
 }
 
 void Map_tool_window::initialize_component()
@@ -39,6 +36,14 @@ void Map_tool_window::initialize_component()
     Expects(m_components != nullptr);
     Imgui_window::initialize(*m_components);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+}
+
+void Map_tool_window::post_initialize()
+{
+    m_imgui_renderer = get<erhe::application::Imgui_renderer>();
+    m_map_editor     = get<Map_editor>();
+    m_map_window     = get<Map_window>();
+    m_tile_renderer  = get<Tile_renderer>();
 }
 
 void Map_tool_window::imgui()

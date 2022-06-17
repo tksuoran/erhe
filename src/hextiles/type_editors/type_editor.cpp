@@ -22,15 +22,14 @@ Type_editor::Type_editor()
 {
 }
 
-Type_editor::~Type_editor()
+Type_editor::~Type_editor() noexcept
 {
 }
 
-void Type_editor::connect()
+void Type_editor::post_initialize()
 {
-    require<erhe::application::Imgui_windows>();
     m_imgui_renderer = get<erhe::application::Imgui_renderer>();
-    m_tile_renderer   = get<Tile_renderer>();
+    m_tile_renderer  = get<Tile_renderer>();
     m_map_window     = get<Map_window  >();
     m_rendering      = get<Rendering   >();
     m_tiles          = get<Tiles       >();

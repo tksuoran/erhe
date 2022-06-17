@@ -32,20 +32,21 @@ Layers_window::~Layers_window() noexcept
 {
 }
 
-void Layers_window::connect()
+void Layers_window::declare_required_components()
 {
-    m_scene_root     = get<Scene_root>();
-    m_selection_tool = get<Selection_tool>();
-    m_icon_set       = get<Icon_set>();
-    Expects(m_scene_root     != nullptr);
-    //Expects(m_selection_tool != nullptr);
-    Expects(m_icon_set       != nullptr);
     require<erhe::application::Imgui_windows>();
 }
 
 void Layers_window::initialize_component()
 {
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+}
+
+void Layers_window::post_initialize()
+{
+    m_scene_root     = get<Scene_root>();
+    m_selection_tool = get<Selection_tool>();
+    m_icon_set       = get<Icon_set>();
 }
 
 void Layers_window::imgui()

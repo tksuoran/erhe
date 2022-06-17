@@ -21,18 +21,14 @@ Textures::~Textures() noexcept
 {
 }
 
-void Textures::connect()
+void Textures::declare_required_components()
 {
     m_image_transfer = require<Image_transfer>();
     require<erhe::application::Gl_context_provider>();
-
-    Ensures(m_image_transfer);
 }
 
 void Textures::initialize_component()
 {
-    Expects(m_image_transfer);
-
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()
     };
@@ -49,7 +45,7 @@ auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format
         case erhe::graphics::Image_format::srgb8_alpha8: return gl::Internal_format::srgb8_alpha8;
         default:
         {
-            ERHE_FATAL("Bad image format %04x\n", static_cast<unsigned int>(format));
+            ERHE_FATAL("Bad image format %04x", static_cast<unsigned int>(format));
         }
     }
     // std::unreachable() return gl::Internal_format::rgba8;

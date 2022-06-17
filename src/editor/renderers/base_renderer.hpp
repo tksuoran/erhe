@@ -113,7 +113,7 @@ public:
 
     void next_frame();
 
-    void base_connect(const erhe::components::Component* component);
+    void base_require(erhe::components::Component* component);
 
     // Can discard return value
     auto update_primitive_buffer(

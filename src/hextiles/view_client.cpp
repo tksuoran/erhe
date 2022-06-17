@@ -13,23 +13,27 @@ View_client::View_client()
 {
 }
 
-View_client::~View_client()
+View_client::~View_client() noexcept
 {
 }
 
-void View_client::connect()
+void View_client::declare_required_components()
 {
-    m_imgui_windows          = get<erhe::application::Imgui_windows    >();
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-
-    m_tile_renderer  = get<Tile_renderer                    >();
-    m_map_window    = get<Map_window                      >();
     require<erhe::application::View>();
 }
 
 void View_client::initialize_component()
 {
     get<erhe::application::View>()->set_client(this);
+}
+
+void View_client::post_initialize()
+{
+    m_imgui_windows          = get<erhe::application::Imgui_windows    >();
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
+
+    m_tile_renderer = get<Tile_renderer>();
+    m_map_window    = get<Map_window   >();
 }
 
 void View_client::initial_state()

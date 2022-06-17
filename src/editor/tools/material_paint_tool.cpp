@@ -99,10 +99,8 @@ Material_paint_tool::Material_paint_tool()
 {
 }
 
-void Material_paint_tool::connect()
+void Material_paint_tool::declare_required_components()
 {
-    m_pointer_context = get<Pointer_context>();
-    m_scene_root      = get<Scene_root>();
     require<Tools                  >();
     require<erhe::application::View>();
     require<Operations             >();
@@ -125,6 +123,12 @@ void Material_paint_tool::initialize_component()
     set_active_command(c_command_paint);
 
     get<Operations>()->register_active_tool(this);
+}
+
+void Material_paint_tool::post_initialize()
+{
+    m_pointer_context = get<Pointer_context>();
+    m_scene_root      = get<Scene_root>();
 }
 
 auto Material_paint_tool::description() -> const char*

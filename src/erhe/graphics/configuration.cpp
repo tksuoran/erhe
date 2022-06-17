@@ -1,4 +1,5 @@
 #include "erhe/graphics/configuration.hpp"
+#include "erhe/gl/command_info.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/graphics/log.hpp"
 
@@ -16,6 +17,7 @@ namespace erhe::graphics
 Instance::Info                   Instance::info;
 Instance::Limits                 Instance::limits;
 Instance::Implementation_defined Instance::implementation_defined;
+//std::vector<gl::Extension>       Instance::extensions;
 
 namespace
 {
@@ -52,7 +54,20 @@ void opengl_callback(
     // id:       0x000002
     // severity: GL_DEBUG_SEVERITY_MEDIUM
     // API_ID_RECOMPILE_FRAGMENT_SHADER performance warning has been generated. Fragment shader recompiled due to state change.
-    if (id == 0x020071 || id == 0x020061 || id == 0x000008 || 0x000002)
+    //
+    // Nvidia:
+    // source:   GL_DEBUG_SOURCE_API
+    // type:     GL_DEBUG_TYPE_PERFORMANCE
+    // id:       0x020092
+    // severity: GL_DEBUG_SEVERITY_MEDIUM
+    // Program/shader state performance warning: Fragment shader in program 63 is being recompiled based on GL state.
+    if (
+        (id == 0x020071) ||
+        (id == 0x020061) ||
+        (id == 0x020092) ||
+        (id == 0x000008) ||
+        (id == 0x000002)
+    )
     {
         return;
     }
@@ -161,7 +176,6 @@ auto get_string(gl::String_name string_name) -> std::string
 void Instance::initialize()
 {
     std::vector<std::string> extensions;
-
     const auto gl_vendor      = (get_string)(gl::String_name::vendor);
     const auto gl_renderer    = (get_string)(gl::String_name::renderer);
     const auto gl_version_str = (get_string)(gl::String_name::version);
@@ -178,10 +192,10 @@ void Instance::initialize()
     info.gl_version = (major * 100) + (minor * 10);
 
     gl::get_integer_v(gl::Get_p_name::max_texture_size, &limits.max_texture_size);
-    log_configuration->trace("max texture size: {}", limits.max_texture_size);
+    log_configuration->info("max texture size: {}", limits.max_texture_size);
 
     gl::get_integer_v(gl::Get_p_name::max_vertex_attribs, &limits.max_vertex_attribs);
-    log_configuration->trace("max vertex attribs: {}", limits.max_vertex_attribs);
+    log_configuration->info("max vertex attribs: {}", limits.max_vertex_attribs);
 
     log_configuration->trace("GL Extensions:");
     {
@@ -193,11 +207,9 @@ void Instance::initialize()
             extensions.reserve(num_extensions);
             for (unsigned int i = 0; i < static_cast<unsigned int>(num_extensions); ++i)
             {
-                const auto* extension = gl::get_string_i(gl::String_name::extensions, i);
-                auto e = std::string(reinterpret_cast<const char*>(extension));
-
+                const auto* extension_str = gl::get_string_i(gl::String_name::extensions, i);
+                auto e = std::string(reinterpret_cast<const char*>(extension_str));
                 extensions.push_back(e);
-                log_configuration->trace("    {}", e);
             }
         }
     }
@@ -212,8 +224,10 @@ void Instance::initialize()
         info.glsl_version = (major * 100) + minor;
     }
 
-    log_configuration->trace("glVersion:   {}", info.gl_version);
-    log_configuration->trace("glslVersion: {}", info.glsl_version);
+    log_configuration->info("glVersion:   {}", info.gl_version);
+    log_configuration->info("glslVersion: {}", info.glsl_version);
+
+    gl::command_info_init(info.glsl_version, extensions);
 
     gl::get_integer_v(gl::Get_p_name::max_3d_texture_size,              &limits.max_3d_texture_size);
     gl::get_integer_v(gl::Get_p_name::max_cube_map_texture_size,        &limits.max_cube_map_texture_size);
@@ -242,6 +256,7 @@ void Instance::initialize()
         info.compatibility_profile = true;
         log_configuration->info("compatibility profile");
     }
+
 
     gl::get_integer_v(gl::Get_p_name::max_texture_buffer_size, &limits.max_texture_buffer_size);
 
@@ -304,7 +319,11 @@ void Instance::initialize()
         limits.max_fragment_shader_storage_blocks
     );
 
-    extensions.clear();
+    if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture))
+    {
+        info.use_bindless_texture = true;
+    }
+    log_configuration->info("GL_ARB_bindless_texture supported : {}", info.use_bindless_texture);
 }
 
 } // namespace erhe::graphics

@@ -3,6 +3,7 @@
 
 #include "renderers/programs.hpp"
 
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/renderers/imgui_renderer.hpp"
 #include "erhe/graphics/texture.hpp"
@@ -35,14 +36,21 @@ Icon_set::~Icon_set() noexcept
 {
 }
 
-void Icon_set::connect()
+void Icon_set::declare_required_components()
 {
+    require<erhe::application::Configuration>();
     require<erhe::application::Gl_context_provider>();
     require<Programs>();
 }
 
 void Icon_set::initialize_component()
 {
+    const auto& config = get<erhe::application::Configuration>();
+    if (!config->imgui.enabled)
+    {
+        return;
+    }
+
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()
     };

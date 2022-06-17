@@ -1,4 +1,5 @@
 #include "erhe/application/renderers/text_renderer.hpp"
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/log.hpp"
 
@@ -88,17 +89,25 @@ Text_renderer::~Text_renderer() noexcept
 {
 }
 
-void Text_renderer::connect()
+void Text_renderer::declare_required_components()
 {
+    require<erhe::application::Configuration>();
     require<Gl_context_provider>();
-
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 }
 
 static constexpr std::string_view c_text_renderer_initialize_component{"Text_renderer::initialize_component()"};
+
 void Text_renderer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+
+    const auto& config = get<erhe::application::Configuration>();
+
+    if (!config->text_renderer.enabled)
+    {
+        log_startup->info("Text renderer disabled due to erhe.ini setting");
+        return;
+    }
 
     const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
@@ -260,6 +269,11 @@ void Text_renderer::initialize_component()
     create_frame_resources();
 }
 
+void Text_renderer::post_initialize()
+{
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
+}
+
 void Text_renderer::create_frame_resources()
 {
     ERHE_PROFILE_FUNCTION
@@ -300,6 +314,11 @@ void Text_renderer::print(
 {
     ERHE_PROFILE_FUNCTION
 
+    if (!m_font)
+    {
+        return;
+    }
+
     m_vertex_writer.begin(current_frame_resources().vertex_buffer.target());
 
     const auto                vertex_gpu_data = current_frame_resources().vertex_buffer.map();
@@ -330,7 +349,9 @@ void Text_renderer::print(
 
 auto Text_renderer::measure(const std::string_view text) const -> erhe::ui::Rectangle
 {
-    return m_font->measure(text);
+    return m_font
+        ? m_font->measure(text)
+        : erhe::ui::Rectangle{};
 }
 
 static constexpr std::string_view c_text_renderer_render{"Text_renderer::render()"};

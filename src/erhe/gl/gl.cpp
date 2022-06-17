@@ -65,7 +65,7 @@ auto size_of_type(const gl::Draw_elements_type type) -> size_t
         case gl::Draw_elements_type::unsigned_short: return 2;
         case gl::Draw_elements_type::unsigned_int:   return 4;
         default:
-            ERHE_FATAL("Bad draw elements index type\n");
+            ERHE_FATAL("Bad draw elements index type");
     }
 }
 
@@ -105,7 +105,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
 
         default:
         {
-            ERHE_FATAL("Bad vertex attribute type\n");
+            ERHE_FATAL("Bad vertex attribute type");
         }
     }
 }

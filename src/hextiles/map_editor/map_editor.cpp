@@ -58,15 +58,14 @@ Map_editor::Map_editor()
 {
 }
 
-Map_editor::~Map_editor()
+Map_editor::~Map_editor() noexcept
 {
 }
 
-void Map_editor::connect()
+void Map_editor::declare_required_components()
 {
-    m_map_window   = require<Map_window  >();
-    m_tile_renderer = get    <Tile_renderer>();
-    m_tiles        = get    <Tiles       >();
+    require<erhe::application::View>();
+    m_map_window = require<Map_window>();
 }
 
 void Map_editor::initialize_component()
@@ -84,6 +83,12 @@ void Map_editor::initialize_component()
 
     view->bind_command_to_mouse_motion(&m_map_hover_command);
     view->bind_command_to_mouse_drag  (&m_map_primary_brush_command, erhe::toolkit::Mouse_button_left);
+}
+
+void Map_editor::post_initialize()
+{
+    m_tile_renderer = get<Tile_renderer>();
+    m_tiles         = get<Tiles        >();
 }
 
 auto Map_editor::get_map() -> std::shared_ptr<Map>

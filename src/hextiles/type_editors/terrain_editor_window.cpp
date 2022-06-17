@@ -16,8 +16,13 @@ Terrain_editor_window::Terrain_editor_window()
 {
 }
 
-Terrain_editor_window::~Terrain_editor_window()
+Terrain_editor_window::~Terrain_editor_window() noexcept
 {
+}
+
+void Terrain_editor_window::declare_required_components()
+{
+    require<erhe::application::Imgui_windows>();
 }
 
 void Terrain_editor_window::initialize_component()

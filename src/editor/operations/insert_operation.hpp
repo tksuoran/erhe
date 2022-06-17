@@ -82,7 +82,7 @@ public:
             case Mode::remove: return Mode::insert;
             default:
             {
-                ERHE_FATAL("Bad Context::Mode %04x\n", static_cast<unsigned int>(mode));
+                ERHE_FATAL("Bad Context::Mode %04x", static_cast<unsigned int>(mode));
                 // unreachable return Mode::insert;
             }
         }

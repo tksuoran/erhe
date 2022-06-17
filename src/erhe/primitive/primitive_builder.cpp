@@ -624,7 +624,7 @@ void Build_context::build_vertex_normal()
 
             default:
             {
-                ERHE_FATAL("bad normal style\n");
+                ERHE_FATAL("bad normal style");
             }
         }
     }

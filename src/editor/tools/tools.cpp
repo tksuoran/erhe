@@ -15,13 +15,9 @@ Tools::~Tools() noexcept
 {
 }
 
-void Tools::connect()
+void Tools::post_initialize()
 {
-    m_imgui_windows = require<erhe::application::Imgui_windows>();
-}
-
-void Tools::initialize_component()
-{
+    m_imgui_windows = get<erhe::application::Imgui_windows>();
 }
 
 void Tools::register_tool(Tool* tool)

@@ -104,6 +104,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<erhe::application::Performance_window    >());
         m_components.add(make_shared<erhe::application::Pipelines             >());
         m_components.add(make_shared<erhe::application::Shader_monitor        >());
+        //m_components.add(make_shared<erhe::application::Texture_unit_cache    >());
         m_components.add(make_shared<erhe::application::Text_renderer         >());
         m_components.add(make_shared<erhe::application::Line_renderer_set     >());
 
@@ -154,7 +155,6 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Headset_renderer>());
         m_components.add(make_shared<Theremin        >());
 #endif
-
     }
 
     if (!window->create_gl_window())
@@ -206,7 +206,11 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     if (m_components.get<editor::Trs_tool              >() && !config.trs                ) m_components.get<editor::Trs_tool              >()->hide();
     if (m_components.get<editor::Tool_properties_window>() && !config.tool_properties    ) m_components.get<editor::Tool_properties_window>()->hide();
     if (m_components.get<editor::Viewport_config       >() && !config.viewport_config    ) m_components.get<editor::Viewport_config       >()->hide();
-    if (m_components.get<editor::Scene_root>()) m_components.get<editor::Scene_root>()->physics_world().enable_physics_updates();
+
+    if (m_components.get<editor::Scene_root>() && configuration->physics.enabled)
+    {
+        m_components.get<editor::Scene_root>()->physics_world().enable_physics_updates();
+    }
 
     opengl_state_tracker->on_thread_enter();
 

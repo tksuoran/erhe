@@ -20,19 +20,23 @@ View_client::~View_client() noexcept
 
 }
 
-void View_client::connect()
+void View_client::declare_required_components()
 {
-    m_imgui_windows    = get<erhe::application::Imgui_windows>();
-    m_editor_rendering = get<Editor_rendering                >();
-    m_pointer_context  = get<Pointer_context                 >();
-    m_scene_root       = get<Scene_root                      >();
-    m_viewport_windows = get<Viewport_windows                >();
     require<erhe::application::View>();
 }
 
 void View_client::initialize_component()
 {
     get<erhe::application::View>()->set_client(this);
+}
+
+void View_client::post_initialize()
+{
+    m_imgui_windows    = get<erhe::application::Imgui_windows>();
+    m_editor_rendering = get<Editor_rendering                >();
+    m_pointer_context  = get<Pointer_context                 >();
+    m_scene_root       = get<Scene_root                      >();
+    m_viewport_windows = get<Viewport_windows                >();
 }
 
 void View_client::initial_state()

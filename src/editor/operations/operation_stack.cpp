@@ -56,7 +56,7 @@ Operation_stack::~Operation_stack() noexcept
 {
 }
 
-void Operation_stack::connect()
+void Operation_stack::declare_required_components()
 {
     require<erhe::application::View         >();
     require<erhe::application::Imgui_windows>();

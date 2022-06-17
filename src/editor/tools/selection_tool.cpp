@@ -246,13 +246,8 @@ Selection_tool::~Selection_tool() noexcept
 {
 }
 
-void Selection_tool::connect()
+void Selection_tool::declare_required_components()
 {
-    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_pointer_context   = get<Pointer_context  >();
-    m_scene_root        = get<Scene_root       >();
-    m_viewport_config   = get<Viewport_config  >();
-
     require<Tools>();
     require<erhe::application::View >();
 }
@@ -267,6 +262,14 @@ void Selection_tool::initialize_component()
     view->register_command           (&m_delete_command);
     view->bind_command_to_mouse_click(&m_select_command, erhe::toolkit::Mouse_button_left);
     view->bind_command_to_key        (&m_delete_command, erhe::toolkit::Key_delete, true);
+}
+
+void Selection_tool::post_initialize()
+{
+    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
+    m_pointer_context   = get<Pointer_context  >();
+    m_scene_root        = get<Scene_root       >();
+    m_viewport_config   = get<Viewport_config  >();
 }
 
 auto Selection_tool::description() -> const char*

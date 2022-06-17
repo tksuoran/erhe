@@ -22,15 +22,19 @@ Tool_properties_window::~Tool_properties_window() noexcept
 {
 }
 
-void Tool_properties_window::connect()
+void Tool_properties_window::declare_required_components()
 {
-    m_operations = get<Operations>();
     require<erhe::application::Imgui_windows>();
 }
 
 void Tool_properties_window::initialize_component()
 {
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+}
+
+void Tool_properties_window::post_initialize()
+{
+    m_operations = get<Operations>();
 }
 
 void Tool_properties_window::imgui()

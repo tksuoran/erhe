@@ -95,15 +95,11 @@ Brushes::~Brushes() noexcept
 {
 }
 
-void Brushes::connect()
+void Brushes::declare_required_components()
 {
-    m_grid_tool       = get<Grid_tool>();
-    m_materials       = get<Materials>();
-    m_operation_stack = get<Operation_stack>();
-    m_pointer_context = get<Pointer_context>();
-    m_scene_root      = require<Scene_root>();
-    m_selection_tool  = get<Selection_tool>();
+    m_scene_root = require<Scene_root>();
     require<erhe::application::Imgui_windows>();
+    require<erhe::application::View         >();
     require<Operations                      >();
     require<Tools                           >();
 }
@@ -122,6 +118,15 @@ void Brushes::initialize_component()
     view->bind_command_to_mouse_click (&m_insert_command, erhe::toolkit::Mouse_button_right);
 
     get<Operations>()->register_active_tool(this);
+}
+
+void Brushes::post_initialize()
+{
+    m_grid_tool       = get<Grid_tool>();
+    m_materials       = get<Materials>();
+    m_operation_stack = get<Operation_stack>();
+    m_pointer_context = get<Pointer_context>();
+    m_selection_tool  = get<Selection_tool>();
 }
 
 auto Brushes::allocate_brush(

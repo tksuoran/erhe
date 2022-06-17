@@ -43,10 +43,10 @@ Base_renderer::~Base_renderer() noexcept
 {
 }
 
-void Base_renderer::base_connect(const erhe::components::Component* component)
+void Base_renderer::base_require(erhe::components::Component* component)
 {
-    m_programs          = component->get<Programs>();
-    m_program_interface = component->get<Program_interface>();
+    m_programs          = component->require<Programs>();
+    m_program_interface = component->require<Program_interface>();
 }
 
 void Base_renderer::create_frame_resources(
@@ -116,7 +116,7 @@ auto Base_renderer::update_primitive_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
-    //log_render->trace("{}(meshes.size() = {})", __func__, meshes.size());
+    SPDLOG_LOGGER_TRACE(log_render, "meshes.size() = {}", meshes.size());
 
     m_primitive_writer.begin(current_frame_resources().primitive_buffer.target());
     const auto&  shader_resources   = *m_program_interface->shader_resources.get();
@@ -212,7 +212,7 @@ auto Base_renderer::update_light_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
-    log_render->trace("{}(lights.size() = {})", __func__, lights.size());
+    SPDLOG_LOGGER_TRACE(log_render, "lights.size() = {}", lights.size());
 
     const auto&    shader_resources = *m_program_interface->shader_resources.get();
     const size_t   entry_size       = shader_resources.light_struct.size_bytes();

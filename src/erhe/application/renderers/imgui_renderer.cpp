@@ -1,6 +1,8 @@
 #include "erhe/application/renderers/imgui_renderer.hpp"
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/log.hpp"
+#include "erhe/application/window.hpp"
 
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
@@ -32,7 +34,11 @@ constexpr std::string_view c_vertex_shader_source =
     "\n"
     "out      vec4  v_color;\n"
     "out      vec2  v_texcoord;\n"
+    "#if defined(ERHE_BINDLESS_TEXTURE)\n"
     "out flat uvec2 v_texture;\n"
+    "#else\n"
+    "out flat uint v_texture_id;\n"
+    "#endif\n"
     "\n"
     "out gl_PerVertex {\n"
     "    vec4  gl_Position;\n"
@@ -72,19 +78,31 @@ constexpr std::string_view c_vertex_shader_source =
     "    gl_ClipDistance[2] = clip_rect[2] - a_position.x;\n"
     "    gl_ClipDistance[3] = clip_rect[3] - a_position.y;\n"
     "    v_texcoord         = a_texcoord;\n"
-    "    v_texture          = draw.draw_parameters[gl_DrawID].u_texture;"
+    "#if defined(ERHE_BINDLESS_TEXTURE)\n"
+    "    v_texture          = draw.draw_parameters[gl_DrawID].u_texture;\n"
+    "#else\n"
+    "    v_texture_id       = draw.draw_parameters[gl_DrawID].u_texture_indices[0];\n"
+    "#endif\n"
     "    v_color            = vec4(srgb_to_linear(a_color.rgb), a_color.a);\n"
     "}\n";
 
 const std::string_view c_fragment_shader_source =
     "in      vec4  v_color;\n"
     "in      vec2  v_texcoord;\n"
+    "#if defined(ERHE_BINDLESS_TEXTURE)\n"
     "in flat uvec2 v_texture;\n"
+    "#else\n"
+    "in flat uint v_texture_id;\n"
+    "#endif\n"
     "\n"
     "void main()\n"
     "{\n"
+    "#if defined(ERHE_BINDLESS_TEXTURE)\n"
     "    sampler2D s_texture = sampler2D(v_texture);\n"
     "    vec4 texture_sample = texture(s_texture, v_texcoord.st);\n"
+    "#else\n"
+    "    vec4 texture_sample = texture(s_textures[v_texture_id], v_texcoord.st);\n"
+    "#endif\n"
     "    out_color.rgb       = v_color.rgb * texture_sample.rgb * v_color.a;\n"
     "    out_color.a         = texture_sample.a * v_color.a;\n"
     "}\n";
@@ -155,14 +173,21 @@ Imgui_renderer::Imgui_renderer()
 {
 }
 
-void Imgui_renderer::connect()
+void Imgui_renderer::declare_required_components()
 {
+    require<erhe::application::Configuration>();
     require<erhe::graphics::OpenGL_state_tracker>();
     require<Gl_context_provider>();
 }
 
 void Imgui_renderer::initialize_component()
 {
+    const auto& config = get<erhe::application::Configuration>();
+    if (!config->imgui.enabled)
+    {
+        return;
+    }
+
     const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
@@ -254,9 +279,16 @@ void Imgui_renderer::create_attribute_mappings_and_vertex_format()
 void Imgui_renderer::create_blocks()
 {
     // Draw parameter struct
-    m_u_clip_rect_offset = m_draw_parameter_struct.add_vec4 ("u_clip_rect")->offset_in_parent();
-    m_u_texture_offset   = m_draw_parameter_struct.add_uvec2("u_texture"  )->offset_in_parent();
-    m_u_extra_offset     = m_draw_parameter_struct.add_uvec2("u_extra"    )->offset_in_parent();
+    m_u_clip_rect_offset = m_draw_parameter_struct.add_vec4("u_clip_rect")->offset_in_parent();
+    if (erhe::graphics::Instance::info.use_bindless_texture)
+    {
+        m_u_texture_offset = m_draw_parameter_struct.add_uvec2("u_texture")->offset_in_parent();
+        m_u_extra_offset   = m_draw_parameter_struct.add_uvec2("u_extra"  )->offset_in_parent();
+    }
+    else
+    {
+        m_u_texture_indices_offset = m_draw_parameter_struct.add_uint("u_texture_indices", 4)->offset_in_parent();
+    }
 
     // Create uniform block for per draw data
     m_projection_block = make_unique<erhe::graphics::Shader_resource>(
@@ -292,7 +324,7 @@ void Imgui_renderer::create_shader_stages()
     erhe::graphics::Shader_stages::Create_info create_info{
         .name                      = "ImGui Renderer",
         .vertex_attribute_mappings = &m_attribute_mappings,
-        .fragment_outputs          = &m_fragment_outputs
+        .fragment_outputs          = &m_fragment_outputs,
     };
     create_info.add_interface_block(m_projection_block.get());
     create_info.add_interface_block(m_draw_parameter_block.get());
@@ -301,6 +333,21 @@ void Imgui_renderer::create_shader_stages()
     create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   c_vertex_shader_source);
     create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, c_fragment_shader_source);
 
+    if (erhe::graphics::Instance::info.use_bindless_texture)
+    {
+        create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
+    }
+    else
+    {
+        m_default_uniform_block.add_sampler(
+            "s_textures",
+            gl::Uniform_type::sampler_2d,
+            0,
+            s_texture_unit_count
+        );
+        create_info.default_uniform_block = &m_default_uniform_block;
+    }
+
     erhe::graphics::Shader_stages::Prototype prototype{create_info};
     ERHE_VERIFY(prototype.is_valid());
     m_shader_stages = make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
@@ -308,6 +355,8 @@ void Imgui_renderer::create_shader_stages()
 
 void Imgui_renderer::create_samplers()
 {
+    m_dummy_texture = erhe::graphics::create_dummy_texture();
+
     m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
         gl::Texture_min_filter::nearest,
         gl::Texture_mag_filter::nearest
@@ -381,7 +430,7 @@ void Imgui_renderer::create_font_texture()
         create_info.height
     );
 
-    // Store our identifier
+    // Store our handle
     const uint64_t handle = get_handle(
         *m_font_texture.get(),
         *m_linear_sampler.get()
@@ -556,8 +605,8 @@ void Imgui_renderer::use(
 {
     ERHE_PROFILE_FUNCTION
 
-    m_used_textures.push_back(texture);
-    m_used_texture_handles.push_back(handle);
+    m_used_textures.insert(texture);
+    m_used_texture_handles.insert(handle);
 }
 
 void Imgui_renderer::render_draw_data()
@@ -570,8 +619,8 @@ void Imgui_renderer::render_draw_data()
             *m_font_texture.get(),
             *m_linear_sampler.get()
         );
-        m_used_texture_handles.push_back(handle);
-    };
+        use(m_font_texture, handle);
+    }
 
     const ImDrawData* draw_data = ImGui::GetDrawData();
     if (draw_data == nullptr)
@@ -668,7 +717,7 @@ void Imgui_renderer::render_draw_data()
             {
                 if (pcmd->UserCallback == ImDrawCallback_ResetRenderState)
                 {
-                    ERHE_FATAL("not implemented\n");
+                    ERHE_FATAL("not implemented");
                 }
                 else
                 {
@@ -698,26 +747,49 @@ void Imgui_renderer::render_draw_data()
                     draw_parameter_byte_offset += s_vec4_size;
 
                     // Write texture indices
-                    //const auto texture_unit = m_texture_unit_cache.allocate_texture_unit(pcmd->TextureId);
-                    //ERHE_VERIFY(texture_unit.has_value());
-                    const uint64_t handle = pcmd->TextureId;
-                    const uint32_t texture_handle[2] =
+                    if (erhe::graphics::Instance::info.use_bindless_texture)
                     {
-                        static_cast<uint32_t>((handle & 0xffffffffu)),
-                        static_cast<uint32_t>(handle >> 32u)
-                    };
-                    const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
-                    erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, texture_handle_cpu_data);
-                    draw_parameter_byte_offset += s_uvec2_size;
+                        //const auto texture_unit = m_texture_unit_cache.allocate_texture_unit(pcmd->TextureId);
+                        //ERHE_VERIFY(texture_unit.has_value());
+                        const uint64_t handle = pcmd->TextureId;
+                        const uint32_t texture_handle[2] =
+                        {
+                            static_cast<uint32_t>((handle & 0xffffffffu)),
+                            static_cast<uint32_t>(handle >> 32u)
+                        };
+                        const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
+                        erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, texture_handle_cpu_data);
+                        draw_parameter_byte_offset += s_uvec2_size;
 
-                    const uint32_t extra[2] =
+                        const uint32_t extra[2] =
+                        {
+                            0u,
+                            0u
+                        };
+                        const gsl::span<const uint32_t> extra_cpu_data{&extra[0], 2};
+                        erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, extra_cpu_data);
+                        draw_parameter_byte_offset += s_uvec2_size;
+                    }
+                    else
                     {
-                        0u,
-                        0u
-                    };
-                    const gsl::span<const uint32_t> extra_cpu_data{&extra[0], 2};
-                    erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, extra_cpu_data);
-                    draw_parameter_byte_offset += s_uvec2_size;
+                        const uint64_t handle = pcmd->TextureId;
+                        const auto texture_unit_opt = erhe::graphics::s_texture_unit_cache.allocate_texture_unit(handle);
+                        if (texture_unit_opt.has_value())
+                        {
+                            const auto texture_unit = texture_unit_opt.value();
+                            const uint32_t texture_indices[4] = { static_cast<uint32_t>(texture_unit), 0, 0, 0 };
+                            const gsl::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
+                            erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, texture_indices_cpu_data);
+                            draw_parameter_byte_offset += s_uivec4_size;
+                        }
+                        else
+                        {
+                            const uint32_t texture_indices[4] = { 0, 0, 0, 0 };
+                            const gsl::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
+                            erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, texture_indices_cpu_data);
+                            draw_parameter_byte_offset += s_uivec4_size;
+                        }
+                    }
 
                     const auto draw_command = gl::Draw_elements_indirect_command{
                         pcmd->ElemCount,
@@ -758,9 +830,23 @@ void Imgui_renderer::render_draw_data()
         // TODO viewport states is not currently in pipeline
         gl::viewport(0, 0, static_cast<GLsizei>(fb_width), static_cast<GLsizei>(fb_height));
 
-        for (const auto handle : m_used_texture_handles)
+        if (erhe::graphics::Instance::info.use_bindless_texture)
         {
-            gl::make_texture_handle_resident_arb(handle);
+            for (const auto handle : m_used_texture_handles)
+            {
+                gl::make_texture_handle_resident_arb(handle);
+            }
+        }
+        else
+        {
+            const auto texture_unit_use_count = erhe::graphics::s_texture_unit_cache.bind();
+            for (size_t i = texture_unit_use_count; i < s_texture_unit_count; ++i)
+            {
+                gl::bind_texture_unit(static_cast<GLuint>(i), m_dummy_texture->gl_name());
+                gl::bind_sampler     (static_cast<GLuint>(i), m_nearest_sampler->gl_name());
+            }
+
+            //m_texture_unit_cache->bind();
         }
 
         ERHE_VERIFY(draw_parameter_byte_offset > 0);
@@ -794,9 +880,12 @@ void Imgui_renderer::render_draw_data()
             static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
         );
 
-        for (const auto handle : m_used_texture_handles)
+        if (erhe::graphics::Instance::info.use_bindless_texture)
         {
-            gl::make_texture_handle_non_resident_arb(handle);
+            for (const auto handle : m_used_texture_handles)
+            {
+                gl::make_texture_handle_non_resident_arb(handle);
+            }
         }
 
         next_frame();

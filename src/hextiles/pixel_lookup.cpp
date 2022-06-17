@@ -104,12 +104,11 @@ Pixel_lookup::Pixel_lookup()
             }
             if (!any_set)
             {
-                log_pixel_lookup->error("lut: nothing set for tile {}, {}", tx, ty);
+                log_pixel_lookup->warn("lut: nothing set for tile {}, {}", tx, ty);
             }
         }
     }
 
-    log_pixel_lookup->info("--- lut:");
     std::stringstream ss;
     const char* glyphs = ":.*#+";
     size_t used_glyphs{0};
@@ -156,7 +155,7 @@ Pixel_lookup::Pixel_lookup()
         ss << fmt::format("{} = {}, {}\n", i.second, i.first.x, i.first.y);
     }
     ss << "---";
-    log_pixel_lookup->info("{}", ss.str());
+    log_pixel_lookup->info("--- lut:\n{}", ss.str());
 }
 
 template <typename T> int mod(T a, T b)
@@ -195,7 +194,7 @@ auto Pixel_lookup::pixel_to_tile(Pixel_coordinate pixel_coordinate) const -> Til
     const int  lut_index = lx + ly * lut_width;
     const Tile_coordinate tile_offset = m_lut[lut_index];
     return Tile_coordinate{
-        tx * 2,
+        static_cast<coordinate_t>(tx * 2),
         ty
     } + tile_offset;
 }

@@ -111,7 +111,6 @@ public:
     Shader_resource(Shader_resource&& other) = default;
 
     [[nodiscard]] auto is_array                    () const -> bool;
-    [[nodiscard]] auto dedicated_texture_unit_index() const -> nonstd::optional<int>;
     [[nodiscard]] auto type                        () const -> Type;
     [[nodiscard]] auto name                        () const -> const std::string&;
     [[nodiscard]] auto array_size                  () const -> nonstd::optional<size_t>;
@@ -146,8 +145,8 @@ public:
     auto add_sampler(
         const std::string_view         name,
         const gl::Uniform_type         sampler_type,
-        const nonstd::optional<size_t> array_size = {},
-        const nonstd::optional<int>    dedicated_texture_unit = {}
+        const nonstd::optional<int>    dedicated_texture_unit = {},
+        const nonstd::optional<size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_float(
@@ -220,25 +219,24 @@ private:
 
     // Basic type declaration
     //Precision              m_precision{Precision::highp};
-    gl::Uniform_type   m_basic_type{gl::Uniform_type::bool_};
+    gl::Uniform_type  m_basic_type{gl::Uniform_type::bool_};
 
     // Uniforms in default uniform block - TODO plus some others?
     // For default uniform block, this is next available location (initialized to 0)
-    int                   m_location{-1};
+    int               m_location{-1};
 
     // Struct instance
-    Shader_resource*      m_struct_type{nullptr};
-
-    // Samplers, in default uniform block
-    nonstd::optional<int> m_dedicated_texture_unit_index;
+    Shader_resource*  m_struct_type{nullptr};
 
     // Aggregate type declation
-    Member_collection     m_members;
-    size_t                m_offset{0}; // where next member will be placed
+    Member_collection m_members;
+    size_t            m_offset{0}; // where next member will be placed
 
     // Interface blocks (aggregate type declaration)
-    std::string           m_block_name;
-    int                   m_binding_point{-1};
+    std::string       m_block_name;
+
+    // Blocks and samplers in default uniform block
+    int               m_binding_point{-1};
 
     // Only used for uniforms in program
 };

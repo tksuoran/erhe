@@ -34,7 +34,7 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect() override;
+    void post_initialize() override;
 
     // Public API
     auto terrain_image          (terrain_tile_t terrain_tile, const int scale) -> bool;

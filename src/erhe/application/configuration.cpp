@@ -22,6 +22,8 @@ auto str(const bool value) -> const char*
 
 auto to_lower(std::string data) -> std::string
 {
+    data = data.substr(0, data.find(' '));
+    data = data.substr(0, data.find('\t'));
     std::transform(
         data.begin(),
         data.end(),
@@ -91,7 +93,7 @@ void ini_get(
 }
 
 Configuration::Configuration(int argc, char** argv)
-    : erhe::components::Component      {c_label}
+    : erhe::components::Component{c_label}
 {
     mINI::INIFile file("erhe.ini");
     mINI::INIStructure ini;
@@ -115,8 +117,13 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("graphics"))
         {
             const auto& section = ini["graphics"];
-            ini_get(section, "reverse_depth",   graphics.reverse_depth);
-            ini_get(section, "simpler_shaders", graphics.simpler_shaders);
+            ini_get(section, "low_hdr",           graphics.low_hdr);
+            ini_get(section, "reverse_depth",     graphics.reverse_depth);
+            ini_get(section, "simpler_shaders",   graphics.simpler_shaders);
+            ini_get(section, "post_processing",   graphics.post_processing);
+            ini_get(section, "use_time_query",    graphics.use_time_query);
+            ini_get(section, "force_no_bindless", graphics.force_no_bindless);
+            ini_get(section, "msaa_sample_count", graphics.msaa_sample_count);
         }
         if (ini.has("mesh_memory"))
         {
@@ -127,18 +134,23 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("window"))
         {
             const auto& section = ini["window"];
-            ini_get(section, "fullscreen",        window.fullscreen);
-            ini_get(section, "width",             window.width);
-            ini_get(section, "height",            window.height);
-            ini_get(section, "msaa_sample_count", window.msaa_sample_count);
+            ini_get(section, "fullscreen", window.fullscreen);
+            ini_get(section, "width",      window.width);
+            ini_get(section, "height",     window.height);
         }
 
         if (ini.has("shadow_renderer"))
         {
-            const auto& section = ini["graphics`"];
+            const auto& section = ini["shadow_renderer"];
             ini_get(section, "enabled",                    shadow_renderer.enabled);
             ini_get(section, "shadow_map_resolution",      shadow_renderer.shadow_map_resolution);
             ini_get(section, "shadow_map_max_light_count", shadow_renderer.shadow_map_max_light_count);
+        }
+
+        if (ini.has("text_renderer"))
+        {
+            const auto& section = ini["text_renderer"];
+            ini_get(section, "enabled", text_renderer.enabled);
         }
 
         if (ini.has("forward_renderer"))
@@ -189,12 +201,12 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("scene"))
         {
             const auto& section = ini["scene"];
-
             ini_get(section, "directional_light_count", scene.directional_light_count);
             ini_get(section, "spot_light_count",        scene.spot_light_count);
             ini_get(section, "floor_size",              scene.floor_size);
             ini_get(section, "instance_count",          scene.instance_count);
             ini_get(section, "instance_gap",            scene.instance_gap);
+            ini_get(section, "detail",                  scene.detail);
             ini_get(section, "gltf_files",              scene.gltf_files);
             ini_get(section, "obj_files",               scene.obj_files);
             ini_get(section, "floor",                   scene.floor);
@@ -204,6 +216,15 @@ Configuration::Configuration(int argc, char** argv)
             ini_get(section, "cone",                    scene.cone);
             ini_get(section, "platonic_solids",         scene.platonic_solids);
             ini_get(section, "johnson_solids",          scene.johnson_solids);
+        }
+
+        if (ini.has("viewport"))
+        {
+            const auto& section = ini["viewport"];
+            ini_get(section, "polygon_fill",      viewport.polygon_fill);
+            ini_get(section, "edge_lines",        viewport.edge_lines);
+            ini_get(section, "corner_points",     viewport.corner_points);
+            ini_get(section, "polygon_centroids", viewport.polygon_centroids);
         }
     }
 

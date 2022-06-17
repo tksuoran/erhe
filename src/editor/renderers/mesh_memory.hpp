@@ -56,9 +56,9 @@ public:
     ~Mesh_memory() noexcept override;
 
     // Implements Component
-    auto get_type_hash       () const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    auto get_type_hash() const -> uint32_t override { return hash; }
+    void declare_required_components() override;
+    void initialize_component       () override;
 
     // Public API
     [[nodiscard]] auto gl_vertex_format() const -> erhe::graphics::Vertex_format&;

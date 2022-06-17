@@ -93,7 +93,7 @@ Scene_root::~Scene_root() noexcept
 {
 }
 
-void Scene_root::connect()
+void Scene_root::declare_required_components()
 {
     require<erhe::application::Configuration>();
     require<erhe::application::View>();

@@ -60,10 +60,10 @@
             "externalConsole": false
         },
         {
-            "name": "editor Ninja (Linux) Clang 13 Embree neon GDB",
+            "name": "editor Ninja (Linux) Clang 14 GDB",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/out/build/Linux_Debug_Ninja_Clang_13_Embree_neon/src/editor/editor",
+            "program": "${workspaceFolder}/out/build/Linux_Debug_Ninja_Clang_14/src/editor/editor",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/src/editor",

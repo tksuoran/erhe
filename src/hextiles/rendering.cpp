@@ -13,11 +13,11 @@ Rendering::Rendering()
 {
 }
 
-Rendering::~Rendering()
+Rendering::~Rendering() noexcept
 {
 }
 
-void Rendering::connect()
+void Rendering::post_initialize()
 {
     m_imgui_renderer = get<erhe::application::Imgui_renderer>();
     m_tile_renderer  = get<Tile_renderer>();

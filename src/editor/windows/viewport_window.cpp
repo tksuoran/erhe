@@ -33,9 +33,6 @@
 namespace editor
 {
 
-namespace {
-    const int s_sample_count = 4;
-}
 
 using erhe::graphics::Vertex_input_state;
 using erhe::graphics::Input_assembly_state;
@@ -65,20 +62,17 @@ Viewport_windows::~Viewport_windows() noexcept
 {
 }
 
-void Viewport_windows::connect()
+void Viewport_windows::declare_required_components()
 {
     m_configuration          = require<erhe::application::Configuration    >();
-    m_editor_rendering       = get    <Editor_rendering                    >();
     m_editor_view            = require<erhe::application::View             >();
-    m_pipeline_state_tracker = get    <erhe::graphics::OpenGL_state_tracker>();
-    m_pointer_context        = get    <Pointer_context >();
     m_scene_root             = require<Scene_root      >();
-    m_viewport_config        = get    <Viewport_config >();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     m_headset_renderer       = require<Headset_renderer>();
 #endif
 
     // Need cameras to be setup
+    require<erhe::application::Imgui_windows>();
     require<Scene_builder>();
 }
 
@@ -103,7 +97,14 @@ void Viewport_windows::initialize_component()
 #endif
     m_editor_view->register_command   (&m_open_new_viewport_window_command);
     m_editor_view->bind_command_to_key(&m_open_new_viewport_window_command, erhe::toolkit::Key_f1, true);
+}
 
+void Viewport_windows::post_initialize()
+{
+    m_editor_rendering       = get<Editor_rendering                    >();
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
+    m_pointer_context        = get<Pointer_context >();
+    m_viewport_config        = get<Viewport_config >();
 }
 
 auto Viewport_windows::create_window(
@@ -177,6 +178,12 @@ void Viewport_windows::update_viewport_windows()
 
     if (any_window)
     {
+        // Hack - check what is correct way to handle this
+        if (!m_configuration->imgui.enabled)
+        {
+            m_editor_view->set_mouse_input_sink(m_hover_window);
+        }
+
         m_pointer_context->update_viewport(m_hover_window);
     }
     else
@@ -211,7 +218,6 @@ void Viewport_windows::render()
 
         m_editor_rendering->bind_default_framebuffer();
         m_editor_rendering->clear();
-
     }
 
     for (const auto& window : m_windows)
@@ -292,11 +298,19 @@ void Viewport_window::render(
     }
 #endif
 
-    if (m_framebuffer_multisample)
+    if (
+        m_configuration->imgui.enabled ||
+        m_configuration->graphics.post_processing
+    )
     {
-        if (!bind_multisample_framebuffer())
+        if (!is_framebuffer_ready())
         {
-            gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+            update_framebuffer();
+        }
+        bind_framebuffer();
+        if (!is_framebuffer_ready())
+        {
+            return;
         }
 
         static constexpr std::string_view c_clear{"clear"};
@@ -306,13 +320,25 @@ void Viewport_window::render(
     else
     {
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+
+        // Framebuffer has been cleared elsewhere
     }
 
     editor_rendering.render_viewport(context, m_is_hovered);
 
-    if (m_framebuffer_multisample)
+    if (
+        m_configuration->graphics.post_processing ||
+        m_configuration->imgui.enabled
+    )
     {
-        multisample_resolve();
+        resolve();
+    }
+
+    if (should_post_process())
+    {
+        m_post_processing->post_process(
+            m_color_texture_resolved_for_present.get()
+        );
     }
 }
 
@@ -352,6 +378,21 @@ void Viewport_window::on_end()
     ImGui::PopStyleVar();
 }
 
+auto Viewport_window::should_post_process() const -> bool
+{
+    return
+        m_configuration->graphics.post_processing &&
+        m_enable_post_processing &&
+        !m_visualize_normal &&
+        !m_visualize_tangent &&
+        !m_visualize_bitangent &&
+        m_post_processing &&
+        (
+            !m_configuration->imgui.enabled ||
+            m_viewport_config->post_processing_enable
+        );
+}
+
 void Viewport_window::imgui()
 {
     ERHE_PROFILE_FUNCTION
@@ -368,22 +409,6 @@ void Viewport_window::imgui()
     ImGui::Checkbox("Post Processing", &m_enable_post_processing);
 
     //if (ImGui::Button("Post Process"))
-    const bool gate_post_processing =
-        m_enable_post_processing &&
-        !m_visualize_normal &&
-        !m_visualize_tangent &&
-        !m_visualize_bitangent &&
-        m_post_processing &&
-        m_viewport_config->post_processing_enable;
-    {
-        if (gate_post_processing)
-        {
-            m_post_processing->post_process(
-                m_color_texture_resolved_for_present.get()
-            );
-        }
-    }
-
     const auto size = ImGui::GetContentRegionAvail();
 
     if (
@@ -394,7 +419,7 @@ void Viewport_window::imgui()
     )
     {
         const bool use_post_processing_texture =
-            gate_post_processing &&
+            should_post_process() &&
             m_post_processing->get_output();
         const auto& texture = use_post_processing_texture
             ? m_post_processing->get_output()
@@ -471,22 +496,24 @@ auto Viewport_window::pointer_context() const -> const std::shared_ptr<Pointer_c
 
 auto Viewport_window::is_framebuffer_ready() const -> bool
 {
-    return m_framebuffer_multisample.get() != nullptr;
+    return
+        (
+            (m_configuration->graphics.msaa_sample_count > 0) &&
+            m_framebuffer_multisample
+        ) ||
+        m_framebuffer_resolved;
 }
 
-auto Viewport_window::bind_multisample_framebuffer() -> bool
+void Viewport_window::bind_framebuffer()
 {
-    if (!m_framebuffer_multisample)
-    {
-        return false;
-    }
+    int draw_fbo_name = (m_configuration->graphics.msaa_sample_count > 0)
+        ? m_framebuffer_multisample->gl_name()
+        : m_framebuffer_resolved->gl_name();
 
-    gl::bind_framebuffer(
-        gl::Framebuffer_target::draw_framebuffer,
-        m_framebuffer_multisample->gl_name()
-    );
+    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, draw_fbo_name);
+#if !defined(NDEBUG)
     const auto status = gl::check_named_framebuffer_status(
-        m_framebuffer_multisample->gl_name(),
+        draw_fbo_name,
         gl::Framebuffer_target::draw_framebuffer
     );
     if (status != gl::Framebuffer_status::framebuffer_complete)
@@ -494,73 +521,75 @@ auto Viewport_window::bind_multisample_framebuffer() -> bool
         log_framebuffer->error("draw framebuffer status = {}", c_str(status));
     }
     ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
-
-    return true;
+#endif
 }
 
 static constexpr std::string_view c_multisample_resolve{"Viewport_window::multisample_resolve()"};
 
-void Viewport_window::multisample_resolve()
+void Viewport_window::resolve()
 {
     ERHE_PROFILE_FUNCTION
 
     ERHE_PROFILE_GPU_SCOPE(c_multisample_resolve);
 
-    if (!m_framebuffer_multisample || !m_framebuffer_resolved)
+    if (m_configuration->graphics.msaa_sample_count > 0)
     {
-        return;
-    }
+        if (!m_framebuffer_multisample || !m_framebuffer_resolved)
+        {
+            return;
+        }
 
-    erhe::graphics::Scoped_debug_group pass_scope{c_multisample_resolve};
+        erhe::graphics::Scoped_debug_group pass_scope{c_multisample_resolve};
 
-    {
-        ERHE_PROFILE_SCOPE("bind read")
-        gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_framebuffer_multisample->gl_name());
-    }
+        {
+            ERHE_PROFILE_SCOPE("bind read")
+            gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_framebuffer_multisample->gl_name());
+        }
 
 #if !defined(NDEBUG)
-    if constexpr (true)
-    {
-        const auto status = gl::check_named_framebuffer_status(
-            m_framebuffer_multisample->gl_name(),
-            gl::Framebuffer_target::draw_framebuffer
-        );
-        if (status != gl::Framebuffer_status::framebuffer_complete)
+        if constexpr (true)
         {
-            log_framebuffer->error("read framebuffer status = {}", c_str(status));
+            const auto status = gl::check_named_framebuffer_status(
+                m_framebuffer_multisample->gl_name(),
+                gl::Framebuffer_target::draw_framebuffer
+            );
+            if (status != gl::Framebuffer_status::framebuffer_complete)
+            {
+                log_framebuffer->error("read framebuffer status = {}", c_str(status));
+            }
+            ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
         }
-        ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
-    }
 #endif
 
-    {
-        ERHE_PROFILE_SCOPE("bind draw")
-        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer_resolved->gl_name());
-    }
+        {
+            ERHE_PROFILE_SCOPE("bind draw")
+            gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer_resolved->gl_name());
+        }
 
 #if !defined(NDEBUG)
-    if constexpr (true)
-    {
-        const auto status = gl::check_named_framebuffer_status(
-            m_framebuffer_multisample->gl_name(),
-            gl::Framebuffer_target::draw_framebuffer
-        );
-        if (status != gl::Framebuffer_status::framebuffer_complete)
+        if constexpr (true)
         {
-            log_framebuffer->error("draw framebuffer status = {}", c_str(status));
+            const auto status = gl::check_named_framebuffer_status(
+                m_framebuffer_multisample->gl_name(),
+                gl::Framebuffer_target::draw_framebuffer
+            );
+            if (status != gl::Framebuffer_status::framebuffer_complete)
+            {
+                log_framebuffer->error("draw framebuffer status = {}", c_str(status));
+            }
+            ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
         }
-        ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
-    }
 #endif
 
-    gl::disable(gl::Enable_cap::scissor_test);
-    {
-        ERHE_PROFILE_SCOPE("blit")
-        gl::blit_framebuffer(
-            0, 0, m_color_texture_multisample->width(), m_color_texture_multisample->height(),
-            0, 0, m_color_texture_resolved   ->width(), m_color_texture_resolved   ->height(),
-            gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
-        );
+        gl::disable(gl::Enable_cap::scissor_test);
+        {
+            ERHE_PROFILE_SCOPE("blit")
+            gl::blit_framebuffer(
+                0, 0, m_color_texture_multisample->width(), m_color_texture_multisample->height(),
+                0, 0, m_color_texture_resolved   ->width(), m_color_texture_resolved   ->height(),
+                gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
+            );
+        }
     }
 
     m_color_texture_resolved_for_present = m_color_texture_resolved;
@@ -579,7 +608,10 @@ void Viewport_window::update_framebuffer()
     }
 
     if (
-        m_framebuffer_multisample &&
+        (
+            !(m_configuration->graphics.msaa_sample_count > 0) ||
+            m_framebuffer_multisample
+        ) &&
         m_framebuffer_resolved    &&
         m_color_texture_resolved  &&
         (m_color_texture_resolved->width()  == m_content_region_size.x) &&
@@ -591,15 +623,18 @@ void Viewport_window::update_framebuffer()
 
     gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
 
+    if (m_configuration->graphics.msaa_sample_count > 0)
     {
         m_color_texture_multisample = std::make_unique<Texture>(
             Texture::Create_info{
-                .target = (s_sample_count > 0)
+                .target = (m_configuration->graphics.msaa_sample_count > 0)
                     ? gl::Texture_target::texture_2d_multisample
                     : gl::Texture_target::texture_2d,
-                .internal_format = gl::Internal_format::rgba16f,
+                .internal_format = m_configuration->graphics.low_hdr
+                    ? gl::Internal_format::r11f_g11f_b10f
+                    : gl::Internal_format::rgba16f,
                 //.internal_format = gl::Internal_format::rgba32f,
-                .sample_count    = s_sample_count,
+                .sample_count    = m_configuration->graphics.msaa_sample_count,
                 .width           = m_content_region_size.x,
                 .height          = m_content_region_size.y
             }
@@ -613,19 +648,61 @@ void Viewport_window::update_framebuffer()
             gl::Pixel_type::float_,
             &clear_value[0]
         );
+
+        m_depth_stencil_multisample_renderbuffer = std::make_unique<Renderbuffer>(
+            gl::Internal_format::depth24_stencil8,
+            m_configuration->graphics.msaa_sample_count,
+            m_content_region_size.x,
+            m_content_region_size.y
+        );
+
+        m_depth_stencil_multisample_renderbuffer->set_debug_label("Viewport Window multisample Depth-Stencil");
+        {
+            Framebuffer::Create_info create_info;
+            create_info.attach(gl::Framebuffer_attachment::color_attachment0,  m_color_texture_multisample.get());
+            create_info.attach(gl::Framebuffer_attachment::depth_attachment,   m_depth_stencil_multisample_renderbuffer.get());
+            create_info.attach(gl::Framebuffer_attachment::stencil_attachment, m_depth_stencil_multisample_renderbuffer.get());
+            m_framebuffer_multisample = std::make_unique<Framebuffer>(create_info);
+            m_framebuffer_multisample->set_debug_label("Viewport Window Multisample");
+
+            gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
+            gl::named_framebuffer_draw_buffers(m_framebuffer_multisample->gl_name(), 1, &draw_buffers[0]);
+            gl::named_framebuffer_read_buffer (m_framebuffer_multisample->gl_name(), gl::Color_buffer::color_attachment0);
+
+            log_framebuffer->trace("Multisample framebuffer:");
+            if (!m_framebuffer_multisample->check_status())
+            {
+                log_framebuffer->error("Multisample framebuffer not complete");
+                m_framebuffer_multisample.reset();
+            }
+        }
     }
 
     {
         m_color_texture_resolved = std::make_shared<Texture>(
             Texture::Create_info{
                 .target          = gl::Texture_target::texture_2d,
-                .internal_format = gl::Internal_format::rgba16f,
+                .internal_format = m_configuration->graphics.low_hdr
+                    ? gl::Internal_format::r11f_g11f_b10f
+                    : gl::Internal_format::rgba16f,
                 //.internal_format = gl::Internal_format::rgba32f,
                 .width           = m_content_region_size.x,
                 .height          = m_content_region_size.y
             }
         );
         m_color_texture_resolved->set_debug_label("Viewport Window Multisample Resolved");
+
+        if (m_configuration->graphics.msaa_sample_count == 0)
+        {
+            m_depth_stencil_resolved_renderbuffer = std::make_unique<Renderbuffer>(
+                gl::Internal_format::depth24_stencil8,
+                0,
+                m_content_region_size.x,
+                m_content_region_size.y
+            );
+            m_depth_stencil_resolved_renderbuffer->set_debug_label("Viewport Window resolved Depth-Stencil");
+        }
+
         if (!m_can_present)
         {
             constexpr float clear_value[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
@@ -640,39 +717,19 @@ void Viewport_window::update_framebuffer()
         }
     }
 
-    m_depth_stencil_renderbuffer = std::make_unique<Renderbuffer>(
-        gl::Internal_format::depth24_stencil8,
-        s_sample_count,
-        m_content_region_size.x,
-        m_content_region_size.y
-    );
-    m_depth_stencil_renderbuffer->set_debug_label("Viewport Window Depth-Stencil");
-    {
-        Framebuffer::Create_info create_info;
-        create_info.attach(gl::Framebuffer_attachment::color_attachment0,  m_color_texture_multisample.get());
-        create_info.attach(gl::Framebuffer_attachment::depth_attachment,   m_depth_stencil_renderbuffer.get());
-        create_info.attach(gl::Framebuffer_attachment::stencil_attachment, m_depth_stencil_renderbuffer.get());
-        m_framebuffer_multisample = std::make_unique<Framebuffer>(create_info);
-        m_framebuffer_multisample->set_debug_label("Viewport Window Multisample");
-
-        gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
-        gl::named_framebuffer_draw_buffers(m_framebuffer_multisample->gl_name(), 1, &draw_buffers[0]);
-        gl::named_framebuffer_read_buffer (m_framebuffer_multisample->gl_name(), gl::Color_buffer::color_attachment0);
-
-        log_framebuffer->trace("Multisample framebuffer:");
-        if (!m_framebuffer_multisample->check_status())
-        {
-            log_framebuffer->error("Multisample framebuffer not complete");
-            m_framebuffer_multisample.reset();
-        }
-    }
-
     {
         Framebuffer::Create_info create_info;
         create_info.attach(
             gl::Framebuffer_attachment::color_attachment0,
             m_color_texture_resolved.get()
         );
+
+        if (m_configuration->graphics.msaa_sample_count == 0)
+        {
+            create_info.attach(gl::Framebuffer_attachment::depth_attachment,   m_depth_stencil_resolved_renderbuffer.get());
+            create_info.attach(gl::Framebuffer_attachment::stencil_attachment, m_depth_stencil_resolved_renderbuffer.get());
+        }
+
         m_framebuffer_resolved = std::make_unique<Framebuffer>(create_info);
         m_framebuffer_resolved->set_debug_label("Viewport Window Multisample Resolved");
 

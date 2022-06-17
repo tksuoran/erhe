@@ -23,13 +23,11 @@ Debug_draw::~Debug_draw() noexcept
 {
 }
 
-void Debug_draw::connect()
+void Debug_draw::declare_required_components()
 {
     using IDebug_draw = erhe::physics::IDebug_draw;
 
     require<Scene_root>();
-    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_text_renderer     = get<erhe::application::Text_renderer>();
 
     m_debug_mode =
         IDebug_draw::c_Draw_wireframe           |
@@ -53,6 +51,12 @@ void Debug_draw::connect()
 void Debug_draw::initialize_component()
 {
     get<Scene_root>()->physics_world().set_debug_drawer(this);
+}
+
+void Debug_draw::post_initialize()
+{
+    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
+    m_text_renderer     = get<erhe::application::Text_renderer>();
 }
 
 auto Debug_draw::get_colors() const -> Colors

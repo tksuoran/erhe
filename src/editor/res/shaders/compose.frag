@@ -85,11 +85,19 @@ vec3 tonemap_ue3(vec3 x) {
 
 void main()
 {
+#if defined(ERHE_BINDLESS_TEXTURE)
     vec3 sum = 1.0 * texture(sampler2D(post_processing.source_texture[0]), v_texcoord).rgb;
+#else
+    vec3 sum = 1.0 * texture(s_source_textures[0], v_texcoord).rgb;
+#endif
     for (uint i = 1; i < post_processing.texture_count; ++i)
     {
         float scale = 0.02 / float(i + 1);
+#if defined(ERHE_BINDLESS_TEXTURE)
         vec3 source = texture(sampler2D(post_processing.source_texture[i]), v_texcoord).rgb;
+#else
+        vec3 source = texture(s_source_textures[i], v_texcoord).rgb;
+#endif
         sum += fix(scale * source);
     }
 

@@ -1,3 +1,5 @@
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/log.hpp"
 #include "erhe/geometry/remapper.hpp"
@@ -137,18 +139,23 @@ void Geometry::weld(const Weld_settings& weld_settings)
             {
                 continue;
             }
-            //const vec3 centroid = polygon_attribute_maps.centroids->get(old_polygon_id);
-            //log_weld.trace("    {:2} (old {:2}: centroid {}", new_polygon_id, old_polygon_id, centroid);
+            SPDLOG_LOGGER_TRACE(
+                log_weld,
+                "    {:2} (old {:2}: centroid {}",
+                new_polygon_id,
+                old_polygon_id,
+                polygon_attribute_maps.centroids->get(old_polygon_id)
+            );
             if (polygon_attribute_maps.normals->has(old_polygon_id))
             {
-                //const vec3 normal = polygon_attribute_maps.normals->get(old_polygon_id);
-                //log_weld.trace(" normal {}", normal);
+                SPDLOG_LOGGER_TRACE(log_weld, " normal {}", polygon_attribute_maps.normals->get(old_polygon_id));
             }
-            //log_weld.trace("\n");
         }
 
-        //log_weld.trace("Polygon remapping before merging / eliminating:\n");
-        //polygon_remapper.dump();
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        SPDLOG_LOGGER_TRACE(log_weld, "Polygon remapping before merging / eliminating:");
+        polygon_remapper.dump();
+#endif
 
         // Scan for polygon merge/eliminate
         class Polygon_data
@@ -176,13 +183,14 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 continue;
             }
             const Polygon_data primary_attributes(primary_old_id, polygon_attribute_maps);
-            //log_weld.trace(
-            //    "primary   new {:2} old {:2} centroid {} normal {}\n",
-            //    primary_new_id,
-            //    primary_old_id,
-            //    primary_attributes.centroid,
-            //    primary_attributes.normal
-            //);
+            SPDLOG_LOGGER_TRACE(
+                log_weld,
+                "primary   new {:2} old {:2} centroid {} normal {}",
+                primary_new_id,
+                primary_old_id,
+                primary_attributes.centroid,
+                primary_attributes.normal
+            );
             for (
                 Polygon_id secondary_new_id = primary_new_id + 1;
                 secondary_new_id < m_next_polygon_id;
@@ -195,40 +203,56 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 }
                 const Polygon_id   secondary_old_id = polygon_remapper.old_id(secondary_new_id);
                 const Polygon_data secondary_attributes(secondary_old_id, polygon_attribute_maps);
-                //log_weld.trace(
-                //    "secondary new {:2} old {:2} centroid {} normal {}\n",
-                //    secondary_new_id,
-                //    secondary_old_id,
-                //    secondary_attributes.centroid,
-                //    secondary_attributes.normal
-                //);
+                SPDLOG_LOGGER_TRACE(
+                    log_weld,
+                    "secondary new {:2} old {:2} centroid {} normal {}",
+                    secondary_new_id,
+                    secondary_old_id,
+                    secondary_attributes.centroid,
+                    secondary_attributes.normal
+                );
 
                 const float diff = std::abs(primary_attributes.centroid[axis0] - secondary_attributes.centroid[axis0]);
                 if (diff > 0.001f)
                 {
-                    //log_weld.trace(
-                    //    "group end: primary new {:2} old {:2} secondary new {:2} old {:2} diff {}\n",
-                    //    primary_new_id, primary_old_id, secondary_new_id, secondary_old_id, diff
-                    //);
+                    SPDLOG_LOGGER_TRACE(
+                        log_weld,
+                        "group end: primary new {:2} old {:2} secondary new {:2} old {:2} diff {}",
+                        primary_new_id,
+                        primary_old_id,
+                        secondary_new_id,
+                        secondary_old_id,
+                        diff
+                    );
                     break;
                 }
 
                 const float distance = glm::distance(primary_attributes.centroid, secondary_attributes.centroid);
                 if (distance > weld_settings.max_point_distance)
                 {
-                    //log_weld.trace(
-                    //    "primary new {:2} old {:2} secondary new {:2} old {:2} centroid distance {}\n",
-                    //    primary_new_id, primary_old_id, secondary_new_id, secondary_old_id, distance
-                    //);
+                    SPDLOG_LOGGER_TRACE(
+                        log_weld,
+                        "primary new {:2} old {:2} secondary new {:2} old {:2} centroid distance {}",
+                        primary_new_id,
+                        primary_old_id,
+                        secondary_new_id,
+                        secondary_old_id,
+                        distance
+                    );
                     continue;
                 }
                 const float dot_product = glm::dot(primary_attributes.normal, secondary_attributes.normal);
                 if (std::abs(dot_product) < weld_settings.min_normal_dot_product)
                 {
-                    //log_weld.trace(
-                    //    "primary new {:2} old {:2} secondary new {:2} old {:2} normal dot product {}\n",
-                    //    primary_new_id, primary_old_id, secondary_new_id, secondary_old_id, dot_product
-                    //);
+                    SPDLOG_LOGGER_TRACE(
+                        log_weld,
+                        "primary new {:2} old {:2} secondary new {:2} old {:2} normal dot product {}",
+                        primary_new_id,
+                        primary_old_id,
+                        secondary_new_id,
+                        secondary_old_id,
+                        dot_product
+                    );
                     continue;
                 }
 
@@ -236,10 +260,14 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 // TODO check polygons have matching corners
                 if (dot_product >= weld_settings.min_normal_dot_product)
                 {
-                    //log_weld.trace(
-                    //    "merging new polygon {:2} old polygon {:2} to new polygon {:2} old polygon {:2}\n",
-                    //    secondary_new_id, secondary_old_id, primary_new_id, primary_old_id
-                    //);
+                    SPDLOG_LOGGER_TRACE(
+                        log_weld,
+                        "merging new polygon {:2} old polygon {:2} to new polygon {:2} old polygon {:2}",
+                        secondary_new_id,
+                        secondary_old_id,
+                        primary_new_id,
+                        primary_old_id
+                    );
                     polygon_remapper.merge.insert(primary_new_id, secondary_new_id);
                 }
 
@@ -247,37 +275,51 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 // TODO check polygons have matching corners
                 if (dot_product <= -weld_settings.min_normal_dot_product)
                 {
-                    //log_weld.trace(
-                    //    "eliminate polygons new {:2} old polygon {:2} and new polygon {:2} old polygon {:2}\n",
-                    //    secondary_new_id, secondary_old_id, primary_new_id, primary_old_id
-                    //);
+                    SPDLOG_LOGGER_TRACE(
+                        log_weld,
+                        "eliminate polygons new {:2} old polygon {:2} and new polygon {:2} old polygon {:2}",
+                        secondary_new_id,
+                        secondary_old_id,
+                        primary_new_id,
+                        primary_old_id
+                    );
                     polygon_remapper.eliminate.push_back(primary_new_id);
                     polygon_remapper.eliminate.push_back(secondary_new_id);
                     //{
-                    //    const erhe::log::Indenter scoped_indent;
-                    //    log_weld.trace("centroid {} vs {}\n", primary_attributes.centroid, current.centroid);
-                    //    log_weld.trace("normal {} vs {}\n", primary_attributes.normal, current.normal);
+                    //    //const erhe::log::Indenter scoped_indent;
+                    //    SPDLOG_LOGGER_TRACE(log_weld, "centroid {} vs {}", primary_attributes.centroid, current.centroid);
+                    //    SPDLOG_LOGGER_TRACE(log_weld, "normal {} vs {}", primary_attributes.normal, current.normal);
                     //}
                 }
             }
         }
 
-        auto old_polygons = polygons;
+        auto old_polygons = polygons; // intentional copy
 
-        //log_weld.trace("Merged {} polygons\n", polygon_remapper.merge.size());
-        //log_weld.trace("Polygon remapping after merge, before removing duplicates:\n");
-        //polygon_remapper.dump();
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        SPDLOG_LOGGER_TRACE(log_weld, "Merged {} polygons", polygon_remapper.merge.size());
+        SPDLOG_LOGGER_TRACE(log_weld, "Polygon remapping after merge, before removing duplicates:");
+        polygon_remapper.dump();
+#endif
         polygon_remapper.reorder_to_drop_duplicates();
-        //log_weld.trace("Polygon remapping after reorder_to_drop_duplicates:\n");
-        //polygon_remapper.dump();
+
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        SPDLOG_LOGGER_TRACE(log_weld, "Polygon remapping after reorder_to_drop_duplicates:");
+        polygon_remapper.dump();
+#endif
+
         polygon_remapper.update_secondary_new_from_old();
-        //log_weld.trace("Polygon remapping after update_secondary_new_from_old:\n");
-        //polygon_remapper.dump();
+
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        SPDLOG_LOGGER_TRACE(log_weld, "Polygon remapping after update_secondary_new_from_old:");
+        polygon_remapper.dump();
+#endif
+
         polygon_remapper.trim(
-            [/*this*/](Point_id new_id, Point_id old_id)
+            [this](Point_id new_id, Point_id old_id)
             {
-#if 0 // Disable trace logging
-                log_weld.trace("Dropping polygon new {:2} old {:2} corners:", new_id, old_id);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+                SPDLOG_LOGGER_TRACE(log_weld, "Dropping polygon new {:2} old {:2} corners:", new_id, old_id);
                 const Polygon& polygon = polygons[old_id];
                 for (
                     Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id,
@@ -286,10 +328,11 @@ void Geometry::weld(const Weld_settings& weld_settings)
                     ++polygon_corner_id)
                 {
                     const Corner_id corner_id = polygon_corners[polygon_corner_id];
-                    log_weld.trace(" {:2}", corner_id);
+                    SPDLOG_LOGGER_TRACE(log_weld, " {:2}", corner_id);
                 }
-                log_weld.trace("\n");
+                //log_weld.trace("\n");
 #else
+                static_cast<void>(this);
                 static_cast<void>(new_id);
                 static_cast<void>(old_id);
 #endif
@@ -307,7 +350,11 @@ void Geometry::weld(const Weld_settings& weld_settings)
         )
         {
             const Polygon_id old_polygon_id = polygon_remapper.old_id(new_polygon_id);
-            //log_weld.trace("Polygon new {:2} from old {:2} corners:", new_polygon_id, old_polygon_id);
+
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+            std::stringstream ss;
+            ss << fmt::format("Polygon new {:2} from old {:2} corners:", new_polygon_id, old_polygon_id);
+#endif
             Polygon& old_polygon = old_polygons[old_polygon_id];
             Polygon& new_polygon = polygons[new_polygon_id];
             polygons[new_polygon_id].first_polygon_corner_id = next_polygon_corner;
@@ -320,11 +367,25 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 polygon_corners[new_polygon_corner_id] = corner_id;
                 ++new_polygon.corner_count;
                 ++next_polygon_corner;
-                //log_weld.trace(" {}", corner_id);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+                ss << fmt::format(" {}", corner_id);
+#endif
             }
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+            ss << " - ";
+#endif
             polygon_remapper.for_each_primary_new(
                 new_polygon_id,
-                [this, new_polygon_id, &old_polygons, &old_polygon_corners, &next_polygon_corner]
+                [
+                    this,
+                    new_polygon_id,
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+                    &ss,
+#endif
+                    &old_polygons,
+                    &old_polygon_corners,
+                    &next_polygon_corner
+                ]
                 (
                     Polygon_id primary_new_id,
                     Polygon_id /*primary_old_id*/,
@@ -345,10 +406,13 @@ void Geometry::weld(const Weld_settings& weld_settings)
                         polygon_corners[new_polygon_corner_id] = corner_id;
                         ++primary_new.corner_count;
                         ++next_polygon_corner;
-                        //log_weld.trace(" {}", corner_id);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+                        ss << fmt::format(" {}", corner_id);
+#endif
                     }
                 });
             //log_weld.trace("\n");
+            SPDLOG_LOGGER_TRACE(log_weld, "{}", ss.str());
         }
         m_next_polygon_corner_id = next_polygon_corner;
         polygon_corners.resize(m_next_polygon_corner_id);
@@ -365,17 +429,19 @@ void Geometry::weld(const Weld_settings& weld_settings)
             ERHE_VERIFY(old_polygon_id != std::numeric_limits<Polygon_id>::max());
             Polygon_id new_polygon_id = polygon_remapper.new_id(old_polygon_id);
             corner.polygon_id = new_polygon_id;
-            //log_weld.trace("Corner {:2} polygon {:2} -> {:2}\n", corner_id, old_polygon_id, new_polygon_id);
+            SPDLOG_LOGGER_TRACE(log_weld, "Corner {:2} polygon {:2} -> {:2}", corner_id, old_polygon_id, new_polygon_id);
         }
 
         polygon_attributes().remap_keys(polygon_remapper.old_from_new);
         polygon_attributes().trim(get_polygon_count());
     }
 
-    //debug_trace();
-    //sanity_check();
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+    debug_trace();
+#endif
+    sanity_check();
 
-    //log_weld.trace("Point processing:\n");
+    SPDLOG_LOGGER_TRACE(log_weld, "Point processing:");
     {
         //const erhe::log::Indenter scope_indent;
 

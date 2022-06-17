@@ -651,7 +651,7 @@ void Geometry::generate_texture_coordinates_spherical()
             }
             else
             {
-                ERHE_FATAL("No normal sources\n");
+                ERHE_FATAL("No normal sources");
             }
 
             float u;

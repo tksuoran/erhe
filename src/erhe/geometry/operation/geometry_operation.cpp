@@ -88,7 +88,7 @@ auto Geometry_operation::find_or_make_point_from_edge(
             return new_point_id;
         }
     }
-    ERHE_FATAL("s_max_edge_point_slots too low\n");
+    ERHE_FATAL("s_max_edge_point_slots too low");
 }
 
 void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> relative_positions)

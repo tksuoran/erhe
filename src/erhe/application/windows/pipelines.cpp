@@ -24,7 +24,7 @@ Pipelines::Pipelines()
 {
 }
 
-void Pipelines::connect()
+void Pipelines::declare_required_components()
 {
     require<Imgui_windows>();
 }

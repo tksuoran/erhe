@@ -18,7 +18,7 @@ auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format
         case erhe::graphics::Image_format::srgb8_alpha8: return gl::Internal_format::srgb8_alpha8;
         default:
         {
-            ERHE_FATAL("Bad image format %04x\n", static_cast<unsigned int>(format));
+            ERHE_FATAL("Bad image format %04x", static_cast<unsigned int>(format));
         }
     }
     // std::unreachable() return gl::Internal_format::rgba8;

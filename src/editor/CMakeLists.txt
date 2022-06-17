@@ -124,12 +124,14 @@ erhe_target_sources_grouped(
     windows/viewport_window.cpp
     windows/viewport_window.hpp
 
+    editor_rendering.cpp
+    editor_rendering.hpp
     log.cpp
     log.hpp
     main.cpp
     on_load.cpp
-    editor_rendering.cpp
-    editor_rendering.hpp
+    task_queue.cpp
+    task_queue.hpp
     view_client.cpp
     view_client.hpp
 

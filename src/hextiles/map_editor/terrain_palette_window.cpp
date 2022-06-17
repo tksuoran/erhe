@@ -12,18 +12,23 @@ Terrain_palette_window::Terrain_palette_window()
 {
 }
 
-Terrain_palette_window::~Terrain_palette_window()
+Terrain_palette_window::~Terrain_palette_window() noexcept
 {
 }
 
-void Terrain_palette_window::connect()
+void Terrain_palette_window::declare_required_components()
 {
-    m_map_editor = get<Map_editor>();
+    require<erhe::application::Imgui_windows>();
 }
 
 void Terrain_palette_window::initialize_component()
 {
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+}
+
+void Terrain_palette_window::post_initialize()
+{
+    m_map_editor = get<Map_editor>();
 }
 
 void Terrain_palette_window::imgui()

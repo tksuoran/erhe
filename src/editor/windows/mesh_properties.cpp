@@ -35,18 +35,23 @@ Mesh_properties::~Mesh_properties() noexcept
 {
 }
 
-void Mesh_properties::connect()
+void Mesh_properties::declare_required_components()
 {
-    m_scene_root     = get<Scene_root    >();
-    m_selection_tool = get<Selection_tool>();
-    m_text_renderer  = get<erhe::application::Text_renderer>();
     require<Tools>();
+    require<erhe::application::Imgui_windows>();
 }
 
 void Mesh_properties::initialize_component()
 {
     get<Tools>()->register_tool(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+}
+
+void Mesh_properties::post_initialize()
+{
+    m_scene_root     = get<Scene_root    >();
+    m_selection_tool = get<Selection_tool>();
+    m_text_renderer  = get<erhe::application::Text_renderer>();
 }
 
 void Mesh_properties::imgui()
@@ -129,7 +134,12 @@ void Mesh_properties::tool_render(
 
             if ((point_locations != nullptr) && m_show_edges)
             {
-                for (Edge_id edge_id = 0; edge_id < geometry->get_edge_count(); ++edge_id)
+                const uint32_t end = (std::min)(
+                    static_cast<uint32_t>(m_max_labels),
+                    geometry->get_edge_count()
+                );
+
+                for (Edge_id edge_id = 0; edge_id < end; ++edge_id)
                 {
                     const auto& edge = geometry->edges[edge_id];
 
@@ -162,7 +172,11 @@ void Mesh_properties::tool_render(
 
             if ((polygon_centroids != nullptr) && m_show_polygons)
             {
-                for (Polygon_id polygon_id = 0; polygon_id < geometry->get_polygon_count(); ++polygon_id)
+                const uint32_t end = (std::min)(
+                    static_cast<uint32_t>(m_max_labels),
+                    geometry->get_polygon_count()
+                );
+                for (Polygon_id polygon_id = 0; polygon_id < end; ++polygon_id)
                 {
                     if (!polygon_centroids->has(polygon_id))
                     {

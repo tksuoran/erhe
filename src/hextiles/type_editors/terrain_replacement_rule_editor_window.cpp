@@ -16,8 +16,13 @@ Terrain_replacement_rule_editor_window::Terrain_replacement_rule_editor_window()
 {
 }
 
-Terrain_replacement_rule_editor_window::~Terrain_replacement_rule_editor_window()
+Terrain_replacement_rule_editor_window::~Terrain_replacement_rule_editor_window() noexcept
 {
+}
+
+void Terrain_replacement_rule_editor_window::declare_required_components()
+{
+    require<erhe::application::Imgui_windows>();
 }
 
 void Terrain_replacement_rule_editor_window::initialize_component()

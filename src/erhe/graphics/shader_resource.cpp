@@ -78,7 +78,7 @@ auto glsl_token(const gl::Uniform_type type) -> const char*
 
         default:
         {
-            ERHE_FATAL("Bad uniform type\n");
+            ERHE_FATAL("Bad uniform type");
         }
     }
 }
@@ -209,7 +209,7 @@ auto get_type_details(const gl::Uniform_type type) -> Type_details
 
         default:
         {
-            ERHE_FATAL("Bad uniform type\n");
+            ERHE_FATAL("Bad uniform type");
         }
     }
 }
@@ -263,7 +263,7 @@ auto Shader_resource::is_basic(const Type type) -> bool
         case Type::shader_storage_block : return false;
         default:
         {
-            ERHE_FATAL("bad Shader_resource::Type\n");
+            ERHE_FATAL("bad Shader_resource::Type");
         }
     }
 }
@@ -282,7 +282,7 @@ auto Shader_resource::is_aggregate(const Shader_resource::Type type) -> bool
         case Type::shader_storage_block : return true;
         default:
         {
-            ERHE_FATAL("bad Shader_resource::Type\n");
+            ERHE_FATAL("bad Shader_resource::Type");
         }
     }
 }
@@ -301,7 +301,7 @@ auto Shader_resource::should_emit_members(const Shader_resource::Type type) -> b
         case Type::shader_storage_block : return true;
         default:
         {
-            ERHE_FATAL("bad Shader_resource::Type\n");
+            ERHE_FATAL("bad Shader_resource::Type");
         }
     }
 }
@@ -320,7 +320,7 @@ auto Shader_resource::is_block(const Shader_resource::Type type) -> bool
         case Type::shader_storage_block : return true;
         default:
         {
-            ERHE_FATAL("bad Shader_resource::Type\n");
+            ERHE_FATAL("bad Shader_resource::Type");
         }
     }
 }
@@ -339,7 +339,7 @@ auto Shader_resource::uses_binding_points(const Shader_resource::Type type) -> b
         case Type::shader_storage_block : return true;
         default:
         {
-            ERHE_FATAL("bad Shader_resource::Type\n");
+            ERHE_FATAL("bad Shader_resource::Type");
         }
     }
 }
@@ -355,7 +355,7 @@ auto Shader_resource::c_str(const Shader_resource::Precision precision) -> const
         case Shader_resource::Precision::superp:  return "superp";
         default:
         {
-            ERHE_FATAL("Bad uniform precision\n");
+            ERHE_FATAL("Bad uniform precision");
         }
     }
 };
@@ -392,19 +392,29 @@ Shader_resource::Shader_resource(
 
 // Block (uniform block or shader storage block)
 Shader_resource::Shader_resource(
-    const std::string_view         block_name,
+    const std::string_view         name,
     const int                      binding_point,
-    const Type                     block_type,
+    const Type                     type,
     const nonstd::optional<size_t> array_size /* = {} */
 )
-    : m_type         {block_type}
-    , m_name         {block_name}
+    : m_type         {type}
+    , m_name         {name}
     , m_array_size   {array_size}
     , m_binding_point{binding_point}
 {
-    Expects((int)binding_point < Instance::limits.max_uniform_buffer_bindings);
-
-    ERHE_VERIFY((block_type == Type::uniform_block) || (block_type == Type::shader_storage_block));
+    if (type == Type::uniform_block)
+    {
+        ERHE_VERIFY(binding_point < Instance::limits.max_uniform_buffer_bindings);
+    }
+    if (type == Type::shader_storage_block)
+    {
+        ERHE_VERIFY(binding_point < Instance::limits.max_shader_storage_buffer_bindings);
+    }
+    if (type == Type::sampler)
+    {
+        // TODO Which limit to use?
+        ERHE_VERIFY(binding_point < Instance::limits.max_combined_texture_image_units);
+    }
 }
 
 // Basic type
@@ -433,13 +443,17 @@ Shader_resource::Shader_resource(
     const nonstd::optional<size_t>  array_size /* = {} */,
     const nonstd::optional<int>     dedicated_texture_unit /* = {} */
 )
-    : m_type                        {Type::sampler}
-    , m_name                        {sampler_name}
-    , m_array_size                  {array_size}
-    , m_parent                      {parent}
-    , m_basic_type                  {sampler_type}
-    , m_location                    {location}
-    , m_dedicated_texture_unit_index{dedicated_texture_unit}
+    : m_type         {Type::sampler}
+    , m_name         {sampler_name}
+    , m_array_size   {array_size}
+    , m_parent       {parent}
+    , m_basic_type   {sampler_type}
+    , m_location     {location}
+    , m_binding_point{
+        dedicated_texture_unit.has_value()
+            ? dedicated_texture_unit.value()
+            : -1
+    }
 {
 }
 
@@ -456,13 +470,6 @@ Shader_resource::~Shader_resource() noexcept
 auto Shader_resource::is_array() const -> bool
 {
     return m_array_size.has_value();
-}
-
-auto Shader_resource::dedicated_texture_unit_index() const -> nonstd::optional<int>
-{
-    Expects(m_type == Type::sampler);
-
-    return m_dedicated_texture_unit_index;
 }
 
 auto Shader_resource::type() const -> Shader_resource::Type
@@ -651,12 +658,12 @@ auto Shader_resource::type_string() const -> std::string
 
         case Type::sampler:
         {
-            ERHE_FATAL("Samplers are only allowed in default uniform block\n");
+            ERHE_FATAL("Samplers are only allowed in default uniform block");
         }
 
         default:
         {
-            ERHE_FATAL("Bad Shader_resource::Type\n");
+            ERHE_FATAL("Bad Shader_resource::Type");
         }
     }
 }
@@ -792,7 +799,7 @@ auto Shader_resource::source(
 auto Shader_resource::add_struct(
     const std::string_view          name,
     gsl::not_null<Shader_resource*> struct_type,
-    const nonstd::optional<size_t>     array_size /* = {} */
+    const nonstd::optional<size_t>  array_size /* = {} */
 ) -> Shader_resource*
 {
     align_offset_to(4); // align by 4 bytes TODO do what spec says
@@ -804,8 +811,8 @@ auto Shader_resource::add_struct(
 auto Shader_resource::add_sampler(
     const std::string_view         name,
     const gl::Uniform_type         sampler_type,
-    const nonstd::optional<size_t> array_size /* = {} */,
-    const nonstd::optional<int>    dedicated_texture_unit /* = {} */
+    const nonstd::optional<int>    dedicated_texture_unit, /* = {} */
+    const nonstd::optional<size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     Expects(m_type == Type::default_uniform_block);
@@ -815,14 +822,17 @@ auto Shader_resource::add_sampler(
         std::make_unique<Shader_resource>(
             name,
             this,
-            m_location,
+            dedicated_texture_unit.has_value() ? -1 : m_location,
             sampler_type,
             array_size,
             dedicated_texture_unit
         )
     ).get();
     const int count = array_size.has_value() ? static_cast<int>(array_size.value()) : 1;
-    m_location += count;
+    if (!dedicated_texture_unit.has_value())
+    {
+        m_location += count;
+    }
     return new_member;
 }
 

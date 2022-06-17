@@ -36,14 +36,15 @@ Physics_window::~Physics_window() noexcept
 {
 }
 
-void Physics_window::connect()
+void Physics_window::declare_required_components()
 {
-    m_selection_tool  = get    <Selection_tool>();
-    m_scene_root      = require<Scene_root    >();
+    m_scene_root = require<Scene_root>();
 
     require<Mesh_memory>();
     require<Programs   >();
+    require<Tools      >();
     require<erhe::application::Gl_context_provider>();
+    require<erhe::application::Imgui_windows>();
 }
 
 void Physics_window::initialize_component()
@@ -68,6 +69,11 @@ void Physics_window::initialize_component()
     //rendertarget->register_imgui_window(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
     m_min_size = glm::vec2{120.0f, 120.0f};
+}
+
+void Physics_window::post_initialize()
+{
+    m_selection_tool = get<Selection_tool>();
 }
 
 auto Physics_window::description() -> const char*

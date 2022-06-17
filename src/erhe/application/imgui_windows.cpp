@@ -540,11 +540,9 @@ Imgui_windows::~Imgui_windows() noexcept
     ImGui::DestroyContext(m_imgui_context);
 }
 
-void Imgui_windows::connect()
+void Imgui_windows::declare_required_components()
 {
-    m_view                   = get    <View>();
-    m_pipeline_state_tracker = get    <erhe::graphics::OpenGL_state_tracker>();
-    m_renderer               = require<Imgui_renderer>();
+    m_renderer = require<Imgui_renderer>();
 
     require<Configuration      >();
     require<Gl_context_provider>();
@@ -556,6 +554,12 @@ void Imgui_windows::initialize_component()
     const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     init_context();
+}
+
+void Imgui_windows::post_initialize()
+{
+    m_view                   = get<View>();
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 }
 
 void Imgui_windows::init_context()

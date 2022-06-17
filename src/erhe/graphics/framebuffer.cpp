@@ -227,6 +227,7 @@ void Framebuffer::create()
 
 auto Framebuffer::check_status() const -> bool
 {
+#if !defined(NDEBUG)
     const auto status = gl::check_named_framebuffer_status(
         gl_name(),
         gl::Framebuffer_target::draw_framebuffer
@@ -242,6 +243,9 @@ auto Framebuffer::check_status() const -> bool
         return false;
     }
     return status == gl::Framebuffer_status::framebuffer_complete;
+#else
+    return true;
+#endif
 }
 
 auto Framebuffer::gl_name() const -> unsigned int

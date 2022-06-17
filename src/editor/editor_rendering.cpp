@@ -46,32 +46,12 @@ Editor_rendering::~Editor_rendering() noexcept
 {
 }
 
-void Editor_rendering::connect()
+void Editor_rendering::declare_required_components()
 {
-    m_configuration          = get<erhe::application::Configuration>();
-    m_imgui_windows          = get<erhe::application::Imgui_windows>();
-    m_view                   = get<erhe::application::View         >();
-    m_time                   = get<erhe::application::Time         >();
-    m_log_window             = get<erhe::application::Log_window   >();
-    m_line_renderer_set      = get<erhe::application::Line_renderer_set>();
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-    m_text_renderer          = get<erhe::application::Text_renderer    >();
-
-    m_tools                  = get<Tools                           >();
-    m_forward_renderer       = get<Forward_renderer                >();
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_headset_renderer       = get<Headset_renderer    >();
-#endif
-    m_id_renderer            = get<Id_renderer                         >();
-    m_pointer_context        = get<Pointer_context                     >();
-    m_post_processing        = get<Post_processing                     >();
-    m_scene_root             = get<Scene_root                          >();
-    m_shadow_renderer        = get<Shadow_renderer                     >();
-    m_viewport_windows       = get<Viewport_windows                    >();
-
     require<Programs   >();
     require<Mesh_memory>();
     require<erhe::application::Gl_context_provider>();
+    m_configuration = require<erhe::application::Configuration>();
 }
 
 void Editor_rendering::initialize_component()
@@ -367,6 +347,29 @@ void Editor_rendering::initialize_component()
     m_gui_timer       = std::make_unique<erhe::graphics::Gpu_timer>("Gui");
     m_brush_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Brush");
     m_tools_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Tools");
+}
+
+void Editor_rendering::post_initialize()
+{
+    m_imgui_windows          = get<erhe::application::Imgui_windows    >();
+    m_view                   = get<erhe::application::View             >();
+    m_time                   = get<erhe::application::Time             >();
+    m_log_window             = get<erhe::application::Log_window       >();
+    m_line_renderer_set      = get<erhe::application::Line_renderer_set>();
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
+    m_text_renderer          = get<erhe::application::Text_renderer    >();
+
+    m_tools                  = get<Tools           >();
+    m_forward_renderer       = get<Forward_renderer>();
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    m_headset_renderer       = get<Headset_renderer>();
+#endif
+    m_id_renderer            = get<Id_renderer     >();
+    m_pointer_context        = get<Pointer_context >();
+    m_post_processing        = get<Post_processing >();
+    m_scene_root             = get<Scene_root      >();
+    m_shadow_renderer        = get<Shadow_renderer >();
+    m_viewport_windows       = get<Viewport_windows>();
 }
 
 void Editor_rendering::init_state()

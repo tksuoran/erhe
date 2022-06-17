@@ -20,7 +20,7 @@ class Tile_renderer;
 class Map_window;
 class Tiles;
 
-class Map_hover_command
+class Map_hover_command final
     : public erhe::application::Command
 {
 public:
@@ -37,7 +37,7 @@ private:
     Map_editor& m_map_editor;
 };
 
-class Map_primary_brush_command
+class Map_primary_brush_command final
     : public erhe::application::Command
 {
 public:
@@ -68,8 +68,9 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    void declare_required_components() override;
+    void initialize_component       () override;
+    void post_initialize            () override;
 
     // Public API
     [[nodiscard]] auto get_map() -> std::shared_ptr<Map>;

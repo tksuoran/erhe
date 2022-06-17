@@ -339,7 +339,7 @@ auto parse_obj_geometry(
                                         case 2: face_vertex_normal_indices  .push_back(value); break;
                                         default:
                                         {
-                                            //ERHE_FATAL("bad subtoken slot for wavefront obj parser face command\n");
+                                            //ERHE_FATAL("bad subtoken slot for wavefront obj parser face command");
                                             break;
                                         }
                                     }
@@ -385,7 +385,7 @@ auto parse_obj_geometry(
                     }
                     //else
                     //{
-                    //    ERHE_FATAL("unsupported vertex dimension\n");
+                    //    ERHE_FATAL("unsupported vertex dimension");
                     //}
                     break;
                 }
@@ -399,7 +399,7 @@ auto parse_obj_geometry(
                     }
                     //else
                     //{
-                    //    ERHE_FATAL("unsupported normal dimension\n");
+                    //    ERHE_FATAL("unsupported normal dimension");
                     //}
                     break;
                 }
@@ -413,7 +413,7 @@ auto parse_obj_geometry(
                     }
                     //else
                     //{
-                    //    ERHE_FATAL("unsupported texcoord dimension\n");
+                    //    ERHE_FATAL("unsupported texcoord dimension");
                     //}
                     break;
                 }

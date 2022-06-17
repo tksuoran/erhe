@@ -21,16 +21,12 @@ Game_window::Game_window()
 {
 }
 
-Game_window::~Game_window()
+Game_window::~Game_window() noexcept
 {
 }
 
-void Game_window::connect()
+void Game_window::declare_required_components()
 {
-    m_game          = get<Game         >();
-    m_rendering     = get<Rendering    >();
-    m_tiles         = get<Tiles        >();
-    m_tile_renderer = get<Tile_renderer>();
     require<erhe::application::Imgui_windows>();
 }
 
@@ -38,6 +34,14 @@ void Game_window::initialize_component()
 {
     Imgui_window::initialize(*m_components);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+}
+
+void Game_window::post_initialize()
+{
+    m_game          = get<Game         >();
+    m_rendering     = get<Rendering    >();
+    m_tiles         = get<Tiles        >();
+    m_tile_renderer = get<Tile_renderer>();
 }
 
 void Game_window::imgui()

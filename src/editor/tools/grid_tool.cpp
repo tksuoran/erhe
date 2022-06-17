@@ -24,9 +24,8 @@ Grid_tool::~Grid_tool() noexcept
 {
 }
 
-void Grid_tool::connect()
+void Grid_tool::declare_required_components()
 {
-    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
     require<Tools>();
     require<erhe::application::Imgui_windows>();
 }
@@ -35,6 +34,11 @@ void Grid_tool::initialize_component()
 {
     get<Tools                           >()->register_background_tool(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+}
+
+void Grid_tool::post_initialize()
+{
+    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
 }
 
 auto Grid_tool::description() -> const char*

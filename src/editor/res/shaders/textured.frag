@@ -25,7 +25,10 @@ vec4 srgb_to_linear(vec4 v)
 
 void main()
 {
+#if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_texture = sampler2D(v_texture);
+#endif
+
     //out_color = srgb_to_linear(texture(s_texture, v_texcoord));
     out_color = texture(s_texture, v_texcoord);
 }

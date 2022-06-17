@@ -25,11 +25,11 @@ New_game_window::New_game_window()
 {
 }
 
-New_game_window::~New_game_window()
+New_game_window::~New_game_window() noexcept
 {
 }
 
-void New_game_window::connect()
+void New_game_window::declare_required_components()
 {
     require<erhe::application::Imgui_windows>();
 }

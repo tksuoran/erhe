@@ -21,14 +21,21 @@ Viewport_config::Viewport_config()
     render_style_selected.edge_lines = false;
 }
 
-void Viewport_config::connect()
+void Viewport_config::declare_required_components()
 {
+    require<erhe::application::Configuration>();
     require<erhe::application::Imgui_windows>();
 }
 
 void Viewport_config::initialize_component()
 {
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    const auto& config = get<erhe::application::Configuration>()->viewport;
+    render_style_not_selected.polygon_fill      = config.polygon_fill;
+    render_style_not_selected.edge_lines        = config.edge_lines;
+    render_style_not_selected.corner_points     = config.corner_points;
+    render_style_not_selected.polygon_centroids = config.polygon_centroids;
+    //render_style_selected.edge_lines = false;
 }
 
 void Viewport_config::render_style_ui(Render_style& render_style)

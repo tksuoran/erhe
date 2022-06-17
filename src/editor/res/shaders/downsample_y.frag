@@ -18,7 +18,9 @@ vec3 fix(vec3 value)
 
 void main()
 {
+#if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_source = sampler2D(post_processing.source_texture[0]);
+#endif
 
     float offset_1 = 1.41176471 * post_processing.texel_scale;
     float offset_2 = 3.29411765 * post_processing.texel_scale;

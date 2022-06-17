@@ -40,8 +40,8 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    void declare_required_components() override;
+    void initialize_component       () override;
 
     [[nodiscard]] auto load    (const fs::path& path) -> ImVec2;
     [[nodiscard]] auto uv1     (const ImVec2& uv0) const -> ImVec2;

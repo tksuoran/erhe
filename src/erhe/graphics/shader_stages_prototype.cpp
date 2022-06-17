@@ -347,7 +347,7 @@ template <typename T>
 
         default:
         {
-            ERHE_FATAL("Bad program property\n");
+            ERHE_FATAL("Bad program property");
         }
     }
 }

@@ -22,12 +22,9 @@ Performance_window::~Performance_window() noexcept
 {
 }
 
-void Performance_window::connect()
+void Performance_window::declare_required_components()
 {
-    //m_editor_rendering = get<Editor_rendering>();
-    //m_id_renderer      = get<Id_renderer     >();
-    //m_imgui_renderer   = get<Imgui_renderer  >();
-    //m_shadow_renderer  = get<Shadow_renderer >();
+    require<Imgui_windows>();
 }
 
 void Performance_window::initialize_component()

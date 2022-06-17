@@ -17,7 +17,7 @@ Imgui_demo_window::~Imgui_demo_window() noexcept
 {
 }
 
-void Imgui_demo_window::connect()
+void Imgui_demo_window::declare_required_components()
 {
     require<Imgui_windows>();
 }

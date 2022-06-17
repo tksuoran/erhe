@@ -53,17 +53,16 @@ Id_renderer::~Id_renderer() noexcept
 {
 }
 
-void Id_renderer::connect()
+void Id_renderer::declare_required_components()
 {
-    base_connect(this);
+    base_require(this);
 
     require<erhe::application::Configuration>();
     require<erhe::application::Gl_context_provider>();
     require<Program_interface>();
 
-    m_pipeline_state_tracker = erhe::components::Component::get<erhe::graphics::OpenGL_state_tracker>();
-    m_mesh_memory            = require<Mesh_memory>();
-    m_programs               = require<Programs>();
+    m_mesh_memory = require<Mesh_memory>();
+    m_programs    = require<Programs>();
 }
 
 static constexpr std::string_view c_id_renderer_initialize_component{"Id_renderer::initialize_component()"};
@@ -80,7 +79,9 @@ void Id_renderer::initialize_component()
 
     create_frame_resources(1, 1, 1, config->forward_renderer.max_primitive_count, config->forward_renderer.max_draw_count);
 
-    const auto reverse_depth = erhe::components::Component::get<erhe::application::Configuration>()->graphics.reverse_depth;
+    const auto reverse_depth = erhe::components::Component::get<
+        erhe::application::Configuration
+    >()->graphics.reverse_depth;
 
     m_pipeline.data = {
         .name           = "ID Renderer",
@@ -107,6 +108,11 @@ void Id_renderer::initialize_component()
     create_id_frame_resources();
 
     m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Id_renderer");
+}
+
+void Id_renderer::post_initialize()
+{
+    m_pipeline_state_tracker = erhe::components::Component::get<erhe::graphics::OpenGL_state_tracker>();
 }
 
 void Id_renderer::create_id_frame_resources()
@@ -309,22 +315,27 @@ void Id_renderer::render(const Render_parameters& parameters)
         m_pipeline_state_tracker->color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
         {
             gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
+
+#if !defined(NDEBUG)
             const auto status = gl::check_named_framebuffer_status(m_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
             if (status != gl::Framebuffer_status::framebuffer_complete)
             {
                 log_framebuffer->error("draw framebuffer status = {}", c_str(status));
             }
             ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
+#endif
         }
 
         {
             gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_framebuffer->gl_name());
+#if !defined(NDEBUG)
             const auto status = gl::check_named_framebuffer_status(m_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
             if (status != gl::Framebuffer_status::framebuffer_complete)
             {
                 log_framebuffer->error("read framebuffer status = {}", c_str(status));
             }
             ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
+#endif
         }
         gl::disable    (gl::Enable_cap::framebuffer_srgb);
         gl::viewport   (viewport.x, viewport.y, viewport.width, viewport.height);

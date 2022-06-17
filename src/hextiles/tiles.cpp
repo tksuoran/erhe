@@ -20,11 +20,7 @@ Tiles::Tiles()
 {
 }
 
-Tiles::~Tiles()
-{
-}
-
-void Tiles::connect()
+Tiles::~Tiles() noexcept
 {
 }
 

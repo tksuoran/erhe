@@ -33,11 +33,9 @@ Quad_renderer::~Quad_renderer() noexcept
 {
 }
 
-void Quad_renderer::connect()
+void Quad_renderer::declare_required_components()
 {
     require<Gl_context_provider>();
-
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 }
 
 void Quad_renderer::initialize_component()
@@ -75,6 +73,11 @@ void Quad_renderer::initialize_component()
     create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
     erhe::graphics::Shader_stages::Prototype prototype{create_info};
     m_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
+}
+
+void Quad_renderer::post_initialize()
+{
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 }
 
 void Quad_renderer::create_frame_resources()

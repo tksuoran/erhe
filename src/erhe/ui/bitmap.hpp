@@ -32,7 +32,7 @@ public:
     {
         if ((width < 0) || (height < 0) || (components < 1) || (components > 4))
         {
-            ERHE_FATAL("bad dimension\n");
+            ERHE_FATAL("bad dimension");
         }
 
         m_stride = m_width * m_components;
@@ -108,7 +108,7 @@ public:
             (c >= m_components)
         )
         {
-            ERHE_FATAL("invalid index\n");
+            ERHE_FATAL("invalid index");
         }
 
         const size_t offset =
@@ -130,7 +130,7 @@ public:
             (c >= m_components)
         )
         {
-            ERHE_FATAL("invalid index\n");
+            ERHE_FATAL("invalid index");
         }
 #endif
 
@@ -170,7 +170,7 @@ public:
             (dst_y + height > this->height())
         )
         {
-            ERHE_FATAL("invalid input\n");
+            ERHE_FATAL("invalid input");
         }
 #endif
 
@@ -346,7 +346,7 @@ public:
             (src_components < 0)
         )
         {
-            ERHE_FATAL("invalid index\n");
+            ERHE_FATAL("invalid index");
         }
 #endif
 
@@ -437,7 +437,7 @@ public:
             (src_components < 0)
         )
         {
-            ERHE_FATAL("invalid index\n");
+            ERHE_FATAL("invalid index");
         }
 #endif
 

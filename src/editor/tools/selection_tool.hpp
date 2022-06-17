@@ -144,9 +144,10 @@ public:
     ~Selection_tool() noexcept override;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash () const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    void declare_required_components() override;
+    void initialize_component       () override;
+    void post_initialize            () override;
 
     // Implements Tool
     [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }

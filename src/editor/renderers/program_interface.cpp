@@ -21,7 +21,7 @@ Program_interface::~Program_interface() noexcept
 {
 }
 
-void Program_interface::connect()
+void Program_interface::declare_required_components()
 {
     require<erhe::application::Window>(); // ensures we have graphics::Instance info
 

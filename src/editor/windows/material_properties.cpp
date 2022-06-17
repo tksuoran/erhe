@@ -21,15 +21,19 @@ Material_properties::~Material_properties() noexcept
 {
 }
 
-void Material_properties::connect()
+void Material_properties::declare_required_components()
 {
-    m_materials = get<Materials>();
     require<erhe::application::Imgui_windows>();
 }
 
 void Material_properties::initialize_component()
 {
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+}
+
+void Material_properties::post_initialize()
+{
+    m_materials = get<Materials>();
 }
 
 void Material_properties::imgui()

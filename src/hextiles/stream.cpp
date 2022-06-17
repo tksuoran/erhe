@@ -14,7 +14,7 @@ File_write_stream::File_write_stream(const char* path)
     }
 }
 
-File_write_stream::~File_write_stream()
+File_write_stream::~File_write_stream() noexcept
 {
     fclose(m_file);
 }
@@ -36,7 +36,7 @@ File_read_stream::File_read_stream(const char* path)
     }
 }
 
-File_read_stream::~File_read_stream()
+File_read_stream::~File_read_stream() noexcept
 {
     fclose(m_file);
 }

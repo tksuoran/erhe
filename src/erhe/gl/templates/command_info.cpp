@@ -1,6 +1,7 @@
 {AUTOGENERATION_WARNING}
 
 #include "erhe/gl/command_info.hpp"
+#include "erhe/gl/gl.hpp"
 #include <bitset>
 #include <cctype>
 #include <cstdio>
@@ -16,13 +17,8 @@ int g_version;
 std::bitset<static_cast<size_t>(Extension::Extension_Count)> g_extension_support;
 std::bitset<static_cast<size_t>(Command::Command_Count)> g_command_support;
 
-const std::map<const char*, Extension> g_extension_map {{
-{EXTENSION_MAP_ENTRIES}
-}};
-
-const std::map<const char*, Command> g_command_map {{
-{COMMAND_MAP_ENTRIES}
-}};
+std::map<std::string, Extension> g_extension_map;
+std::map<std::string, Command> g_command_map;
 
 void enable(const Extension extension)
 {{
@@ -95,7 +91,7 @@ auto c_str(const Command command) -> const char*
     }}
 }}
 
-auto parse_extension(const char* extension_name) -> Extension
+auto parse_extension(const std::string& extension_name) -> Extension
 {{
     const auto i = g_extension_map.find(extension_name);
     if (i != g_extension_map.end())
@@ -105,7 +101,7 @@ auto parse_extension(const char* extension_name) -> Extension
     return Extension::Extension_None;
 }}
 
-auto parse_command(const char* command_name) -> Command
+auto parse_command(const std::string& command_name) -> Command
 {{
     const auto i = g_command_map.find(command_name);
     if (i != g_command_map.end())
@@ -120,10 +116,16 @@ void command_info_init(
     const std::vector<std::string>& extensions
 )
 {{
+    // Register extensions
+{EXTENSION_MAP_ENTRIES}
+
+    // Register commands
+{COMMAND_MAP_ENTRIES}
+
     g_version = version;
-    for (auto extension_str : extensions)
+    for (const auto& extension_str : extensions)
     {{
-        const auto extension = parse_extension(extension_str.c_str());
+        const auto extension = parse_extension(extension_str);
         enable(extension);
     }}
 {COMMAND_INFO_ENTRIES}

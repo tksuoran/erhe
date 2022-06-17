@@ -32,19 +32,23 @@ Operations::~Operations() noexcept
 {
 }
 
-void Operations::connect()
+void Operations::declare_required_components()
 {
-    m_mesh_memory     = get<Mesh_memory    >();
-    m_operation_stack = get<Operation_stack>();
-    m_pointer_context = get<Pointer_context>();
-    m_scene_root      = get<Scene_root     >();
-    m_selection_tool  = get<Selection_tool >();
     require<erhe::application::Imgui_windows>();
 }
 
 void Operations::initialize_component()
 {
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+}
+
+void Operations::post_initialize()
+{
+    m_mesh_memory     = get<Mesh_memory    >();
+    m_operation_stack = get<Operation_stack>();
+    m_pointer_context = get<Pointer_context>();
+    m_scene_root      = get<Scene_root     >();
+    m_selection_tool  = get<Selection_tool >();
 }
 
 auto Operations::count_selected_meshes() const -> size_t

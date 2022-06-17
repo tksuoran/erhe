@@ -3,6 +3,7 @@
 #include <gsl/assert>
 
 #include <algorithm>
+#include <limits>
 
 namespace hextiles
 {

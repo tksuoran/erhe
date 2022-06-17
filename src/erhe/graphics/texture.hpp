@@ -4,6 +4,7 @@
 
 #include <gsl/span>
 
+#include <optional>
 #include <string_view>
 
 namespace erhe::graphics
@@ -11,7 +12,6 @@ namespace erhe::graphics
 
 class Buffer;
 class Sampler;
-
 
 class Texture_create_info
 {
@@ -117,6 +117,9 @@ private:
     const Sampler& sampler
 ) -> uint64_t;
 
+[[nodiscard]] auto get_texture_from_handle(uint64_t handle) -> GLuint;
+[[nodiscard]] auto get_sampler_from_handle(uint64_t handle) -> GLuint;
+
 class Texture_hash
 {
 public:
@@ -143,5 +146,22 @@ public:
     gl::Pixel_format&   format,
     gl::Pixel_type&     type
 ) -> bool;
+
+[[nodiscard]] auto create_dummy_texture() -> std::shared_ptr<Texture>;
+
+// For non-bindless textures
+class Texture_unit_cache
+{
+public:
+    void reset();
+    auto allocate_texture_unit(uint64_t handle) -> std::optional<std::size_t>;
+
+    auto bind() -> size_t;
+
+private:
+    std::vector<uint64_t> m_texture_units;
+};
+
+extern Texture_unit_cache s_texture_unit_cache;
 
 } // namespace erhe::graphics

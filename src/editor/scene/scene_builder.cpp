@@ -1,5 +1,6 @@
 #include "scene/scene_builder.hpp"
 #include "log.hpp"
+#include "task_queue.hpp"
 
 #include "parsers/gltf.hpp"
 #include "parsers/json_polyhedron.hpp"
@@ -19,8 +20,6 @@
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
-#include <erhe/concurrency/concurrent_queue.hpp>
-#include <erhe/concurrency/serial_queue.hpp>
 #include "erhe/geometry/shapes/box.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/disc.hpp"
@@ -84,12 +83,12 @@ Scene_builder::~Scene_builder() noexcept
 {
 }
 
-void Scene_builder::connect()
+void Scene_builder::declare_required_components()
 {
     require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
-    require<Fly_camera_tool    >();
-    require<Materials          >();
+    require<Fly_camera_tool>();
+    require<Materials      >();
     m_brushes     = require<Brushes    >();
     m_mesh_memory = require<Mesh_memory>();
     m_scene_root  = require<Scene_root >();
@@ -152,44 +151,14 @@ auto Scene_builder::build_info() -> erhe::primitive::Build_info&
     return m_mesh_memory->build_info;
 };
 
-class Task_queue
-{
-public:
-    explicit Task_queue(const bool parallel)
-        : m_parallel{parallel}
-    {
-    }
-
-    void enqueue(std::function<void()>&& func)
-    {
-        if (m_parallel)
-        {
-            m_queue.enqueue(func);
-        }
-        else
-        {
-            func();
-        }
-    }
-
-    void wait()
-    {
-        if (m_parallel)
-        {
-            m_queue.wait();
-        }
-    }
-
-private:
-    bool                                m_parallel;
-    erhe::concurrency::Concurrent_queue m_queue;
-};
-
 void Scene_builder::make_brushes()
 {
     ERHE_PROFILE_FUNCTION
 
-    Task_queue execution_queue{get<erhe::application::Configuration>()->threading.parallel_initialization};
+    Task_queue execution_queue;
+    execution_queue.set_parallel(
+        get<erhe::application::Configuration>()->threading.parallel_initialization
+    );
 
     const auto& config = get<erhe::application::Configuration>()->scene;
 
@@ -369,7 +338,7 @@ void Scene_builder::make_brushes()
     if (config.sphere)
     {
         execution_queue.enqueue(
-            [this]()
+            [this, &config]()
             {
                 ERHE_PROFILE_SCOPE("Sphere");
 
@@ -382,7 +351,11 @@ void Scene_builder::make_brushes()
 
                 make_brush(
                     instantiate,
-                    make_sphere(object_scale, 24 * 4, 6 * 4),
+                    make_sphere(
+                        object_scale,
+                        24 * std::max(1, config.detail),
+                         6 * std::max(1, config.detail)
+                    ),
                     context,
                     erhe::physics::ICollision_shape::create_sphere_shape_shared(object_scale)
                 );
@@ -393,7 +366,7 @@ void Scene_builder::make_brushes()
     if (config.torus)
     {
         execution_queue.enqueue(
-            [this]()
+            [this, &config]()
             {
                 ERHE_PROFILE_SCOPE("Torus");
 
@@ -461,7 +434,12 @@ void Scene_builder::make_brushes()
                 make_brush(
                     instantiate,
                     std::make_shared<erhe::geometry::Geometry>(
-                        make_torus(major_radius, minor_radius, 42, 32)
+                        make_torus(
+                            major_radius,
+                            minor_radius,
+                            10 * std::max(1, config.detail),
+                             8 * std::max(1, config.detail)
+                        )
                     ),
                     context,
                     torus_collision_volume_calculator,
@@ -474,7 +452,7 @@ void Scene_builder::make_brushes()
     if (config.cylinder)
     {
         execution_queue.enqueue(
-            [this]()
+            [this, &config]()
             {
                 ERHE_PROFILE_SCOPE("Cylinder");
 
@@ -486,7 +464,11 @@ void Scene_builder::make_brushes()
                 auto cylinder_geometry = make_cylinder(
                     -1.0f * object_scale,
                      1.0f * object_scale,
-                     1.0f * object_scale, true, true, 36, 4
+                     1.0f * object_scale,
+                    true,
+                    true,
+                    9 * std::max(1, config.detail),
+                    std::max(1, config.detail)
                 ); // always axis = x
                 cylinder_geometry.transform(erhe::toolkit::mat4_swap_xy); // convert to axis = y
 
@@ -506,7 +488,7 @@ void Scene_builder::make_brushes()
     if (config.cone)
     {
         execution_queue.enqueue(
-            [this]()
+            [this, &config]()
             {
                 ERHE_PROFILE_SCOPE("Cone");
 
@@ -515,7 +497,14 @@ void Scene_builder::make_brushes()
                     .normal_style = Normal_style::corner_normals
                 };
                 constexpr bool instantiate = true;
-                auto cone_geometry = make_cone(-object_scale, object_scale, object_scale, true, 42, 4); // always axis = x
+                auto cone_geometry = make_cone( // always axis = x
+                    -object_scale,
+                    object_scale,
+                    object_scale,
+                    true,
+                    10 * std::max(1, config.detail),
+                    std::max(1, config.detail)
+                );
                 cone_geometry.transform(erhe::toolkit::mat4_swap_xy); // convert to axis = y
 
                 make_brush(
@@ -539,7 +528,12 @@ void Scene_builder::make_brushes()
         auto        aniso_material    = m_scene_root->make_material("aniso", vec3{1.0f, 1.0f, 1.0f}, glm::vec2{0.8f, 0.2f}, 0.0f);
         const float ring_major_radius = 4.0f;
         const float ring_minor_radius = 0.55f; // 0.15f;
-        auto        ring_geometry     = make_torus(ring_major_radius, ring_minor_radius, 80, 32);
+        auto        ring_geometry     = make_torus(
+            ring_major_radius,
+            ring_minor_radius,
+            20 * std::max(1, config.detail),
+             8 * std::max(1, config.detail)
+        );
         ring_geometry.transform(erhe::toolkit::mat4_swap_xy);
         auto rotate_ring_pg = make_primitive(ring_geometry, build_info());
         const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(

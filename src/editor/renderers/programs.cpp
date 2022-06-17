@@ -1,5 +1,6 @@
 #include "renderers/programs.hpp"
 #include "log.hpp"
+
 #include "renderers/program_interface.hpp"
 
 #include "erhe/application/configuration.hpp"
@@ -23,7 +24,7 @@ Programs::~Programs() noexcept
 {
 }
 
-void Programs::connect()
+void Programs::declare_required_components()
 {
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Configuration>();
@@ -38,82 +39,118 @@ void Programs::initialize_component()
 
     //const erhe::log::Indenter indenter;
 
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
-    };
+    {
+        const erhe::application::Scoped_gl_context gl_context{
+            Component::get<erhe::application::Gl_context_provider>()
+        };
 
-    nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::nearest,
-        gl::Texture_mag_filter::nearest
-    );
+        nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
+            gl::Texture_min_filter::nearest,
+            gl::Texture_mag_filter::nearest
+        );
 
-    linear_sampler = std::make_unique<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::linear,
-        gl::Texture_mag_filter::linear
-    );
+        linear_sampler = std::make_unique<erhe::graphics::Sampler>(
+            gl::Texture_min_filter::linear,
+            gl::Texture_mag_filter::linear
+        );
 
-    linear_mipmap_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::linear_mipmap_linear,
-        gl::Texture_mag_filter::linear
-    );
+        linear_mipmap_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
+            gl::Texture_min_filter::linear_mipmap_linear,
+            gl::Texture_mag_filter::linear
+        );
+    }
+
+    log_programs->info("samplers created");
+
+    if (!erhe::graphics::Instance::info.use_bindless_texture)
+    {
+        shadow_map_default_uniform_block = std::make_unique<erhe::graphics::Shader_resource>();
+        textured_default_uniform_block   = std::make_unique<erhe::graphics::Shader_resource>();
+
+        shadow_map_default_uniform_block->add_sampler(
+            "s_shadow",
+            gl::Uniform_type::sampler_2d_array,
+            shadow_texture_unit
+        );
+        textured_default_uniform_block->add_sampler(
+            "s_texture",
+            gl::Uniform_type::sampler_2d,
+            base_texture_unit
+        );
+    }
+    const auto* shadow_default_uniform_block = erhe::graphics::Instance::info.use_bindless_texture
+        ? nullptr
+        : shadow_map_default_uniform_block.get();
+    const auto* base_texture_default_uniform_block = erhe::graphics::Instance::info.use_bindless_texture
+        ? nullptr
+        : textured_default_uniform_block.get();
 
     m_shader_path = fs::path("res") / fs::path("shaders");
 
-    brush           = make_program("brush");
+    m_queue.set_parallel(
+        // TODO does not always work (locks up) get<erhe::application::Configuration>()->threading.parallel_initialization
+        false
+    );
+
     // Not available on Dell laptop.
     //standard      = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
 
-    m_dump_interface = true;
+    using ci = erhe::graphics::Shader_stages::Create_info;
 
-    standard            = make_program("standard");
+    queue(standard            , ci{ .name = "standard", .default_uniform_block = shadow_default_uniform_block, .dump_interface = true } );
+    queue(brush               , ci{ .name = "brush"   , .default_uniform_block = shadow_default_uniform_block } );
+    queue(textured            , ci{ .name = "textured", .default_uniform_block = base_texture_default_uniform_block } );
+    queue(edge_lines          , ci{ .name = "edge_lines"      } );
+    queue(wide_lines          , ci{ .name = "wide_lines"      } );
+    queue(points              , ci{ .name = "points"          } );
+    queue(depth               , ci{ .name = "depth"           } );
+    queue(id                  , ci{ .name = "id"              } );
+    queue(tool                , ci{ .name = "tool"            } );
+    queue(visualize_depth     , ci{ .name = "visualize_depth", .default_uniform_block = shadow_default_uniform_block } );
+    queue(visualize_normal    , ci{ .name = "standard", .defines = { std::pair<std::string, std::string>{"ERHE_VISUALIZE_NORMAL",    "1"}}, .default_uniform_block = shadow_default_uniform_block } );
+    queue(visualize_tangent   , ci{ .name = "standard", .defines = { std::pair<std::string, std::string>{"ERHE_VISUALIZE_TANGENT",   "1"}}, .default_uniform_block = shadow_default_uniform_block } );
+    queue(visualize_bitangent , ci{ .name = "standard", .defines = { std::pair<std::string, std::string>{"ERHE_VISUALIZE_BITANGENT", "1"}}, .default_uniform_block = shadow_default_uniform_block } );
 
-    m_dump_interface = false;
-
-    textured            = make_program("textured");
-    edge_lines          = make_program("edge_lines");
-    wide_lines          = make_program("wide_lines");
-    points              = make_program("points");
-    depth               = make_program("depth");
-    id                  = make_program("id");
-    tool                = make_program("tool");
-    visualize_depth     = make_program("visualize_depth");
-    visualize_normal    = make_program("standard", "ERHE_VISUALIZE_NORMAL");
-    visualize_tangent   = make_program("standard", "ERHE_VISUALIZE_TANGENT");
-    visualize_bitangent = make_program("standard", "ERHE_VISUALIZE_BITANGENT");
+    SPDLOG_LOGGER_TRACE(log_programs, "all programs queued, waiting for them to complete");
+    m_queue.wait();
+    SPDLOG_LOGGER_TRACE(log_programs, "queue finished");
 }
 
-auto Programs::make_program(
-    const std::string_view name
-) -> std::unique_ptr<erhe::graphics::Shader_stages>
+void Programs::queue(
+    std::unique_ptr<erhe::graphics::Shader_stages>& program,
+    erhe::graphics::Shader_stages::Create_info      create_info
+)
 {
-    const std::vector<std::string> no_defines;
-    return make_program(name, no_defines);
+    m_queue.enqueue(
+        [this, &program, &create_info]
+        ()
+        {
+            SPDLOG_LOGGER_TRACE(log_programs, "before compiling {}", create_info.name);
+            {
+                const erhe::application::Scoped_gl_context gl_context{
+                    Component::get<erhe::application::Gl_context_provider>()
+                };
+
+                SPDLOG_LOGGER_TRACE(log_programs, "compiling {}", create_info.name);
+                program = make_program(create_info);
+            }
+            SPDLOG_LOGGER_TRACE(log_programs, "after compiling {}", create_info.name);
+        }
+    );
 }
 
 auto Programs::make_program(
-    const std::string_view name,
-    const std::string_view define
-) -> std::unique_ptr<erhe::graphics::Shader_stages>
-{
-    std::vector<std::string> defines;
-    defines.push_back(std::string(define));
-    return make_program(name, defines);
-}
-
-auto Programs::make_program(
-    const std::string_view                                      name,
-    const std::vector<std::string>&                             defines,
-    const std::vector<std::pair<gl::Shader_type, std::string>>& extensions
+    erhe::graphics::Shader_stages::Create_info create_info
 ) -> std::unique_ptr<erhe::graphics::Shader_stages>
 {
     ERHE_PROFILE_FUNCTION
 
-    log_programs->trace("Programs::make_program({})", name);
-    log_programs->trace("current directory is {}", fs::current_path().string());
+    SPDLOG_LOGGER_TRACE(log_programs, "Programs::make_program({})", create_info.name);
+    SPDLOG_LOGGER_TRACE(log_programs, "current directory is {}", fs::current_path().string());
 
-    const fs::path vs_path = m_shader_path / fs::path(std::string(name) + ".vert");
-    const fs::path gs_path = m_shader_path / fs::path(std::string(name) + ".geom");
-    const fs::path fs_path = m_shader_path / fs::path(std::string(name) + ".frag");
+    const fs::path vs_path = m_shader_path / fs::path(create_info.name + ".vert");
+    const fs::path gs_path = m_shader_path / fs::path(create_info.name + ".geom");
+    const fs::path fs_path = m_shader_path / fs::path(create_info.name + ".frag");
 
     const bool vs_exists = fs::exists(vs_path);
     const bool gs_exists = fs::exists(gs_path);
@@ -121,15 +158,8 @@ auto Programs::make_program(
 
     const auto& shader_resources = *m_program_interface->shader_resources.get();
 
-    Shader_stages::Create_info create_info{
-        .name                      = std::string{name},
-        .vertex_attribute_mappings = &shader_resources.attribute_mappings,
-        .fragment_outputs          = &shader_resources.fragment_outputs,
-        .default_uniform_block     = default_uniform_block.get(),
-        .dump_reflection           = m_dump_reflection,
-        .dump_interface            = m_dump_interface,
-        .dump_final_source         = m_dump_final_source
-   };
+    create_info.vertex_attribute_mappings = &shader_resources.attribute_mappings,
+    create_info.fragment_outputs          = &shader_resources.fragment_outputs,
     create_info.add_interface_block(&shader_resources.material_block);
     create_info.add_interface_block(&shader_resources.light_block);
     create_info.add_interface_block(&shader_resources.camera_block);
@@ -138,15 +168,20 @@ auto Programs::make_program(
     create_info.struct_types.push_back(&shader_resources.light_struct);
     create_info.struct_types.push_back(&shader_resources.camera_struct);
     create_info.struct_types.push_back(&shader_resources.primitive_struct);
-    for (const auto& j : defines)
-    {
-        create_info.defines.emplace_back(j, "1");
-    }
 
-    const bool simpler_shaders = Component::get<erhe::application::Configuration>()->graphics.simpler_shaders;
-    if (simpler_shaders)
+    const auto& config = Component::get<erhe::application::Configuration>();
+    if (config->shadow_renderer.enabled)
+    {
+        create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
+    }
+    if (config->graphics.simpler_shaders)
     {
         create_info.defines.emplace_back("ERHE_SIMPLER_SHADERS", "1");
+    }
+
+    if (erhe::graphics::Instance::info.use_bindless_texture)
+    {
+        create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
     }
 
     if (vs_exists)
@@ -161,7 +196,6 @@ auto Programs::make_program(
     {
         create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
     }
-    create_info.extensions = extensions;
 
     // Always require bindless
     create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
@@ -169,7 +203,8 @@ auto Programs::make_program(
     Shader_stages::Prototype prototype{create_info};
     if (!prototype.is_valid())
     {
-        log_programs->error("Compiling shader program {} failed", name);
+        log_programs->error("current directory is {}", fs::current_path().string());
+        log_programs->error("Compiling shader program {} failed", create_info.name);
         return {};
     }
 
