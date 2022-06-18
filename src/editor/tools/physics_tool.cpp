@@ -18,7 +18,9 @@
 #include "erhe/physics/iconstraint.hpp"
 #include "erhe/scene/mesh.hpp"
 
-#include <imgui.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace editor
 {
@@ -487,6 +489,7 @@ void Physics_tool::set_active_command(const int command)
 
 void Physics_tool::tool_properties()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     int command = m_active_command;
     ImGui::RadioButton("Drag",  &command, c_command_drag); ImGui::SameLine();
     ImGui::RadioButton("Force", &command, c_command_force);
@@ -509,6 +512,7 @@ void Physics_tool::tool_properties()
     ImGui::SliderFloat("Impulse Clamp",   &m_impulse_clamp,   0.0f, 100.0f);
     ImGui::SliderFloat("Linear Damping",  &m_linear_damping,  0.0f,   1.0f);
     ImGui::SliderFloat("Angular Damping", &m_angular_damping, 0.0f,   1.0f);
+#endif
 }
 
 } // namespace editor

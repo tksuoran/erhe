@@ -6,6 +6,7 @@
 
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
+#include "erhe/graphics/debug.hpp"
 
 namespace editor
 {
@@ -17,7 +18,6 @@ View_client::View_client()
 
 View_client::~View_client() noexcept
 {
-
 }
 
 void View_client::declare_required_components()
@@ -65,6 +65,7 @@ void View_client::update()
 
 void View_client::render()
 {
+    erhe::graphics::Scoped_debug_group frame_scope{"frame"};
     m_editor_rendering->render();
 }
 

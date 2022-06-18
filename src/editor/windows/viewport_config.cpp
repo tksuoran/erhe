@@ -6,7 +6,9 @@
 #include "erhe/application/imgui_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <imgui.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace editor
 {
@@ -38,6 +40,7 @@ void Viewport_config::initialize_component()
     //render_style_selected.edge_lines = false;
 }
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
 void Viewport_config::render_style_ui(Render_style& render_style)
 {
     ERHE_PROFILE_FUNCTION
@@ -113,9 +116,11 @@ void Viewport_config::render_style_ui(Render_style& render_style)
         ImGui::SliderFloat("Point Size", &render_style.point_size, 0.0f, 20.0f);
     }
 }
+#endif
 
 void Viewport_config::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     ImGui::ColorEdit4("Clear Color", &clear_color.x, ImGuiColorEditFlags_Float);
@@ -147,6 +152,7 @@ void Viewport_config::imgui()
         erhe::application::make_combo("Camera",       debug_visualizations.camera,       c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
         ImGui::TreePop();
     }
+#endif
 }
 
 } // namespace editor

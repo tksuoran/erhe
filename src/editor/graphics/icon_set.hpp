@@ -2,7 +2,6 @@
 
 #include "erhe/components/components.hpp"
 
-#include <imgui.h>
 #include <glm/glm.hpp>
 
 #include "erhe/toolkit/filesystem.hpp"
@@ -43,10 +42,10 @@ public:
     void declare_required_components() override;
     void initialize_component       () override;
 
-    [[nodiscard]] auto load    (const fs::path& path) -> ImVec2;
-    [[nodiscard]] auto uv1     (const ImVec2& uv0) const -> ImVec2;
-    [[nodiscard]] auto get_icon(const erhe::scene::Light_type type) const -> const ImVec2;
-    void               icon    (const ImVec2 uv0, const glm::vec4 tint_color = glm::vec4{1.0f}) const;
+    [[nodiscard]] auto load    (const fs::path& path) -> glm::vec2;
+    [[nodiscard]] auto uv1     (const glm::vec2& uv0) const -> glm::vec2;
+    [[nodiscard]] auto get_icon(const erhe::scene::Light_type type) const -> const glm::vec2;
+    void               icon    (const glm::vec2 uv0, const glm::vec4 tint_color = glm::vec4{1.0f}) const;
 
     void icon(const erhe::scene::Camera& camera) const;
     void icon(const erhe::scene::Light&  light) const;
@@ -55,13 +54,13 @@ public:
 
     struct Icons
     {
-        ImVec2 camera           {};
-        ImVec2 directional_light{};
-        ImVec2 point_light      {};
-        ImVec2 spot_light       {};
-        ImVec2 mesh             {};
-        ImVec2 node             {};
-        ImVec2 three_dots        {};
+        glm::vec2 camera           {};
+        glm::vec2 directional_light{};
+        glm::vec2 point_light      {};
+        glm::vec2 spot_light       {};
+        glm::vec2 mesh             {};
+        glm::vec2 node             {};
+        glm::vec2 three_dots       {};
     };
 
     Icons icons;

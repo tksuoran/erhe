@@ -30,7 +30,10 @@
 #include "erhe/toolkit/profile.hpp"
 
 #include <glm/gtx/transform.hpp>
-#include <imgui.h>
+
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace editor
 {
@@ -61,8 +64,8 @@ auto Brush_tool_preview_command::try_call(
 }
 
 void Brush_tool_insert_command::try_ready(
-    erhe::application::Command_context&
-context)
+    erhe::application::Command_context& context
+)
 {
     if (m_brushes.try_insert_ready())
     {
@@ -514,6 +517,7 @@ void Brushes::update_mesh()
 
 void Brushes::tool_properties()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     ImGui::InputFloat("Hover scale",     &debug_info.hover_frame_scale);
@@ -528,10 +532,12 @@ void Brushes::tool_properties()
             ? erhe::application::Item_mode::disabled
             : erhe::application::Item_mode::normal
     );
+#endif
 }
 
 void Brushes::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     const size_t brush_count = m_brushes.size();
@@ -555,6 +561,7 @@ void Brushes::imgui()
             }
         }
     }
+#endif
 }
 
 } // namespace editor

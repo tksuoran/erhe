@@ -178,6 +178,77 @@ Line_renderer::Line_renderer(const char* name)
 {
 }
 
+Line_renderer::Frame_resources::Frame_resources(
+    const bool                                reverse_depth,
+    const size_t                              view_stride,
+    const size_t                              view_count,
+    const size_t                              vertex_count,
+    erhe::graphics::Shader_stages* const      shader_stages,
+    erhe::graphics::Vertex_attribute_mappings attribute_mappings,
+    erhe::graphics::Vertex_format&            vertex_format,
+    const std::string&                        style_name,
+    const size_t                              slot
+)
+    : vertex_buffer{
+        gl::Buffer_target::array_buffer,
+        vertex_format.stride() * vertex_count,
+        storage_mask,
+        access_mask
+    }
+    , view_buffer{
+        gl::Buffer_target::uniform_buffer,
+        view_stride * view_count,
+        storage_mask,
+        access_mask
+    }
+    , vertex_input{
+        erhe::graphics::Vertex_input_state_data::make(
+            attribute_mappings,
+            vertex_format,
+            &vertex_buffer,
+            nullptr
+        )
+    }
+    , pipeline_depth_pass{
+        {
+            .name           = "Line Renderer depth pass",
+            .shader_stages  = shader_stages,
+            .vertex_input   = &vertex_input,
+            .input_assembly = erhe::graphics::Input_assembly_state::lines,
+            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+            .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
+        }
+    }
+    , pipeline_depth_fail{
+        {
+            .name           = "Line Renderer depth fail",
+            .shader_stages  = shader_stages,
+            .vertex_input   = &vertex_input,
+            .input_assembly = erhe::graphics::Input_assembly_state::lines,
+            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+            .color_blend    = {
+                .enabled = true,
+                .rgb = {
+                    .equation_mode      = gl::Blend_equation_mode::func_add,
+                    .source_factor      = gl::Blending_factor::constant_alpha,
+                    .destination_factor = gl::Blending_factor::one_minus_constant_alpha
+                },
+                .alpha = {
+                    .equation_mode      = gl::Blend_equation_mode::func_add,
+                    .source_factor      = gl::Blending_factor::constant_alpha,
+                    .destination_factor = gl::Blending_factor::one_minus_constant_alpha
+                },
+                .constant = { 0.0f, 0.0f, 0.0f, 0.1f },
+            }
+        }
+    }
+{
+    vertex_buffer.set_debug_label(fmt::format("Line Renderer {} Vertex {}", style_name, slot));
+    view_buffer  .set_debug_label(fmt::format("Line Renderer {} View {}", style_name, slot));
+}
+
 void Line_renderer::create_frame_resources(
     Line_renderer_pipeline* pipeline,
     const Configuration&    configuration
@@ -187,7 +258,7 @@ void Line_renderer::create_frame_resources(
 
     m_pipeline = pipeline;
     const auto       reverse_depth = configuration.graphics.reverse_depth;
-    constexpr size_t vertex_count  = 65536;
+    constexpr size_t vertex_count  = 512 * 1024;
     constexpr size_t view_stride   = 256;
     constexpr size_t view_count    = 16;
     for (size_t slot = 0; slot < s_frame_resources_count; ++slot)
@@ -299,6 +370,28 @@ void Line_renderer::add_lines(
     m_line_count += lines.size();
     m_vertex_writer.end();
 }
+
+void Line_renderer::set_line_color(const uint32_t color)
+{
+    m_line_color = color;
+}
+
+void Line_renderer::set_line_color(const float r, const float g, const float b, const float a)
+{
+    m_line_color = erhe::toolkit::convert_float4_to_uint32(glm::vec4{r, g, b, a});
+}
+
+void Line_renderer::set_line_color(const glm::vec3 color)
+{
+    m_line_color = erhe::toolkit::convert_float4_to_uint32(color);
+}
+
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+void Line_renderer::set_line_color(const ImVec4 color)
+{
+    m_line_color = ImGui::ColorConvertFloat4ToU32(color);
+}
+#endif
 
 void Line_renderer::add_lines(
     const std::initializer_list<Line> lines,

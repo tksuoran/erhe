@@ -35,8 +35,10 @@ protected:
     Thread_pool::Queue m_queue;
 
 public:
-    Concurrent_queue();
-    explicit Concurrent_queue(
+    explicit Concurrent_queue(Thread_pool& thread_pool);
+
+    Concurrent_queue(
+        Thread_pool&           thread_pool,
         const std::string_view name,
         Priority               priority = Priority::NORMAL
     );

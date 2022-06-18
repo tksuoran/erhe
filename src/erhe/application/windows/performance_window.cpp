@@ -6,8 +6,10 @@
 #include "erhe/toolkit/timer.hpp"
 
 #include <gsl/gsl>
-#include <imgui.h>
-#include <imgui_internal.h>
+
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui_internal.h>
+#endif
 
 namespace erhe::application
 {
@@ -104,6 +106,7 @@ auto Cpu_timer_plot::timer() const -> erhe::toolkit::Timer*
     return m_timer;
 }
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
 namespace {
 
 static inline ImVec2 operator+(const ImVec2& lhs, const ImVec2& rhs)
@@ -127,6 +130,7 @@ static inline T clamp(T value, T min_value, T max_value)
 }
 
 }
+#endif
 
 Plot::~Plot() noexcept
 {
@@ -134,6 +138,7 @@ Plot::~Plot() noexcept
 
 void Plot::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     //ImGuiContext& g = *GImGui;
@@ -312,10 +317,12 @@ void Plot::imgui()
     // Return hovered index or -1 if none are hovered.
     // This is currently not exposed in the public API because we need a larger redesign of the whole thing, but in the short-term we are making it available in PlotEx().
     //return idx_hovered;
+#endif
 }
 
 void Performance_window::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     const auto all_gpu_timers = erhe::graphics::Gpu_timer::all_gpu_timers();
@@ -437,6 +444,7 @@ void Performance_window::imgui()
     {
         plot.imgui();
     }
+#endif
 }
 
 } // namespace erhe::application

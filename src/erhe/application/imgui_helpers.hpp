@@ -1,5 +1,7 @@
 #pragma once
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+
 #include <imgui.h>
 
 namespace erhe::application
@@ -30,3 +32,5 @@ void make_combo(
 }
 
 } // namespace editor
+
+#endif

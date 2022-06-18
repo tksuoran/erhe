@@ -35,6 +35,7 @@ endmacro ()
 set_option(ERHE_AUDIO_LIBRARY              "Audio library. Either miniaudio or none"                              "none"     "miniaudio;none")
 set_option(ERHE_FONT_RASTERIZATION_LIBRARY "Font rasterization library. Either freetype or none"                  "freetype" "freetype;none")
 set_option(ERHE_GLTF_LIBRARY               "GLTF library. Either cgltf or none"                                   "cgltf"    "cgltf;none")
+set_option(ERHE_GUI_LIBRARY                "GUI library. Either imgui or none"                                    "imgui"    "imgui;none")
 set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either bullet, jolt or none"        "bullet"   "bullet;jolt;none")
 set_option(ERHE_PNG_LIBRARY                "PNG loading library. Either mango or none"                            "none"     "mango;none")
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either superluminal, tracy or none" "none"     "superluminal;tracy;none")
@@ -44,80 +45,6 @@ set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype
 set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Either glfw or none"                 "glfw"     "glfw;none")
 set_option(ERHE_XR_LIBRARY                 "XR library to use with erhe. Either OpenXR, or none"                  "none"     "OpenXR;none")
 
-### Copied from Jolt physics
-if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
-	set(CLANG_LIB_PATH "\"$(VSInstallDir)\\VC\\Tools\\Llvm\\x64\\lib\\clang\\${CMAKE_CXX_COMPILER_VERSION}\\lib\\windows\"")
-	set(CMAKE_VS_PLATFORM_TOOLSET_HOST_ARCHITECTURE "x64")
-	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    # Jolt has /GR-  disable runtime type information
-    #          /WX   treat warnings as errors
-    # Zi      separate pdb
-    # Gm      minimal rebuild
-    # FC      full path to cl.exe
-    # GS      buffer security check
-    # GL      whole program optimization
-    # Gy      enable function level linking
-    # Od      disable all optimizations, fastert o compile
-    # Ob0     disable inline expansion
-    # Oi      generate intrinsic functions
-    # Ot      favor fast code
-    # MP      build with multiple processes
-    # fp:fast fast floating-point model; results are less predicable
-    # /DUNICODE /D_UNICODE
-	set(CMAKE_CXX_FLAGS "/std:c++17 /Zc:__cplusplus /Gm- /EHsc /nologo /diagnostics:classic /FC /fp:except- /Zc:inline /Zi /DWIN32 /D_WINDOWS")
-	set(CMAKE_CXX_FLAGS_DEBUG "/D_DEBUG /GS /Od /Ob0 /RTC1")
-	set(CMAKE_CXX_FLAGS_RELEASE "/DNDEBUG /GS- /GL /Gy /O2 /Oi /Ot")
-	set(CMAKE_CXX_FLAGS_DISTRIBUTION "/DNDEBUG /GS- /GL /Gy /O2 /Oi /Ot")
-	set(CMAKE_CXX_FLAGS_RELEASEASAN "/DNDEBUG -fsanitize=address /Od")
-	set(CMAKE_CXX_FLAGS_RELEASEUBSAN "/DNDEBUG -fsanitize=undefined,implicit-conversion")
-	set(CMAKE_CXX_FLAGS_RELEASECOVERAGE "/DNDEBUG -fprofile-instr-generate -fcoverage-mapping")
-    # Jolt has /SUBSYSTEM:WINDOWS
-	set(CMAKE_EXE_LINKER_FLAGS "/machine:x64 /ignore:4221 /DEBUG:FASTLINK")
-	if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP /fp:fast") # Clang doesn't use fast math because it cannot be turned off inside a single compilation unit
-		set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}") # Clang turns Float2 into a vector sometimes causing floating point exceptions
-		set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
-		set(CMAKE_EXE_LINKER_FLAGS_RELEASE "/INCREMENTAL:NO /LTCG:incremental /OPT:ICF /OPT:REF")
-		set(CMAKE_STATIC_LINKER_FLAGS_RELEASE "/LTCG")
-	elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /showFilenames")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -mpopcnt")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mlzcnt")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mbmi")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mf16c")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfma")
-		set(CMAKE_EXE_LINKER_FLAGS_RELEASEASAN "/SUBSYSTEM:CONSOLE /LIBPATH:${CLANG_LIB_PATH} clang_rt.asan-x86_64.lib -wholearchive:clang_rt.asan-x86_64.lib clang_rt.asan_cxx-x86_64.lib -wholearchive:clang_rt.asan_cxx-x86_64.lib")
-		set(CMAKE_EXE_LINKER_FLAGS_RELEASEUBSAN "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /LIBPATH:${CLANG_LIB_PATH}")
-		set(CMAKE_EXE_LINKER_FLAGS_RELEASECOVERAGE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /LIBPATH:${CLANG_LIB_PATH}")
-	endif()
-elseif ("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux" OR "${CMAKE_SYSTEM_NAME}" STREQUAL "Darwin" OR "${CMAKE_SYSTEM_NAME}" STREQUAL "iOS")
-	#set(CMAKE_CXX_FLAGS "-g -std=c++17 -I. -Wall -Werror")
-	if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-comment -ffp-contract=off")
-	endif()
-	if ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64" OR "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "AMD64")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -mpopcnt")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mlzcnt")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mbmi")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mf16c")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfma")
-	#elseif ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "aarch64")
-	#	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-	endif()
-	set(CMAKE_CXX_FLAGS_DEBUG "-D_DEBUG")
-	set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
-	set(CMAKE_CXX_FLAGS_DISTRIBUTION "-O3 -DNDEBUG")
-	set(CMAKE_CXX_FLAGS_RELEASEASAN "-DNDEBUG -fsanitize=address")
-	set(CMAKE_CXX_FLAGS_RELEASEUBSAN "-DNDEBUG -fsanitize=undefined,implicit-conversion")
-	set(CMAKE_CXX_FLAGS_RELEASECOVERAGE "-DNDEBUG -fprofile-instr-generate -fcoverage-mapping")
-	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pthread")
-endif()
-
-# Set linker flags
-set(CMAKE_EXE_LINKER_FLAGS_DISTRIBUTION "${CMAKE_EXE_LINKER_FLAGS_RELEASE}")
-
-###
-
 # These are in cmake/ directory
 message("Compiler = ${CMAKE_CXX_COMPILER_ID}")
 include(${CMAKE_CXX_COMPILER_ID})
@@ -126,9 +53,12 @@ include(functions)
 include(glfw)
 include(JoltPhysics)
 include(libraries)
-#include(mango)
 include(tracy)
 include(vscode)
+
+if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
+    apply_jolt_compatible_flags()
+endif ()
 
 # Dependencies
 message("Fetching dependencies")
@@ -190,18 +120,23 @@ else ()
     add_definitions(-DERHE_PROFILE_LIBRARY_NONE)
 endif ()
 
-
 vscode_support()
 
-#if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
-#    message("Fetching mango")
-#    FetchContent_MakeAvailable_mango()
-message(STATUS "Erhe configured to use Mango for PNG loading.")
-add_definitions(-DERHE_PNG_LIBRARY_MANGO)
-#else ()
-#    message(STATUS "Erhe configured to disable PNG loading.")
-#    add_definitions(-DERHE_PNG_LIBRARY_NONE)
-#endif ()
+if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
+    message(STATUS "Erhe configured to use ImGui for GUI.")
+    add_definitions(-DERHE_GUI_LIBRARY_IMGUI)
+else ()
+    message(STATUS "Erhe configured to disable GUI.")
+    add_definitions(-DERHE_GUI_LIBRARY_NONE)
+endif ()
+
+if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
+    message(STATUS "Erhe configured to use Mango for PNG loading.")
+    add_definitions(-DERHE_PNG_LIBRARY_MANGO)
+else ()
+    message(STATUS "Erhe configured to disable PNG loading.")
+    add_definitions(-DERHE_PNG_LIBRARY_NONE)
+endif ()
 
 if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
     message("Fetching freetype")

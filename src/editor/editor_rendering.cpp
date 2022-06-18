@@ -440,7 +440,8 @@ void Editor_rendering::render()
     // Render shadow maps
     if (
         m_scene_root &&
-        m_shadow_renderer
+        m_shadow_renderer &&
+        !m_scene_root->content_layer()->meshes.empty()
     )
     {
         m_scene_root->sort_lights();

@@ -7,8 +7,10 @@
 #include "erhe/primitive/material.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <imgui.h>
-#include <imgui/misc/cpp/imgui_stdlib.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#   include <imgui/misc/cpp/imgui_stdlib.h>
+#endif
 
 namespace editor
 {
@@ -94,6 +96,7 @@ void Materials::initialize_component()
 
 void Materials::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     // TODO We take a copy here
@@ -119,6 +122,7 @@ void Materials::imgui()
             m_selected_material = material;
         }
     }
+#endif
 }
 
 } // namespace editor

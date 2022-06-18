@@ -408,6 +408,13 @@ auto Brush::make_instance(
 
     ERHE_VERIFY(scaled.rt_primitive);
 
+    log_scene->trace(
+        "creating {} with material index {} : {}",
+        name,
+        instance_create_info.material->index,
+        instance_create_info.material->name
+    );
+
     auto mesh = std::make_shared<erhe::scene::Mesh>(name);
     mesh->mesh_data.primitives.push_back(
         erhe::primitive::Primitive{

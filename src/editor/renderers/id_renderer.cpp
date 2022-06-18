@@ -71,17 +71,27 @@ void Id_renderer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
+    const auto& config = Component::get<erhe::application::Configuration>();
+
+    if (!config->id_renderer.enabled)
+    {
+        log_render->info("Id renderer disabled due to erhe.ini setting");
+        return;
+    }
+
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()
     };
 
-    const auto& config = Component::get<erhe::application::Configuration>();
+    create_frame_resources(
+        1,
+        1,
+        1,
+        config->renderer.max_primitive_count,
+        config->renderer.max_draw_count
+    );
 
-    create_frame_resources(1, 1, 1, config->forward_renderer.max_primitive_count, config->forward_renderer.max_draw_count);
-
-    const auto reverse_depth = erhe::components::Component::get<
-        erhe::application::Configuration
-    >()->graphics.reverse_depth;
+    const auto reverse_depth = config->graphics.reverse_depth;
 
     m_pipeline.data = {
         .name           = "ID Renderer",
@@ -270,6 +280,12 @@ void Id_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION
 
+    const auto& config = Component::get<erhe::application::Configuration>();
+    if (!config->id_renderer.enabled)
+    {
+        return;
+    }
+
     const auto& viewport           = parameters.viewport;
     const auto* camera             = parameters.camera;
     const auto& content_mesh_spans = parameters.content_mesh_spans;
@@ -433,6 +449,10 @@ auto Id_renderer::get(
     float&    depth
 ) -> bool
 {
+    if (m_id_frame_resources.empty())
+    {
+        return false;
+    }
     int slot = static_cast<int>(m_current_id_frame_resource_slot);
 
     for (size_t i = 0; i < s_frame_resources_count; ++i)

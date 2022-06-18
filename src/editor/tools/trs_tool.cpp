@@ -35,7 +35,9 @@
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <imgui.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace editor
 {
@@ -611,6 +613,7 @@ void Trs_tool::Visualization::initialize(
 
 void Trs_tool::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     const bool   show_translate = m_visualization.show_translate;
     const bool   show_rotate    = m_visualization.show_rotate;
     const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};
@@ -696,6 +699,7 @@ void Trs_tool::imgui()
     {
         update_visibility();
     }
+#endif
 }
 
 auto Trs_tool::on_hover() -> bool

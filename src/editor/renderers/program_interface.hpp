@@ -82,7 +82,6 @@ class Program_interface
     : public erhe::components::Component
 {
 public:
-    static constexpr size_t           c_max_light_count{120};
     static constexpr std::string_view c_label{"Program_interface"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
@@ -101,7 +100,12 @@ public:
     class Shader_resources
     {
     public:
-        Shader_resources();
+        Shader_resources(
+            size_t max_material_count,
+            size_t max_light_count,
+            size_t max_camera_count,
+            size_t max_primitive_count
+        );
 
         erhe::graphics::Vertex_attribute_mappings attribute_mappings;
         erhe::graphics::Fragment_outputs          fragment_outputs;
@@ -115,6 +119,7 @@ public:
         erhe::graphics::Shader_resource light_block    {"light_block", 1, erhe::graphics::Shader_resource::Type::uniform_block};
         erhe::graphics::Shader_resource camera_block   {"camera",      2, erhe::graphics::Shader_resource::Type::uniform_block};
         erhe::graphics::Shader_resource primitive_block{"primitive",   3, erhe::graphics::Shader_resource::Type::shader_storage_block};
+        // TODO use uniform_block type for primitive_block if fits size
 
         erhe::graphics::Shader_resource material_struct {"Material"};
         erhe::graphics::Shader_resource light_struct    {"Light"};

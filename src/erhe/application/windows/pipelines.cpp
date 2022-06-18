@@ -12,8 +12,10 @@
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <imgui.h>
-#include <imgui/misc/cpp/imgui_stdlib.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#   include <imgui/misc/cpp/imgui_stdlib.h>
+#endif
 
 namespace erhe::application
 {
@@ -34,6 +36,7 @@ void Pipelines::initialize_component()
     get<Imgui_windows>()->register_imgui_window(this);
 }
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
 const char* gl_cull_face_mode_strings[] =
 {
     "Front",
@@ -413,9 +416,11 @@ void Pipelines::color_blend(erhe::graphics::Color_blend_state& color_blend)
 
     ImGui::PopID();
 }
+#endif
 
 void Pipelines::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     ImGui::Begin(c_title.data());
@@ -446,6 +451,7 @@ void Pipelines::imgui()
         }
     }
     ImGui::End();
+#endif
 }
 
 } // namespace erhe::application

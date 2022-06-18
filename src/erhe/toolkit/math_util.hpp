@@ -732,4 +732,36 @@ void calculate_bounding_volume(
     Bounding_sphere&    bounding_sphere
 );
 
+static inline auto saturate(float value) -> float
+{
+    return (value < 0.0f)
+        ? 0.0f
+        : (value > 1.0f)
+            ? 1.0f
+            : value;
+}
+
+static inline auto float_to_int8_saturate(float value) -> uint32_t
+{
+    return static_cast<uint32_t>(saturate(value) * 255.0f + 0.5f);
+}
+
+static inline auto convert_float4_to_uint32(const glm::vec4& in) -> uint32_t
+{
+    return
+        (float_to_int8_saturate(in.x)      ) |
+        (float_to_int8_saturate(in.y) <<  8) |
+        (float_to_int8_saturate(in.z) << 16) |
+        (float_to_int8_saturate(in.w) << 24);
+}
+
+static inline auto convert_float4_to_uint32(const glm::vec3& in) -> uint32_t
+{
+    return
+        (float_to_int8_saturate(in.x)      ) |
+        (float_to_int8_saturate(in.y) <<  8) |
+        (float_to_int8_saturate(in.z) << 16) |
+        0xff000000u;
+}
+
 } // namespace erhe::toolkit

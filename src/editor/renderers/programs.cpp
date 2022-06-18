@@ -87,10 +87,9 @@ void Programs::initialize_component()
 
     m_shader_path = fs::path("res") / fs::path("shaders");
 
-    m_queue.set_parallel(
-        // TODO does not always work (locks up) get<erhe::application::Configuration>()->threading.parallel_initialization
-        false
-    );
+    // TODO Make parallel task queue work
+    m_queue = std::make_unique<Serial_task_queue>();
+
 
     // Not available on Dell laptop.
     //standard      = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
@@ -112,7 +111,8 @@ void Programs::initialize_component()
     queue(visualize_bitangent , ci{ .name = "standard", .defines = { std::pair<std::string, std::string>{"ERHE_VISUALIZE_BITANGENT", "1"}}, .default_uniform_block = shadow_default_uniform_block } );
 
     SPDLOG_LOGGER_TRACE(log_programs, "all programs queued, waiting for them to complete");
-    m_queue.wait();
+    m_queue->wait();
+    m_queue.reset();
     SPDLOG_LOGGER_TRACE(log_programs, "queue finished");
 }
 
@@ -121,7 +121,7 @@ void Programs::queue(
     erhe::graphics::Shader_stages::Create_info      create_info
 )
 {
-    m_queue.enqueue(
+    m_queue->enqueue(
         [this, &program, &create_info]
         ()
         {

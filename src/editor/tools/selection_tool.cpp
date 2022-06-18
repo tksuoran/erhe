@@ -24,8 +24,6 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
-#include <imgui.h>
-
 namespace editor
 {
 
@@ -659,21 +657,9 @@ void Selection_tool::tool_render(
         )
         {
             const auto& light = as_light(node);
-            const uint32_t light_color = ImGui::ColorConvertFloat4ToU32(
-                ImVec4{
-                    light->color.r,
-                    light->color.g,
-                    light->color.b,
-                    1.0f
-                }
-            );
-            const uint32_t half_light_color = ImGui::ColorConvertFloat4ToU32(
-                ImVec4{
-                    0.5f * light->color.r,
-                    0.5f * light->color.g,
-                    0.5f * light->color.b,
-                    0.5f
-                }
+            const uint32_t light_color = erhe::toolkit::convert_float4_to_uint32(light->color);
+            const uint32_t half_light_color = erhe::toolkit::convert_float4_to_uint32(
+                glm::vec4{0.5f * light->color, 0.5f}
             );
             if (light->type == erhe::scene::Light_type::directional)
             {

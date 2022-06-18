@@ -24,7 +24,9 @@
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <backends/imgui_impl_glfw.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <backends/imgui_impl_glfw.h>
+#endif
 
 namespace erhe::application {
 
@@ -224,14 +226,17 @@ void View::run()
     {
         if (m_close_requested)
         {
+            log_frame->trace("close was requested, exiting loop");
             break;
         }
 
+        log_frame->trace("> before poll events()");
         get<Window>()->get_context_window()->poll_events();
-        //m_imgui_windows->make_imgui_context_uncurrent();
+        log_frame->trace("> after poll events()");
 
         if (m_close_requested)
         {
+            log_frame->trace("close was requested, exiting loop");
             break;
         }
 
@@ -241,12 +246,16 @@ void View::run()
 
 void View::on_close()
 {
+    log_frame->trace("on_close()");
+
     m_close_requested = true;
 }
 
 void View::update()
 {
     ERHE_PROFILE_FUNCTION
+
+    log_frame->trace("update()");
 
     m_time->update();
 
@@ -271,7 +280,9 @@ void View::update()
         ERHE_PROFILE_SCOPE(c_swap_buffers.data());
 
         erhe::graphics::Gpu_timer::end_frame();
+        log_frame->trace("> before swap_buffers()");
         m_window->get_context_window()->swap_buffers();
+        log_frame->trace("> after swap_buffers()");
     }
 
     m_ready = true;
@@ -411,6 +422,8 @@ void View::inactivate_ready_commands()
 void View::set_mouse_input_sink(Imgui_window* mouse_input_sink)
 {
     m_mouse_input_sink = mouse_input_sink;
+
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     if (
         m_configuration->imgui.enabled &&
         (mouse_input_sink != nullptr)
@@ -422,6 +435,7 @@ void View::set_mouse_input_sink(Imgui_window* mouse_input_sink)
         m_window_content_region_max = glm::vec2{ImGui::GetWindowContentRegionMax()};
     }
     else
+#endif
     {
         m_window_position = glm::vec2{0.0f, 0.0f};
         m_window_size     = glm::vec2{0.0f, 0.0f};
@@ -643,6 +657,7 @@ void View::on_mouse_move(const double x, const double y)
 
 void View::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
     const ImGuiTreeNodeFlags leaf_flags{
@@ -704,6 +719,7 @@ void View::imgui()
         }
         ImGui::TreePop();
     }
+#endif
 }
 
 }  // namespace editor

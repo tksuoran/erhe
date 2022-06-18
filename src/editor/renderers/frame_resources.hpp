@@ -45,7 +45,16 @@ public:
         : material_buffer     {gl::Buffer_target::uniform_buffer,        material_count  * material_stride,  storage_mask, access_mask}
         , light_buffer        {gl::Buffer_target::uniform_buffer,        light_count     * light_stride,     storage_mask, access_mask}
         , camera_buffer       {gl::Buffer_target::uniform_buffer,        camera_count    * camera_stride,    storage_mask, access_mask}
-        , primitive_buffer    {gl::Buffer_target::shader_storage_buffer, primitive_count * primitive_stride, storage_mask, access_mask}
+        , primitive_buffer    {
+            // TODO
+            //(primitive_count * primitive_stride <= erhe::graphics::Instance::limits.max_uniform_block_size)
+            //    ? gl::Buffer_target::uniform_buffer
+            //    : gl::Buffer_target::shader_storage_buffer,
+            gl::Buffer_target::shader_storage_buffer,
+            primitive_count * primitive_stride,
+            storage_mask,
+            access_mask
+        }
         , draw_indirect_buffer{gl::Buffer_target::draw_indirect_buffer,  draw_count      * draw_stride,      storage_mask, access_mask}
     {
         material_buffer     .set_debug_label(fmt::format("{} Material {}",      name, slot));

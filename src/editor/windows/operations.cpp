@@ -17,7 +17,9 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <imgui.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace editor
 {
@@ -80,6 +82,7 @@ void Operations::register_active_tool(Tool* tool)
 
 void Operations::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     if (m_selection_tool == nullptr)
@@ -281,6 +284,7 @@ void Operations::imgui()
     /////     );
     /////     rendertarget->mesh_node()->set_parent_from_node(placement);
     ///// }
+#endif
 }
 
 } // namespace editor

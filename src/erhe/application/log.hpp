@@ -17,6 +17,7 @@ extern std::shared_ptr<spdlog::logger> log_tools;
 extern std::shared_ptr<spdlog::logger> log_windows;
 extern std::shared_ptr<spdlog::logger> log_shader_monitor;
 extern std::shared_ptr<spdlog::logger> log_imgui;
+extern std::shared_ptr<spdlog::logger> log_frame;
 
 void initialize_logging();
 

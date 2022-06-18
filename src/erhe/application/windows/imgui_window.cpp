@@ -3,7 +3,9 @@
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <imgui.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace erhe::application {
 
@@ -30,7 +32,11 @@ void Imgui_window::initialize(
     const erhe::components::Components& components
 )
 {
+#if !defined(ERHE_GUI_LIBRARY_IMGUI)
+    static_cast<void>(components);
+#else
     m_imgui_renderer = components.get<Imgui_renderer>();
+#endif
 }
 
 void Imgui_window::image(
@@ -39,7 +45,13 @@ void Imgui_window::image(
     const int                                       height
 )
 {
+#if !defined(ERHE_GUI_LIBRARY_IMGUI)
+    static_cast<void>(texture);
+    static_cast<void>(width);
+    static_cast<void>(height);
+#else
     m_imgui_renderer->image(texture, width, height);
+#endif
 }
 
 void Imgui_window::show()
@@ -74,6 +86,7 @@ auto Imgui_window::label() -> const char*
 
 auto Imgui_window::begin() -> bool
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     on_begin();
     bool keep_visible{true};
     ImGui::SetNextWindowSizeConstraints(
@@ -90,12 +103,17 @@ auto Imgui_window::begin() -> bool
         hide();
     }
     return not_collapsed;
+#else
+    return false;
+#endif
 }
 
 void Imgui_window::end()
 {
     on_end();
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::End();
+#endif
 }
 
 auto Imgui_window::flags() -> ImGuiWindowFlags
@@ -130,11 +148,16 @@ Rendertarget_imgui_window::Rendertarget_imgui_window(
 
 auto Rendertarget_imgui_window::flags() -> ImGuiWindowFlags
 {
+#if !defined(ERHE_GUI_LIBRARY_IMGUI)
+    return 0;
+#else
     return ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize;
+#endif
 }
 
 void Rendertarget_imgui_window::on_begin()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
 #ifdef IMGUI_HAS_VIEWPORT
@@ -147,11 +170,14 @@ void Rendertarget_imgui_window::on_begin()
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 #endif
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+#endif
 }
 
 void Rendertarget_imgui_window::on_end()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PopStyleVar();
+#endif
 }
 
 } // namespace erhe::application

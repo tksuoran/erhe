@@ -172,6 +172,8 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 
+# Subset now in src/mango
+#
 #FetchContent_Declare(
 #    mango
 #    #GIT_REPOSITORY https://github.com/t0rakka/mango.git

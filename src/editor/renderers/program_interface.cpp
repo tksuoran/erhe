@@ -1,6 +1,7 @@
 #include "renderers/program_interface.hpp"
 #include "log.hpp"
 
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/window.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/sampler.hpp"
@@ -23,12 +24,18 @@ Program_interface::~Program_interface() noexcept
 
 void Program_interface::declare_required_components()
 {
+    require<erhe::application::Configuration>();
     require<erhe::application::Window>(); // ensures we have graphics::Instance info
 
     // TODO Make erhe::graphics::Instance a component
 }
 
-Program_interface::Shader_resources::Shader_resources()
+Program_interface::Shader_resources::Shader_resources(
+    size_t max_material_count,
+    size_t max_light_count,
+    size_t max_camera_count,
+    size_t max_primitive_count
+)
 {
     fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 
@@ -154,7 +161,7 @@ Program_interface::Shader_resources::Shader_resources()
         .base_texture = material_struct.add_uvec2("texture"     )->offset_in_parent(),
         .reserved     = material_struct.add_uvec2("reserved"    )->offset_in_parent()
     };
-    material_block.add_struct("materials", &material_struct, 200);
+    material_block.add_struct("materials", &material_struct, max_material_count);
 
     light_block_offsets = {
         .shadow_texture          = light_block.add_uvec2("shadow_texture"         )->offset_in_parent(),
@@ -171,7 +178,7 @@ Program_interface::Shader_resources::Shader_resources()
             .direction_and_outer_spot_cos = light_struct.add_vec4("direction_and_outer_spot_cos")->offset_in_parent(),
             .radiance_and_range           = light_struct.add_vec4("radiance_and_range"          )->offset_in_parent(),
         },
-        .light_struct            = light_block.add_struct("lights", &light_struct, c_max_light_count)->offset_in_parent()
+        .light_struct            = light_block.add_struct("lights", &light_struct, max_light_count)->offset_in_parent()
     };
 
     camera_block_offsets = {
@@ -185,7 +192,7 @@ Program_interface::Shader_resources::Shader_resources()
         .view_depth_far       = camera_struct.add_float("view_depth_far"      )->offset_in_parent(),
         .exposure             = camera_struct.add_float("exposure"            )->offset_in_parent()
     };
-    camera_block.add_struct("cameras", &camera_struct, 1);
+    camera_block.add_struct("cameras", &camera_struct, max_camera_count);
 
     primitive_block_offsets = {
         .world_from_node = primitive_struct.add_mat4 ("world_from_node")->offset_in_parent(),
@@ -195,7 +202,7 @@ Program_interface::Shader_resources::Shader_resources()
         .extra2          = primitive_struct.add_uint ("extra2"         )->offset_in_parent(),
         .extra3          = primitive_struct.add_uint ("extra3"         )->offset_in_parent()
     };
-    primitive_block.add_struct("primitives", &primitive_struct, 1000);
+    primitive_block.add_struct("primitives", &primitive_struct, max_primitive_count);
 }
 
 void Program_interface::initialize_component()
@@ -203,7 +210,15 @@ void Program_interface::initialize_component()
     // No idea why cppcheck this interface_blocks is not used
 
     // cppcheck-suppress unreadVariable
-    shader_resources = std::make_unique<Shader_resources>();
+
+    const auto& config = get<erhe::application::Configuration>();
+
+    shader_resources = std::make_unique<Shader_resources>(
+        config->renderer.max_material_count,
+        config->renderer.max_light_count,
+        config->renderer.max_camera_count,
+        config->renderer.max_primitive_count
+    );
 }
 
 }

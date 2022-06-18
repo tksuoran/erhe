@@ -192,16 +192,21 @@ class Concurrent_execution_queue
     : public IExecution_queue
 {
 public:
-    ~Concurrent_execution_queue() override
-    {
-    }
+    Concurrent_execution_queue(size_t thread_count);
 
     void enqueue(std::function<void()> task) override;
     void wait   () override;
 
 private:
+    erhe::concurrency::Thread_pool      m_thread_pool;
     erhe::concurrency::Concurrent_queue m_concurrent_queue;
 };
+
+Concurrent_execution_queue::Concurrent_execution_queue(size_t thread_count)
+    : m_thread_pool     {thread_count}
+    , m_concurrent_queue{m_thread_pool, "component initialization"}
+{
+}
 
 void Concurrent_execution_queue::enqueue(std::function<void()> task)
 {
@@ -375,7 +380,11 @@ void Components::launch_component_initialization(const bool parallel)
 
     if (parallel)
     {
-        m_execution_queue = std::make_unique<Concurrent_execution_queue>();
+        size_t thread_count = std::min(
+            8U,
+            std::max(std::thread::hardware_concurrency() - 0, 1U)
+        );
+        m_execution_queue = std::make_unique<Concurrent_execution_queue>(thread_count);
     }
     else
     {
@@ -499,11 +508,13 @@ void Components::wait_component_initialization_complete()
     }
 
     m_execution_queue->wait();
+    m_execution_queue.reset();
 
     post_initialize_components();
 
     const std::lock_guard<std::mutex> lock{m_mutex};
     m_is_ready = true;
+
 }
 
 void Components::update_fixed_step(

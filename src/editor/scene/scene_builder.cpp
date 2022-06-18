@@ -155,10 +155,20 @@ void Scene_builder::make_brushes()
 {
     ERHE_PROFILE_FUNCTION
 
-    Task_queue execution_queue;
-    execution_queue.set_parallel(
-        get<erhe::application::Configuration>()->threading.parallel_initialization
-    );
+    std::unique_ptr<ITask_queue> execution_queue;
+
+    if (get<erhe::application::Configuration>()->threading.parallel_initialization)
+    {
+        size_t thread_count = std::min(
+            8U,
+            std::max(std::thread::hardware_concurrency() - 0, 1U)
+        );
+        execution_queue = std::make_unique<Parallel_task_queue>("scene builder", thread_count);
+    }
+    else
+    {
+        execution_queue = std::make_unique<Serial_task_queue>();
+    }
 
     const auto& config = get<erhe::application::Configuration>()->scene;
 
@@ -175,7 +185,7 @@ void Scene_builder::make_brushes()
     // Floor
     if (config.floor)
     {
-        execution_queue.enqueue(
+        execution_queue->enqueue(
             [this, /*floor_size,*/ &floor_box_shape/*, &table_box_shape*/, &config]()
             {
                 ERHE_PROFILE_SCOPE("Floor brush");
@@ -237,7 +247,7 @@ void Scene_builder::make_brushes()
     if (config.gltf_files)
     {
 #if !defined(ERHE_GLTF_LIBRARY_NONE)
-        //execution_queue.enqueue(
+        //execution_queue->enqueue(
         //    [this]()
             {
                 ERHE_PROFILE_SCOPE("parse gltf files");
@@ -267,7 +277,7 @@ void Scene_builder::make_brushes()
 
     if (config.obj_files)
     {
-        execution_queue.enqueue(
+        execution_queue->enqueue(
             [this]()
             {
                 ERHE_PROFILE_SCOPE("parse .obj files");
@@ -307,7 +317,7 @@ void Scene_builder::make_brushes()
 
     if (config.platonic_solids)
     {
-        execution_queue.enqueue(
+        execution_queue->enqueue(
             [this]()
             {
                 ERHE_PROFILE_SCOPE("Platonic solids");
@@ -337,7 +347,7 @@ void Scene_builder::make_brushes()
 
     if (config.sphere)
     {
-        execution_queue.enqueue(
+        execution_queue->enqueue(
             [this, &config]()
             {
                 ERHE_PROFILE_SCOPE("Sphere");
@@ -365,7 +375,7 @@ void Scene_builder::make_brushes()
 
     if (config.torus)
     {
-        execution_queue.enqueue(
+        execution_queue->enqueue(
             [this, &config]()
             {
                 ERHE_PROFILE_SCOPE("Torus");
@@ -451,7 +461,7 @@ void Scene_builder::make_brushes()
 
     if (config.cylinder)
     {
-        execution_queue.enqueue(
+        execution_queue->enqueue(
             [this, &config]()
             {
                 ERHE_PROFILE_SCOPE("Cylinder");
@@ -487,7 +497,7 @@ void Scene_builder::make_brushes()
 
     if (config.cone)
     {
-        execution_queue.enqueue(
+        execution_queue->enqueue(
             [this, &config]()
             {
                 ERHE_PROFILE_SCOPE("Cone");
@@ -598,7 +608,7 @@ void Scene_builder::make_brushes()
 
                 for (const auto& key_name : library.names)
                 {
-                    execution_queue.enqueue(
+                    execution_queue->enqueue(
                         [this, &library, &key_name, &context]()
                         {
                             constexpr bool instantiate = true;
@@ -617,7 +627,7 @@ void Scene_builder::make_brushes()
         }
     }
 
-    execution_queue.wait();
+    execution_queue->wait();
 
     buffer_transfer_queue().flush();
 }
@@ -817,6 +827,13 @@ void Scene_builder::make_mesh_nodes()
 
         for (auto& entry : pack_entries)
         {
+            // TODO this will lock up if there are no visible materials
+            do
+            {
+                material_index = (material_index + 1) % m_scene_root->materials().size();
+            }
+            while (!m_scene_root->materials().at(material_index)->visible);
+
             auto* brush = entry.brush;
             float x     = static_cast<float>(entry.rectangle.x) / 256.0f;
             float z     = static_cast<float>(entry.rectangle.y) / 256.0f;
@@ -843,12 +860,6 @@ void Scene_builder::make_mesh_nodes()
             };
             auto instance = brush->make_instance(brush_instance_create_info);
             m_scene_root->add_instance(instance);
-
-            do
-            {
-                material_index = (material_index + 1) % m_scene_root->materials().size();
-            }
-            while (!m_scene_root->materials().at(material_index)->visible);
 
             m_scene_root->scene().sanity_check();
         }

@@ -29,6 +29,7 @@ namespace erhe::application
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
 auto from_erhe(const erhe::toolkit::Keycode keycode) -> ImGuiKey
 {
     switch (keycode)
@@ -167,6 +168,7 @@ public:
 private:
     ImGuiContext* m_old_context{nullptr};
 };
+#endif
 
 #if 0
 Rendertarget_imgui_windows::Rendertarget_imgui_windows(
@@ -528,21 +530,27 @@ void Rendertarget_imgui_windows::end_and_render_imgui_frame()
 Imgui_windows::Imgui_windows()
     : erhe::components::Component{c_label}
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     std::fill(
         std::begin(m_mouse_just_pressed),
         std::end(m_mouse_just_pressed),
         false
     );
+#endif
 }
 
 Imgui_windows::~Imgui_windows() noexcept
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::DestroyContext(m_imgui_context);
+#endif
 }
 
 void Imgui_windows::declare_required_components()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     m_renderer = require<Imgui_renderer>();
+#endif
 
     require<Configuration      >();
     require<Gl_context_provider>();
@@ -564,6 +572,7 @@ void Imgui_windows::post_initialize()
 
 void Imgui_windows::init_context()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     IMGUI_CHECKVERSION();
 
     auto* font_atlas = m_renderer->get_font_atlas();
@@ -582,8 +591,6 @@ void Imgui_windows::init_context()
     //io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;          // We can honor io.WantSetMousePos requests (optional, rarely used)
     //io.BackendFlags |= ImGuiBackendFlags_PlatformHasViewports;    // We can create multi-viewports on the Platform side (optional)
 
-    m_time = 0.0;
-
     // TODO Clipboard
     // TODO Update monitors
 
@@ -592,10 +599,14 @@ void Imgui_windows::init_context()
     main_viewport->PlatformHandle = this;
 
     ImGui::SetCurrentContext(nullptr);
+#endif
+
+    m_time = 0.0;
 }
 
 void Imgui_windows::begin_imgui_frame()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     const auto& editor_view    = *get<View  >().get();
@@ -647,22 +658,27 @@ void Imgui_windows::begin_imgui_frame()
 
     ImGui::NewFrame();
     ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+#endif
 }
 
 void Imgui_windows::end_imgui_frame()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     ImGui::EndFrame();
+#endif
 }
 
 void Imgui_windows::render_imgui_frame()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     ImGui::Render();
 
     m_renderer->render_draw_data();
+#endif
 }
 
 #if 0
@@ -704,6 +720,7 @@ void Editor_imgui_windows::destroy_rendertarget(
 
 void Imgui_windows::menu()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     if (ImGui::BeginMainMenuBar())
     {
         window_menu();
@@ -711,10 +728,12 @@ void Imgui_windows::menu()
     }
 
     //ImGui::End();
+#endif
 }
 
 void Imgui_windows::window_menu()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
 
     if (ImGui::BeginMenu("Window"))
@@ -758,11 +777,16 @@ void Imgui_windows::window_menu()
     }
 
     ImGui::PopStyleVar();
+#endif
 }
 
 auto Imgui_windows::want_capture_mouse() const -> bool
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     return ImGui::GetIO(m_imgui_context).WantCaptureMouse;
+#else
+    return false;
+#endif
 }
 
 void Imgui_windows::register_imgui_window(Imgui_window* window)
@@ -796,6 +820,7 @@ void Imgui_windows::rendertarget_imgui_windows()
 
 void Imgui_windows::imgui_windows()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     Scoped_imgui_context scoped_context{m_imgui_context};
@@ -844,6 +869,7 @@ void Imgui_windows::imgui_windows()
     }
 
     end_imgui_frame();
+#endif
 }
 
 #if 0
@@ -868,9 +894,13 @@ void Editor_imgui_windows::render_rendertarget_gui_meshes(
 
 void Imgui_windows::on_focus(int focused)
 {
+#if !defined(ERHE_GUI_LIBRARY_IMGUI)
+    static_cast<void>(focused);
+#else
     // TODO must make sure context is current
     ImGuiIO& io = ImGui::GetIO(m_imgui_context);
     io.AddFocusEvent(focused != 0);
+#endif
 }
 
 void Imgui_windows::on_cursor_enter(int entered)
@@ -883,6 +913,10 @@ void Imgui_windows::on_mouse_click(
     const int      count
 )
 {
+#if !defined(ERHE_GUI_LIBRARY_IMGUI)
+    static_cast<void>(button);
+    static_cast<void>(count);
+#else
     if (
         (button < ImGuiMouseButton_COUNT) &&
         (count > 0)
@@ -890,6 +924,7 @@ void Imgui_windows::on_mouse_click(
     {
         m_mouse_just_pressed[button] = true;
     }
+#endif
 }
 
 void Imgui_windows::on_mouse_wheel(
@@ -897,6 +932,10 @@ void Imgui_windows::on_mouse_wheel(
     const double y
 )
 {
+#if !defined(ERHE_GUI_LIBRARY_IMGUI)
+    static_cast<void>(x);
+    static_cast<void>(y);
+#else
     ImGuiIO& io = ImGui::GetIO(m_imgui_context);
     io.MouseWheelH += static_cast<float>(x);
     io.MouseWheel  += static_cast<float>(y);
@@ -905,20 +944,25 @@ void Imgui_windows::on_mouse_wheel(
     ///// {
     /////     rendertarget->on_mouse_wheel(x, y);
     ///// }
+#endif
 }
 
 void Imgui_windows::make_imgui_context_current()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     ImGui::SetCurrentContext(m_imgui_context);
+#endif
 }
 
 void Imgui_windows::make_imgui_context_uncurrent()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     ImGui::SetCurrentContext(nullptr);
+#endif
 }
 
 void Imgui_windows::on_key(
@@ -927,6 +971,11 @@ void Imgui_windows::on_key(
     const bool       pressed
 )
 {
+#if !defined(ERHE_GUI_LIBRARY_IMGUI)
+    static_cast<void>(keycode);
+    static_cast<void>(modifier_mask);
+    static_cast<void>(pressed);
+#else
     ///// for (const auto& rendertarget : m_rendertarget_imgui_windows)
     ///// {
     /////     rendertarget->on_key(keycode, modifier_mask, pressed);
@@ -937,14 +986,19 @@ void Imgui_windows::on_key(
     ImGuiIO& io = ImGui::GetIO(m_imgui_context);
     update_key_modifiers(io, modifier_mask);
     io.AddKeyEvent(from_erhe(keycode), pressed);
+#endif
 }
 
 void Imgui_windows::on_char(
     const unsigned int codepoint
 )
 {
+#if !defined(ERHE_GUI_LIBRARY_IMGUI)
+    static_cast<void>(codepoint);
+#else
     ImGuiIO& io = ImGui::GetIO(m_imgui_context);
     io.AddInputCharacter(codepoint);
+#endif
 }
 
 }  // namespace editor

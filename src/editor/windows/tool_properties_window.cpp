@@ -7,7 +7,10 @@
 #include "erhe/toolkit/profile.hpp"
 
 #include <gsl/gsl>
-#include <imgui.h>
+
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace editor
 {
@@ -39,6 +42,7 @@ void Tool_properties_window::post_initialize()
 
 void Tool_properties_window::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     if (!m_operations)
@@ -51,6 +55,7 @@ void Tool_properties_window::imgui()
         return;
     }
     tool->tool_properties();
+#endif
 }
 
 } // namespace editor

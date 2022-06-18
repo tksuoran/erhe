@@ -66,7 +66,7 @@ auto Debug_view_window::get_size(
 {
     static_cast<void>(available_size);
 
-    if (!m_shadow_renderer)
+    if (!m_shadow_renderer || !m_shadow_renderer->texture())
     {
         return {};
     }

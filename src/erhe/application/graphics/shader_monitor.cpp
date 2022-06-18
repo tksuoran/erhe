@@ -1,4 +1,5 @@
 #include "erhe/application/graphics/shader_monitor.hpp"
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/log.hpp"
 
 #include "erhe/toolkit/profile.hpp"
@@ -28,12 +29,28 @@ Shader_monitor::~Shader_monitor() noexcept
     log_shader_monitor->info("Shader_monitor shut down complete");
 }
 
+void Shader_monitor::declare_required_components()
+{
+    require<Configuration>();
+}
+
 void Shader_monitor::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
+    if (!get<Configuration>()->shader_monitor.enabled)
+    {
+        log_startup->info("Shader monitor disabled due to erhe.ini setting");
+        return;
+    }
+
     set_run(true);
     m_poll_filesystem_thread = std::thread(&Shader_monitor::poll_thread, this);
+}
+
+void Shader_monitor::set_enabled(bool enabled)
+{
+    set_run(enabled);
 }
 
 void Shader_monitor::add(

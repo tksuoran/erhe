@@ -1,16 +1,18 @@
 @rem rd /S /Q build
 @rem -D CMAKE_GENERATOR_INSTANCE="C:/Program Files/Microsoft Visual Studio/2022/Community" ^
+@rem -A x64 ^
+@rem -Thost=x64 ^
 
 cmake ^
     -G "Visual Studio 17 2022" ^
     -A x64 ^
-    -Thost=x64 ^
     -B build ^
     -S . ^
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ^
     -Wno-dev ^
     -DERHE_FONT_RASTERIZATION_LIBRARY=freetype ^
     -DERHE_GLTF_LIBRARY=cgltf ^
+    -DERHE_GUI_LIBRARY=imgui ^
     -DERHE_PHYSICS_LIBRARY=bullet ^
     -DERHE_PNG_LIBRARY=mango ^
     -DERHE_PROFILE_LIBRARY=tracy ^

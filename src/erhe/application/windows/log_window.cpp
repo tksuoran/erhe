@@ -7,7 +7,9 @@
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/timestamp.hpp"
 
-#include <imgui.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 #include <algorithm>
 
@@ -56,6 +58,7 @@ void Log_window::toggle_pause()
 
 void Log_window::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     auto& tail  = erhe::log::get_tail_store_log();
@@ -157,6 +160,7 @@ void Log_window::imgui()
         ImGui::TreePop();
     }
     frame->trim(0);
+#endif
 }
 
 } // namespace erhe::application

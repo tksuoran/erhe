@@ -7,7 +7,9 @@
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <imgui.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace editor
 {
@@ -62,10 +64,8 @@ void Grid_tool::tool_render(
         return;
     }
 
-    const ImVec4    im_major_color{m_major_color.x, m_major_color.y, m_major_color.z, m_major_color.w};
-    const ImVec4    im_minor_color{m_minor_color.x, m_minor_color.y, m_minor_color.z, m_minor_color.w};
-    const uint32_t  cell_major_color = ImGui::ColorConvertFloat4ToU32(im_major_color);
-    const uint32_t  cell_minor_color = ImGui::ColorConvertFloat4ToU32(im_minor_color);
+    const uint32_t  cell_major_color = erhe::toolkit::convert_float4_to_uint32(m_major_color);
+    const uint32_t  cell_minor_color = erhe::toolkit::convert_float4_to_uint32(m_minor_color);
     const glm::mat4 m = erhe::toolkit::create_translation<float>(m_center);
 
     const float extent     = static_cast<float>(m_cell_count) * m_cell_size;
@@ -130,6 +130,7 @@ void Grid_tool::tool_render(
 
 void Grid_tool::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     ImGui::Checkbox   ("Enable",      &m_enable);
@@ -140,6 +141,7 @@ void Grid_tool::imgui()
     ImGui::DragFloat3 ("Center",      &m_center.x);
     ImGui::ColorEdit4 ("Major Color", &m_major_color.x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Minor Color", &m_minor_color.x, ImGuiColorEditFlags_Float);
+#endif
 }
 
 auto Grid_tool::snap(const vec3 v) const -> vec3

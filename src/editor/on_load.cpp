@@ -2,7 +2,6 @@
 #include "view_client.hpp"
 #include "graphics/icon_set.hpp"
 #include "graphics/image_transfer.hpp"
-//#include "graphics/textures.hpp"
 #include "operations/operation_stack.hpp"
 
 #include "renderers/forward_renderer.hpp"
@@ -17,7 +16,6 @@
 #include "renderers/program_interface.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
-//#include "renderers/texture_renderer.hpp"
 
 #include "tools/fly_camera_tool.hpp"
 #include "tools/grid_tool.hpp"
@@ -56,13 +54,16 @@
 #include "erhe/application/window.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
-#include "erhe/application/renderers/imgui_renderer.hpp"
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include "erhe/application/renderers/imgui_renderer.hpp"
+#endif
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/application/windows/imgui_demo_window.hpp"
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/application/windows/performance_window.hpp"
 #include "erhe/application/windows/pipelines.hpp"
+#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
@@ -99,8 +100,10 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<erhe::application::Time                  >());
         m_components.add(make_shared<erhe::application::View                  >());
         m_components.add(make_shared<erhe::application::Log_window            >());
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
         m_components.add(make_shared<erhe::application::Imgui_demo_window     >());
         m_components.add(make_shared<erhe::application::Imgui_renderer        >());
+#endif
         m_components.add(make_shared<erhe::application::Performance_window    >());
         m_components.add(make_shared<erhe::application::Pipelines             >());
         m_components.add(make_shared<erhe::application::Shader_monitor        >());
@@ -182,7 +185,9 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 
     const auto& config = configuration->windows;
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     if (m_components.get<erhe::application::Imgui_demo_window >()) m_components.get<erhe::application::Imgui_demo_window >()->hide();
+#endif
     if (m_components.get<erhe::application::Log_window        >() && !config.log        ) m_components.get<erhe::application::Log_window        >()->hide();
     if (m_components.get<erhe::application::Performance_window>() && !config.performance) m_components.get<erhe::application::Performance_window>()->hide();
     if (m_components.get<erhe::application::Pipelines         >() && !config.pipelines  ) m_components.get<erhe::application::Pipelines         >()->hide();

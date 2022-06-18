@@ -2,15 +2,19 @@
 
 namespace erhe::concurrency {
 
-Concurrent_queue::Concurrent_queue()
-    : m_pool {Thread_pool::get_instance()}
+Concurrent_queue::Concurrent_queue(Thread_pool& thread_pool)
+    : m_pool {thread_pool}
     , m_queue{&m_pool, int(Priority::NORMAL), "concurrent.default"}
 {
 }
 
-Concurrent_queue::Concurrent_queue(const std::string_view name, Priority priority)
-    : m_pool {Thread_pool::get_instance()}
-    , m_queue{&m_pool, int(priority), name}
+Concurrent_queue::Concurrent_queue(
+    Thread_pool&           thread_pool,
+    const std::string_view name,
+    Priority               priority
+)
+    : m_pool {thread_pool}
+    , m_queue{&m_pool, static_cast<int>(priority), name}
 {
 }
 

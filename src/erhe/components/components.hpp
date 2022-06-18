@@ -12,12 +12,6 @@
 #include <string_view>
 #include <vector>
 
-namespace mango {
-
-class ConcurrentQueue;
-
-}
-
 namespace erhe::components
 {
 

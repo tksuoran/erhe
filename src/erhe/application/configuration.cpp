@@ -153,14 +153,14 @@ Configuration::Configuration(int argc, char** argv)
             ini_get(section, "enabled", text_renderer.enabled);
         }
 
-        if (ini.has("forward_renderer"))
+        if (ini.has("renderer"))
         {
-            const auto& section = ini["forward_renderer"];
-            ini_get(section, "max_material_count",  forward_renderer.max_material_count );
-            ini_get(section, "max_light_count",     forward_renderer.max_light_count    );
-            ini_get(section, "max_camera_count",    forward_renderer.max_camera_count   );
-            ini_get(section, "max_primitive_count", forward_renderer.max_primitive_count);
-            ini_get(section, "max_draw_count",      forward_renderer.max_draw_count     );
+            const auto& section = ini["renderer"];
+            ini_get(section, "max_material_count",  renderer.max_material_count );
+            ini_get(section, "max_light_count",     renderer.max_light_count    );
+            ini_get(section, "max_camera_count",    renderer.max_camera_count   );
+            ini_get(section, "max_primitive_count", renderer.max_primitive_count);
+            ini_get(section, "max_draw_count",      renderer.max_draw_count     );
         }
 
         if (ini.has("physics"))
@@ -225,6 +225,18 @@ Configuration::Configuration(int argc, char** argv)
             ini_get(section, "edge_lines",        viewport.edge_lines);
             ini_get(section, "corner_points",     viewport.corner_points);
             ini_get(section, "polygon_centroids", viewport.polygon_centroids);
+        }
+
+        if (ini.has("shader_monitor"))
+        {
+            const auto& section = ini["shader_monitor"];
+            ini_get(section, "enabled", shader_monitor.enabled);
+        }
+
+        if (ini.has("id_renderer"))
+        {
+            const auto& section = ini["id_renderer"];
+            ini_get(section, "enabled", id_renderer.enabled);
         }
     }
 

@@ -9,6 +9,7 @@
 #include <sstream>
 #include <thread>
 
+// Comment this out disable timer queries
 #define ERHE_USE_TIME_QUERY 1
 
 namespace erhe::graphics
@@ -17,7 +18,9 @@ namespace erhe::graphics
 Scoped_debug_group::Scoped_debug_group(
     const std::string_view debug_label
 )
+    : m_debug_label{debug_label}
 {
+    gl::log_gl->trace("---- begin: {}", debug_label);
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
         0,
@@ -28,6 +31,7 @@ Scoped_debug_group::Scoped_debug_group(
 
 Scoped_debug_group::~Scoped_debug_group() noexcept
 {
+    gl::log_gl->trace("---- end: {}", m_debug_label);
     gl::pop_debug_group();
 }
 
@@ -127,7 +131,6 @@ void Gpu_timer::create()
 #if defined(ERHE_USE_TIME_QUERY)
     std::stringstream this_thread_id_ss;
     this_thread_id_ss << std::this_thread::get_id();
-    //log_threads.trace("{}: create @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
     log_threads->trace(
         "{}: create @ {}",
         this_thread_id_ss.str(),
@@ -156,7 +159,6 @@ void Gpu_timer::reset()
 #if defined(ERHE_USE_TIME_QUERY)
     std::stringstream this_thread_id_ss;
     this_thread_id_ss << std::this_thread::get_id();
-    //log_threads.trace("{}: reset @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
     log_threads->trace(
         "{}: reset @ {}",
         this_thread_id_ss.str(),

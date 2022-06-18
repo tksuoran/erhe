@@ -214,7 +214,6 @@ target_link_libraries(
     erhe::scene
     erhe::toolkit
     erhe::ui
-    imgui
     ghc_filesystem
     optional_lite
     nlohmann_json::nlohmann_json
@@ -222,6 +221,10 @@ target_link_libraries(
     rapidjson
     spdlog
 )
+
+if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
+    target_link_libraries(${_target} PRIVATE imgui)
+endif ()
 
 if (${ERHE_SVG_LIBRARY} STREQUAL "lunasvg")
     target_link_libraries(${_target} PRIVATE lunasvg)

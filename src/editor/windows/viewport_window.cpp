@@ -28,7 +28,9 @@
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <imgui.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace editor
 {
@@ -370,12 +372,16 @@ auto Viewport_window::consumes_mouse_input() const -> bool
 
 void Viewport_window::on_begin()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
+#endif
 }
 
 void Viewport_window::on_end()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PopStyleVar();
+#endif
 }
 
 auto Viewport_window::should_post_process() const -> bool
@@ -395,6 +401,7 @@ auto Viewport_window::should_post_process() const -> bool
 
 void Viewport_window::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     ImGui::SetNextItemWidth(150.0f);
@@ -448,6 +455,7 @@ void Viewport_window::imgui()
     //m_viewport_config.imgui();
 
     update_framebuffer();
+#endif
 }
 
 void Viewport_window::set_viewport(

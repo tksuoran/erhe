@@ -141,6 +141,7 @@ auto make_logger(
     );
     spdlog::register_logger(logger);
     logger->set_level(level);
+    logger->flush_on(spdlog::level::trace);
     return logger;
 }
 

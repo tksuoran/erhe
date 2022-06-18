@@ -57,8 +57,6 @@ public:
     explicit Thread_pool(size_t size);
     ~Thread_pool() noexcept;
 
-    static Thread_pool& get_instance();
-
     int size() const;
 
     void enqueue(std::function<void()>&& func)
@@ -74,8 +72,6 @@ protected:
     void wait               (Queue* queue);
 
 private:
-    static Thread_pool      m_static_instance;
-
     struct Task_queue;
     alignas(64) Task_queue* m_queues;
 

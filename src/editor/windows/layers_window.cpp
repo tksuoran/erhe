@@ -15,7 +15,10 @@
 #include "erhe/toolkit/profile.hpp"
 
 #include <gsl/gsl>
-#include <imgui.h>
+
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace editor
 {
@@ -51,6 +54,7 @@ void Layers_window::post_initialize()
 
 void Layers_window::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     const ImGuiTreeNodeFlags parent_flags{
@@ -116,6 +120,7 @@ void Layers_window::imgui()
         }
     }
     m_node_clicked.reset();
+#endif
 }
 
 } // namespace editor

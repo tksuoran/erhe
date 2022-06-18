@@ -136,6 +136,7 @@ auto Operation_stack::can_redo() const -> bool
     return !m_undone.empty();
 }
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
 void Operation_stack::imgui(
     const char*                                     stack_label,
     const std::vector<std::shared_ptr<IOperation>>& operations
@@ -164,11 +165,14 @@ void Operation_stack::imgui(
         ImGui::TreePop();
     }
 }
+#endif
 
 void Operation_stack::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     imgui("Executed", m_executed);
     imgui("Undone", m_undone);
+#endif
 }
 
 } // namespace editor

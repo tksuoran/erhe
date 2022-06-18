@@ -16,6 +16,7 @@
                 "CMAKE_INSTALL_PREFIX":            "${sourceDir}/out/install/${presetName}",
                 "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
                 "ERHE_GLTF_LIBRARY":               "cgltf",
+                "ERHE_GUI_LIBRARY":                "imgui",
                 "ERHE_PHYSICS_LIBRARY":            "bullet",
                 "ERHE_PNG_LIBRARY":                "mango",
                 "ERHE_PROFILE_LIBRARY":            "tracy",

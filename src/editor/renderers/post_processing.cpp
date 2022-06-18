@@ -12,7 +12,9 @@
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <imgui.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 #include <algorithm>
 
@@ -323,7 +325,8 @@ Rendertarget::Rendertarget()
 Rendertarget::Rendertarget(
     const std::string& label,
     const int          width,
-    const int          height)
+    const int          height
+)
 {
     using erhe::graphics::Framebuffer;
     using erhe::graphics::Texture;
@@ -404,6 +407,7 @@ auto Post_processing::current_frame_resources() -> Frame_resources&
 
 void Post_processing::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     //ImGui::DragInt("Taps",   &m_taps,   1.0f, 1, 32);
@@ -460,6 +464,7 @@ void Post_processing::imgui()
         );
     }
     ImGui::PopStyleVar();
+#endif
 }
 
 [[nodiscard]] auto Post_processing::get_output() -> std::shared_ptr<erhe::graphics::Texture>

@@ -14,6 +14,11 @@
 #include <memory>
 #include <vector>
 
+namespace erhe::application
+{
+    class Configuration;
+}
+
 namespace erhe::primitive
 {
     class Primitive;
@@ -162,8 +167,9 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Program_interface> m_program_interface;
-    std::shared_ptr<Programs>          m_programs;
+    std::shared_ptr<erhe::application::Configuration> m_configuration;
+    std::shared_ptr<Program_interface>                m_program_interface;
+    std::shared_ptr<Programs>                         m_programs;
 
     std::string                      m_name;
     std::vector<Frame_resources>     m_frame_resources;

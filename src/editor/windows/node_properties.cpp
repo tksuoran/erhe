@@ -25,9 +25,12 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtc/constants.hpp>
-#include <imgui.h>
-#include <imgui_internal.h>
-#include <imgui/misc/cpp/imgui_stdlib.h>
+
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#   include <imgui_internal.h>
+#   include <imgui/misc/cpp/imgui_stdlib.h>
+#endif
 
 namespace editor
 {
@@ -67,6 +70,7 @@ void Node_properties::post_initialize()
     m_selection_tool  = get<Selection_tool >();
 }
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
 void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
 {
     ERHE_PROFILE_FUNCTION
@@ -278,9 +282,16 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
             const auto& geometry = primitive.source_geometry;
             if (geometry)
             {
-                if (ImGui::TreeNode(geometry->name.c_str()))
+                if (
+                    ImGui::TreeNodeEx(
+                        geometry->name.c_str(),
+                        ImGuiTreeNodeFlags_Framed |
+                        ImGuiTreeNodeFlags_DefaultOpen
+                    )
+                )
                 {
                     get<Scene_root>()->material_combo("Material", primitive.material);
+                    ImGui::Text("Material Index: %zu", primitive.material->index);
                     int point_count   = geometry->get_point_count();
                     int polygon_count = geometry->get_polygon_count();
                     int edge_count    = geometry->get_edge_count();
@@ -533,6 +544,7 @@ auto Node_properties::make_angle_button(
         .edit_ended    = ImGui::IsItemDeactivatedAfterEdit()
     };
 };
+#endif
 
 Node_properties::Node_state::Node_state(erhe::scene::Node& node)
     : node                              {&node}
@@ -569,6 +581,7 @@ auto Node_properties::drop_node_state(erhe::scene::Node& node)
     );
 }
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
 void Node_properties::transform_properties(erhe::scene::Node& node)
 {
     ERHE_PROFILE_FUNCTION
@@ -681,19 +694,25 @@ void Node_properties::transform_properties(erhe::scene::Node& node)
     }
     ImGui::PopID();
 }
+#endif
 
 void Node_properties::on_begin()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 0.0f);
+#endif
 }
 
 void Node_properties::on_end()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PopStyleVar();
+#endif
 }
 
 void Node_properties::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     if (!m_selection_tool)
@@ -738,6 +757,7 @@ void Node_properties::imgui()
 
         transform_properties(*node.get());
     }
+#endif
 }
 
 } // namespace editor

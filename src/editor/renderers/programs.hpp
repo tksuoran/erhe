@@ -82,7 +82,7 @@ private:
     std::shared_ptr<erhe::application::Shader_monitor> m_shader_monitor;
     fs::path m_shader_path;
 
-    Task_queue m_queue;
+    std::unique_ptr<ITask_queue> m_queue;
 };
 
 }

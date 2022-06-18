@@ -31,8 +31,6 @@ erhe_target_sources_grouped(
     graphics/shader_monitor.hpp
 
     renderers/buffer_writer.hpp
-    renderers/imgui_renderer.cpp
-    renderers/imgui_renderer.hpp
     renderers/line_renderer.cpp
     renderers/line_renderer.hpp
     renderers/quad_renderer.cpp
@@ -42,16 +40,14 @@ erhe_target_sources_grouped(
 
     windows/framebuffer_window.cpp
     windows/framebuffer_window.hpp
-    windows/imgui_demo_window.cpp
-    windows/imgui_demo_window.hpp
+    windows/imgui_window.cpp
+    windows/imgui_window.hpp
     windows/log_window.cpp
     windows/log_window.hpp
     windows/performance_window.cpp
     windows/performance_window.hpp
     windows/pipelines.cpp
     windows/pipelines.hpp
-    windows/imgui_window.cpp
-    windows/imgui_window.hpp
 
     application.cpp
     application.hpp
@@ -59,8 +55,6 @@ erhe_target_sources_grouped(
     configuration.hpp
     controller.cpp
     controller.hpp
-    imgui_helpers.cpp
-    imgui_helpers.hpp
     imgui_windows.cpp
     imgui_windows.hpp
     log.cpp
@@ -73,8 +67,24 @@ erhe_target_sources_grouped(
     view.hpp
     window.cpp
     window.hpp
-
 )
+
+if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        renderers/imgui_renderer.cpp
+        renderers/imgui_renderer.hpp
+        windows/imgui_demo_window.cpp
+        windows/imgui_demo_window.hpp
+        imgui_helpers.cpp
+        imgui_helpers.hpp
+    )
+    target_link_libraries(${_target}
+    PUBLIC
+        imgui
+)
+
+endif ()
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
@@ -88,10 +98,8 @@ target_link_libraries(${_target}
         erhe::log
         erhe::toolkit
         erhe::ui
-        imgui
         mINI
         ghc_filesystem
-        #mango
         optional_lite
         Microsoft.GSL::GSL
 )

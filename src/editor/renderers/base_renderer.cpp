@@ -5,6 +5,7 @@
 
 #include "erhe/gl/gl.hpp"
 #include "erhe/gl/strong_gl_enums.hpp"
+#include "erhe/application/configuration.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/shader_resource.hpp"
@@ -25,7 +26,10 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <imgui.h>
+
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace editor
 {
@@ -45,6 +49,8 @@ Base_renderer::~Base_renderer() noexcept
 
 void Base_renderer::base_require(erhe::components::Component* component)
 {
+    // TODO configuration is not really needed as require
+    m_configuration     = component->require<erhe::application::Configuration>();
     m_programs          = component->require<Programs>();
     m_program_interface = component->require<Program_interface>();
 }
@@ -119,13 +125,20 @@ auto Base_renderer::update_primitive_buffer(
     SPDLOG_LOGGER_TRACE(log_render, "meshes.size() = {}", meshes.size());
 
     m_primitive_writer.begin(current_frame_resources().primitive_buffer.target());
-    const auto&  shader_resources   = *m_program_interface->shader_resources.get();
-    const size_t entry_size         = shader_resources.primitive_struct.size_bytes();
-    const auto   primitive_gpu_data = current_frame_resources().primitive_buffer.map();
-    const auto&  offsets            = shader_resources.primitive_block_offsets;
-    size_t       primitive_index    = 0;
+    const auto&  shader_resources    = *m_program_interface->shader_resources.get();
+    const size_t entry_size          = shader_resources.primitive_struct.size_bytes();
+    const auto   primitive_gpu_data  = current_frame_resources().primitive_buffer.map();
+    const auto&  offsets             = shader_resources.primitive_block_offsets;
+    const size_t max_primitive_count = m_configuration->renderer.max_primitive_count;
+    size_t       primitive_index     = 0;
     for (const auto& mesh : meshes)
     {
+        if (primitive_index == max_primitive_count)
+        {
+            log_render->warn("max primitive count reached");
+            break;
+        }
+
         ERHE_VERIFY(mesh);
         if (!visibility_filter(mesh->get_visibility_mask()))
         {
@@ -137,6 +150,12 @@ auto Base_renderer::update_primitive_buffer(
         size_t mesh_primitive_index{0};
         for (const auto& primitive : mesh_data.primitives)
         {
+            if (primitive_index == max_primitive_count)
+            {
+                log_render->warn("max primitive count reached");
+                break;
+            }
+
             const auto& primitive_geometry = primitive.gl_primitive_geometry;
             //log_render->trace("primitive_index = {}", primitive_index);
 
@@ -218,6 +237,7 @@ auto Base_renderer::update_light_buffer(
     const size_t   entry_size       = shader_resources.light_struct.size_bytes();
     const auto&    offsets          = shader_resources.light_block_offsets;
     const auto     light_gpu_data   = current_frame_resources().light_buffer.map();
+    const size_t   max_light_count  = m_configuration->renderer.max_light_count;
     int            light_index      = 0;
     uint32_t       directional_light_count{0u};
     uint32_t       spot_light_count       {0u};
@@ -239,6 +259,12 @@ auto Base_renderer::update_light_buffer(
     using erhe::graphics::write;
     for (const auto& light : lights)
     {
+        if (light_index == max_light_count)
+        {
+            log_render->warn("max light count reached");
+            break;
+        }
+
         ERHE_VERIFY(light);
 
         switch (light->type)
@@ -286,14 +312,20 @@ auto Base_renderer::update_material_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto&  shader_resources  = *m_program_interface->shader_resources.get();
-    const size_t entry_size        = shader_resources.material_struct.size_bytes();
-    const auto&  offsets           = shader_resources.material_block_offsets;
-    const auto   material_gpu_data = current_frame_resources().material_buffer.map();
-    size_t       material_index    = 0;
+    const auto&  shader_resources   = *m_program_interface->shader_resources.get();
+    const size_t entry_size         = shader_resources.material_struct.size_bytes();
+    const auto&  offsets            = shader_resources.material_block_offsets;
+    const auto   material_gpu_data  = current_frame_resources().material_buffer.map();
+    const size_t max_material_count = m_configuration->renderer.max_material_count;
+    size_t       material_index     = 0;
     m_material_writer.begin(current_frame_resources().material_buffer.target());
     for (const auto& material : materials)
     {
+        if (material_index == max_material_count)
+        {
+            log_render->warn("max material count reached");
+            break;
+        }
         memset(reinterpret_cast<uint8_t*>(material_gpu_data.data()) + m_material_writer.write_offset, 0, entry_size);
         using erhe::graphics::as_span;
         using erhe::graphics::write;
@@ -378,19 +410,31 @@ auto Base_renderer::update_draw_indirect_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto draw_indirect_gpu_data = current_frame_resources().draw_indirect_buffer.map();
-    uint32_t   instance_count     {1};
-    uint32_t   base_instance      {0};
-    size_t     draw_indirect_count{0};
+    const auto   draw_indirect_gpu_data = current_frame_resources().draw_indirect_buffer.map();
+    const size_t max_draw_count         = m_configuration->renderer.max_draw_count;
+    uint32_t     instance_count     {1};
+    uint32_t     base_instance      {0};
+    size_t       draw_indirect_count{0};
     m_draw_indirect_writer.begin(current_frame_resources().draw_indirect_buffer.target());
     for (const auto& mesh : meshes)
     {
+        if (draw_indirect_count == max_draw_count)
+        {
+            log_render->warn("max draw count reached");
+            break;
+        }
+
         if (!visibility_filter(mesh->get_visibility_mask()))
         {
             continue;
         }
         for (auto& primitive : mesh->mesh_data.primitives)
         {
+            if (draw_indirect_count == max_draw_count)
+            {
+                log_render->warn("max draw count reached");
+                break;
+            }
             const auto& primitive_geometry = primitive.gl_primitive_geometry;
             const auto  index_range        = primitive_geometry.index_range(primitive_mode);
             if (index_range.index_count == 0)
@@ -530,10 +574,12 @@ void Base_renderer::bind_draw_indirect_buffer()
 
 void Base_renderer::debug_properties_window()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::Begin("Base Renderer Debug Properties");
     ImGui::Checkbox("Enable Max Index Count", &m_max_index_count_enable);
     ImGui::SliderInt("Max Index Count", &m_max_index_count, 0, 256);
     ImGui::End();
+#endif
 }
 
 auto Base_renderer::max_index_count_enable() const -> bool

@@ -1,4 +1,5 @@
 #include "erhe/graphics/buffer.hpp"
+#include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 

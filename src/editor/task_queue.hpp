@@ -5,15 +5,33 @@
 
 namespace editor {
 
-class Task_queue
+class ITask_queue
 {
 public:
-    void set_parallel(bool parallel);
-    void enqueue     (std::function<void()>&& func);
-    void wait        ();
+    virtual ~ITask_queue();
+    virtual void enqueue(std::function<void()>&& func) = 0;
+    virtual void wait   () = 0;
+};
+
+class Serial_task_queue
+    : public ITask_queue
+{
+public:
+    void enqueue(std::function<void()>&& func) override;
+    void wait   () override;
+};
+
+class Parallel_task_queue
+    : public ITask_queue
+{
+public:
+    explicit Parallel_task_queue(const std::string_view name, size_t thread_count);
+
+    void enqueue(std::function<void()>&& func) override;
+    void wait   () override;
 
 private:
-    bool                                m_parallel;
+    erhe::concurrency::Thread_pool      m_thread_pool;
     erhe::concurrency::Concurrent_queue m_queue;
 };
 

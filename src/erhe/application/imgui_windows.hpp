@@ -7,7 +7,9 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/viewport.hpp"
 
-#include <imgui.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 #include <gsl/gsl>
 
@@ -183,13 +185,17 @@ private:
 #if 0
     std::vector<std::shared_ptr<Rendertarget_imgui_windows>> m_rendertarget_imgui_windows;
 #endif
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGuiContext*                                            m_imgui_context       {nullptr};
     ImVector<ImWchar>                                        m_glyph_ranges;
+#endif
     bool                                                     m_show_style_editor   {false};
 
     double                                                   m_time                {0.0};
     bool                                                     m_has_cursor          {false};
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     bool                                                     m_mouse_just_pressed[ImGuiMouseButton_COUNT];
+#endif
 
     // std::shared_ptr<erhe::scene::Mesh> m_test_rendertarget_mesh;
 };

@@ -6,8 +6,6 @@
 #include "erhe/components/components.hpp"
 #include "erhe/log/log.hpp"
 
-#include <imgui.h>
-
 #include <fmt/core.h>
 #include <fmt/format.h>
 

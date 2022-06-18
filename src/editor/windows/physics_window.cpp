@@ -20,7 +20,9 @@
 
 #include <glm/ext/matrix_common.hpp>
 
-#include <imgui.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace editor
 {
@@ -83,6 +85,7 @@ auto Physics_window::description() -> const char*
 
 void Physics_window::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     if (m_selection_tool == nullptr)
@@ -202,6 +205,7 @@ void Physics_window::imgui()
         ImGui::SliderFloat("Angular Damping", &angular_damping, 0.0f, 1.0f);
         rigid_body->set_damping(linear_damping, angular_damping);
     }
+#endif
 }
 
 auto Physics_window::get_debug_draw_parameters() -> Debug_draw_parameters

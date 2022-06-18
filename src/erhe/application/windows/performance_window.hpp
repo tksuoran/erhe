@@ -3,8 +3,10 @@
 #include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
-#include <imgui.h>
 #include <glm/glm.hpp>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 #include <memory>
 #include <string>
@@ -43,7 +45,9 @@ protected:
     float              m_scale_min      {0.0f};
     float              m_scale_max      {2.0f}; // 2 ms
     float              m_scale_max_limit{1.0f}; // 1 ms
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImVec2             m_frame_size     {256.0f, 64.0f};
+#endif
     std::vector<float> m_values;
 };
 

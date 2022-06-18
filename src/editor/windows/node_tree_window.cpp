@@ -19,8 +19,11 @@
 #include "erhe/toolkit/profile.hpp"
 
 #include <gsl/gsl>
-#include <imgui.h>
-#include <imgui_internal.h>
+
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#   include <imgui_internal.h>
+#endif
 
 namespace editor
 {
@@ -187,6 +190,7 @@ void Node_tree_window::attach_selection_to(
     }
 }
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
 void Node_tree_window::drag_and_drop_source(
     const std::shared_ptr<erhe::scene::Node>& node
 )
@@ -545,20 +549,26 @@ void Node_tree_window::imgui_tree_node(
         }
     }
 }
+#endif
 
 void Node_tree_window::on_begin()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,      ImVec2{0.0f, 0.0f});
     ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2{3.0f, 3.0f});
+#endif
 }
 
 void Node_tree_window::on_end()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PopStyleVar(2);
+#endif
 }
 
 void Node_tree_window::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     const auto& scene = m_scene_root->scene();
@@ -592,6 +602,7 @@ void Node_tree_window::imgui()
     {
         m_selection_tool->range_selection().end();
     }
+#endif
 }
 
 }

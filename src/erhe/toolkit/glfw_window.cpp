@@ -216,7 +216,7 @@ void key_event_callback(
     const int   key,
     const int   scancode,
     const int   action,
-    const int   glfe_modifiers
+    const int   glfw_modifiers
 )
 {
     static_cast<void>(scancode);
@@ -231,7 +231,7 @@ void key_event_callback(
             {
                 event_handler->on_key(
                     glfw_key_to_erhe(key),
-                    glfw_modifiers_to_erhe(glfe_modifiers),
+                    glfw_modifiers_to_erhe(glfw_modifiers),
                     (action == GLFW_PRESS)
                 );
                 break;
@@ -395,7 +395,6 @@ auto Context_window::open(
     //glfwWindowHint(GLFW_DEPTH_BITS,            24);
     glfwWindowHint(GLFW_SRGB_CAPABLE,  GLFW_TRUE);
     glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_TRUE); // Fullscreen only
-    //glfwWindowHint(GLFW_CONTEXT_NO_ERROR, GLFW_TRUE); // Release only
     if (configuration.msaa_sample_count > 0)
     {
         glfwWindowHint(GLFW_SAMPLES, configuration.msaa_sample_count);

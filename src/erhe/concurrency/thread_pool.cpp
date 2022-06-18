@@ -15,10 +15,6 @@ using std::chrono::milliseconds;
 // Thread_pool
 // ------------------------------------------------------------
 
-static const
-size_t concurrency = std::max(std::thread::hardware_concurrency() - 0, 1U);
-
-Thread_pool Thread_pool::m_static_instance(concurrency);
 
 struct Thread_pool::Task_queue
 {
@@ -87,11 +83,6 @@ Thread_pool::~Thread_pool() noexcept
 //{
 //    return int(std::thread::hardware_concurrency());
 //}
-
-Thread_pool& Thread_pool::get_instance()
-{
-    return m_static_instance;
-}
 
 int Thread_pool::size() const
 {

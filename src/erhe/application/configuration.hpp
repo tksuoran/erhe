@@ -87,7 +87,7 @@ public:
     };
     Text_renderer text_renderer;
 
-    struct Forward_renderer
+    struct Renderer
     {
         int max_material_count  {256};
         int max_light_count     {256};
@@ -95,7 +95,7 @@ public:
         int max_primitive_count {8000}; // GLTF primitives
         int max_draw_count      {8000};
     };
-    Forward_renderer forward_renderer;
+    Renderer renderer;
 
     struct Physics
     {
@@ -160,6 +160,18 @@ public:
         bool polygon_centroids{false};
     };
     Viewport viewport;
+
+    struct Shader_monitor
+    {
+        bool enabled{true};
+    };
+    Shader_monitor shader_monitor;
+
+    struct Id_renderer
+    {
+        bool enabled{true};
+    };
+    Id_renderer id_renderer;
 };
 
 } // namespace erhe::application

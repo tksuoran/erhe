@@ -95,8 +95,8 @@ void Shadow_renderer::initialize_component()
         1,
         m_configuration->shadow_renderer.shadow_map_max_light_count,
         m_configuration->shadow_renderer.shadow_map_max_light_count,
-        m_configuration->forward_renderer.max_primitive_count,
-        m_configuration->forward_renderer.max_draw_count
+        m_configuration->renderer.max_primitive_count,
+        m_configuration->renderer.max_draw_count
     );
 
     const auto& shader_resources = *get<Program_interface>()->shader_resources.get();

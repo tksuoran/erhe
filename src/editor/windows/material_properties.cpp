@@ -5,8 +5,10 @@
 #include "erhe/primitive/material.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <imgui.h>
-#include <imgui/misc/cpp/imgui_stdlib.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#   include <imgui/misc/cpp/imgui_stdlib.h>
+#endif
 
 namespace editor
 {
@@ -38,6 +40,7 @@ void Material_properties::post_initialize()
 
 void Material_properties::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     if (m_materials == nullptr)
@@ -50,12 +53,15 @@ void Material_properties::imgui()
         if (selected_material)
         {
             ImGui::InputText("Name", &selected_material->name);
+            ImGui::Text("Index = %zu", selected_material->index);
             ImGui::SliderFloat("Metallic",    &selected_material->metallic,    0.0f, 1.0f);
             ImGui::SliderFloat("Roughness X", &selected_material->roughness.x, 0.0f, 1.0f);
             ImGui::SliderFloat("Roughness Y", &selected_material->roughness.y, 0.0f, 1.0f);
             ImGui::ColorEdit4 ("Base Color",  &selected_material->base_color.x, ImGuiColorEditFlags_Float);
+            ImGui::ColorEdit4 ("Emissive",    &selected_material->emissive.x  , ImGuiColorEditFlags_Float);
         }
     }
+#endif
 }
 
 } // namespace editor

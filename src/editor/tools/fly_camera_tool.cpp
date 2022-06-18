@@ -15,7 +15,9 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/view.hpp"
 
-#include <imgui.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace editor
 {
@@ -379,6 +381,7 @@ auto simple_degrees(const float radians_value) -> float
 
 void Fly_camera_tool::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     float speed = m_camera_controller->translate_z.max_delta();
@@ -399,6 +402,7 @@ void Fly_camera_tool::imgui()
     m_camera_controller->translate_x.set_max_delta(speed);
     m_camera_controller->translate_y.set_max_delta(speed);
     m_camera_controller->translate_z.set_max_delta(speed);
+#endif
 }
 
 }

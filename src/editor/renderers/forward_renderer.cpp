@@ -74,11 +74,11 @@ void Forward_renderer::initialize_component()
     erhe::graphics::Scoped_debug_group forward_renderer_initialization{c_forward_renderer_initialize_component};
 
     create_frame_resources(
-        m_configuration->forward_renderer.max_material_count,
-        m_configuration->forward_renderer.max_light_count,
-        m_configuration->forward_renderer.max_camera_count,
-        m_configuration->forward_renderer.max_primitive_count,
-        m_configuration->forward_renderer.max_draw_count
+        m_configuration->renderer.max_material_count,
+        m_configuration->renderer.max_light_count,
+        m_configuration->renderer.max_camera_count,
+        m_configuration->renderer.max_primitive_count,
+        m_configuration->renderer.max_draw_count
     );
 }
 

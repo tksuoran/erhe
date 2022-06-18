@@ -10,7 +10,9 @@
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/profile.hpp"
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
 #include <imgui.h>
+#endif
 
 namespace erhe::application
 {
@@ -61,6 +63,7 @@ void Framebuffer_window::bind_framebuffer()
 
 void Framebuffer_window::update_framebuffer()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     const auto win_min = ImGui::GetWindowContentRegionMin();
@@ -137,10 +140,12 @@ void Framebuffer_window::update_framebuffer()
     create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_texture.get());
     m_framebuffer = std::make_unique<Framebuffer>(create_info);
     m_framebuffer->set_debug_label(m_debug_label);
+#endif
 }
 
 void Framebuffer_window::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     if (
@@ -159,6 +164,7 @@ void Framebuffer_window::imgui()
         ImGui::PopStyleVar();
     }
     update_framebuffer();
+#endif
 }
 
 } // namespace erhe::application

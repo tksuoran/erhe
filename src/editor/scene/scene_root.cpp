@@ -23,7 +23,9 @@
 
 #include <glm/gtx/color_space.hpp>
 
-#include <imgui.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 #include <algorithm>
 
@@ -303,6 +305,7 @@ auto Scene_root::light_layer() const -> erhe::scene::Light_layer*
     return m_light_layer.get();
 }
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
 auto Scene_root::camera_combo(
     const char*            label,
     erhe::scene::ICamera*& selected_camera,
@@ -392,6 +395,7 @@ auto Scene_root::material_combo(
     }
     return selection_changed;
 }
+#endif
 
 namespace
 {

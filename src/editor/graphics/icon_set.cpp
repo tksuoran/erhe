@@ -85,17 +85,17 @@ void Icon_set::initialize_component()
     icons.three_dots        = load(icon_directory / "three_dots.svg");
 }
 
-auto Icon_set::load(const fs::path& path) -> ImVec2
+auto Icon_set::load(const fs::path& path) -> glm::vec2
 {
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)
     Expects(m_row < m_row_count);
 
     //const auto  current_path = fs::current_path();
-    const auto  document = lunasvg::Document::loadFromFile(path.string());
+    const auto document = lunasvg::Document::loadFromFile(path.string());
     if (!document)
     {
         log_svg->error("Unable to load {}", path.string());
-        return ImVec2{0.0f, 0.0f};
+        return glm::vec2{0.0f, 0.0f};
     }
 
     // Render a super sampled icon
@@ -165,31 +165,41 @@ auto Icon_set::load(const fs::path& path) -> ImVec2
         ++m_row;
     }
 
-    return ImVec2{u, v};
+    return glm::vec2{u, v};
 #else
     static_cast<void>(path);
-    return ImVec2{};
+    return glm::vec2{};
 #endif
 }
 
-auto Icon_set::uv1(const ImVec2& uv0) const -> ImVec2
+auto Icon_set::uv1(const glm::vec2& uv0) const -> glm::vec2
 {
-    return ImVec2{
+    return glm::vec2{
         uv0.x + m_icon_uv_width,
         uv0.y + m_icon_uv_height
     };
 }
 
-ImVec4 imvec_from_glm(glm::vec4 v)
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+auto imvec_from_glm(glm::vec2 v) -> ImVec2
+{
+    return ImVec2{v.x, v.y};
+}
+auto imvec_from_glm(glm::vec4 v) -> ImVec4
 {
     return ImVec4{v.x, v.y, v.z, v.w};
 }
+#endif
 
 void Icon_set::icon(
-    const ImVec2    uv0,
+    const glm::vec2 uv0,
     const glm::vec4 tint_color
 ) const
 {
+#if !defined(ERHE_GUI_LIBRARY_IMGUI)
+    static_cast<void>(uv0);
+    static_cast<void>(tint_color);
+#else
     ERHE_PROFILE_FUNCTION
 
     //const float size      = ImGui::GetTextLineHeight();
@@ -208,9 +218,10 @@ void Icon_set::icon(
     );
     get<erhe::application::Imgui_renderer>()->use(m_texture, m_texture_handle);
     ImGui::SameLine();
+#endif
 }
 
-auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const ImVec2
+auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const glm::vec2
 {
     switch (type)
     {
@@ -241,6 +252,5 @@ void Icon_set::icon(const erhe::scene::Node&) const
 {
     icon(icons.node);
 }
-
 
 }

@@ -12,7 +12,9 @@
 #include "erhe/application/view.hpp"
 #include "erhe/scene/mesh.hpp"
 
-#include <imgui.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace editor
 {
@@ -229,6 +231,7 @@ void Material_paint_tool::set_active_command(const int command)
 
 void Material_paint_tool::tool_properties()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     int command = m_active_command;
     ImGui::RadioButton("Paint", &command, c_command_paint); ImGui::SameLine();
     ImGui::RadioButton("Pick",  &command, c_command_pick);
@@ -238,6 +241,7 @@ void Material_paint_tool::tool_properties()
     }
 
     m_scene_root->material_combo("Material", m_material);
+#endif
 }
 
 } // namespace editor

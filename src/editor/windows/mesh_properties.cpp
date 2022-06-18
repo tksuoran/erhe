@@ -13,8 +13,10 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <imgui.h>
-#include <imgui/misc/cpp/imgui_stdlib.h>
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#   include <imgui/misc/cpp/imgui_stdlib.h>
+#endif
 
 namespace editor
 {
@@ -56,12 +58,14 @@ void Mesh_properties::post_initialize()
 
 void Mesh_properties::imgui()
 {
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
     ImGui::SliderInt("Max Labels",    &m_max_labels, 0, 2000);
     ImGui::Checkbox ("Show Points",   &m_show_points);
     ImGui::Checkbox ("Show Polygons", &m_show_polygons);
     ImGui::Checkbox ("Show Edges",    &m_show_edges);
+#endif
 }
 
 void Mesh_properties::tool_render(

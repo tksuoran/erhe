@@ -1,5 +1,6 @@
 #pragma once
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
 #include "erhe/components/components.hpp"
 
 #include "erhe/graphics/buffer.hpp"
@@ -170,3 +171,5 @@ private:
 } // namespace erhe::application
 
 void ImGui_ImplErhe_assert_user_error(const bool condition, const char* message);
+
+#endif
