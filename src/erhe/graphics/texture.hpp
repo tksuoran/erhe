@@ -156,7 +156,7 @@ public:
     void reset();
     auto allocate_texture_unit(uint64_t handle) -> std::optional<std::size_t>;
 
-    auto bind() -> size_t;
+    auto bind(uint64_t fallback_handle) -> size_t;
 
 private:
     std::vector<uint64_t> m_texture_units;

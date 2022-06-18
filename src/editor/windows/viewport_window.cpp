@@ -431,6 +431,12 @@ void Viewport_window::imgui()
         const auto& texture = use_post_processing_texture
             ? m_post_processing->get_output()
             : m_color_texture_resolved_for_present;
+        SPDLOG_LOGGER_TRACE(
+            log_render,
+            "Viewport_window::imgui() rendering texture {} {}",
+            texture->gl_name(),
+            texture->debug_label()
+        );
         image(
             texture,
             static_cast<int>(size.x),

@@ -343,10 +343,10 @@ void Editor_rendering::initialize_component()
     };
 
     m_content_timer   = std::make_unique<erhe::graphics::Gpu_timer>("Content");
-    m_selection_timer = std::make_unique<erhe::graphics::Gpu_timer>("Selection");
-    m_gui_timer       = std::make_unique<erhe::graphics::Gpu_timer>("Gui");
-    m_brush_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Brush");
-    m_tools_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Tools");
+    //m_selection_timer = std::make_unique<erhe::graphics::Gpu_timer>("Selection");
+    //m_gui_timer       = std::make_unique<erhe::graphics::Gpu_timer>("Gui");
+    //m_brush_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Brush");
+    //m_tools_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Tools");
 }
 
 void Editor_rendering::post_initialize()
@@ -487,31 +487,17 @@ void Editor_rendering::render_viewport(
 
     if (m_forward_renderer)
     {
-        {
-            static constexpr std::string_view c_id_content{"content"};
+        static constexpr std::string_view c_id_content{"render"};
+        ERHE_PROFILE_GPU_SCOPE(c_id_content);
+        erhe::graphics::Scoped_gpu_timer timer{*m_content_timer.get()};
 
-            ERHE_PROFILE_GPU_SCOPE(c_id_content);
-            render_content  (context);
-        }
+        render_content  (context);
+        render_selection(context);
+        ////render_gui  (context);
+        render_brush    (context);
 
-        {
-            static constexpr std::string_view c_id_selection{"selection"};
-
-            ERHE_PROFILE_GPU_SCOPE(c_id_selection);
-            render_selection(context);
-        }
-        ////render_gui      (context);
-        {
-            static constexpr std::string_view c_id_brush{"brush"};
-
-            ERHE_PROFILE_GPU_SCOPE(c_id_brush);
-            render_brush    (context);
-        }
         if (has_pointer)
         {
-            static constexpr std::string_view c_id_tool{"tool"};
-
-            ERHE_PROFILE_GPU_SCOPE(c_id_tool);
             render_tool_meshes(context);
         }
     }
@@ -576,8 +562,6 @@ void Editor_rendering::render_content(const Render_context& context)
     {
         return;
     }
-
-    erhe::graphics::Scoped_gpu_timer timer{*m_content_timer.get()};
 
     auto& render_style = context.viewport_config->render_style_not_selected;
 
@@ -686,7 +670,7 @@ void Editor_rendering::render_selection(const Render_context& context)
         return;
     }
 
-    erhe::graphics::Scoped_gpu_timer timer{*m_selection_timer.get()};
+    //erhe::graphics::Scoped_gpu_timer timer{*m_selection_timer.get()};
 
     const auto& render_style = context.viewport_config->render_style_selected;
 
@@ -799,7 +783,7 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
         return;
     }
 
-    erhe::graphics::Scoped_gpu_timer timer{*m_tools_timer.get()};
+    //erhe::graphics::Scoped_gpu_timer timer{*m_tools_timer.get()};
 
     m_forward_renderer->render(
         {
@@ -848,7 +832,7 @@ void Editor_rendering::render_brush(const Render_context& context)
         return;
     }
 
-    erhe::graphics::Scoped_gpu_timer timer{*m_brush_timer.get()};
+    //erhe::graphics::Scoped_gpu_timer timer{*m_brush_timer.get()};
 
     m_forward_renderer->render(
         {

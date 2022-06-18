@@ -606,6 +606,8 @@ void Imgui_windows::init_context()
 
 void Imgui_windows::begin_imgui_frame()
 {
+    SPDLOG_LOGGER_TRACE(log_frame, "Imgui_windows::begin_imgui_frame()");
+
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
@@ -656,6 +658,7 @@ void Imgui_windows::begin_imgui_frame()
     const auto cursor = static_cast<erhe::toolkit::Mouse_cursor>(ImGui::GetMouseCursor());
     context_window->set_cursor(cursor);
 
+    SPDLOG_LOGGER_TRACE(log_frame, "ImGui::NewFrame()");
     ImGui::NewFrame();
     ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 #endif
@@ -663,11 +666,6 @@ void Imgui_windows::begin_imgui_frame()
 
 void Imgui_windows::end_imgui_frame()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
-
-    ImGui::EndFrame();
-#endif
 }
 
 void Imgui_windows::render_imgui_frame()
@@ -675,6 +673,7 @@ void Imgui_windows::render_imgui_frame()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
+    SPDLOG_LOGGER_TRACE(log_frame, "ImGui::Render()");
     ImGui::Render();
 
     m_renderer->render_draw_data();

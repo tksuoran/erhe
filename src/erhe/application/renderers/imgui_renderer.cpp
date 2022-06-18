@@ -578,11 +578,11 @@ auto Imgui_renderer::image(
     const bool                                      linear
 ) -> bool
 {
+    SPDLOG_LOGGER_TRACE(log_imgui, "Imgui_renderer::image() texture {}", texture->gl_name());
+    const auto& sampler = linear ? m_linear_sampler : m_nearest_sampler;
     const uint64_t handle = erhe::graphics::get_handle(
         *texture.get(),
-        linear
-            ? *m_linear_sampler.get()
-            : *m_nearest_sampler.get()
+        *sampler.get()
     );
     ImGui::Image(
         handle,
@@ -605,12 +605,27 @@ void Imgui_renderer::use(
 {
     ERHE_PROFILE_FUNCTION
 
+#if !defined(NDEBUG)
+    if (!erhe::graphics::Instance::info.use_bindless_texture)
+    {
+        const GLuint texture_name = erhe::graphics::get_texture_from_handle(handle);
+        const GLuint sampler_name = erhe::graphics::get_sampler_from_handle(handle);
+        ERHE_VERIFY(texture_name != 0);
+        ERHE_VERIFY(sampler_name != 0);
+        ERHE_VERIFY(texture_name == texture->gl_name());
+        ERHE_VERIFY(gl::is_texture(texture_name) == GL_TRUE);
+        ERHE_VERIFY(gl::is_sampler(sampler_name) == GL_TRUE);
+    }
+#endif
+
     m_used_textures.insert(texture);
     m_used_texture_handles.insert(handle);
 }
 
 void Imgui_renderer::render_draw_data()
 {
+    SPDLOG_LOGGER_TRACE(log_frame, "begin Imgui_renderer::render_draw_data()");
+
     ERHE_PROFILE_FUNCTION
 
     // Also make font texture handle resident
@@ -689,6 +704,11 @@ void Imgui_renderer::render_draw_data()
 
     const ImVec2 clip_off   = draw_data->DisplayPos;
     const ImVec2 clip_scale = draw_data->FramebufferScale;
+
+    if (!erhe::graphics::Instance::info.use_bindless_texture)
+    {
+        erhe::graphics::s_texture_unit_cache.reset();
+    }
 
     for (int n = 0; n < draw_data->CmdListsCount; n++)
     {
@@ -839,14 +859,32 @@ void Imgui_renderer::render_draw_data()
         }
         else
         {
-            const auto texture_unit_use_count = erhe::graphics::s_texture_unit_cache.bind();
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+            for (const auto& texture : m_used_textures)
+            {
+                SPDLOG_LOGGER_TRACE(log_imgui, ("used texture: {} {}", texture->gl_name(), texture->debug_label());
+            }
+            for (const auto texture_handle : m_used_texture_handles)
+            {
+                const GLuint texture_name = erhe::graphics::get_texture_from_handle(texture_handle);
+                const GLuint sampler_name = erhe::graphics::get_sampler_from_handle(texture_handle);
+                SPDLOG_LOGGER_TRACE(log_imgui, "used texture: {}", texture_name);
+                SPDLOG_LOGGER_TRACE(log_imgui, "used sampler: {}", sampler_name);
+            }
+#endif
+
+            const auto dummy_handle = erhe::graphics::get_handle(
+                *m_dummy_texture.get(),
+                *m_nearest_sampler.get()
+            );
+
+            const auto texture_unit_use_count = erhe::graphics::s_texture_unit_cache.bind(dummy_handle);
+
             for (size_t i = texture_unit_use_count; i < s_texture_unit_count; ++i)
             {
                 gl::bind_texture_unit(static_cast<GLuint>(i), m_dummy_texture->gl_name());
                 gl::bind_sampler     (static_cast<GLuint>(i), m_nearest_sampler->gl_name());
             }
-
-            //m_texture_unit_cache->bind();
         }
 
         ERHE_VERIFY(draw_parameter_byte_offset > 0);
@@ -894,6 +932,8 @@ void Imgui_renderer::render_draw_data()
         gl::disable(gl::Enable_cap::clip_distance2);
         gl::disable(gl::Enable_cap::clip_distance3);
     }
+
+    SPDLOG_LOGGER_TRACE(log_frame, "end Imgui_renderer::render_draw_data()");
 }
 
 } // namespace erhe::application

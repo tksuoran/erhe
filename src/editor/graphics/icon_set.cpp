@@ -202,21 +202,15 @@ void Icon_set::icon(
 #else
     ERHE_PROFILE_FUNCTION
 
-    //const float size      = ImGui::GetTextLineHeight();
-    //const auto  icon_size = ImVec2{size, size};
-    const auto icon_size = ImVec2{
-        static_cast<float>(m_icon_width),
-        static_cast<float>(m_icon_height)
-    };
-
-    ImGui::Image(
-        m_texture_handle,
-        icon_size,
+    get<erhe::application::Imgui_renderer>()->image(
+        m_texture,
+        m_icon_width,
+        m_icon_height,
         uv0,
         uv1(uv0),
-        imvec_from_glm(tint_color)
+        imvec_from_glm(tint_color),
+        false
     );
-    get<erhe::application::Imgui_renderer>()->use(m_texture, m_texture_handle);
     ImGui::SameLine();
 #endif
 }

@@ -224,19 +224,21 @@ void View::run()
     m_imgui_windows->make_imgui_context_current();
     for (;;)
     {
+        SPDLOG_LOGGER_TRACE(log_frame, "\n-------- new frame --------\n");
+
         if (m_close_requested)
         {
-            log_frame->trace("close was requested, exiting loop");
+            log_frame->info("close was requested, exiting loop");
             break;
         }
 
-        log_frame->trace("> before poll events()");
+        SPDLOG_LOGGER_TRACE(log_frame, "> before poll events()");
         get<Window>()->get_context_window()->poll_events();
-        log_frame->trace("> after poll events()");
+        SPDLOG_LOGGER_TRACE(log_frame, "> after poll events()");
 
         if (m_close_requested)
         {
-            log_frame->trace("close was requested, exiting loop");
+            log_frame->info("close was requested, exiting loop");
             break;
         }
 
@@ -246,7 +248,7 @@ void View::run()
 
 void View::on_close()
 {
-    log_frame->trace("on_close()");
+    SPDLOG_LOGGER_TRACE(log_frame, "on_close()");
 
     m_close_requested = true;
 }
@@ -255,7 +257,7 @@ void View::update()
 {
     ERHE_PROFILE_FUNCTION
 
-    log_frame->trace("update()");
+    SPDLOG_LOGGER_TRACE(log_frame, "update()");
 
     m_time->update();
 
@@ -280,9 +282,9 @@ void View::update()
         ERHE_PROFILE_SCOPE(c_swap_buffers.data());
 
         erhe::graphics::Gpu_timer::end_frame();
-        log_frame->trace("> before swap_buffers()");
+        SPDLOG_LOGGER_TRACE(log_frame, "> before swap_buffers()");
         m_window->get_context_window()->swap_buffers();
-        log_frame->trace("> after swap_buffers()");
+        SPDLOG_LOGGER_TRACE(log_frame, "> after swap_buffers()");
     }
 
     m_ready = true;

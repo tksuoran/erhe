@@ -247,6 +247,7 @@ auto Texture::mipmap_dimensions(const gl::Texture_target target) -> int
 
 Texture::~Texture() noexcept
 {
+    log_texture->trace("Deleting texture {} {}", gl_name(), m_debug_label);
 }
 
 Texture::Texture(Texture&& other) noexcept
@@ -302,24 +303,21 @@ auto get_handle(
     }
     else
     {
-        return
-            (
-                static_cast<uint64_t>(texture.gl_name())
-            ) |
-            (
-                (static_cast<uint64_t>(sampler.gl_name()) << 32)
-            );
+        const uint64_t texture_name  = static_cast<uint64_t>(texture.gl_name());
+        const uint64_t sampler_name  = static_cast<uint64_t>(sampler.gl_name());
+        const uint64_t handle        = texture_name | (sampler_name << 32);
+        return handle;
     }
 }
 
 auto get_texture_from_handle(uint64_t handle) -> GLuint
 {
-    return static_cast<GLuint>(handle & 0xffffu);
+    return static_cast<GLuint>(handle & 0xffffffffu);
 }
 
 auto get_sampler_from_handle(uint64_t handle) -> GLuint
 {
-    return static_cast<GLuint>((handle & 0xffff0000u) >> 32);
+    return static_cast<GLuint>((handle & 0xffffffff00000000u) >> 32);
 }
 
 auto Texture::size_level_count(int size) -> int
@@ -399,6 +397,8 @@ Texture::Texture(const Create_info& create_info)
     , m_depth                 {create_info.depth}
     , m_buffer                {create_info.buffer}
 {
+    log_texture->trace("Created texture {} {}x{} {}", gl_name(), m_width, m_height, gl::c_str(m_internal_format));
+
     const auto dimensions = storage_dimensions(m_target);
 
     if (create_info.wrap_texture_name != 0)
@@ -682,6 +682,7 @@ void Texture::upload_subimage(
 
 void Texture::set_debug_label(const std::string& value)
 {
+    log_texture->trace("Texture {} name set to {}", gl_name(), value);
     m_debug_label = "(T) " + value;
     gl::object_label(
         gl::Object_identifier::texture,
@@ -802,22 +803,41 @@ void Texture_unit_cache::reset()
 
 auto Texture_unit_cache::allocate_texture_unit(uint64_t handle) -> std::optional<std::size_t>
 {
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+    const GLuint texture_name = erhe::graphics::get_texture_from_handle(handle);
+    const GLuint sampler_name = erhe::graphics::get_sampler_from_handle(handle);
+#endif
+
     for (size_t texture_unit = 0, end = m_texture_units.size(); texture_unit < end; ++texture_unit)
     {
         if (m_texture_units[texture_unit] == handle)
         {
+            SPDLOG_LOGGER_TRACE(
+                log_texture,
+                "cache hit texture unit {} for texture {}, sampler {}",
+                texture_unit,
+                texture_name,
+                sampler_name
+            );
             return texture_unit;
         }
     }
 
     const size_t result = m_texture_units.size();
     m_texture_units.push_back(handle);
+    SPDLOG_LOGGER_TRACE(
+        log_texture,
+        "allocted texture unit {} for texture {}, sampler {}",
+        result,
+        texture_name,
+        sampler_name
+    );
     return result;
 }
 
 Texture_unit_cache s_texture_unit_cache;
 
-auto Texture_unit_cache::bind() -> size_t
+auto Texture_unit_cache::bind(uint64_t fallback_handle) -> size_t
 {
     GLuint i{};
     GLuint end = std::min(
@@ -827,8 +847,45 @@ auto Texture_unit_cache::bind() -> size_t
 
     for (i = 0; i < end; ++i)
     {
-        gl::bind_texture_unit(i, erhe::graphics::get_texture_from_handle(m_texture_units[i]));
-        gl::bind_sampler     (i, erhe::graphics::get_sampler_from_handle(m_texture_units[i]));
+        const uint64_t handle       = m_texture_units[i];
+        const GLuint   texture_name = erhe::graphics::get_texture_from_handle(handle);
+        const GLuint   sampler_name = erhe::graphics::get_sampler_from_handle(handle);
+
+#if !defined(NDEBUG)
+        if (gl::is_texture(texture_name) == GL_TRUE)
+        {
+            gl::bind_texture_unit(i, texture_name);
+            SPDLOG_LOGGER_TRACE(
+                log_texture,
+                "texture unit {}: bound texture {}", i, texture_name
+            );
+        }
+        else
+        {
+            log_texture->warn("texture unit {}: {} is not a texture", i, texture_name);
+            gl::bind_texture_unit(i, erhe::graphics::get_texture_from_handle(fallback_handle));
+        }
+
+        if (
+            (sampler_name == 0) ||
+            (gl::is_sampler(sampler_name) == GL_TRUE)
+        )
+        {
+            gl::bind_sampler(i, sampler_name);
+            SPDLOG_LOGGER_TRACE(
+                log_texture,
+                "texture unit {}: bound sampler {}", i, sampler_name
+            );
+        }
+        else
+        {
+            gl::bind_sampler(i, erhe::graphics::get_sampler_from_handle(fallback_handle));
+            log_texture->warn("texture unit {}: {} is not a sampler", i, sampler_name);
+        }
+#else
+        gl::bind_texture_unit(i, texture_name);
+        gl::bind_sampler(i, sampler_name);
+#endif
     }
     return m_texture_units.size();
 }
