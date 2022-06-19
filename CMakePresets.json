@@ -154,6 +154,22 @@
             }
         },
         {
+            "name":     "GCC Debug",
+            "inherits": "Base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER":   "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
+            }
+        },
+        {
+            "name":     "GCC Release",
+            "inherits": "Base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER":   "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
+            }
+        },
+        {
             "name":     "GCC 8",
             "inherits": "Base",
             "cacheVariables": {
