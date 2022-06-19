@@ -317,9 +317,19 @@
             "configurePreset": "GCC"
         },
         {
+            "name":            "GCC Debug for CLion",
+            "inherits":        "Debug",
+            "configurePreset": "GCC Debug"
+        },
+        {
             "name":            "GCC Release",
             "inherits":        "Release",
             "configurePreset": "GCC"
+        },
+        {
+            "name":            "GCC Release for CLion",
+            "inherits":        "Release",
+            "configurePreset": "GCC Release"
         },
 
         {
