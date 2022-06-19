@@ -19,7 +19,7 @@ project(
 )
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/../cache")
+#set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/../cache")
 set(ERHE_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/src")
 
 # Split parts to cmake/

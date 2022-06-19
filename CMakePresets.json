@@ -4,7 +4,7 @@
         {
             "name":      "Base",
             "hidden":    true,
-            "generator": "Ninja Multi-Config",
+            "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables":
             {
@@ -146,6 +146,14 @@
             }
         },
         {
+            "name":     "Clang 14 Debug",
+            "inherits": "Clang 14"
+        },
+        {
+            "name":     "Clang 14 Release",
+            "inherits": "Clang 14"
+        },
+        {
             "name":     "GCC",
             "inherits": "Base",
             "cacheVariables": {
@@ -155,19 +163,11 @@
         },
         {
             "name":     "GCC Debug",
-            "inherits": "Base",
-            "cacheVariables": {
-                "CMAKE_C_COMPILER":   "gcc",
-                "CMAKE_CXX_COMPILER": "g++"
-            }
+            "inherits": "GCC"
         },
         {
             "name":     "GCC Release",
-            "inherits": "Base",
-            "cacheVariables": {
-                "CMAKE_C_COMPILER":   "gcc",
-                "CMAKE_CXX_COMPILER": "g++"
-            }
+            "inherits": "GCC"
         },
         {
             "name":     "GCC 8",
@@ -322,9 +322,19 @@
             "configurePreset": "Clang 14"
         },
         {
+            "name":            "Clang 14 Debug for CLion",
+            "inherits":        "Debug",
+            "configurePreset": "Clang 14 Debug"
+        },
+        {
             "name":            "Clang 14 Release",
             "inherits":        "Release",
             "configurePreset": "Clang 14"
+        },
+        {
+            "name":            "Clang 14 Release for CLion",
+            "inherits":        "Release",
+            "configurePreset": "Clang 14 Release"
         },
 
         {
