@@ -58,7 +58,7 @@
         {
             "hidden":         true,
             "name":           "Embree SSE",
-            "inherits":       ["embree"],
+            "inherits":       ["Embree"],
             "cacheVariables": { "EMBREE_ISA_SSE42": "ON" }
         },
         {
