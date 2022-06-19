@@ -27,7 +27,7 @@ small libraries, or git pulled from their repositories using CMake
 
 ### Windows
 
-Requirements:
+#### Requirements
 
 -   C++ compiler. Visual Studio 2022 with msbuild has been tested.
     Ninjabuild GCC and clang may also work, and some older versions
@@ -37,7 +37,7 @@ Requirements:
 
 -   CMake.
 
-Build steps:
+#### Build steps
 
 -   `git clone https://github.com/tksuoran/erhe`
 -   In *x64 native tools command prompt for vs 2022*, cd to the *erhe* directory
@@ -45,9 +45,15 @@ Build steps:
 -   Open solution from the *build* directory with Visual Studio
 -   Build solution, or editor executable
 
+#### Notes for CLion users
+
+CLion has initial support. Enable profiles that begin with `VS` and
+end with `for CLion`, for example VS 2022 Debug for CLion. MingW toolset
+support does not yet seem to work, contributions are welcome.
+
 ### Linux
 
-Requirements:
+#### Requirements
 
 -   *Ubuntu 20.04* has been tested, Ubuntu 18.04 likely also works (but needs filesystem linking fix)
 -   *Visual Studio Code* with *CMake extensions* has been tested.
@@ -55,13 +61,19 @@ Requirements:
 -   python 3
 -   packages such `xorg-dev`
 
-Build steps:
+#### Build steps
 
 -   `git clone https://github.com/tksuoran/erhe`
 -   Open erhe folder in Visual Studio code
 -   Execute command: *CMake: Select Configure Preset*
 -   Execute command: *CMake: Configure*
 -   Execute command: *CMake: Build*
+
+#### Notes for CLion users
+
+CLion has initial support. Enable profiles that begin with end with `for CLion`,
+for example `GCC Debug for CLion`. You make have to adjust toolset configuration
+in CLion to use a specific toolset. Contributions are welcome.
 
 ## Configuration
 
