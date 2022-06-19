@@ -883,6 +883,7 @@ auto Texture_unit_cache::bind(uint64_t fallback_handle) -> size_t
             log_texture->warn("texture unit {}: {} is not a sampler", i, sampler_name);
         }
 #else
+        static_cast<void>(fallback_handle);
         gl::bind_texture_unit(i, texture_name);
         gl::bind_sampler(i, sampler_name);
 #endif
