@@ -17,7 +17,9 @@
         },
         {
             "name":    "editor VS",
-            "type":    "cppvsdbg",
+            "windows": {
+                "type": "cppvsdbg",
+            },
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
             "cwd":     "${workspaceFolder}/src/editor",

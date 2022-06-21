@@ -182,6 +182,7 @@ auto Programs::make_program(
     if (erhe::graphics::Instance::info.use_bindless_texture)
     {
         create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
+        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     }
 
     if (vs_exists)
