@@ -41,8 +41,8 @@ void Mesh_memory::initialize_component()
 
     const auto& config = Component::get<erhe::application::Configuration>()->mesh_memory;
 
-    const size_t vertex_byte_count = static_cast<size_t>(config.vertex_buffer_size) * 1024 * 1024;
-    const size_t index_byte_count  = static_cast<size_t>(config.index_buffer_size) * 1024 * 1024;
+    const std::size_t vertex_byte_count = static_cast<std::size_t>(config.vertex_buffer_size) * 1024 * 1024;
+    const std::size_t index_byte_count  = static_cast<std::size_t>(config.index_buffer_size) * 1024 * 1024;
 
     gl_buffer_transfer_queue = std::make_unique<erhe::graphics::Buffer_transfer_queue>();
 

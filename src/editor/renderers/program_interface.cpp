@@ -31,10 +31,10 @@ void Program_interface::declare_required_components()
 }
 
 Program_interface::Shader_resources::Shader_resources(
-    size_t max_material_count,
-    size_t max_light_count,
-    size_t max_camera_count,
-    size_t max_primitive_count
+    std::size_t max_material_count,
+    std::size_t max_light_count,
+    std::size_t max_camera_count,
+    std::size_t max_primitive_count
 )
 {
     fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);

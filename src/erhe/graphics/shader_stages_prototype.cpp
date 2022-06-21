@@ -511,19 +511,19 @@ Shader_stages::Prototype::Prototype(
 
 auto is_array_and_nonzero(const std::string& name)
 {
-    const size_t open_bracket_pos = name.find_first_of('[');
+    const std::size_t open_bracket_pos = name.find_first_of('[');
     if (open_bracket_pos == std::string::npos)
     {
         return false;
     }
 
-    const size_t digit_pos = name.find_first_of("0123456789", open_bracket_pos + 1);
+    const std::size_t digit_pos = name.find_first_of("0123456789", open_bracket_pos + 1);
     if (digit_pos != open_bracket_pos + 1)
     {
         return false;
     }
 
-    const size_t non_digit_pos = name.find_first_not_of("0123456789", digit_pos + 1);
+    const std::size_t non_digit_pos = name.find_first_not_of("0123456789", digit_pos + 1);
     if (non_digit_pos == std::string::npos)
     {
         return false;
@@ -534,8 +534,8 @@ auto is_array_and_nonzero(const std::string& name)
         return false;
     }
 
-    const size_t close_bracket_pos = non_digit_pos;
-    const char   digit             = name.at(digit_pos);
+    const std::size_t close_bracket_pos = non_digit_pos;
+    const char        digit             = name.at(digit_pos);
 
     if (
         (close_bracket_pos == (open_bracket_pos + 2)) &&

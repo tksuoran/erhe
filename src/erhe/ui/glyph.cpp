@@ -123,7 +123,7 @@ Glyph::Glyph(
         {
             const int           src_x   = ix;
             const int           src_y   = bitmap.height - 1 - iy;
-            const size_t        address = src_x + (src_y * bitmap.pitch);
+            const std::size_t   address = src_x + (src_y * bitmap.pitch);
             const unsigned char value   = ft_bitmap.buffer[address];
             m_buffer[address] = value;
         }

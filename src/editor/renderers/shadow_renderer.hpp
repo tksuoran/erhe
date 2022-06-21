@@ -83,7 +83,7 @@ private:
     std::unique_ptr<erhe::graphics::Gpu_timer>                m_gpu_timer;
     std::vector<std::unique_ptr<erhe::graphics::Framebuffer>> m_framebuffers;
     erhe::scene::Viewport                                     m_viewport{0, 0, 0, 0, true};
-    size_t                                                    m_slot{0};
+    std::size_t                                               m_slot{0};
 };
 
 } // namespace editor

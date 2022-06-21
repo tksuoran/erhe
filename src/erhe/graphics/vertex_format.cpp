@@ -25,7 +25,7 @@ void Vertex_format::add(
         (attribute.data_type.dimension <= 4)
     );
 
-    const size_t stride = attribute.data_type.dimension * size_of_type(attribute.data_type.type);
+    const std::size_t stride = attribute.data_type.dimension * size_of_type(attribute.data_type.type);
 
     // Align attributes to their type
     switch (stride)

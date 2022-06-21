@@ -362,8 +362,8 @@ auto Geometry::compute_tangents(
     // MikkTSpace can only handle triangles or quads.
     // We triangulate all non-triangles by adding a virtual polygon centroid
     // and presenting N virtual triangles to MikkTSpace.
-    int          face_index     = 0;
-    const size_t triangle_count = count_polygon_triangles();
+    int               face_index     = 0;
+    const std::size_t triangle_count = count_polygon_triangles();
     g.triangle_count = static_cast<int>(triangle_count);
     g.triangles.resize(triangle_count);
     for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)

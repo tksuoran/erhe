@@ -109,7 +109,7 @@ void Light_debug_renderer::light_pass(const Light_collection &lights, const Came
     bind_camera();
 
     log_trace("for (auto l : lights)\n");
-    size_t light_index = 0;
+    std::size_t light_index = 0;
     for (auto l : lights)
     {
         if (light_index == max_lights())

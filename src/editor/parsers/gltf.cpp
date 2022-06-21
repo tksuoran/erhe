@@ -516,7 +516,7 @@ private:
         parse_node_transform(node, new_light);
     }
 
-    static const size_t max_vertex_valency = 10;
+    static const std::size_t max_vertex_valency = 10;
 
     class Primitive_context
     {
@@ -928,7 +928,7 @@ private:
             std::numeric_limits<float>::lowest()
         };
         erhe::geometry::Point_id point_id{0};
-        size_t point_share_count{0};
+        std::size_t point_share_count{0};
         for (cgltf_size index : context.sorted_vertex_indices)
         {
             if (index == std::numeric_limits<cgltf_size>::max())
@@ -1011,10 +1011,10 @@ private:
             const Corner_id  c0         = context.erhe_geometry->make_polygon_corner(polygon_id, p0);
             const Corner_id  c1         = context.erhe_geometry->make_polygon_corner(polygon_id, p1);
             const Corner_id  c2         = context.erhe_geometry->make_polygon_corner(polygon_id, p2);
-            size_t           index_for_c0 = (v0 - context.primitive_min_index) * max_vertex_valency;
-            size_t           index_for_c1 = (v1 - context.primitive_min_index) * max_vertex_valency;
-            size_t           index_for_c2 = (v2 - context.primitive_min_index) * max_vertex_valency;
-            for (size_t end = index_for_c0 + max_vertex_valency; index_for_c0 < end; ++index_for_c0)
+            std::size_t      index_for_c0 = (v0 - context.primitive_min_index) * max_vertex_valency;
+            std::size_t      index_for_c1 = (v1 - context.primitive_min_index) * max_vertex_valency;
+            std::size_t      index_for_c2 = (v2 - context.primitive_min_index) * max_vertex_valency;
+            for (std::size_t end = index_for_c0 + max_vertex_valency; index_for_c0 < end; ++index_for_c0)
             {
                 if (context.erhe_corner_id_from_gltf_index[index_for_c0] == std::numeric_limits<Corner_id>::max())
                 {
@@ -1184,7 +1184,7 @@ private:
 
         log_parsers->trace("Node: node index = {}, name = {}", node_index, safe_str(node->name));
 
-        size_t node_count = 0;
+        std::size_t node_count = 0;
         if (node->camera != nullptr)
         {
             assert(node_count == 0); // TODO

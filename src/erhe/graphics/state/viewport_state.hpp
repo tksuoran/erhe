@@ -38,13 +38,13 @@ public:
         serial = get_next_serial();
     }
 
-    size_t serial;
-    float  x         {0.0f};
-    float  y         {0.0f};
-    float  width     {0.0f};
-    float  height    {0.0f};
-    float  min_depth {0.0f}; // OpenGL near
-    float  max_depth {1.0f}; // OpenGL far
+    std::size_t serial;
+    float       x         {0.0f};
+    float       y         {0.0f};
+    float       width     {0.0f};
+    float       height    {0.0f};
+    float       min_depth {0.0f}; // OpenGL near
+    float       max_depth {1.0f}; // OpenGL far
 
     // TODO scissors
 
@@ -59,7 +59,7 @@ public:
         return s_serial;
     }
 
-    static size_t s_serial;
+    static std::size_t s_serial;
 };
 
 class Viewport_state_hash
@@ -96,7 +96,7 @@ public:
     void execute(const Viewport_state* state);
 
 private:
-    size_t         m_last{0};
+    std::size_t    m_last{0};
     Viewport_state m_cache;
 };
 

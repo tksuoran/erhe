@@ -22,7 +22,7 @@ public:
     public:
         Transfer_entry(
             Buffer&                target,
-            const size_t           target_offset,
+            const std::size_t      target_offset,
             std::vector<uint8_t>&& data
         )
             : target       {target}
@@ -44,7 +44,7 @@ public:
         auto operator=(Transfer_entry&& other) = delete;
 
         Buffer&              target;
-        size_t               target_offset{0};
+        std::size_t          target_offset{0};
         std::vector<uint8_t> data;
     };
 
@@ -52,7 +52,7 @@ public:
 
     void enqueue(
         Buffer&                buffer,
-        const size_t           offset,
+        const std::size_t      offset,
         std::vector<uint8_t>&& data
     );
 

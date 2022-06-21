@@ -231,7 +231,7 @@ auto Hand::is_valid(const XrHandJointEXT joint) const -> bool
     return m_joints[joint].location.radius > 0.0f;
 }
 
-void Hand::set_color(const size_t finger, const ImVec4 color)
+void Hand::set_color(const std::size_t finger, const ImVec4 color)
 {
     m_color[finger] = color;
 }
@@ -277,8 +277,8 @@ void Hand::draw_joint_line_strip(
 
     for (size_t i = 1; i < joint_names.size(); ++i)
     {
-        const size_t joint_id_a = static_cast<size_t>(joint_names[i - 1]);
-        const size_t joint_id_b = static_cast<size_t>(joint_names[i]);
+        const std::size_t joint_id_a = static_cast<std::size_t>(joint_names[i - 1]);
+        const std::size_t joint_id_b = static_cast<std::size_t>(joint_names[i    ]);
         if (joint_id_a >= m_joints.size())
         {
             continue;
@@ -370,9 +370,9 @@ void Hand_tracker::set_color(const Hand_name hand_name, const ImVec4 color)
 }
 
 void Hand_tracker::set_color(
-    const Hand_name hand_name,
-    const size_t    finger_name,
-    const ImVec4    color
+    const Hand_name   hand_name,
+    const std::size_t finger_name,
+    const ImVec4      color
 )
 {
     get_hand(hand_name).set_color(finger_name, color);

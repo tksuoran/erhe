@@ -83,7 +83,7 @@ public:
     std::vector<std::shared_ptr<INode_attachment>> attachments;
     uint64_t                                       visibility_mask{Node_visibility::none};
     uint64_t                                       flag_bits      {Node_flag_bit::none};
-    size_t                                         depth          {0};
+    std::size_t                                    depth          {0};
     std::string                                    name;
     std::string                                    label;
 };
@@ -128,14 +128,14 @@ public:
     [[nodiscard]] auto root               () -> std::weak_ptr<Node>;
     [[nodiscard]] auto name               () const -> const std::string&;
     [[nodiscard]] auto label              () const -> const std::string&;
-    [[nodiscard]] auto child_count        () const -> size_t;
+    [[nodiscard]] auto child_count        () const -> std::size_t;
     [[nodiscard]] auto get_id             () const -> erhe::toolkit::Unique_id<Node>::id_type;
-    [[nodiscard]] auto get_index_in_parent() const -> size_t;
-    [[nodiscard]] auto get_index_of_child (const Node* child) const -> nonstd::optional<size_t>;
+    [[nodiscard]] auto get_index_in_parent() const -> std::size_t;
+    [[nodiscard]] auto get_index_of_child (const Node* child) const -> nonstd::optional<std::size_t>;
     [[nodiscard]] auto is_ancestor        (const Node* ancestor_candidate) const -> bool;
 
     void set_parent                (const std::weak_ptr<Node>& parent);
-    void set_depth_recursive       (const size_t depth);
+    void set_depth_recursive       (const std::size_t depth);
     void update_transform          (const uint64_t serial = 0);
     void update_transform_recursive(const uint64_t serial = 0);
     void sanity_check              () const;
@@ -147,7 +147,7 @@ public:
     void set_world_from_node       (const glm::mat4 matrix);
     void set_world_from_node       (const Transform& transform);
     void attach                    (const std::shared_ptr<Node>& node, const bool primary_operation = true);
-    void attach                    (const std::shared_ptr<Node>& node, const size_t position, const bool primary_operation = true);
+    void attach                    (const std::shared_ptr<Node>& node, const std::size_t position, const bool primary_operation = true);
     auto detach                    (Node* node, const bool primary_operation = true) -> bool;
     void attach                    (const std::shared_ptr<INode_attachment>& attachment);
     auto detach                    (INode_attachment* attachment) -> bool;

@@ -197,9 +197,6 @@ auto Programs::make_program(
         create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
     }
 
-    // Always require bindless
-    create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-
     Shader_stages::Prototype prototype{create_info};
     if (!prototype.is_valid())
     {

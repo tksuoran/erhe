@@ -50,9 +50,9 @@ public:
     virtual auto descriptor() const -> Property_map_descriptor = 0;
     virtual void clear     () = 0;
     virtual auto empty     () const -> bool = 0;
-    virtual auto size      () const -> size_t = 0;
+    virtual auto size      () const -> std::size_t = 0;
     virtual auto has       (Key_type key) const -> bool = 0;
-    virtual void trim      (size_t size) = 0;
+    virtual void trim      (std::size_t size) = 0;
     virtual void remap_keys(const std::vector<Key_type>& key_old_to_new) = 0;
 
     virtual void interpolate(
@@ -90,8 +90,8 @@ public:
     auto has       (Key_type key) const -> bool final;
     void clear     () final;
     auto empty     () const -> bool final;
-    auto size      () const -> size_t final;
-    void trim      (size_t size) final;
+    auto size      () const -> std::size_t final;
+    void trim      (std::size_t size) final;
     void remap_keys(const std::vector<Key_type>& key_new_to_old) final;
 
     void interpolate(
@@ -104,7 +104,7 @@ public:
     void import_from(Property_map_base<Key_type>* source, const glm::mat4 transform) final;
     auto constructor(const Property_map_descriptor& descriptor) const -> Property_map_base<Key_type>* final;
 
-    static constexpr size_t s_grow_size = 4096;
+    static constexpr std::size_t s_grow_size = 4096;
 
     std::vector<Value_type> values;
     std::vector<bool>       present; // Yes, I know vector<bool> has limitations

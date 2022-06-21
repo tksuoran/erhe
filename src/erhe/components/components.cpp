@@ -380,7 +380,7 @@ void Components::launch_component_initialization(const bool parallel)
 
     if (parallel)
     {
-        size_t thread_count = std::min(
+        std::size_t thread_count = std::min(
             8U,
             std::max(std::thread::hardware_concurrency() - 0, 1U)
         );
@@ -423,8 +423,8 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
         {
             const std::lock_guard<std::mutex> lock{m_mutex};
 
-            size_t     most_uninitialized_depended_by = 0;
-            Component* selected_component{nullptr};
+            std::size_t most_uninitialized_depended_by = 0;
+            Component*  selected_component{nullptr};
 
             for (Component* component : m_components_to_process)
             {

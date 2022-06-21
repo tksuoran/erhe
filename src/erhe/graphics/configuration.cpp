@@ -111,16 +111,16 @@ auto split(
 ) -> std::vector<std::string>
 {
     std::vector<std::string> result;
-    const size_t length = text.size();
-    size_t span_start = std::string::npos;
-    for (size_t i = 0; i < length; ++i)
+    const std::size_t length = text.size();
+    std::size_t span_start = std::string::npos;
+    for (std::size_t i = 0; i < length; ++i)
     {
         char c = text[i];
         if (c == separator)
         {
             if (span_start != std::string::npos)
             {
-                const size_t span_length = i - span_start;
+                const std::size_t span_length = i - span_start;
                 if (span_length > 0)
                 {
                     result.emplace_back(text.substr(span_start, span_length));
@@ -140,7 +140,7 @@ auto split(
     {
         if (length > span_start)
         {
-            const size_t span_length = length - span_start;
+            const std::size_t span_length = length - span_start;
             result.emplace_back(text.substr(span_start, span_length));
         }
     }
@@ -149,8 +149,8 @@ auto split(
 
 auto digits_only(std::string s) -> std::string
 {
-    const size_t size = s.size();
-    for (size_t i = 0; i < size; ++i)
+    const std::size_t size = s.size();
+    for (std::size_t i = 0; i < size; ++i)
     {
         if (::isdigit(s[i]) == 0)
         {

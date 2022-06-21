@@ -402,7 +402,7 @@ void Rendertarget_imgui_windows::imgui_windows()
 
     begin_imgui_frame();
 
-    size_t i = 0;
+    std::size_t i = 0;
     bool any_mouse_input_sink{false};
     for (auto& imgui_window : m_imgui_windows)
     {
@@ -828,7 +828,7 @@ void Imgui_windows::imgui_windows()
 
     menu();
 
-    size_t i = 0;
+    std::size_t i = 0;
     bool any_mouse_input_sink{false};
     for (auto& imgui_window : m_imgui_windows)
     {

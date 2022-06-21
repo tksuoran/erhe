@@ -33,7 +33,7 @@ public:
         }
 
         gsl::span<std::byte>      span;
-        size_t                    capacity{0};
+        std::size_t               capacity{0};
         erhe::graphics::Gl_buffer pbo;
     };
 
@@ -52,7 +52,7 @@ public:
     [[nodiscard]] auto get_slot() -> Slot&;
 
 private:
-    size_t                               m_index{0};
+    std::size_t                          m_index{0};
     std::unique_ptr<std::array<Slot, 4>> m_slots;
 };
 

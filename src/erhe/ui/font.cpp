@@ -551,8 +551,8 @@ auto Font::print(
     hb_glyph_info_t*     glyph_info = hb_buffer_get_glyph_infos    (m_harfbuzz_buffer, &glyph_count);
     hb_glyph_position_t* glyph_pos  = hb_buffer_get_glyph_positions(m_harfbuzz_buffer, &glyph_count);
 
-    size_t chars_printed{0};
-    size_t word_offset{0};
+    std::size_t chars_printed{0};
+    std::size_t word_offset{0};
     for (unsigned int i = 0; i < glyph_count; ++i)
     {
         const auto  glyph_id  = glyph_info[i].codepoint;

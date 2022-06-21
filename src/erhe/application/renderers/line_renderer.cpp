@@ -180,14 +180,14 @@ Line_renderer::Line_renderer(const char* name)
 
 Line_renderer::Frame_resources::Frame_resources(
     const bool                                reverse_depth,
-    const size_t                              view_stride,
-    const size_t                              view_count,
-    const size_t                              vertex_count,
+    const std::size_t                         view_stride,
+    const std::size_t                         view_count,
+    const std::size_t                         vertex_count,
     erhe::graphics::Shader_stages* const      shader_stages,
     erhe::graphics::Vertex_attribute_mappings attribute_mappings,
     erhe::graphics::Vertex_format&            vertex_format,
     const std::string&                        style_name,
-    const size_t                              slot
+    const std::size_t                         slot
 )
     : vertex_buffer{
         gl::Buffer_target::array_buffer,
@@ -257,11 +257,11 @@ void Line_renderer::create_frame_resources(
     ERHE_PROFILE_FUNCTION
 
     m_pipeline = pipeline;
-    const auto       reverse_depth = configuration.graphics.reverse_depth;
-    constexpr size_t vertex_count  = 512 * 1024;
-    constexpr size_t view_stride   = 256;
-    constexpr size_t view_count    = 16;
-    for (size_t slot = 0; slot < s_frame_resources_count; ++slot)
+    const auto            reverse_depth = configuration.graphics.reverse_depth;
+    constexpr std::size_t vertex_count  = 512 * 1024;
+    constexpr std::size_t view_stride   = 256;
+    constexpr std::size_t view_count    = 16;
+    for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot)
     {
         m_frame_resources.emplace_back(
             reverse_depth,
@@ -323,12 +323,12 @@ void Line_renderer::add_lines(
     m_vertex_writer.begin();
 
     std::byte* const          start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
-    const size_t              byte_count = vertex_gpu_data.size_bytes();
-    const size_t              word_count = byte_count / sizeof(float);
+    const std::size_t         byte_count = vertex_gpu_data.size_bytes();
+    const std::size_t         word_count = byte_count / sizeof(float);
     const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
     const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
-    size_t word_offset = 0;
+    std::size_t word_offset = 0;
     for (const Line& line : lines)
     {
         const glm::vec4 p0{transform * glm::vec4{line.p0, 1.0f}};
@@ -352,12 +352,12 @@ void Line_renderer::add_lines(
     m_vertex_writer.begin();
 
     std::byte* const          start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
-    const size_t              byte_count = vertex_gpu_data.size_bytes();
-    const size_t              word_count = byte_count / sizeof(float);
+    const std::size_t         byte_count = vertex_gpu_data.size_bytes();
+    const std::size_t         word_count = byte_count / sizeof(float);
     const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
     const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
-    size_t word_offset = 0;
+    std::size_t word_offset = 0;
     for (const Line4& line : lines)
     {
         const glm::vec4 p0{transform * glm::vec4{glm::vec3{line.p0}, 1.0f}};
@@ -403,12 +403,12 @@ void Line_renderer::add_lines(
     m_vertex_writer.begin();
 
     std::byte* const          start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
-    const size_t              byte_count = vertex_gpu_data.size_bytes();
-    const size_t              word_count = byte_count / sizeof(float);
+    const std::size_t         byte_count = vertex_gpu_data.size_bytes();
+    const std::size_t         word_count = byte_count / sizeof(float);
     const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
     const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
-    size_t word_offset = 0;
+    std::size_t word_offset = 0;
     for (const Line& line : lines)
     {
         put(line.p0, thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);

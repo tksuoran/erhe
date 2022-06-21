@@ -30,13 +30,13 @@ public:
     virtual ~Buffer_sink() noexcept;
 
     [[nodiscard]] virtual auto allocate_vertex_buffer(
-        const size_t vertex_count,
-        const size_t vertex_element_size
+        const std::size_t vertex_count,
+        const std::size_t vertex_element_size
     ) -> Buffer_range = 0;
 
     [[nodiscard]] virtual auto allocate_index_buffer(
-        const size_t index_count,
-        const size_t index_element_size
+        const std::size_t index_count,
+        const std::size_t index_element_size
     ) -> Buffer_range = 0;
 
     virtual void buffer_ready(Vertex_buffer_writer& writer) const = 0;
@@ -54,13 +54,13 @@ public:
     );
 
     [[nodiscard]] auto allocate_vertex_buffer(
-        const size_t vertex_count,
-        const size_t vertex_element_size
+        const std::size_t vertex_count,
+        const std::size_t vertex_element_size
     ) -> Buffer_range override;
 
     [[nodiscard]] auto allocate_index_buffer(
-        const size_t index_count,
-        const size_t index_element_size
+        const std::size_t index_count,
+        const std::size_t index_element_size
     ) -> Buffer_range override;
 
     void buffer_ready(Vertex_buffer_writer& writer) const override;
@@ -82,13 +82,13 @@ public:
     );
 
     [[nodiscard]] auto allocate_vertex_buffer(
-        const size_t vertex_count,
-        const size_t vertex_element_size
+        const std::size_t vertex_count,
+        const std::size_t vertex_element_size
     ) -> Buffer_range override;
 
     [[nodiscard]] auto allocate_index_buffer(
-        const size_t index_count,
-        const size_t index_element_size
+        const std::size_t index_count,
+        const std::size_t index_element_size
     ) -> Buffer_range override;
 
     void buffer_ready(Vertex_buffer_writer& writer) const override;

@@ -124,7 +124,7 @@ namespace compiletime_xxhash::detail::xxh32 {
 
 // "public" function
 namespace compiletime_xxhash {
-    constexpr uint32_t xxh32(const char* input, size_t inputLen, uint32_t seed) {
+    constexpr uint32_t xxh32(const char* input, std::size_t inputLen, uint32_t seed) {
         return detail::xxh32::xxh32(input, static_cast<int>(inputLen), seed);
     }
 }

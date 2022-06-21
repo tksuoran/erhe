@@ -543,9 +543,9 @@ void Post_processing::post_process(
     }
 
     {
-        size_t i      = 1;
-        int    width  = source_texture->width ();
-        int    height = source_texture->height();
+        std::size_t i      = 1;
+        int         width  = source_texture->width ();
+        int         height = source_texture->height();
         const erhe::graphics::Texture* source = source_texture;
         for (;;)
         {
@@ -597,8 +597,8 @@ void Post_processing::downsample(
     m_parameter_writer.begin(parameter_buffer.target());
 
     std::byte* const          start      = parameter_gpu_data.data() + m_parameter_writer.write_offset;
-    const size_t              byte_count = parameter_gpu_data.size_bytes();
-    const size_t              word_count = byte_count / sizeof(float);
+    const std::size_t         byte_count = parameter_gpu_data.size_bytes();
+    const std::size_t         word_count = byte_count / sizeof(float);
     const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
     const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
@@ -607,7 +607,7 @@ void Post_processing::downsample(
         *m_programs->linear_sampler.get()
     );
 
-    size_t word_offset = 0;
+    std::size_t word_offset = 0;
     gpu_float_data[word_offset++] = 1.0f / source_texture->width();
     gpu_uint_data [word_offset++] = 1;
     gpu_float_data[word_offset++] = 0.0f;
@@ -675,12 +675,12 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
     m_parameter_writer.begin(parameter_buffer.target());
 
     std::byte* const          start      = parameter_gpu_data.data() + m_parameter_writer.write_offset;
-    const size_t              byte_count = parameter_gpu_data.size_bytes();
-    const size_t              word_count = byte_count / sizeof(float);
+    const std::size_t         byte_count = parameter_gpu_data.size_bytes();
+    const std::size_t         word_count = byte_count / sizeof(float);
     const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
     const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
-    size_t word_offset = 0;
+    std::size_t word_offset = 0;
     gpu_float_data[word_offset++] = 0.0f;
     gpu_uint_data [word_offset++] = static_cast<uint32_t>(m_rendertargets.size());
     gpu_float_data[word_offset++] = 0.0f;
@@ -801,7 +801,7 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
         }
 
         for (
-            size_t i = 1, end = std::min(m_rendertargets.size(), size_t{32});
+            std::size_t i = 1, end = std::min(m_rendertargets.size(), size_t{32});
             i < end;
             ++i
         )

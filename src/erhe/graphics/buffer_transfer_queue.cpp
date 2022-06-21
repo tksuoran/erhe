@@ -21,7 +21,7 @@ Buffer_transfer_queue::~Buffer_transfer_queue() noexcept
 
 void Buffer_transfer_queue::enqueue(
     Buffer&                buffer,
-    const size_t           offset,
+    const std::size_t      offset,
     std::vector<uint8_t>&& data
 )
 {

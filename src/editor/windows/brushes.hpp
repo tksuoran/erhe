@@ -185,8 +185,8 @@ private:
     nonstd::optional<glm::vec3>         m_hover_normal;
     std::shared_ptr<erhe::scene::Mesh>  m_hover_mesh;
     erhe::geometry::Geometry*           m_hover_geometry   {nullptr};
-    size_t                              m_hover_primitive  {0};
-    size_t                              m_hover_local_index{0};
+    std::size_t                         m_hover_primitive  {0};
+    std::size_t                         m_hover_local_index{0};
     std::shared_ptr<erhe::scene::Mesh>  m_brush_mesh;
     float                               m_scale            {1.0f};
     float                               m_transform_scale  {1.0f};

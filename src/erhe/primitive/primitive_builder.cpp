@@ -288,7 +288,7 @@ void Build_context_root::get_mesh_info()
             mi.index_count_fill_triangles,
             primitive_geometry->triangle_fill_indices
         );
-        const size_t primitive_count = mi.index_count_fill_triangles;
+        const std::size_t primitive_count = mi.index_count_fill_triangles;
         primitive_geometry->primitive_id_to_polygon_id.resize(primitive_count);
     }
 
@@ -363,7 +363,7 @@ void Build_context_root::allocate_index_buffer()
     Expects(total_index_count > 0);
 
     const gl::Draw_elements_type index_type = build_info.buffer.index_type;
-    const size_t index_type_size{size_of_type(index_type)};
+    const std::size_t index_type_size{size_of_type(index_type)};
 
     log_primitive_builder->trace(
         "allocating index buffer "
@@ -391,7 +391,7 @@ public:
     {
     }
 
-    auto point_count() const -> size_t override
+    auto point_count() const -> std::size_t override
     {
         if (m_point_locations == nullptr)
         {
@@ -400,7 +400,7 @@ public:
         return m_geometry.get_point_count();
     }
 
-    auto get_point(size_t index) const -> std::optional<glm::vec3> override
+    auto get_point(std::size_t index) const -> std::optional<glm::vec3> override
     {
         const auto point_id = static_cast<erhe::geometry::Point_id>(index);
         if (m_point_locations->has(point_id))
@@ -1027,7 +1027,7 @@ void Build_context::build_centroid_points()
 
 void Build_context_root::allocate_index_range(
     const gl::Primitive_type primitive_type,
-    const size_t             index_count,
+    const std::size_t       index_count,
     Index_range&             out_range
 )
 {

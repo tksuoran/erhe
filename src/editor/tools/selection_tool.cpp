@@ -543,7 +543,7 @@ void Selection_tool::update_selection_from_node(
 void Selection_tool::sanity_check()
 {
     const auto& scene = m_scene_root->scene();
-    size_t error_count{0};
+    std::size_t error_count{0};
     for (const auto& node : scene.flat_node_vector)
     {
         if (node->is_selected() && !is_in(node, m_selection))
@@ -854,9 +854,9 @@ void Selection_tool::tool_render(
                 std::vector<Cone_edge> sign_flip_edges;
                 for (size_t i = 0; i < cone_edges.size(); ++i)
                 {
-                    const size_t next_i    = (i + 1) % cone_edges.size();
-                    const auto&  edge      = cone_edges[i];
-                    const auto&  next_edge = cone_edges[next_i];
+                    const std::size_t next_i    = (i + 1) % cone_edges.size();
+                    const auto&       edge      = cone_edges[i];
+                    const auto&       next_edge = cone_edges[next_i];
                     if (sign(edge.n_dot_v) != sign(next_edge.n_dot_v))
                     {
                         if (std::abs(edge.n_dot_v) < std::abs(next_edge.n_dot_v))

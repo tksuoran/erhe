@@ -644,8 +644,8 @@ void Texture::upload_subimage(
     const auto row_stride   = src_row_length * pixel_stride;
     const auto byte_count   = row_stride * height;
     Expects(data.size_bytes() >= byte_count);
-    const size_t src_x_offset = src_x * pixel_stride;
-    const size_t src_y_offset = src_y * row_stride;
+    const std::size_t src_x_offset = src_x * pixel_stride;
+    const std::size_t src_y_offset = src_y * row_stride;
     const char* data_pointer =
         reinterpret_cast<const char*>(data.data())
         + src_x_offset
@@ -823,7 +823,7 @@ auto Texture_unit_cache::allocate_texture_unit(uint64_t handle) -> std::optional
         }
     }
 
-    const size_t result = m_texture_units.size();
+    const std::size_t result = m_texture_units.size();
     m_texture_units.push_back(handle);
     SPDLOG_LOGGER_TRACE(
         log_texture,

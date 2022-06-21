@@ -58,12 +58,12 @@ Bvh_geometry::Bvh_geometry(
 
 Bvh_geometry::~Bvh_geometry() = default;
 
-auto Bvh_geometry::point_count() const -> size_t
+auto Bvh_geometry::point_count() const -> std::size_t
 {
     return m_points.size();
 }
 
-auto Bvh_geometry::get_point(size_t index) const -> std::optional<glm::vec3>
+auto Bvh_geometry::get_point(std::size_t index) const -> std::optional<glm::vec3>
 {
     if (index < m_points.size())
     {
@@ -127,7 +127,7 @@ void Bvh_geometry::commit()
 
         m_triangles.clear();
         std::set<uint32_t> unique_indices;
-        for (size_t i = 0; i < index_buffer_info->item_count; ++i)
+        for (std::size_t i = 0; i < index_buffer_info->item_count; ++i)
         {
             const uint32_t i0 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 0 * sizeof(uint32_t));
             const uint32_t i1 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 1 * sizeof(uint32_t));
@@ -237,9 +237,9 @@ void Bvh_geometry::set_buffer(
     const unsigned int slot,
     const Format       format,
     IBuffer* const     buffer,
-    const size_t       byte_offset,
-    const size_t       byte_stride,
-    const size_t       item_count
+    const std::size_t  byte_offset,
+    const std::size_t  byte_stride,
+    const std::size_t  item_count
 )
 {
     m_buffer_infos.emplace_back(type, slot, format, buffer, byte_offset, byte_stride, item_count);

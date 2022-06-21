@@ -540,7 +540,7 @@ void Brushes::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
-    const size_t brush_count = m_brushes.size();
+    const std::size_t brush_count = m_brushes.size();
 
     {
         const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};

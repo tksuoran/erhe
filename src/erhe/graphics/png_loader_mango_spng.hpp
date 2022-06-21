@@ -81,7 +81,7 @@ public:
         gsl::span<std::byte> data
     ) -> bool;
 
-    auto stream_op(void* dst_src, size_t length) -> int;
+    auto stream_op(void* dst_src, std::size_t length) -> int;
 
 private:
     std::unique_ptr<mango::filesystem::FileStream> m_file_stream;

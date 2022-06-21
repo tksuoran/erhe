@@ -11,12 +11,12 @@ namespace
 {
 
 auto shuffle(
-    const size_t x,
-    const size_t m,
-    const size_t shift
-) -> size_t
+    const std::size_t x,
+    const std::size_t m,
+    const std::size_t shift
+) -> std::size_t
 {
-    const size_t t = ((x >> shift) ^ x) & m;
+    const std::size_t t = ((x >> shift) ^ x) & m;
     return (x ^ t) ^ (t << shift);
 }
 
@@ -24,7 +24,7 @@ auto shuffle(
 
 auto Blend_state_hash::operator()(
     const Color_blend_state& state
-) const noexcept -> size_t
+) const noexcept -> std::size_t
 {
     return
         (

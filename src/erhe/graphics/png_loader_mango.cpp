@@ -100,7 +100,7 @@ auto PNG_loader::open(
 auto PNG_loader::load(gsl::span<std::byte> transfer_buffer) -> bool
 {
     const mango::image::ImageHeader header{m_image_decoder->header()};
-    const size_t stride = static_cast<size_t>(header.width) * static_cast<size_t>(header.format.bytes());
+    const std::size_t stride = static_cast<std::size_t>(header.width) * static_cast<std::size_t>(header.format.bytes());
     mango::image::Surface surface{
         header.width,
         header.height,
@@ -134,7 +134,7 @@ auto PNG_writer::write(
         info.width,
         info.height,
         to_mango(info.format),
-        static_cast<size_t>(info.row_stride),
+        static_cast<std::size_t>(info.row_stride),
         data.data()
     };
     m_file_stream = std::make_unique<mango::filesystem::FileStream>(

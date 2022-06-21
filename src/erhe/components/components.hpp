@@ -176,8 +176,8 @@ private:
     std::condition_variable                 m_component_processed;
     std::set<Component*>                    m_components_to_process;
     std::unique_ptr<IExecution_queue>       m_execution_queue;
-    size_t                                  m_initialize_component_count_worker_thread{0};
-    size_t                                  m_initialize_component_count_main_thread  {0};
+    std::size_t                             m_initialize_component_count_worker_thread{0};
+    std::size_t                             m_initialize_component_count_main_thread  {0};
 };
 
 template<typename T>

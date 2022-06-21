@@ -31,14 +31,14 @@ Property_map<Key_type, Value_type>::empty() const -> bool
 
 template <typename Key_type, typename Value_type>
 inline auto
-Property_map<Key_type, Value_type>::size() const -> size_t
+Property_map<Key_type, Value_type>::size() const -> std::size_t
 {
     return values.size();
 }
 
 template <typename Key_type, typename Value_type>
 inline void
-Property_map<Key_type, Value_type>::trim(size_t size)
+Property_map<Key_type, Value_type>::trim(std::size_t size)
 {
     values.resize(size);
     present.resize(size);
@@ -64,7 +64,7 @@ Property_map<Key_type, Value_type>::put(Key_type key, Value_type value)
 {
     ERHE_PROFILE_FUNCTION
 
-    const size_t i = static_cast<size_t>(key);
+    const std::size_t i = static_cast<std::size_t>(key);
     if (values.size() <= i)
     {
         values.resize(i + s_grow_size);
@@ -80,7 +80,7 @@ Property_map<Key_type, Value_type>::get(Key_type key) const -> Value_type
 {
     ERHE_PROFILE_FUNCTION
 
-    const size_t i = static_cast<size_t>(key);
+    const std::size_t i = static_cast<std::size_t>(key);
     if ((values.size() <= i) || !present[i])
     {
         ERHE_FATAL("Value not found");
@@ -94,7 +94,7 @@ Property_map<Key_type, Value_type>::erase(Key_type key)
 {
     ERHE_PROFILE_FUNCTION
 
-    const size_t i = static_cast<size_t>(key);
+    const std::size_t i = static_cast<std::size_t>(key);
     if (values.size() <= i)
     {
         values.resize(i + s_grow_size);
@@ -109,7 +109,7 @@ Property_map<Key_type, Value_type>::maybe_get(Key_type key, Value_type& out_valu
 {
     ERHE_PROFILE_FUNCTION
 
-    const size_t i = static_cast<size_t>(key);
+    const std::size_t i = static_cast<size_t>(key);
     if ((values.size() <= i) || !present[i])
     {
         return false;
@@ -125,7 +125,7 @@ Property_map<Key_type, Value_type>::has(Key_type key) const -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    const size_t i = static_cast<size_t>(key);
+    const std::size_t i = static_cast<std::size_t>(key);
     if ((values.size() <= i) || !present[i])
     {
         return false;
@@ -165,7 +165,7 @@ Property_map<Key_type, Value_type>::interpolate(
     }
 
     for (
-        size_t new_key = 0, end = key_new_to_olds.size();
+        std::size_t new_key = 0, end = key_new_to_olds.size();
         new_key < end;
         ++new_key
     )
@@ -310,7 +310,7 @@ Property_map<Key_type, Value_type>::transform(
 
             case Transform_mode::matrix:
             {
-                for (size_t i = 0, end = values.size(); i < end; ++i)
+                for (std::size_t i = 0, end = values.size(); i < end; ++i)
                 {
                     values[i] = apply_transform(values[i], transform, 1.0f);
                 }
@@ -323,7 +323,7 @@ Property_map<Key_type, Value_type>::transform(
                 if constexpr (std::is_same_v<Value_type, glm::vec3>)
                 {
                     const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
-                    for (size_t i = 0, end = values.size(); i < end; ++i)
+                    for (std::size_t i = 0, end = values.size(); i < end; ++i)
                     {
                         values[i] = glm::normalize(
                             apply_transform(
@@ -343,7 +343,7 @@ Property_map<Key_type, Value_type>::transform(
                 if constexpr (std::is_same_v<Value_type, glm::vec4>)
                 {
                     const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
-                    for (size_t i = 0, end = values.size(); i < end; ++i)
+                    for (std::size_t i = 0, end = values.size(); i < end; ++i)
                     {
                         values[i] = glm::vec4{
                             glm::normalize(
@@ -403,7 +403,7 @@ Property_map<Key_type, Value_type>::import_from(
 
             case Transform_mode::matrix:
             {
-                for (size_t i = 0, end = source->values.size(); i < end; ++i)
+                for (std::size_t i = 0, end = source->values.size(); i < end; ++i)
                 {
                     const Value_type source_value = source->values[i];
                     const Value_type result       = apply_transform(source_value, transform, 1.0f);
@@ -418,7 +418,7 @@ Property_map<Key_type, Value_type>::import_from(
                 if constexpr (std::is_same_v<Value_type, glm::vec3>)
                 {
                     const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
-                    for (size_t i = 0, end = source->values.size(); i < end; ++i)
+                    for (std::size_t i = 0, end = source->values.size(); i < end; ++i)
                     {
                         const Value_type source_value = source->values[i];
                         const Value_type result       = glm::normalize(apply_transform(source_value, inverse_transpose_transform, 0.0f));
@@ -434,7 +434,7 @@ Property_map<Key_type, Value_type>::import_from(
                 if constexpr (std::is_same_v<Value_type, glm::vec4>)
                 {
                     const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
-                    for (size_t i = 0, end = source->values.size(); i < end; ++i)
+                    for (std::size_t i = 0, end = source->values.size(); i < end; ++i)
                     {
                         const Value_type source_value     = source->values[i];
                         const glm::vec3  transformed_vec3 = glm::normalize(apply_transform(glm::vec3{source_value}, inverse_transpose_transform, 0.0f));

@@ -6,7 +6,7 @@ ITask_queue::~ITask_queue()
 {
 }
 
-Parallel_task_queue::Parallel_task_queue(const std::string_view name, size_t thread_count)
+Parallel_task_queue::Parallel_task_queue(const std::string_view name, std::size_t thread_count)
     : m_thread_pool{thread_count}
     , m_queue      {m_thread_pool, name}
 {

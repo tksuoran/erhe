@@ -22,7 +22,7 @@ public:
     Vertex_attribute_info(
         erhe::graphics::Vertex_format* const               vertex_format,
         const gl::Vertex_attrib_type                       default_data_type,
-        const size_t                                       dimension,
+        const std::size_t                                  dimension,
         const erhe::graphics::Vertex_attribute::Usage_type semantic,
         const unsigned int                                 semantic_index
     );
@@ -31,8 +31,8 @@ public:
 
     const erhe::graphics::Vertex_attribute* attribute{nullptr};
     gl::Vertex_attrib_type                  data_type{gl::Vertex_attrib_type::float_};
-    size_t                                  offset   {std::numeric_limits<size_t>::max()};
-    size_t                                  size     {0};
+    std::size_t                             offset   {std::numeric_limits<size_t>::max()};
+    std::size_t                             size     {0};
 };
 
 } // namespace erhe::primitive

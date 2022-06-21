@@ -47,7 +47,7 @@ public:
     void next_frame();
 
 private:
-    static constexpr size_t s_frame_resources_count = 4;
+    static constexpr std::size_t s_frame_resources_count = 4;
 
     class Frame_resources
     {
@@ -66,7 +66,7 @@ private:
 
         Frame_resources(
             erhe::graphics::Shader_stages* shader_stages,
-            const size_t                   slot
+            const std::size_t              slot
         );
 
         Frame_resources(const Frame_resources&) = delete;
@@ -91,12 +91,12 @@ private:
     std::unique_ptr<erhe::graphics::Shader_resource>    m_parameter_block;
     std::unique_ptr<erhe::graphics::Shader_stages>      m_shader_stages;
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_vertex_input;
-    size_t                                              m_u_texture_size  {0};
-    size_t                                              m_u_texture_offset{0};
+    std::size_t                                         m_u_texture_size  {0};
+    std::size_t                                         m_u_texture_offset{0};
     std::unique_ptr<erhe::graphics::Sampler>            m_nearest_sampler;
 
     std::deque<Frame_resources> m_frame_resources;
-    size_t                      m_current_frame_resource_slot{0};
+    std::size_t                 m_current_frame_resource_slot{0};
 
     Buffer_writer m_parameter_writer;
 };

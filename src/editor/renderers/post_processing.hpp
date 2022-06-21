@@ -89,7 +89,7 @@ private:
     std::shared_ptr<Programs>                             m_programs;
     std::shared_ptr<erhe::application::Shader_monitor>    m_shader_monitor;
 
-    static constexpr size_t s_frame_resources_count = 4;
+    static constexpr std::size_t s_frame_resources_count = 4;
     struct Frame_resources
     {
         static constexpr gl::Buffer_storage_mask storage_mask{
@@ -104,9 +104,9 @@ private:
         };
 
         Frame_resources(
-            const size_t parameter_stride,
-            const size_t parameter_count,
-            const size_t slot
+            const std::size_t parameter_stride,
+            const std::size_t parameter_count,
+            const std::size_t slot
         )
             : parameter_buffer{
                 gl::Buffer_target::uniform_buffer,
@@ -128,7 +128,7 @@ private:
         erhe::graphics::Buffer parameter_buffer;
     };
     std::deque<Frame_resources>      m_frame_resources;
-    size_t                           m_current_frame_resource_slot{0};
+    std::size_t                      m_current_frame_resource_slot{0};
     erhe::application::Buffer_writer m_parameter_writer;
     [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
 
@@ -138,12 +138,12 @@ private:
     std::unique_ptr<erhe::graphics::Shader_stages>      m_downsample_y_shader_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>      m_compose_shader_stages;
     std::shared_ptr<erhe::graphics::Texture>            m_dummy_texture;
-    size_t                                              m_source_texture_count {24};
-    size_t                                              m_source_texture_offset{0};
-    size_t                                              m_texel_scale_offset   {0};
-    size_t                                              m_texture_count_offset {0};
-    size_t                                              m_reserved0_offset     {0};
-    size_t                                              m_reserved1_offset     {0};
+    std::size_t                                         m_source_texture_count {24};
+    std::size_t                                         m_source_texture_offset{0};
+    std::size_t                                         m_texel_scale_offset   {0};
+    std::size_t                                         m_texture_count_offset {0};
+    std::size_t                                         m_reserved0_offset     {0};
+    std::size_t                                         m_reserved1_offset     {0};
     std::unique_ptr<erhe::graphics::Gpu_timer>          m_gpu_timer;
 
     const erhe::graphics::Shader_resource*              m_downsample_source_texture{nullptr}; // for non bindless textures

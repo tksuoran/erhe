@@ -56,7 +56,7 @@ void Operations::post_initialize()
 auto Operations::count_selected_meshes() const -> size_t
 {
     const auto& selection = m_selection_tool->selection();
-    size_t count = 0;
+    std::size_t count = 0;
     for (const auto& node : selection)
     {
         if (is_mesh(node))

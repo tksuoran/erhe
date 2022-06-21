@@ -25,7 +25,7 @@ public:
     {
     }
 
-    static constexpr size_t s_grow_size = 4096;
+    static constexpr std::size_t s_grow_size = 4096;
     Geometry&                                              source;
     Geometry&                                              destination;
     std::vector<Point_id  >                                point_old_to_new;
@@ -40,7 +40,7 @@ public:
     std::vector<std::vector<std::pair<float, Edge_id   >>> new_edge_sources;
 
 private:
-    static constexpr size_t s_max_edge_point_slots = 300;
+    static constexpr std::size_t s_max_edge_point_slots = 300;
     std::vector<Point_id> m_old_edge_to_new_points;
 
 public:
@@ -50,9 +50,9 @@ public:
     void reserve_edge_to_new_points();
 
     [[nodiscard]] auto find_or_make_point_from_edge(
-        const Point_id a,
-        const Point_id b,
-        const size_t   count = 1
+        const Point_id    a,
+        const Point_id    b,
+        const std::size_t count = 1
     ) -> Point_id;
 
     void make_edge_midpoints(

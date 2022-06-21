@@ -110,13 +110,13 @@ const std::string_view c_fragment_shader_source =
 } // anonymous namespace
 
 Imgui_renderer::Frame_resources::Frame_resources(
-    const size_t                               slot,
+    const std::size_t                          slot,
     erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
     erhe::graphics::Vertex_format&             vertex_format,
     erhe::graphics::Shader_stages*             shader_stages,
-    size_t          vertex_count, size_t vertex_stride,
-    size_t          index_count,  size_t index_stride,
-    size_t          draw_count,   size_t draw_stride
+    std::size_t vertex_count, std::size_t vertex_stride,
+    std::size_t index_count,  std::size_t index_stride,
+    std::size_t draw_count,   std::size_t draw_stride
 )
     : vertex_buffer{
         gl::Buffer_target::array_buffer,
@@ -328,13 +328,13 @@ void Imgui_renderer::create_shader_stages()
     };
     create_info.add_interface_block(m_projection_block.get());
     create_info.add_interface_block(m_draw_parameter_block.get());
-    create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     create_info.struct_types.push_back(&m_draw_parameter_struct);
     create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   c_vertex_shader_source);
     create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, c_fragment_shader_source);
 
     if (erhe::graphics::Instance::info.use_bindless_texture)
     {
+        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
         create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
     }
     else
@@ -397,8 +397,8 @@ void Imgui_renderer::create_font_texture()
     create_info.internal_format = gl::Internal_format::rgba8;
     m_font_atlas.GetTexDataAsRGBA32(&pixels, &create_info.width, &create_info.height);
 
-    const size_t pixel_count = static_cast<size_t>(create_info.width) * static_cast<size_t>(create_info.height);
-    const size_t byte_count  = 4 * pixel_count;
+    const std::size_t pixel_count = static_cast<size_t>(create_info.width) * static_cast<size_t>(create_info.height);
+    const std::size_t byte_count  = 4 * pixel_count;
     std::vector<uint8_t> post_processed_data;
     post_processed_data.resize(byte_count);
     const uint8_t* src = reinterpret_cast<const uint8_t*>(pixels);
@@ -665,13 +665,13 @@ void Imgui_renderer::render_draw_data()
     auto index_gpu_data          = index_buffer.map();
     auto draw_indirect_gpu_data  = draw_indirect_buffer.map();
 
-    size_t draw_parameter_byte_offset{0};
-    size_t vertex_byte_offset        {0};
-    size_t index_byte_offset         {0};
-    size_t draw_indirect_byte_offset {0};
-    size_t list_vertex_offset        {0};
-    size_t list_index_offset         {0};
-    size_t draw_indirect_count       {0};
+    std::size_t draw_parameter_byte_offset{0};
+    std::size_t vertex_byte_offset        {0};
+    std::size_t index_byte_offset         {0};
+    std::size_t draw_indirect_byte_offset {0};
+    std::size_t list_vertex_offset        {0};
+    std::size_t list_index_offset         {0};
+    std::size_t draw_indirect_count       {0};
 
     const float scale[2] = {
         2.0f / draw_data->DisplaySize.x,
@@ -683,7 +683,7 @@ void Imgui_renderer::render_draw_data()
     };
 
     // Projection block repeats only once
-    const size_t start_of_projection_block = draw_parameter_byte_offset;
+    const std::size_t start_of_projection_block = draw_parameter_byte_offset;
 
     // Write scale
     const gsl::span<const float> scale_cpu_data{&scale[0], 2};
@@ -700,7 +700,7 @@ void Imgui_renderer::render_draw_data()
         ++draw_parameter_byte_offset;
     }
 
-    const size_t start_of_draw_parameter_block = draw_parameter_byte_offset;
+    const std::size_t start_of_draw_parameter_block = draw_parameter_byte_offset;
 
     const ImVec2 clip_off   = draw_data->DisplayPos;
     const ImVec2 clip_scale = draw_data->FramebufferScale;

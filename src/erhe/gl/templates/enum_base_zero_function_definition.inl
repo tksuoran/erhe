@@ -8,7 +8,7 @@ auto base_zero(const {WRAPPER_ENUM_TYPE_NAME} value) -> std::size_t // {GROUP_NA
     }}
 }}
 
-auto {WRAPPER_ENUM_TYPE_NAME}_from_base_zero(const size_t ui_value) -> {WRAPPER_ENUM_TYPE_NAME} // {GROUP_NAME}
+auto {WRAPPER_ENUM_TYPE_NAME}_from_base_zero(const std::size_t ui_value) -> {WRAPPER_ENUM_TYPE_NAME} // {GROUP_NAME}
 {{
     switch (ui_value)
     {{

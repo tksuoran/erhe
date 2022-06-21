@@ -51,7 +51,7 @@ Embree_scene::~Embree_scene() noexcept
 
 // namespace {
 // 
-// constexpr size_t s_grow = 256;
+// constexpr std::size_t s_grow = 256;
 // 
 // }
 

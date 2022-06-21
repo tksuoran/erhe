@@ -38,16 +38,16 @@ public:
     void write(const Vertex_attribute_info& attribute, const glm::vec3 value);
     void write(const Vertex_attribute_info& attribute, const glm::vec4 value);
     void write(const Vertex_attribute_info& attribute, const uint32_t value);
-    void move (const size_t relative_offset);
+    void move (const std::size_t relative_offset);
 
-    [[nodiscard]] auto start_offset() -> size_t;
+    [[nodiscard]] auto start_offset() -> std::size_t;
 
     Build_context&              build_context;
     gsl::not_null<Buffer_sink*> buffer_sink;
     Buffer_range                buffer_range;
     std::vector<std::uint8_t>   vertex_data;
     gsl::span<std::uint8_t>     vertex_data_span;
-    size_t                      vertex_write_offset{0};
+    std::size_t                 vertex_write_offset{0};
 };
 
 /// Writes 8/16/32 -bit indices to byte buffer/memory
@@ -68,13 +68,13 @@ public:
     void write_edge    (const uint32_t v0, const uint32_t v1);
     void write_centroid(const uint32_t v0);
 
-    [[nodiscard]] auto start_offset  () -> size_t;
+    [[nodiscard]] auto start_offset  () -> std::size_t;
 
     Build_context&               build_context;
     gsl::not_null<Buffer_sink*>  buffer_sink;
     Buffer_range                 buffer_range;
     const gl::Draw_elements_type index_type;
-    const size_t                 index_type_size{0};
+    const std::size_t            index_type_size{0};
     std::vector<std::uint8_t>    index_data;
     gsl::span<std::uint8_t>      index_data_span;
     gsl::span<std::uint8_t>      corner_point_index_data_span;
@@ -82,10 +82,10 @@ public:
     gsl::span<std::uint8_t>      edge_line_index_data_span;
     gsl::span<std::uint8_t>      polygon_centroid_index_data_span;
 
-    size_t corner_point_indices_written    {0};
-    size_t triangle_indices_written        {0};
-    size_t edge_line_indices_written       {0};
-    size_t polygon_centroid_indices_written{0};
+    std::size_t corner_point_indices_written    {0};
+    std::size_t triangle_indices_written        {0};
+    std::size_t edge_line_indices_written       {0};
+    std::size_t polygon_centroid_indices_written{0};
 };
 
 } // namespace erhe::primitive

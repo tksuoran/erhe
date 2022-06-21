@@ -37,7 +37,7 @@ public:
 
         m_stride = m_width * m_components;
 
-        const size_t byte_count = static_cast<size_t>(m_stride) * static_cast<size_t>(m_height);
+        const std::size_t byte_count = static_cast<std::size_t>(m_stride) * static_cast<std::size_t>(m_height);
         m_data.resize(byte_count);
         fill(0);
     }
@@ -111,10 +111,10 @@ public:
             ERHE_FATAL("invalid index");
         }
 
-        const size_t offset =
-            static_cast<size_t>(x) * static_cast<size_t>(m_components) +
-            static_cast<size_t>(y) * static_cast<size_t>(m_stride) +
-            static_cast<size_t>(c);
+        const std::size_t offset =
+            static_cast<std::size_t>(x) * static_cast<std::size_t>(m_components) +
+            static_cast<std::size_t>(y) * static_cast<std::size_t>(m_stride) +
+            static_cast<std::size_t>(c);
         m_data[offset] = value;
     }
 
@@ -134,10 +134,10 @@ public:
         }
 #endif
 
-        const size_t offset = static_cast<size_t>(
-            (static_cast<size_t>(x) * static_cast<size_t>(m_components)) +
-            (static_cast<size_t>(y) * static_cast<size_t>(m_stride)) +
-            static_cast<size_t>(c)
+        const std::size_t offset = static_cast<std::size_t>(
+            (static_cast<std::size_t>(x) * static_cast<std::size_t>(m_components)) +
+            (static_cast<std::size_t>(y) * static_cast<std::size_t>(m_stride)) +
+            static_cast<std::size_t>(c)
         );
         return m_data[offset];
     }
@@ -238,7 +238,7 @@ public:
 
     void dump_data()
     {
-        size_t counter{0};
+        std::size_t counter{0};
         for (component_t c = 0; c < m_components; ++c)
         {
             for (int iy = 0; iy < m_height; ++iy)
@@ -260,7 +260,7 @@ public:
 
     void load_data(gsl::span<value_t> source)
     {
-        size_t read_offset{0};
+        std::size_t read_offset{0};
         for (component_t c = 0; c < m_components; ++c)
         {
             for (int iy = 0; iy < m_height; ++iy)
@@ -395,7 +395,7 @@ public:
                     uint8_t   value{0};
                     if (src_byte_x < src_byte_width)
                     {
-                        auto offset = static_cast<size_t>(src_byte_x + (src_y_ * src_pitch));
+                        auto offset = static_cast<std::size_t>(src_byte_x + (src_y_ * src_pitch));
                         value       = src_buffer[offset];
                     }
                     else
@@ -486,7 +486,7 @@ public:
                     uint8_t   value {0};
                     if (src_byte_x < src_byte_width)
                     {
-                        const size_t offset = src_byte_x + (src_y * src_pitch);
+                        const std::size_t offset = src_byte_x + (src_y * src_pitch);
                         value = src_buffer[offset];
                     }
                     else

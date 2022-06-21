@@ -18,7 +18,7 @@
                 "${workspaceFolder}/**"
             ],
             "defines": [],
-            "compilerPath":          "/usr/bin/clang",
+            "compilerPath":          "/usr/bin/clang-14",
             "compileCommands":       "${workspaceFolder}/vscode-cmake-build/compile_commands.json",
             "cStandard":             "c11",
             "cppStandard":           "c++20",

@@ -110,7 +110,7 @@ auto PNG_loader::open(
     };
     result = ::spng_get_ihdr(m_image_decoder, &ihdr);
 
-    size_t image_size{};
+    std::size_t image_size{};
     result = ::spng_decoded_image_size(m_image_decoder, SPNG_FMT_RGBA8, &image_size);
     if (result != 0)
     {
@@ -141,14 +141,14 @@ PNG_writer::~PNG_writer() noexcept
 {
 }
 
-int spng_rw(spng_ctx* ctx, void* user, void* dst_src, size_t length)
+int spng_rw(spng_ctx* ctx, void* user, void* dst_src, ::size_t length)
 {
     static_cast<void>(ctx);
     auto* writer = reinterpret_cast<PNG_writer*>(user);
     return writer->stream_op(dst_src, length);
 }
 
-auto PNG_writer::stream_op(void* dst_src, size_t length) -> int
+auto PNG_writer::stream_op(void* dst_src, std::size_t length) -> int
 {
     m_file_stream->write(dst_src, length);
     return 0;

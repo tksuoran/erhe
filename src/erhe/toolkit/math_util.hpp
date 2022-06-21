@@ -722,8 +722,8 @@ public:
 class Point_source
 {
 public:
-    virtual auto point_count() const -> size_t = 0;
-    virtual auto get_point  (size_t index) const -> std::optional<glm::vec3> = 0;
+    virtual auto point_count() const -> std::size_t = 0;
+    virtual auto get_point  (std::size_t index) const -> std::optional<glm::vec3> = 0;
 };
 
 void calculate_bounding_volume(

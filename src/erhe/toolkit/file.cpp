@@ -18,7 +18,7 @@ auto read(const fs::path& path) -> nonstd::optional<std::string>
             !fs::is_empty(path)
         )
         {
-            const size_t file_length = fs::file_size(path);
+            const std::size_t file_length = fs::file_size(path);
             std::FILE* file =
 #ifdef _MSC_VER
                 _wfopen(path.c_str(), L"rb");
@@ -31,8 +31,8 @@ auto read(const fs::path& path) -> nonstd::optional<std::string>
                 return {};
             }
 
-            size_t bytes_to_read = file_length;
-            size_t bytes_read = 0;
+            std::size_t bytes_to_read = file_length;
+            std::size_t bytes_read = 0;
             std::string result(file_length, '\0');
             do
             {

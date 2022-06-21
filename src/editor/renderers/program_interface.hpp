@@ -20,62 +20,62 @@ namespace editor {
 class Primitive_struct
 {
 public:
-    size_t world_from_node; // mat4 16 * 4 bytes
-    size_t color;           // vec4  4 * 4 bytes - id_offset / wire frame color
-    size_t material_index;  // uint  1 * 4 bytes
-    size_t size;            // uint  1 * 4 bytes - point size / line width
-    size_t extra2;          // uint  1 * 4 bytes
-    size_t extra3;          // uint  1 * 4 bytes
+    std::size_t world_from_node; // mat4 16 * 4 bytes
+    std::size_t color;           // vec4  4 * 4 bytes - id_offset / wire frame color
+    std::size_t material_index;  // uint  1 * 4 bytes
+    std::size_t size;            // uint  1 * 4 bytes - point size / line width
+    std::size_t extra2;          // uint  1 * 4 bytes
+    std::size_t extra3;          // uint  1 * 4 bytes
 };
 
 class Camera_struct
 {
 public:
-    size_t world_from_node;      // mat4
-    size_t world_from_clip;      // mat4
-    size_t clip_from_world;      // mat4
-    size_t viewport;             // vec4
-    size_t fov;                  // vec4
-    size_t clip_depth_direction; // float 1.0 = forward depth, -1.0 = reverse depth
-    size_t view_depth_near;      // float
-    size_t view_depth_far;       // float
-    size_t exposure;             // float
+    std::size_t world_from_node;      // mat4
+    std::size_t world_from_clip;      // mat4
+    std::size_t clip_from_world;      // mat4
+    std::size_t viewport;             // vec4
+    std::size_t fov;                  // vec4
+    std::size_t clip_depth_direction; // float 1.0 = forward depth, -1.0 = reverse depth
+    std::size_t view_depth_near;      // float
+    std::size_t view_depth_far;       // float
+    std::size_t exposure;             // float
 };
 
 class Light_struct
 {
 public:
-    size_t texture_from_world; // mat4
-    size_t position_and_inner_spot_cos;
-    size_t direction_and_outer_spot_cos;
-    size_t radiance_and_range;
+    std::size_t texture_from_world; // mat4
+    std::size_t position_and_inner_spot_cos;
+    std::size_t direction_and_outer_spot_cos;
+    std::size_t radiance_and_range;
 };
 
 class Light_block
 {
 public:
-    size_t       shadow_texture;
-    size_t       reserved_1;
-    size_t       directional_light_count;
-    size_t       spot_light_count;
-    size_t       point_light_count;
-    size_t       reserved_0;
-    size_t       ambient_light;
-    size_t       reserved_2;
+    std::size_t  shadow_texture;
+    std::size_t  reserved_1;
+    std::size_t  directional_light_count;
+    std::size_t  spot_light_count;
+    std::size_t  point_light_count;
+    std::size_t  reserved_0;
+    std::size_t  ambient_light;
+    std::size_t  reserved_2;
     Light_struct light;
-    size_t       light_struct;
+    std::size_t  light_struct;
 };
 
 class Material_struct
 {
 public:
-    size_t roughness;    // vec2
-    size_t metallic;     // float
-    size_t transparency; // float
-    size_t base_color;   // vec4
-    size_t emissive;     // vec4
-    size_t base_texture; // uvec2
-    size_t reserved;     // uvec2
+    std::size_t roughness;    // vec2
+    std::size_t metallic;     // float
+    std::size_t transparency; // float
+    std::size_t base_color;   // vec4
+    std::size_t emissive;     // vec4
+    std::size_t base_texture; // uvec2
+    std::size_t reserved;     // uvec2
 };
 
 class Program_interface
@@ -101,10 +101,10 @@ public:
     {
     public:
         Shader_resources(
-            size_t max_material_count,
-            size_t max_light_count,
-            size_t max_camera_count,
-            size_t max_primitive_count
+            std::size_t max_material_count,
+            std::size_t max_light_count,
+            std::size_t max_camera_count,
+            std::size_t max_primitive_count
         );
 
         erhe::graphics::Vertex_attribute_mappings attribute_mappings;

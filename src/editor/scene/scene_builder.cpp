@@ -159,7 +159,7 @@ void Scene_builder::make_brushes()
 
     if (get<erhe::application::Configuration>()->threading.parallel_initialization)
     {
-        size_t thread_count = std::min(
+        const std::size_t thread_count = std::min(
             8U,
             std::max(std::thread::hardware_concurrency() - 0, 1U)
         );
@@ -821,7 +821,7 @@ void Scene_builder::make_mesh_nodes()
         }
     }
 
-    size_t material_index = 0;
+    std::size_t material_index = 0;
     {
         ERHE_PROFILE_SCOPE("make instances");
 

@@ -34,13 +34,13 @@ public:
     };
 
     explicit Frame_resources(
-        const size_t material_stride,  const size_t material_count,
-        const size_t light_stride,     const size_t light_count,
-        const size_t camera_stride,    const size_t camera_count,
-        const size_t primitive_stride, const size_t primitive_count,
-        const size_t draw_stride,      const size_t draw_count,
+        const std::size_t  material_stride,  const std::size_t material_count,
+        const std::size_t  light_stride,     const std::size_t light_count,
+        const std::size_t  camera_stride,    const std::size_t camera_count,
+        const std::size_t  primitive_stride, const std::size_t primitive_count,
+        const std::size_t  draw_stride,      const std::size_t draw_count,
         const std::string& name,
-        const size_t slot
+        const std::size_t  slot
     )
         : material_buffer     {gl::Buffer_target::uniform_buffer,        material_count  * material_stride,  storage_mask, access_mask}
         , light_buffer        {gl::Buffer_target::uniform_buffer,        light_count     * light_stride,     storage_mask, access_mask}

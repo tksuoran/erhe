@@ -111,8 +111,8 @@ void Quad_renderer::render(const erhe::graphics::Texture& texture)
     auto&                     parameter_buffer = current_frame_resources().parameter_buffer;
     const auto                vertex_gpu_data  = parameter_buffer.map();
     std::byte* const          start            = vertex_gpu_data.data()       + m_parameter_writer.write_offset;
-    const size_t              byte_count       = vertex_gpu_data.size_bytes() - m_parameter_writer.write_offset;
-    const size_t              word_count       = byte_count / sizeof(float);
+    const std::size_t         byte_count       = vertex_gpu_data.size_bytes() - m_parameter_writer.write_offset;
+    const std::size_t         word_count       = byte_count / sizeof(float);
     const gsl::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     const uint32_t texture_handle[2] =

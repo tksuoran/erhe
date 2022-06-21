@@ -35,20 +35,20 @@ enum class Hand_name : unsigned int
 class Finger_name
 {
 public:
-    static const size_t thumb  = 0;
-    static const size_t index  = 1;
-    static const size_t middle = 2;
-    static const size_t ring   = 3;
-    static const size_t little = 4;
-    static const size_t palm   = 5;
-    static const size_t wrist  = 6;
-    static const size_t count  = 7;
+    static const std::size_t thumb  = 0;
+    static const std::size_t index  = 1;
+    static const std::size_t middle = 2;
+    static const std::size_t ring   = 3;
+    static const std::size_t little = 4;
+    static const std::size_t palm   = 5;
+    static const std::size_t wrist  = 6;
+    static const std::size_t count  = 7;
 };
 
 class Closest_finger
 {
 public:
-    size_t                               finger;
+    std::size_t                          finger;
     erhe::toolkit::Closest_points<float> closest_points;
 };
 
@@ -70,7 +70,7 @@ public:
     auto is_active() const -> bool;
     auto is_valid (const XrHandJointEXT joint) const -> bool;
     void draw     (Line_renderer& line_renderer, const glm::mat4 transform);
-    void set_color(const size_t finger, const ImVec4 color);
+    void set_color(const std::size_t finger, const ImVec4 color);
 
 private:
     void draw_joint_line_strip(
@@ -116,9 +116,9 @@ public:
     auto get_hand (const Hand_name hand_name) -> Hand&;
     void set_color(const Hand_name hand_name, const ImVec4 color);
     void set_color(
-        const Hand_name hand_name,
-        const size_t    finger_name,
-        const ImVec4    color
+        const Hand_name   hand_name,
+        const std::size_t finger_name,
+        const ImVec4      color
     );
 
 private:

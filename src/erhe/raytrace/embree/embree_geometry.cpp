@@ -128,9 +128,9 @@ void Embree_geometry::set_buffer(
     const unsigned int slot,
     const Format       format,
     IBuffer* const     buffer,
-    const size_t       byte_offset,
-    const size_t       byte_stride,
-    const size_t       item_count
+    const std::size_t  byte_offset,
+    const std::size_t  byte_stride,
+    const std::size_t  item_count
 )
 {
     SPDLOG_LOGGER_TRACE(

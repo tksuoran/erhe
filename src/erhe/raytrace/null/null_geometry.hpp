@@ -32,9 +32,9 @@ public:
         const unsigned int,
         const Format      ,
         IBuffer* const    ,
-        const size_t      ,
-        const size_t      ,
-        const size_t
+        const std::size_t ,
+        const std::size_t ,
+        const std::size_t
     ) override {}
     void set_user_data(void* ptr) override { m_user_data = ptr; }
     [[nodiscard]] auto get_mask     () const -> uint32_t         override { return m_mask; }

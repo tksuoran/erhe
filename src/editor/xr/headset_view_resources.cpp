@@ -21,7 +21,7 @@ Headset_view_resources::Headset_view_resources(
     erhe::xr::Render_view& render_view,
     Headset_renderer&      headset_renderer,
     Editor_rendering&      rendering,
-    const size_t           slot
+    const std::size_t      slot
 )
 {
     // log_headset.trace(

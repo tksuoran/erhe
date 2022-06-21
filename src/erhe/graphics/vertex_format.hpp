@@ -44,7 +44,7 @@ public:
 
 private:
     std::vector<Vertex_attribute> m_attributes;
-    size_t                        m_stride{0};
+    std::size_t                   m_stride{0};
 };
 
 } // namespace erhe::graphics

@@ -41,15 +41,15 @@ namespace erhe::application
 class Buffer_range
 {
 public:
-    size_t first_byte_offset{0};
-    size_t byte_count       {0};
+    std::size_t first_byte_offset{0};
+    std::size_t byte_count       {0};
 };
 
 class Buffer_writer
 {
 public:
     Buffer_range range;
-    size_t       write_offset{0};
+    std::size_t       write_offset{0};
 
     void shader_storage_align()
     {

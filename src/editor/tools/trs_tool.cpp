@@ -1357,7 +1357,7 @@ void Trs_tool::tool_render(
         }
         for (size_t i = 0, count = positions.size(); i < count; ++i)
         {
-            const size_t next_i = (i + 1) % count;
+            const std::size_t next_i = (i + 1) % count;
             line_renderer.add_lines(
                 {
                     {

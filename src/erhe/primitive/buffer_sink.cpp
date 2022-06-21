@@ -26,8 +26,8 @@ Gl_buffer_sink::Gl_buffer_sink(
 }
 
 auto Gl_buffer_sink::allocate_vertex_buffer(
-    const size_t vertex_count,
-    const size_t vertex_element_size
+    const std::size_t vertex_count,
+    const std::size_t vertex_element_size
 ) -> Buffer_range
 {
     const auto byte_offset = m_vertex_buffer.allocate_bytes(
@@ -43,8 +43,8 @@ auto Gl_buffer_sink::allocate_vertex_buffer(
 }
 
 auto Gl_buffer_sink::allocate_index_buffer(
-    const size_t index_count,
-    const size_t index_element_size
+    const std::size_t index_count,
+    const std::size_t index_element_size
 ) -> Buffer_range
 {
     const auto index_byte_offset = m_index_buffer.allocate_bytes(index_count * index_element_size);
@@ -84,8 +84,8 @@ Raytrace_buffer_sink::Raytrace_buffer_sink(
 }
 
 auto Raytrace_buffer_sink::allocate_vertex_buffer(
-    const size_t vertex_count,
-    const size_t vertex_element_size
+    const std::size_t vertex_count,
+    const std::size_t vertex_element_size
 ) -> Buffer_range
 {
     const auto vertex_byte_offset = m_vertex_buffer.allocate_bytes(
@@ -100,8 +100,8 @@ auto Raytrace_buffer_sink::allocate_vertex_buffer(
 }
 
 auto Raytrace_buffer_sink::allocate_index_buffer(
-    const size_t index_count,
-    const size_t index_element_size
+    const std::size_t index_count,
+    const std::size_t index_element_size
 ) -> Buffer_range
 {
     const auto index_byte_offset = m_index_buffer.allocate_bytes(index_count * index_element_size);

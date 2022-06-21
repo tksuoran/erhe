@@ -25,8 +25,8 @@ void Corner::smooth_normalize(
     const T    polygon_value  = polygon_attribute.get(polygon_id);
     T          corner_value   = polygon_value;
 
-    size_t point_corner_count{0};
-    size_t participant_count {0};
+    std::size_t point_corner_count{0};
+    std::size_t participant_count {0};
 
     const Point& point = geometry.points[point_id];
     point.for_each_corner_const(geometry, [&](const auto& i)
@@ -93,7 +93,7 @@ void Corner::smooth_average(
 
     T corner_value{};
 
-    size_t participant_count{0};
+    std::size_t participant_count{0};
     const Point& point = geometry.points[point_id];
     point.for_each_corner_const([&](const auto& i)
     {

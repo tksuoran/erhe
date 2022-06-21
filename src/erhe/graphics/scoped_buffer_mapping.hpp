@@ -19,8 +19,8 @@ class Scoped_buffer_mapping
 public:
     Scoped_buffer_mapping(
         Buffer&                          buffer,
-        const size_t                     element_offset,
-        const size_t                     element_count,
+        const std::size_t                element_offset,
+        const std::size_t                element_count,
         const gl::Map_buffer_access_mask access_mask
     )
         : m_buffer{buffer}

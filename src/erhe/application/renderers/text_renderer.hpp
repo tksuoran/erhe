@@ -77,7 +77,7 @@ public:
     void next_frame();
 
 private:
-    static constexpr size_t s_frame_resources_count = 4;
+    static constexpr std::size_t s_frame_resources_count = 4;
 
     class Frame_resources
     {
@@ -95,12 +95,12 @@ private:
         };
 
         Frame_resources(
-            const size_t                              vertex_count,
+            const std::size_t                         vertex_count,
             erhe::graphics::Shader_stages*            shader_stages,
             erhe::graphics::Vertex_attribute_mappings attribute_mappings,
             erhe::graphics::Vertex_format&            vertex_format,
             erhe::graphics::Buffer*                   index_buffer,
-            const size_t                              slot
+            const std::size_t                         slot
         );
 
         Frame_resources(const Frame_resources&) = delete;
@@ -126,21 +126,23 @@ private:
     std::shared_ptr<erhe::graphics::Buffer>          m_index_buffer;
     std::unique_ptr<erhe::graphics::Shader_resource> m_projection_block;
     std::unique_ptr<erhe::graphics::Shader_stages>   m_shader_stages;
-    size_t                                           m_u_clip_from_window_size  {0};
-    size_t                                           m_u_clip_from_window_offset{0};
-    size_t                                           m_u_texture_size           {0};
-    size_t                                           m_u_texture_offset         {0};
+    erhe::graphics::Shader_resource                  m_default_uniform_block; // containing sampler uniforms for non bindless textures
+
+    std::size_t                                      m_u_clip_from_window_size  {0};
+    std::size_t                                      m_u_clip_from_window_offset{0};
+    std::size_t                                      m_u_texture_size           {0};
+    std::size_t                                      m_u_texture_offset         {0};
 
     std::unique_ptr<erhe::ui::Font>                  m_font;
     std::unique_ptr<erhe::graphics::Sampler>         m_nearest_sampler;
 
     std::deque<Frame_resources> m_frame_resources;
-    size_t                      m_current_frame_resource_slot{0};
+    std::size_t                 m_current_frame_resource_slot{0};
 
     Buffer_writer m_vertex_writer;
     Buffer_writer m_projection_writer;
-    size_t        m_index_range_first{0};
-    size_t        m_index_count      {0};
+    std::size_t   m_index_range_first{0};
+    std::size_t   m_index_count      {0};
 };
 
 } // namespace erhe::application

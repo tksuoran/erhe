@@ -8,22 +8,22 @@
 namespace erhe::raytrace
 {
 
-auto IBuffer::create(const std::string_view debug_label, const size_t capacity_bytes_count) -> IBuffer*
+auto IBuffer::create(const std::string_view debug_label, const std::size_t capacity_bytes_count) -> IBuffer*
 {
     return new Bvh_buffer(debug_label, capacity_bytes_count);
 }
 
-auto IBuffer::create_shared(const std::string_view debug_label, const size_t capacity_bytes_count) -> std::shared_ptr<IBuffer>
+auto IBuffer::create_shared(const std::string_view debug_label, const std::size_t capacity_bytes_count) -> std::shared_ptr<IBuffer>
 {
     return std::make_shared<Bvh_buffer>(debug_label, capacity_bytes_count);
 }
 
-auto IBuffer::create_unique(const std::string_view debug_label, const size_t capacity_bytes_count) -> std::unique_ptr<IBuffer>
+auto IBuffer::create_unique(const std::string_view debug_label, const std::size_t capacity_bytes_count) -> std::unique_ptr<IBuffer>
 {
     return std::make_unique<Bvh_buffer>(debug_label, capacity_bytes_count);
 }
 
-Bvh_buffer::Bvh_buffer(const std::string_view debug_label, const size_t capacity_bytes_count)
+Bvh_buffer::Bvh_buffer(const std::string_view debug_label, const std::size_t capacity_bytes_count)
     : m_capacity_byte_count{capacity_bytes_count}
     , m_next_free_byte     {0}
     , m_debug_label        {debug_label}
@@ -53,15 +53,15 @@ Bvh_buffer& Bvh_buffer::operator=(Bvh_buffer&& other) noexcept
 Bvh_buffer::~Bvh_buffer() = default;
 
 auto Bvh_buffer::capacity_byte_count() const noexcept
--> size_t
+-> std::size_t
 {
     return m_capacity_byte_count;
 }
 
 auto Bvh_buffer::allocate_bytes(
-    const size_t byte_count,
-    const size_t alignment
-) noexcept -> size_t
+    const std::size_t byte_count,
+    const std::size_t alignment
+) noexcept -> std::size_t
 {
     const std::lock_guard<std::mutex> lock{m_allocate_mutex};
 

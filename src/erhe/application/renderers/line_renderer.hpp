@@ -82,10 +82,10 @@ public:
     erhe::graphics::Vertex_format                    vertex_format;
     std::unique_ptr<erhe::graphics::Shader_resource> view_block;
     std::unique_ptr<erhe::graphics::Shader_stages>   shader_stages;
-    size_t                                           clip_from_world_offset       {0};
-    size_t                                           view_position_in_world_offset{0};
-    size_t                                           viewport_offset              {0};
-    size_t                                           fov_offset                   {0};
+    std::size_t                                      clip_from_world_offset       {0};
+    std::size_t                                      view_position_in_world_offset{0};
+    std::size_t                                      viewport_offset              {0};
+    std::size_t                                      fov_offset                   {0};
 };
 
 class Line_renderer
@@ -161,7 +161,7 @@ public:
     //    const float                             thickness = 2.0f
     //);
 private:
-    static constexpr size_t s_frame_resources_count = 4;
+    static constexpr std::size_t s_frame_resources_count = 4;
 
     class Frame_resources
     {
@@ -179,14 +179,14 @@ private:
 
         Frame_resources(
             const bool                                reverse_depth,
-            const size_t                              view_stride,
-            const size_t                              view_count,
-            const size_t                              vertex_count,
+            const std::size_t                         view_stride,
+            const std::size_t                         view_count,
+            const std::size_t                         vertex_count,
             erhe::graphics::Shader_stages* const      shader_stages,
             erhe::graphics::Vertex_attribute_mappings attribute_mappings,
             erhe::graphics::Vertex_format&            vertex_format,
             const std::string&                        style_name,
-            const size_t                              slot
+            const std::size_t                         slot
         );
 
         Frame_resources(const Frame_resources&) = delete;
@@ -204,15 +204,15 @@ private:
     class Buffer_range
     {
     public:
-        size_t first_byte_offset{0};
-        size_t byte_count       {0};
+        std::size_t first_byte_offset{0};
+        std::size_t byte_count       {0};
     };
 
     class Buffer_writer
     {
     public:
         Buffer_range range;
-        size_t       write_offset{0};
+        std::size_t  write_offset{0};
 
         void begin()
         {
@@ -246,11 +246,10 @@ private:
     std::deque<Frame_resources> m_frame_resources;
     std::string                 m_name;
     Line_renderer_pipeline*     m_pipeline  {nullptr};
-    //bool                        m_world_space;
-    size_t                      m_line_count{0};
+    std::size_t                 m_line_count{0};
     Buffer_writer               m_view_writer;
     Buffer_writer               m_vertex_writer;
-    size_t                      m_current_frame_resource_slot{0};
+    std::size_t                 m_current_frame_resource_slot{0};
     uint32_t                    m_line_color                 {0xffffffffu};
 };
 

@@ -151,9 +151,9 @@ public:
         const unsigned int slot,
         const Format       format,
         IBuffer* const     buffer,
-        const size_t       byte_offset,
-        const size_t       byte_stride,
-        const size_t       item_count
+        const std::size_t  byte_offset,
+        const std::size_t  byte_stride,
+        const std::size_t  item_count
     ) = 0;
     virtual void set_user_data(void* ptr) = 0;
     [[nodiscard]] virtual auto get_mask     () const -> uint32_t         = 0;

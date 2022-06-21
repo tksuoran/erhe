@@ -62,9 +62,9 @@ public:
 private:
     std::shared_ptr<erhe::scene::Node> m_child_node;
     std::shared_ptr<erhe::scene::Node> m_parent_before;
-    size_t                             m_parent_before_index;
+    std::size_t                        m_parent_before_index;
     std::shared_ptr<erhe::scene::Node> m_parent_after;
-    size_t                             m_parent_after_index;
+    std::size_t                        m_parent_after_index;
 };
 
 }

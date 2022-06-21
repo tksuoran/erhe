@@ -27,7 +27,7 @@ public:
     );
     ~Material() noexcept;
 
-    size_t                                   index{0};
+    std::size_t                              index{0};
     std::string                              name;
     float                                    metallic    {0.0f};
     glm::vec2                                roughness   {0.5f, 0.5f};

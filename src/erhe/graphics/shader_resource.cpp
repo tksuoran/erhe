@@ -96,7 +96,7 @@ public:
     Type_details(
         const gl::Uniform_type type,
         const gl::Uniform_type basic_type,
-        const size_t           component_count
+        const std::size_t      component_count
     )
         : type           {type}
         , basic_type     {basic_type}
@@ -129,8 +129,8 @@ public:
     gl::Uniform_type   type             {gl::Uniform_type::bool_};
     gl::Uniform_type   basic_type       {gl::Uniform_type::bool_};
     gl::Texture_target texture_target   {gl::Texture_target::texture_1d};
-    size_t             component_count  {0};
-    size_t             sampler_dimension{0};
+    std::size_t        component_count  {0};
+    std::size_t        sampler_dimension{0};
     unsigned int       sampler_mask     {0};
 };
 
@@ -214,7 +214,7 @@ auto get_type_details(const gl::Uniform_type type) -> Type_details
     }
 }
 
-auto get_type_size(const gl::Uniform_type type) -> size_t
+auto get_type_size(const gl::Uniform_type type) -> std::size_t
 {
     switch (type)
     {
@@ -236,7 +236,7 @@ auto get_type_size(const gl::Uniform_type type) -> size_t
     }
 }
 
-auto get_pack_size(const gl::Uniform_type type) -> size_t
+auto get_pack_size(const gl::Uniform_type type) -> std::size_t
 {
     const auto type_details = get_type_details(type);
     if (type_details.is_sampler())
@@ -375,10 +375,10 @@ Shader_resource::Shader_resource(
 
 // Struct member
 Shader_resource::Shader_resource(
-    const std::string_view          struct_member_name,
-    gsl::not_null<Shader_resource*> struct_type,
-    const nonstd::optional<size_t>  array_size /* = {} */,
-    Shader_resource*                parent /* = nullptr */
+    const std::string_view              struct_member_name,
+    gsl::not_null<Shader_resource*>     struct_type,
+    const nonstd::optional<std::size_t> array_size /* = {} */,
+    Shader_resource*                    parent /* = nullptr */
 )
     : m_type            {Type::struct_member}
     , m_name            {struct_member_name}
@@ -392,10 +392,10 @@ Shader_resource::Shader_resource(
 
 // Block (uniform block or shader storage block)
 Shader_resource::Shader_resource(
-    const std::string_view         name,
-    const int                      binding_point,
-    const Type                     type,
-    const nonstd::optional<size_t> array_size /* = {} */
+    const std::string_view              name,
+    const int                           binding_point,
+    const Type                          type,
+    const nonstd::optional<std::size_t> array_size /* = {} */
 )
     : m_type         {type}
     , m_name         {name}
@@ -419,10 +419,10 @@ Shader_resource::Shader_resource(
 
 // Basic type
 Shader_resource::Shader_resource(
-    const std::string_view         basic_name,
-    const gl::Uniform_type         basic_type,
-    const nonstd::optional<size_t> array_size /* = {} */,
-    Shader_resource*               parent /* = nullptr */
+    const std::string_view              basic_name,
+    const gl::Uniform_type              basic_type,
+    const nonstd::optional<std::size_t> array_size /* = {} */,
+    Shader_resource*                    parent /* = nullptr */
 )
     : m_type            {Type::basic}
     , m_name            {basic_name}
@@ -436,12 +436,12 @@ Shader_resource::Shader_resource(
 
 // Sampler
 Shader_resource::Shader_resource(
-    const std::string_view          sampler_name,
-    gsl::not_null<Shader_resource*> parent,
-    const int                       location,
-    const gl::Uniform_type          sampler_type,
-    const nonstd::optional<size_t>  array_size /* = {} */,
-    const nonstd::optional<int>     dedicated_texture_unit /* = {} */
+    const std::string_view              sampler_name,
+    gsl::not_null<Shader_resource*>     parent,
+    const int                           location,
+    const gl::Uniform_type              sampler_type,
+    const nonstd::optional<std::size_t> array_size /* = {} */,
+    const nonstd::optional<int>         dedicated_texture_unit /* = {} */
 )
     : m_type         {Type::sampler}
     , m_name         {sampler_name}
@@ -482,7 +482,7 @@ auto Shader_resource::name() const -> const std::string&
     return m_name;
 }
 
-auto Shader_resource::array_size() const -> nonstd::optional<size_t>
+auto Shader_resource::array_size() const -> nonstd::optional<std::size_t>
 {
     return m_array_size;
 }
@@ -504,7 +504,7 @@ auto Shader_resource::location() const -> int
     return m_location;
 }
 
-auto Shader_resource::index_in_parent() const -> size_t
+auto Shader_resource::index_in_parent() const -> std::size_t
 {
     Expects(m_parent != nullptr);
     Expects(is_aggregate(m_parent->type()));
@@ -512,7 +512,7 @@ auto Shader_resource::index_in_parent() const -> size_t
     return m_index_in_parent; // TODO
 }
 
-auto Shader_resource::offset_in_parent() const  -> size_t
+auto Shader_resource::offset_in_parent() const -> std::size_t
 {
     Expects(m_parent != nullptr);
     Expects(is_aggregate(m_parent->type()));
@@ -525,7 +525,7 @@ auto Shader_resource::parent() const -> Shader_resource*
     return m_parent;
 }
 
-auto Shader_resource::member_count() const -> size_t
+auto Shader_resource::member_count() const -> std::size_t
 {
     Expects(is_aggregate(m_type));
 
@@ -554,7 +554,7 @@ auto Shader_resource::binding_point() const -> unsigned int
 
 // Returns size of block.
 // For arrays, size of one element is returned.
-auto Shader_resource::size_bytes() const -> size_t
+auto Shader_resource::size_bytes() const -> std::size_t
 {
     if (m_type == Type::struct_type)
     {
@@ -570,7 +570,7 @@ auto Shader_resource::size_bytes() const -> size_t
     // TODO Shader storage buffer alignment?
     if (is_block(m_type))
     {
-        size_t padded_size = m_offset;
+        std::size_t padded_size = m_offset;
         while ((padded_size % Instance::implementation_defined.uniform_buffer_offset_alignment) != 0)
         {
             ++padded_size;
@@ -580,8 +580,8 @@ auto Shader_resource::size_bytes() const -> size_t
     }
     else
     {
-        size_t element_size = get_pack_size(m_basic_type);
-        size_t array_multiplier{1};
+        std::size_t element_size = get_pack_size(m_basic_type);
+        std::size_t array_multiplier{1};
         if (m_array_size.has_value() && (m_array_size.value() > 0))
         {
             array_multiplier = m_array_size.value();
@@ -600,13 +600,13 @@ auto Shader_resource::size_bytes() const -> size_t
     }
 }
 
-auto Shader_resource::offset() const -> size_t
+auto Shader_resource::offset() const -> std::size_t
 {
     Expects(is_aggregate(m_type));
     return m_offset;
 }
 
-auto Shader_resource::next_member_offset() const -> size_t
+auto Shader_resource::next_member_offset() const -> std::size_t
 {
     Expects(is_aggregate(m_type));
     return m_offset;
@@ -797,9 +797,9 @@ auto Shader_resource::source(
 }
 
 auto Shader_resource::add_struct(
-    const std::string_view          name,
-    gsl::not_null<Shader_resource*> struct_type,
-    const nonstd::optional<size_t>  array_size /* = {} */
+    const std::string_view              name,
+    gsl::not_null<Shader_resource*>     struct_type,
+    const nonstd::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     align_offset_to(4); // align by 4 bytes TODO do what spec says
@@ -809,10 +809,10 @@ auto Shader_resource::add_struct(
 }
 
 auto Shader_resource::add_sampler(
-    const std::string_view         name,
-    const gl::Uniform_type         sampler_type,
-    const nonstd::optional<int>    dedicated_texture_unit, /* = {} */
-    const nonstd::optional<size_t> array_size /* = {} */
+    const std::string_view              name,
+    const gl::Uniform_type              sampler_type,
+    const nonstd::optional<int>         dedicated_texture_unit, /* = {} */
+    const nonstd::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     Expects(m_type == Type::default_uniform_block);
@@ -837,8 +837,8 @@ auto Shader_resource::add_sampler(
 }
 
 auto Shader_resource::add_float(
-    const std::string_view         name,
-    const nonstd::optional<size_t> array_size /* = {} */
+    const std::string_view              name,
+    const nonstd::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -856,8 +856,8 @@ auto Shader_resource::add_float(
 }
 
 auto Shader_resource::add_vec2(
-    const std::string_view         name,
-    const nonstd::optional<size_t> array_size /* = {} */
+    const std::string_view              name,
+    const nonstd::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -875,8 +875,8 @@ auto Shader_resource::add_vec2(
 }
 
 auto Shader_resource::add_vec3(
-    const std::string_view         name,
-    const nonstd::optional<size_t> array_size /* = {} */
+    const std::string_view              name,
+    const nonstd::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -894,8 +894,8 @@ auto Shader_resource::add_vec3(
 }
 
 auto Shader_resource::add_vec4(
-    const std::string_view         name,
-    const nonstd::optional<size_t> array_size /* = {} */
+    const std::string_view              name,
+    const nonstd::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -913,8 +913,8 @@ auto Shader_resource::add_vec4(
 }
 
 auto Shader_resource::add_mat4(
-    const std::string_view         name,
-    const nonstd::optional<size_t> array_size /* = {} */
+    const std::string_view              name,
+    const nonstd::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -932,8 +932,8 @@ auto Shader_resource::add_mat4(
 }
 
 auto Shader_resource::add_int(
-    const std::string_view         name,
-    const nonstd::optional<size_t> array_size /* = {} */
+    const std::string_view              name,
+    const nonstd::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -951,8 +951,8 @@ auto Shader_resource::add_int(
 }
 
 auto Shader_resource::add_uint(
-    const std::string_view         name,
-    const nonstd::optional<size_t> array_size /* = {} */
+    const std::string_view              name,
+    const nonstd::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -970,8 +970,8 @@ auto Shader_resource::add_uint(
 }
 
 auto Shader_resource::add_uvec2(
-    const std::string_view         name,
-    const nonstd::optional<size_t> array_size /* = {} */
+    const std::string_view              name,
+    const nonstd::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -989,8 +989,8 @@ auto Shader_resource::add_uvec2(
 }
 
 auto Shader_resource::add_uvec3(
-    const std::string_view         name,
-    const nonstd::optional<size_t> array_size /* = {} */
+    const std::string_view              name,
+    const nonstd::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -1008,8 +1008,8 @@ auto Shader_resource::add_uvec3(
 }
 
 auto Shader_resource::add_uvec4(
-    const std::string_view         name,
-    const nonstd::optional<size_t> array_size /* = {} */
+    const std::string_view              name,
+    const nonstd::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));
@@ -1027,8 +1027,8 @@ auto Shader_resource::add_uvec4(
 }
 
 auto Shader_resource::add_uint64(
-    const std::string_view         name,
-    const nonstd::optional<size_t> array_size /* = {} */
+    const std::string_view              name,
+    const nonstd::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     Expects(is_aggregate(m_type));

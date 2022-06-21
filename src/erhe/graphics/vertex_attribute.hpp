@@ -43,8 +43,8 @@ public:
             return !(*this == other);
         }
 
-        Usage_type type {Usage_type::none};
-        size_t     index{0};
+        Usage_type  type {Usage_type::none};
+        std::size_t index{0};
     };
 
     // type, normalized, dimension -> dvec3 for example is double, false, 3
@@ -66,7 +66,7 @@ public:
 
         gl::Vertex_attrib_type type;
         bool                   normalized{false};
-        size_t                 dimension {0};
+        std::size_t            dimension {0};
     };
 
     [[nodiscard]] static auto desc(const Usage_type usage) -> const char*;
@@ -98,7 +98,7 @@ public:
     Usage              usage;
     gl::Attribute_type shader_type;
     Data_type          data_type;
-    size_t             offset {0};
+    std::size_t        offset {0};
     unsigned int       divisor{0};
 };
 

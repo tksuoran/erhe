@@ -35,7 +35,7 @@ template <typename T>
 template <typename T>
 inline void write(
     const gsl::span<std::byte>& dst,
-    const size_t                write_byte_offset,
+    const std::size_t           write_byte_offset,
     const gsl::span<const T>    source
 )
 {
@@ -48,7 +48,7 @@ inline void write(
 template <typename T>
 inline void write(
     const gsl::span<T>&      dst,
-    const size_t             write_byte_offset,
+    const std::size_t        write_byte_offset,
     const gsl::span<const T> source
 )
 {

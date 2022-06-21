@@ -75,15 +75,15 @@ public:
         erhe::geometry::Geometry*          geometry     {nullptr};
         nonstd::optional<glm::vec3>        position     {};
         nonstd::optional<glm::vec3>        normal       {};
-        size_t                             primitive    {0};
-        size_t                             local_index  {0};
+        std::size_t                        primitive    {0};
+        std::size_t                        local_index  {0};
     };
 
-    static constexpr size_t content_slot = 0;
-    static constexpr size_t tool_slot    = 1;
-    static constexpr size_t brush_slot   = 2;
-    static constexpr size_t gui_slot     = 3;
-    static constexpr size_t slot_count   = 4;
+    static constexpr std::size_t content_slot = 0;
+    static constexpr std::size_t tool_slot    = 1;
+    static constexpr std::size_t brush_slot   = 2;
+    static constexpr std::size_t gui_slot     = 3;
+    static constexpr std::size_t slot_count   = 4;
 
     static constexpr std::array<uint32_t, slot_count> slot_masks = {
         Raytrace_node_mask::content,
@@ -112,7 +112,7 @@ public:
     [[nodiscard]] auto mouse_button_released           (const erhe::toolkit::Mouse_button button) const -> bool;
     [[nodiscard]] auto mouse_x                         () const -> double;
     [[nodiscard]] auto mouse_y                         () const -> double;
-    [[nodiscard]] auto get_hover                       (const size_t slot) const -> const Hover_entry&;
+    [[nodiscard]] auto get_hover                       (const std::size_t slot) const -> const Hover_entry&;
     [[nodiscard]] auto get_nearest_hover               () const -> const Hover_entry&;
     [[nodiscard]] auto window                          () const -> Viewport_window*;
     [[nodiscard]] auto last_window                     () const -> Viewport_window*;
@@ -150,7 +150,7 @@ private:
     uint64_t                           m_frame_number         {0};
 
     std::array<Hover_entry, slot_count> m_hover_entries;
-    size_t                              m_nearest_slot{0};
+    std::size_t                         m_nearest_slot{0};
 };
 
 } // namespace editor

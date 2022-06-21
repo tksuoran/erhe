@@ -89,7 +89,7 @@ public:
     {
     public:
         erhe::application::Buffer_range range;
-        size_t                          draw_indirect_count{0};
+        std::size_t                     draw_indirect_count{0};
     };
 
     class Id_range
@@ -98,20 +98,20 @@ public:
         uint32_t                           offset         {0};
         uint32_t                           length         {0};
         std::shared_ptr<erhe::scene::Mesh> mesh           {};
-        size_t                             primitive_index{0};
+        std::size_t                        primitive_index{0};
     };
 
     explicit Base_renderer(const std::string& name);
     virtual ~Base_renderer() noexcept;
 
-    static constexpr size_t s_frame_resources_count = 4;
+    static constexpr std::size_t s_frame_resources_count = 4;
 
     void create_frame_resources(
-        const size_t material_count,
-        const size_t light_count,
-        const size_t camera_count,
-        const size_t primitive_count,
-        const size_t draw_count
+        const std::size_t material_count,
+        const std::size_t light_count,
+        const std::size_t camera_count,
+        const std::size_t primitive_count,
+        const std::size_t draw_count
     );
 
     [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
@@ -173,7 +173,7 @@ private:
 
     std::string                      m_name;
     std::vector<Frame_resources>     m_frame_resources;
-    size_t                           m_current_frame_resource_slot{0};
+    std::size_t                      m_current_frame_resource_slot{0};
 
     erhe::application::Buffer_writer m_material_writer;
     erhe::application::Buffer_writer m_light_writer;

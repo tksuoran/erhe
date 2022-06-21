@@ -56,11 +56,11 @@ void Base_renderer::base_require(erhe::components::Component* component)
 }
 
 void Base_renderer::create_frame_resources(
-    const size_t material_count,
-    const size_t light_count,
-    const size_t camera_count,
-    const size_t primitive_count,
-    const size_t draw_count
+    const std::size_t material_count,
+    const std::size_t light_count,
+    const std::size_t camera_count,
+    const std::size_t primitive_count,
+    const std::size_t draw_count
 )
 {
     ERHE_PROFILE_FUNCTION
@@ -125,12 +125,12 @@ auto Base_renderer::update_primitive_buffer(
     SPDLOG_LOGGER_TRACE(log_render, "meshes.size() = {}", meshes.size());
 
     m_primitive_writer.begin(current_frame_resources().primitive_buffer.target());
-    const auto&  shader_resources    = *m_program_interface->shader_resources.get();
-    const size_t entry_size          = shader_resources.primitive_struct.size_bytes();
-    const auto   primitive_gpu_data  = current_frame_resources().primitive_buffer.map();
-    const auto&  offsets             = shader_resources.primitive_block_offsets;
-    const size_t max_primitive_count = m_configuration->renderer.max_primitive_count;
-    size_t       primitive_index     = 0;
+    const auto&       shader_resources    = *m_program_interface->shader_resources.get();
+    const std::size_t entry_size          = shader_resources.primitive_struct.size_bytes();
+    const auto        primitive_gpu_data  = current_frame_resources().primitive_buffer.map();
+    const auto&       offsets             = shader_resources.primitive_block_offsets;
+    const std::size_t max_primitive_count = m_configuration->renderer.max_primitive_count;
+    std::size_t       primitive_index     = 0;
     for (const auto& mesh : meshes)
     {
         if (primitive_index == max_primitive_count)
@@ -147,7 +147,7 @@ auto Base_renderer::update_primitive_buffer(
 
         const auto& mesh_data = mesh->mesh_data;
 
-        size_t mesh_primitive_index{0};
+        std::size_t mesh_primitive_index{0};
         for (const auto& primitive : mesh_data.primitives)
         {
             if (primitive_index == max_primitive_count)
@@ -233,19 +233,19 @@ auto Base_renderer::update_light_buffer(
 
     SPDLOG_LOGGER_TRACE(log_render, "lights.size() = {}", lights.size());
 
-    const auto&    shader_resources = *m_program_interface->shader_resources.get();
-    const size_t   entry_size       = shader_resources.light_struct.size_bytes();
-    const auto&    offsets          = shader_resources.light_block_offsets;
-    const auto     light_gpu_data   = current_frame_resources().light_buffer.map();
-    const size_t   max_light_count  = m_configuration->renderer.max_light_count;
-    int            light_index      = 0;
-    uint32_t       directional_light_count{0u};
-    uint32_t       spot_light_count       {0u};
-    uint32_t       point_light_count      {0u};
-    const uint32_t uint32_zero            {0u};
-    const uint32_t uvec2_zero[2]          {0u, 0u};
-    const uint32_t uvec4_zero[4]          {0u, 0u, 0u, 0u};
-    const uint32_t shadow_map_texture_handle_uvec2[2] =
+    const auto&       shader_resources = *m_program_interface->shader_resources.get();
+    const std::size_t entry_size       = shader_resources.light_struct.size_bytes();
+    const auto&       offsets          = shader_resources.light_block_offsets;
+    const auto        light_gpu_data   = current_frame_resources().light_buffer.map();
+    const std::size_t max_light_count  = m_configuration->renderer.max_light_count;
+    std::size_t       light_index      = 0;
+    uint32_t          directional_light_count{0u};
+    uint32_t          spot_light_count       {0u};
+    uint32_t          point_light_count      {0u};
+    const uint32_t    uint32_zero            {0u};
+    const uint32_t    uvec2_zero[2]          {0u, 0u};
+    const uint32_t    uvec4_zero[4]          {0u, 0u, 0u, 0u};
+    const uint32_t    shadow_map_texture_handle_uvec2[2] =
     {
         static_cast<uint32_t>((shadow_map_texture_handle & 0xffffffffu)),
         static_cast<uint32_t>(shadow_map_texture_handle >> 32u)
@@ -312,12 +312,12 @@ auto Base_renderer::update_material_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto&  shader_resources   = *m_program_interface->shader_resources.get();
-    const size_t entry_size         = shader_resources.material_struct.size_bytes();
-    const auto&  offsets            = shader_resources.material_block_offsets;
-    const auto   material_gpu_data  = current_frame_resources().material_buffer.map();
-    const size_t max_material_count = m_configuration->renderer.max_material_count;
-    size_t       material_index     = 0;
+    const auto&       shader_resources   = *m_program_interface->shader_resources.get();
+    const std::size_t entry_size         = shader_resources.material_struct.size_bytes();
+    const auto&       offsets            = shader_resources.material_block_offsets;
+    const auto        material_gpu_data  = current_frame_resources().material_buffer.map();
+    const std::size_t max_material_count = m_configuration->renderer.max_material_count;
+    std::size_t       material_index     = 0;
     m_material_writer.begin(current_frame_resources().material_buffer.target());
     for (const auto& material : materials)
     {
@@ -410,11 +410,11 @@ auto Base_renderer::update_draw_indirect_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto   draw_indirect_gpu_data = current_frame_resources().draw_indirect_buffer.map();
-    const size_t max_draw_count         = m_configuration->renderer.max_draw_count;
-    uint32_t     instance_count     {1};
-    uint32_t     base_instance      {0};
-    size_t       draw_indirect_count{0};
+    const auto        draw_indirect_gpu_data = current_frame_resources().draw_indirect_buffer.map();
+    const std::size_t max_draw_count         = m_configuration->renderer.max_draw_count;
+    uint32_t          instance_count     {1};
+    uint32_t          base_instance      {0};
+    std::size_t       draw_indirect_count{0};
     m_draw_indirect_writer.begin(current_frame_resources().draw_indirect_buffer.target());
     for (const auto& mesh : meshes)
     {

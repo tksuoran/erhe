@@ -55,7 +55,7 @@ Raytrace_primitive::Raytrace_primitive(
     );
 
     //const auto   index_type   = gl::Draw_elements_type::unsigned_int;
-    const size_t index_stride = 4;
+    const std::size_t index_stride = 4;
 
     const erhe::geometry::Mesh_info mesh_info = geometry->get_mesh_info();
 

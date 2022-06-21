@@ -47,7 +47,7 @@ void Geometry_operation::make_polygon_centroids()
 void Geometry_operation::reserve_edge_to_new_points()
 {
     const uint32_t point_count = source.get_point_count();
-    m_old_edge_to_new_points.resize(static_cast<size_t>(point_count) * s_max_edge_point_slots);
+    m_old_edge_to_new_points.resize(static_cast<std::size_t>(point_count) * s_max_edge_point_slots);
     std::fill(
         begin(m_old_edge_to_new_points),
         end(m_old_edge_to_new_points),
@@ -56,9 +56,9 @@ void Geometry_operation::reserve_edge_to_new_points()
 }
 
 auto Geometry_operation::find_or_make_point_from_edge(
-    const Point_id point_a,
-    const Point_id point_b,
-    const size_t   count
+    const Point_id    point_a,
+    const Point_id    point_b,
+    const std::size_t count
 ) -> Point_id
 {
     const Point_id a = std::min(point_a, point_b);
@@ -77,7 +77,7 @@ auto Geometry_operation::find_or_make_point_from_edge(
             edge_b       = b;
             new_point_id = destination.make_point();
             // log_geometry.trace("created edge {} - {} point {}\n", a, b, new_point_id);
-            for (size_t i = 1; i < count; ++i)
+            for (std::size_t i = 1; i < count; ++i)
             {
                 destination.make_point();
             }
@@ -95,7 +95,7 @@ void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> 
 {
     ERHE_PROFILE_FUNCTION
 
-    const size_t split_count = relative_positions.size();
+    const std::size_t split_count = relative_positions.size();
     reserve_edge_to_new_points();
 
     source.for_each_polygon_const([&](auto& i)
@@ -221,7 +221,7 @@ auto Geometry_operation::make_new_point_from_point(
     // );
     // const erhe::log::Indenter scope_indent;
     add_point_source(new_point, point_weight, old_point);
-    const size_t i = static_cast<size_t>(old_point);
+    const std::size_t i = static_cast<std::size_t>(old_point);
     if (point_old_to_new.size() <= i)
     {
         point_old_to_new.resize(i + s_grow_size);
@@ -241,7 +241,7 @@ auto Geometry_operation::make_new_point_from_point(
     // );
     // const erhe::log::Indenter scope_indent;
     add_point_source(new_point, 1.0f, old_point);
-    const size_t i = static_cast<size_t>(old_point);
+    const std::size_t i = static_cast<std::size_t>(old_point);
     if (point_old_to_new.size() <= i)
     {
         point_old_to_new.resize(i + s_grow_size);
@@ -260,7 +260,7 @@ auto Geometry_operation::make_new_point_from_polygon_centroid(
     //     old_polygon, new_point
     // );
     // const erhe::log::Indenter scope_indent;
-    const size_t i = static_cast<size_t>(old_polygon);
+    const std::size_t i = static_cast<size_t>(old_polygon);
     if (old_polygon_centroid_to_new_points.size() <= i)
     {
         old_polygon_centroid_to_new_points.resize(i + s_grow_size);
@@ -323,7 +323,7 @@ auto Geometry_operation::make_new_polygon_from_polygon(
     // );
     // const erhe::log::Indenter scope_indent;
     add_polygon_source(new_polygon_id, 1.0f, old_polygon_id);
-    const size_t i = static_cast<size_t>(old_polygon_id);
+    const std::size_t i = static_cast<std::size_t>(old_polygon_id);
     if (polygon_old_to_new.size() <= i)
     {
         polygon_old_to_new.resize(i + s_grow_size);
@@ -420,7 +420,7 @@ void Geometry_operation::add_point_source(
     //     new_point_id, weight, old_point_id
     // );
     // const erhe::log::Indenter scope_indent;
-    const size_t i = static_cast<size_t>(new_point_id);
+    const std::size_t i = static_cast<std::size_t>(new_point_id);
     if (new_point_sources.size() <= i)
     {
         new_point_sources.resize(i + s_grow_size);
@@ -439,7 +439,7 @@ void Geometry_operation::add_point_corner_source(
     //     new_point_id, weight, old_corner_id
     // );
     // const erhe::log::Indenter scope_indent;
-    const size_t i = static_cast<size_t>(new_point_id);
+    const std::size_t i = static_cast<std::size_t>(new_point_id);
     if (new_point_corner_sources.size() <= i)
     {
         new_point_corner_sources.resize(i + s_grow_size);
@@ -458,7 +458,7 @@ void Geometry_operation::add_corner_source(
     //     new_corner_id, weight, old_corner_id
     // );
     // const erhe::log::Indenter scope_indent;
-    const size_t i = static_cast<size_t>(new_corner_id);
+    const std::size_t i = static_cast<std::size_t>(new_corner_id);
     if (new_corner_sources.size() <= i)
     {
         new_corner_sources.resize(i + s_grow_size);
@@ -497,7 +497,7 @@ void Geometry_operation::add_polygon_source(
     //     new_polygon_id, weight, old_polygon_id
     // );
     // const erhe::log::Indenter scope_indent;
-    const size_t i = static_cast<size_t>(new_polygon_id);
+    const std::size_t i = static_cast<std::size_t>(new_polygon_id);
     if (new_polygon_sources.size() <= i)
     {
         new_polygon_sources.resize(i + s_grow_size);
@@ -516,7 +516,7 @@ void Geometry_operation::add_edge_source(
     //     new_edge_id, weight, old_edge_id
     // );
     // const erhe::log::Indenter scope_indent;
-    const size_t i = static_cast<size_t>(new_edge_id);
+    const std::size_t i = static_cast<std::size_t>(new_edge_id);
     if (new_edge_sources.size() <= i)
     {
         new_edge_sources.resize(i + s_grow_size);
@@ -539,7 +539,7 @@ void Geometry_operation::build_destination_edges_with_sourcing()
         const Point_id new_b_      = std::max(new_a, new_b);
         const Edge_id  new_edge_id = destination.make_edge(new_a_, new_b_);
         add_edge_source(new_edge_id, 1.0f, i.edge_id);
-        const size_t index = static_cast<size_t>(i.edge_id);
+        const std::size_t index = static_cast<std::size_t>(i.edge_id);
         if (edge_old_to_new.size() <= index)
         {
             edge_old_to_new.resize(index + s_grow_size);

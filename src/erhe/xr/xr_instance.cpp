@@ -585,7 +585,7 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     );
 
     log_xr.info("View configuration views:\n");
-    size_t index = 0;
+    std::size_t index = 0;
     for (const auto& view_configuration_view : m_xr_view_configuration_views)
     {
         log_xr.info(

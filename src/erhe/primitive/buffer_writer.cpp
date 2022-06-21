@@ -20,7 +20,7 @@ namespace
 inline void write_low(
     const gsl::span<std::uint8_t> destination,
     const gl::Draw_elements_type  type,
-    const size_t                  value)
+    const std::size_t             value)
 {
     switch (type)
     {
@@ -192,7 +192,7 @@ Vertex_buffer_writer::~Vertex_buffer_writer() noexcept
     buffer_sink->buffer_ready(*this);
 }
 
-auto Vertex_buffer_writer::start_offset() -> size_t
+auto Vertex_buffer_writer::start_offset() -> std::size_t
 {
     return build_context.root.primitive_geometry->vertex_buffer_range.byte_offset;
 }
@@ -250,7 +250,7 @@ Index_buffer_writer::~Index_buffer_writer() noexcept
     buffer_sink->buffer_ready(*this);
 }
 
-auto Index_buffer_writer::start_offset() -> size_t
+auto Index_buffer_writer::start_offset() -> std::size_t
 {
     return build_context.root.primitive_geometry->index_buffer_range.byte_offset;
 }
@@ -315,7 +315,7 @@ void Vertex_buffer_writer::write(
     );
 }
 
-void Vertex_buffer_writer::move(const size_t relative_offset)
+void Vertex_buffer_writer::move(const std::size_t relative_offset)
 {
     vertex_write_offset += relative_offset;
 }

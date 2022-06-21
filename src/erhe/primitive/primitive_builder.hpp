@@ -67,20 +67,20 @@ public:
     void allocate_index_buffer    ();
     void allocate_index_range(
         const gl::Primitive_type primitive_type,
-        const size_t             index_count,
+        const std::size_t        index_count,
         Index_range&             out_range
     );
 
     const erhe::geometry::Geometry& geometry;
     Build_info&                     build_info;
     Primitive_geometry*             primitive_geometry{nullptr};
-    size_t                          next_index_range_start{0};
+    std::size_t                     next_index_range_start{0};
     Vertex_attributes               attributes;
     erhe::geometry::Mesh_info       mesh_info;
     erhe::graphics::Vertex_format*  vertex_format     {nullptr};
-    size_t                          vertex_stride     {0};
-    size_t                          total_vertex_count{0};
-    size_t                          total_index_count {0};
+    std::size_t                     vertex_stride     {0};
+    std::size_t                     total_vertex_count{0};
+    std::size_t                     total_index_count {0};
 };
 
 class Build_context

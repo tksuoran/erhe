@@ -47,7 +47,7 @@ void Plot::clear()
 
 Gpu_timer_plot::Gpu_timer_plot(
     erhe::graphics::Gpu_timer* timer,
-    const size_t               width
+    const std::size_t          width
 )
     : m_gpu_timer{timer}
 {
@@ -76,7 +76,7 @@ auto Gpu_timer_plot::gpu_timer() const -> erhe::graphics::Gpu_timer*
 
 Cpu_timer_plot::Cpu_timer_plot(
     erhe::toolkit::Timer* timer,
-    const size_t          width
+    const std::size_t     width
 )
     : m_timer{timer}
 {
@@ -205,7 +205,7 @@ void Plot::imgui()
         style.FrameRounding
     );
 
-    //const size_t values_count_min = 2;
+    //const std::size_t values_count_min = 2;
     //int idx_hovered = -1;
     //if (m_value_count >= values_count_min)
     {
@@ -216,14 +216,14 @@ void Plot::imgui()
         const bool hovered = ImGui::ItemHoverable(frame_bb, id);
         if (hovered && inner_bb.Contains(io.MousePos))
         {
-            const float  t0    = clamp((io.MousePos.x - inner_bb.Min.x) / (inner_bb.Max.x - inner_bb.Min.x), 0.0f, 0.9999f);
-            const float  idx   = t0 * m_values.size();
-            const size_t v_idx = (size_t)(idx);
+            const float       t0    = clamp((io.MousePos.x - inner_bb.Min.x) / (inner_bb.Max.x - inner_bb.Min.x), 0.0f, 0.9999f);
+            const float       idx   = t0 * m_values.size();
+            const std::size_t v_idx = static_cast<std::size_t>(idx);
             IM_ASSERT(v_idx < m_values.size());
 
             const float v0 = m_values.at((v_idx + m_offset) % m_values.size());
             const float v1 = m_values.at((v_idx + 1 + m_offset) % m_values.size());
-            const float t1 = t0 - static_cast<size_t>(t0);
+            const float t1 = t0 - static_cast<std::size_t>(t0);
             const float v  = (1.0f - t1) * v0 + t1 * v1;
             //const float i  = (v_idx + m_offset) % m_values.size() + t1;
             ImGui::SetTooltip("%.2g", v);
@@ -264,11 +264,11 @@ void Plot::imgui()
 
         for (int n = 0; n < res_w; n++)
         {
-            const float  t1     = t0 + t_step;
-            const int    v1_idx = (int)(t0 * item_count + 0.5f);
-            const size_t idx    = (v1_idx + m_offset + 1) % m_values.size();
-            const float  v1     = m_values.at(idx);
-            const ImVec2 tp1 = ImVec2{t1, 1.0f - ImSaturate((v1 - m_scale_min) * inv_scale)};
+            const float       t1     = t0 + t_step;
+            const int         v1_idx = (int)(t0 * item_count + 0.5f);
+            const std::size_t idx    = (v1_idx + m_offset + 1) % m_values.size();
+            const float       v1     = m_values.at(idx);
+            const ImVec2      tp1 = ImVec2{t1, 1.0f - ImSaturate((v1 - m_scale_min) * inv_scale)};
 
             // NB: Draw calls are merged together by the DrawList system. Still, we should render our batch are lower level to save a bit of CPU.
             const ImVec2 pos0 = ImLerp(inner_bb.Min, inner_bb.Max, tp0);

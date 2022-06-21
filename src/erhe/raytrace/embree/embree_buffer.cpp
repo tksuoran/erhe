@@ -6,22 +6,22 @@
 namespace erhe::raytrace
 {
 
-auto IBuffer::create(const std::string_view debug_label, const size_t capacity_byte_count) -> IBuffer*
+auto IBuffer::create(const std::string_view debug_label, const std::size_t capacity_byte_count) -> IBuffer*
 {
     return new Embree_buffer(debug_label, capacity_byte_count);
 }
 
-auto IBuffer::create_shared(const std::string_view debug_label, const size_t capacity_byte_count) -> std::shared_ptr<IBuffer>
+auto IBuffer::create_shared(const std::string_view debug_label, const std::size_t capacity_byte_count) -> std::shared_ptr<IBuffer>
 {
     return std::make_shared<Embree_buffer>(debug_label, capacity_byte_count);
 }
 
-auto IBuffer::create_unique(const std::string_view debug_label, const size_t capacity_byte_count) -> std::unique_ptr<IBuffer>
+auto IBuffer::create_unique(const std::string_view debug_label, const std::size_t capacity_byte_count) -> std::unique_ptr<IBuffer>
 {
     return std::make_unique<Embree_buffer>(debug_label, capacity_byte_count);
 }
 
-Embree_buffer::Embree_buffer(const std::string_view debug_label, const size_t capacity_byte_count)
+Embree_buffer::Embree_buffer(const std::string_view debug_label, const std::size_t capacity_byte_count)
     : m_debug_label{debug_label}
 {
     m_buffer = rtcNewBuffer(
@@ -38,15 +38,15 @@ Embree_buffer::~Embree_buffer() noexcept
     rtcReleaseBuffer(m_buffer);
 }
 
-auto Embree_buffer::capacity_byte_count() const noexcept -> size_t
+auto Embree_buffer::capacity_byte_count() const noexcept -> std::size_t
 {
     return m_capacity_byte_count;
 }
 
 auto Embree_buffer::allocate_bytes(
-    const size_t byte_count,
-    const size_t alignment
-) noexcept -> size_t
+    const std::size_t byte_count,
+    const std::size_t alignment
+) noexcept -> std::size_t
 {
     while ((m_next_free_byte % alignment) != 0)
     {

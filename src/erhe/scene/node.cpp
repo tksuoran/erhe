@@ -179,7 +179,7 @@ auto Node::detach(INode_attachment* attachment) -> bool
     return false;
 }
 
-auto Node::child_count() const -> size_t
+auto Node::child_count() const -> std::size_t
 {
     return node_data.children.size();
 }
@@ -189,7 +189,7 @@ auto Node::get_id() const -> erhe::toolkit::Unique_id<Node>::id_type
     return m_id.get_id();
 }
 
-auto Node::get_index_in_parent() const -> size_t
+auto Node::get_index_in_parent() const -> std::size_t
 {
     const auto& current_parent = parent().lock();
     if (current_parent)
@@ -200,10 +200,10 @@ auto Node::get_index_in_parent() const -> size_t
     return 0;
 }
 
-auto Node::get_index_of_child(const Node* child) const -> nonstd::optional<size_t>
+auto Node::get_index_of_child(const Node* child) const -> nonstd::optional<std::size_t>
 {
     for (
-        size_t i = 0, end = node_data.children.size();
+        std::size_t i = 0, end = node_data.children.size();
         i < end;
         ++i
     )
@@ -290,7 +290,7 @@ void Node::attach(
 
 void Node::attach(
     const std::shared_ptr<Node>& child_node,
-    const size_t                 position,
+    const std::size_t            position,
     const bool                   primary_operation
 )
 {
@@ -460,7 +460,7 @@ void Node::on_attached()
     sanity_check();
 }
 
-void Node::set_depth_recursive(const size_t depth)
+void Node::set_depth_recursive(const std::size_t depth)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -685,7 +685,7 @@ auto Node::parent() const -> std::weak_ptr<Node>
     return node_data.parent;
 }
 
-auto Node::depth() const -> size_t
+auto Node::depth() const -> std::size_t
 {
     return node_data.depth;
 }

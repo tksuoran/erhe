@@ -351,14 +351,14 @@ void Deferred_renderer::geometry_pass(
 
     bind_camera();
 
-    size_t model_index = 0;
+    std::size_t model_index = 0;
     for (auto model : models)
     {
-        auto   geometry_mesh  = model->geometry_mesh;
-        auto   Vertex_stream  = geometry_mesh->vertex_stream();
-        auto   mesh           = geometry_mesh->get_mesh();
-        auto   material       = model->material;
-        size_t material_index = material->index;
+        auto        geometry_mesh  = model->geometry_mesh;
+        auto        Vertex_stream  = geometry_mesh->vertex_stream();
+        auto        mesh           = geometry_mesh->get_mesh();
+        auto        material       = model->material;
+        std::size_t material_index = material->index;
 
         gl::begin_mode::value         begin_mode    = gl::begin_mode::triangles;
         Index_range                   index_range   = geometry_mesh->fill_indices();
@@ -447,7 +447,7 @@ void Deferred_renderer::light_pass(const Light_collection &lights, const Camera 
 
     bind_camera();
 
-    size_t light_index = 0;
+    std::size_t light_index = 0;
     if (!use_stencil())
     {
         t.execute(&m_light_render_states);

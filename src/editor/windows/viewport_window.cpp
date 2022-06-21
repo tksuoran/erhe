@@ -203,7 +203,7 @@ void Viewport_windows::render()
         const int   total_width  = m_editor_view->width();
         const int   total_height = m_editor_view->height();
         const float count        = static_cast<float>(m_windows.size());
-        size_t i = 0;
+        std::size_t i = 0;
         for (const auto& window : m_windows)
         {
             const float start_rel = static_cast<float>(i) / count;

@@ -422,7 +422,7 @@ void Theremin::tool_render(const erhe::application::Render_context& context)
             line_renderer.add_lines( { { P, Q } }, 2.0f );
             set_antenna_distance(d);
             for (
-                size_t i = Finger_name::thumb;
+                std::size_t i = Finger_name::thumb;
                 i <= Finger_name::little;
                 ++i
             )

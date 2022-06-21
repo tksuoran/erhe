@@ -38,8 +38,8 @@ public:
     [[nodiscard]] virtual auto label () const -> const char* = 0;
 
 protected:
-    size_t             m_offset         {0};
-    size_t             m_value_count    {0};
+    std::size_t        m_offset         {0};
+    std::size_t        m_value_count    {0};
     float              m_max_great      {1.0f};
     float              m_max_ok         {2.5f};
     float              m_scale_min      {0.0f};
@@ -57,7 +57,7 @@ class Gpu_timer_plot
 public:
     explicit Gpu_timer_plot(
         erhe::graphics::Gpu_timer* timer,
-        const size_t               width = 256
+        const std::size_t          width = 256
     );
 
     void sample() override;
@@ -75,7 +75,7 @@ class Cpu_timer_plot
 public:
     explicit Cpu_timer_plot(
         erhe::toolkit::Timer* timer,
-        const size_t          width = 256
+        const std::size_t     width = 256
     );
 
     void sample() override;

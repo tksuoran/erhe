@@ -44,8 +44,8 @@ public:
         uint32_t                           id                  {0};
         float                              depth               {0.0f};
         std::shared_ptr<erhe::scene::Mesh> mesh                {};
-        size_t                             mesh_primitive_index{0};
-        size_t                             local_index         {0};
+        std::size_t                        mesh_primitive_index{0};
+        std::size_t                        local_index         {0};
         bool                               valid               {false};
     };
 
@@ -81,9 +81,9 @@ public:
     void next_frame();
 
 private:
-    static constexpr size_t s_frame_resources_count = 4;
-    static constexpr size_t s_extent                = 64;
-    static constexpr size_t s_id_buffer_size        = s_extent * s_extent * 8; // RGBA + depth
+    static constexpr std::size_t s_frame_resources_count = 4;
+    static constexpr std::size_t s_extent                = 64;
+    static constexpr std::size_t s_id_buffer_size        = s_extent * s_extent * 8; // RGBA + depth
 
     class Id_frame_resources
     {
@@ -106,7 +106,7 @@ private:
             Read_complete
         };
 
-        explicit Id_frame_resources(const size_t slot)
+        explicit Id_frame_resources(const std::size_t slot)
             : pixel_pack_buffer{
                 gl::Buffer_target::pixel_pack_buffer,
                 s_id_buffer_size,
@@ -174,7 +174,7 @@ private:
     std::unique_ptr<erhe::graphics::Texture>              m_depth_texture;
     std::unique_ptr<erhe::graphics::Framebuffer>          m_framebuffer;
     std::vector<Id_frame_resources>                       m_id_frame_resources;
-    size_t                                                m_current_id_frame_resource_slot{0};
+    std::size_t                                           m_current_id_frame_resource_slot{0};
     std::unique_ptr<erhe::graphics::Gpu_timer>            m_gpu_timer;
 
     class Range
@@ -183,7 +183,7 @@ private:
         uint32_t                           offset   {0};
         uint32_t                           length   {0};
         std::shared_ptr<erhe::scene::Mesh> mesh     {nullptr};
-        size_t                             mesh_primitive_index{0};
+        std::size_t                        mesh_primitive_index{0};
     };
 
     void render(

@@ -90,11 +90,11 @@ Geometry::Geometry(Geometry&& other) noexcept
 {
 }
 
-auto Geometry::count_polygon_triangles() const -> size_t
+auto Geometry::count_polygon_triangles() const -> std::size_t
 {
     ERHE_PROFILE_FUNCTION
 
-    size_t triangle_count{0};
+    std::size_t triangle_count{0};
     for (
         Polygon_id polygon_id = 0;
         polygon_id < m_next_polygon_id;
@@ -134,7 +134,7 @@ auto Geometry::get_mesh_info() const -> Mesh_info
     };
 }
 
-void Geometry::reserve_points(const size_t point_count)
+void Geometry::reserve_points(const std::size_t point_count)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -144,7 +144,7 @@ void Geometry::reserve_points(const size_t point_count)
     }
 }
 
-void Geometry::reserve_polygons(const size_t polygon_count)
+void Geometry::reserve_polygons(const std::size_t polygon_count)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -279,9 +279,9 @@ void Geometry::build_edges(bool is_manifold)
     log_build_edges->info("{} build_edges() : {} polygons", name, m_next_polygon_id);
 
     //const erhe::log::Indenter scope_indent;
-    size_t polygon_index{0};
+    std::size_t polygon_index{0};
 
-    size_t polygon_edge_count = 0;
+    std::size_t polygon_edge_count = 0;
     // First pass - shared edges
     {
         ERHE_PROFILE_SCOPE("first pass");
@@ -748,7 +748,7 @@ auto Geometry::generate_polygon_texture_coordinates(const bool overwrite_existin
 
 void Geometry::sanity_check() const
 {
-    size_t error_count = 0;
+    std::size_t error_count = 0;
 
     for_each_point_const([&](auto& i)
     {

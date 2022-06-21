@@ -11,7 +11,7 @@ namespace erhe::graphics
 class Vertex_attribute_mapping
 {
 public:
-    size_t                       layout_location;
+    std::size_t                  layout_location;
     gl::Attribute_type           shader_type;
     std::string_view             name;
     Vertex_attribute::Usage      src_usage;

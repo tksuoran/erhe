@@ -55,13 +55,13 @@ public:
         };
 
         Frame_resources(
-            const size_t                               slot,
+            const std::size_t                               slot,
             erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
             erhe::graphics::Vertex_format&             vertex_format,
             erhe::graphics::Shader_stages*             shader_stages,
-            size_t          vertex_count, size_t vertex_stride,
-            size_t          index_count,  size_t index_stride,
-            size_t          draw_count,   size_t draw_stride
+            std::size_t vertex_count, std::size_t vertex_stride,
+            std::size_t index_count,  std::size_t index_stride,
+            std::size_t draw_count,   std::size_t draw_stride
         );
 
         Frame_resources(const Frame_resources&) = delete;
@@ -87,17 +87,15 @@ public:
     void declare_required_components() override;
     void initialize_component       () override;
 
-    //static constexpr size_t vec2_size   = 2 * sizeof(float);
-    static constexpr size_t s_uivec4_size = 4 * sizeof(uint32_t); // for non bindless textures
-    static constexpr size_t s_uvec2_size  = 2 * sizeof(uint32_t);
-    static constexpr size_t s_vec4_size   = 4 * sizeof(float);
+    static constexpr std::size_t s_uivec4_size = 4 * sizeof(uint32_t); // for non bindless textures
+    static constexpr std::size_t s_uvec2_size  = 2 * sizeof(uint32_t);
+    static constexpr std::size_t s_vec4_size   = 4 * sizeof(float);
 
     // scale, translation, clip rectangle, texture indices
-    //static constexpr size_t draw_parameters_block_size = vec2_size + vec2_size + vec4_size + uivec4_size;
-    static constexpr size_t s_max_draw_count     =   6'000;
-    static constexpr size_t s_max_index_count    = 300'000;
-    static constexpr size_t s_max_vertex_count   = 800'000;
-    static constexpr size_t s_texture_unit_count = 16; // for non bindless textures
+    static constexpr std::size_t s_max_draw_count     =   6'000;
+    static constexpr std::size_t s_max_index_count    = 300'000;
+    static constexpr std::size_t s_max_vertex_count   = 800'000;
+    static constexpr std::size_t s_texture_unit_count = 16; // for non bindless textures
 
     // Public API
     [[nodiscard]] auto get_font_atlas() -> ImFontAtlas*;
@@ -151,21 +149,21 @@ private:
     std::unique_ptr<erhe::graphics::Sampler>           m_nearest_sampler;
     std::unique_ptr<erhe::graphics::Sampler>           m_linear_sampler;
     std::unique_ptr<erhe::graphics::Sampler>           m_linear_mipmap_linear_sampler;
-    size_t                                             m_u_scale_offset          {0};
-    size_t                                             m_u_translate_offset      {0};
-    size_t                                             m_u_clip_rect_offset      {0};
-    size_t                                             m_u_texture_offset        {0};
-    size_t                                             m_u_extra_offset          {0};
-    size_t                                             m_u_texture_indices_offset{0}; // for non bindless textures
+    std::size_t                                        m_u_scale_offset          {0};
+    std::size_t                                        m_u_translate_offset      {0};
+    std::size_t                                        m_u_clip_rect_offset      {0};
+    std::size_t                                        m_u_texture_offset        {0};
+    std::size_t                                        m_u_extra_offset          {0};
+    std::size_t                                        m_u_texture_indices_offset{0}; // for non bindless textures
     erhe::graphics::Fragment_outputs                   m_fragment_outputs;
     std::set<std::shared_ptr<erhe::graphics::Texture>> m_used_textures;
     std::set<uint64_t>                                 m_used_texture_handles;
     std::unique_ptr<erhe::graphics::Gpu_timer>         m_gpu_timer;
 
     std::deque<Frame_resources> m_frame_resources;
-    size_t                      m_current_frame_resource_slot{0};
+    std::size_t                 m_current_frame_resource_slot{0};
 
-    static constexpr size_t frame_resources_count = 4;
+    static constexpr std::size_t frame_resources_count = 4;
 };
 
 } // namespace erhe::application

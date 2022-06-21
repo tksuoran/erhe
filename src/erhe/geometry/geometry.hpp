@@ -406,16 +406,16 @@ public:
 class Mesh_info
 {
 public:
-    size_t polygon_count              {0};
-    size_t corner_count               {0};
-    size_t triangle_count             {0};
-    size_t edge_count                 {0};
-    size_t vertex_count_corners       {0};
-    size_t vertex_count_centroids     {0};
-    size_t index_count_fill_triangles {0};
-    size_t index_count_edge_lines     {0};
-    size_t index_count_corner_points  {0};
-    size_t index_count_centroid_points{0};
+    std::size_t polygon_count              {0};
+    std::size_t corner_count               {0};
+    std::size_t triangle_count             {0};
+    std::size_t edge_count                 {0};
+    std::size_t vertex_count_corners       {0};
+    std::size_t vertex_count_centroids     {0};
+    std::size_t index_count_fill_triangles {0};
+    std::size_t index_count_edge_lines     {0};
+    std::size_t index_count_corner_points  {0};
+    std::size_t index_count_centroid_points{0};
 
     void trace(const std::shared_ptr<spdlog::logger>& log) const;
 };
@@ -551,7 +551,7 @@ public:
     auto make_polygon_corner(const Polygon_id polygon_id, const Point_id point_id) -> Corner_id;
 
     // Calculates the number of triangles as if all faces were triangulated
-    [[nodiscard]] auto count_polygon_triangles() const -> size_t;
+    [[nodiscard]] auto count_polygon_triangles() const -> std::size_t;
 
     [[nodiscard]] auto get_mesh_info() const -> Mesh_info;
 
@@ -595,9 +595,9 @@ public:
         return m_edge_property_map_collection;
     }
 
-    void reserve_points(const size_t point_count);
+    void reserve_points(const std::size_t point_count);
 
-    void reserve_polygons(const size_t polygon_count);
+    void reserve_polygons(const std::size_t polygon_count);
 
     auto make_point(const float x, const float y, const float z) -> Point_id;
 
@@ -824,7 +824,7 @@ public:
     void for_each_edge         (std::function<void(Edge_context&         )> callback);
     void for_each_edge_const   (std::function<void(Edge_context_const&   )> callback) const;
 
-    constexpr static size_t s_grow = 4096;
+    constexpr static std::size_t s_grow = 4096;
     Corner_id                       m_next_corner_id           {0};
     Point_id                        m_next_point_id            {0};
     Polygon_id                      m_next_polygon_id          {0};

@@ -56,11 +56,11 @@ private:
         bool                       pending     {false};
     };
 
-    static constexpr size_t        s_count = 4;
+    static constexpr std::size_t   s_count = 4;
     static std::mutex              s_mutex;
     static std::vector<Gpu_timer*> s_all_gpu_timers;
     static Gpu_timer*              s_active_timer;
-    static size_t                  s_index;
+    static std::size_t             s_index;
 
     std::array<Query, s_count> m_queries;
     std::thread::id            m_owner_thread;

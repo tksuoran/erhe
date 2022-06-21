@@ -30,7 +30,7 @@ public:
         erhe::xr::Render_view& render_view,
         Headset_renderer&      headset_renderer,
         Editor_rendering&      rendering,
-        const size_t           slot
+        const std::size_t      slot
     );
 
     void update(erhe::xr::Render_view& render_view);

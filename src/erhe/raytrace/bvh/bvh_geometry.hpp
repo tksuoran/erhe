@@ -42,9 +42,9 @@ public:
         const unsigned int slot,
         const Format       format,
         IBuffer* const     buffer,
-        const size_t       byte_offset,
-        const size_t       byte_stride,
-        const size_t       item_count
+        const std::size_t  byte_offset,
+        const std::size_t  byte_stride,
+        const std::size_t  item_count
     ) override;
     void set_user_data(void* ptr) override;
     [[nodiscard]] auto get_mask     () const -> uint32_t         override;
@@ -57,8 +57,8 @@ public:
     [[nodiscard]] auto get_sphere() const -> const erhe::toolkit::Bounding_sphere&;
 
     // Implements erhe::toolkit::Point_source
-    auto point_count() const -> size_t override;
-    auto get_point  (size_t index) const -> std::optional<glm::vec3> override;
+    auto point_count() const -> std::size_t override;
+    auto get_point  (std::size_t index) const -> std::optional<glm::vec3> override;
 
 private:
     class Buffer_info
@@ -68,9 +68,9 @@ private:
         unsigned int slot       {0};
         Format       format     {Format::FORMAT_UNDEFINED};
         IBuffer*     buffer     {nullptr};
-        size_t       byte_offset{0};
-        size_t       byte_stride{0};
-        size_t       item_count {0};
+        std::size_t  byte_offset{0};
+        std::size_t  byte_stride{0};
+        std::size_t  item_count {0};
     };
 
     glm::mat4    m_transform  {1.0f};
