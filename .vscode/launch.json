@@ -9,6 +9,14 @@
             "program": "${command:cmake.launchTargetPath}",
         },
         {
+            "name":        "erhe editor GBD Remote",
+            "type":        "cppdbg",
+            "request":     "launch",
+            "cwd":         "${workspaceFolder}/src/editor",
+            "environment": [ {"name": "DISPLAY", "value": ":0"}],
+            "program":     "${command:cmake.launchTargetPath}",
+        },
+        {
             "name":    "erhe editor LLDB",
             "type":    "lldb",
             "request": "launch",

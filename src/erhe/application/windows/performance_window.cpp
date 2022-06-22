@@ -106,6 +106,38 @@ auto Cpu_timer_plot::timer() const -> erhe::toolkit::Timer*
     return m_timer;
 }
 
+Frame_time_plot::Frame_time_plot(std::size_t width)
+{
+    m_values.resize(width);
+}
+
+void Frame_time_plot::sample()
+{
+    const auto now = std::chrono::steady_clock::now();
+    if (!m_last_frame_time_point.has_value())
+    {
+        m_last_frame_time_point = now;
+        return;
+    }
+    const auto duration     = now - m_last_frame_time_point.value();
+    const auto sample_value = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+    m_last_frame_time_point = now;
+
+    m_values[m_offset % m_values.size()] = static_cast<float>(sample_value);
+    m_value_count = std::min(m_value_count + 1, m_values.size());
+    m_offset++;
+}
+
+auto Frame_time_plot::timer() const -> erhe::toolkit::Timer*
+{
+    return nullptr;
+}
+
+auto Frame_time_plot::label() const -> const char*
+{
+    return "frame time";
+}
+
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 namespace {
 
@@ -209,33 +241,53 @@ void Plot::imgui()
     //int idx_hovered = -1;
     //if (m_value_count >= values_count_min)
     {
-        int res_w = std::min((int)(m_frame_size.x), (int)(m_values.size() - 1));
         int item_count = (int)(m_values.size() - 1);
+        if (item_count < 1)
+        {
+            return;
+        }
+
+        int res_w = std::min((int)(m_frame_size.x), item_count);
 
         // Tooltip on hover
         const bool hovered = ImGui::ItemHoverable(frame_bb, id);
         if (hovered && inner_bb.Contains(io.MousePos))
         {
-            const float       t0    = clamp((io.MousePos.x - inner_bb.Min.x) / (inner_bb.Max.x - inner_bb.Min.x), 0.0f, 0.9999f);
-            const float       idx   = t0 * m_values.size();
-            const std::size_t v_idx = static_cast<std::size_t>(idx);
-            IM_ASSERT(v_idx < m_values.size());
+            const float box_width = inner_bb.Max.x - inner_bb.Min.x;
 
-            const float v0 = m_values.at((v_idx + m_offset) % m_values.size());
-            const float v1 = m_values.at((v_idx + 1 + m_offset) % m_values.size());
-            const float t1 = t0 - static_cast<std::size_t>(t0);
-            const float v  = (1.0f - t1) * v0 + t1 * v1;
-            //const float i  = (v_idx + m_offset) % m_values.size() + t1;
-            ImGui::SetTooltip("%.2g", v);
-            //%d: %8.4g\n%d: %8.4g",
-            //    (v_idx + m_offset) % m_values.size(),
-            //    v0,
-            //    (v_idx + 1 + m_offset) % m_values.size(),
-            //    v1);
-            //idx_hovered = v_idx;
+            if (box_width != 0.0f)
+            {
+                const float       t0        = clamp((io.MousePos.x - inner_bb.Min.x) / box_width, 0.0f, 0.9999f);
+                const float       idx       = t0 * m_values.size();
+                const std::size_t v_idx     = static_cast<std::size_t>(idx);
+                IM_ASSERT(v_idx < m_values.size());
+
+                const float v0 = m_values.at((v_idx + m_offset) % m_values.size());
+                const float v1 = m_values.at((v_idx + 1 + m_offset) % m_values.size());
+                const float t1 = t0 - static_cast<std::size_t>(t0);
+                const float v  = (1.0f - t1) * v0 + t1 * v1;
+                //const float i  = (v_idx + m_offset) % m_values.size() + t1;
+                ImGui::SetTooltip("%.2g", v);
+                //%d: %8.4g\n%d: %8.4g",
+                //    (v_idx + m_offset) % m_values.size(),
+                //    v0,
+                //    (v_idx + 1 + m_offset) % m_values.size(),
+                //    v1);
+                //idx_hovered = v_idx;
+            }
         }
 
+        if (res_w == 0.0f)
+        {
+            return;
+        }
         const float t_step   = 1.0f / (float)res_w;
+
+        if (m_scale_max == m_scale_min)
+        {
+            return;
+        }
+
         const float inv_scale = (m_scale_min == m_scale_max)
             ? 0.0f
             : (1.0f / (m_scale_max - m_scale_min));
@@ -413,7 +465,13 @@ void Performance_window::imgui()
         m_cpu_timer_plots.end()
     );
 
-    ImGui::Checkbox("Pause", &m_pause);
+    if (ImGui::Checkbox("Pause", &m_pause))
+    {
+        if (!m_pause)
+        {
+            m_frame_time_plot.sample();
+        }
+    }
     ImGui::SameLine();
     ImGui::SetNextItemWidth(100.0f);
     if (ImGui::Button("Clear"))
@@ -426,6 +484,7 @@ void Performance_window::imgui()
 
     if (!m_pause)
     {
+        m_frame_time_plot.sample();
         for (auto& plot : m_cpu_timer_plots)
         {
             plot.sample();
@@ -436,6 +495,7 @@ void Performance_window::imgui()
         }
     }
 
+    m_frame_time_plot.imgui();
     for (auto& plot : m_cpu_timer_plots)
     {
         plot.imgui();
