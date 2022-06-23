@@ -228,10 +228,20 @@ void main()
     vec3  N     = normalize(v_TBN[2]);
     vec3  T0    = normalize(v_TBN[0]);
     vec3  B0    = normalize(v_TBN[1]);
+
+    // Anisitropy direction
     vec2  T_    = normalize(v_texcoord);
-    float T_a   = mix(1.0, min(1.0, length(v_texcoord) * 8.0), v_color.a);
-    vec3  T     = mix(T0, T_.x * T0 + T_.y * B0, v_color.a);
-    vec3  B     = mix(B0, T_.y * T0 - T_.x * B0, v_color.a);
+
+    // Anisotropy strength:
+    //  - 0.0 where alpha is 0.0
+    //  - relative to texture coordinate magnitude, clamped from 0 to 1
+    float anisotropy_texcoord = v_color.g;
+    float texcoord_factor     = length(v_texcoord) * 8.0;
+    float anisotropy_strength = mix(1.0, min(1.0, pow(texcoord_factor, 0.25)), anisotropy_texcoord) * v_color.r;
+
+    // Anisotropic tangent and bitangent, mixed with non-aniso T and B based on vertex alpha aniso control
+    vec3  T     = mix(T0, T_.x * T0 + T_.y * B0, anisotropy_texcoord);
+    vec3  B     = mix(B0, T_.y * T0 - T_.x * B0, anisotropy_texcoord);
 
     mat3  TBN   = mat3(T, B, N);
     mat3  TBN_t = transpose(TBN);
@@ -247,8 +257,8 @@ void main()
     //float roughness_x_ = material.roughness.x;
     //float roughness_y_ = material.roughness.y;
     float roughness    = 0.5 * material.roughness.x + 0.5 * material.roughness.y;
-    float roughness_x = mix(roughness, material.roughness.x, T_a);
-    float roughness_y = mix(roughness, material.roughness.y, T_a);
+    float roughness_x = mix(roughness, material.roughness.x, anisotropy_strength);
+    float roughness_y = mix(roughness, material.roughness.y, anisotropy_strength);
     float alpha_x     = roughness_x * roughness_x;
     float alpha_y     = roughness_y * roughness_y;
 
@@ -361,14 +371,37 @@ void main()
     float exposure = camera.cameras[0].exposure;
     out_color.rgb = color * exposure;
 
-#if defined(ERHE_VISUALIZE_NORMAL)
+#if defined(ERHE_DEBUG_NORMAL)
     out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * N);
 #endif
-#if defined(ERHE_VISUALIZE_TANGENT)
-    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * T);
+#if defined(ERHE_DEBUG_TANGENT)
+    out_color.rgb = srgb_to_linear(0.25 * vec3(0.5) + 0.5 * T);
 #endif
-#if defined(ERHE_VISUALIZE_BITANGENT)
+#if defined(ERHE_DEBUG_BITANGENT)
     out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * B);
+#endif
+#if defined(ERHE_DEBUG_TEXCOORD)
+    out_color.rgb = srgb_to_linear(0.25 * vec3(v_texcoord, 0.0));
+#endif
+#if defined(ERHE_DEBUG_VERTEX_COLOR_RGB)
+    out_color.rgb = srgb_to_linear(v_color.rgb);
+#endif
+#if defined(ERHE_DEBUG_VERTEX_COLOR_ALPHA)
+    out_color.rgb = srgb_to_linear(vec3(v_color.a));
+#endif
+#if defined(ERHE_DEBUG_MISC)
+    //vec2  T_    = normalize(v_texcoord);
+    //float T_a   = mix(1.0, min(1.0, length(v_texcoord) * 8.0), v_color.a);
+    //vec3  T     = mix(T0, T_.x * T0 + T_.y * B0, v_color.a);
+    //vec3  B     = mix(B0, T_.y * T0 - T_.x * B0, v_color.a);
+
+    float q0 = length(v_texcoord) * 8.0;
+    float q1 = min(1.0, q0);
+    float q2 = mix(q1, 1.0, v_color.a);
+    out_color.rgb = srgb_to_linear(vec3(anisotropy_strength));
+    //out_color.rgb = vec3(1.0, 0.0, 0.0);
+    //v_color.a
+    //out_color.rgb = srgb_to_linear(0.25 * vec3(0.5) + 0.5 * B0);
 #endif
     //out_color.rgb = v_color.rgb;
     //out_color.rgb = vec3(0.5 + 0.25 * v_tangent_scale);

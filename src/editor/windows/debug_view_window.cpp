@@ -43,7 +43,7 @@ void Debug_view_window::initialize_component()
 
     m_renderpass.pipeline.data = {
         .name           = "Debug_view",
-        .shader_stages  = m_programs->visualize_depth.get(),
+        .shader_stages  = m_programs->debug_depth.get(),
         .vertex_input   = m_empty_vertex_input.get(),
         .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
         .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,

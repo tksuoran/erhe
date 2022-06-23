@@ -45,6 +45,16 @@ void Plot::clear()
     );
 }
 
+auto Plot::last_value() const -> float
+{
+    if (m_value_count == 0)
+    {
+        return 0.0f;
+    }
+    const size_t last_index = (m_offset + m_values.size() - 1) % m_values.size();
+    return m_values[last_index];
+}
+
 Gpu_timer_plot::Gpu_timer_plot(
     erhe::graphics::Gpu_timer* timer,
     const std::size_t          width
@@ -109,6 +119,10 @@ auto Cpu_timer_plot::timer() const -> erhe::toolkit::Timer*
 Frame_time_plot::Frame_time_plot(std::size_t width)
 {
     m_values.resize(width);
+    m_max_great       = 16.6666f;
+    m_max_ok          = 16.6666f * 2.0f;
+    m_scale_max       = 16.6666f * 2.0f;
+    m_scale_max_limit = 16.6666f * 2.0f;
 }
 
 void Frame_time_plot::sample()
@@ -119,11 +133,10 @@ void Frame_time_plot::sample()
         m_last_frame_time_point = now;
         return;
     }
-    const auto duration     = now - m_last_frame_time_point.value();
-    const auto sample_value = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+    const std::chrono::duration<float, std::milli> duration = now - m_last_frame_time_point.value();
     m_last_frame_time_point = now;
 
-    m_values[m_offset % m_values.size()] = static_cast<float>(sample_value);
+    m_values[m_offset % m_values.size()] = static_cast<float>(duration.count());
     m_value_count = std::min(m_value_count + 1, m_values.size());
     m_offset++;
 }
@@ -135,7 +148,7 @@ auto Frame_time_plot::timer() const -> erhe::toolkit::Timer*
 
 auto Frame_time_plot::label() const -> const char*
 {
-    return "frame time";
+    return "Frame time";
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -342,11 +355,21 @@ void Plot::imgui()
             tp0 = tp1;
         }
 
-        auto overlay_text = fmt::format("Max: {:.3f} ms", displayed_max);
+
+        auto max_text  = fmt::format("Max: {:.3f} ms", displayed_max);
+        auto now_text = fmt::format("Now: {:.3f} ms", v0);
         ImGui::RenderTextClipped(
             ImVec2{frame_bb.Min.x, frame_bb.Min.y + style.FramePadding.y},
             frame_bb.Max,
-            overlay_text.c_str(),
+            max_text.c_str(),
+            nullptr,
+            nullptr,
+            ImVec2{0.0f, 0.0f}
+        );
+        ImGui::RenderTextClipped(
+            ImVec2{frame_bb.Min.x, frame_bb.Min.y + style.FramePadding.y + 14.0f},
+            frame_bb.Max,
+            now_text.c_str(),
             nullptr,
             nullptr,
             ImVec2{0.0f, 0.0f}
@@ -476,6 +499,11 @@ void Performance_window::imgui()
     ImGui::SetNextItemWidth(100.0f);
     if (ImGui::Button("Clear"))
     {
+        m_frame_time_plot.clear();
+        for (auto& plot : m_cpu_timer_plots)
+        {
+            plot.clear();
+        }
         for (auto& plot : m_gpu_timer_plots)
         {
             plot.clear();

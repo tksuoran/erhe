@@ -620,34 +620,40 @@ void Selection_tool::tool_render(
                     continue;
                 }
                 const auto& primitive_geometry = primitive.gl_primitive_geometry;
-                const vec3 box_min = primitive_geometry.bounding_box.min;
-                const vec3 box_max = primitive_geometry.bounding_box.max;
-                line_renderer.add_lines(
-                    node->world_from_node(),
-                    yellow,
-                    {
-                        { vec3{box_min.x, box_min.y, box_min.z}, vec3{box_max.x, box_min.y, box_min.z} },
-		                { vec3{box_max.x, box_min.y, box_min.z}, vec3{box_max.x, box_max.y, box_min.z} },
-		                { vec3{box_max.x, box_max.y, box_min.z}, vec3{box_min.x, box_max.y, box_min.z} },
-		                { vec3{box_min.x, box_max.y, box_min.z}, vec3{box_min.x, box_min.y, box_min.z} },
-		                { vec3{box_min.x, box_min.y, box_min.z}, vec3{box_min.x, box_min.y, box_max.z} },
-		                { vec3{box_max.x, box_min.y, box_min.z}, vec3{box_max.x, box_min.y, box_max.z} },
-		                { vec3{box_max.x, box_max.y, box_min.z}, vec3{box_max.x, box_max.y, box_max.z} },
-		                { vec3{box_min.x, box_max.y, box_min.z}, vec3{box_min.x, box_max.y, box_max.z} },
-		                { vec3{box_min.x, box_min.y, box_max.z}, vec3{box_max.x, box_min.y, box_max.z} },
-		                { vec3{box_max.x, box_min.y, box_max.z}, vec3{box_max.x, box_max.y, box_max.z} },
-		                { vec3{box_max.x, box_max.y, box_max.z}, vec3{box_min.x, box_max.y, box_max.z} },
-                        { vec3{box_min.x, box_max.y, box_max.z}, vec3{box_min.x, box_min.y, box_max.z} }
-                    },
-                    thickness
-                );
-                line_renderer.add_sphere(
-                    node->world_from_node(),
-                    half_yellow,
-                    primitive_geometry.bounding_sphere.center,
-                    primitive_geometry.bounding_sphere.radius,
-                    thickness
-                );
+                if (m_viewport_config->selection_bounding_box)
+                {
+                    const vec3 box_min = primitive_geometry.bounding_box.min;
+                    const vec3 box_max = primitive_geometry.bounding_box.max;
+                    line_renderer.add_lines(
+                        node->world_from_node(),
+                        yellow,
+                        {
+                            { vec3{box_min.x, box_min.y, box_min.z}, vec3{box_max.x, box_min.y, box_min.z} },
+		                    { vec3{box_max.x, box_min.y, box_min.z}, vec3{box_max.x, box_max.y, box_min.z} },
+		                    { vec3{box_max.x, box_max.y, box_min.z}, vec3{box_min.x, box_max.y, box_min.z} },
+		                    { vec3{box_min.x, box_max.y, box_min.z}, vec3{box_min.x, box_min.y, box_min.z} },
+		                    { vec3{box_min.x, box_min.y, box_min.z}, vec3{box_min.x, box_min.y, box_max.z} },
+		                    { vec3{box_max.x, box_min.y, box_min.z}, vec3{box_max.x, box_min.y, box_max.z} },
+		                    { vec3{box_max.x, box_max.y, box_min.z}, vec3{box_max.x, box_max.y, box_max.z} },
+		                    { vec3{box_min.x, box_max.y, box_min.z}, vec3{box_min.x, box_max.y, box_max.z} },
+		                    { vec3{box_min.x, box_min.y, box_max.z}, vec3{box_max.x, box_min.y, box_max.z} },
+		                    { vec3{box_max.x, box_min.y, box_max.z}, vec3{box_max.x, box_max.y, box_max.z} },
+		                    { vec3{box_max.x, box_max.y, box_max.z}, vec3{box_min.x, box_max.y, box_max.z} },
+                            { vec3{box_min.x, box_max.y, box_max.z}, vec3{box_min.x, box_min.y, box_max.z} }
+                        },
+                        thickness
+                    );
+                }
+                if (m_viewport_config->selection_bounding_sphere)
+                {
+                    line_renderer.add_sphere(
+                        node->world_from_node(),
+                        half_yellow,
+                        primitive_geometry.bounding_sphere.center,
+                        primitive_geometry.bounding_sphere.radius,
+                        thickness
+                    );
+                }
             }
         }
 

@@ -266,6 +266,23 @@ void Viewport_window::update()
     }
 }
 
+auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shader_stages*
+{
+    switch (m_shader_stages_variant)
+    {
+        case Shader_stages_variant::standard:                 return m_programs->standard.get();
+        case Shader_stages_variant::debug_depth:              return m_programs->debug_depth.get();
+        case Shader_stages_variant::debug_normal:             return m_programs->debug_normal.get();
+        case Shader_stages_variant::debug_tangent:            return m_programs->debug_tangent.get();
+        case Shader_stages_variant::debug_bitangent:          return m_programs->debug_bitangent.get();
+        case Shader_stages_variant::debug_texcoord:           return m_programs->debug_texcoord.get();
+        case Shader_stages_variant::debug_vertex_color_rgb:   return m_programs->debug_vertex_color_rgb.get();
+        case Shader_stages_variant::debug_vertex_color_alpha: return m_programs->debug_vertex_color_alpha.get();
+        case Shader_stages_variant::debug_misc:               return m_programs->debug_misc.get();
+        default:                                              return m_programs->standard.get();
+    }
+}
+
 void Viewport_window::render(
     Editor_rendering&                     editor_rendering,
     erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker
@@ -284,13 +301,7 @@ void Viewport_window::render(
         .viewport_config        = m_viewport_config.get(),
         .camera                 = m_camera,
         .viewport               = m_viewport,
-        .override_shader_stages = m_visualize_normal
-            ? m_programs->visualize_normal.get()
-            : m_visualize_tangent
-                ? m_programs->visualize_tangent.get()
-                : m_visualize_bitangent
-                    ? m_programs->visualize_bitangent.get()
-                    : nullptr
+        .override_shader_stages = get_override_shader_stages()
     };
 
 #if defined(ERHE_RAYTRACE_LIBRARY_NONE)
@@ -389,15 +400,15 @@ auto Viewport_window::should_post_process() const -> bool
     return
         m_configuration->graphics.post_processing &&
         m_enable_post_processing &&
-        !m_visualize_normal &&
-        !m_visualize_tangent &&
-        !m_visualize_bitangent &&
+        (m_shader_stages_variant == Shader_stages_variant::standard) &&
         m_post_processing &&
         (
             !m_configuration->imgui.enabled ||
             m_viewport_config->post_processing_enable
         );
 }
+
+
 
 void Viewport_window::imgui()
 {
@@ -407,12 +418,15 @@ void Viewport_window::imgui()
     ImGui::SetNextItemWidth(150.0f);
     m_scene_root->camera_combo("Camera", m_camera);
     ImGui::SameLine();
-    ImGui::Checkbox("Normal", &m_visualize_normal);
-    ImGui::SameLine();
-    ImGui::Checkbox("Tangent", &m_visualize_tangent);
-    ImGui::SameLine();
-    ImGui::Checkbox("Bitangent", &m_visualize_bitangent);
-    ImGui::SameLine();
+
+    ImGui::SetNextItemWidth(140.0f);
+    ImGui::Combo(
+        "Shader",
+        reinterpret_cast<int*>(&m_shader_stages_variant),
+        c_shader_stages_variant_strings,
+        IM_ARRAYSIZE(c_shader_stages_variant_strings)
+    );
+
     ImGui::Checkbox("Post Processing", &m_enable_post_processing);
 
     //if (ImGui::Button("Post Process"))

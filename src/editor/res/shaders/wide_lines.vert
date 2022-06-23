@@ -29,7 +29,7 @@ void main()
 
     gl_Position   = clip_from_world * position;
     gl_Position.z -= bias;
-    vs_color      = a_color * primitive.primitives[gl_DrawID].color;
+    vs_color      = primitive.primitives[gl_DrawID].color;
     //vs_color      = vec4(0.5 * normal + vec3(0.5), 1.0);
     //vs_color      = vec4(0.0, 0.0, 0.0, 1.0);
     vs_line_width = (1.0 / 1024.0) * viewport_width * max(max_size / d, 1.0) / fov_width; //primitive.primitives[gl_DrawID].size;

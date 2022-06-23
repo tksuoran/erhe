@@ -1,3 +1,5 @@
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/buffer_sink.hpp"
 #include "erhe/primitive/buffer_writer.hpp"
@@ -555,7 +557,7 @@ void Build_context::build_vertex_position()
 
     SPDLOG_LOGGER_TRACE(
         log_primitive_builder,
-        "polygon {} point {} corner {} vertex {} location {}\n",
+        "polygon {} corner {} point {} vertex {} location {}",
         polygon_index, corner_id, point_id, vertex_index, position
     );
 }
@@ -668,12 +670,22 @@ void Build_context::build_vertex_tangent()
     if (property_maps.corner_tangents != nullptr)
     {
         found = property_maps.corner_tangents->maybe_get(corner_id, tangent);
-        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} tangent {}", point_id, corner_id, tangent);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found)
+        {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} tangent {}", point_id, corner_id, tangent);
+        }
+#endif
     }
     if (!found && (property_maps.point_tangents != nullptr))
     {
         found = property_maps.point_tangents->maybe_get(point_id, tangent);
-        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point tangent {}", point_id, corner_id, tangent);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found)
+        {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point tangent {}", point_id, corner_id, tangent);
+        }
+#endif
     }
     if (!found)
     {
@@ -698,12 +710,22 @@ void Build_context::build_vertex_bitangent()
     if (property_maps.corner_bitangents != nullptr)
     {
         found = property_maps.corner_bitangents->maybe_get(corner_id, bitangent);
-        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} bitangent {}", point_id, corner_id, bitangent);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found)
+        {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} bitangent {}", point_id, corner_id, bitangent);
+        }
+#endif
     }
     if (!found && (property_maps.point_bitangents != nullptr))
     {
         found = property_maps.point_bitangents->maybe_get(point_id, bitangent);
-        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point bitangent {}", point_id, corner_id, bitangent);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found)
+        {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point bitangent {}", point_id, corner_id, bitangent);
+        }
+#endif
     }
     if (!found)
     {
@@ -728,11 +750,22 @@ void Build_context::build_vertex_texcoord()
     if (property_maps.corner_texcoords != nullptr)
     {
         found = property_maps.corner_texcoords->maybe_get(corner_id, texcoord);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found)
+        {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} texcoord {}", point_id, corner_id, texcoord);
+        }
+#endif
     }
     if (!found && (property_maps.point_texcoords != nullptr))
     {
         found = property_maps.point_texcoords->maybe_get(point_id, texcoord);
-        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point texcoord {}", point_id, corner_id, texcoord);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found)
+        {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point texcoord {}", point_id, corner_id, texcoord);
+        }
+#endif
     }
     if (!found)
     {
@@ -778,12 +811,22 @@ void Build_context::build_vertex_color(const uint32_t /*polygon_corner_count*/)
     if (property_maps.corner_colors != nullptr)
     {
         found = property_maps.corner_colors->maybe_get(corner_id, color);
-        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} corner color {}", point_id, corner_id, color);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found)
+        {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} corner color {}", point_id, corner_id, color);
+        }
+#endif
     }
     if (!found && (property_maps.point_colors != nullptr))
     {
         found = property_maps.point_colors->maybe_get(point_id, color);
-        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point color {}", point_id, corner_id, color);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found)
+        {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point color {}", point_id, corner_id, color);
+        }
+#endif
     }
     if (!found && (property_maps.polygon_colors != nullptr))
     {
@@ -811,9 +854,9 @@ void Build_context::build_centroid_position()
     }
 
     vec3 position{0.0f, 0.0f, 0.0f};
-    if ((property_maps.point_locations != nullptr) && property_maps.point_locations->has(polygon_id))
+    if ((property_maps.polygon_centroids != nullptr) && property_maps.polygon_centroids->has(polygon_id))
     {
-        position = property_maps.point_locations->get(polygon_id);
+        position = property_maps.polygon_centroids->get(polygon_id);
     }
 
     vertex_writer.write(root.attributes.position, position);
@@ -829,10 +872,8 @@ void Build_context::build_centroid_normal()
     }
 
     vec3 normal{0.0f, 1.0f, 0.0f};
-    //bool found{false};
     if (property_maps.polygon_normals != nullptr)
     {
-        //found =
         property_maps.polygon_normals->maybe_get(polygon_id, normal);
     }
 
@@ -985,7 +1026,8 @@ void Build_context::build_edge_lines()
 
         if (
             property_maps.corner_indices->has(corner_id_a) &&
-            property_maps.corner_indices->has(corner_id_b))
+            property_maps.corner_indices->has(corner_id_b)
+        )
         {
             const auto v0 = property_maps.corner_indices->get(corner_id_a);
             const auto v1 = property_maps.corner_indices->get(corner_id_b);

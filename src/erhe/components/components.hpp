@@ -203,6 +203,7 @@ template<typename T>
             ERHE_VERIFY(m_components != nullptr);
             auto get_result = m_components->get<T>();
             ERHE_VERIFY(
+                (!get_result) ||
                 (get_result->get_state() == Component_state::Initialized) ||
                 (get_result->get_state() == Component_state::Ready)
             );

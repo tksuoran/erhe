@@ -96,19 +96,23 @@ void Programs::initialize_component()
 
     using ci = erhe::graphics::Shader_stages::Create_info;
 
-    queue(standard            , ci{ .name = "standard", .default_uniform_block = shadow_default_uniform_block, .dump_interface = true } );
-    queue(brush               , ci{ .name = "brush"   , .default_uniform_block = shadow_default_uniform_block } );
-    queue(textured            , ci{ .name = "textured", .default_uniform_block = base_texture_default_uniform_block } );
-    queue(edge_lines          , ci{ .name = "edge_lines"      } );
-    queue(wide_lines          , ci{ .name = "wide_lines"      } );
-    queue(points              , ci{ .name = "points"          } );
-    queue(depth               , ci{ .name = "depth"           } );
-    queue(id                  , ci{ .name = "id"              } );
-    queue(tool                , ci{ .name = "tool"            } );
-    queue(visualize_depth     , ci{ .name = "visualize_depth", .default_uniform_block = shadow_default_uniform_block } );
-    queue(visualize_normal    , ci{ .name = "standard", .defines = { std::pair<std::string, std::string>{"ERHE_VISUALIZE_NORMAL",    "1"}}, .default_uniform_block = shadow_default_uniform_block } );
-    queue(visualize_tangent   , ci{ .name = "standard", .defines = { std::pair<std::string, std::string>{"ERHE_VISUALIZE_TANGENT",   "1"}}, .default_uniform_block = shadow_default_uniform_block } );
-    queue(visualize_bitangent , ci{ .name = "standard", .defines = { std::pair<std::string, std::string>{"ERHE_VISUALIZE_BITANGENT", "1"}}, .default_uniform_block = shadow_default_uniform_block } );
+    queue(standard                , ci{ .name = "standard"  , .default_uniform_block = shadow_default_uniform_block, .dump_interface = true } );
+    queue(brush                   , ci{ .name = "brush"     , .default_uniform_block = shadow_default_uniform_block } );
+    queue(textured                , ci{ .name = "textured"  , .default_uniform_block = base_texture_default_uniform_block } );
+    queue(wide_lines_draw_color   , ci{ .name = "wide_lines", .defines = { std::pair<std::string, std::string>{"ERHE_USE_DRAW_COLOR",   "1"}}});
+    queue(wide_lines_vertex_color , ci{ .name = "wide_lines", .defines = { std::pair<std::string, std::string>{"ERHE_USE_VERTEX_COLOR", "1"}}});
+    queue(points                  , ci{ .name = "points"          } );
+    queue(depth                   , ci{ .name = "depth"           } );
+    queue(id                      , ci{ .name = "id"              } );
+    queue(tool                    , ci{ .name = "tool"            } );
+    queue(debug_depth             , ci{ .name = "visualize_depth", .default_uniform_block = shadow_default_uniform_block } );
+    queue(debug_normal            , ci{ .name = "standard", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_NORMAL",             "1"}}, .default_uniform_block = shadow_default_uniform_block } );
+    queue(debug_tangent           , ci{ .name = "standard", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_TANGENT",            "1"}}, .default_uniform_block = shadow_default_uniform_block } );
+    queue(debug_bitangent         , ci{ .name = "standard", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_BITANGENT",          "1"}}, .default_uniform_block = shadow_default_uniform_block } );
+    queue(debug_texcoord          , ci{ .name = "standard", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_TEXCOORD",           "1"}}, .default_uniform_block = shadow_default_uniform_block } );
+    queue(debug_vertex_color_rgb  , ci{ .name = "standard", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_RGB",   "1"}}, .default_uniform_block = shadow_default_uniform_block } );
+    queue(debug_vertex_color_alpha, ci{ .name = "standard", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_ALPHA", "1"}}, .default_uniform_block = shadow_default_uniform_block } );
+    queue(debug_misc              , ci{ .name = "standard", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_MISC",               "1"}}, .default_uniform_block = shadow_default_uniform_block } );
 
     SPDLOG_LOGGER_TRACE(log_programs, "all programs queued, waiting for them to complete");
     m_queue->wait();

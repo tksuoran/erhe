@@ -80,7 +80,7 @@ public:
     Render_style render_style_selected;
     glm::vec4    clear_color{0.18f, 0.41f, 0.58f, 1.0f};
     bool         post_processing_enable{true};
-    //glm::vec4  clear_color{0.02f, 0.02f, 0.02f, 1.0f};
+    //glm::vec4    clear_color{0.02f, 0.02f, 0.02f, 1.0f};
 
     class Debug_visualizations
     {
@@ -91,6 +91,8 @@ public:
     };
 
     Debug_visualizations debug_visualizations;
+    bool                 selection_bounding_box;
+    bool                 selection_bounding_sphere;
 };
 
 } // namespace editor

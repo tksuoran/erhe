@@ -32,9 +32,9 @@ public:
 
     void imgui();
     void clear();
+    [[nodiscard]] auto last_value() const -> float;
 
     virtual void sample() = 0;
-
     [[nodiscard]] virtual auto label () const -> const char* = 0;
 
 protected:

@@ -26,6 +26,32 @@ namespace editor {
 
 class Program_interface;
 
+enum class Shader_stages_variant : int
+{
+    standard,
+    debug_depth,
+    debug_normal,
+    debug_tangent,
+    debug_bitangent,
+    debug_texcoord,
+    debug_vertex_color_rgb,
+    debug_vertex_color_alpha,
+    debug_misc
+};
+
+static constexpr const char* c_shader_stages_variant_strings[] =
+{
+    "Standard",
+    "Debug Depth",
+    "Debug Normal",
+    "Debug Tangent",
+    "Debug Bitangent",
+    "Debug TexCoord",
+    "Debug Vertex Color RGB",
+    "Debug Vertex Color Alpha",
+    "Debug Miscellaneous"
+};
+
 class Programs
     : public erhe::components::Component
 {
@@ -58,16 +84,20 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages> brush;
     std::unique_ptr<erhe::graphics::Shader_stages> standard;
     std::unique_ptr<erhe::graphics::Shader_stages> textured;
-    std::unique_ptr<erhe::graphics::Shader_stages> edge_lines;
-    std::unique_ptr<erhe::graphics::Shader_stages> wide_lines;
+    std::unique_ptr<erhe::graphics::Shader_stages> wide_lines_draw_color;
+    std::unique_ptr<erhe::graphics::Shader_stages> wide_lines_vertex_color;
     std::unique_ptr<erhe::graphics::Shader_stages> points;
     std::unique_ptr<erhe::graphics::Shader_stages> depth;
     std::unique_ptr<erhe::graphics::Shader_stages> id;
     std::unique_ptr<erhe::graphics::Shader_stages> tool;
-    std::unique_ptr<erhe::graphics::Shader_stages> visualize_depth;
-    std::unique_ptr<erhe::graphics::Shader_stages> visualize_normal;
-    std::unique_ptr<erhe::graphics::Shader_stages> visualize_tangent;
-    std::unique_ptr<erhe::graphics::Shader_stages> visualize_bitangent;
+    std::unique_ptr<erhe::graphics::Shader_stages> debug_depth;
+    std::unique_ptr<erhe::graphics::Shader_stages> debug_normal;
+    std::unique_ptr<erhe::graphics::Shader_stages> debug_tangent;
+    std::unique_ptr<erhe::graphics::Shader_stages> debug_bitangent;
+    std::unique_ptr<erhe::graphics::Shader_stages> debug_texcoord;
+    std::unique_ptr<erhe::graphics::Shader_stages> debug_vertex_color_rgb;
+    std::unique_ptr<erhe::graphics::Shader_stages> debug_vertex_color_alpha;
+    std::unique_ptr<erhe::graphics::Shader_stages> debug_misc;
 
 private:
     void queue(

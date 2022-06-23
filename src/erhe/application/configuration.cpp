@@ -201,30 +201,38 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("scene"))
         {
             const auto& section = ini["scene"];
-            ini_get(section, "directional_light_count", scene.directional_light_count);
-            ini_get(section, "spot_light_count",        scene.spot_light_count);
-            ini_get(section, "floor_size",              scene.floor_size);
-            ini_get(section, "instance_count",          scene.instance_count);
-            ini_get(section, "instance_gap",            scene.instance_gap);
-            ini_get(section, "detail",                  scene.detail);
-            ini_get(section, "gltf_files",              scene.gltf_files);
-            ini_get(section, "obj_files",               scene.obj_files);
-            ini_get(section, "floor",                   scene.floor);
-            ini_get(section, "sphere",                  scene.sphere);
-            ini_get(section, "torus",                   scene.torus);
-            ini_get(section, "cylinder",                scene.cylinder);
-            ini_get(section, "cone",                    scene.cone);
-            ini_get(section, "platonic_solids",         scene.platonic_solids);
-            ini_get(section, "johnson_solids",          scene.johnson_solids);
+            ini_get(section, "directional_light_intensity", scene.directional_light_intensity);
+            ini_get(section, "directional_light_radius",    scene.directional_light_radius);
+            ini_get(section, "directional_light_height",    scene.directional_light_height);
+            ini_get(section, "directional_light_count",     scene.directional_light_count);
+            ini_get(section, "spot_light_intensity",        scene.spot_light_intensity);
+            ini_get(section, "spot_light_radius",           scene.spot_light_radius);
+            ini_get(section, "spot_light_height",           scene.spot_light_height);
+            ini_get(section, "spot_light_count",            scene.spot_light_count);
+            ini_get(section, "floor_size",                  scene.floor_size);
+            ini_get(section, "instance_count",              scene.instance_count);
+            ini_get(section, "instance_gap",                scene.instance_gap);
+            ini_get(section, "detail",                      scene.detail);
+            ini_get(section, "gltf_files",                  scene.gltf_files);
+            ini_get(section, "obj_files",                   scene.obj_files);
+            ini_get(section, "floor",                       scene.floor);
+            ini_get(section, "sphere",                      scene.sphere);
+            ini_get(section, "torus",                       scene.torus);
+            ini_get(section, "cylinder",                    scene.cylinder);
+            ini_get(section, "cone",                        scene.cone);
+            ini_get(section, "platonic_solids",             scene.platonic_solids);
+            ini_get(section, "johnson_solids",              scene.johnson_solids);
         }
 
         if (ini.has("viewport"))
         {
             const auto& section = ini["viewport"];
-            ini_get(section, "polygon_fill",      viewport.polygon_fill);
-            ini_get(section, "edge_lines",        viewport.edge_lines);
-            ini_get(section, "corner_points",     viewport.corner_points);
-            ini_get(section, "polygon_centroids", viewport.polygon_centroids);
+            ini_get(section, "polygon_fill",              viewport.polygon_fill);
+            ini_get(section, "edge_lines",                viewport.edge_lines);
+            ini_get(section, "corner_points",             viewport.corner_points);
+            ini_get(section, "polygon_centroids",         viewport.polygon_centroids);
+            ini_get(section, "selection_bounding_box",    viewport.selection_bounding_box);
+            ini_get(section, "selection_bounding_sphere", viewport.selection_bounding_sphere);
         }
 
         if (ini.has("shader_monitor"))
@@ -243,6 +251,15 @@ Configuration::Configuration(int argc, char** argv)
         {
             const auto& section = ini["renderdoc"];
             ini_get(section, "capture_support", renderdoc.capture_support);
+        }
+
+        if (ini.has("grid"))
+        {
+            const auto& section = ini["grid"];
+            ini_get(section, "enabled",    grid.enabled);
+            ini_get(section, "cell_size" , grid.cell_size);
+            ini_get(section, "cell_div",   grid.cell_div);
+            ini_get(section, "cell_count", grid.cell_count);
         }
     }
 

@@ -239,7 +239,6 @@ void Scene_builder::make_brushes()
         );
     }
 
-    //constexpr bool cone                    = false;
     constexpr bool anisotropic_test_object = false;
 
     constexpr float object_scale = 1.0f;
@@ -363,8 +362,8 @@ void Scene_builder::make_brushes()
                     instantiate,
                     make_sphere(
                         object_scale,
-                        24 * std::max(1, config.detail),
-                         6 * std::max(1, config.detail)
+                        8 * std::max(1, config.detail), // slice count
+                        6 * std::max(1, config.detail)  // stack count
                     ),
                     context,
                     erhe::physics::ICollision_shape::create_sphere_shape_shared(object_scale)
@@ -508,12 +507,12 @@ void Scene_builder::make_brushes()
                 };
                 constexpr bool instantiate = true;
                 auto cone_geometry = make_cone( // always axis = x
-                    -object_scale,
-                    object_scale,
-                    object_scale,
-                    true,
-                    10 * std::max(1, config.detail),
-                    std::max(1, config.detail)
+                    -object_scale,                    // min x
+                    object_scale,                     // max x
+                    object_scale,                     // bottom radius
+                    true,                             // use bottm
+                    10 * std::max(1, config.detail),  // slice count
+                     5 * std::max(1, config.detail)   // stack count
                 );
                 cone_geometry.transform(erhe::toolkit::mat4_swap_xy); // convert to axis = y
 
@@ -1010,20 +1009,20 @@ void Scene_builder::setup_lights()
     for (int i = 0; i < config.directional_light_count; ++i)
     {
         const float rel = static_cast<float>(i) / static_cast<float>(config.directional_light_count);
-        const float R   = 6.0f;
+        const float R   = config.directional_light_radius;
         const float h   = rel * 360.0f;
-        const float s   = 0.5f;
+        const float s   = (config.directional_light_count > 1) ? 0.5f : 0.0f;
         const float v   = 1.0f;
         float r, g, b;
 
         erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
 
         const vec3        color     = vec3{r, g, b};
-        const float       intensity = 20.0f / static_cast<float>(config.directional_light_count);
+        const float       intensity = config.directional_light_intensity / static_cast<float>(config.directional_light_count);
         const std::string name      = fmt::format("Directional light {}", i);
-        const float       x_pos     = R * sin(rel * glm::two_pi<float>());
-        const float       z_pos     = R * cos(rel * glm::two_pi<float>());
-        const vec3        position  = vec3{x_pos, 10.0f, z_pos};
+        const float       x_pos     = R * std::sin(rel * glm::two_pi<float>() + 1.0f / 7.0f);
+        const float       z_pos     = R * std::cos(rel * glm::two_pi<float>() + 1.0f / 7.0f);
+        const vec3        position  = vec3{x_pos, config.directional_light_height, z_pos};
         make_directional_light(name, position, color, intensity);
     }
 
@@ -1031,21 +1030,21 @@ void Scene_builder::setup_lights()
     {
         const float rel   = static_cast<float>(i) / static_cast<float>(config.spot_light_count);
         const float theta = rel * glm::two_pi<float>();
-        const float R     = 0.5f + 20.0f * rel;
-        const float h     = glm::fract(theta) * 360.0f;
-        const float s     = 0.9f;
+        const float R     = config.spot_light_radius;
+        const float h     = rel * 360.0f;
+        const float s     = (config.spot_light_count > 1) ? 0.9f : 0.0f;
         const float v     = 1.0f;
         float r, g, b;
 
         erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
 
         const vec3        color           = vec3{r, g, b};
-        const float       intensity       = 150.0f;
+        const float       intensity       = config.spot_light_intensity;
         const std::string name            = fmt::format("Spot {}", i);
-        const float       x_pos           = R * sin(rel * 6.0f * glm::two_pi<float>());
-        const float       z_pos           = R * cos(rel * 6.0f * glm::two_pi<float>());
-        const vec3        position        = vec3{x_pos, 10.0f, z_pos};
-        const vec3        target          = vec3{x_pos * 0.5, 0.0f, z_pos * 0.5f};
+        const float       x_pos           = R * std::sin(theta);
+        const float       z_pos           = R * std::cos(theta);
+        const vec3        position        = vec3{x_pos, config.spot_light_height, z_pos};
+        const vec3        target          = vec3{x_pos * 0.1f, 0.0f, z_pos * 0.1f};
         const vec2        spot_cone_angle = vec2{
             glm::pi<float>() / 5.0f,
             glm::pi<float>() / 4.0f

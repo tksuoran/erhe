@@ -277,7 +277,7 @@ void Editor_rendering::initialize_component()
 
     m_rp_edge_lines.pipeline.data = {
         .name           = "Edge lines",
-        .shader_stages  = programs.wide_lines.get(),
+        .shader_stages  = programs.wide_lines_draw_color.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::lines,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
@@ -310,7 +310,7 @@ void Editor_rendering::initialize_component()
 
     m_rp_line_hidden_blend.pipeline.data = {
         .name                       = "Hidden lines with blending",
-        .shader_stages              = programs.wide_lines.get(),
+        .shader_stages              = programs.wide_lines_draw_color.get(),
         .vertex_input               = vertex_input,
         .input_assembly             = Input_assembly_state::lines,
         .rasterization              = Rasterization_state::cull_mode_back_ccw(reverse_depth),
@@ -718,6 +718,13 @@ void Editor_rendering::render_selection(const Render_context& context)
         //}
         //m_forward_renderer->primitive_color_source   = Base_renderer::Primitive_color_source::constant_color;
         //m_forward_renderer->primitive_constant_color = render_style.line_color;
+
+        Renderpass renderpass = m_rp_polygon_fill_standard;
+        if (context.override_shader_stages != nullptr)
+        {
+            renderpass.pipeline.data.shader_stages = context.override_shader_stages;
+        }
+
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
@@ -725,7 +732,7 @@ void Editor_rendering::render_selection(const Render_context& context)
                 .mesh_spans        = { m_scene_root->content_layer()->meshes },
                 .lights            = m_scene_root->light_layer()->lights,
                 .materials         = m_scene_root->materials(),
-                .passes            = { &m_rp_polygon_fill_standard },
+                .passes            = { &renderpass },
                 .visibility_filter = content_selected_filter,
                 .ambient_light     = m_scene_root->light_layer()->ambient_light
             }

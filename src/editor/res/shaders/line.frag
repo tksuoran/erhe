@@ -72,6 +72,7 @@ void main(void)
         discard;
     }
     //out_color = vec4(v_color.rgb * v_color.a, alpha);
+    //out_color = vec4(srgb_to_linear(v_color.rgb) * v_color.a, 1.0);
     out_color = vec4(srgb_to_linear(v_color.rgb) * v_color.a, 1.0);
 #endif
 }

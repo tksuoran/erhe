@@ -105,22 +105,28 @@ public:
 
     struct Scene
     {
-        int   directional_light_count{4};
-        int   spot_light_count       {3};
-        float floor_size             {40.0f};
-        int   floor_div              {4};
-        int   instance_count         {1};
-        float instance_gap           {0.4f};
-        int   detail                 {2};
-        bool  floor                  {true};
-        bool  gltf_files             {false};
-        bool  obj_files              {false};
-        bool  sphere                 {false};
-        bool  torus                  {false};
-        bool  cylinder               {false};
-        bool  cone                   {false};
-        bool  platonic_solids        {true};
-        bool  johnson_solids         {false};
+        float directional_light_intensity{20.0f};
+        float directional_light_radius   {6.0f};
+        float directional_light_height   {10.0f};
+        int   directional_light_count    {4};
+        float spot_light_intensity       {150.0f};
+        float spot_light_radius          {20.0f};
+        float spot_light_height          {10.0f};
+        int   spot_light_count           {3};
+        float floor_size                 {40.0f};
+        int   floor_div                  {4};
+        int   instance_count             {1};
+        float instance_gap               {0.4f};
+        int   detail                     {2};
+        bool  floor                      {true};
+        bool  gltf_files                 {false};
+        bool  obj_files                  {false};
+        bool  sphere                     {false};
+        bool  torus                      {false};
+        bool  cylinder                   {false};
+        bool  cone                       {false};
+        bool  platonic_solids            {true};
+        bool  johnson_solids             {false};
     };
     Scene scene;
 
@@ -154,10 +160,12 @@ public:
 
     struct Viewport
     {
-        bool polygon_fill     {true};
-        bool edge_lines       {false};
-        bool corner_points    {false};
-        bool polygon_centroids{false};
+        bool polygon_fill             {true};
+        bool edge_lines               {false};
+        bool corner_points            {false};
+        bool polygon_centroids        {false};
+        bool selection_bounding_sphere{true};
+        bool selection_bounding_box   {true};
     };
     Viewport viewport;
 
@@ -178,6 +186,15 @@ public:
         bool capture_support{true};
     };
     Renderdoc renderdoc;
+
+    struct Grid
+    {
+        bool  enabled   {false};
+        float cell_size {1.0f};
+        int   cell_div  {10};
+        int   cell_count{2};
+    };
+    Grid grid;
 };
 
 } // namespace erhe::application

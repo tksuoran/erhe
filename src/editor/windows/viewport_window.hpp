@@ -1,6 +1,7 @@
 #pragma once
 
 #include "windows/viewport_config.hpp"
+#include "renderers/programs.hpp"
 
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/windows/imgui_window.hpp"
@@ -86,8 +87,9 @@ public:
     [[nodiscard]] auto camera              () const -> erhe::scene::ICamera*;
 
 private:
-    [[nodiscard]] auto should_render      () const -> bool;
-    [[nodiscard]] auto should_post_process() const -> bool;
+    [[nodiscard]] auto should_render             () const -> bool;
+    [[nodiscard]] auto should_post_process       () const -> bool;
+    [[nodiscard]] auto get_override_shader_stages() const -> erhe::graphics::Shader_stages*;
 
     void update_framebuffer();
 
@@ -107,9 +109,7 @@ private:
 
     erhe::scene::Viewport                         m_viewport              {0, 0, 0, 0, true};
     erhe::scene::ICamera*                         m_camera                {nullptr};
-    bool                                          m_visualize_normal      {false};
-    bool                                          m_visualize_tangent     {false};
-    bool                                          m_visualize_bitangent   {false};
+    Shader_stages_variant                         m_shader_stages_variant {Shader_stages_variant::standard};
     bool                                          m_enable_post_processing{true};
     erhe::scene::Projection_transforms            m_projection_transforms;
     bool                                          m_is_hovered            {false};

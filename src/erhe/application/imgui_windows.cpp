@@ -804,6 +804,14 @@ void Imgui_windows::register_imgui_window(Imgui_window* window)
 #endif
     {
         m_imgui_windows.emplace_back(window);
+        std::sort(
+            m_imgui_windows.begin(),
+            m_imgui_windows.end(),
+            [](const gsl::not_null<Imgui_window*>& lhs, const gsl::not_null<Imgui_window*>& rhs)
+            {
+                return lhs->title() < rhs->title();
+            }
+        );
     }
 }
 
