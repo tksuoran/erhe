@@ -408,8 +408,6 @@ auto Viewport_window::should_post_process() const -> bool
         );
 }
 
-
-
 void Viewport_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -426,6 +424,7 @@ void Viewport_window::imgui()
         c_shader_stages_variant_strings,
         IM_ARRAYSIZE(c_shader_stages_variant_strings)
     );
+    ImGui::SameLine();
 
     ImGui::Checkbox("Post Processing", &m_enable_post_processing);
 
