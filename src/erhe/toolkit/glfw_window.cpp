@@ -7,6 +7,13 @@
 
 #include <fmt/printf.h>
 #include <GLFW/glfw3.h>
+
+#if defined(_WIN32)
+#define GLFW_EXPOSE_NATIVE_WIN32 1
+#define GLFW_EXPOSE_NATIVE_WGL 1
+#include <GLFW/glfw3native.h>
+#endif
+
 #include <gsl/assert>
 
 #include <cstdlib>
@@ -729,6 +736,24 @@ void Context_window::swap_buffers() const
     {
         glfwSwapBuffers(window);
     }
+}
+
+auto Context_window::get_device_pointer() const -> void*
+{
+#if defined(_WIN32)
+    return glfwGetWGLContext(m_glfw_window);
+#else
+    return nullptr; // TODO
+#endif
+}
+
+auto Context_window::get_window_handle () const -> void*
+{
+#if defined(_WIN32)
+    return glfwGetWin32Window(m_glfw_window);
+#else
+    return nullptr; // TODO
+#endif
 }
 
 } // namespace erhe::toolkit

@@ -63,6 +63,7 @@
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/application/windows/performance_window.hpp"
 #include "erhe/application/windows/pipelines.hpp"
+#include "erhe/application/renderdoc_capture_support.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/pipeline.hpp"
@@ -84,32 +85,33 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    auto configuration        = make_shared<erhe::application::Configuration>(argc, argv);
-    auto window               = make_shared<erhe::application::Window>();
-    auto gl_context_provider  = make_shared<erhe::application::Gl_context_provider>();
-    auto opengl_state_tracker = make_shared<erhe::graphics::OpenGL_state_tracker>();
+    auto configuration             = make_shared<erhe::application::Configuration>(argc, argv);
+    auto renderdoc_capture_support = make_shared<erhe::application::Renderdoc_capture_support>();
+    auto window                    = make_shared<erhe::application::Window>();
+    auto gl_context_provider       = make_shared<erhe::application::Gl_context_provider>();
+    auto opengl_state_tracker      = make_shared<erhe::graphics::OpenGL_state_tracker>();
 
     {
         ERHE_PROFILE_SCOPE("add components");
 
         m_components.add(configuration);
+        m_components.add(renderdoc_capture_support);
         m_components.add(window);
         m_components.add(shared_from_this());
         m_components.add(gl_context_provider);
-        m_components.add(make_shared<erhe::application::Imgui_windows         >());
-        m_components.add(make_shared<erhe::application::Time                  >());
-        m_components.add(make_shared<erhe::application::View                  >());
-        m_components.add(make_shared<erhe::application::Log_window            >());
+        m_components.add(make_shared<erhe::application::Imgui_windows            >());
+        m_components.add(make_shared<erhe::application::Time                     >());
+        m_components.add(make_shared<erhe::application::View                     >());
+        m_components.add(make_shared<erhe::application::Log_window               >());
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-        m_components.add(make_shared<erhe::application::Imgui_demo_window     >());
-        m_components.add(make_shared<erhe::application::Imgui_renderer        >());
+        m_components.add(make_shared<erhe::application::Imgui_demo_window        >());
+        m_components.add(make_shared<erhe::application::Imgui_renderer           >());
 #endif
-        m_components.add(make_shared<erhe::application::Performance_window    >());
-        m_components.add(make_shared<erhe::application::Pipelines             >());
-        m_components.add(make_shared<erhe::application::Shader_monitor        >());
-        //m_components.add(make_shared<erhe::application::Texture_unit_cache    >());
-        m_components.add(make_shared<erhe::application::Text_renderer         >());
-        m_components.add(make_shared<erhe::application::Line_renderer_set     >());
+        m_components.add(make_shared<erhe::application::Performance_window       >());
+        m_components.add(make_shared<erhe::application::Pipelines                >());
+        m_components.add(make_shared<erhe::application::Shader_monitor           >());
+        m_components.add(make_shared<erhe::application::Text_renderer            >());
+        m_components.add(make_shared<erhe::application::Line_renderer_set        >());
 
         m_components.add(make_shared<erhe::graphics::OpenGL_state_tracker >());
 
@@ -159,6 +161,9 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<Theremin        >());
 #endif
     }
+
+    configuration->initialize_component();
+    renderdoc_capture_support->initialize_component();
 
     if (!window->create_gl_window())
     {

@@ -29,8 +29,13 @@ using View = erhe::toolkit::View;
 
 Window::Window()
     : erhe::components::Component{c_label}
-    /////, m_renderdoc_api            {get_renderdoc_api()}
 {
+}
+
+void Window::declare_required_components()
+{
+    // Required so that capture support is initialized before window is created
+    m_renderdoc_capture_support = require<Renderdoc_capture_support>();
 }
 
 auto Window::create_gl_window() -> bool
@@ -121,7 +126,10 @@ auto Window::create_gl_window() -> bool
 
     erhe::graphics::Instance::initialize();
 
-    if (configuration.graphics.force_no_bindless)
+    if (
+        configuration.graphics.force_no_bindless ||
+        configuration.renderdoc.capture_support
+    )
     {
         if (erhe::graphics::Instance::info.use_bindless_texture)
         {
@@ -149,24 +157,20 @@ auto Window::get_context_window() const -> erhe::toolkit::Context_window*
 
 void Window::begin_renderdoc_capture()
 {
-    ///// if (!m_renderdoc_api)
-    ///// {
-    /////     return;
-    ///// }
-    ///// log_renderdoc.trace("RenderDoc: StartFrameCapture()\n");
-    ///// m_renderdoc_api->StartFrameCapture(nullptr, nullptr);
+    if (!m_renderdoc_capture_support)
+    {
+        return;
+    }
+    m_renderdoc_capture_support->start_frame_capture(m_context_window.get());
 }
 
 void Window::end_renderdoc_capture()
 {
-    ///// if (!m_renderdoc_api)
-    ///// {
-    /////     return;
-    ///// }
-    ///// log_renderdoc.trace("RenderDoc: EndFrameCapture()\n");
-    ///// m_renderdoc_api->EndFrameCapture(nullptr, nullptr);
-    ///// log_renderdoc.trace("RenderDoc: LaunchReplayUI(1, nullptr)\n");
-    ///// m_renderdoc_api->LaunchReplayUI(1, nullptr);
+    if (!m_renderdoc_capture_support)
+    {
+        return;
+    }
+    m_renderdoc_capture_support->end_frame_capture(m_context_window.get());
 }
 
 }

@@ -20,7 +20,7 @@ auto read(const fs::path& path) -> nonstd::optional<std::string>
         {
             const std::size_t file_length = fs::file_size(path);
             std::FILE* file =
-#ifdef _MSC_VER
+#if defined(_WIN32) // _MSC_VER
                 _wfopen(path.c_str(), L"rb");
 #else
                 std::fopen(path.c_str(), "rb");

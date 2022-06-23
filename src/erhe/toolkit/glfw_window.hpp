@@ -63,6 +63,9 @@ public:
     void set_cursor         (const Mouse_cursor cursor);
     void capture_mouse      (const bool capture);
 
+    auto get_device_pointer() const -> void*;
+    auto get_window_handle () const -> void*;
+
 private:
     void get_extensions();
 

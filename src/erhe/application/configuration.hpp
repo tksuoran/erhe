@@ -172,6 +172,12 @@ public:
         bool enabled{true};
     };
     Id_renderer id_renderer;
+
+    struct Renderdoc
+    {
+        bool capture_support{true};
+    };
+    Renderdoc renderdoc;
 };
 
 } // namespace erhe::application

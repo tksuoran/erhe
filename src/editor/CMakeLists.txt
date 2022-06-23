@@ -173,6 +173,9 @@ erhe_target_sources_grouped(
     res/shaders/wide_lines.vert
     res/shaders/wide_lines.geom
     res/shaders/wide_lines.frag
+
+    erhe.ini
+
 )
 
 if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")

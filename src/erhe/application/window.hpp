@@ -3,11 +3,10 @@
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/window.hpp"
 
-//#include <renderdoc_app.h>
-
 namespace erhe::application {
 
 class Configuration;
+class Renderdoc_capture_support;
 
 class Window
     : public erhe::components::Component
@@ -26,6 +25,7 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    void declare_required_components() override;
 
     // Public API
     [[nodiscard]] auto get_context_window() const -> erhe::toolkit::Context_window*;
@@ -34,8 +34,8 @@ public:
     void end_renderdoc_capture  ();
 
 private:
-    std::unique_ptr<erhe::toolkit::Context_window> m_context_window;
-    //RENDERDOC_API_1_1_2*                           m_renderdoc_api;
+    std::unique_ptr<erhe::toolkit::Context_window>                m_context_window;
+    std::shared_ptr<erhe::application::Renderdoc_capture_support> m_renderdoc_capture_support;
 };
 
 } // namespace erhe::application

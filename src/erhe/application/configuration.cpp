@@ -238,6 +238,12 @@ Configuration::Configuration(int argc, char** argv)
             const auto& section = ini["id_renderer"];
             ini_get(section, "enabled", id_renderer.enabled);
         }
+
+        if (ini.has("renderdoc"))
+        {
+            const auto& section = ini["renderdoc"];
+            ini_get(section, "capture_support", renderdoc.capture_support);
+        }
     }
 
     cxxopts::Options options("Editor", "Erhe Editor (C) 2022 Timo Suoranta");

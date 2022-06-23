@@ -2,6 +2,7 @@
 
 #include <fmt/format.h>
 
+#define _POSIX_THREAD_SAFE_FUNCTIONS 1
 #include <ctime>
 
 namespace erhe::toolkit
@@ -13,10 +14,15 @@ namespace erhe::toolkit
 auto timestamp() -> std::string
 {
     struct timespec ts{};
+#if defined(_MSC_VER)
     timespec_get(&ts, TIME_UTC);
+#else
+    // Works at least with MinGW gcc bundled with CLion
+    clock_gettime(CLOCK_REALTIME, &ts);
+#endif
 
     struct tm time;
-#ifdef _MSC_VER
+#if defined (_WIN32) // _MSC_VER
     localtime_s(&time, &ts.tv_sec);
 #else
     localtime_r(&ts.tv_sec, &time);

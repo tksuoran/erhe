@@ -37,8 +37,17 @@ namespace editor {
 
 using erhe::graphics::Color_blend_state;
 
+
+auto Capture_frame_command::try_call(erhe::application::Command_context& context) -> bool
+{
+    static_cast<void>(context);
+    m_editor_rendering.trigger_capture();
+    return true;
+}
+
 Editor_rendering::Editor_rendering()
     : erhe::components::Component{c_label}
+    , m_capture_frame_command    {*this}
 {
 }
 
@@ -51,11 +60,17 @@ void Editor_rendering::declare_required_components()
     require<Programs   >();
     require<Mesh_memory>();
     require<erhe::application::Gl_context_provider>();
+    require<erhe::application::View               >();
     m_configuration = require<erhe::application::Configuration>();
 }
 
 void Editor_rendering::initialize_component()
 {
+    const auto& view = get<erhe::application::View>();
+
+    view->register_command(&m_capture_frame_command);
+    view->bind_command_to_key(&m_capture_frame_command, erhe::toolkit::Key_f10);
+
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()
     };
@@ -372,6 +387,11 @@ void Editor_rendering::post_initialize()
     m_viewport_windows       = get<Viewport_windows>();
 }
 
+void Editor_rendering::trigger_capture()
+{
+    m_trigger_capture = true;
+}
+
 void Editor_rendering::init_state()
 {
     gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
@@ -476,6 +496,12 @@ void Editor_rendering::render()
     if (m_post_processing  ) m_post_processing  ->next_frame();
     if (m_shadow_renderer  ) m_shadow_renderer  ->next_frame();
     if (m_text_renderer    ) m_text_renderer    ->next_frame();
+
+    if (m_trigger_capture)
+    {
+        get<erhe::application::Window>()->end_renderdoc_capture();
+        m_trigger_capture = false;
+    }
 }
 
 void Editor_rendering::render_viewport(

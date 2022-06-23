@@ -72,7 +72,7 @@ support does not yet seem to work, contributions are welcome.
 #### Notes for CLion users
 
 CLion has initial support. Enable profiles that begin with end with `for CLion`,
-for example `GCC Debug for CLion`. You make have to adjust toolset configuration
+for example `GCC Debug for CLion`. You may have to adjust toolset configuration
 in CLion to use a specific toolset. Contributions are welcome.
 
 ## Configuration
@@ -85,6 +85,7 @@ erhe with CMake:
 | ERHE_AUDIO_LIBRARY              | Audio library              | miniaudio, none           |
 | ERHE_FONT_RASTERIZATION_LIBRARY | Font rasterization library | freetype, none            |
 | ERHE_GLTF_LIBRARY               | GLTF library               | cgltf, none               |
+| ERHE_GUI_LIBRARY                | GUI library                | imgui, none               |
 | ERHE_PHYSICS_LIBRARY            | Physics library            | bullet, jolt, none        |
 | ERHE_PNG_LIBRARY                | PNG loading library        | mango, none               |
 | ERHE_PROFILE_LIBRARY            | Profile library            | superluminal, tracy, none |
@@ -109,7 +110,7 @@ and requires more work before it is usable.
 The main raytrace backend is currently `embree`. Even the `embree` backend is incomplete,
 causing performance issues when creating larger scenes.
 
-Currently erhe (editor) uses raytrace for mouse picking models from 3D viewports. If raytrace
+Currently, erhe (editor) uses raytrace for mouse picking models from 3D viewports. If raytrace
 backend is set to `none`, mouse picking uses an alternative path, using GPU to render ID buffer
 and reading this back to the CPU.
 
@@ -147,18 +148,18 @@ Disabling GLTF library removes capability to parse GLTF files in erhe editor.
 
 ### ERHE_AUDIO_LIBRARY
 
-Currently audio library is only used with some code (VR theremin) that is currently not functional.
+Currently, audio library is only used with some code (VR theremin) that is currently not functional.
 `miniaudio` can be enabled, but at the moment it is best to use `none`.
 
 ### ERHE_FONT_RASTERIZATION_LIBRARY
 
-Currently only `freetype` is supported.
-
-Disabling font rasterization library removes native text rendering in erhe. ImGui content is not affected.
+Currently, only `freetype` is supported. Disabling font rasterization library removes
+native text rendering in erhe. ImGui content is not affected.
 
 ### ERHE_TEXT_LAYOUT_LIBRARY
 
-Currently only `harfbuzz` is supported. Freetype as text layout support is rotten but might be resurrected.
+Currently, only `harfbuzz` is supported. Freetype as text layout support is rotten
+but might be resurrected.
 
 Disabling font layout library removes native text rendering in erhe. ImGui content is not affected.
 
@@ -181,7 +182,7 @@ Editor is a sandbox like experimentation executable with a random set of functio
 ## erhe::components namespace
 
 `erhe::component`s namespace provides classes to manage components.
-Components can depends on each other. Components declare what other
+Components can depend on each other. Components declare what other
 components they need for their initialization. With this information,
 components are automatically initialized in correct order, also in
 parallel if so configured.
@@ -288,7 +289,7 @@ Some features:
 
 `erhe::graphics` namespace provides classes basic 3D rendering with modern OpenGL.
 
-Currently erhe uses OpenGL as graphics API. The `erhe::graphics` builds a vulkan-like
+Currently, erhe uses OpenGL as graphics API. The `erhe::graphics` builds a vulkan-like
 abstraction on top of OpenGL:
 
 -  `erhe::graphics::Pipeline` capsulates all relevant GL state.

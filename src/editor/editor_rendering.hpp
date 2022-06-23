@@ -4,6 +4,7 @@
 #include "renderers/forward_renderer.hpp"
 #include "windows/viewport_window.hpp"
 
+#include "erhe/application/commands/command.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/scene/viewport.hpp"
 
@@ -53,6 +54,24 @@ class Shadow_renderer;
 class Tools;
 class Viewport_windows;
 
+class Editor_rendering;
+
+class Capture_frame_command
+    : public erhe::application::Command
+{
+public:
+    explicit Capture_frame_command(Editor_rendering& editor_rendering)
+        : Command           {"editor.capture_frame"}
+        , m_editor_rendering{editor_rendering}
+    {
+    }
+
+    auto try_call(erhe::application::Command_context& context) -> bool override;
+
+private:
+    Editor_rendering& m_editor_rendering;
+};
+
 class Editor_rendering
     : public erhe::components::Component
 {
@@ -76,6 +95,7 @@ public:
     void post_initialize            () override;
 
     // Public API
+    void trigger_capture         ();
     void init_state              ();
     void render                  ();
     void render_viewport         (const Render_context& context, const bool has_pointer);
@@ -103,6 +123,9 @@ private:
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
+
+    // Commands
+    Capture_frame_command m_capture_frame_command;
 
     std::shared_ptr<Tools>                                m_tools;
     std::shared_ptr<Forward_renderer>                     m_forward_renderer;

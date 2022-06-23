@@ -2,5 +2,6 @@
 .vs
 .vscode/compile_commands.json
 build
+cmake-build-debug
 vscode-cmake-build
 log.txt
