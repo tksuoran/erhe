@@ -189,6 +189,11 @@ auto Programs::make_program(
         create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     }
 
+    if (config->shader_monitor.enabled)
+    {
+        create_info.pragmas.push_back("optimize(off)");
+    }
+
     if (vs_exists)
     {
         create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);

@@ -64,6 +64,7 @@ public:
 
         std::string                                          name;
 
+        std::vector<std::string>                             pragmas                       {};
         std::vector<std::pair<std::string, std::string>>     defines                       {};
         std::vector<std::pair<gl::Shader_type, std::string>> extensions                    {};
         // https://stackoverflow.com/questions/35525777/use-of-string-view-for-map-lookup

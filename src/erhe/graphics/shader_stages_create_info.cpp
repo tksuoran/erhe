@@ -127,7 +127,17 @@ auto Shader_stages::Create_info::final_source(
     std::stringstream sb;
     sb << "#version 460 core\n\n";
 
-    if (extensions.size() > 0)
+    if (!pragmas.empty())
+    {
+        sb << "// Pragmas\n";
+        for (const auto& i : pragmas)
+        {
+            sb << "#pragma " << i << "\n";
+        }
+        sb << "\n";
+    }
+
+    if (!extensions.empty())
     {
         sb << "// Extensions\n";
         for (const auto& i : extensions)

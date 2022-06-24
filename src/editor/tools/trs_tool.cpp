@@ -324,24 +324,28 @@ void Trs_tool::Visualization::update_scale(
 {
     ERHE_PROFILE_FUNCTION
 
-    if (root == nullptr)
-    {
-        return;
-    }
+    //if (root == nullptr)
+    //{
+    //    return;
+    //}
 
-    const vec3 position_in_world = root->position_in_world();
+    const vec3 position_in_world = (root != nullptr) 
+        ? root->position_in_world()
+        : glm::vec3{0.0f};
     view_distance = length(position_in_world - vec3{view_position_in_world});
 }
 
 auto Trs_tool::Visualization::get_handle_visibility(const Handle handle) const -> bool
 {
-    switch (trs_tool.get_handle_type(handle))
-    {
-        case Handle_type::e_handle_type_translate_axis:  return show_translate;
-        case Handle_type::e_handle_type_translate_plane: return show_translate;
-        case Handle_type::e_handle_type_rotate:          return show_rotate;
-        default:                                         return false;
-    }
+    static_cast<void>(handle);
+    return true;
+    //switch (trs_tool.get_handle_type(handle))
+    //{
+    //    case Handle_type::e_handle_type_translate_axis:  return show_translate;
+    //    case Handle_type::e_handle_type_translate_plane: return show_translate;
+    //    case Handle_type::e_handle_type_rotate:          return show_rotate;
+    //    default:                                         return false;
+    //}
 }
 
 void Trs_tool::Visualization::update_mesh_visibility(
@@ -349,18 +353,24 @@ void Trs_tool::Visualization::update_mesh_visibility(
 )
 {
     const auto active_handle = trs_tool.get_active_handle();
-    const bool show_all      = is_visible && (active_handle == Handle::e_handle_none);
+    //const bool show_all      = is_visible && (active_handle == Handle::e_handle_none);
     const auto handle        = trs_tool.get_handle(mesh.get());
-    const bool show          = get_handle_visibility(handle);
+    //const bool show          = get_handle_visibility(handle);
+    //mesh->set_visibility_mask(
+    //    show &&
+    //    (
+    //        !hide_inactive ||
+    //        (active_handle == handle) ||
+    //        show_all
+    //    )
+    //        ? (erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::tool | erhe::scene::Node_visibility::id)
+    //        : erhe::scene::Node_visibility::tool
+    //);
+
     mesh->set_visibility_mask(
-        show &&
-        (
-            !hide_inactive ||
-            (active_handle == handle) ||
-            show_all
-        )
-            ? (erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::tool | erhe::scene::Node_visibility::id)
-            : erhe::scene::Node_visibility::tool
+        erhe::scene::Node_visibility::visible |
+        erhe::scene::Node_visibility::tool    |
+        erhe::scene::Node_visibility::id
     );
 
     mesh->mesh_data.primitives.front().material =
@@ -373,7 +383,7 @@ void Trs_tool::Visualization::update_visibility(
     const bool visible
 )
 {
-    is_visible = visible;
+    is_visible = true; static_cast<void>(visible); // TODO XXX FIXME HACK visible;
     update_mesh_visibility(x_arrow_cylinder_mesh);
     update_mesh_visibility(x_arrow_cone_mesh    );
     update_mesh_visibility(y_arrow_cylinder_mesh);
