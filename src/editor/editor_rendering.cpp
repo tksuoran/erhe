@@ -522,8 +522,7 @@ void Editor_rendering::render_viewport(
         ////render_gui  (context);
         render_brush    (context);
 
-
-        if (has_pointer || m_tools)
+        if (has_pointer)
         {
             render_tool_meshes(context);
         }

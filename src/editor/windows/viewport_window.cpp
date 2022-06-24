@@ -422,6 +422,7 @@ void Viewport_window::imgui()
         "Shader",
         reinterpret_cast<int*>(&m_shader_stages_variant),
         c_shader_stages_variant_strings,
+        IM_ARRAYSIZE(c_shader_stages_variant_strings),
         IM_ARRAYSIZE(c_shader_stages_variant_strings)
     );
     ImGui::SameLine();

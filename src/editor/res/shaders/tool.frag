@@ -41,6 +41,7 @@ void main()
     float NdotV = max(dot(n, v), 0.0);
     out_color.rgb = srgb_to_linear(material.materials[v_material_index].base_color.rgb * (0.5 + pow(NdotV, 5.0) * 2.5));
 
+#if 0
     const vec3 palette[24] = vec3[24](
         vec3(0.0, 0.0, 0.0), // 0
         vec3(1.0, 0.0, 0.0), // 1
@@ -69,5 +70,7 @@ void main()
     );
 
     out_color.rgb = srgb_to_linear(palette[v_material_index % 24]);
+#endif
+
     out_color.a = 1.0;
 }

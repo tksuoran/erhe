@@ -134,16 +134,17 @@ auto Base_renderer::update_primitive_buffer(
     m_primitive_writer.begin(current_frame_resources().primitive_buffer.target());
     auto&             buffer             = current_frame_resources().primitive_buffer;
     auto&             writer             = m_primitive_writer;
+    const auto        primitive_gpu_data = buffer.map();
     const auto&       shader_resources   = *m_program_interface->shader_resources.get();
     const std::size_t entry_size         = shader_resources.primitive_struct.size_bytes();
-    const auto        primitive_gpu_data = buffer.map();
     const auto&       offsets            = shader_resources.primitive_block_offsets;
     std::size_t       primitive_index    = 0;
     for (const auto& mesh : meshes)
     {
-        if (writer.write_offset + entry_size > buffer.capacity_byte_count())
+        if ((writer.write_offset + entry_size) > buffer.capacity_byte_count())
         {
-            log_render->warn("primitive buffer capacity {} exceeded", buffer.capacity_byte_count());
+            log_render->critical("primitive buffer capacity {} exceeded", buffer.capacity_byte_count());
+            ERHE_FATAL("primitive buffer capacity exceeded");
             break;
         }
 
@@ -158,9 +159,10 @@ auto Base_renderer::update_primitive_buffer(
         std::size_t mesh_primitive_index{0};
         for (const auto& primitive : mesh_data.primitives)
         {
-            if (writer.write_offset + entry_size > buffer.capacity_byte_count())
+            if ((writer.write_offset + entry_size) > buffer.capacity_byte_count())
             {
-                log_render->warn("primitive buffer capacity {} exceeded", buffer.capacity_byte_count());
+                log_render->critical("primitive buffer capacity {} exceeded", buffer.capacity_byte_count());
+                ERHE_FATAL("primitive buffer capacity exceeded");
                 break;
             }
 
@@ -274,9 +276,10 @@ auto Base_renderer::update_light_buffer(
     using erhe::graphics::write;
     for (const auto& light : lights)
     {
-        if (writer.write_offset == buffer.capacity_byte_count())
+        if ((writer.write_offset + entry_size) > buffer.capacity_byte_count())
         {
-            log_render->warn("light buffer capacity {} exceeded", buffer.capacity_byte_count());
+            log_render->critical("light buffer capacity {} exceeded", buffer.capacity_byte_count());
+            ERHE_FATAL("light buffer capacity exceeded");
             break;
         }
 
@@ -347,9 +350,10 @@ auto Base_renderer::update_material_buffer(
     writer.begin(buffer.target());
     for (const auto& material : materials)
     {
-        if (writer.write_offset == buffer.capacity_byte_count())
+        if ((writer.write_offset + entry_size) > buffer.capacity_byte_count())
         {
-            log_render->warn("material buffer capacity {} exceeded", buffer.capacity_byte_count());
+            log_render->critical("material buffer capacity {} exceeded", buffer.capacity_byte_count());
+            ERHE_FATAL("material buffer capacity exceeded");
             break;
         }
         memset(reinterpret_cast<uint8_t*>(material_gpu_data.data()) + writer.write_offset, 0, entry_size);
@@ -394,21 +398,22 @@ auto Base_renderer::update_camera_buffer(
         m_draw_indirect_writer.write_offset
     );
 
-    auto&       buffer                = current_frame_resources().camera_buffer;
-    auto&       writer                = m_camera_writer;
-    const auto  projection_transforms = camera.projection_transforms(viewport);
-    const auto& shader_resources      = *m_program_interface->shader_resources.get();
-    const auto  camera_gpu_data       = buffer.map();
-    const auto& offsets               = shader_resources.camera_block_offsets;
-    const mat4  world_from_node       = camera.world_from_node();
-    const mat4  world_from_clip       = projection_transforms.clip_from_world.inverse_matrix();
-    const mat4  clip_from_world       = projection_transforms.clip_from_world.matrix();
-    const float exposure              = camera.get_exposure();
+    auto&        buffer                = current_frame_resources().camera_buffer;
+    auto&        writer                = m_camera_writer;
+    const auto   projection_transforms = camera.projection_transforms(viewport);
+    const auto&  shader_resources      = *m_program_interface->shader_resources.get();
+    const auto   camera_gpu_data       = buffer.map();
+    const auto&  offsets               = shader_resources.camera_block_offsets;
+    const size_t entry_size            = shader_resources.camera_block.size_bytes();
+    const mat4   world_from_node       = camera.world_from_node();
+    const mat4   world_from_clip       = projection_transforms.clip_from_world.inverse_matrix();
+    const mat4   clip_from_world       = projection_transforms.clip_from_world.matrix();
+    const float  exposure              = camera.get_exposure();
 
-    if (writer.write_offset == buffer.capacity_byte_count())
+    if ((writer.write_offset + entry_size) > buffer.capacity_byte_count())
     {
-        log_render->warn("camera buffer capacity {} exceeded", buffer.capacity_byte_count());
-        return {};
+        log_render->critical("camera buffer capacity {} exceeded", buffer.capacity_byte_count());
+        ERHE_FATAL("camera buffer capacity exceeded");
     }
 
     writer.begin(current_frame_resources().camera_buffer.target());
@@ -439,7 +444,7 @@ auto Base_renderer::update_camera_buffer(
     write(camera_gpu_data, writer.write_offset + offsets.view_depth_near,      as_span(view_depth_near     ));
     write(camera_gpu_data, writer.write_offset + offsets.view_depth_far,       as_span(view_depth_far      ));
     write(camera_gpu_data, writer.write_offset + offsets.exposure,             as_span(exposure            ));
-    writer.write_offset += shader_resources.camera_block.size_bytes();
+    writer.write_offset += entry_size;
     ERHE_VERIFY(writer.write_offset <= buffer.capacity_byte_count());
     writer.end();
 
@@ -461,18 +466,20 @@ auto Base_renderer::update_draw_indirect_buffer(
         m_draw_indirect_writer.write_offset
     );
 
-    auto&       buffer                 = current_frame_resources().draw_indirect_buffer;
-    auto&       writer                 = m_draw_indirect_writer;
-    const auto  draw_indirect_gpu_data = buffer.map();
-    uint32_t    instance_count     {1};
-    uint32_t    base_instance      {0};
-    std::size_t draw_indirect_count{0};
+    auto&        buffer                 = current_frame_resources().draw_indirect_buffer;
+    auto&        writer                 = m_draw_indirect_writer;
+    const auto   draw_indirect_gpu_data = buffer.map();
+    const size_t entry_size             = sizeof(gl::Draw_elements_indirect_command);
+    uint32_t     instance_count     {1};
+    uint32_t     base_instance      {0};
+    std::size_t  draw_indirect_count{0};
     writer.begin(buffer.target());
     for (const auto& mesh : meshes)
     {
-        if (writer.write_offset == buffer.capacity_byte_count())
+        if ((writer.write_offset + entry_size) > buffer.capacity_byte_count())
         {
-            log_render->warn("draw indirect buffer capacity {} exceeded", buffer.capacity_byte_count());
+            log_render->critical("draw indirect buffer capacity {} exceeded", buffer.capacity_byte_count());
+            ERHE_FATAL("draw indirect buffer capacity exceeded");
             break;
         }
 
@@ -482,9 +489,10 @@ auto Base_renderer::update_draw_indirect_buffer(
         }
         for (auto& primitive : mesh->mesh_data.primitives)
         {
-            if (writer.write_offset == buffer.capacity_byte_count())
+            if ((writer.write_offset + entry_size) > buffer.capacity_byte_count())
             {
-                log_render->warn("draw indirect buffer capacity {} exceeded", buffer.capacity_byte_count());
+                log_render->critical("draw indirect buffer capacity {} exceeded", buffer.capacity_byte_count());
+                ERHE_FATAL("draw indirect buffer capacity exceeded");
                 break;
             }
             const auto& primitive_geometry = primitive.gl_primitive_geometry;

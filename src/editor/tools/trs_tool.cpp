@@ -324,28 +324,24 @@ void Trs_tool::Visualization::update_scale(
 {
     ERHE_PROFILE_FUNCTION
 
-    //if (root == nullptr)
-    //{
-    //    return;
-    //}
+    if (root == nullptr)
+    {
+        return;
+    }
 
-    const vec3 position_in_world = (root != nullptr) 
-        ? root->position_in_world()
-        : glm::vec3{0.0f};
+    const vec3 position_in_world = root->position_in_world();
     view_distance = length(position_in_world - vec3{view_position_in_world});
 }
 
 auto Trs_tool::Visualization::get_handle_visibility(const Handle handle) const -> bool
 {
-    static_cast<void>(handle);
-    return true;
-    //switch (trs_tool.get_handle_type(handle))
-    //{
-    //    case Handle_type::e_handle_type_translate_axis:  return show_translate;
-    //    case Handle_type::e_handle_type_translate_plane: return show_translate;
-    //    case Handle_type::e_handle_type_rotate:          return show_rotate;
-    //    default:                                         return false;
-    //}
+    switch (trs_tool.get_handle_type(handle))
+    {
+        case Handle_type::e_handle_type_translate_axis:  return show_translate;
+        case Handle_type::e_handle_type_translate_plane: return show_translate;
+        case Handle_type::e_handle_type_rotate:          return show_rotate;
+        default:                                         return false;
+    }
 }
 
 void Trs_tool::Visualization::update_mesh_visibility(
@@ -353,24 +349,18 @@ void Trs_tool::Visualization::update_mesh_visibility(
 )
 {
     const auto active_handle = trs_tool.get_active_handle();
-    //const bool show_all      = is_visible && (active_handle == Handle::e_handle_none);
+    const bool show_all      = is_visible && (active_handle == Handle::e_handle_none);
     const auto handle        = trs_tool.get_handle(mesh.get());
-    //const bool show          = get_handle_visibility(handle);
-    //mesh->set_visibility_mask(
-    //    show &&
-    //    (
-    //        !hide_inactive ||
-    //        (active_handle == handle) ||
-    //        show_all
-    //    )
-    //        ? (erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::tool | erhe::scene::Node_visibility::id)
-    //        : erhe::scene::Node_visibility::tool
-    //);
-
+    const bool show          = get_handle_visibility(handle);
     mesh->set_visibility_mask(
-        erhe::scene::Node_visibility::visible |
-        erhe::scene::Node_visibility::tool    |
-        erhe::scene::Node_visibility::id
+        show &&
+        (
+            !hide_inactive ||
+            (active_handle == handle) ||
+            show_all
+        )
+            ? (erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::tool | erhe::scene::Node_visibility::id)
+            : erhe::scene::Node_visibility::tool
     );
 
     mesh->mesh_data.primitives.front().material =
@@ -383,7 +373,7 @@ void Trs_tool::Visualization::update_visibility(
     const bool visible
 )
 {
-    is_visible = true; static_cast<void>(visible); // TODO XXX FIXME HACK visible;
+    is_visible = visible;
     update_mesh_visibility(x_arrow_cylinder_mesh);
     update_mesh_visibility(x_arrow_cone_mesh    );
     update_mesh_visibility(y_arrow_cylinder_mesh);
@@ -447,7 +437,7 @@ namespace {
     constexpr float box_half_thickness       = 0.02f;
     constexpr float box_length               = 1.0f;
     constexpr float rotate_ring_major_radius = 4.0f;
-    constexpr float rotate_ring_minor_radius = 0.1f; // 0.125f
+    constexpr float rotate_ring_minor_radius = 0.1f;
 
     constexpr float arrow_tip = arrow_cylinder_length + arrow_cone_length;
 }
@@ -457,17 +447,15 @@ auto Trs_tool::Visualization::make_arrow_cylinder(
 ) -> Part
 {
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
-        //std::move(
-            erhe::geometry::shapes::make_cylinder(
-                0.0,
-                arrow_cylinder_length,
-                arrow_cylinder_radius,
-                true,
-                true,
-                32,
-                4
-            )
-        //)
+        erhe::geometry::shapes::make_cylinder(
+            0.0,
+            arrow_cylinder_length,
+            arrow_cylinder_radius,
+            true,
+            true,
+            32,
+            4
+        )
     );
 
     return Part{
@@ -482,16 +470,14 @@ auto Trs_tool::Visualization::make_arrow_cone(
 ) -> Part
 {
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
-        //std::move(
-            erhe::geometry::shapes::make_cone(
-                arrow_cylinder_length,
-                arrow_tip,
-                arrow_cone_radius,
-                true,
-                32,
-                4
-            )
-        //)
+        erhe::geometry::shapes::make_cone(
+            arrow_cylinder_length,
+            arrow_tip,
+            arrow_cone_radius,
+            true,
+            32,
+            4
+        )
     );
 
     return Part{
@@ -506,16 +492,14 @@ auto Trs_tool::Visualization::make_box(
 ) -> Part
 {
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
-        //std::move(
-            erhe::geometry::shapes::make_box(
-                0.0,
-                box_length,
-                0.0,
-                box_length,
-                -box_half_thickness,
-                box_half_thickness
-            )
-        //)
+        erhe::geometry::shapes::make_box(
+            0.0,
+            box_length,
+            0.0,
+            box_length,
+            -box_half_thickness,
+            box_half_thickness
+        )
     );
 
     return Part{
@@ -530,14 +514,12 @@ auto Trs_tool::Visualization::make_rotate_ring(
 ) -> Part
 {
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
-        //std::move(
-            erhe::geometry::shapes::make_torus(
-                rotate_ring_major_radius,
-                rotate_ring_minor_radius,
-                80,
-                32
-            )
-        //)
+        erhe::geometry::shapes::make_torus(
+            rotate_ring_major_radius,
+            rotate_ring_minor_radius,
+            80,
+            32
+        )
     );
 
     return Part{

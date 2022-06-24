@@ -162,6 +162,7 @@ erhe_target_sources_grouped(
     res/shaders/points.frag
     res/shaders/standard.vert
     res/shaders/standard.frag
+    res/shaders/standard_debug.frag
     res/shaders/text.vert
     res/shaders/text.frag
     res/shaders/textured.vert
