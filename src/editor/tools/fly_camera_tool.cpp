@@ -7,6 +7,7 @@
 #include "tools/trs_tool.hpp"
 #include "windows/viewport_window.hpp"
 
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/commands/command_context.hpp"
@@ -182,6 +183,7 @@ void Fly_camera_tool::declare_required_components()
     m_editor_tools = require<Tools>();
     m_scene_root   = require<Scene_root>();
 
+    require<erhe::application::Configuration>();
     require<erhe::application::Imgui_windows>();
     require<erhe::application::View>();
 }
@@ -200,7 +202,8 @@ void Fly_camera_tool::initialize_component()
     m_editor_tools->register_tool(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
-    const auto view = get<erhe::application::View>();
+    const auto& config = get<erhe::application::Configuration>()->camera_controls;
+    const auto& view   = get<erhe::application::View>();
 
     // TODO these commands should be registered
     view->bind_command_to_key(&m_move_up_active_command,         erhe::toolkit::Key_e, true );
@@ -220,6 +223,13 @@ void Fly_camera_tool::initialize_component()
     view->bind_command_to_mouse_drag(&m_turn_command, erhe::toolkit::Mouse_button_left);
 
     m_camera_controller = std::make_shared<Frame_controller>();
+
+    m_camera_controller->get_controller(Control::translate_x).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
+    m_camera_controller->get_controller(Control::translate_y).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
+    m_camera_controller->get_controller(Control::translate_z).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
+
+    m_rotate_scale_x = config.invert_x ? -1.0f / 1024.0f : 1.0f / 1024.f;
+    m_rotate_scale_y = config.invert_y ? -1.0f / 1024.0f : 1.0f / 1024.f;
 }
 
 void Fly_camera_tool::post_initialize()
@@ -340,13 +350,13 @@ void Fly_camera_tool::turn_relative(const double dx, const double dy)
 
     if (dx != 0.0f)
     {
-        const float value = static_cast<float>(m_sensitivity * dx / 1024.0);
+        const float value = static_cast<float>(m_sensitivity * dx * m_rotate_scale_x);
         m_camera_controller->rotate_y.adjust(value);
     }
 
     if (dy != 0.0f)
     {
-        const float value = static_cast<float>(m_sensitivity * dy / 1024.0);
+        const float value = static_cast<float>(m_sensitivity * dy * m_rotate_scale_y);
         m_camera_controller->rotate_x.adjust(value);
     }
 }

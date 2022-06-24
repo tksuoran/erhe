@@ -27,26 +27,30 @@ public:
     [[nodiscard]] auto depth_clear_value_pointer() const -> const float *; // reverse_depth ? 0.0f : 1.0f;
     [[nodiscard]] auto depth_function           (const gl::Depth_function depth_function) const -> gl::Depth_function;
 
-    struct Imgui
+    class Imgui
     {
+    public:
         bool enabled{true};
     };
     Imgui imgui;
 
-    struct Headset
+    class Headset
     {
+    public:
         bool openxr{false};
     };
     Headset headset;
 
-    struct Threading
+    class Threading
     {
+    public:
         bool parallel_initialization{true};
     };
     Threading threading;
 
-    struct Graphics
+    class Graphics
     {
+    public:
         bool low_hdr          {false};
         bool reverse_depth    {true};
         bool simpler_shaders  {true};
@@ -57,15 +61,17 @@ public:
     };
     Graphics graphics;
 
-    struct Mesh_memory
+    class Mesh_memory
     {
+    public:
         int vertex_buffer_size{32}; // in megabytes
         int index_buffer_size  {8}; // in megabytes
     };
     Mesh_memory mesh_memory;
 
-    struct Window
+    class Window
     {
+    public:
         bool show             {true};
         bool fullscreen       {false};
         int  width            {1920};
@@ -73,22 +79,25 @@ public:
     };
     Window window;
 
-    struct Shadow_renderer
+    class Shadow_renderer
     {
+    public:
         bool enabled{true};
         int  shadow_map_resolution     {2048};
         int  shadow_map_max_light_count{8};
     };
     Shadow_renderer shadow_renderer;
 
-    struct Text_renderer
+    class Text_renderer
     {
+    public:
         bool enabled{true};
     };
     Text_renderer text_renderer;
 
-    struct Renderer
+    class Renderer
     {
+    public:
         int max_material_count  {256};
         int max_light_count     {256};
         int max_camera_count    {256};
@@ -97,14 +106,16 @@ public:
     };
     Renderer renderer;
 
-    struct Physics
+    class Physics
     {
+    public:
         bool enabled{false};
     };
     Physics physics;
 
-    struct Scene
+    class Scene
     {
+    public:
         float directional_light_intensity{20.0f};
         float directional_light_radius   {6.0f};
         float directional_light_height   {10.0f};
@@ -130,8 +141,9 @@ public:
     };
     Scene scene;
 
-    struct Windows
+    class Windows
     {
+    public:
         bool brushes            {true};
         bool debug_view         {false};
         bool fly_camera         {false};
@@ -158,8 +170,9 @@ public:
     };
     Windows windows;
 
-    struct Viewport
+    class Viewport
     {
+    public:
         bool polygon_fill             {true};
         bool edge_lines               {false};
         bool corner_points            {false};
@@ -169,32 +182,52 @@ public:
     };
     Viewport viewport;
 
-    struct Shader_monitor
+    class Shader_monitor
     {
+    public:
         bool enabled{true};
     };
     Shader_monitor shader_monitor;
 
-    struct Id_renderer
+    class Id_renderer
     {
+    public:
         bool enabled{true};
     };
     Id_renderer id_renderer;
 
-    struct Renderdoc
+    class Renderdoc
     {
+    public:
         bool capture_support{true};
     };
     Renderdoc renderdoc;
 
-    struct Grid
+    class Grid
     {
+    public:
         bool  enabled   {false};
         float cell_size {1.0f};
         int   cell_div  {10};
         int   cell_count{2};
     };
     Grid grid;
+
+    class Camera_controls
+    {
+    public:
+        bool  invert_x          {false};
+        bool  invert_y          {false};
+        float velocity_damp     {0.92f};
+        float velocity_max_delta{0.004f};
+        float sensitivity       {1.0f};
+    };
+    Camera_controls camera_controls;
+
+    //class Input
+    //{
+    //};
+    //Input input;
 };
 
 } // namespace erhe::application

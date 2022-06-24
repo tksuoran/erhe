@@ -252,9 +252,11 @@ void Gpu_timer::read()
 #endif
 }
 
-auto Gpu_timer::last_result() const -> uint64_t
+auto Gpu_timer::last_result() -> uint64_t
 {
-    return m_last_result;
+    uint64_t result = m_last_result;
+    m_last_result = 0;
+    return result;
 }
 
 auto Gpu_timer::label() const -> const char*

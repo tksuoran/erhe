@@ -162,6 +162,8 @@ private:
     Fly_camera_move_command           m_move_backward_active_command;
     Fly_camera_move_command           m_move_backward_inactive_command;
     std::shared_ptr<Frame_controller> m_camera_controller;
+    float                             m_rotate_scale_x{1.0f};
+    float                             m_rotate_scale_y{1.0f};
 
     // Component dependencies
     std::shared_ptr<Tools>           m_editor_tools;

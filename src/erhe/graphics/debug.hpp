@@ -33,7 +33,7 @@ public:
     Gpu_timer     (Gpu_timer&&)      = delete;
     auto operator=(Gpu_timer&&)      = delete;
 
-    [[nodiscard]] auto last_result() const -> uint64_t;
+    [[nodiscard]] auto last_result() -> uint64_t;
     [[nodiscard]] auto label      () const -> const char*;
     void begin ();
     void end   ();

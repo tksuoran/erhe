@@ -261,6 +261,16 @@ Configuration::Configuration(int argc, char** argv)
             ini_get(section, "cell_div",   grid.cell_div);
             ini_get(section, "cell_count", grid.cell_count);
         }
+
+        if (ini.has("camera_controls"))
+        {
+            const auto& section = ini["camera_controls"];
+            ini_get(section, "invert_x",           camera_controls.invert_x);
+            ini_get(section, "invert_y",           camera_controls.invert_y);
+            ini_get(section, "velocity_damp",      camera_controls.velocity_damp);
+            ini_get(section, "velocity_max_delta", camera_controls.velocity_max_delta);
+            ini_get(section, "sensitivity",        camera_controls.sensitivity);
+        }
     }
 
     cxxopts::Options options("Editor", "Erhe Editor (C) 2022 Timo Suoranta");

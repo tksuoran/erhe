@@ -830,12 +830,14 @@ void Build_context::build_vertex_color(const uint32_t /*polygon_corner_count*/)
     }
     if (!found && (property_maps.polygon_colors != nullptr))
     {
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
         found = property_maps.polygon_colors->maybe_get(polygon_id, color);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
         if (found)
         {
             SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} polygon {} polygon color {}", point_id, corner_id, polygon_id, color);
         }
+#else
+        static_cast<void>(found);
 #endif
     }
     //if (!found)

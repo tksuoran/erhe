@@ -233,7 +233,7 @@ void main()
     vec2  T_    = normalize(v_texcoord);
 
     // Anisotropy strength:
-    //  - 0.0 where alpha is 0.0
+    //  - 0.0 where r is 0.0
     //  - relative to texture coordinate magnitude, clamped from 0 to 1
     float anisotropy_texcoord = v_color.g;
     float texcoord_factor     = length(v_texcoord) * 8.0;
