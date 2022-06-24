@@ -10,3 +10,5 @@ exclude_paths:
   - "src/RectangleBinPack/**"
   - "src/miniaudio/**"
   - "src/optional_lite/**"
+  - "src/mango/**"
+  - "src/rapidjson/**"
