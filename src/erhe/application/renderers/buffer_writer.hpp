@@ -49,7 +49,7 @@ class Buffer_writer
 {
 public:
     Buffer_range range;
-    std::size_t       write_offset{0};
+    std::size_t  write_offset{0};
 
     void shader_storage_align()
     {

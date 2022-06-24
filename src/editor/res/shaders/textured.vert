@@ -8,6 +8,6 @@ void main()
 
     vec4 position = world_from_node * vec4(a_position, 1.0);
     gl_Position   = clip_from_world * position;
-    v_texture     = material.materials[gl_DrawID].texture;
+    v_texture     = material.materials[gl_DrawID].base_texture;
     v_texcoord    = a_texcoord;
 }

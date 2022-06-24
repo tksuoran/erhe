@@ -56,6 +56,16 @@ public:
             access_mask
         }
         , draw_indirect_buffer{gl::Buffer_target::draw_indirect_buffer,  draw_count      * draw_stride,      storage_mask, access_mask}
+        , material_stride     {material_stride }
+        , light_stride        {light_stride    }
+        , camera_stride       {camera_stride   }
+        , primitive_stride    {primitive_stride}
+        , draw_stride         {draw_stride     }
+        , max_material_count  {material_count }
+        , max_light_count     {light_count    }
+        , max_camera_count    {camera_count   }
+        , max_primitive_count {primitive_count}
+        , max_draw_count      {draw_count     }
     {
         material_buffer     .set_debug_label(fmt::format("{} Material {}",      name, slot));
         light_buffer        .set_debug_label(fmt::format("{} Light {}",         name, slot));
@@ -73,6 +83,16 @@ public:
         , camera_buffer       {std::move(other.camera_buffer       )}
         , primitive_buffer    {std::move(other.primitive_buffer    )}
         , draw_indirect_buffer{std::move(other.draw_indirect_buffer)}
+        , material_stride     {other.material_stride }
+        , light_stride        {other.light_stride    }
+        , camera_stride       {other.camera_stride   }
+        , primitive_stride    {other.primitive_stride}
+        , draw_stride         {other.draw_stride     }
+        , max_material_count  {other.max_material_count }
+        , max_light_count     {other.max_light_count    }
+        , max_camera_count    {other.max_camera_count   }
+        , max_primitive_count {other.max_primitive_count}
+        , max_draw_count      {other.max_draw_count     }
     {
     }
 
@@ -83,6 +103,16 @@ public:
         camera_buffer        = std::move(other.camera_buffer);
         primitive_buffer     = std::move(other.primitive_buffer);
         draw_indirect_buffer = std::move(other.draw_indirect_buffer);
+        material_stride      = other.material_stride ;
+        light_stride         = other.light_stride    ;
+        camera_stride        = other.camera_stride   ;
+        primitive_stride     = other.primitive_stride;
+        draw_stride          = other.draw_stride     ;
+        max_material_count   = other.max_material_count ;
+        max_light_count      = other.max_light_count    ;
+        max_camera_count     = other.max_camera_count   ;
+        max_primitive_count  = other.max_primitive_count;
+        max_draw_count       = other.max_draw_count     ;
         return *this;
     }
 
@@ -91,6 +121,18 @@ public:
     erhe::graphics::Buffer camera_buffer;
     erhe::graphics::Buffer primitive_buffer;
     erhe::graphics::Buffer draw_indirect_buffer;
+
+    std::size_t material_stride;
+    std::size_t light_stride;
+    std::size_t camera_stride;
+    std::size_t primitive_stride;
+    std::size_t draw_stride;
+
+    std::size_t max_material_count;
+    std::size_t max_light_count;
+    std::size_t max_camera_count;
+    std::size_t max_primitive_count;
+    std::size_t max_draw_count;
 };
 
 } // namespace editor

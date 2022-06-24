@@ -5,6 +5,7 @@
 namespace editor {
 
 extern std::shared_ptr<spdlog::logger> log_brush;
+extern std::shared_ptr<spdlog::logger> log_draw;
 extern std::shared_ptr<spdlog::logger> log_framebuffer;
 extern std::shared_ptr<spdlog::logger> log_gl;
 extern std::shared_ptr<spdlog::logger> log_headset;

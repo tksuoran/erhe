@@ -158,7 +158,7 @@ Program_interface::Shader_resources::Shader_resources(
         .transparency = material_struct.add_float("transparency")->offset_in_parent(),
         .base_color   = material_struct.add_vec4 ("base_color"  )->offset_in_parent(),
         .emissive     = material_struct.add_vec4 ("emissive"    )->offset_in_parent(),
-        .base_texture = material_struct.add_uvec2("texture"     )->offset_in_parent(),
+        .base_texture = material_struct.add_uvec2("base_texture")->offset_in_parent(),
         .reserved     = material_struct.add_uvec2("reserved"    )->offset_in_parent()
     };
     material_block.add_struct("materials", &material_struct, max_material_count);

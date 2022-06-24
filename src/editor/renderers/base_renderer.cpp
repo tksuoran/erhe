@@ -1,3 +1,5 @@
+#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "renderers/base_renderer.hpp"
 #include "renderers/program_interface.hpp"
 #include "renderers/programs.hpp"
@@ -122,20 +124,26 @@ auto Base_renderer::update_primitive_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
-    SPDLOG_LOGGER_TRACE(log_render, "meshes.size() = {}", meshes.size());
+    SPDLOG_LOGGER_TRACE(
+        log_render,
+        "meshes.size() = {}, m_primitive_writer.write_offset = {}",
+        meshes.size(),
+        m_primitive_writer.write_offset
+    );
 
     m_primitive_writer.begin(current_frame_resources().primitive_buffer.target());
-    const auto&       shader_resources    = *m_program_interface->shader_resources.get();
-    const std::size_t entry_size          = shader_resources.primitive_struct.size_bytes();
-    const auto        primitive_gpu_data  = current_frame_resources().primitive_buffer.map();
-    const auto&       offsets             = shader_resources.primitive_block_offsets;
-    const std::size_t max_primitive_count = m_configuration->renderer.max_primitive_count;
-    std::size_t       primitive_index     = 0;
+    auto&             buffer             = current_frame_resources().primitive_buffer;
+    auto&             writer             = m_primitive_writer;
+    const auto&       shader_resources   = *m_program_interface->shader_resources.get();
+    const std::size_t entry_size         = shader_resources.primitive_struct.size_bytes();
+    const auto        primitive_gpu_data = buffer.map();
+    const auto&       offsets            = shader_resources.primitive_block_offsets;
+    std::size_t       primitive_index    = 0;
     for (const auto& mesh : meshes)
     {
-        if (primitive_index == max_primitive_count)
+        if (writer.write_offset + entry_size > buffer.capacity_byte_count())
         {
-            log_render->warn("max primitive count reached");
+            log_render->warn("primitive buffer capacity {} exceeded", buffer.capacity_byte_count());
             break;
         }
 
@@ -150,19 +158,17 @@ auto Base_renderer::update_primitive_buffer(
         std::size_t mesh_primitive_index{0};
         for (const auto& primitive : mesh_data.primitives)
         {
-            if (primitive_index == max_primitive_count)
+            if (writer.write_offset + entry_size > buffer.capacity_byte_count())
             {
-                log_render->warn("max primitive count reached");
+                log_render->warn("primitive buffer capacity {} exceeded", buffer.capacity_byte_count());
                 break;
             }
 
-            const auto& primitive_geometry = primitive.gl_primitive_geometry;
-            //log_render->trace("primitive_index = {}", primitive_index);
-
-            const uint32_t count        = static_cast<uint32_t>(primitive_geometry.triangle_fill_indices.index_count);
-            const uint32_t power_of_two = erhe::toolkit::next_power_of_two(count);
-            const uint32_t mask         = power_of_two - 1;
-            const uint32_t current_bits = m_id_offset & mask;
+            const auto&    primitive_geometry = primitive.gl_primitive_geometry;
+            const uint32_t count              = static_cast<uint32_t>(primitive_geometry.triangle_fill_indices.index_count);
+            const uint32_t power_of_two       = erhe::toolkit::next_power_of_two(count);
+            const uint32_t mask               = power_of_two - 1;
+            const uint32_t current_bits       = m_id_offset & mask;
             if (current_bits != 0)
             {
                 const auto add = power_of_two - current_bits;
@@ -189,15 +195,16 @@ auto Base_renderer::update_primitive_buffer(
             {
                 //ZoneScopedN("write");
                 using erhe::graphics::write;
-                write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.world_from_node, as_span(world_from_node));
-                write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.color,           color_span              );
-                write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.material_index,  as_span(material_index ));
-                write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.size,            size_span               );
-                write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.extra2,          as_span(extra2         ));
-                write(primitive_gpu_data, m_primitive_writer.write_offset + offsets.extra3,          as_span(extra3         ));
+                write(primitive_gpu_data, writer.write_offset + offsets.world_from_node, as_span(world_from_node));
+                write(primitive_gpu_data, writer.write_offset + offsets.color,           color_span              );
+                write(primitive_gpu_data, writer.write_offset + offsets.material_index,  as_span(material_index ));
+                write(primitive_gpu_data, writer.write_offset + offsets.size,            size_span               );
+                write(primitive_gpu_data, writer.write_offset + offsets.extra2,          as_span(extra2         ));
+                write(primitive_gpu_data, writer.write_offset + offsets.extra3,          as_span(extra3         ));
 
             }
-            m_primitive_writer.write_offset += entry_size;
+            writer.write_offset += entry_size;
+            ERHE_VERIFY(writer.write_offset <= buffer.capacity_byte_count());
 
             if (use_id_ranges)
             {
@@ -217,9 +224,11 @@ auto Base_renderer::update_primitive_buffer(
         }
     }
 
-    m_primitive_writer.end();
+    writer.end();
 
-    return m_primitive_writer.range;
+    SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to primitive buffer", primitive_index);
+
+    return writer.range;
 }
 
 auto Base_renderer::update_light_buffer(
@@ -231,13 +240,19 @@ auto Base_renderer::update_light_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
-    SPDLOG_LOGGER_TRACE(log_render, "lights.size() = {}", lights.size());
+    SPDLOG_LOGGER_TRACE(
+        log_render,
+        "lights.size() = {}, m_light_writer.write_offset = {}",
+        lights.size(),
+        m_light_writer.write_offset
+    );
 
     const auto&       shader_resources = *m_program_interface->shader_resources.get();
     const std::size_t entry_size       = shader_resources.light_struct.size_bytes();
     const auto&       offsets          = shader_resources.light_block_offsets;
-    const auto        light_gpu_data   = current_frame_resources().light_buffer.map();
-    const std::size_t max_light_count  = m_configuration->renderer.max_light_count;
+    auto&             buffer           = current_frame_resources().light_buffer;
+    auto&             writer           = m_light_writer;
+    const auto        light_gpu_data   = buffer.map();
     std::size_t       light_index      = 0;
     uint32_t          directional_light_count{0u};
     uint32_t          spot_light_count       {0u};
@@ -251,17 +266,17 @@ auto Base_renderer::update_light_buffer(
         static_cast<uint32_t>(shadow_map_texture_handle >> 32u)
     };
 
-    m_light_writer.begin(current_frame_resources().light_buffer.target());
+    writer.begin(buffer.target());
 
-    m_light_writer.write_offset += offsets.light_struct;
+    writer.write_offset += offsets.light_struct;
 
     using erhe::graphics::as_span;
     using erhe::graphics::write;
     for (const auto& light : lights)
     {
-        if (light_index == max_light_count)
+        if (writer.write_offset == buffer.capacity_byte_count())
         {
-            log_render->warn("max light count reached");
+            log_render->warn("light buffer capacity {} exceeded", buffer.capacity_byte_count());
             break;
         }
 
@@ -290,6 +305,7 @@ auto Base_renderer::update_light_buffer(
         write(light_gpu_data, m_light_writer.write_offset + offsets.light.direction_and_outer_spot_cos, as_span(direction_outer_spot));
         write(light_gpu_data, m_light_writer.write_offset + offsets.light.radiance_and_range,           as_span(radiance));
         m_light_writer.write_offset += entry_size;
+        ERHE_VERIFY(writer.write_offset <= buffer.capacity_byte_count());
         ++light_index;
     }
     write(light_gpu_data, m_light_writer.range.first_byte_offset + offsets.shadow_texture,          as_span(shadow_map_texture_handle_uvec2));
@@ -303,6 +319,8 @@ auto Base_renderer::update_light_buffer(
 
     m_light_writer.end();
 
+    SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to light buffer", light_index);
+
     return m_light_writer.range;
 }
 
@@ -312,21 +330,29 @@ auto Base_renderer::update_material_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
+    SPDLOG_LOGGER_TRACE(
+        log_render,
+        "materials.size() = {}, m_material_writer.write_offset = {}",
+        materials.size(),
+        m_material_writer.write_offset
+    );
+
     const auto&       shader_resources   = *m_program_interface->shader_resources.get();
+    auto&             buffer             = current_frame_resources().material_buffer;
+    auto&             writer             = m_material_writer;
     const std::size_t entry_size         = shader_resources.material_struct.size_bytes();
     const auto&       offsets            = shader_resources.material_block_offsets;
-    const auto        material_gpu_data  = current_frame_resources().material_buffer.map();
-    const std::size_t max_material_count = m_configuration->renderer.max_material_count;
+    const auto        material_gpu_data  = buffer.map();
     std::size_t       material_index     = 0;
-    m_material_writer.begin(current_frame_resources().material_buffer.target());
+    writer.begin(buffer.target());
     for (const auto& material : materials)
     {
-        if (material_index == max_material_count)
+        if (writer.write_offset == buffer.capacity_byte_count())
         {
-            log_render->warn("max material count reached");
+            log_render->warn("material buffer capacity {} exceeded", buffer.capacity_byte_count());
             break;
         }
-        memset(reinterpret_cast<uint8_t*>(material_gpu_data.data()) + m_material_writer.write_offset, 0, entry_size);
+        memset(reinterpret_cast<uint8_t*>(material_gpu_data.data()) + writer.write_offset, 0, entry_size);
         using erhe::graphics::as_span;
         using erhe::graphics::write;
 
@@ -337,19 +363,22 @@ auto Base_renderer::update_material_buffer(
                     *m_programs->linear_sampler.get()
                 )
             : 0;
-        write(material_gpu_data, m_material_writer.write_offset + offsets.metallic    , as_span(material->metallic    ));
-        write(material_gpu_data, m_material_writer.write_offset + offsets.roughness   , as_span(material->roughness   ));
-        write(material_gpu_data, m_material_writer.write_offset + offsets.transparency, as_span(material->transparency));
-        write(material_gpu_data, m_material_writer.write_offset + offsets.base_color  , as_span(material->base_color  ));
-        write(material_gpu_data, m_material_writer.write_offset + offsets.emissive    , as_span(material->emissive    ));
-        write(material_gpu_data, m_material_writer.write_offset + offsets.base_texture, as_span(handle                ));
+        write(material_gpu_data, writer.write_offset + offsets.metallic    , as_span(material->metallic    ));
+        write(material_gpu_data, writer.write_offset + offsets.roughness   , as_span(material->roughness   ));
+        write(material_gpu_data, writer.write_offset + offsets.transparency, as_span(material->transparency));
+        write(material_gpu_data, writer.write_offset + offsets.base_color  , as_span(material->base_color  ));
+        write(material_gpu_data, writer.write_offset + offsets.emissive    , as_span(material->emissive    ));
+        write(material_gpu_data, writer.write_offset + offsets.base_texture, as_span(handle                ));
 
-        m_material_writer.write_offset += entry_size;
+        writer.write_offset += entry_size;
+        ERHE_VERIFY(writer.write_offset <= buffer.capacity_byte_count());
         ++material_index;
     }
-    m_material_writer.end();
+    writer.end();
 
-    return m_material_writer.range;
+    SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to material buffer", material_index);
+
+    return writer.range;
 }
 
 auto Base_renderer::update_camera_buffer(
@@ -359,16 +388,30 @@ auto Base_renderer::update_camera_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
+    SPDLOG_LOGGER_TRACE(
+        log_render,
+        "write_offset = {}",
+        m_draw_indirect_writer.write_offset
+    );
+
+    auto&       buffer                = current_frame_resources().camera_buffer;
+    auto&       writer                = m_camera_writer;
     const auto  projection_transforms = camera.projection_transforms(viewport);
     const auto& shader_resources      = *m_program_interface->shader_resources.get();
-    const auto  camera_gpu_data       = current_frame_resources().camera_buffer.map();
+    const auto  camera_gpu_data       = buffer.map();
     const auto& offsets               = shader_resources.camera_block_offsets;
     const mat4  world_from_node       = camera.world_from_node();
     const mat4  world_from_clip       = projection_transforms.clip_from_world.inverse_matrix();
     const mat4  clip_from_world       = projection_transforms.clip_from_world.matrix();
     const float exposure              = camera.get_exposure();
 
-    m_camera_writer.begin(current_frame_resources().camera_buffer.target());
+    if (writer.write_offset == buffer.capacity_byte_count())
+    {
+        log_render->warn("camera buffer capacity {} exceeded", buffer.capacity_byte_count());
+        return {};
+    }
+
+    writer.begin(current_frame_resources().camera_buffer.target());
     const float viewport_floats[4] {
         static_cast<float>(viewport.x),
         static_cast<float>(viewport.y),
@@ -387,19 +430,20 @@ auto Base_renderer::update_camera_buffer(
     const float view_depth_far       = camera.projection()->z_far;
     using erhe::graphics::as_span;
     using erhe::graphics::write;
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.world_from_node,      as_span(world_from_node     ));
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.world_from_clip,      as_span(world_from_clip     ));
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.clip_from_world,      as_span(clip_from_world     ));
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.viewport,             as_span(viewport_floats     ));
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.fov,                  as_span(fov_floats          ));
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.clip_depth_direction, as_span(clip_depth_direction));
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.view_depth_near,      as_span(view_depth_near     ));
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.view_depth_far,       as_span(view_depth_far      ));
-    write(camera_gpu_data, m_camera_writer.write_offset + offsets.exposure,             as_span(exposure            ));
-    m_camera_writer.write_offset += shader_resources.camera_block.size_bytes();
-    m_camera_writer.end();
+    write(camera_gpu_data, writer.write_offset + offsets.world_from_node,      as_span(world_from_node     ));
+    write(camera_gpu_data, writer.write_offset + offsets.world_from_clip,      as_span(world_from_clip     ));
+    write(camera_gpu_data, writer.write_offset + offsets.clip_from_world,      as_span(clip_from_world     ));
+    write(camera_gpu_data, writer.write_offset + offsets.viewport,             as_span(viewport_floats     ));
+    write(camera_gpu_data, writer.write_offset + offsets.fov,                  as_span(fov_floats          ));
+    write(camera_gpu_data, writer.write_offset + offsets.clip_depth_direction, as_span(clip_depth_direction));
+    write(camera_gpu_data, writer.write_offset + offsets.view_depth_near,      as_span(view_depth_near     ));
+    write(camera_gpu_data, writer.write_offset + offsets.view_depth_far,       as_span(view_depth_far      ));
+    write(camera_gpu_data, writer.write_offset + offsets.exposure,             as_span(exposure            ));
+    writer.write_offset += shader_resources.camera_block.size_bytes();
+    ERHE_VERIFY(writer.write_offset <= buffer.capacity_byte_count());
+    writer.end();
 
-    return m_camera_writer.range;
+    return writer.range;
 }
 
 auto Base_renderer::update_draw_indirect_buffer(
@@ -410,17 +454,25 @@ auto Base_renderer::update_draw_indirect_buffer(
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto        draw_indirect_gpu_data = current_frame_resources().draw_indirect_buffer.map();
-    const std::size_t max_draw_count         = m_configuration->renderer.max_draw_count;
-    uint32_t          instance_count     {1};
-    uint32_t          base_instance      {0};
-    std::size_t       draw_indirect_count{0};
-    m_draw_indirect_writer.begin(current_frame_resources().draw_indirect_buffer.target());
+    SPDLOG_LOGGER_TRACE(
+        log_render,
+        "meshes.size() = {}, m_draw_indirect_writer.write_offset = {}",
+        meshes.size(),
+        m_draw_indirect_writer.write_offset
+    );
+
+    auto&       buffer                 = current_frame_resources().draw_indirect_buffer;
+    auto&       writer                 = m_draw_indirect_writer;
+    const auto  draw_indirect_gpu_data = buffer.map();
+    uint32_t    instance_count     {1};
+    uint32_t    base_instance      {0};
+    std::size_t draw_indirect_count{0};
+    writer.begin(buffer.target());
     for (const auto& mesh : meshes)
     {
-        if (draw_indirect_count == max_draw_count)
+        if (writer.write_offset == buffer.capacity_byte_count())
         {
-            log_render->warn("max draw count reached");
+            log_render->warn("draw indirect buffer capacity {} exceeded", buffer.capacity_byte_count());
             break;
         }
 
@@ -430,9 +482,9 @@ auto Base_renderer::update_draw_indirect_buffer(
         }
         for (auto& primitive : mesh->mesh_data.primitives)
         {
-            if (draw_indirect_count == max_draw_count)
+            if (writer.write_offset == buffer.capacity_byte_count())
             {
-                log_render->warn("max draw count reached");
+                log_render->warn("draw indirect buffer capacity {} exceeded", buffer.capacity_byte_count());
                 break;
             }
             const auto& primitive_geometry = primitive.gl_primitive_geometry;
@@ -462,18 +514,20 @@ auto Base_renderer::update_draw_indirect_buffer(
 
             erhe::graphics::write(
                 draw_indirect_gpu_data,
-                m_draw_indirect_writer.write_offset,
+                writer.write_offset,
                 erhe::graphics::as_span(draw_command)
             );
 
-            m_draw_indirect_writer.write_offset += sizeof(gl::Draw_elements_indirect_command);
+            writer.write_offset += sizeof(gl::Draw_elements_indirect_command);
+            ERHE_VERIFY(writer.write_offset <= buffer.capacity_byte_count());
             ++draw_indirect_count;
         }
     }
 
     m_draw_indirect_writer.end();
 
-    return { m_draw_indirect_writer.range, draw_indirect_count};
+    SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to draw indirect buffer", draw_indirect_count);
+    return { writer.range, draw_indirect_count };
 }
 
 void Base_renderer::bind_material_buffer()
@@ -486,13 +540,30 @@ void Base_renderer::bind_material_buffer()
     }
 
     const auto& shader_resources = *m_program_interface->shader_resources.get();
-    const auto& material_buffer  = current_frame_resources().material_buffer;
+    const auto& buffer           = current_frame_resources().material_buffer;
+    const auto& writer           = m_material_writer;
+
+    SPDLOG_LOGGER_TRACE(
+        log_draw,
+        "binding material buffer offset = {} byte count = {}",
+        writer.range.first_byte_offset,
+        writer.range.byte_count
+    );
+
+    ERHE_VERIFY(
+        (buffer.target() != gl::Buffer_target::uniform_buffer) ||
+        (writer.range.byte_count <= erhe::graphics::Instance::limits.max_uniform_block_size)
+    );
+    ERHE_VERIFY(
+        writer.range.first_byte_offset + writer.range.byte_count <=buffer.capacity_byte_count()
+    );
+
     gl::bind_buffer_range(
-        material_buffer.target(),
+        buffer.target(),
         static_cast<GLuint>    (shader_resources.material_block.binding_point()),
-        static_cast<GLuint>    (material_buffer.gl_name()),
-        static_cast<GLintptr>  (m_material_writer.range.first_byte_offset),
-        static_cast<GLsizeiptr>(m_material_writer.range.byte_count)
+        static_cast<GLuint>    (buffer.gl_name()),
+        static_cast<GLintptr>  (writer.range.first_byte_offset),
+        static_cast<GLsizeiptr>(writer.range.byte_count)
     );
 }
 
@@ -507,12 +578,29 @@ void Base_renderer::bind_light_buffer()
 
     const auto& shader_resources = *m_program_interface->shader_resources.get();
     const auto& buffer           = current_frame_resources().light_buffer;
+    const auto& writer           = m_light_writer;
+
+    SPDLOG_LOGGER_TRACE(
+        log_draw,
+        "binding light buffer offset = {} byte count = {}",
+        writer.range.first_byte_offset,
+        writer.range.byte_count
+    );
+
+    ERHE_VERIFY(
+        (buffer.target() != gl::Buffer_target::uniform_buffer) ||
+        (writer.range.byte_count <= erhe::graphics::Instance::limits.max_uniform_block_size)
+    );
+    ERHE_VERIFY(
+        writer.range.first_byte_offset + writer.range.byte_count <= buffer.capacity_byte_count()
+    );
+
     gl::bind_buffer_range(
         buffer.target(),
         static_cast<GLuint>    (shader_resources.light_block.binding_point()),
         static_cast<GLuint>    (buffer.gl_name()),
-        static_cast<GLintptr>  (m_light_writer.range.first_byte_offset),
-        static_cast<GLsizeiptr>(m_light_writer.range.byte_count)
+        static_cast<GLintptr>  (writer.range.first_byte_offset),
+        static_cast<GLsizeiptr>(writer.range.byte_count)
     );
 }
 
@@ -527,6 +615,12 @@ void Base_renderer::bind_camera_buffer()
 
     const auto& shader_resources = *m_program_interface->shader_resources.get();
     const auto& buffer           = current_frame_resources().camera_buffer;
+    const auto& writer           = m_camera_writer;
+
+    ERHE_VERIFY(
+        writer.range.first_byte_offset + writer.range.byte_count <= buffer.capacity_byte_count()
+    );
+
     gl::bind_buffer_range(
         buffer.target(),
         static_cast<GLuint>    (shader_resources.camera_block.binding_point()),
@@ -547,12 +641,29 @@ void Base_renderer::bind_primitive_buffer()
 
     const auto& shader_resources = *m_program_interface->shader_resources.get();
     const auto& buffer           = current_frame_resources().primitive_buffer;
+    const auto& writer           = m_primitive_writer;
+
+    SPDLOG_LOGGER_TRACE(
+        log_draw,
+        "binding primitive buffer offset = {} byte count = {}",
+        writer.range.first_byte_offset,
+        writer.range.byte_count
+    );
+
+    ERHE_VERIFY(
+        (buffer.target() != gl::Buffer_target::uniform_buffer) ||
+        (writer.range.byte_count <= erhe::graphics::Instance::limits.max_uniform_block_size)
+    );
+    ERHE_VERIFY(
+        writer.range.first_byte_offset + writer.range.byte_count <= buffer.capacity_byte_count()
+    );
+
     gl::bind_buffer_range(
         buffer.target(),
         static_cast<GLuint>    (shader_resources.primitive_block.binding_point()),
         static_cast<GLuint>    (buffer.gl_name()),
-        static_cast<GLintptr>  (m_primitive_writer.range.first_byte_offset),
-        static_cast<GLsizeiptr>(m_primitive_writer.range.byte_count)
+        static_cast<GLintptr>  (writer.range.first_byte_offset),
+        static_cast<GLsizeiptr>(writer.range.byte_count)
     );
 }
 
@@ -566,6 +677,16 @@ void Base_renderer::bind_draw_indirect_buffer()
     }
 
     const auto& buffer = current_frame_resources().draw_indirect_buffer;
+
+    SPDLOG_LOGGER_TRACE(
+        log_draw,
+        "binding draw indirect buffer size = {} (offset = {} byte count = {})",
+        m_draw_indirect_writer.range.first_byte_offset,
+        buffer.capacity_byte_count(),
+        m_draw_indirect_writer.range.first_byte_offset,
+        m_draw_indirect_writer.range.byte_count
+    );
+
     gl::bind_buffer(
         buffer.target(),
         static_cast<GLuint>(buffer.gl_name())
@@ -575,10 +696,10 @@ void Base_renderer::bind_draw_indirect_buffer()
 void Base_renderer::debug_properties_window()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ImGui::Begin("Base Renderer Debug Properties");
-    ImGui::Checkbox("Enable Max Index Count", &m_max_index_count_enable);
+    ImGui::Begin    ("Base Renderer Debug Properties");
+    ImGui::Checkbox ("Enable Max Index Count", &m_max_index_count_enable);
     ImGui::SliderInt("Max Index Count", &m_max_index_count, 0, 256);
-    ImGui::End();
+    ImGui::End      ();
 #endif
 }
 

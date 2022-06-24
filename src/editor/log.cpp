@@ -3,6 +3,7 @@
 namespace editor {
 
 std::shared_ptr<spdlog::logger> log_brush          ;
+std::shared_ptr<spdlog::logger> log_draw           ;
 std::shared_ptr<spdlog::logger> log_fly_camera     ;
 std::shared_ptr<spdlog::logger> log_framebuffer    ;
 std::shared_ptr<spdlog::logger> log_gl             ;
@@ -25,6 +26,7 @@ std::shared_ptr<spdlog::logger> log_trs_tool       ;
 void initialize_logging()
 {
     log_brush           = erhe::log::make_logger("editor::brush"          , spdlog::level::info);
+    log_draw            = erhe::log::make_logger("editor::draw"           , spdlog::level::trace);
     log_fly_camera      = erhe::log::make_logger("editor::fly_camera"     , spdlog::level::info);
     log_framebuffer     = erhe::log::make_logger("editor::framebuffer"    , spdlog::level::info, false);
     log_gl              = erhe::log::make_logger("editor::gl"             , spdlog::level::info);
@@ -37,7 +39,7 @@ void initialize_logging()
     log_pointer         = erhe::log::make_logger("editor::pointer"        , spdlog::level::info, false);
     log_programs        = erhe::log::make_logger("editor::programs"       , spdlog::level::info);
     log_raytrace        = erhe::log::make_logger("editor::raytrace"       , spdlog::level::warn);
-    log_render          = erhe::log::make_logger("editor::render"         , spdlog::level::info, false);
+    log_render          = erhe::log::make_logger("editor::render"         , spdlog::level::trace, false);
     log_scene           = erhe::log::make_logger("editor::scene"          , spdlog::level::info);
     log_selection       = erhe::log::make_logger("editor::selection"      , spdlog::level::info);
     log_svg             = erhe::log::make_logger("editor::svg"            , spdlog::level::info);
