@@ -97,27 +97,7 @@
             "generator": "Visual Studio 16 2019"
         },
         {
-            "name":      "Visual Studio 2019 Debug",
-            "inherits":  ["Base", "Windows"],
-            "generator": "Visual Studio 16 2019"
-        },
-        {
-            "name":      "Visual Studio 2019 Release",
-            "inherits":  ["Base", "Windows"],
-            "generator": "Visual Studio 16 2019"
-        },
-        {
             "name":      "Visual Studio 2022",
-            "inherits":  ["Base", "Windows"],
-            "generator": "Visual Studio 17 2022"
-        },
-        {
-            "name":      "Visual Studio 2022 Debug",
-            "inherits":  ["Base", "Windows"],
-            "generator": "Visual Studio 17 2022"
-        },
-        {
-            "name":      "Visual Studio 2022 Release",
             "inherits":  ["Base", "Windows"],
             "generator": "Visual Studio 17 2022"
         }
@@ -125,84 +105,66 @@
 
     "buildPresets": [
         {
-            "name":    "Base",
+            "name":    "Build Base",
             "hidden":  true,
             "verbose": false
         },
         {
-            "name":            "Debug",
-            "inherits":        "Base",
+            "name":            "Build Debug",
+            "displayName":     "Build Debug",
+            "inherits":        "Build Base",
             "configuration":   "Debug",
             "configurePreset": "Base"
         },
         {
-            "name":            "Release",
-            "inherits":        "Base",
+            "name":            "Build Release",
+            "displayName":     "Build Release",
+            "inherits":        "Build Base",
             "configuration":   "Release",
             "configurePreset": "Base"
         },
 
         {
-            "name":            "Clang Debug",
-            "inherits":        "Debug",
+            "name":            "Build Clang Debug",
+            "inherits":        "Build Debug",
             "configurePreset": "Clang"
         },
         {
-            "name":            "Clang Release",
-            "inherits":        "Release",
+            "name":            "Build Clang Release",
+            "inherits":        "Build Release",
             "configurePreset": "Clang"
         },
 
         {
-            "name":            "GCC Debug",
-            "inherits":        "Debug",
+            "name":            "Build GCC Debug",
+            "inherits":        "Build Debug",
             "configurePreset": "GCC"
         },
         {
-            "name":            "GCC Release",
-            "inherits":        "Release",
+            "name":            "Build GCC Release",
+            "inherits":        "Build Release",
             "configurePreset": "GCC"
         },
 
         {
-            "name":            "Visual Studio 2019 Debug",
-            "inherits":        "Debug",
+            "name":            "Build Visual Studio 2019 Debug",
+            "inherits":        "Build Debug",
             "configurePreset": "Visual Studio 2019"
         },
         {
-            "name":            "Visual Studio 2019 Release",
-            "inherits":        "Release",
+            "name":            "Build Visual Studio 2019 Release",
+            "inherits":        "Build Release",
             "configurePreset": "Visual Studio 2019"
         },
         {
-            "name":            "Visual Studio 2019 Debug for CLion",
-            "inherits":        "Debug",
-            "configurePreset": "Visual Studio 2019 Debug"
-        },
-        {
-            "name":            "Visual Studio 2019 Release for CLion",
-            "inherits":        "Release",
-            "configurePreset": "Visual Studio 2019 Release"
-        },
-        {
-            "name":            "Visual Studio 2022 Debug",
-            "inherits":        "Debug",
+            "name":            "Build Visual Studio 2022 Debug",
+            "inherits":        "Build Debug",
             "configurePreset": "Visual Studio 2022"
         },
         {
-            "name":            "Visual Studio 2022 Release",
-            "inherits":        "Release",
+            "name":            "Build Visual Studio 2022 Release",
+            "inherits":        "Build Release",
             "configurePreset": "Visual Studio 2022"
-        },
-        {
-            "name":            "Visual Studio 2022 Debug for CLion",
-            "inherits":        "Debug",
-            "configurePreset": "Visual Studio 2022 Debug"
-        },
-        {
-            "name":            "Visual Studio 2022 Release for CLion",
-            "inherits":        "Release",
-            "configurePreset": "Visual Studio 2022 Release"
         }
     ]
 }

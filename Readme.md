@@ -17,6 +17,8 @@ erhe is a C++ library for modern OpenGL experiments.
 
 erhe is evolution of RenderStack <https://github.com/tksuoran/RenderStack>
 
+![screenshot](https://github.com/tksuoran/erhe/wiki/images/12.png)
+
 ## Building
 
 ### Dependencies
@@ -25,47 +27,24 @@ All dependencies of erhe are either included directly in `src/` for
 small libraries, or git pulled from their repositories using CMake
 `fetchcontent` during CMake configure step.
 
-### Windows
-
-#### Requirements
+### Windows Requirements
 
 -   C++ compiler. Visual Studio 2022 with msbuild has been tested.
     Ninjabuild GCC and clang may also work, and some older versions
     of Visual Studio.
 
--   Python 3.
+-   Python 3
 
--   CMake.
+-   CMake
 
-#### Build steps
+-   Optional: ninja from https://github.com/ninja-build/ninja/releases
 
--   `git clone https://github.com/tksuoran/erhe`
--   In *x64 native tools command prompt for vs 2022*, cd to the *erhe* directory
--   `scripts\configure_msbuild.bat`
--   Open solution from the *build* directory with Visual Studio
--   Build solution, or editor executable
-
-#### Notes for CLion users
-
-CLion has initial support. Currently, you should only enable single CMake profile
-at time when using CLion. Otherwise profiles may end up trying to use same directory
-and that will not work.
-
--  Get from VCS: URL: `https://github.com/tksuoran/erhe`
--  Enable CMake profile: `Debug`
--  Build
-
-### Linux
-
-#### Requirements
+### Linux Requirements
 
 -   Recent enough CMake
     -   Ubuntu 22.04 and 20.04 have been tested to good
     -   Ubuntu 18.04 has too old version of CMake
     -   https://apt.kitware.com/ may help to get recent CMake
--   Command line or IDE
-    -   *Visual Studio Code* with *CMake extensions* has been tested.
-    -   CLion has been tested
 -   New enough C++ compiler
     -   clang-10 or newer is ok
     -   GCC-9 or newer are ok
@@ -78,19 +57,42 @@ For IDE:
 -  Visual Studio Code with CMake and C++ extensions is supported
 -  CLion is supported
 
-#### Build steps for Visual Studio Code
+### Build steps for Visual Studio (Windows)
+
+-   `git clone https://github.com/tksuoran/erhe`
+-   In *x64 native tools command prompt for vs 2022*, cd to the *erhe* directory
+-   `scripts\configure_msbuild.bat`
+-   Open solution from the *build* directory with Visual Studio
+-   Build solution, or editor executable
+
+### Build steps for CLion (Windows and Linux)
+
+erhe has initial CLion support.
+
+Currently, CLion does not fully support CMake presets. Enable `Debug` profile only.
+If you want to make a release build, edit settings for that profile, instead of trying
+to use the other CMake preset profiles.
+
+-  Get from VCS: URL: `https://github.com/tksuoran/erhe`
+-  Clone
+-  Keep `Debug` CMake profile enabled, do not enable other profiles
+-  Either default toolchain `MinGW` or `Visual Studio`
+-  Wait for CMake configure to complete. It will say `[Finished]` in CMake tab
+-  Build Project or Build 'editor'
+-  Run `editor`
+
+For IDE:
+
+-  Visual Studio Code with CMake and C++ extensions is supported
+-  CLion is supported
+
+#### Build steps for Visual Studio Code (Windows and Linux)
 
 -   `git clone https://github.com/tksuoran/erhe`
 -   Open erhe folder in Visual Studio code
 -   Execute command: *CMake: Select Configure Preset*
 -   Execute command: *CMake: Configure*
 -   Execute command: *CMake: Build*
-
-#### Build instructions for CLion
-
-erhe has initial CLion support. Enable exactly one CMake profiles, for example `Debug` or `Release`
-at time. Do not enable both at the same time, because CLion would try to use same directory for both
-and this will not work.
 
 ## Configuration
 
