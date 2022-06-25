@@ -82,7 +82,7 @@ public:
 
 private:
     static constexpr std::size_t s_frame_resources_count = 4;
-    static constexpr std::size_t s_extent                = 64;
+    static constexpr std::size_t s_extent                = 256;
     static constexpr std::size_t s_id_buffer_size        = s_extent * s_extent * 8; // RGBA + depth
 
     class Id_frame_resources

@@ -78,10 +78,14 @@ public:
     class Window
     {
     public:
-        bool show             {true};
-        bool fullscreen       {false};
-        int  width            {1920};
-        int  height           {1080};
+        bool  show         {true};
+        bool  fullscreen   {false};
+        bool  use_finish   {false};
+        float sleep_time   {0.004f};
+        float wait_time    {0.000f};
+        int   swap_interval{1};
+        int   width        {1920};
+        int   height       {1080};
     };
     Window window;
 

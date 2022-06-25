@@ -140,9 +140,13 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("window"))
         {
             const auto& section = ini["window"];
-            ini_get(section, "fullscreen", window.fullscreen);
-            ini_get(section, "width",      window.width);
-            ini_get(section, "height",     window.height);
+            ini_get(section, "fullscreen",    window.fullscreen);
+            ini_get(section, "use_finish",    window.use_finish);
+            ini_get(section, "sleep_time",    window.sleep_time);
+            ini_get(section, "wait_time",     window.wait_time);
+            ini_get(section, "swap_interval", window.swap_interval);
+            ini_get(section, "width",         window.width);
+            ini_get(section, "height",        window.height);
         }
 
         if (ini.has("shadow_renderer"))

@@ -34,6 +34,8 @@ Window::Window()
 
 void Window::declare_required_components()
 {
+    m_configuration             = require<Configuration>();
+
     // Required so that capture support is initialized before window is created
     m_renderdoc_capture_support = require<Renderdoc_capture_support>();
 }
@@ -72,11 +74,15 @@ auto Window::create_gl_window() -> bool
     m_context_window = std::make_unique<erhe::toolkit::Context_window>(
         erhe::toolkit::Window_configuration{
             .fullscreen        = configuration.window.fullscreen,
+            .use_finish        = configuration.window.use_finish,
             .width             = configuration.window.width,
             .height            = configuration.window.height,
             .msaa_sample_count = (configuration.imgui.enabled || configuration.graphics.post_processing)
                 ? 0
                 : configuration.graphics.msaa_sample_count,
+            .swap_interval     = configuration.window.swap_interval,
+            .sleep_time        = configuration.window.sleep_time,
+            .wait_time         = configuration.window.wait_time,
             .title             = title.c_str()
         }
     );

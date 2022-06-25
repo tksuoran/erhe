@@ -196,7 +196,7 @@ void View::on_refresh()
     }
     if (!m_ready)
     {
-        gl::clear_color(0.0f, 0.0f, 0.0f, 1.0f);
+        gl::clear_color(0.3f, 0.3f, 0.3f, 1.0f);
         gl::clear(
             gl::Clear_buffer_mask::color_buffer_bit |
             gl::Clear_buffer_mask::depth_buffer_bit |
@@ -228,9 +228,11 @@ void View::run()
             break;
         }
 
-        SPDLOG_LOGGER_TRACE(log_frame, "> before poll events()");
-        get<Window>()->get_context_window()->poll_events();
-        SPDLOG_LOGGER_TRACE(log_frame, "> after poll events()");
+        {
+            SPDLOG_LOGGER_TRACE(log_frame, "> before poll events()");
+            get<Window>()->get_context_window()->poll_events();
+            SPDLOG_LOGGER_TRACE(log_frame, "> after poll events()");
+        }
 
         if (m_close_requested)
         {
@@ -278,9 +280,11 @@ void View::update()
         ERHE_PROFILE_SCOPE(c_swap_buffers.data());
 
         erhe::graphics::Gpu_timer::end_frame();
-        SPDLOG_LOGGER_TRACE(log_frame, "> before swap_buffers()");
         m_window->get_context_window()->swap_buffers();
-        SPDLOG_LOGGER_TRACE(log_frame, "> after swap_buffers()");
+        if (m_configuration->window.use_finish)
+        {
+            gl::finish();
+        }
     }
 
     m_ready = true;

@@ -30,9 +30,13 @@ class Window_configuration
 {
 public:
     bool            fullscreen       {false};
+    bool            use_finish       {false};
     int             width            {1920};
     int             height           {1080};
     int             msaa_sample_count{0};
+    int             swap_interval    {1};
+    float           sleep_time       {0.0f};
+    float           wait_time        {0.01f};
     const char*     title            {nullptr};
     Context_window* share            {nullptr};
 };
@@ -69,13 +73,14 @@ public:
 private:
     void get_extensions();
 
-    Root_view    m_root_view;
-    GLFWwindow*  m_glfw_window          {nullptr};
-    Mouse_cursor m_current_mouse_cursor {Mouse_cursor_Arrow};
-    bool         m_is_event_loop_running{false};
-    bool         m_is_mouse_captured    {false};
-    bool         m_is_window_visible    {false};
-    GLFWcursor*  m_mouse_cursor         [Mouse_cursor_COUNT];
+    Root_view            m_root_view;
+    GLFWwindow*          m_glfw_window          {nullptr};
+    Mouse_cursor         m_current_mouse_cursor {Mouse_cursor_Arrow};
+    bool                 m_is_event_loop_running{false};
+    bool                 m_is_mouse_captured    {false};
+    bool                 m_is_window_visible    {false};
+    GLFWcursor*          m_mouse_cursor         [Mouse_cursor_COUNT];
+    Window_configuration m_configuration;
 
     static int s_window_count;
 };

@@ -34,8 +34,9 @@ public:
     void end_renderdoc_capture  ();
 
 private:
-    std::unique_ptr<erhe::toolkit::Context_window>                m_context_window;
-    std::shared_ptr<erhe::application::Renderdoc_capture_support> m_renderdoc_capture_support;
+    std::unique_ptr<erhe::toolkit::Context_window> m_context_window;
+    std::shared_ptr<Configuration>                 m_configuration;
+    std::shared_ptr<Renderdoc_capture_support>     m_renderdoc_capture_support;
 };
 
 } // namespace erhe::application

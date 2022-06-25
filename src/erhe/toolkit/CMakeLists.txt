@@ -13,6 +13,8 @@ erhe_target_sources_grouped(
     log.hpp
     optional.hpp
     profile.hpp
+    sleep.cpp
+    sleep.hpp
     timer.cpp
     timer.hpp
     timestamp.cpp

@@ -2,7 +2,9 @@
 
 #include "erhe/toolkit/glfw_window.hpp"
 #include "erhe/gl/dynamic_load.hpp"
+#include "erhe/toolkit/log.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/sleep.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <fmt/printf.h>
@@ -391,6 +393,8 @@ auto Context_window::open(
             fputs("Failed to initialize GLFW\n", stderr);
             return false;
         }
+
+        sleep_initialize();
     }
 
     const bool primary = (configuration.share == nullptr);
@@ -507,12 +511,13 @@ auto Context_window::open(
         glfwSetInputMode(window, GLFW_CURSOR,               GLFW_CURSOR_NORMAL);
         glfwSetInputMode(window, GLFW_STICKY_KEYS,          GL_FALSE);
         glfwSetInputMode(window, GLFW_STICKY_MOUSE_BUTTONS, GL_FALSE);
-        glfwSwapInterval(1);
 
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
         glfwShowWindow(window);
         glfwMakeContextCurrent(window);
+        log_window->info("Setting swap interval to {}", configuration.swap_interval);
+        glfwSwapInterval(configuration.swap_interval);
         if (s_window_count == 1)
         {
             get_extensions();
@@ -525,6 +530,8 @@ auto Context_window::open(
             m_mouse_cursor[cursor_n] = nullptr;
         }
     }
+
+    m_configuration = configuration;
 
     return true;
 }
@@ -555,7 +562,24 @@ void Context_window::break_event_loop()
 
 void Context_window::poll_events()
 {
-    glfwPollEvents();
+    ERHE_PROFILE_FUNCTION
+
+    if (m_configuration.sleep_time > 0.0f)
+    {
+        ERHE_PROFILE_SCOPE("sleep")
+        sleep_for(std::chrono::duration<float, std::milli>(m_configuration.sleep_time * 1000.0f));
+    }
+    if (m_configuration.wait_time > 0.0f)
+    {
+        ERHE_PROFILE_SCOPE("wait")
+        glfwWaitEventsTimeout(m_configuration.wait_time);
+    }
+    else
+    {
+        ERHE_PROFILE_SCOPE("poll")
+
+        glfwPollEvents();
+    }
 }
 
 void Context_window::enter_event_loop()
@@ -568,7 +592,7 @@ void Context_window::enter_event_loop()
             break;
         }
 
-        glfwPollEvents();
+        poll_events();
 
         if (!m_is_event_loop_running)
         {
