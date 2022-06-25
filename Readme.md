@@ -47,21 +47,38 @@ small libraries, or git pulled from their repositories using CMake
 
 #### Notes for CLion users
 
-CLion has initial support. Enable profiles that begin with `VS` and
-end with `for CLion`, for example VS 2022 Debug for CLion. MingW toolset
-support does not yet seem to work, contributions are welcome.
+CLion has initial support. Currently, you should only enable single CMake profile
+at time when using CLion. Otherwise profiles may end up trying to use same directory
+and that will not work.
+
+-  Get from VCS: URL: `https://github.com/tksuoran/erhe`
+-  Enable CMake profile: `Debug`
+-  Build
 
 ### Linux
 
 #### Requirements
 
--   *Ubuntu 20.04* has been tested, Ubuntu 18.04 likely also works (but needs filesystem linking fix)
--   *Visual Studio Code* with *CMake extensions* has been tested.
--   GCC-8 or newer and clang-10 or newer has been tested
+-   Recent enough CMake
+    -   Ubuntu 22.04 and 20.04 have been tested to good
+    -   Ubuntu 18.04 has too old version of CMake
+    -   https://apt.kitware.com/ may help to get recent CMake
+-   Command line or IDE
+    -   *Visual Studio Code* with *CMake extensions* has been tested.
+    -   CLion has been tested
+-   New enough C++ compiler
+    -   clang-10 or newer is ok
+    -   GCC-9 or newer are ok
+    -   GCC-8 or older is not currently support
 -   python 3
 -   packages such `xorg-dev`
 
-#### Build steps
+For IDE:
+
+-  Visual Studio Code with CMake and C++ extensions is supported
+-  CLion is supported
+
+#### Build steps for Visual Studio Code
 
 -   `git clone https://github.com/tksuoran/erhe`
 -   Open erhe folder in Visual Studio code
@@ -69,11 +86,11 @@ support does not yet seem to work, contributions are welcome.
 -   Execute command: *CMake: Configure*
 -   Execute command: *CMake: Build*
 
-#### Notes for CLion users
+#### Build instructions for CLion
 
-CLion has initial support. Enable profiles that begin with end with `for CLion`,
-for example `GCC Debug for CLion`. You may have to adjust toolset configuration
-in CLion to use a specific toolset. Contributions are welcome.
+erhe has initial CLion support. Enable exactly one CMake profiles, for example `Debug` or `Release`
+at time. Do not enable both at the same time, because CLion would try to use same directory for both
+and this will not work.
 
 ## Configuration
 
@@ -110,13 +127,16 @@ and requires more work before it is usable.
 The main raytrace backend is currently `embree`. Even the `embree` backend is incomplete,
 causing performance issues when creating larger scenes.
 
-Currently, erhe (editor) uses raytrace for mouse picking models from 3D viewports. If raytrace
-backend is set to `none`, mouse picking uses an alternative path, using GPU to render ID buffer
-and reading this back to the CPU.
+erhe (editor) can be configured to use raytrace for mouse picking models from 3D viewports.
+By default, and when raytrace backend is set to `none`, mouse picking uses GPU rendering
+based, where GPU renders ID buffer (unique color per object and triangle) and the image
+is read back to the CPU.
 
 ### ERHE_PROFILE_LIBRARY
 
-The main profile library is Trace. Superluminal was briefly tested, but support for it is likely rotten.
+The main profile library is Tracy.
+
+Superluminal was briefly tested, but support for it is likely rotten.
 
 ### ERHE_WINDOW_LIBRARY
 
@@ -280,10 +300,18 @@ Some features:
     -   Dual
     -   Ambo
     -   Truncate
+    -   Gyro
 
 ## erhe::gl namespace
 
 `erhe::gl` namespace provides python generated low level C++ wrappers for GL API.
+
+Some features:
+
+-  Strongly typed C++ enums
+-  Optional API call logging, with enum and bitfield values shown as human readable strings
+-  Queries for checking GL extension and command support
+-  Helper functions to map enum values to/from zero based integers, to help with ImGui, hashing, serialization
 
 ## erhe::graphics namespace
 
@@ -296,7 +324,7 @@ abstraction on top of OpenGL:
 
 ## erhe::log namespace
 
-`erhe::log` namespace provides classes to do very basic logging.
+`erhe::log` namespace provides helpers / wrappers for spdlog logging/
 
 ## erhe::primitive namespace
 
@@ -307,6 +335,8 @@ to renderable vertex and index buffers.
 
 `erhe::scene` namespace provides classes for basic 3D scene graph.
 
+Warning: `erhe::physics` is in early, experimental stages.
+
 ## erhe::toolkit namespace
 
 `erhe::toolkit` namespace provides windowing system abstraction, currently
@@ -314,3 +344,25 @@ using GLFW3, and some small helper functions.
 
 Also included are macros `VERIFY(condition)` and `FATAL(format, ...)` which
 can be used in place of `assert()` and unrecoverable error.
+
+## erhe::physics namespace
+
+`erhe::physics` namespace provides minimal abstraction / wrappers for Bullet / Jolt.
+The Bullet physics backend is more complete. The Jolt physics backend is barely started.
+Both will need more work.
+
+Warning: `erhe::physics` is in early, experimental stages.
+
+## erhe::application namespace
+
+`erhe::application` contains code that can be shared with multiple applications. Features
+contained in this library may eventually end up elsewhere.
+
+Some features:
+
+-  Commands that can be bound to input events (key, mouse events)
+-  OpenGL context provided for multi-threaded loading of OpenGL resources
+-  ImGui window wrapper/abstraction, including custom ImGui backend / renderer using erhe
+-  Shader hot-reloading support `Shader_monitor`
+
+Warning: `erhe::application` is in early, experimental stages.
