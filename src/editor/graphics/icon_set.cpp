@@ -16,23 +16,8 @@
 
 namespace editor {
 
-Icon_set::Icon_set(
-    const int icon_width,
-    const int icon_height,
-    const int row_count,
-    const int column_count
-)
+Icon_set::Icon_set()
     : erhe::components::Component{c_label}
-    , m_icon_width               {icon_width}
-    , m_icon_height              {icon_height}
-    , m_row_count                {row_count}
-    , m_column_count             {column_count}
-    , m_row                      {0}
-    , m_column                   {0}
-{
-}
-
-Icon_set::~Icon_set() noexcept
 {
 }
 
@@ -50,6 +35,14 @@ void Icon_set::initialize_component()
     {
         return;
     }
+
+    m_icon_width  = config->imgui.icon_size;
+    m_icon_height = config->imgui.icon_size;
+
+    m_row_count    = 16;
+    m_column_count = 16;
+    m_row          = 0;
+    m_column       = 0;
 
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()

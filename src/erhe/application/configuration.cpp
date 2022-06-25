@@ -102,7 +102,13 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("imgui"))
         {
             const auto& section = ini["imgui"];
-            ini_get(section, "enabled", imgui.enabled);
+            ini_get(section, "enabled",      imgui.enabled);
+            ini_get(section, "primary_font", imgui.primary_font);
+            ini_get(section, "mono_font",    imgui.mono_font);
+            ini_get(section, "font_size",    imgui.font_size);
+            ini_get(section, "icon_size",    imgui.icon_size);
+            ini_get(section, "padding",      imgui.padding);
+            ini_get(section, "rounding",     imgui.rounding);
         }
         if (ini.has("headset"))
         {

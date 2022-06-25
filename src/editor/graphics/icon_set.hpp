@@ -29,13 +29,7 @@ public:
     static constexpr std::string_view c_label{"Icon_set"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
-    Icon_set(
-        const int icon_width   = 16,
-        const int icon_height  = 16,
-        const int row_count    = 16,
-        const int column_count = 16
-    );
-    ~Icon_set() noexcept override;
+    Icon_set();
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }

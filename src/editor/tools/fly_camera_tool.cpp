@@ -167,7 +167,6 @@ Fly_camera_tool::Fly_camera_tool()
     , m_move_forward_inactive_command {*this, Control::translate_z, erhe::application::Controller_item::less, false}
     , m_move_backward_active_command  {*this, Control::translate_z, erhe::application::Controller_item::more, true }
     , m_move_backward_inactive_command{*this, Control::translate_z, erhe::application::Controller_item::more, false}
-
 {
 }
 

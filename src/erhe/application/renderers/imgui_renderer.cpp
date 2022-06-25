@@ -387,8 +387,10 @@ void Imgui_renderer::create_font_texture()
 {
     ERHE_PROFILE_FUNCTION
 
-    m_primary_font = m_font_atlas.AddFontFromFileTTF("res/fonts/SourceSansPro-Regular.otf", 17.0f);
-    m_mono_font    = m_font_atlas.AddFontFromFileTTF("res/fonts/SourceCodePro-Semibold.otf", 17.0f);
+    const auto& config = get<erhe::application::Configuration>()->imgui;
+
+    m_primary_font = m_font_atlas.AddFontFromFileTTF(config.primary_font.c_str(), config.font_size);
+    m_mono_font    = m_font_atlas.AddFontFromFileTTF(config.mono_font.c_str(), config.font_size);
 
     // Build texture atlas
     Texture::Create_info create_info{};
