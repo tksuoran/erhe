@@ -389,6 +389,7 @@ void Node_tree_window::imgui_node_update(
             else
             {
                 log_node_properties->trace("click with ctrl down on node {} - selecting", node->name());
+                m_selection_tool->add_to_selection(node);
                 range_selection.set_terminator(node);
             }
         }

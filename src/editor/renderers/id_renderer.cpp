@@ -45,7 +45,6 @@ using glm::mat4;
 
 Id_renderer::Id_renderer()
     : erhe::components::Component{c_label}
-    , Base_renderer              {std::string{c_label}}
 {
 }
 
@@ -55,8 +54,6 @@ Id_renderer::~Id_renderer() noexcept
 
 void Id_renderer::declare_required_components()
 {
-    base_require(this);
-
     require<erhe::application::Configuration>();
     require<erhe::application::Gl_context_provider>();
     require<Program_interface>();
@@ -83,13 +80,10 @@ void Id_renderer::initialize_component()
         Component::get<erhe::application::Gl_context_provider>()
     };
 
-    create_frame_resources(
-        1,
-        1,
-        1,
-        config->renderer.max_primitive_count,
-        config->renderer.max_draw_count
-    );
+    const auto& shader_resources = *Component::get<Program_interface>()->shader_resources.get();
+    m_camera_buffers        = std::make_unique<Camera_buffer       >(shader_resources.camera_interface);
+    m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(config->renderer.max_draw_count);
+    m_primitive_buffers     = std::make_unique<Primitive_buffer    >(shader_resources.primitive_interface);
 
     const auto reverse_depth = config->graphics.reverse_depth;
 
@@ -143,7 +137,10 @@ auto Id_renderer::current_id_frame_resources() -> Id_frame_resources&
 
 void Id_renderer::next_frame()
 {
-    Base_renderer::next_frame();
+    m_camera_buffers       ->next_frame();
+    m_draw_indirect_buffers->next_frame();
+    m_primitive_buffers    ->next_frame();
+
     m_current_id_frame_resource_slot = (m_current_id_frame_resource_slot + 1) % s_frame_resources_count;
 }
 
@@ -238,12 +235,12 @@ void Id_renderer::render(
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u
     };
-    update_primitive_buffer(
+    m_primitive_buffers->update(
         meshes,
         id_filter,
         true
     );
-    auto draw_indirect_buffer_range = update_draw_indirect_buffer(
+    auto draw_indirect_buffer_range = m_draw_indirect_buffers->update(
         meshes,
         erhe::primitive::Primitive_mode::polygon_fill,
         id_filter
@@ -253,8 +250,8 @@ void Id_renderer::render(
         return;
     }
 
-    bind_primitive_buffer();
-    bind_draw_indirect_buffer();
+    m_primitive_buffers->bind();
+    m_draw_indirect_buffers->bind();
 
     {
         static constexpr std::string_view c_draw{"draw"};
@@ -319,10 +316,10 @@ void Id_renderer::render(const Render_parameters& parameters)
     idr.y_offset        = std::max(y - (static_cast<int>(s_extent / 2)), 0);
     idr.clip_from_world = clip_from_world;
 
-    primitive_color_source = Primitive_color_source::id_offset;
+    m_primitive_buffers->settings.color_source = Primitive_color_source::id_offset;
 
-    update_camera_buffer(*camera, viewport);
-    bind_camera_buffer();
+    m_camera_buffers->update(*camera->projection(), *camera, viewport, 1.0f);
+    m_camera_buffers->bind();
 
     {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_clear)
@@ -364,7 +361,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         }
     }
 
-    reset_id_ranges();
+    m_primitive_buffers->reset_id_ranges();
 
     m_pipeline_state_tracker->execute(m_pipeline);
     for (auto meshes : content_mesh_spans)
@@ -517,7 +514,7 @@ auto Id_renderer::get(
     }
     result.valid = true;
 
-    for (auto& r : id_ranges())
+    for (auto& r : m_primitive_buffers->id_ranges())
     {
         if (
             (result.id >= r.offset) &&

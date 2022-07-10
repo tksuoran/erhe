@@ -1,39 +1,9 @@
 #pragma once
 
-//#include "erhe/application/renderers/programs.hpp"
-//#include "erhe/application/renderers/frame_resources.hpp"
-//#include "erhe/application/renderers/light_mesh.hpp"
-
-#include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/graphics/configuration.hpp"
 
-#include "erhe/scene/mesh.hpp"
-#include <glm/glm.hpp>
-
-#include <algorithm>
-#include <array>
-#include <memory>
-#include <vector>
-
-
-namespace erhe::primitive
-{
-    class Primitive;
-    class Material;
-}
-
-namespace erhe::scene
-{
-    class ICamera;
-    class Camera;
-    class Light;
-    class Light_layer;
-    class Mesh_layer;
-    class Node;
-    class Viewport;
-    class Visibility_filter;
-}
+#include <cstddef>
 
 namespace erhe::application
 {

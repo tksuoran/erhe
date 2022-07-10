@@ -65,8 +65,13 @@ protected:
     virtual ~Component() noexcept;
 
 public:
+    // Will fail hard with ERHE_VERIFY() if component has not yet been initialized
     template<typename T>
     [[nodiscard]] auto get() const -> std::shared_ptr<T>;
+
+    // Will not trigger failure if component was not yet initialized
+    template<typename T>
+    [[nodiscard]] auto try_get() const -> std::shared_ptr<T>;
 
     template<typename T>
     auto require() -> std::shared_ptr<T>;
@@ -183,6 +188,18 @@ private:
 template<typename T>
 [[nodiscard]] auto Component::get() const -> std::shared_ptr<T>
 {
+    const std::shared_ptr<T> component = try_get<T>();
+    if (!component)
+    {
+        ERHE_FATAL("component was not declared required");
+    }
+
+    return component;
+}
+
+template<typename T>
+[[nodiscard]] auto Component::try_get() const -> std::shared_ptr<T>
+{
     switch (m_state)
     {
         case Component_state::Initializing:
@@ -194,7 +211,7 @@ template<typename T>
                     return std::dynamic_pointer_cast<T>(component);
                 }
             }
-            ERHE_FATAL("component was not declared required");
+            return {};
         }
 
         case Component_state::Post_initializing: // fall-through

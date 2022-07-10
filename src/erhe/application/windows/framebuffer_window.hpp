@@ -44,7 +44,8 @@ public:
     virtual auto get_size(glm::vec2 available_size) const -> glm::vec2;
 
     // Public API
-    void update_framebuffer();
+    virtual void update_framebuffer();
+
     void bind_framebuffer();
 
 protected:

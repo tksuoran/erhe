@@ -2,6 +2,10 @@
 #include "log.hpp"
 
 #include "renderers/program_interface.hpp"
+#include "renderers/material_buffer.hpp"
+#include "renderers/light_buffer.hpp"
+#include "renderers/camera_buffer.hpp"
+#include "renderers/primitive_buffer.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -164,14 +168,15 @@ auto Programs::make_program(
 
     create_info.vertex_attribute_mappings = &shader_resources.attribute_mappings,
     create_info.fragment_outputs          = &shader_resources.fragment_outputs,
-    create_info.add_interface_block(&shader_resources.material_block);
-    create_info.add_interface_block(&shader_resources.light_block);
-    create_info.add_interface_block(&shader_resources.camera_block);
-    create_info.add_interface_block(&shader_resources.primitive_block);
-    create_info.struct_types.push_back(&shader_resources.material_struct);
-    create_info.struct_types.push_back(&shader_resources.light_struct);
-    create_info.struct_types.push_back(&shader_resources.camera_struct);
-    create_info.struct_types.push_back(&shader_resources.primitive_struct);
+    create_info.add_interface_block(&shader_resources.material_interface.material_block);
+    create_info.add_interface_block(&shader_resources.light_interface.light_block);
+    create_info.add_interface_block(&shader_resources.light_interface.light_control_block);
+    create_info.add_interface_block(&shader_resources.camera_interface.camera_block);
+    create_info.add_interface_block(&shader_resources.primitive_interface.primitive_block);
+    create_info.struct_types.push_back(&shader_resources.material_interface.material_struct);
+    create_info.struct_types.push_back(&shader_resources.light_interface.light_struct);
+    create_info.struct_types.push_back(&shader_resources.camera_interface.camera_struct);
+    create_info.struct_types.push_back(&shader_resources.primitive_interface.primitive_struct);
 
     const auto& config = Component::get<erhe::application::Configuration>();
     if (config->shadow_renderer.enabled)

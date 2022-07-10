@@ -80,6 +80,44 @@ Buffer::Buffer(
     Ensures(m_capacity_byte_count > 0);
 }
 
+Buffer::Buffer(
+    const gl::Buffer_target          target,
+    const std::size_t                capacity_byte_count,
+    const gl::Buffer_storage_mask    storage_mask,
+    const gl::Map_buffer_access_mask map_buffer_access_mask,
+    const std::string_view           debug_label
+) noexcept
+    : m_target             {target}
+    , m_capacity_byte_count{capacity_byte_count}
+    , m_storage_mask       {storage_mask}
+{
+    log_buffer->trace(
+        "Buffer::Buffer(target = {}, capacity_byte_count = {}, storage_mask = {}, map_buffer_access_mask = {}) name = {} {}",
+        gl::c_str(target),
+        capacity_byte_count,
+        gl::to_string(storage_mask),
+        gl::to_string(map_buffer_access_mask),
+        gl_name(),
+        debug_label
+    );
+
+    set_debug_label(debug_label);
+
+    ERHE_VERIFY(capacity_byte_count > 0);
+
+    gl::named_buffer_storage(
+        gl_name(),
+        static_cast<GLintptr>(m_capacity_byte_count),
+        nullptr,
+        storage_mask
+    );
+
+    map_bytes(0, capacity_byte_count, map_buffer_access_mask);
+
+    Ensures(gl_name() != 0);
+    Ensures(m_capacity_byte_count > 0);
+}
+
 Buffer::Buffer()
 {
 }
@@ -125,9 +163,9 @@ auto Buffer::target() const noexcept -> gl::Buffer_target
     return m_target;
 }
 
-void Buffer::set_debug_label(const std::string& label) noexcept
+void Buffer::set_debug_label(const std::string_view label) noexcept
 {
-    m_debug_label = "(B) " + label;
+    m_debug_label = fmt::format("(B) {}", label);
     gl::object_label(
         gl::Object_identifier::buffer,
         gl_name(),

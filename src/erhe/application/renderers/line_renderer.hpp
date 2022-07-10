@@ -34,7 +34,7 @@ namespace erhe::graphics
 
 namespace erhe::scene
 {
-    class ICamera;
+    class Camera;
     class Viewport;
 }
 
@@ -105,10 +105,13 @@ public:
 
     void next_frame();
 
+    void begin();
+    void end();
+
     void render(
         erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker,
         const erhe::scene::Viewport           camera_viewport,
-        const erhe::scene::ICamera&           camera,
+        const erhe::scene::Camera&            camera,
         const bool                            show_visible_lines,
         const bool                            show_hidden_lines
     );
@@ -119,16 +122,15 @@ public:
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     void set_line_color(const ImVec4 color);
 #endif
+    void set_thickness (const float thickness);
 
     void add_lines(
-        const std::initializer_list<Line> lines,
-        const float                       thickness
+        const std::initializer_list<Line> lines
     );
 
     void add_lines(
         const glm::mat4                   transform,
-        const std::initializer_list<Line> lines,
-        const float                       thickness
+        const std::initializer_list<Line> lines
     );
 
     void add_lines(
@@ -139,20 +141,36 @@ public:
     void add_lines(
         const glm::mat4                   transform,
         const uint32_t                    color,
-        const std::initializer_list<Line> lines,
-        const float                       thickness
+        const std::initializer_list<Line> lines
     )
     {
         set_line_color(color);
-        add_lines(transform, lines, thickness);
+        add_lines(transform, lines);
     }
+
+
+    void add_lines(
+        const uint32_t                    color,
+        const std::initializer_list<Line> lines
+    )
+    {
+        set_line_color(color);
+        add_lines(lines);
+    }
+
+    void add_cube(
+        const glm::mat4 transform,
+        const uint32_t  color,
+        const glm::vec3 min_corner,
+        const glm::vec3 max_corner,
+        const bool      z_cross = false
+    );
 
     void add_sphere(
         const glm::mat4 transform,
         const uint32_t  color,
         const glm::vec3 center,
-        const float     radius,
-        const float     thickness
+        const float     radius
     );
 
     //void add_lines(
@@ -251,6 +269,8 @@ private:
     Buffer_writer               m_vertex_writer;
     std::size_t                 m_current_frame_resource_slot{0};
     uint32_t                    m_line_color                 {0xffffffffu};
+    float                       m_line_thickness             {1.0f};
+    bool                        m_inside_begin_end{false};
 };
 
 class Line_renderer_set
@@ -270,10 +290,12 @@ public:
     void post_initialize            () override;
 
     // Public API
+    void begin     ();
+    void end       ();
     void next_frame();
     void render(
         const erhe::scene::Viewport camera_viewport,
-        const erhe::scene::ICamera& camera
+        const erhe::scene::Camera&  camera
     );
 
 private:

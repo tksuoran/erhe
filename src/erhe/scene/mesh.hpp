@@ -20,9 +20,8 @@ class Mesh_data
 {
 public:
     std::vector<erhe::primitive::Primitive> primitives;
-    glm::vec4                               wireframe_color{0.0f, 0.0f, 0.0f, 1.0f};
-    float                                   point_size     {3.0f};
-    float                                   line_width     {1.0f};
+    float                                   point_size{3.0f};
+    float                                   line_width{1.0f};
 };
 
 class Mesh

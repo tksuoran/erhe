@@ -16,7 +16,6 @@
 namespace erhe::scene
 {
     class Camera;
-    class ICamera;
 }
 
 namespace editor
@@ -130,8 +129,8 @@ public:
 
     // Public API
 
-    [[nodiscard]] auto get_camera() const -> erhe::scene::ICamera*;
-    void set_camera (erhe::scene::ICamera* camera);
+    [[nodiscard]] auto get_camera() const -> erhe::scene::Camera*;
+    void set_camera (erhe::scene::Camera* camera);
     void translation(const int tx, const int ty, const int tz);
     void rotation   (const int rx, const int ry, const int rz);
 

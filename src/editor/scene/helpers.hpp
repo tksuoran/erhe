@@ -23,7 +23,6 @@ namespace erhe::raytrace
 namespace erhe::scene
 {
     class Camera;
-    class ICamera;
     class Light;
     class Light_layer;
     class Mesh;

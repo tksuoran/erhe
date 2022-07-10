@@ -56,14 +56,14 @@ public:
 class Node_flag_bit
 {
 public:
-    static constexpr uint64_t none         = 0u;
-    static constexpr uint64_t is_transform = (1u << 0);
-    static constexpr uint64_t is_empty     = (1u << 1);
-    static constexpr uint64_t is_physics   = (1u << 2);
-    static constexpr uint64_t is_icamera   = (1u << 4);
-    static constexpr uint64_t is_camera    = (1u << 5);
-    static constexpr uint64_t is_light     = (1u << 6);
-    static constexpr uint64_t is_mesh      = (1u << 7);
+    static constexpr uint64_t none                      = 0u;
+    static constexpr uint64_t is_transform              = (1u << 0);
+    static constexpr uint64_t is_empty                  = (1u << 1);
+    static constexpr uint64_t is_physics                = (1u << 2);
+    static constexpr uint64_t is_camera                 = (1u << 3);
+    static constexpr uint64_t is_light                  = (1u << 4);
+    static constexpr uint64_t is_mesh                   = (1u << 5);
+    static constexpr uint64_t show_debug_visualizations = (1u << 6);
 };
 
 class Node_transforms
@@ -82,8 +82,9 @@ public:
     std::vector<std::shared_ptr<Node>>             children;
     std::vector<std::shared_ptr<INode_attachment>> attachments;
     uint64_t                                       visibility_mask{Node_visibility::none};
-    uint64_t                                       flag_bits      {Node_flag_bit::none};
+    uint64_t                                       flag_bits      {Node_flag_bit::show_debug_visualizations};
     std::size_t                                    depth          {0};
+    glm::vec4                                      wireframe_color{1.0f, 1.0f, 1.0f, 1.0f};
     std::string                                    name;
     std::string                                    label;
 };

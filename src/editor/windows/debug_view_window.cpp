@@ -6,6 +6,7 @@
 #include "renderers/shadow_renderer.hpp"
 
 #include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/application/imgui_helpers.hpp"
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
@@ -101,15 +102,111 @@ void Debug_view_window::render()
 
     m_forward_renderer->render_fullscreen(
         Forward_renderer::Render_parameters{
-            .viewport    = m_viewport,
-            .mesh_spans  = {},
-            .lights      = m_scene_root->light_layer()->lights,
-            .materials   = m_scene_root->materials(),
-            .passes      = { &m_renderpass }
-        }
+            .viewport          = m_viewport,
+            .mesh_spans        = {},
+            .lights            = m_scene_root->light_layer()->lights,
+            .light_projections = m_shadow_renderer->light_projections(),
+            .materials         = m_scene_root->materials(),
+            .passes            = { &m_renderpass }
+        },
+        m_light_index
     );
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+}
+
+void Debug_view_window::update_framebuffer()
+{
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+    ERHE_PROFILE_FUNCTION
+
+    if (
+        m_texture &&
+        (m_texture->width()  == m_viewport.width) &&
+        (m_texture->height() == m_viewport.height) ||
+        (m_viewport.width < 1) ||
+        (m_viewport.height < 1)
+    )
+    {
+        return;
+    }
+
+    using Texture = erhe::graphics::Texture;
+    using Framebuffer = erhe::graphics::Framebuffer;
+    m_texture = std::make_shared<Texture>(
+        Texture::Create_info{
+            .target          = gl::Texture_target::texture_2d,
+            .internal_format = gl::Internal_format::srgb8_alpha8,
+            .sample_count    = 0,
+            .width           = m_viewport.width,
+            .height          = m_viewport.height
+        }
+    );
+    m_texture->set_debug_label(m_debug_label);
+    const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
+    gl::clear_tex_image(
+        m_texture->gl_name(),
+        0,
+        gl::Pixel_format::rgba,
+        gl::Pixel_type::float_,
+        &clear_value[0]
+    );
+
+    Framebuffer::Create_info create_info;
+    create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_texture.get());
+    m_framebuffer = std::make_unique<Framebuffer>(create_info);
+    m_framebuffer->set_debug_label(m_debug_label);
+#endif
+}
+
+void Debug_view_window::imgui()
+{
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+    ERHE_PROFILE_FUNCTION
+
+    const auto& light_projections = m_shadow_renderer->light_projections();
+    const int count = static_cast<int>(light_projections.texture_from_world.size());
+    for (int i = 0; i < count; ++i)
+    {
+        ImGui::SameLine();
+        //ImGui::SetNextItemWidth(30.0f);
+        std::string label = fmt::format("{}", i);
+        //if (ImGui::Button(label.c_str()))
+        if (
+            erhe::application::make_button(
+                label.c_str(),
+                (m_light_index == i)
+                    ? erhe::application::Item_mode::active
+                    : erhe::application::Item_mode::normal
+            )
+        )
+        {
+            m_light_index = i;
+        }
+    }
+
+    const auto size = ImGui::GetContentRegionAvail();
+
+    if (
+        m_texture &&
+        (m_texture->width() > 0) &&
+        (m_texture->height() > 0)
+    )
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
+        image(
+            m_texture,
+            static_cast<int>(size.x),
+            static_cast<int>(size.y)
+        );
+        m_is_hovered = ImGui::IsItemHovered();
+        ImGui::PopStyleVar();
+    }
+
+    m_viewport.width  = static_cast<int>(size.x);
+    m_viewport.height = static_cast<int>(size.y);
+    update_framebuffer();
+#endif
 }
 
 } // namespace editor

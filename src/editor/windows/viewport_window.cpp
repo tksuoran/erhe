@@ -5,7 +5,6 @@
 #include "renderers/post_processing.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
-#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
@@ -66,37 +65,23 @@ Viewport_windows::~Viewport_windows() noexcept
 
 void Viewport_windows::declare_required_components()
 {
-    m_configuration          = require<erhe::application::Configuration    >();
-    m_editor_view            = require<erhe::application::View             >();
-    m_scene_root             = require<Scene_root      >();
+    m_configuration = require<erhe::application::Configuration>();
+    m_imgui_windows = require<erhe::application::Imgui_windows>();
+    m_editor_view   = require<erhe::application::View         >();
+    m_scene_root    = require<Scene_root      >();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_headset_renderer       = require<Headset_renderer>();
+    m_headset_renderer = require<Headset_renderer>();
 #endif
-
-    // Need cameras to be setup
-    require<erhe::application::Imgui_windows>();
-    require<Scene_builder>();
 }
 
 void Viewport_windows::initialize_component()
 {
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    {
-        auto* const headset_camera = m_headset_renderer->root_camera().get();
-        create_window("Headset Camera", headset_camera);
-    }
-#else
-    {
-        const auto& camera = m_scene_root->scene().cameras.front();
-        auto* icamera = as_icamera(camera.get());
-        create_window("Viewport", icamera);
-    }
-    //for (const auto& camera : m_scene_root->scene().cameras)
-    //{
-    //    auto* icamera = as_icamera(camera.get());
-    //    create_window("Viewport", icamera);
-    //}
-#endif
+//#if defined(ERHE_XR_LIBRARY_OPENXR)
+//    {
+//        auto* const headset_camera = m_headset_renderer->root_camera().get();
+//        create_window("Headset Camera", headset_camera);
+//    }
+//#else
     m_editor_view->register_command   (&m_open_new_viewport_window_command);
     m_editor_view->bind_command_to_key(&m_open_new_viewport_window_command, erhe::toolkit::Key_f1, true);
 }
@@ -111,7 +96,7 @@ void Viewport_windows::post_initialize()
 
 auto Viewport_windows::create_window(
     const std::string_view name,
-    erhe::scene::ICamera*  camera
+    erhe::scene::Camera*   camera
 ) -> Viewport_window*
 {
     const auto new_window = std::make_shared<Viewport_window>(
@@ -126,7 +111,7 @@ auto Viewport_windows::create_window(
 
     if (configuration.imgui.enabled)
     {
-        get<erhe::application::Imgui_windows>()->register_imgui_window(new_window.get());
+        m_imgui_windows->register_imgui_window(new_window.get());
     }
     return new_window.get();
 }
@@ -137,18 +122,24 @@ auto Viewport_windows::open_new_viewport_window() -> bool
     {
         return false;
     }
-    auto selection_tool = get<Selection_tool>();
-    for (const auto& entry : selection_tool->selection())
+
+    auto selection_tool = try_get<Selection_tool>();
+    if (selection_tool)
     {
-        if (is_icamera(entry)) {
-            auto* icamera = as_icamera(entry.get());
-            create_window("Viewport", icamera);
-            return true;
+        for (const auto& entry : selection_tool->selection())
+        {
+            if (is_camera(entry))
+            {
+                erhe::scene::Camera* camera = as_camera(entry.get());
+                create_window("Viewport", camera);
+                return true;
+            }
         }
     }
+
+    // Case for when no camera found in selection
     const auto& camera = m_scene_root->scene().cameras.front();
-    auto* icamera = as_icamera(camera.get());
-    create_window("Viewport", icamera);
+    create_window("Viewport", camera.get());
     return true;
 }
 
@@ -236,7 +227,7 @@ int Viewport_window::s_serial = 0;
 Viewport_window::Viewport_window(
     const std::string_view              name,
     const erhe::components::Components& components,
-    erhe::scene::ICamera*               camera
+    erhe::scene::Camera*                camera
 )
     : Imgui_window     {name, fmt::format("{}##{}", name, ++s_serial)}
     , m_configuration  {components.get<erhe::application::Configuration>()}
@@ -512,7 +503,7 @@ auto Viewport_window::viewport() const -> const erhe::scene::Viewport&
     return m_viewport;
 }
 
-auto Viewport_window::camera() const -> erhe::scene::ICamera*
+auto Viewport_window::camera() const -> erhe::scene::Camera*
 {
     return m_camera;
 }

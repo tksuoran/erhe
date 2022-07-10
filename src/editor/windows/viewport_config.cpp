@@ -1,4 +1,5 @@
 #include "windows/viewport_config.hpp"
+#include "renderers/primitive_buffer.hpp"
 
 #include "erhe/application/application.hpp"
 #include "erhe/application/configuration.hpp"
@@ -89,8 +90,8 @@ void Viewport_config::render_style_ui(Render_style& render_style)
             erhe::application::make_combo(
                 "Color Source",
                 render_style.edge_lines_color_source,
-                Base_renderer::c_primitive_color_source_strings_data.data(),
-                static_cast<int>(Base_renderer::c_primitive_color_source_strings_data.size())
+                Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
+                static_cast<int>(Primitive_interface_settings::c_primitive_color_source_strings_data.size())
             );
         }
         ImGui::TreePop();
@@ -105,8 +106,8 @@ void Viewport_config::render_style_ui(Render_style& render_style)
             erhe::application::make_combo(
                 "Color Source",
                 render_style.polygon_centroids_color_source,
-                Base_renderer::c_primitive_color_source_strings_data.data(),
-                static_cast<int>(Base_renderer::c_primitive_color_source_strings_data.size())
+                Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
+                static_cast<int>(Primitive_interface_settings::c_primitive_color_source_strings_data.size())
             );
         }
         ImGui::TreePop();
@@ -119,8 +120,8 @@ void Viewport_config::render_style_ui(Render_style& render_style)
         erhe::application::make_combo(
             "Color Source",
             render_style.corner_points_color_source,
-            Base_renderer::c_primitive_color_source_strings_data.data(),
-            static_cast<int>(Base_renderer::c_primitive_color_source_strings_data.size())
+            Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
+            static_cast<int>(Primitive_interface_settings::c_primitive_color_source_strings_data.size())
         );
         ImGui::TreePop();
     }
@@ -161,9 +162,8 @@ void Viewport_config::imgui()
 
     if (ImGui::TreeNodeEx("Debug Visualizations", flags))
     {
-        erhe::application::make_combo("Light",        debug_visualizations.light,        c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
-        erhe::application::make_combo("Light Camera", debug_visualizations.light_camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
-        erhe::application::make_combo("Camera",       debug_visualizations.camera,       c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
+        erhe::application::make_combo("Light",  debug_visualizations.light,  c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
+        erhe::application::make_combo("Camera", debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
         ImGui::TreePop();
     }
 #endif

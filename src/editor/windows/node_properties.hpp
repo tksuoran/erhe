@@ -11,7 +11,6 @@
 namespace erhe::scene
 {
     class Camera;
-    class ICamera;
     class Light;
     class Mesh;
     class Node;
@@ -48,7 +47,7 @@ public:
     void on_end  () override;
 
 private:
-    void icamera_properties  (erhe::scene::ICamera& camera) const;
+    void icamera_properties  (erhe::scene::Camera& camera) const;
     void light_properties    (erhe::scene::Light& light) const;
     void mesh_properties     (erhe::scene::Mesh& mesh) const;
     void transform_properties(erhe::scene::Node& node);

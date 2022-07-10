@@ -17,6 +17,7 @@
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
 
+#include "tools/debug_visualizations.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/hover_tool.hpp"
@@ -121,6 +122,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Brushes               >());
         m_components.add(make_shared<editor::Debug_draw            >());
         m_components.add(make_shared<editor::Debug_view_window     >());
+        m_components.add(make_shared<editor::Debug_visualizations  >());
         m_components.add(make_shared<editor::Editor_rendering      >());
         m_components.add(make_shared<editor::Fly_camera_tool       >());
         m_components.add(make_shared<editor::Forward_renderer      >());

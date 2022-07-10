@@ -14,7 +14,7 @@ enum class Item_mode : unsigned int
     active      // button in active state
 };
 
-bool make_button   (const char* label, const Item_mode mode, const ImVec2 size);
+bool make_button   (const char* label, const Item_mode mode, const ImVec2 size = ImVec2{0.0f, 0.0f});
 void make_check_box(const char* label, bool* value, const Item_mode mode = Item_mode::normal);
 
 template <typename T>

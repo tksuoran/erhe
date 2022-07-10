@@ -80,6 +80,7 @@ void Grid_tool::tool_render(
     const float minor_step = m_cell_size / static_cast<float>(m_cell_div);
     int cell;
     auto& line_renderer = m_line_renderer_set->visible;
+    line_renderer.set_thickness(m_thickness);
     for (cell = -m_cell_count; cell < m_cell_count; ++cell)
     {
         float xz = static_cast<float>(cell) * m_cell_size;
@@ -95,8 +96,7 @@ void Grid_tool::tool_render(
                     vec3{-extent, 0.0f,      xz},
                     vec3{ extent, 0.0f,      xz}
                 }
-            },
-            m_thickness
+            }
         );
         line_renderer.set_line_color(cell_minor_color);
         for (int i = 0; i < (m_cell_div - 1); ++i)
@@ -113,8 +113,7 @@ void Grid_tool::tool_render(
                         vec3{-extent, 0.0f,      xz},
                         vec3{ extent, 0.0f,      xz}
                     }
-                },
-                m_thickness
+                }
             );
         }
     }
@@ -131,8 +130,7 @@ void Grid_tool::tool_render(
                 vec3{-extent, 0.0f,     xz},
                 vec3{ extent, 0.0f,     xz}
             }
-        },
-        m_thickness
+        }
     );
 }
 

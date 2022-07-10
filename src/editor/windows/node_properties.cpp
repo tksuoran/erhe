@@ -71,7 +71,7 @@ void Node_properties::post_initialize()
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-void Node_properties::icamera_properties(erhe::scene::ICamera& camera) const
+void Node_properties::icamera_properties(erhe::scene::Camera& camera) const
 {
     ERHE_PROFILE_FUNCTION
 
@@ -270,13 +270,6 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
         )
     )
     {
-        ImGui::ColorEdit3(
-            "Wireframe Color",
-            &mesh_data.wireframe_color.x,
-            ImGuiColorEditFlags_Float |
-            ImGuiColorEditFlags_NoInputs
-        );
-
         for (auto& primitive : mesh_data.primitives)
         {
             const auto& geometry = primitive.source_geometry;
@@ -737,10 +730,31 @@ void Node_properties::imgui()
             }
         }
 
-        const auto& icamera = as_icamera(node);
-        if (icamera)
+        ImGui::ColorEdit3(
+            "Wireframe Color",
+            &node->node_data.wireframe_color.x,
+            ImGuiColorEditFlags_Float |
+            ImGuiColorEditFlags_NoInputs
+        );
+
+        const auto flag_bits = node->get_flag_bits();
+        bool show_debug_visualization = (flag_bits & erhe::scene::Node_flag_bit::show_debug_visualizations) == erhe::scene::Node_flag_bit::show_debug_visualizations;
+        if (ImGui::Checkbox("Show Debug", &show_debug_visualization))
         {
-            icamera_properties(*icamera.get());
+            if (show_debug_visualization)
+            {
+                node->set_flag_bits(flag_bits | erhe::scene::Node_flag_bit::show_debug_visualizations);
+            }
+            else
+            {
+                node->set_flag_bits(flag_bits & ~erhe::scene::Node_flag_bit::show_debug_visualizations);
+            }
+        }
+
+        const auto& camera = as_camera(node);
+        if (camera)
+        {
+            icamera_properties(*camera.get());
         }
 
         const auto& light = as_light(node);

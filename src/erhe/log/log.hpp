@@ -1,6 +1,6 @@
 #pragma once
 
-#define SPDLOG_EOL ""
+//#define SPDLOG_EOL ""
 #include <fmt/core.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/base_sink.h>
@@ -14,13 +14,16 @@ namespace erhe::log
 void console_init();
 void initialize_log_sinks();
 
+// creates and configures logger
 auto make_logger(
     std::string               name,
     spdlog::level::level_enum level,
     bool                      tail = true
 ) -> std::shared_ptr<spdlog::logger>;
 
-class store_log_sink final : public spdlog::sinks::base_sink<std::mutex>
+// Sink that keeps log entries in deqeue
+class store_log_sink final
+    : public spdlog::sinks::base_sink<std::mutex>
 {
 public:
     class Entry

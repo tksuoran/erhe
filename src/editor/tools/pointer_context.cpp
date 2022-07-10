@@ -14,6 +14,7 @@
 #include "erhe/raytrace/iinstance.hpp"
 #include "erhe/raytrace/ray.hpp"
 #include "erhe/scene/camera.hpp"
+#include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/math_util.hpp"

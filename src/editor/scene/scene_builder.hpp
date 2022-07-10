@@ -34,7 +34,6 @@ namespace erhe::primitive
 namespace erhe::scene
 {
     class Camera;
-    class ICamera;
     class Light;
     class Mesh;
     class Mesh_layer;

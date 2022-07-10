@@ -552,8 +552,6 @@ auto Shader_resource::binding_point() const -> unsigned int
     return static_cast<unsigned int>(m_binding_point);
 }
 
-// Returns size of block.
-// For arrays, size of one element is returned.
 auto Shader_resource::size_bytes() const -> std::size_t
 {
     if (m_type == Type::struct_type)
@@ -564,7 +562,23 @@ auto Shader_resource::size_bytes() const -> std::size_t
 
     if (m_type == Type::struct_member)
     {
-        return m_struct_type->size_bytes();
+        std::size_t struct_size = m_struct_type->size_bytes();
+        std::size_t array_multiplier{1};
+        if (m_array_size.has_value() && (m_array_size.value() > 0))
+        {
+            array_multiplier = m_array_size.value();
+
+            // arrays in uniform block are packed with std140
+            if ((m_parent != nullptr) && (m_parent->type() == Type::uniform_block))
+            {
+                while ((struct_size % 16) != 0)
+                {
+                    ++struct_size;
+                }
+            }
+        }
+
+        return struct_size * array_multiplier;
     }
 
     // TODO Shader storage buffer alignment?

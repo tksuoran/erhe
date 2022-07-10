@@ -36,6 +36,11 @@ Program_interface::Shader_resources::Shader_resources(
     std::size_t max_camera_count,
     std::size_t max_primitive_count
 )
+    : camera_interface   {max_camera_count   }
+    , light_interface    {max_light_count    }
+    , material_interface {max_material_count }
+    , primitive_interface{max_primitive_count}
+
 {
     fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
 
@@ -151,66 +156,10 @@ Program_interface::Shader_resources::Shader_resources(
             }
         }
     );
-
-    material_block_offsets = {
-        .roughness    = material_struct.add_vec2 ("roughness"   )->offset_in_parent(),
-        .metallic     = material_struct.add_float("metallic"    )->offset_in_parent(),
-        .transparency = material_struct.add_float("transparency")->offset_in_parent(),
-        .base_color   = material_struct.add_vec4 ("base_color"  )->offset_in_parent(),
-        .emissive     = material_struct.add_vec4 ("emissive"    )->offset_in_parent(),
-        .base_texture = material_struct.add_uvec2("base_texture")->offset_in_parent(),
-        .reserved     = material_struct.add_uvec2("reserved"    )->offset_in_parent()
-    };
-    material_block.add_struct("materials", &material_struct, max_material_count);
-
-    light_block_offsets = {
-        .shadow_texture          = light_block.add_uvec2("shadow_texture"         )->offset_in_parent(),
-        .reserved_1              = light_block.add_uvec2("reserved_1"             )->offset_in_parent(),
-        .directional_light_count = light_block.add_uint ("directional_light_count")->offset_in_parent(),
-        .spot_light_count        = light_block.add_uint ("spot_light_count"       )->offset_in_parent(),
-        .point_light_count       = light_block.add_uint ("point_light_count"      )->offset_in_parent(),
-        .reserved_0              = light_block.add_uint ("reserved_0"             )->offset_in_parent(),
-        .ambient_light           = light_block.add_vec4 ("ambient_light"          )->offset_in_parent(),
-        .reserved_2              = light_block.add_uvec4("reserved_2"             )->offset_in_parent(),
-        .light = {
-            .texture_from_world           = light_struct.add_mat4("texture_from_world"          )->offset_in_parent(),
-            .position_and_inner_spot_cos  = light_struct.add_vec4("position_and_inner_spot_cos" )->offset_in_parent(),
-            .direction_and_outer_spot_cos = light_struct.add_vec4("direction_and_outer_spot_cos")->offset_in_parent(),
-            .radiance_and_range           = light_struct.add_vec4("radiance_and_range"          )->offset_in_parent(),
-        },
-        .light_struct            = light_block.add_struct("lights", &light_struct, max_light_count)->offset_in_parent()
-    };
-
-    camera_block_offsets = {
-        .world_from_node      = camera_struct.add_mat4 ("world_from_node"     )->offset_in_parent(),
-        .world_from_clip      = camera_struct.add_mat4 ("world_from_clip"     )->offset_in_parent(),
-        .clip_from_world      = camera_struct.add_mat4 ("clip_from_world"     )->offset_in_parent(),
-        .viewport             = camera_struct.add_vec4 ("viewport"            )->offset_in_parent(),
-        .fov                  = camera_struct.add_vec4 ("fov"                 )->offset_in_parent(),
-        .clip_depth_direction = camera_struct.add_float("clip_depth_direction")->offset_in_parent(),
-        .view_depth_near      = camera_struct.add_float("view_depth_near"     )->offset_in_parent(),
-        .view_depth_far       = camera_struct.add_float("view_depth_far"      )->offset_in_parent(),
-        .exposure             = camera_struct.add_float("exposure"            )->offset_in_parent()
-    };
-    camera_block.add_struct("cameras", &camera_struct, max_camera_count);
-
-    primitive_block_offsets = {
-        .world_from_node = primitive_struct.add_mat4 ("world_from_node")->offset_in_parent(),
-        .color           = primitive_struct.add_vec4 ("color"          )->offset_in_parent(),
-        .material_index  = primitive_struct.add_uint ("material_index" )->offset_in_parent(),
-        .size            = primitive_struct.add_float("size"           )->offset_in_parent(),
-        .extra2          = primitive_struct.add_uint ("extra2"         )->offset_in_parent(),
-        .extra3          = primitive_struct.add_uint ("extra3"         )->offset_in_parent()
-    };
-    primitive_block.add_struct("primitives", &primitive_struct, max_primitive_count);
 }
 
 void Program_interface::initialize_component()
 {
-    // No idea why cppcheck this interface_blocks is not used
-
-    // cppcheck-suppress unreadVariable
-
     const auto& config = get<erhe::application::Configuration>();
 
     shader_resources = std::make_unique<Shader_resources>(
@@ -221,4 +170,4 @@ void Program_interface::initialize_component()
     );
 }
 
-}
+} // namespace editor

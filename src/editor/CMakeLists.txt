@@ -39,20 +39,28 @@ erhe_target_sources_grouped(
     parsers/wavefront_obj.cpp
     parsers/wavefront_obj.hpp
 
-    renderers/base_renderer.cpp
-    renderers/base_renderer.hpp
+    renderers/camera_buffer.cpp
+    renderers/camera_buffer.hpp
+    renderers/draw_indirect_buffer.cpp
+    renderers/draw_indirect_buffer.hpp
     renderers/forward_renderer.cpp
     renderers/forward_renderer.hpp
-    renderers/frame_resources.cpp
-    renderers/frame_resources.hpp
     renderers/id_renderer.cpp
     renderers/id_renderer.hpp
+    renderers/light_buffer.cpp
+    renderers/light_buffer.hpp
     renderers/light_mesh.cpp
     renderers/light_mesh.hpp
+    renderers/material_buffer.cpp
+    renderers/material_buffer.hpp
     renderers/mesh_memory.cpp
     renderers/mesh_memory.hpp
+    renderers/multi_buffer.cpp
+    renderers/multi_buffer.hpp
     renderers/post_processing.cpp
     renderers/post_processing.hpp
+    renderers/primitive_buffer.cpp
+    renderers/primitive_buffer.hpp
     renderers/program_interface.cpp
     renderers/program_interface.hpp
     renderers/programs.cpp
@@ -224,7 +232,6 @@ target_link_libraries(
     nlohmann_json::nlohmann_json
     RectangleBinPack
     rapidjson
-    spdlog
 )
 
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")

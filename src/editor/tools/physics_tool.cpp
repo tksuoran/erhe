@@ -427,15 +427,16 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
     {
         return;
     }
-    m_line_renderer_set->hidden.set_line_color(0xffffffffu);
-    m_line_renderer_set->hidden.add_lines(
+    erhe::application::Line_renderer& line_renderer = m_line_renderer_set->hidden;
+    line_renderer.set_line_color(0xffffffffu);
+    line_renderer.set_thickness(4.0f);
+    line_renderer.add_lines(
         {
             {
                 m_target_position_start,
                 m_target_position_end
             }
-        },
-        4.0f
+        }
     );
     m_line_renderer_set->hidden.set_line_color(0xffff0000u);
     m_line_renderer_set->hidden.add_lines(
@@ -444,8 +445,7 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
                 m_target_position_start,
                 m_target_position_start + m_to_end_direction
             }
-        },
-        4.0f
+        }
     );
     m_line_renderer_set->hidden.set_line_color(0xff00ff00u);
     m_line_renderer_set->hidden.add_lines(
@@ -454,8 +454,7 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
                 m_target_position_start,
                 m_target_position_start + m_to_start_direction
             }
-        },
-        4.0f
+        }
     );
 }
 

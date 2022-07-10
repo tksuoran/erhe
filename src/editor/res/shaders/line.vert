@@ -31,6 +31,7 @@ void main()
     float distance_scaled_thickness = (thickness < 0.0)
         ? -thickness
         : max(thickness / d, 0.01);
+    distance_scaled_thickness = min(distance_scaled_thickness, 100.0);
 
     gl_Position   = clip_from_world * position;
     vs_position   = a_position.xyz;

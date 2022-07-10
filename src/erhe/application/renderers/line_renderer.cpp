@@ -282,6 +282,18 @@ auto Line_renderer::current_frame_resources() -> Frame_resources&
     return m_frame_resources[m_current_frame_resource_slot];
 }
 
+void Line_renderer_set::begin()
+{
+    visible.begin();
+    hidden.begin();
+}
+
+void Line_renderer_set::end()
+{
+    visible.end();
+    hidden.end();
+}
+
 void Line_renderer_set::next_frame()
 {
     visible.next_frame();
@@ -290,10 +302,29 @@ void Line_renderer_set::next_frame()
 
 void Line_renderer::next_frame()
 {
+
     m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % s_frame_resources_count;
     m_view_writer  .reset();
     m_vertex_writer.reset();
     m_line_count = 0;
+}
+
+void Line_renderer::begin()
+{
+    ERHE_VERIFY(!m_inside_begin_end);
+
+    m_view_writer  .begin();
+    m_vertex_writer.begin();
+    m_line_count = 0;
+    m_inside_begin_end = true;
+}
+
+void Line_renderer::end()
+{
+    ERHE_VERIFY(m_inside_begin_end);
+
+    m_inside_begin_end = false;
+    m_vertex_writer.end();
 }
 
 void Line_renderer::put(
@@ -314,13 +345,12 @@ void Line_renderer::put(
 
 void Line_renderer::add_lines(
     const glm::mat4                   transform,
-    const std::initializer_list<Line> lines,
-    const float                       thickness
+    const std::initializer_list<Line> lines
 )
 {
-    auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+    ERHE_VERIFY(m_inside_begin_end);
 
-    m_vertex_writer.begin();
+    auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
 
     std::byte* const          start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
     const std::size_t         byte_count = vertex_gpu_data.size_bytes();
@@ -333,13 +363,12 @@ void Line_renderer::add_lines(
     {
         const glm::vec4 p0{transform * glm::vec4{line.p0, 1.0f}};
         const glm::vec4 p1{transform * glm::vec4{line.p1, 1.0f}};
-        put(vec3{p0} / p0.w, thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
-        put(vec3{p1} / p1.w, thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
+        put(vec3{p0} / p0.w, m_line_thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
+        put(vec3{p1} / p1.w, m_line_thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
     }
 
     m_vertex_writer.write_offset += lines.size() * 2 * m_pipeline->vertex_format.stride();
     m_line_count += lines.size();
-    m_vertex_writer.end();
 }
 
 void Line_renderer::add_lines(
@@ -347,9 +376,9 @@ void Line_renderer::add_lines(
     const std::initializer_list<Line4> lines
 )
 {
-    auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+    ERHE_VERIFY(m_inside_begin_end);
 
-    m_vertex_writer.begin();
+    auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
 
     std::byte* const          start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
     const std::size_t         byte_count = vertex_gpu_data.size_bytes();
@@ -368,16 +397,19 @@ void Line_renderer::add_lines(
 
     m_vertex_writer.write_offset += lines.size() * 2 * m_pipeline->vertex_format.stride();
     m_line_count += lines.size();
-    m_vertex_writer.end();
 }
 
 void Line_renderer::set_line_color(const uint32_t color)
 {
+    ERHE_VERIFY(m_inside_begin_end);
+
     m_line_color = color;
 }
 
 void Line_renderer::set_line_color(const float r, const float g, const float b, const float a)
 {
+    ERHE_VERIFY(m_inside_begin_end);
+
     m_line_color = erhe::toolkit::convert_float4_to_uint32(glm::vec4{r, g, b, a});
 }
 
@@ -389,18 +421,26 @@ void Line_renderer::set_line_color(const glm::vec3 color)
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 void Line_renderer::set_line_color(const ImVec4 color)
 {
+    ERHE_VERIFY(m_inside_begin_end);
+
     m_line_color = ImGui::ColorConvertFloat4ToU32(color);
 }
 #endif
 
+void Line_renderer::set_thickness(const float thickness)
+{
+    ERHE_VERIFY(m_inside_begin_end);
+
+    m_line_thickness = thickness;
+}
+
 void Line_renderer::add_lines(
-    const std::initializer_list<Line> lines,
-    const float                       thickness
+    const std::initializer_list<Line> lines
 )
 {
-    auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+    ERHE_VERIFY(m_inside_begin_end);
 
-    m_vertex_writer.begin();
+    auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
 
     std::byte* const          start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
     const std::size_t         byte_count = vertex_gpu_data.size_bytes();
@@ -411,21 +451,84 @@ void Line_renderer::add_lines(
     std::size_t word_offset = 0;
     for (const Line& line : lines)
     {
-        put(line.p0, thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
-        put(line.p1, thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
+        put(line.p0, m_line_thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
+        put(line.p1, m_line_thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
     }
 
     m_vertex_writer.write_offset += lines.size() * 2 * m_pipeline->vertex_format.stride();
     m_line_count += lines.size();
-    m_vertex_writer.end();
+}
+
+void Line_renderer::add_cube(
+    const glm::mat4 transform,
+    const uint32_t  color,
+    const glm::vec3 min_corner,
+    const glm::vec3 max_corner,
+    const bool      z_cross
+)
+{
+    const auto a = min_corner;
+    const auto b = max_corner;
+    vec3 p[8] = {
+        vec3{a.x, a.y, a.z},
+        vec3{b.x, a.y, a.z},
+        vec3{b.x, b.y, a.z},
+        vec3{a.x, b.y, a.z},
+        vec3{a.x, a.y, b.z},
+        vec3{b.x, a.y, b.z},
+        vec3{b.x, b.y, b.z},
+        vec3{a.x, b.y, b.z}
+    };
+    add_lines(
+        transform,
+        color,
+        {
+            // near plane
+            { p[0], p[1] },
+            { p[1], p[2] },
+            { p[2], p[3] },
+            { p[3], p[0] },
+
+            // far plane
+            { p[4], p[5] },
+            { p[5], p[6] },
+            { p[6], p[7] },
+            { p[7], p[4] },
+
+            // near to far
+            { p[0], p[4] },
+            { p[1], p[5] },
+            { p[2], p[6] },
+            { p[3], p[7] }
+        }
+    );
+    if (z_cross)
+    {
+        add_lines(
+            transform,
+            color,
+            {
+                // near to far middle
+                { 0.5f * p[0] + 0.5f * p[1], 0.5f * p[4] + 0.5f * p[5] },
+                { 0.5f * p[1] + 0.5f * p[2], 0.5f * p[5] + 0.5f * p[6] },
+                { 0.5f * p[2] + 0.5f * p[3], 0.5f * p[6] + 0.5f * p[7] },
+                { 0.5f * p[3] + 0.5f * p[0], 0.5f * p[7] + 0.5f * p[4] },
+
+                // near+far/2 plane
+                { 0.5f * p[0] + 0.5f * p[4], 0.5f * p[1] + 0.5f * p[5] },
+                { 0.5f * p[1] + 0.5f * p[5], 0.5f * p[2] + 0.5f * p[6] },
+                { 0.5f * p[2] + 0.5f * p[6], 0.5f * p[3] + 0.5f * p[7] },
+                { 0.5f * p[3] + 0.5f * p[7], 0.5f * p[0] + 0.5f * p[4] },
+            }
+        );
+    }
 }
 
 void Line_renderer::add_sphere(
     const glm::mat4 transform,
     const uint32_t  color,
     const glm::vec3 center,
-    const float     radius,
-    const float     thickness
+    const float     radius
 )
 {
     const glm::vec3 axis_x{radius, 0.0f, 0.0f};
@@ -464,8 +567,7 @@ void Line_renderer::add_sphere(
                     + std::cos(t1) * axis_x
                     + std::sin(t1) * axis_z
                 }
-            },
-            thickness
+            }
         );
     }
 }
@@ -474,7 +576,7 @@ static constexpr std::string_view c_line_renderer_render{"Line_renderer::render(
 
 void Line_renderer_set::render(
     const erhe::scene::Viewport viewport,
-    const erhe::scene::ICamera& camera
+    const erhe::scene::Camera&  camera
 )
 {
     auto& state_tracker = *m_pipeline_state_tracker.get();
@@ -485,7 +587,7 @@ void Line_renderer_set::render(
 void Line_renderer::render(
     erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker,
     const erhe::scene::Viewport           viewport,
-    const erhe::scene::ICamera&           camera,
+    const erhe::scene::Camera&            camera,
     const bool                            show_visible_lines,
     const bool                            show_hidden_lines
 )
@@ -543,6 +645,11 @@ void Line_renderer::render(
         static_cast<GLsizeiptr>(m_view_writer.range.byte_count)
     );
 
+    const auto first = static_cast<GLint>(
+        m_vertex_writer.range.first_byte_offset / m_pipeline->vertex_format.stride()
+    );
+    const auto count = static_cast<GLsizei>(m_line_count * 2);
+
     if (show_hidden_lines)
     {
         const auto& pipeline = current_frame_resources().pipeline_depth_fail;
@@ -550,8 +657,8 @@ void Line_renderer::render(
 
         gl::draw_arrays(
             pipeline.data.input_assembly.primitive_topology,
-            0,
-            static_cast<GLsizei>(m_line_count * 2)
+            first,
+            count
         );
     }
 
@@ -562,8 +669,8 @@ void Line_renderer::render(
 
         gl::draw_arrays(
             pipeline.data.input_assembly.primitive_topology,
-            0,
-            static_cast<GLsizei>(m_line_count * 2)
+            first,
+            count
         );
     }
 

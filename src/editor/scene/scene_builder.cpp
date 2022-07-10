@@ -15,6 +15,7 @@
 #include "tools/fly_camera_tool.hpp"
 #include "windows/brushes.hpp"
 #include "windows/materials.hpp"
+#include "windows/viewport_window.hpp"
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
@@ -87,8 +88,9 @@ void Scene_builder::declare_required_components()
 {
     require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
-    require<Fly_camera_tool>();
-    require<Materials      >();
+    require<Fly_camera_tool >();
+    require<Materials       >();
+    require<Viewport_windows>();
     m_brushes     = require<Brushes    >();
     m_mesh_memory = require<Mesh_memory>();
     m_scene_root  = require<Scene_root >();
@@ -117,7 +119,7 @@ auto Scene_builder::make_camera(
     camera->projection()->fov_y           = glm::radians(35.0f);
     camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
     camera->projection()->z_near          = 0.03f;
-    camera->projection()->z_far           = 200.0f;
+    camera->projection()->z_far           = 80.0f;
 
     m_scene_root->scene().add(camera);
 
@@ -133,17 +135,24 @@ auto Scene_builder::make_camera(
 
 void Scene_builder::setup_cameras()
 {
-    auto camera_a = make_camera(
+    const auto& camera_a = make_camera(
         "Camera A",
-        vec3{0.0f, 4.0f, 10.0f},
+        vec3{0.0f, 1.0f, 3.0f},
         vec3{0.0f, 0.5f, 0.0f}
     );
-    //make_camera(
-    //    "Camera B",
-    //    vec3{-1.0f, 1.65f,  4.0f}
-    //);
+    //camera_a->projection()->z_far = 10.0;
+    camera_a->node_data.wireframe_color = glm::vec4{1.0f, 0.6f, 0.3f, 1.0f};
 
-    get<Fly_camera_tool>()->set_camera(camera_a.get());
+    const auto& camera_b = make_camera(
+        "Camera B",
+        vec3{-7.0f, 1.0f, 0.0f},
+        vec3{ 0.0f, 0.5f, 0.0f}
+    );
+    camera_b->node_data.wireframe_color = glm::vec4{0.3f, 0.6f, 1.00f, 1.0f};
+
+    const auto& viewport_windows = get<Viewport_windows>();
+    viewport_windows->create_window("Primary Viewport", camera_a.get());
+    //viewport_windows->create_window("Secondary Viewport", camera_b.get());
 }
 
 auto Scene_builder::build_info() -> erhe::primitive::Build_info&
@@ -920,13 +929,13 @@ auto Scene_builder::make_directional_light(
     light->color                         = color;
     light->intensity                     = intensity;
     light->range                         =   0.0f;
-    light->projection()->projection_type = Projection::Type::orthogonal;
-    light->projection()->ortho_left      = -10.0f;
-    light->projection()->ortho_width     =  20.0f;
-    light->projection()->ortho_bottom    = -10.0f;
-    light->projection()->ortho_height    =  20.0f;
-    light->projection()->z_near          =   5.0f;
-    light->projection()->z_far           =  20.0f;
+    //light->projection()->projection_type = Projection::Type::orthogonal;
+    //light->projection()->ortho_left      = -10.0f;
+    //light->projection()->ortho_width     =  20.0f;
+    //light->projection()->ortho_bottom    = -10.0f;
+    //light->projection()->ortho_height    =  20.0f;
+    //light->projection()->z_near          =   5.0f;
+    //light->projection()->z_far           =  20.0f;
 
     m_scene_root->scene().add_to_light_layer(
         *m_scene_root->light_layer(),
@@ -934,9 +943,9 @@ auto Scene_builder::make_directional_light(
     );
 
     const mat4 m = erhe::toolkit::create_look_at(
-        position,                 // eye
-        vec3{0.0f,  0.0f, 0.0f},  // center
-        vec3{0.0f,  1.0f, 0.0f}   // up
+        position,                // eye
+        vec3{0.0f, 0.0f, 0.0f},  // center
+        vec3{0.0f, 1.0f, 0.0f}   // up
     );
     light->set_parent_from_node(m);
 
@@ -959,11 +968,11 @@ auto Scene_builder::make_spot_light(
     light->range                         = 25.0f;
     light->inner_spot_angle              = spot_cone_angle[0];
     light->outer_spot_angle              = spot_cone_angle[1];
-    light->projection()->projection_type = Projection::Type::perspective;//orthogonal;
-    light->projection()->fov_x           = light->outer_spot_angle;
-    light->projection()->fov_y           = light->outer_spot_angle;
-    light->projection()->z_near          =  1.0f;
-    light->projection()->z_far           = 100.0f;
+    //light->projection()->projection_type = Projection::Type::perspective;//orthogonal;
+    //light->projection()->fov_x           = light->outer_spot_angle;
+    //light->projection()->fov_y           = light->outer_spot_angle;
+    //light->projection()->z_near          =  1.0f;
+    //light->projection()->z_far           = 100.0f;
 
     m_scene_root->scene().add_to_light_layer(
         *m_scene_root->light_layer(),

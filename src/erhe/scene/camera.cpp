@@ -7,46 +7,6 @@
 namespace erhe::scene
 {
 
-auto is_icamera(const Node* const node) -> bool
-{
-    if (node == nullptr)
-    {
-        return false;
-    }
-    return (node->get_flag_bits() & Node_flag_bit::is_icamera) == Node_flag_bit::is_icamera;
-}
-
-auto is_icamera(const std::shared_ptr<Node>& node) -> bool
-{
-    return is_icamera(node.get());
-}
-
-auto as_icamera(Node* const node) -> ICamera*
-{
-    if (node == nullptr)
-    {
-        return nullptr;
-    }
-    if ((node->get_flag_bits() & Node_flag_bit::is_icamera) == 0)
-    {
-        return nullptr;
-    }
-    return reinterpret_cast<ICamera*>(node);
-}
-
-auto as_icamera(const std::shared_ptr<Node>& node) -> std::shared_ptr<ICamera>
-{
-    if (!node)
-    {
-        return {};
-    }
-    if ((node->get_flag_bits() & Node_flag_bit::is_icamera) == 0)
-    {
-        return {};
-    }
-    return std::dynamic_pointer_cast<ICamera>(node);
-}
-//
 auto is_camera(const Node* const node) -> bool
 {
     if (node == nullptr)
@@ -92,14 +52,8 @@ auto Camera::node_type() const -> const char*
     return "Camera";
 }
 
-ICamera::ICamera(const std::string_view name)
-    : Node{name}
-{
-    node_data.flag_bits |= (Node_flag_bit::is_icamera | Node_flag_bit::is_transform);
-}
-
 Camera::Camera(const std::string_view name)
-    : ICamera{name}
+    : Node{name}
 {
     node_data.flag_bits |= (Node_flag_bit::is_camera | Node_flag_bit::is_transform);
 }

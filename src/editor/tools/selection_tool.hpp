@@ -152,7 +152,6 @@ public:
     // Implements Tool
     [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
     [[nodiscard]] auto description  () -> const char* override;
-    void tool_render(const Render_context& context) override;
 
     // Public API
     [[nodiscard]] auto subscribe_selection_change_notification(On_selection_changed callback) -> Subcription;

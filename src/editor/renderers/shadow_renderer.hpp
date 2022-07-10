@@ -1,6 +1,8 @@
 #pragma once
 
-#include "renderers/base_renderer.hpp"
+#include "renderers/light_buffer.hpp"
+#include "renderers/draw_indirect_buffer.hpp"
+#include "renderers/primitive_buffer.hpp"
 
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/scene/viewport.hpp"
@@ -39,7 +41,6 @@ class Mesh_memory;
 
 class Shadow_renderer
     : public erhe::components::Component
-    , public Base_renderer
 {
 public:
     static constexpr std::string_view c_label{"Shadow_renderer"};
@@ -58,6 +59,7 @@ public:
     class Render_parameters
     {
     public:
+        const erhe::scene::Camera&                                 camera;
         const std::initializer_list<
             const gsl::span<
                 const std::shared_ptr<erhe::scene::Mesh>
@@ -66,7 +68,11 @@ public:
         const gsl::span<const std::shared_ptr<erhe::scene::Light>> lights;
     };
 
-    void render(const Render_parameters& parameters);
+    auto light_projections() const -> const Light_projections&;
+
+    auto render(const Render_parameters& parameters) -> const Light_projections&;
+
+    void next_frame();
 
     [[nodiscard]] auto texture () const -> erhe::graphics::Texture*;
     [[nodiscard]] auto viewport() const -> erhe::scene::Viewport;
@@ -83,7 +89,11 @@ private:
     std::unique_ptr<erhe::graphics::Gpu_timer>                m_gpu_timer;
     std::vector<std::unique_ptr<erhe::graphics::Framebuffer>> m_framebuffers;
     erhe::scene::Viewport                                     m_viewport{0, 0, 0, 0, true};
-    std::size_t                                               m_slot{0};
+    Light_projections                                         m_light_projections;
+
+    std::unique_ptr<Light_buffer        > m_light_buffers;
+    std::unique_ptr<Draw_indirect_buffer> m_draw_indirect_buffers;
+    std::unique_ptr<Primitive_buffer    > m_primitive_buffers;
 };
 
 } // namespace editor

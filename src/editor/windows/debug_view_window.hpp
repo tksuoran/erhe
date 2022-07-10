@@ -52,6 +52,10 @@ public:
 
     // Implements Framebuffer_window
     auto get_size(glm::vec2 available_size) const -> glm::vec2 override;
+    void update_framebuffer() override;
+
+    // Overrides Framebuffer_window / Imgui_window
+    void imgui() override;
 
     // Public API
     void render();
@@ -66,6 +70,9 @@ private:
 
     std::unique_ptr<erhe::graphics::Vertex_input_state>   m_empty_vertex_input;
     Renderpass                                            m_renderpass;
+    int                                                   m_light_index{};
+    float                                                 m_width;
+    float                                                 m_height;
 
 };
 

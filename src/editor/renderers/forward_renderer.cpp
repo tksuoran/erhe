@@ -41,8 +41,7 @@ using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 
 Forward_renderer::Forward_renderer()
-    : Component    {c_label}
-    , Base_renderer{std::string{c_label}}
+    : Component{c_label}
 {
 }
 
@@ -52,14 +51,13 @@ Forward_renderer::~Forward_renderer() noexcept
 
 void Forward_renderer::declare_required_components()
 {
-    base_require(this);
-
     require<erhe::application::Gl_context_provider>();
     require<Program_interface>();
 
     m_configuration = require<erhe::application::Configuration>();
     m_mesh_memory   = require<Mesh_memory>();
     m_programs      = require<Programs   >();
+    require<Program_interface>();
 }
 
 static constexpr std::string_view c_forward_renderer_initialize_component{"Forward_renderer::initialize_component()"};
@@ -73,13 +71,12 @@ void Forward_renderer::initialize_component()
 
     erhe::graphics::Scoped_debug_group forward_renderer_initialization{c_forward_renderer_initialize_component};
 
-    create_frame_resources(
-        m_configuration->renderer.max_material_count,
-        m_configuration->renderer.max_light_count,
-        m_configuration->renderer.max_camera_count,
-        m_configuration->renderer.max_primitive_count,
-        m_configuration->renderer.max_draw_count
-    );
+    const auto& shader_resources = *get<Program_interface>()->shader_resources.get();
+    m_material_buffers      = std::make_unique<Material_buffer     >(shader_resources.material_interface);
+    m_light_buffers         = std::make_unique<Light_buffer        >(shader_resources.light_interface);
+    m_camera_buffers        = std::make_unique<Camera_buffer       >(shader_resources.camera_interface);
+    m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(m_configuration->renderer.max_draw_count);
+    m_primitive_buffers     = std::make_unique<Primitive_buffer    >(shader_resources.primitive_interface);
 }
 
 void Forward_renderer::post_initialize()
@@ -93,6 +90,20 @@ void Forward_renderer::post_initialize()
 }
 
 static constexpr std::string_view c_forward_renderer_render{"Forward_renderer::render()"};
+
+void Forward_renderer::next_frame()
+{
+    m_material_buffers     ->next_frame();
+    m_light_buffers        ->next_frame();
+    m_camera_buffers       ->next_frame();
+    m_draw_indirect_buffers->next_frame();
+    m_primitive_buffers    ->next_frame();
+}
+
+auto Forward_renderer::primitive_settings() const -> Primitive_interface_settings&
+{
+    return m_primitive_buffers->settings;
+}
 
 void Forward_renderer::render(const Render_parameters& parameters)
 {
@@ -119,23 +130,16 @@ void Forward_renderer::render(const Render_parameters& parameters)
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     if (camera != nullptr)
     {
-        update_camera_buffer(*camera, viewport);
-        bind_camera_buffer  ();
+        m_camera_buffers->update(*camera->projection(), *camera, viewport, camera->get_exposure());
+        m_camera_buffers->bind();
     }
-    update_material_buffer(materials);
-    bind_material_buffer();
+    m_material_buffers->update(materials, m_programs);
+    m_material_buffers->bind();
 
     if (!lights.empty())
     {
-        update_light_buffer(
-            lights,
-            parameters.ambient_light,
-            m_shadow_renderer
-                ? m_shadow_renderer->viewport()
-                : erhe::scene::Viewport{},
-            shadow_texture_handle
-        );
-        bind_light_buffer();
+        m_light_buffers->update(lights, parameters.light_projections, parameters.ambient_light);
+        m_light_buffers->bind_light_buffer();
     }
 
     if (enable_shadows)
@@ -177,14 +181,14 @@ void Forward_renderer::render(const Render_parameters& parameters)
             ERHE_PROFILE_SCOPE("mesh span");
             ERHE_PROFILE_GPU_SCOPE(c_forward_renderer_render);
 
-            update_primitive_buffer(meshes, visibility_filter);
-            const auto draw_indirect_buffer_range = update_draw_indirect_buffer(meshes, primitive_mode, visibility_filter);
+            m_primitive_buffers->update(meshes, visibility_filter);
+            const auto draw_indirect_buffer_range = m_draw_indirect_buffers->update(meshes, primitive_mode, visibility_filter);
             if (draw_indirect_buffer_range.draw_indirect_count == 0)
             {
                 continue;
             }
-            bind_primitive_buffer();
-            bind_draw_indirect_buffer();
+            m_primitive_buffers->bind();
+            m_draw_indirect_buffers->bind();
 
             {
                 ERHE_PROFILE_SCOPE("mdi");
@@ -213,7 +217,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
 }
 
 void Forward_renderer::render_fullscreen(
-    const Render_parameters& parameters
+    const Render_parameters& parameters,
+    unsigned int             light_index
 )
 {
     ERHE_PROFILE_FUNCTION
@@ -236,20 +241,15 @@ void Forward_renderer::render_fullscreen(
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     if (camera != nullptr)
     {
-        update_camera_buffer(*camera, viewport);
-        bind_camera_buffer  ();
+        m_camera_buffers->update(*camera->projection(), *camera, viewport, camera->get_exposure());
+        m_camera_buffers->bind();
     }
+    m_light_buffers->update_control(light_index);
+    m_light_buffers->bind_control_buffer();
     if (!lights.empty())
     {
-        update_light_buffer(
-            lights,
-            parameters.ambient_light,
-            m_shadow_renderer
-                ? m_shadow_renderer->viewport()
-                : erhe::scene::Viewport{},
-            shadow_texture_handle
-        );
-        bind_light_buffer();
+        m_light_buffers->update(lights, parameters.light_projections, parameters.ambient_light);
+        m_light_buffers->bind_light_buffer();
     }
 
     if (enable_shadows)

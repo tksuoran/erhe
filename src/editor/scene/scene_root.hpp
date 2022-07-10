@@ -49,7 +49,6 @@ namespace erhe::primitive
 namespace erhe::scene
 {
     class Camera;
-    class ICamera;
     class Light;
     class Light_layer;
     class Mesh;
@@ -153,9 +152,9 @@ public:
     void initialize_component       () override;
 
     // Public API
-    auto create_new_camera    () -> bool;
-    auto create_new_empty_node() -> bool;
-    auto create_new_light     () -> bool;
+    auto create_new_camera    () -> std::shared_ptr<erhe::scene::Camera>;
+    auto create_new_empty_node() -> std::shared_ptr<erhe::scene::Node>;
+    auto create_new_light     () -> std::shared_ptr<erhe::scene::Light>;
 
     void attach_to_selection(const std::shared_ptr<erhe::scene::Node>& node);
 
@@ -197,9 +196,9 @@ public:
     void add_instance(const Instance& instance);
 
     auto camera_combo(
-        const char*            label,
-        erhe::scene::ICamera*& camera,
-        const bool             nullptr_option = false
+        const char*           label,
+        erhe::scene::Camera*& camera,
+        const bool            nullptr_option = false
     ) const -> bool;
 
     auto material_combo(

@@ -180,14 +180,14 @@ void Hover_tool::tool_render(
             const vec3 p0 = m_hover_position_world.value() + 0.0f * m_hover_normal.value();
             const vec3 p1 = m_hover_position_world.value() + 1.0f * m_hover_normal.value();
             line_renderer.set_line_color(0xff0000ffu);
+            line_renderer.set_thickness(10.0f);
             line_renderer.add_lines(
                 {
                     {
                         p0,
                         p1
                     }
-                },
-                10.0f
+                }
             );
         }
 #if 0

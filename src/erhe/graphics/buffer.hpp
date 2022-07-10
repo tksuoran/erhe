@@ -30,6 +30,14 @@ public:
         const gl::Map_buffer_access_mask map_buffer_access_mask
     ) noexcept;
 
+    Buffer(
+        const gl::Buffer_target          target,
+        const std::size_t                capacity_byte_count,
+        const gl::Buffer_storage_mask    storage_mask,
+        const gl::Map_buffer_access_mask map_buffer_access_mask,
+        const std::string_view           debug_label
+    ) noexcept;
+
     Buffer        (const Buffer&) = delete;
     void operator=(const Buffer&) = delete;
     Buffer        (Buffer&& other) noexcept;
@@ -45,7 +53,7 @@ public:
     void unmap                () noexcept;
     void flush_bytes          (const std::size_t byte_offset, const std::size_t byte_count) noexcept;
     void flush_and_unmap_bytes(const std::size_t byte_count) noexcept;
-    void set_debug_label      (const std::string& label) noexcept;
+    void set_debug_label      (const std::string_view label) noexcept;
     void dump                 () const noexcept;
 
     template <typename T>

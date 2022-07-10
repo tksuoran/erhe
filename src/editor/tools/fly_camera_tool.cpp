@@ -254,7 +254,7 @@ void Fly_camera_tool::update_camera()
     }
 }
 
-void Fly_camera_tool::set_camera(erhe::scene::ICamera* camera)
+void Fly_camera_tool::set_camera(erhe::scene::Camera* camera)
 {
     // attach() below requires world from node matrix, which
     // might not be valid due to transform hierarchy.
@@ -272,9 +272,9 @@ void Fly_camera_tool::set_camera(erhe::scene::ICamera* camera)
     }
 }
 
-auto Fly_camera_tool::get_camera() const -> erhe::scene::ICamera*
+auto Fly_camera_tool::get_camera() const -> erhe::scene::Camera*
 {
-    return as_icamera(m_camera_controller->get_node());
+    return as_camera(m_camera_controller->get_node());
 }
 
 auto Fly_camera_tool::description() -> const char*

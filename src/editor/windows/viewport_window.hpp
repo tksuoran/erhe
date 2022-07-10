@@ -24,6 +24,7 @@ namespace erhe::graphics
 namespace erhe::application
 {
     class Configuration;
+    class Imgui_windows;
     class View;
 }
 namespace editor
@@ -55,7 +56,7 @@ public:
     Viewport_window(
         const std::string_view              name,
         const erhe::components::Components& components,
-        erhe::scene::ICamera*               camera
+        erhe::scene::Camera*                camera
     );
 
     // Implements Imgui_window
@@ -84,7 +85,7 @@ public:
     [[nodiscard]] auto content_region_size () const -> glm::ivec2;
     [[nodiscard]] auto is_hovered          () const -> bool;
     [[nodiscard]] auto viewport            () const -> const erhe::scene::Viewport&;
-    [[nodiscard]] auto camera              () const -> erhe::scene::ICamera*;
+    [[nodiscard]] auto camera              () const -> erhe::scene::Camera*;
 
 private:
     [[nodiscard]] auto should_render             () const -> bool;
@@ -108,7 +109,7 @@ private:
     std::shared_ptr<Viewport_config>              m_viewport_config;
 
     erhe::scene::Viewport                         m_viewport              {0, 0, 0, 0, true};
-    erhe::scene::ICamera*                         m_camera                {nullptr};
+    erhe::scene::Camera*                          m_camera                {nullptr};
     Shader_stages_variant                         m_shader_stages_variant {Shader_stages_variant::standard};
     bool                                          m_enable_post_processing{true};
     erhe::scene::Projection_transforms            m_projection_transforms;
@@ -186,7 +187,7 @@ public:
     // Public API
     auto create_window(
         const std::string_view name,
-        erhe::scene::ICamera*  camera
+        erhe::scene::Camera*   camera
     ) -> Viewport_window*;
 
     auto open_new_viewport_window() -> bool;
@@ -198,6 +199,7 @@ private:
     // Component dependencies
     std::shared_ptr<erhe::application::Configuration>     m_configuration;
     std::shared_ptr<Editor_rendering>                     m_editor_rendering;
+    std::shared_ptr<erhe::application::Imgui_windows>     m_imgui_windows;
     std::shared_ptr<erhe::application::View>              m_editor_view;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Pointer_context>                      m_pointer_context;

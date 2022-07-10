@@ -61,7 +61,7 @@ auto Create_new_camera_command::try_call(
 {
     static_cast<void>(context);
 
-    return m_scene_root.create_new_camera();
+    return m_scene_root.create_new_camera().operator bool();
 }
 
 auto Create_new_empty_node_command::try_call(
@@ -70,7 +70,7 @@ auto Create_new_empty_node_command::try_call(
 {
     static_cast<void>(context);
 
-    return m_scene_root.create_new_empty_node();
+    return m_scene_root.create_new_empty_node().operator bool();
 }
 
 auto Create_new_light_command::try_call(
@@ -79,7 +79,7 @@ auto Create_new_light_command::try_call(
 {
     static_cast<void>(context);
 
-    return m_scene_root.create_new_light();
+    return m_scene_root.create_new_light().operator bool();
 }
 
 Scene_root::Scene_root()
@@ -148,8 +148,8 @@ void Scene_root::initialize_component()
 
 void Scene_root::attach_to_selection(const std::shared_ptr<erhe::scene::Node>& node)
 {
-    auto selection_tool = get<Selection_tool>();
-    if (!selection_tool->selection().empty())
+    auto selection_tool = try_get<Selection_tool>();
+    if (selection_tool && !selection_tool->selection().empty())
     {
         const auto& entry = selection_tool->selection().front();
         entry->attach(node);
@@ -157,7 +157,7 @@ void Scene_root::attach_to_selection(const std::shared_ptr<erhe::scene::Node>& n
     }
 }
 
-auto Scene_root::create_new_camera() -> bool
+auto Scene_root::create_new_camera() -> std::shared_ptr<erhe::scene::Camera>
 {
     auto camera = std::make_shared<erhe::scene::Camera>("Camera");
     camera->projection()->fov_y           = glm::radians(35.0f);
@@ -166,37 +166,37 @@ auto Scene_root::create_new_camera() -> bool
     camera->projection()->z_far           = 200.0f;
     scene().add(camera);
     attach_to_selection(camera);
-    return true;
+    return camera;
 }
 
-auto Scene_root::create_new_empty_node() -> bool
+auto Scene_root::create_new_empty_node() -> std::shared_ptr<erhe::scene::Node>
 {
     auto node = std::make_shared<erhe::scene::Node>("Empty Node");
     scene().add_node(node);
     attach_to_selection(node);
-    return true;
+    return node;
 }
 
-auto Scene_root::create_new_light() -> bool
+auto Scene_root::create_new_light() -> std::shared_ptr<erhe::scene::Light>
 {
     auto light = std::make_shared<Light>("Light");
     light->type                          = Light::Type::directional;
     light->color                         = glm::vec3{1.0, 1.0f, 1.0};
     light->intensity                     =  1.0f;
     light->range                         =  0.0f;
-    light->projection()->projection_type = erhe::scene::Projection::Type::orthogonal;
-    light->projection()->ortho_left      = -10.0f;
-    light->projection()->ortho_width     =  20.0f;
-    light->projection()->ortho_bottom    = -10.0f;
-    light->projection()->ortho_height    =  20.0f;
-    light->projection()->z_near          =   5.0f;
-    light->projection()->z_far           =  20.0f;
+    //light->projection()->projection_type = erhe::scene::Projection::Type::orthogonal;
+    //light->projection()->ortho_left      = -10.0f;
+    //light->projection()->ortho_width     =  20.0f;
+    //light->projection()->ortho_bottom    = -10.0f;
+    //light->projection()->ortho_height    =  20.0f;
+    //light->projection()->z_near          =   5.0f;
+    //light->projection()->z_far           =  20.0f;
     attach_to_selection(light);
     scene().add_to_light_layer(
         *light_layer(),
         light
     );
-    return true;
+    return light;
 }
 
 // TODO This is not thread safe
@@ -307,15 +307,15 @@ auto Scene_root::light_layer() const -> erhe::scene::Light_layer*
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 auto Scene_root::camera_combo(
-    const char*            label,
-    erhe::scene::ICamera*& selected_camera,
-    const bool             nullptr_option
+    const char*           label,
+    erhe::scene::Camera*& selected_camera,
+    const bool            nullptr_option
 ) const -> bool
 {
     int selected_camera_index = 0;
     int index = 0;
-    std::vector<const char*>           names;
-    std::vector<erhe::scene::ICamera*> cameras;
+    std::vector<const char*>          names;
+    std::vector<erhe::scene::Camera*> cameras;
     if (nullptr_option || (selected_camera == nullptr))
     {
         names.push_back("(none)");

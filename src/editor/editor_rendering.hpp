@@ -20,7 +20,6 @@ namespace erhe::graphics
 namespace erhe::scene
 {
     class Camera;
-    class ICamera;
     class Mesh;
     class Node;
 }

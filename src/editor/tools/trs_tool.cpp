@@ -1289,7 +1289,6 @@ void Trs_tool::tool_render(
     constexpr uint32_t red       = 0xff0000ffu;
     constexpr uint32_t blue      = 0xffff0000u;
     constexpr uint32_t orange    = 0xcc0088ffu;
-    constexpr float    thickness = -1.41f;
 
     {
         const int sector_count = m_rotate_snap_enable
@@ -1298,6 +1297,7 @@ void Trs_tool::tool_render(
         std::vector<vec3> positions;
 
         line_renderer.set_line_color(orange);
+        line_renderer.set_thickness(-1.41f);
         for (int i = 0; i < sector_count + 1; ++i)
         {
             const double rel   = static_cast<double>(i) / static_cast<double>(sector_count);
@@ -1327,8 +1327,7 @@ void Trs_tool::tool_render(
                         p0,
                         p1
                     }
-                },
-                thickness
+                }
             );
         }
     }
@@ -1356,8 +1355,7 @@ void Trs_tool::tool_render(
                         positions[i],
                         positions[next_i]
                     }
-                },
-                thickness
+                }
             );
         }
     }
@@ -1368,13 +1366,9 @@ void Trs_tool::tool_render(
         r1 * std::cos(snapped_angle) * side1 +
         r1 * std::sin(snapped_angle) * side2;
 
-    line_renderer.set_line_color(red);
-    line_renderer.add_lines( { { p, r1 * side1 } }, thickness);
-    line_renderer.set_line_color(blue);
-    line_renderer.add_lines( { { p, snapped    } }, thickness);
-
-    line_renderer.set_line_color(get_axis_color(m_active_handle));
-    line_renderer.add_lines({ { p - 10.0 * n, p + 10.0 * n } }, thickness);
+    line_renderer.add_lines(red,                             { { p, r1 * side1 } } );
+    line_renderer.add_lines(blue,                            { { p, snapped    } } );
+    line_renderer.add_lines(get_axis_color(m_active_handle), { { p - 10.0 * n, p + 10.0 * n } } );
 }
 
 void Trs_tool::end_drag()

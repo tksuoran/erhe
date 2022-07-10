@@ -142,7 +142,7 @@ void main(void)
         s_shadow,
         vec3(
             v_texcoord,
-            0.0 // float(light_index)
+            float(light_control_block.light_index)
         )
     ).x;
 

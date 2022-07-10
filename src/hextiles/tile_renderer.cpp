@@ -333,7 +333,7 @@ void Tile_renderer::compose_tileset_texture()
     ty_offset += Tile_group::count * Tile_group::height;
 
     // Extra tiles
-    //int ty0_extra_tiles = ty_offset;
+    //const int ty0_extra_tiles = ty_offset;
     for (int ty = 0; ty < Extra_tiles::height; ++ty)
     {
         for (int tx = 0; tx < Extra_tiles::width; ++tx)
@@ -347,7 +347,7 @@ void Tile_renderer::compose_tileset_texture()
     ty_offset += Extra_tiles::height;
 
     // Explosions
-    //int ty0_explosion = ty_offset;
+    //const int ty0_explosion = ty_offset;
     for (int ty = 0; ty < Explosion_tiles::height; ++ty)
     {
         for (int tx = 0; tx < Base_tiles::width; ++tx)
@@ -361,7 +361,7 @@ void Tile_renderer::compose_tileset_texture()
     ty_offset += Explosion_tiles::height * 2;
 
     // Y offsets in tiles
-    int ty0_special_unit_tiles = ty_offset;
+    const int ty0_special_unit_tiles = ty_offset;
     for (int ty = 0; ty < 1; ++ty)
     {
         for (int tx = 0; tx < Base_tiles::width; ++tx)
@@ -374,7 +374,7 @@ void Tile_renderer::compose_tileset_texture()
     }
     ty_offset += 1;
 
-    int ty0_single_unit_tiles = ty_offset;
+    const int ty0_single_unit_tiles = ty_offset;
     for (int player = 0; player < max_player_count; ++player)
     {
         for (int ty = 0; ty < Unit_group::height; ++ty)
@@ -390,7 +390,37 @@ void Tile_renderer::compose_tileset_texture()
         ty_offset += Unit_group::height;
     }
 
-    int ty0_multiple_unit_tiles = ty_offset;
+    const int ty0_multiple_unit_tiles = ty_offset;
+    {
+        int players[4] = {0, 1, 2, 3};
+        int tx = 0;
+        int ty = ty_offset;
+
+        for (players[0] = 0; players[0] < max_player_count + 1; ++players[0])
+        {
+            for (players[1] = 0; players[1] < max_player_count + 1; ++players[1])
+            {
+                for (players[2] = 0; players[2] < max_player_count + 1; ++players[2])
+                {
+                    for (players[3] = 0; players[3] < max_player_count + 1; ++players[3])
+                    {
+                        m_unit_shapes.emplace_back(
+                            tx * Tile_shape::full_width,
+                            ty * Tile_shape::height
+                        );
+
+                        ++tx;
+                        if (tx == 8)
+                        {
+                            tx = 0;
+                            ++ty;
+                        }
+                    }
+                }
+            }
+        }
+        ty_offset = ty + ((tx != 0) ? 1 : 0);
+    }
 
     // Texture will be created with additional per-player colored unit tiles
     erhe::graphics::Texture_create_info texture_create_info{
@@ -398,7 +428,7 @@ void Tile_renderer::compose_tileset_texture()
         .internal_format = to_gl(m_tileset_image.info.format),
         .use_mipmaps     = false,
         .width           = m_tileset_image.info.width,
-        .height          = m_tileset_image.info.height + (s_unit_tile_height * Tile_shape::height),
+        .height          = ty_offset * Tile_shape::height,
         .depth           = 1,
         .level_count     = 1
     };
@@ -525,18 +555,14 @@ void Tile_renderer::compose_tileset_texture()
                             (ty0_single_unit_tiles + 6) * Tile_shape::height
                         );
                         m_tileset_texture->upload(
-                            to_gl(scratch.info.format),
-                            scratch.data,
-                            scratch.info.width,
-                            scratch.info.height,
-                            1, // depth
-                            0, // mipmap level
-                            tx * Tile_shape::full_width,
-                            ty * Tile_shape::height
-                        );
-                        m_unit_shapes.emplace_back(
-                            tx * Tile_shape::full_width,
-                            ty * Tile_shape::height
+                            to_gl(scratch.info.format),  // internal format
+                            scratch.data,                // data span
+                            scratch.info.width,          // width
+                            scratch.info.height,         // height
+                            1,                           // depth
+                            0,                           // mipmap level
+                            tx * Tile_shape::full_width, // destination x
+                            ty * Tile_shape::height      // destination y
                         );
 
                         ++tx;

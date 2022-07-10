@@ -466,17 +466,24 @@ void Editor_rendering::render()
     {
         m_scene_root->sort_lights();
 
-        //const std::initializer_list<
-        //    const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>
-        //>& mesh_spans = { m_scene_root->content_layer()->meshes };
-
-        m_shadow_renderer->render(
-            {
-                .mesh_spans = { m_scene_root->content_layer()->meshes },
-                .lights     = m_scene_root->light_layer()->lights
-            }
-        );
-        get<Debug_view_window>()->render();
+        // TODO Choose viewport camera
+        //
+        //const Viewport_window*     window = m_pointer_context->window();
+        //const erhe::scene::Camera* camera = (window != nullptr)
+        //    ? window->camera()
+        //    : nullptr;
+        const erhe::scene::Camera* camera = m_scene_root->scene().cameras.front().get();
+        if (camera != nullptr)
+        {
+            m_shadow_renderer->render(
+                {
+                    .camera     = *camera,
+                    .mesh_spans = { m_scene_root->content_layer()->meshes },
+                    .lights     = m_scene_root->light_layer()->lights
+                }
+            );
+            get<Debug_view_window>()->render();
+        }
     }
 
     //// m_imgui_windows->rendertarget_imgui_windows();
@@ -522,16 +529,18 @@ void Editor_rendering::render_viewport(
         ////render_gui  (context);
         render_brush    (context);
 
+        static_cast<void>(has_pointer);
         if (has_pointer)
         {
             render_tool_meshes(context);
         }
     }
 
-    m_tools->render_tools(context);
-
     if (m_line_renderer_set)
     {
+        m_line_renderer_set->begin();
+        m_tools->render_tools(context);
+        m_line_renderer_set->end();
         m_line_renderer_set->render(context.viewport, *context.camera);
     }
 
@@ -616,6 +625,7 @@ void Editor_rendering::render_content(const Render_context& context)
                 .camera            = context.camera,
                 .mesh_spans        = { m_scene_root->content_layer()->meshes, m_scene_root->controller_layer()->meshes },
                 .lights            = m_scene_root->light_layer()->lights,
+                .light_projections = m_shadow_renderer->light_projections(),
                 .materials         = m_scene_root->materials(),
                 .passes            = { &renderpass },
                 .visibility_filter = content_not_selected_filter,
@@ -625,19 +635,22 @@ void Editor_rendering::render_content(const Render_context& context)
         //gl::disable(gl::Enable_cap::polygon_offset_line);
     }
 
+    auto& primitive_settings = m_forward_renderer->primitive_settings();
+
     if (render_style.edge_lines)
     {
         gl::enable(gl::Enable_cap::sample_alpha_to_coverage);
-        m_forward_renderer->primitive_color_source   = render_style.edge_lines_color_source;// Base_renderer::Primitive_color_source::constant_color;
-        m_forward_renderer->primitive_constant_color = render_style.line_color;
-        m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
-        m_forward_renderer->primitive_constant_size  = render_style.line_width;
+        primitive_settings.color_source   = render_style.edge_lines_color_source;// Base_renderer::Primitive_color_source::constant_color;
+        primitive_settings.constant_color = render_style.line_color;
+        primitive_settings.size_source    = Primitive_size_source::constant_size;
+        primitive_settings.constant_size  = render_style.line_width;
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
                 .mesh_spans        = { m_scene_root->content_layer()->meshes },
                 .lights            = m_scene_root->light_layer()->lights,
+                .light_projections = m_shadow_renderer->light_projections(),
                 .materials         = m_scene_root->materials(),
                 .passes            = { &m_rp_edge_lines },
                 .visibility_filter = content_not_selected_filter
@@ -648,16 +661,17 @@ void Editor_rendering::render_content(const Render_context& context)
 
     if (render_style.polygon_centroids)
     {
-        m_forward_renderer->primitive_color_source   = render_style.polygon_centroids_color_source; // Base_renderer::Primitive_color_source::constant_color;
-        m_forward_renderer->primitive_constant_color = render_style.centroid_color;
-        m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
-        m_forward_renderer->primitive_constant_size  = render_style.point_size;
+        primitive_settings.color_source   = render_style.polygon_centroids_color_source; // Base_renderer::Primitive_color_source::constant_color;
+        primitive_settings.constant_color = render_style.centroid_color;
+        primitive_settings.size_source    = Primitive_size_source::constant_size;
+        primitive_settings.constant_size  = render_style.point_size;
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
                 .mesh_spans        = { m_scene_root->content_layer()->meshes },
                 .lights            = m_scene_root->light_layer()->lights,
+                .light_projections = m_shadow_renderer->light_projections(),
                 .materials         = m_scene_root->materials(),
                 .passes            = { &m_rp_polygon_centroids },
                 .visibility_filter = content_not_selected_filter
@@ -667,16 +681,17 @@ void Editor_rendering::render_content(const Render_context& context)
 
     if (render_style.corner_points)
     {
-        m_forward_renderer->primitive_color_source   = render_style.corner_points_color_source; // Base_renderer::Primitive_color_source::constant_color;
-        m_forward_renderer->primitive_constant_color = render_style.corner_color;
-        m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
-        m_forward_renderer->primitive_constant_size  = render_style.point_size;
+        primitive_settings.color_source   = render_style.corner_points_color_source; // Base_renderer::Primitive_color_source::constant_color;
+        primitive_settings.constant_color = render_style.corner_color;
+        primitive_settings.size_source    = Primitive_size_source::constant_size;
+        primitive_settings.constant_size  = render_style.point_size;
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
                 .mesh_spans        = { m_scene_root->content_layer()->meshes },
                 .lights            = m_scene_root->light_layer()->lights,
+                .light_projections = m_shadow_renderer->light_projections(),
                 .materials         = m_scene_root->materials(),
                 .passes            = { &m_rp_corner_points },
                 .visibility_filter = content_not_selected_filter
@@ -731,6 +746,7 @@ void Editor_rendering::render_selection(const Render_context& context)
                 .camera            = context.camera,
                 .mesh_spans        = { m_scene_root->content_layer()->meshes },
                 .lights            = m_scene_root->light_layer()->lights,
+                .light_projections = m_shadow_renderer->light_projections(),
                 .materials         = m_scene_root->materials(),
                 .passes            = { &renderpass },
                 .visibility_filter = content_selected_filter,
@@ -740,21 +756,24 @@ void Editor_rendering::render_selection(const Render_context& context)
         //gl::disable(gl::Enable_cap::polygon_offset_line);
     }
 
+    auto& primitive_settings = m_forward_renderer->primitive_settings();
+
     if (render_style.edge_lines)
     {
         ERHE_PROFILE_SCOPE("selection edge lines");
 
         gl::enable(gl::Enable_cap::sample_alpha_to_coverage);
-        m_forward_renderer->primitive_color_source   = Base_renderer::Primitive_color_source::constant_color;
-        m_forward_renderer->primitive_constant_color = render_style.line_color;
-        m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
-        m_forward_renderer->primitive_constant_size  = render_style.line_width;
+        primitive_settings.color_source   = Primitive_color_source::constant_color;
+        primitive_settings.constant_color = render_style.line_color;
+        primitive_settings.size_source    = Primitive_size_source::constant_size;
+        primitive_settings.constant_size  = render_style.line_width;
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
                 .mesh_spans        = { m_scene_root->content_layer()->meshes },
                 .lights            = m_scene_root->light_layer()->lights,
+                .light_projections = m_shadow_renderer->light_projections(),
                 .materials         = m_scene_root->materials(),
                 .passes            = { &m_rp_edge_lines, &m_rp_line_hidden_blend },
                 .visibility_filter = content_selected_filter
@@ -768,16 +787,17 @@ void Editor_rendering::render_selection(const Render_context& context)
     {
         ERHE_PROFILE_SCOPE("selection polygon centroids");
 
-        m_forward_renderer->primitive_color_source   = Base_renderer::Primitive_color_source::constant_color;
-        m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
-        m_forward_renderer->primitive_constant_color = render_style.centroid_color;
-        m_forward_renderer->primitive_constant_size  = render_style.point_size;
+        primitive_settings.color_source   = Primitive_color_source::constant_color;
+        primitive_settings.size_source    = Primitive_size_source::constant_size;
+        primitive_settings.constant_color = render_style.centroid_color;
+        primitive_settings.constant_size  = render_style.point_size;
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
                 .mesh_spans        = { m_scene_root->content_layer()->meshes },
                 .lights            = m_scene_root->light_layer()->lights,
+                .light_projections = m_shadow_renderer->light_projections(),
                 .materials         = m_scene_root->materials(),
                 .passes            = { &m_rp_polygon_centroids },
                 .visibility_filter = content_selected_filter
@@ -788,16 +808,17 @@ void Editor_rendering::render_selection(const Render_context& context)
     {
         ERHE_PROFILE_SCOPE("selection corner points");
 
-        m_forward_renderer->primitive_color_source   = Base_renderer::Primitive_color_source::constant_color;
-        m_forward_renderer->primitive_size_source    = Base_renderer::Primitive_size_source::constant_size;
-        m_forward_renderer->primitive_constant_color = render_style.corner_color;
-        m_forward_renderer->primitive_constant_size  = render_style.point_size;
+        primitive_settings.color_source   = Primitive_color_source::constant_color;
+        primitive_settings.size_source    = Primitive_size_source::constant_size;
+        primitive_settings.constant_color = render_style.corner_color;
+        primitive_settings.constant_size  = render_style.point_size;
         m_forward_renderer->render(
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
                 .mesh_spans        = { m_scene_root->content_layer()->meshes },
                 .lights            = m_scene_root->light_layer()->lights,
+                .light_projections = m_shadow_renderer->light_projections(),
                 .materials         = m_scene_root->materials(),
                 .passes            = { &m_rp_corner_points },
                 .visibility_filter = content_selected_filter
@@ -820,12 +841,13 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
 
     m_forward_renderer->render(
         {
-            .viewport    = context.viewport,
-            .camera      = context.camera,
-            .mesh_spans  = { m_scene_root->tool_layer()->meshes },
-            .lights      = m_scene_root->light_layer()->lights,
-            .materials   = m_scene_root->materials(),
-            .passes      =
+            .viewport          = context.viewport,
+            .camera            = context.camera,
+            .mesh_spans        = { m_scene_root->tool_layer()->meshes },
+            .lights            = m_scene_root->light_layer()->lights,
+            .light_projections = m_shadow_renderer->light_projections(),
+            .materials         = m_scene_root->materials(),
+            .passes            =
             {
                 &m_rp_tool1_hidden_stencil,   // tag_depth_hidden_with_stencil
                 &m_rp_tool2_visible_stencil,  // tag_depth_visible_with_stencil
@@ -873,6 +895,7 @@ void Editor_rendering::render_brush(const Render_context& context)
             .camera            = context.camera,
             .mesh_spans        = { m_scene_root->brush_layer()->meshes },
             .lights            = m_scene_root->light_layer()->lights,
+            .light_projections = m_shadow_renderer->light_projections(),
             .materials         = m_scene_root->materials(),
             .passes            = { &m_rp_brush_back, &m_rp_brush_front },
             .visibility_filter =

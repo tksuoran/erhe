@@ -2,7 +2,7 @@
 
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/node.hpp"
-#include "erhe/scene/projection.hpp"
+//#include "erhe/scene/projection.hpp"
 #include "erhe/scene/transform.hpp"
 
 #include <gsl/gsl>
@@ -21,7 +21,7 @@ enum class Light_type : unsigned int
 };
 
 class Light
-    : public ICamera
+    : public Node
 {
 public:
     using Type = Light_type;
@@ -37,14 +37,11 @@ public:
     ~Light() noexcept override;
 
     [[nodiscard]] auto node_type() const -> const char* override;
-
-    // Implements ICamera
-    [[nodiscard]] auto projection           () -> Projection*             override;
-    [[nodiscard]] auto projection           () const -> const Projection* override;
-    [[nodiscard]] auto projection_transforms(const Viewport& viewport) const -> Projection_transforms override;
-    [[nodiscard]] auto get_exposure         () const -> float                                         override;
-    void set_exposure(const float value)                                                              override;
-
+    [[nodiscard]] auto projection(const Camera& camera) const -> Projection;
+    [[nodiscard]] auto projection_transforms(
+        const Camera&   camera,
+        const Viewport& shadow_map_viewport
+    ) const -> Projection_transforms;
     [[nodiscard]] auto texture_transform(const Transform& clip_from_world) const -> Transform;
 
     Type      type            {Type::directional};
@@ -54,8 +51,6 @@ public:
     float     inner_spot_angle{glm::pi<float>() * 0.4f};
     float     outer_spot_angle{glm::pi<float>() * 0.5f};
     bool      cast_shadow     {true};
-
-    Projection m_projection;
 
     static constexpr glm::mat4 texture_from_clip{
         0.5f, 0.0f, 0.0f, 0.0f,

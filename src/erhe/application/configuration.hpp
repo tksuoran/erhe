@@ -154,29 +154,30 @@ public:
     class Windows
     {
     public:
-        bool brushes            {true};
-        bool debug_view         {false};
-        bool fly_camera         {false};
-        bool grid               {false};
-        bool layers             {false};
-        bool log                {false};
-        bool materials          {true};
-        bool material_properties{true};
-        bool mesh_properties    {false};
-        bool node_properties    {true};
-        bool node_tree          {true};
-        bool operation_stack    {true};
-        bool operations         {true};
-        bool performance        {false};
-        bool pipelines          {false};
-        bool physics            {false};
-        bool physics_tool       {false};
-        bool post_processing    {false};
-        bool tool_properties    {true};
-        bool trs                {false};
-        bool view               {false};
-        bool viewport           {true};
-        bool viewport_config    {false};
+        bool brushes             {true};
+        bool debug_view          {false};
+        bool debug_visualizations{false};
+        bool fly_camera          {false};
+        bool grid                {false};
+        bool layers              {false};
+        bool log                 {false};
+        bool materials           {true};
+        bool material_properties {true};
+        bool mesh_properties     {false};
+        bool node_properties     {true};
+        bool node_tree           {true};
+        bool operation_stack     {true};
+        bool operations          {true};
+        bool performance         {false};
+        bool pipelines           {false};
+        bool physics             {false};
+        bool physics_tool        {false};
+        bool post_processing     {false};
+        bool tool_properties     {true};
+        bool trs                 {false};
+        bool view                {false};
+        bool viewport            {true};
+        bool viewport_config     {false};
     };
     Windows windows;
 

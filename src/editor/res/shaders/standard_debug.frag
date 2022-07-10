@@ -82,6 +82,7 @@ void main()
     out_color.rgb = srgb_to_linear(vec3(v_color.a));
 #endif
 #if defined(ERHE_DEBUG_MISC)
+    // Show Draw ID
     const vec3 palette[24] = vec3[24](
         vec3(0.0, 0.0, 0.0), // 0
         vec3(1.0, 0.0, 0.0), // 1
@@ -109,7 +110,22 @@ void main()
         vec3(1.0, 0.5, 1.0)  // 23
     );
 
+
+    // Show Directional light L . N
     out_color.rgb = srgb_to_linear(palette[v_material_index % 24]);
+
+    Light light          = light_block.lights[0];
+    vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
+    vec3  L              = normalize(point_to_light);   // Direction from surface point to light
+    float N_dot_L        = dot(N, L);
+    float N_dot_V        = dot(N, V);
+
+    out_color.rgb = srgb_to_linear(vec3(N_dot_L));
+
+    // Show material
+    Material material = material.materials[v_material_index];
+    out_color.rgb = srgb_to_linear(material.base_color.rgb);
+
 #endif
 
     out_color.a = 1.0;

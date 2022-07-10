@@ -1,6 +1,6 @@
 #pragma once
 
-#include "renderers/base_renderer.hpp"
+#include "renderers/primitive_buffer.hpp"
 
 #include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
@@ -35,9 +35,9 @@ public:
     glm::vec4 corner_color         {0.00f, 0.00f, 1.00f, 1.0f};
     glm::vec4 centroid_color       {0.00f, 0.00f, 1.00f, 1.0f};
 
-    Base_renderer::Primitive_color_source edge_lines_color_source       {Base_renderer::Primitive_color_source::constant_color};
-    Base_renderer::Primitive_color_source polygon_centroids_color_source{Base_renderer::Primitive_color_source::constant_color};
-    Base_renderer::Primitive_color_source corner_points_color_source    {Base_renderer::Primitive_color_source::constant_color};
+    Primitive_color_source edge_lines_color_source       {Primitive_color_source::constant_color};
+    Primitive_color_source polygon_centroids_color_source{Primitive_color_source::constant_color};
+    Primitive_color_source corner_points_color_source    {Primitive_color_source::constant_color};
 };
 
 enum class Visualization_mode : unsigned int
@@ -85,9 +85,8 @@ public:
     class Debug_visualizations
     {
     public:
-        Visualization_mode light       {Visualization_mode::selected};
-        Visualization_mode light_camera{Visualization_mode::off};
-        Visualization_mode camera      {Visualization_mode::selected};
+        Visualization_mode light {Visualization_mode::selected};
+        Visualization_mode camera{Visualization_mode::selected};
     };
 
     Debug_visualizations debug_visualizations;
