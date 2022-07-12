@@ -278,7 +278,7 @@ void Forward_renderer::render_fullscreen(
         erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
 
         m_pipeline_state_tracker->execute(pipeline);
-        gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, 4);
+        gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, 3);
 
         if (pass->end)
         {

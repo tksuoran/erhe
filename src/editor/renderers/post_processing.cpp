@@ -648,7 +648,7 @@ void Post_processing::downsample(
         static constexpr std::string_view c_draw_arrays{"draw arrays"};
 
         ERHE_PROFILE_GPU_SCOPE(c_draw_arrays)
-        gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, 4);
+        gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, 3);
     }
     {
         ERHE_PROFILE_SCOPE("bind fbo");
@@ -779,7 +779,7 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
 
     {
         ERHE_PROFILE_SCOPE("draw arrays");
-        gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, 4);
+        gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, 3);
     }
 
     {
