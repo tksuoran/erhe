@@ -28,6 +28,7 @@ public:
     gl::Internal_format internal_format       {gl::Internal_format::rgba8};
     bool                use_mipmaps           {false};
     bool                fixed_sample_locations{true};
+    bool                sparse                {false};
     int                 sample_count          {0};
     int                 width                 {1};
     int                 height                {1};

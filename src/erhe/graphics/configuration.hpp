@@ -25,6 +25,7 @@ public:
         bool use_binary_shaders     {false};
         bool use_integer_polygon_ids{false};
         bool use_bindless_texture   {false};
+        bool use_sparse_texture     {false};
     };
 
     class Limits

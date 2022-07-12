@@ -7,6 +7,7 @@
 # include <csignal>
 #endif
 
+#include <sstream>
 #include <vector>
 
 #define LOG_CATEGORY log_configuration
@@ -324,6 +325,84 @@ void Instance::initialize()
         info.use_bindless_texture = true;
     }
     log_configuration->info("GL_ARB_bindless_texture supported : {}", info.use_bindless_texture);
+
+    if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_sparse_texture))
+    {
+        info.use_sparse_texture = true;
+        GLint max_sparse_texture_size{};
+        gl::get_integer_v(gl::Get_p_name::max_sparse_texture_size_arb, &max_sparse_texture_size);
+        log_configuration->info("max sparse texture size : {}", max_sparse_texture_size);
+
+        gl::Internal_format formats[] = {
+            gl::Internal_format::r8,
+            gl::Internal_format::rgba8,
+            gl::Internal_format::rgba16f,
+            gl::Internal_format::rg32f,
+            gl::Internal_format::rgba32f,
+            gl::Internal_format::depth_component,
+            gl::Internal_format::depth_component32f,
+            gl::Internal_format::depth24_stencil8,
+            gl::Internal_format::stencil_index8
+        };
+
+        for (const auto format : formats)
+        {
+            GLint num_virtual_page_sizes{};
+            gl::get_internalformat_iv(
+                gl::Texture_target::texture_2d,
+                format,
+                gl::Internal_format_p_name::num_virtual_page_sizes_arb,
+                1,
+                &num_virtual_page_sizes
+            );
+
+            if (num_virtual_page_sizes == 0)
+            {
+                continue;
+            }
+
+            std::vector<GLint64> x_sizes;
+            std::vector<GLint64> y_sizes;
+            std::vector<GLint64> z_sizes;
+            x_sizes.resize(num_virtual_page_sizes);
+            y_sizes.resize(num_virtual_page_sizes);
+            z_sizes.resize(num_virtual_page_sizes);
+            gl::get_internalformat_i_64v(
+                gl::Texture_target::texture_2d,
+                format,
+                gl::Internal_format_p_name::virtual_page_size_x_arb,
+                static_cast<GLsizei>(num_virtual_page_sizes),
+                x_sizes.data()
+            );
+            gl::get_internalformat_i_64v(
+                gl::Texture_target::texture_2d,
+                format,
+                gl::Internal_format_p_name::virtual_page_size_y_arb,
+                static_cast<GLsizei>(num_virtual_page_sizes),
+                y_sizes.data()
+            );
+            gl::get_internalformat_i_64v(
+                gl::Texture_target::texture_2d,
+                format,
+                gl::Internal_format_p_name::virtual_page_size_z_arb,
+                static_cast<GLsizei>(num_virtual_page_sizes),
+                z_sizes.data()
+            );
+            std::stringstream ss;
+            for (GLint i = 0; i < num_virtual_page_sizes; ++i)
+            {
+                ss << fmt::format(" {} x {} x {}", x_sizes[i], y_sizes[i], z_sizes[i]);
+            }
+
+            log_configuration->info(
+                "    {} : num page sizes {} :{}",
+                gl::c_str(format),
+                num_virtual_page_sizes,
+                ss.str()
+            );
+        }
+    }
+    log_configuration->info("GL_ARB_sparse_texture supported : {}", info.use_sparse_texture);
 }
 
 } // namespace erhe::graphics

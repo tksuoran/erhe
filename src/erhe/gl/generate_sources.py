@@ -212,7 +212,13 @@ class GLGenerator:
 
     def __init__(self, outpath):
         """Constructor for GLGenerator."""
-        self.extensions_to_collect                     = [ 'GL_ARB_bindless_texture' ]
+        self.extensions_to_collect = [
+            'GL_ARB_bindless_texture',
+            'GL_ARB_sparse_texture',
+            'GL_ARB_sparse_texture2',
+            'GL_ARB_sparse_texture_clamp',
+            'GL_KHR_parallel_shader_compile'
+        ]
         self.script_path = os.path.dirname(os.path.realpath(__file__))
         self.outpath     = outpath
         self.func_prefix = 'gl'

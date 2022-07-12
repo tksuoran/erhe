@@ -401,6 +401,11 @@ Texture::Texture(const Create_info& create_info)
 
     const auto dimensions = storage_dimensions(m_target);
 
+    if (create_info.sparse && Instance::info.use_sparse_texture)
+    {
+        gl::texture_parameter_i(m_handle.gl_name(), gl::Texture_parameter_name::texture_sparse_arb, GL_TRUE);
+    }
+
     if (create_info.wrap_texture_name != 0)
     {
         // Current limitation
@@ -517,6 +522,12 @@ Texture::Texture(const Create_info& create_info)
             ERHE_FATAL("Bad texture target");
         }
     }
+
+    //if (create_info.sparse && Instance::info.use_sparse_texture)
+    //{
+    //    GLint num_sparse_levels{};
+    //    gl::get_texture_parameter_iv(gl_name(), gl::Get_texture_parameter::num_sparse_levels_arb, &num_sparse_levels);
+    //}
 }
 
 void Texture::upload(
