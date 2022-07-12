@@ -91,7 +91,7 @@ void Multi_buffer::bind()
 
     ERHE_VERIFY(
         (buffer.target() != gl::Buffer_target::uniform_buffer) ||
-        (m_writer.range.byte_count <= erhe::graphics::Instance::limits.max_uniform_block_size)
+        (m_writer.range.byte_count <= static_cast<std::size_t>(erhe::graphics::Instance::limits.max_uniform_block_size))
     );
     ERHE_VERIFY(
         m_writer.range.first_byte_offset + m_writer.range.byte_count <= buffer.capacity_byte_count()

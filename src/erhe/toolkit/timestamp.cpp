@@ -2,7 +2,9 @@
 
 #include <fmt/format.h>
 
-#define _POSIX_THREAD_SAFE_FUNCTIONS 1
+#if !defined(_POSIX_THREAD_SAFE_FUNCTIONS)
+#   define _POSIX_THREAD_SAFE_FUNCTIONS 1
+#endif
 #include <ctime>
 
 namespace erhe::toolkit

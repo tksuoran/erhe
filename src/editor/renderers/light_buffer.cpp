@@ -50,9 +50,9 @@ Light_interface::Light_interface(std::size_t max_light_count)
 }
 
 Light_buffer::Light_buffer(const Light_interface& light_interface)
-    : m_light_buffer   {"light"}
+    : m_light_interface{light_interface}
+    , m_light_buffer   {"light"}
     , m_control_buffer {"light_control"}
-    , m_light_interface{light_interface}
 {
     m_light_buffer.allocate(
         gl::Buffer_target::uniform_buffer,

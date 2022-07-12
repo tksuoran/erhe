@@ -85,6 +85,8 @@ erhe_target_sources_grouped(
     scene/scene_root.cpp
     scene/scene_root.hpp
 
+    tools/debug_visualizations.cpp
+    tools/debug_visualizations.hpp
     tools/fly_camera_tool.cpp
     tools/fly_camera_tool.hpp
     tools/grid_tool.cpp

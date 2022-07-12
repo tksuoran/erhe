@@ -276,7 +276,6 @@ public:
         // green channel = apply texture coordinate to anisotropy
         const glm::vec4 non_anisotropic          {0.0f, 0.0f, 0.0f, 0.0f}; // Used on tips
         const glm::vec4 anisotropic_no_texcoord  {1.0f, 0.0f, 0.0f, 0.0f}; // Used on lateral surface
-        const glm::vec4 anisotropic_with_texcoord{1.0f, 1.0f, 0.0f, 0.0f}; // Used on bottom / top ends
 
         for (int stack = 1; stack < stack_count; ++stack)
         {

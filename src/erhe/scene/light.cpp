@@ -72,7 +72,6 @@ auto Light::projection_transforms(
     const vec3 light_direction       = vec3{light->direction_in_world()};
     const vec3 light_up_vector       = vec3{light->world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
     const vec3 view_camera_position  = vec3{view_camera.position_in_world()};
-    const vec3 light_camera_position = view_camera_position + r * light_direction;
 
     // Rotation only transform
     const mat3 world_from_light{light->world_from_node()};

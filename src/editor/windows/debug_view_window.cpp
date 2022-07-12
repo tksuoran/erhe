@@ -121,9 +121,11 @@ void Debug_view_window::update_framebuffer()
     ERHE_PROFILE_FUNCTION
 
     if (
-        m_texture &&
-        (m_texture->width()  == m_viewport.width) &&
-        (m_texture->height() == m_viewport.height) ||
+        (
+            m_texture &&
+            (m_texture->width()  == m_viewport.width) &&
+            (m_texture->height() == m_viewport.height)
+        ) ||
         (m_viewport.width < 1) ||
         (m_viewport.height < 1)
     )
