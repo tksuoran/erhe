@@ -252,7 +252,7 @@ void Forward_renderer::render_fullscreen(
         m_light_buffers->bind_light_buffer();
     }
 
-    if (enable_shadows)
+    if (erhe::graphics::Instance::info.use_bindless_texture)
     {
         gl::make_texture_handle_resident_arb(shadow_texture_handle);
     }
@@ -286,7 +286,7 @@ void Forward_renderer::render_fullscreen(
         }
     }
 
-    if (enable_shadows)
+    if (erhe::graphics::Instance::info.use_bindless_texture)
     {
         gl::make_texture_handle_non_resident_arb(shadow_texture_handle);
     }
