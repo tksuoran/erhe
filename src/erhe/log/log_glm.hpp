@@ -20,7 +20,7 @@ template <> struct fmt::formatter<glm::vec2>
     template <typename FormatContext>
     auto format(const glm::vec2& p, FormatContext& ctx) -> decltype(ctx.out())
     {
-        return fmt::format_to(ctx.out(), "({:.1f}, {:.1f})", p.x, p.y);
+        return fmt::format_to(ctx.out(), "({:.3f}, {:.3f})", p.x, p.y);
     }
 };
 
@@ -40,7 +40,7 @@ template <> struct fmt::formatter<glm::vec3>
     template <typename FormatContext>
     auto format(const glm::vec3& p, FormatContext& ctx) -> decltype(ctx.out())
     {
-        return fmt::format_to(ctx.out(), "({:.1f}, {:.1f}, {:.1f})", p.x, p.y, p.z);
+        return fmt::format_to(ctx.out(), "({:.3f}, {:.3f}, {:.3f})", p.x, p.y, p.z);
     }
 };
 
@@ -60,7 +60,7 @@ template <> struct fmt::formatter<glm::vec4>
     template <typename FormatContext>
     auto format(const glm::vec4& p, FormatContext& ctx) -> decltype(ctx.out())
     {
-        return fmt::format_to(ctx.out(), "({:.1f}, {:.1f}, {:.1f}, {:.1f})", p.x, p.y, p.z, p.w);
+        return fmt::format_to(ctx.out(), "({:.3f}, {:.3f}, {:.3f}, {:.3f})", p.x, p.y, p.z, p.w);
     }
 };
 
@@ -81,7 +81,7 @@ template <> struct fmt::formatter<glm::dvec2>
     template <typename FormatContext>
     auto format(const glm::dvec2& p, FormatContext& ctx) -> decltype(ctx.out())
     {
-        return fmt::format_to(ctx.out(), "({:.1f}, {:.1f})", p.x, p.y);
+        return fmt::format_to(ctx.out(), "({:.3f}, {:.3f})", p.x, p.y);
     }
 };
 
@@ -101,7 +101,7 @@ template <> struct fmt::formatter<glm::dvec3>
     template <typename FormatContext>
     auto format(const glm::dvec3& p, FormatContext& ctx) -> decltype(ctx.out())
     {
-        return fmt::format_to(ctx.out(), "({:.1f}, {:.1f}, {:.1f})", p.x, p.y, p.z);
+        return fmt::format_to(ctx.out(), "({:.3f}, {:.3f}, {:.3f})", p.x, p.y, p.z);
     }
 };
 
@@ -121,7 +121,7 @@ template <> struct fmt::formatter<glm::dvec4>
     template <typename FormatContext>
     auto format(const glm::dvec4& p, FormatContext& ctx) -> decltype(ctx.out())
     {
-        return fmt::format_to(ctx.out(), "({:.1f}, {:.1f}, {:.1f}, {:.1f})", p.x, p.y, p.z, p.w);
+        return fmt::format_to(ctx.out(), "({:.3f}, {:.3f}, {:.3f}, {:.3f})", p.x, p.y, p.z, p.w);
     }
 };
 

@@ -140,7 +140,7 @@ void Scene_builder::setup_cameras()
         vec3{0.0f, 1.0f, 3.0f},
         vec3{0.0f, 0.5f, 0.0f}
     );
-    //camera_a->projection()->z_far = 10.0;
+    camera_a->projection()->z_far = 64.0f;
     camera_a->node_data.wireframe_color = glm::vec4{1.0f, 0.6f, 0.3f, 1.0f};
 
     const auto& camera_b = make_camera(

@@ -202,8 +202,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> const Light
         .require_at_least_one_bit_clear = 0u
     };
 
-    log_render->info("Shadow renderer updating light buffers texture from world");
-
     m_light_projections = Light_projections{
         lights,
         parameters.camera,
