@@ -9,7 +9,7 @@
 #include "erhe/primitive/material.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <imgui/imgui.h>
+#include <imgui.h>
 
 namespace editor
 {

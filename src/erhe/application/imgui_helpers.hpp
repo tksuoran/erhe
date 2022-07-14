@@ -2,7 +2,11 @@
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 
+#include "erhe/toolkit/window.hpp"
+
 #include <imgui.h>
+
+struct ImGuiIO;
 
 namespace erhe::application
 {
@@ -30,6 +34,9 @@ void make_combo(
     ImGui::Combo(label, &int_value, items, items_count, popup_max_height_in_items);
     value = static_cast<T>(int_value);
 }
+
+auto from_erhe           (const erhe::toolkit::Keycode keycode) -> ImGuiKey;
+void update_key_modifiers(::ImGuiIO& io, uint32_t modifier_mask);
 
 } // namespace editor
 

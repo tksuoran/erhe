@@ -24,6 +24,7 @@ namespace erhe::application
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 class Imgui_renderer;
 #endif
+class Imgui_viewport;
 class Pointer_context;
 
 class Imgui_window_context
@@ -59,6 +60,9 @@ public:
         const int                                       height
     );
 
+    auto get_viewport() const -> Imgui_viewport*;
+    void set_viewport(Imgui_viewport* imgui_viewport);
+
     virtual void imgui               () = 0;
     virtual auto get_window_type_hash() const -> uint32_t;
     virtual void on_begin            ();
@@ -71,6 +75,7 @@ protected:
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     std::shared_ptr<Imgui_renderer> m_imgui_renderer;
 #endif
+    Imgui_viewport*   m_imgui_viewport{nullptr};
 
     bool              m_is_visible{true};
     const std::string m_title;
@@ -79,15 +84,15 @@ protected:
     glm::vec2         m_max_size{99999.0f, 99999.0f};
 };
 
-class Rendertarget_imgui_window
-    : public Imgui_window
-{
-public:
-    explicit Rendertarget_imgui_window(const std::string_view title);
-
-    auto flags   () -> ImGuiWindowFlags override;
-    void on_begin()                     override;
-    void on_end  ()                     override;
-};
+//class Rendertarget_imgui_window
+//    : public Imgui_window
+//{
+//public:
+//    explicit Rendertarget_imgui_window(const std::string_view title);
+//
+//    auto flags   () -> ImGuiWindowFlags override;
+//    void on_begin()                     override;
+//    void on_end  ()                     override;
+//};
 
 } // namespace erhe::application

@@ -3,6 +3,10 @@
 #include "operations/operation_stack.hpp"
 #include "operations/ioperation.hpp"
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
+
 namespace editor
 {
 

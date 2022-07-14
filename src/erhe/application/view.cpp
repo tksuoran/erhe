@@ -217,7 +217,7 @@ static constexpr std::string_view c_swap_buffers{"swap_buffers"};
 
 void View::run()
 {
-    m_imgui_windows->make_imgui_context_current();
+    //m_imgui_windows->make_imgui_context_current();
     for (;;)
     {
         SPDLOG_LOGGER_TRACE(log_frame, "\n-------- new frame --------\n");

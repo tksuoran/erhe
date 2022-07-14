@@ -7,6 +7,7 @@
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/graphics/debug.hpp"
+#include "erhe/scene/scene.hpp"
 
 namespace editor
 {

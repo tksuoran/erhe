@@ -143,6 +143,8 @@ erhe_target_sources_grouped(
     log.hpp
     main.cpp
     on_load.cpp
+    rendertarget_imgui_viewport.cpp
+    rendertarget_imgui_viewport.hpp
     task_queue.cpp
     task_queue.hpp
     view_client.cpp

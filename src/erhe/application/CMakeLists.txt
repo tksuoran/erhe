@@ -55,18 +55,24 @@ erhe_target_sources_grouped(
     configuration.hpp
     controller.cpp
     controller.hpp
+    imgui_viewport.cpp
+    imgui_viewport.hpp
     imgui_windows.cpp
     imgui_windows.hpp
     log.cpp
     log.hpp
     renderdoc_capture_support.cpp
     renderdoc_capture_support.hpp
+    scoped_imgui_context.cpp
+    scoped_imgui_context.hpp
     time.cpp
     time.hpp
     view.cpp
     view.hpp
     window.cpp
     window.hpp
+    window_imgui_viewport.cpp
+    window_imgui_viewport.hpp
 )
 
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")

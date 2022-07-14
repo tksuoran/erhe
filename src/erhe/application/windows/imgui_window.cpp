@@ -54,6 +54,16 @@ void Imgui_window::image(
 #endif
 }
 
+auto Imgui_window::get_viewport() const -> Imgui_viewport*
+{
+    return m_imgui_viewport;
+}
+
+void Imgui_window::set_viewport(Imgui_viewport* imgui_viewport)
+{
+    m_imgui_viewport = imgui_viewport;
+}
+
 void Imgui_window::show()
 {
     m_is_visible = true;
@@ -139,6 +149,7 @@ void Imgui_window::on_end()
 {
 }
 
+#if 0
 Rendertarget_imgui_window::Rendertarget_imgui_window(
     const std::string_view title
 )
@@ -179,5 +190,6 @@ void Rendertarget_imgui_window::on_end()
     ImGui::PopStyleVar();
 #endif
 }
+#endif
 
 } // namespace erhe::application

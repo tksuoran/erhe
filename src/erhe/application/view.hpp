@@ -50,8 +50,8 @@ class View
     , public Imgui_window
 {
 public:
-    static constexpr std::string_view c_label{"Editor_view"};
-    static constexpr std::string_view c_title{"Commands"};
+    static constexpr std::string_view c_label{"View"};
+    static constexpr std::string_view c_title{"View"};
     static constexpr uint32_t         hash{
         compiletime_xxhash::xxh32(
             c_title.data(),
@@ -134,7 +134,7 @@ public:
     [[nodiscard]] auto last_mouse_position      () const -> glm::dvec2;
     [[nodiscard]] auto last_mouse_position_delta() const -> glm::dvec2;
     [[nodiscard]] auto last_mouse_wheel_delta   () const -> glm::dvec2;
-    [[nodiscard]] auto pointer_context          () const -> Pointer_context*;
+    //[[nodiscard]] auto pointer_context          () const -> Pointer_context*;
 
     void set_mouse_input_sink(Imgui_window* mouse_input_sink);
 

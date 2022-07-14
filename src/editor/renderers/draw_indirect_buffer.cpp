@@ -14,7 +14,7 @@
 #include "erhe/scene/viewport.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <imgui/imgui.h>
+#include <imgui.h>
 
 namespace editor
 {

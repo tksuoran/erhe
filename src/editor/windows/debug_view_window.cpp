@@ -13,6 +13,7 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/scene/scene.hpp" // TODO move light layer to separate header
 #include "erhe/toolkit/profile.hpp"
 
 namespace editor
