@@ -1,3 +1,5 @@
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "renderers/shadow_renderer.hpp"
 
 #include "log.hpp"
@@ -7,6 +9,8 @@
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/gl/gl.hpp"
+#include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/debug.hpp"
@@ -17,17 +21,19 @@
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/vertex_format.hpp"
+#include "erhe/graphics/vertex_format.hpp"
+#include "erhe/log/log_glm.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/scene.hpp"
-#include "erhe/gl/gl.hpp"
-#include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+
+#include <sstream>
 
 namespace editor
 {
@@ -122,11 +128,31 @@ void Shadow_renderer::initialize_component()
             {
                 .target          = gl::Texture_target::texture_2d_array,
                 .internal_format = gl::Internal_format::depth_component32f,
+                //.sparse          = erhe::graphics::Instance::info.use_sparse_texture,
                 .width           = config.enabled ? config.shadow_map_resolution : 1,
                 .height          = config.enabled ? config.shadow_map_resolution : 1,
                 .depth           = config.shadow_map_max_light_count,
             }
         );
+
+#if 0
+        if (erhe::graphics::Instance::info.use_sparse_texture)
+        {
+            // commit the whole texture for now
+            gl::texture_page_commitment_ext(
+                m_texture->gl_name(),
+                0,                  // level
+                0,                  // x offset
+                0,                  // y offset,
+                0,                  // z offset
+                m_texture->width(),
+                m_texture->height(),
+                m_texture->depth(),
+                GL_TRUE
+            );
+        }
+#endif
+
         m_texture->set_debug_label("Shadowmaps");
         //float depth_clear_value = erhe::graphics::Instance::depth_clear_value;
         //gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
@@ -204,13 +230,14 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> const Light
 
     m_light_projections = Light_projections{
         lights,
-        parameters.camera,
+        parameters.view_camera,
         m_viewport,
         erhe::graphics::get_handle(
             *m_texture.get(),
             *get<Programs>()->nearest_sampler.get()
         )
     };
+
     m_light_buffers->update(
         lights,
         m_light_projections,
@@ -249,6 +276,14 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> const Light
 
             m_light_buffers->update_control(light_index);
             m_light_buffers->bind_control_buffer();
+
+            //Frustum_tiler frustum_tiler{*m_texture.get()};
+            //frustum_tiler.update(
+            //    light_index,
+            //    m_light_projections.projection_transforms[light_index].clip_from_world.matrix(),
+            //    parameters.view_camera,
+            //    parameters.view_camera_viewport
+            //);
 
             {
                 ERHE_PROFILE_SCOPE("bind fbo");

@@ -15,9 +15,11 @@
 namespace erhe::graphics
 {
 
-Instance::Info                   Instance::info;
-Instance::Limits                 Instance::limits;
-Instance::Implementation_defined Instance::implementation_defined;
+Instance::Info                                     Instance::info;
+Instance::Limits                                   Instance::limits;
+Instance::Implementation_defined                   Instance::implementation_defined;
+std::unordered_map<gl::Internal_format, Tile_size> Instance::sparse_tile_sizes;
+
 //std::vector<gl::Extension>       Instance::extensions;
 
 namespace
@@ -393,6 +395,11 @@ void Instance::initialize()
             {
                 ss << fmt::format(" {} x {} x {}", x_sizes[i], y_sizes[i], z_sizes[i]);
             }
+            sparse_tile_sizes[format] = Tile_size{
+                .x = static_cast<int>(x_sizes[0]),
+                .y = static_cast<int>(y_sizes[0]),
+                .z = static_cast<int>(z_sizes[0]),
+            };
 
             log_configuration->info(
                 "    {} : num page sizes {} :{}",

@@ -468,18 +468,20 @@ void Editor_rendering::render()
 
         // TODO Choose viewport camera
         //
-        //const Viewport_window*     window = m_pointer_context->window();
-        //const erhe::scene::Camera* camera = (window != nullptr)
-        //    ? window->camera()
-        //    : nullptr;
-        const erhe::scene::Camera* camera = m_scene_root->scene().cameras.front().get();
+        const Viewport_window* window = m_pointer_context->window();
+        const erhe::scene::Camera* camera = (window != nullptr)
+            ? window->camera()
+            : m_scene_root->scene().cameras.front().get();
         if (camera != nullptr)
         {
             m_shadow_renderer->render(
                 {
-                    .camera     = *camera,
-                    .mesh_spans = { m_scene_root->content_layer()->meshes },
-                    .lights     = m_scene_root->light_layer()->lights
+                    .view_camera          = *camera,
+                    .view_camera_viewport = (window != nullptr)
+                        ? window->viewport()
+                        : erhe::scene::Viewport{0, 0, 1920, 1080},
+                    .mesh_spans           = { m_scene_root->content_layer()->meshes },
+                    .lights               = m_scene_root->light_layer()->lights
                 }
             );
             get<Debug_view_window>()->render();

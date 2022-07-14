@@ -404,6 +404,7 @@ Texture::Texture(const Create_info& create_info)
     if (create_info.sparse && Instance::info.use_sparse_texture)
     {
         gl::texture_parameter_i(m_handle.gl_name(), gl::Texture_parameter_name::texture_sparse_arb, GL_TRUE);
+        m_is_sparse = true;
     }
 
     if (create_info.wrap_texture_name != 0)
@@ -522,12 +523,26 @@ Texture::Texture(const Create_info& create_info)
             ERHE_FATAL("Bad texture target");
         }
     }
+}
 
-    //if (create_info.sparse && Instance::info.use_sparse_texture)
-    //{
-    //    GLint num_sparse_levels{};
-    //    gl::get_texture_parameter_iv(gl_name(), gl::Get_texture_parameter::num_sparse_levels_arb, &num_sparse_levels);
-    //}
+auto Texture::is_sparse() const -> bool
+{
+    return m_is_sparse;
+}
+
+auto Texture::get_sparse_tile_size() const -> Tile_size
+{
+    if (!m_is_sparse)
+    {
+        return Tile_size{0, 0, 0};
+    }
+
+    const auto i = Instance::sparse_tile_sizes.find(m_internal_format);
+    if (i == Instance::sparse_tile_sizes.end())
+    {
+        return Tile_size{0, 0, 0};
+    }
+    return i->second;
 }
 
 void Texture::upload(

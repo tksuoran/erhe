@@ -292,6 +292,32 @@ template <typename T>
     };
 }
 
+template <typename T>
+[[nodiscard]] auto project_to_screen_space_2d(
+    const typename vector_types<T>::mat4 clip_from_world,
+    const typename vector_types<T>::vec3 position_in_world,
+    const T                              viewport_width,
+    const T                              viewport_height
+) -> typename vector_types<T>::vec2
+{
+    using vec2 = typename vector_types<T>::vec2;
+    using vec4 = typename vector_types<T>::vec4;
+
+    const T    viewport_center_x = viewport_width  * T{0.5};
+    const T    viewport_center_y = viewport_height * T{0.5};
+    const vec4 clip = clip_from_world * vec4{position_in_world, T{1.0}};
+
+    const vec2 ndc{
+        clip.x / clip.w,
+        clip.y / clip.w
+    };
+
+    return vec2{
+        viewport_width  * T{0.5} * ndc.x + viewport_center_x,
+        viewport_height * T{0.5} * ndc.y + viewport_center_y,
+    };
+}
+
 [[nodiscard]] auto create_frustum(
     const float left,
     const float right,

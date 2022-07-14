@@ -45,6 +45,8 @@ erhe_target_sources_grouped(
     renderers/draw_indirect_buffer.hpp
     renderers/forward_renderer.cpp
     renderers/forward_renderer.hpp
+    renderers/frustum_tiler.cpp
+    renderers/frustum_tiler.hpp
     renderers/id_renderer.cpp
     renderers/id_renderer.hpp
     renderers/light_buffer.cpp

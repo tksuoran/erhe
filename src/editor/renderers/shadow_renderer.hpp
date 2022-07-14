@@ -59,7 +59,8 @@ public:
     class Render_parameters
     {
     public:
-        const erhe::scene::Camera&                                 camera;
+        const erhe::scene::Camera&                                 view_camera;
+        const erhe::scene::Viewport                                view_camera_viewport;
         const std::initializer_list<
             const gsl::span<
                 const std::shared_ptr<erhe::scene::Mesh>

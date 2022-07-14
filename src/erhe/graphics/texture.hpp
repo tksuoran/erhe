@@ -1,6 +1,9 @@
 #pragma once
 
+#include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/gl_objects.hpp"
+
+#include <glm/glm.hpp>
 
 #include <gsl/span>
 
@@ -89,15 +92,17 @@ public:
 
     void set_debug_label(const std::string& value);
 
-    [[nodiscard]] auto debug_label () const -> const std::string&;
-    [[nodiscard]] auto width       () const -> int;
-    [[nodiscard]] auto height      () const -> int;
-    [[nodiscard]] auto depth       () const -> int;
-    [[nodiscard]] auto sample_count() const -> int;
-    [[nodiscard]] auto target      () const -> gl::Texture_target;
-    [[nodiscard]] auto is_layered  () const -> bool;
-    [[nodiscard]] auto gl_name     () const -> GLuint;
-    [[nodiscard]] auto get_handle  () const -> uint64_t;
+    [[nodiscard]] auto debug_label         () const -> const std::string&;
+    [[nodiscard]] auto width               () const -> int;
+    [[nodiscard]] auto height              () const -> int;
+    [[nodiscard]] auto depth               () const -> int;
+    [[nodiscard]] auto sample_count        () const -> int;
+    [[nodiscard]] auto target              () const -> gl::Texture_target;
+    [[nodiscard]] auto is_layered          () const -> bool;
+    [[nodiscard]] auto gl_name             () const -> GLuint;
+    [[nodiscard]] auto get_handle          () const -> uint64_t;
+    [[nodiscard]] auto is_sparse           () const -> bool;
+    [[nodiscard]] auto get_sparse_tile_size() const -> Tile_size;
 
 private:
     Gl_texture          m_handle;
@@ -105,6 +110,7 @@ private:
     gl::Texture_target  m_target                {gl::Texture_target::texture_2d};
     gl::Internal_format m_internal_format       {gl::Internal_format::rgba8};
     bool                m_fixed_sample_locations{true};
+    bool                m_is_sparse             {false};
     int                 m_sample_count          {0};
     int                 m_level_count           {0};
     int                 m_width                 {0};

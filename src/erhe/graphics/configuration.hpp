@@ -1,9 +1,19 @@
 #pragma once
 
-//#include "erhe/gl/command_info.hpp"
+#include "erhe/gl/wrapper_enums.hpp"
+
+#include <unordered_map>
 
 namespace erhe::graphics
 {
+
+class Tile_size
+{
+public:
+    int x{0};
+    int y{0};
+    int z{0};
+};
 
 class Instance
 {
@@ -63,6 +73,8 @@ public:
     static Info                   info;
     static Limits                 limits;
     static Implementation_defined implementation_defined;
+
+    static std::unordered_map<gl::Internal_format, Tile_size> sparse_tile_sizes;
 
     using PFN_generic          = void (*) ();
     using PFN_get_proc_address = PFN_generic (*) (const char*);
