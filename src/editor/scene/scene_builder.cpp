@@ -962,17 +962,12 @@ auto Scene_builder::make_spot_light(
 ) -> std::shared_ptr<Light>
 {
     auto light = std::make_shared<Light>(name);
-    light->type                          = Light::Type::spot;
-    light->color                         = color;
-    light->intensity                     = intensity;
-    light->range                         = 25.0f;
-    light->inner_spot_angle              = spot_cone_angle[0];
-    light->outer_spot_angle              = spot_cone_angle[1];
-    //light->projection()->projection_type = Projection::Type::perspective;//orthogonal;
-    //light->projection()->fov_x           = light->outer_spot_angle;
-    //light->projection()->fov_y           = light->outer_spot_angle;
-    //light->projection()->z_near          =  1.0f;
-    //light->projection()->z_far           = 100.0f;
+    light->type             = Light::Type::spot;
+    light->color            = color;
+    light->intensity        = intensity;
+    light->range            = 25.0f;
+    light->inner_spot_angle = spot_cone_angle[0];
+    light->outer_spot_angle = spot_cone_angle[1];
 
     m_scene_root->scene().add_to_light_layer(
         *m_scene_root->light_layer(),

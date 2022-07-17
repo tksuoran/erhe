@@ -16,6 +16,8 @@
 #include "erhe/scene/scene.hpp" // TODO move light layer to separate header
 #include "erhe/toolkit/profile.hpp"
 
+#include <imgui/imgui.h>
+
 namespace editor
 {
 
@@ -97,9 +99,16 @@ void Debug_view_window::render()
         return;
     }
 
+    if (m_light_index >= m_shadow_renderer->light_projections().light_projection_transforms.size())
+    {
+        return;
+    }
+
     erhe::graphics::Scoped_debug_group pass_scope{m_debug_label};
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
+
+    const erhe::scene::Light_projection_transforms& light_projection_transforms = m_shadow_renderer->light_projections().light_projection_transforms.at(m_light_index);
 
     m_forward_renderer->render_fullscreen(
         Forward_renderer::Render_parameters{
@@ -110,7 +119,7 @@ void Debug_view_window::render()
             .materials         = m_scene_root->materials(),
             .passes            = { &m_renderpass }
         },
-        m_light_index
+        light_projection_transforms.light
     );
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
@@ -167,10 +176,14 @@ void Debug_view_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
-    const auto& light_projections = m_shadow_renderer->light_projections();
-    const int count = static_cast<int>(light_projections.texture_from_world.size());
+    const auto& light_projections           = m_shadow_renderer->light_projections();
+    const auto& light_projection_transforms = light_projections.light_projection_transforms;
+    const int count = static_cast<int>(light_projection_transforms.size());
     for (int i = 0; i < count; ++i)
     {
+        const auto& light_projection_transform = light_projection_transforms.at(i);
+        ERHE_VERIFY(light_projection_transform.light != nullptr);
+
         ImGui::SameLine();
         //ImGui::SetNextItemWidth(30.0f);
         std::string label = fmt::format("{}", i);
@@ -185,6 +198,10 @@ void Debug_view_window::imgui()
         )
         {
             m_light_index = i;
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("%s", light_projection_transform.light->name().c_str());
         }
     }
 

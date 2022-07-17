@@ -4,16 +4,12 @@
 
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/scene/camera.hpp"
+#include "erhe/scene/light.hpp"
 #include "erhe/scene/transform.hpp"
 #include "erhe/scene/viewport.hpp"
 
 #include <memory>
-
-namespace erhe::scene
-{
-    class Camera;
-    class Light;
-}
+#include <optional>
 
 namespace editor
 {
@@ -63,15 +59,25 @@ public:
     Light_projections();
     Light_projections(
         const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
-        const erhe::scene::Camera&                                  camera,
-        erhe::scene::Viewport                                       light_texture_viewport,
+        const erhe::scene::Camera*                                  view_camera,
+        const erhe::scene::Viewport&                                view_camera_viewport,
+        const erhe::scene::Viewport&                                light_texture_viewport,
         uint64_t                                                    shadow_map_texture_handle
     );
 
-    std::vector<erhe::scene::Projection_transforms> projection_transforms;
-    std::vector<erhe::scene::Transform>             texture_from_world;
-    erhe::scene::Viewport                           light_texture_viewport;
-    uint64_t                                        shadow_map_texture_handle;
+    // Warning: Returns pointer to element of member vector. That pointer
+    //          should remain stable as long as Light_projections stays
+    //          alive.
+    [[nodiscard]] auto get_light_projection_transforms_for_light(
+        const erhe::scene::Light* light
+    ) -> erhe::scene::Light_projection_transforms*;
+    [[nodiscard]] auto get_light_projection_transforms_for_light(
+        const erhe::scene::Light* light
+    ) const -> const erhe::scene::Light_projection_transforms*;
+
+    erhe::scene::Light_projection_parameters              parameters;
+    std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;
+    uint64_t                                              shadow_map_texture_handle;
 };
 
 class Light_buffer
@@ -89,8 +95,8 @@ public:
         std::size_t light_index
     ) -> erhe::application::Buffer_range;
 
-    void next_frame();
-    void bind_light_buffer();
+    void next_frame         ();
+    void bind_light_buffer  ();
     void bind_control_buffer();
 
 private:

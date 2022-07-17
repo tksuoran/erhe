@@ -62,12 +62,12 @@ Camera::~Camera() noexcept
 {
 }
 
-auto Camera::projection_transforms(const Viewport& viewport) const -> Projection_transforms
+auto Camera::projection_transforms(const Viewport& viewport) const -> Camera_projection_transforms
 {
     const auto clip_from_node = m_projection.clip_from_node_transform(viewport);
-    return Projection_transforms{
-        clip_from_node,
-        Transform{
+    return Camera_projection_transforms{
+        .clip_from_camera = clip_from_node,
+        .clip_from_world = Transform{
             clip_from_node.matrix() * node_from_world(),
             world_from_node() * clip_from_node.inverse_matrix()
         }

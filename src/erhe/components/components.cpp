@@ -452,7 +452,7 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
 
         if (!m_parallel_initialization)
         {
-            log_components->error("no component to initialize");
+            log_components->error("Possible cyclic component dependency. Component initialization cannot make progress, no component is ready to be initialized.");
             abort();
         }
 

@@ -3,6 +3,7 @@
 #include "log.hpp"
 #include "editor_rendering.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/shadow_renderer.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
@@ -171,78 +172,32 @@ void Debug_visualizations::directional_light_visualization(
 )
 {
     auto& line_renderer = m_line_renderer_set->hidden;
-    const Render_context& render_context = context.render_context;
-    ERHE_VERIFY(render_context.camera != nullptr);
 
-    const erhe::scene::Camera& camera = context.selected_camera
-        ? *context.selected_camera.get()
-        : *render_context.camera;
-    const float r = camera.projection()->z_far;
+    using Camera                       = erhe::scene::Camera;
+    using Camera_projection_transforms = erhe::scene::Camera_projection_transforms;
 
-    const auto* light = context.light;
+    const auto               shadow_renderer              = get<Shadow_renderer>();
+    const Light_projections& light_projections            = shadow_renderer->light_projections();
+    const auto*              light                        = context.light;
+    const auto               light_projection_transforms  = light_projections.get_light_projection_transforms_for_light(light);
 
-    log_debug_visualization->debug(
-        "Light {} color {} - camera {} far {}",
-        light->name(),
-        light->color,
-        camera.name(),
-        camera.projection()->z_far
-    );
-
-    // Directional light uses a cube surrounding the view camera bounding box as projection frustum
-    const erhe::scene::Projection light_projection = light->projection(camera);
-
-    // Place light projection camera on the view camera bounding volume using light direction
-    const vec3 camera_position       = vec3{camera.position_in_world()};
-    const vec3 light_camera_position = vec3{camera.position_in_world()} + r * vec3{light->direction_in_world()};
-    log_debug_visualization->debug(
-        "camera position {}",
-        camera_position
-    );
-    log_debug_visualization->debug(
-        "light position {} direction {}",
-        light_camera_position,
-        light->direction_in_world()
-    );
-
-    // Light projection camera looks at the view camera, maintains up vector from the node
-    const mat4 world_from_light = erhe::toolkit::create_look_at(
-        light_camera_position, // eye
-        camera_position,       // look at
-        vec3{light->world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}}
-    );
-    const mat4 light_from_world = glm::inverse(world_from_light);
-
-    // Calculate and return projection matrices for light projection camera:
-    //  - clip from node   (for light as node)
-    //  - clip from world
-    erhe::scene::Viewport dummy_square_shadowmap
+    if (light_projection_transforms == nullptr)
     {
-        .x             = 0,
-        .y             = 0,
-        .width         = 1024,
-        .height        = 1024,
-        .reverse_depth = render_context.viewport.reverse_depth
-    };
-    const auto clip_from_light = light_projection.clip_from_node_transform(dummy_square_shadowmap);
+        return;
+    }
 
-    const erhe::scene::Projection_transforms projection_transforms{
-        clip_from_light,
-        erhe::scene::Transform{
-            clip_from_light.matrix() * light_from_world,
-            world_from_light * clip_from_light.inverse_matrix()
-        }
-    };
-    line_renderer.add_lines(I, context.light_color, {{ light_camera_position, camera_position }});
+    const glm::mat4 world_from_light_clip   = light_projection_transforms->clip_from_world.inverse_matrix();
+    const glm::mat4 world_from_light_camera = light_projection_transforms->world_from_light_camera.matrix();
+
     line_renderer.add_cube(
-        projection_transforms.clip_from_world.inverse_matrix(),
+        world_from_light_clip,
         context.light_color,
         clip_min_corner,
         clip_max_corner
     );
 
     line_renderer.add_lines(
-        light->world_from_node(),
+        world_from_light_camera,
         context.light_color,
         {{ O, -1.0f * axis_z }}
     );

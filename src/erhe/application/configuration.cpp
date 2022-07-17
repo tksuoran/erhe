@@ -153,6 +153,7 @@ Configuration::Configuration(int argc, char** argv)
         {
             const auto& section = ini["shadow_renderer"];
             ini_get(section, "enabled",                    shadow_renderer.enabled);
+            ini_get(section, "tight_frustum_fit",          shadow_renderer.tight_frustum_fit);
             ini_get(section, "shadow_map_resolution",      shadow_renderer.shadow_map_resolution);
             ini_get(section, "shadow_map_max_light_count", shadow_renderer.shadow_map_max_light_count);
         }

@@ -112,7 +112,7 @@ private:
     erhe::scene::Camera*                          m_camera                {nullptr};
     Shader_stages_variant                         m_shader_stages_variant {Shader_stages_variant::standard};
     bool                                          m_enable_post_processing{true};
-    erhe::scene::Projection_transforms            m_projection_transforms;
+    erhe::scene::Camera_projection_transforms     m_camera_projection_transforms;
     bool                                          m_is_hovered            {false};
     bool                                          m_can_present           {false};
     glm::ivec2                                    m_content_region_min    {0.0f, 0.0f};

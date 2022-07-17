@@ -48,6 +48,7 @@ class Mesh_memory;
 class Pointer_context;
 class Post_processing;
 class Render_context;
+class Rendertarget_viewport;
 class Scene_root;
 class Shadow_renderer;
 class Tools;
@@ -94,18 +95,24 @@ public:
     void post_initialize            () override;
 
     // Public API
-    void trigger_capture         ();
-    void init_state              ();
-    void render                  ();
-    void render_viewport         (const Render_context& context, const bool has_pointer);
-    void render_content          (const Render_context& context);
-    void render_selection        (const Render_context& context);
-    void render_tool_meshes      (const Render_context& context);
-    //// void render_gui              (const Render_context& context);
-    void render_brush            (const Render_context& context);
-    void render_id               (const Render_context& context);
-    void bind_default_framebuffer();
-    void clear                   ();
+    [[nodiscard]] auto create_rendertarget_viewport(
+        const int    width,
+        const int    height,
+        const double dots_per_meter
+    ) -> std::shared_ptr<Rendertarget_viewport>;
+
+    void trigger_capture              ();
+    void init_state                   ();
+    void render                       ();
+    void render_viewport              (const Render_context& context, const bool has_pointer);
+    void render_content               (const Render_context& context);
+    void render_selection             (const Render_context& context);
+    void render_tool_meshes           (const Render_context& context);
+    void render_rendertarget_viewports(const Render_context& context);
+    void render_brush                 (const Render_context& context);
+    void render_id                    (const Render_context& context);
+    void bind_default_framebuffer     ();
+    void clear                        ();
 
 private:
     void begin_frame();
@@ -116,12 +123,12 @@ private:
     std::shared_ptr<erhe::application::Application>       m_application;
     std::shared_ptr<erhe::application::Configuration>     m_configuration;
     std::shared_ptr<erhe::application::Imgui_windows>     m_imgui_windows;
-    std::shared_ptr<erhe::application::Time>              m_time;
-    std::shared_ptr<erhe::application::View>              m_view;
     std::shared_ptr<erhe::application::Log_window>        m_log_window;
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
+    std::shared_ptr<erhe::application::Time>              m_time;
+    std::shared_ptr<erhe::application::View>              m_view;
+    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
 
     // Commands
     Capture_frame_command m_capture_frame_command;
@@ -137,6 +144,9 @@ private:
     std::shared_ptr<Scene_root>                           m_scene_root;
     std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
     std::shared_ptr<Viewport_windows>                     m_viewport_windows;
+
+    std::mutex                                            m_rendertarget_viewports_mutex;
+    std::vector<std::shared_ptr<Rendertarget_viewport>>   m_rendertarget_viewports;
 
     bool                                                  m_trigger_capture{false};
 

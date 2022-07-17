@@ -30,13 +30,27 @@ auto Light::node_type() const -> const char*
     return "Light";
 }
 
-auto Light::projection(const Camera& camera) const -> Projection
+auto Light::projection(const Light_projection_parameters& parameters) const -> Projection
 {
+    switch (type)
+    {
+        case Light_type::directional: return stable_directional_light_projection(parameters);
+        case Light_type::spot:        return spot_light_projection              (parameters);
+        default: return {};
+    }
+}
+
+auto Light::stable_directional_light_projection(
+    const Light_projection_parameters& parameters
+) const -> Projection
+{
+    ERHE_VERIFY(parameters.view_camera != nullptr);
+
     using glm::vec3;
     using glm::mat4;
 
     // View distance is radius of the view camera bounding volume
-    const float r = camera.projection()->z_far;
+    const float r = parameters.view_camera->projection()->z_far;
 
     // Directional light uses a cube surrounding the view camera bounding box as projection frustum
     return Projection
@@ -49,11 +63,64 @@ auto Light::projection(const Camera& camera) const -> Projection
     };
 }
 
-auto Light::projection_transforms(
-    const Camera&   view_camera,
-    const Viewport& shadow_map_viewport
-) const -> Projection_transforms
+auto Light::spot_light_projection(
+    const Light_projection_parameters& parameters
+) const -> Projection
 {
+    static_cast<void>(parameters); // TODO ignored for now
+    return Projection
+    {
+        .projection_type = Projection::Type::perspective,
+        .z_near          =   1.0f, // TODO
+        .z_far           = 100.0f, // TODO
+        .fov_x           = outer_spot_angle,
+        .fov_y           = outer_spot_angle
+    };
+}
+
+auto Light::projection_transforms(
+    const Light_projection_parameters& parameters
+) const -> Light_projection_transforms
+{
+    switch (type)
+    {
+        case Light_type::directional:
+        {
+            return this->tight_frustum_fit
+                ? tight_directional_light_projection_transforms (parameters)
+                : stable_directional_light_projection_transforms(parameters);
+        }
+
+        case Light_type::spot:
+        {
+            return spot_light_projection_transforms(parameters);
+        }
+
+        default:
+        {
+            return {};
+        };
+    }
+}
+
+auto Light::stable_directional_light_projection_transforms(
+    const Light_projection_parameters& parameters
+) const -> Light_projection_transforms
+{
+    // Overview of the stable directional light projection transforms algorithm:
+    // 
+    // - Define bounding sphere around view camare, based on view camera
+    //   position (as sphere center) and far plane distance (as sphere radius)
+    // - Construct cubic orthogonal projection for light, using view camera far
+    //   plane distance as left / rignt / top / bottom
+    // - Snap view camera position to light space texels
+    //
+    // This algorithm produces stable projection, however:
+    // - No consideration is given o content (shadow casters, shadow receivers)
+    // - Texel size is quite large / A lot of shadow map texture space can be
+    //   wasted
+    ERHE_VERIFY(parameters.view_camera != nullptr);
+
     using vec2 = glm::vec2;
     using vec3 = glm::vec3;
     using vec4 = glm::vec4;
@@ -62,16 +129,16 @@ auto Light::projection_transforms(
 
     const Light* light = this;
 
-    // View distance is radius of the view camera bounding volume
-    const float r = view_camera.projection()->z_far;
+    // View distance is used as radius of the view camera bounding volume
+    const float r = parameters.view_camera->projection()->z_far;
 
     // Directional light uses a cube surrounding the view camera bounding box as projection frustum
-    const Projection light_projection = projection(view_camera);
+    const Projection light_projection = projection(parameters);
 
     // Place light projection camera on the view camera bounding volume using light direction
     const vec3 light_direction       = vec3{light->direction_in_world()};
     const vec3 light_up_vector       = vec3{light->world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
-    const vec3 view_camera_position  = vec3{view_camera.position_in_world()};
+    const vec3 view_camera_position  = vec3{parameters.view_camera->position_in_world()};
 
     // Rotation only transform
     const mat3 world_from_light{light->world_from_node()};
@@ -80,8 +147,8 @@ auto Light::projection_transforms(
     // Snap camera position to shadow map texture texels
     const vec3 view_camera_position_in_light = light_from_world * view_camera_position;
     const vec2 texel_size{
-        (2.0f * r) / static_cast<float>(shadow_map_viewport.width),
-        (2.0f * r) / static_cast<float>(shadow_map_viewport.height)
+        (2.0f * r) / static_cast<float>(parameters.shadow_map_viewport.width),
+        (2.0f * r) / static_cast<float>(parameters.shadow_map_viewport.height)
     };
     const vec2 snap_adjustment{
         std::fmod(view_camera_position_in_light.x, texel_size.x),
@@ -108,7 +175,7 @@ auto Light::projection_transforms(
     // Calculate and return projection matrices for light projection camera:
     //  - clip from node   (for light as node)
     //  - clip from world
-    const auto clip_from_light = light_projection.clip_from_node_transform(shadow_map_viewport);
+    const auto clip_from_light = light_projection.clip_from_node_transform(parameters.shadow_map_viewport);
 
     SPDLOG_LOGGER_TRACE(
         log,
@@ -141,60 +208,180 @@ auto Light::projection_transforms(
         snapped_view_camera_position
     );
 
-    return Projection_transforms{
-        clip_from_light,
-        Transform{
-            clip_from_light.matrix() * snapped_light_from_world,
-            snapped_world_from_light * clip_from_light.inverse_matrix()
-        }
+    const Transform world_from_light_camera
+    {
+        snapped_world_from_light,
+        snapped_light_from_world
+    };
+    const Transform clip_from_world{
+        clip_from_light.matrix() * snapped_light_from_world,
+        snapped_world_from_light * clip_from_light.inverse_matrix()
+    };
+    const Transform texture_from_world{
+        texture_from_clip * clip_from_world.matrix(),
+        clip_from_world.inverse_matrix() * clip_from_texture
+    };
+
+    return Light_projection_transforms{
+        .light                   = this,
+        .world_from_light_camera = world_from_light_camera,
+        .clip_from_light_camera  = clip_from_light,
+        .clip_from_world         = clip_from_world,
+        .texture_from_world      = texture_from_world
     };
 }
 
-#if 0
-    // Transform camera to light space
-    //const vec3  bounding_sphere_center_in_light = vec3{node_from_world() * camera->position_in_world()};
-    //const float camera_distance = glm::length(
-    //    vec3{camera->position_in_world()} - vec3{this->position_in_world()}
-    //);
+[[nodiscard]] auto Light::tight_directional_light_projection_transforms(
+    const Light_projection_parameters& parameters
+) const -> Light_projection_transforms
+{
+    // WORK IN PROGRESS - NOT YET FUNCTIONAL
+    // 
+    // Overview of the right directional light projection transforms algorithm:
+    // - Start with stable directional light projection transforms
+    // - Compute view camera frustum corner points in light space
+    // - Compute min and max corner of view camera frustum in light texture space
+    using vec2 = glm::vec2;
+    using vec3 = glm::vec3;
+    using vec4 = glm::vec4;
+    using mat3 = glm::mat3;
+    using mat4 = glm::mat4;
 
-    //const auto      aspect_ratio    = camera_viewport.aspect_ratio();
-    //const glm::mat4 clip_from_node  = camera->projection()->get_projection_matrix(aspect_ratio, camera_viewport.reverse_depth);
-    //const glm::mat4 node_from_clip  = glm::inverse(clip_from_node);
-    //const glm::mat4 world_from_clip = camera->world_from_node() * node_from_clip;
-    const glm::mat4 world_from_camera_clip = camera->projection_transforms(camera_viewport).clip_from_world.inverse_matrix();
-    const glm::mat4 light_from_camera_clip = node_from_world() * world_from_camera_clip;
+    ERHE_VERIFY(parameters.view_camera != nullptr);
 
-    constexpr std::array<glm::vec3, 8> clip_volume = {
-        glm::vec3{-1.0f, -1.0f, 0.0f},
-        glm::vec3{ 1.0f, -1.0f, 0.0f},
-        glm::vec3{ 1.0f,  1.0f, 0.0f},
-        glm::vec3{-1.0f,  1.0f, 0.0f},
-        glm::vec3{-1.0f, -1.0f, 1.0f},
-        glm::vec3{ 1.0f, -1.0f, 1.0f},
-        glm::vec3{ 1.0f,  1.0f, 1.0f},
-        glm::vec3{-1.0f,  1.0f, 1.0f}
+    const Light* light                        = this;
+    const vec3   light_direction              = vec3{light->direction_in_world()};
+    const vec3   light_up_vector              = vec3{light->world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
+    const auto   camera_projection_transforms = parameters.view_camera->projection_transforms(parameters.view_camera_viewport);
+    const mat4   world_from_view_camera_clip  = camera_projection_transforms.clip_from_world.inverse_matrix();
+
+    // Rotation only transform
+    const mat3 world_from_light{light->world_from_node()};
+    const mat3 light_from_world{light->node_from_world()};
+
+    const mat4 light_from_view_camera_clip = mat4{light_from_world} * world_from_view_camera_clip;
+
+    constexpr std::array<vec3, 8> clip_space_points = {
+        vec3{-1.0f, -1.0f, 0.0f},
+        vec3{ 1.0f, -1.0f, 0.0f},
+        vec3{ 1.0f,  1.0f, 0.0f},
+        vec3{-1.0f,  1.0f, 0.0f},
+        vec3{-1.0f, -1.0f, 1.0f},
+        vec3{ 1.0f, -1.0f, 1.0f},
+        vec3{ 1.0f,  1.0f, 1.0f},
+        vec3{-1.0f,  1.0f, 1.0f}
     };
 
-    for (const auto& p : clip_volume)
+    std::array<vec3, 8> view_frustum_corner_points_in_light = {
+        vec3{light_from_view_camera_clip * vec4{clip_space_points[0], 1.0f}},
+        vec3{light_from_view_camera_clip * vec4{clip_space_points[1], 1.0f}},
+        vec3{light_from_view_camera_clip * vec4{clip_space_points[2], 1.0f}},
+        vec3{light_from_view_camera_clip * vec4{clip_space_points[3], 1.0f}},
+        vec3{light_from_view_camera_clip * vec4{clip_space_points[4], 1.0f}},
+        vec3{light_from_view_camera_clip * vec4{clip_space_points[5], 1.0f}},
+        vec3{light_from_view_camera_clip * vec4{clip_space_points[6], 1.0f}},
+        vec3{light_from_view_camera_clip * vec4{clip_space_points[7], 1.0f}}
+    };
+
+    vec3 min_corner_point = view_frustum_corner_points_in_light.front();
+    vec3 max_corner_point = view_frustum_corner_points_in_light.front();
+    for (const vec3& p : view_frustum_corner_points_in_light)
     {
-        const glm::vec3 camera_frustum_point_in_light = glm::vec3{light_from_camera_clip * glm::vec4{p, 1.0f}};
+        min_corner_point.x = std::min(min_corner_point.x, p.x);
+        min_corner_point.y = std::min(min_corner_point.y, p.y);
+        min_corner_point.z = std::min(min_corner_point.z, p.z);
+        max_corner_point.x = std::max(max_corner_point.x, p.x);
+        max_corner_point.y = std::max(max_corner_point.y, p.y);
+        max_corner_point.z = std::max(max_corner_point.z, p.z);
     }
 
-    const auto clip_from_node = m_projection.clip_from_node_transform(viewport);
-    return Projection_transforms{
-        clip_from_node,
-        Transform{
-            clip_from_node.matrix() * node_from_world(),
-            world_from_node() * clip_from_node.inverse_matrix()
-        }
-    };
-#endif
+    const vec3 view_frustum_size_in_light   = max_corner_point - min_corner_point;
+    const vec3 view_frustum_center_in_light = min_corner_point + 0.5f * (view_frustum_size_in_light);
 
-auto Light::texture_transform(const Transform& clip_from_world) const -> Transform
-{
-    return Transform{
+    const Projection light_projection =
+        {
+            .projection_type = Projection::Type::orthogonal,
+            .z_near          = view_frustum_center_in_light.z - 0.5f * std::abs(view_frustum_size_in_light.z),
+            .z_far           = view_frustum_center_in_light.z + 0.5f * std::abs(view_frustum_size_in_light.z),
+            .ortho_width     = view_frustum_size_in_light.x,
+            .ortho_height    = view_frustum_size_in_light.y
+        };
+    const vec2 texel_size{
+        view_frustum_size_in_light.x / static_cast<float>(parameters.shadow_map_viewport.width),
+        view_frustum_size_in_light.y / static_cast<float>(parameters.shadow_map_viewport.height)
+    };
+
+    const vec2 snap_adjustment{
+        std::fmod(view_frustum_center_in_light.x, texel_size.x),
+        std::fmod(view_frustum_center_in_light.y, texel_size.y)
+    };
+    const vec4 snapped_view_camera_position_in_light{
+        view_frustum_center_in_light.x - snap_adjustment.x,
+        view_frustum_center_in_light.y - snap_adjustment.y,
+        view_frustum_center_in_light.z,
+        1.0f
+    };
+
+    const vec3 snapped_view_camera_position  = vec3{world_from_light * snapped_view_camera_position_in_light};
+    const vec3 snapped_light_camera_position = snapped_view_camera_position + 0.5f * std::abs(view_frustum_size_in_light.z) * light_direction;
+
+    // Snapped transfroms
+    const mat4 snapped_world_from_light = erhe::toolkit::create_look_at(
+        snapped_light_camera_position, // eye
+        snapped_view_camera_position,  // look at
+        light_up_vector                // up
+    );
+    const mat4 snapped_light_from_world = glm::inverse(snapped_world_from_light);
+
+    // Calculate and return projection matrices for light projection camera:
+    //  - clip from node   (for light as node)
+    //  - clip from world
+    const auto clip_from_light = light_projection.clip_from_node_transform(parameters.shadow_map_viewport);
+    const Transform world_from_light_camera
+    {
+        snapped_world_from_light,
+        snapped_light_from_world
+    };
+    const Transform clip_from_world{
+        clip_from_light.matrix() * snapped_light_from_world,
+        snapped_world_from_light * clip_from_light.inverse_matrix()
+    };
+    const Transform texture_from_world{
         texture_from_clip * clip_from_world.matrix(),
         clip_from_world.inverse_matrix() * clip_from_texture
+    };
+
+    return Light_projection_transforms{
+        .light                   = this,
+        .world_from_light_camera = world_from_light_camera,
+        .clip_from_light_camera  = clip_from_light,
+        .clip_from_world         = clip_from_world,
+        .texture_from_world      = texture_from_world
+    };
+}
+
+[[nodiscard]] auto Light::spot_light_projection_transforms(
+    const Light_projection_parameters& parameters
+) const -> Light_projection_transforms
+{
+    const Projection light_projection = projection(parameters);
+    const auto clip_from_light_camera = light_projection.clip_from_node_transform(parameters.shadow_map_viewport);
+
+    const Transform clip_from_world{
+        clip_from_light_camera.matrix() * node_from_world(),
+        world_from_node() * clip_from_light_camera.inverse_matrix()
+    };
+    const Transform texture_from_world{
+        texture_from_clip * clip_from_world.matrix(),
+        clip_from_world.inverse_matrix() * clip_from_texture
+    };
+
+    return Light_projection_transforms{
+        .light                   = this,
+        .world_from_light_camera = world_from_node_transform(),
+        .clip_from_light_camera  = clip_from_light_camera,
+        .clip_from_world         = clip_from_world,
+        .texture_from_world      = texture_from_world
     };
 }
 

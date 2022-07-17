@@ -85,7 +85,10 @@ public:
 
     void render(const Render_parameters& parameters);
 
-    void render_fullscreen(const Render_parameters& parameters, unsigned int light_index);
+    void render_fullscreen(
+        const Render_parameters&  parameters,
+        const erhe::scene::Light* light
+    );
 
     void next_frame();
 

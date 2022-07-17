@@ -11,6 +11,11 @@ class Imgui_window;
 class View;
 class Window_imgui_viewport;
 
+/// Maintains set of imgui windows and set of imgui viewports
+///
+/// Each Imgui_window is shown in exactly one Imgui_viewport.
+/// Currently only one Window_imgui_viewport is used.
+/// Functional rendertarget imgui viewports are in TODO list.
 class Imgui_windows
     : public erhe::components::Component
 {
@@ -38,14 +43,9 @@ public:
     void register_imgui_window(Imgui_window* window);
     void imgui_windows        ();
     void render_imgui_frame   ();
-
-    //[[nodiscard]] auto want_capture_mouse() const -> bool;
+    void window_menu          ();
 
     // NOTE: Same interface as Imgui_viewport
-
-    //void begin_imgui_frame ();
-    //void end_imgui_frame   ();
-
     [[nodiscard]] auto want_capture_mouse() const -> bool;
 
     void on_key         (const signed int keycode, const uint32_t modifier_mask, const bool pressed);

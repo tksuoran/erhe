@@ -8,6 +8,8 @@
 #include "erhe/scene/viewport.hpp"
 #include "erhe/components/components.hpp"
 
+#include "robin_hood.h"
+
 #include <gsl/gsl>
 
 #include <initializer_list>
@@ -59,7 +61,7 @@ public:
     class Render_parameters
     {
     public:
-        const erhe::scene::Camera&                                 view_camera;
+        const erhe::scene::Camera*                                 view_camera;
         const erhe::scene::Viewport                                view_camera_viewport;
         const std::initializer_list<
             const gsl::span<
@@ -90,6 +92,7 @@ private:
     std::unique_ptr<erhe::graphics::Gpu_timer>                m_gpu_timer;
     std::vector<std::unique_ptr<erhe::graphics::Framebuffer>> m_framebuffers;
     erhe::scene::Viewport                                     m_viewport{0, 0, 0, 0, true};
+
     Light_projections                                         m_light_projections;
 
     std::unique_ptr<Light_buffer        > m_light_buffers;

@@ -253,7 +253,7 @@ void Viewport_window::update()
 
     if (m_camera != nullptr)
     {
-        m_projection_transforms = m_camera->projection_transforms(m_viewport);
+        m_camera_projection_transforms = m_camera->projection_transforms(m_viewport);
     }
 }
 
@@ -784,7 +784,7 @@ auto Viewport_window::project_to_viewport(
     constexpr double depth_range_near = 0.0;
     constexpr double depth_range_far  = 1.0;
     return erhe::toolkit::project_to_screen_space<double>(
-        m_projection_transforms.clip_from_world.matrix(),
+        m_camera_projection_transforms.clip_from_world.matrix(),
         position_in_world,
         depth_range_near,
         depth_range_far,
@@ -802,7 +802,7 @@ auto Viewport_window::unproject_to_world(
     constexpr double depth_range_near = 0.0;
     constexpr double depth_range_far  = 1.0;
     return erhe::toolkit::unproject<double>(
-        m_projection_transforms.clip_from_world.inverse_matrix(),
+        m_camera_projection_transforms.clip_from_world.inverse_matrix(),
         position_in_window,
         depth_range_near,
         depth_range_far,

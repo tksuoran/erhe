@@ -228,9 +228,11 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> const Light
         .require_at_least_one_bit_clear = 0u
     };
 
+    // Also assigns lights slot in uniform block shader resource
     m_light_projections = Light_projections{
         lights,
         parameters.view_camera,
+        parameters.view_camera_viewport,
         m_viewport,
         erhe::graphics::get_handle(
             *m_texture.get(),
@@ -261,19 +263,20 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> const Light
         m_primitive_buffers->bind();
         m_draw_indirect_buffers->bind();
 
-        int light_index = 0;
         for (const auto& light : lights)
         {
-            if (light_index >= m_configuration->shadow_renderer.shadow_map_max_light_count)
-            {
-                break; // TODO
-            }
-
             if (!light->cast_shadow)
             {
                 continue;
             }
 
+            auto* light_projection_transform = m_light_projections.get_light_projection_transforms_for_light(light.get());
+            if (light_projection_transform == nullptr)
+            {
+                log_render->warn("Light {} has no light projection transforms", light->name());
+                continue;
+            }
+            const std::size_t light_index = light_projection_transform->index;
             m_light_buffers->update_control(light_index);
             m_light_buffers->bind_control_buffer();
 
@@ -312,7 +315,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> const Light
                     static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
                 );
             }
-            ++light_index;
         }
     }
     return m_light_projections;

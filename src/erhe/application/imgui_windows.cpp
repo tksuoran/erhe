@@ -23,14 +23,14 @@ Imgui_windows::~Imgui_windows() noexcept
 void Imgui_windows::declare_required_components()
 {
     require<Imgui_renderer>();
-    require<Window>();
 }
 
 void Imgui_windows::initialize_component()
 {
+    m_imgui_renderer = get<Imgui_renderer>();
+
     m_window_imgui_viewport = std::make_shared<Window_imgui_viewport>(
-        get<Imgui_renderer>(),
-        get<Window>()
+        m_imgui_renderer
     );
     m_window_imgui_viewport->make_imgui_context_current();
 
@@ -41,8 +41,13 @@ void Imgui_windows::initialize_component()
 
 void Imgui_windows::post_initialize()
 {
-    m_view           = get<View>();
-    m_imgui_renderer = get<Imgui_renderer>();
+    m_view = get<View>();
+
+    m_window_imgui_viewport->post_initialize(
+        this,
+        m_view,
+        get<Window>()
+    );
 }
 
 void Imgui_windows::register_imgui_window(Imgui_window* window)
@@ -87,7 +92,7 @@ void Imgui_windows::imgui_windows()
     bool any_mouse_input_sink{false};
     for (const auto& viewport : m_imgui_viewports)
     {
-        viewport->begin_imgui_frame(*m_view.get());
+        viewport->begin_imgui_frame();
 
         // TODO  menu();
         std::size_t i = 0;
@@ -126,14 +131,58 @@ void Imgui_windows::imgui_windows()
         m_view->set_mouse_input_sink(nullptr);
     }
 
-    /// TODO if (m_show_style_editor)
-    /// {
-    ///     if (ImGui::Begin("Dear ImGui Style Editor", &m_show_style_editor))
-    ///     {
-    ///         ImGui::ShowStyleEditor();
-    ///     }
-    ///     ImGui::End();
-    /// }
+    if (m_show_style_editor)
+    {
+        if (ImGui::Begin("Dear ImGui Style Editor", &m_show_style_editor))
+        {
+            ImGui::ShowStyleEditor();
+        }
+        ImGui::End();
+    }
+}
+
+void Imgui_windows::window_menu()
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
+
+    if (ImGui::BeginMenu("Window"))
+    {
+        for (const auto& window : m_imgui_windows)
+        {
+            bool enabled = window->is_visible();
+            if (ImGui::MenuItem(window->title().data(), "", &enabled))
+            {
+                if (enabled)
+                {
+                    window->show();
+                }
+                else
+                {
+                    window->hide();
+                }
+            }
+        }
+        ImGui::MenuItem("ImGui Style Editor", "", &m_show_style_editor);
+
+        ImGui::Separator();
+        if (ImGui::MenuItem("Close All"))
+        {
+            for (const auto& window : m_imgui_windows)
+            {
+                window->hide();
+            }
+        }
+        if (ImGui::MenuItem("Open All"))
+        {
+            for (const auto& window : m_imgui_windows)
+            {
+                window->show();
+            }
+        }
+        ImGui::EndMenu();
+    }
+
+    ImGui::PopStyleVar();
 }
 
 [[nodiscard]] auto Imgui_windows::want_capture_mouse() const -> bool

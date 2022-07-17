@@ -15,10 +15,10 @@ namespace erhe::scene
 
 class Viewport;
 
-class Projection_transforms
+class Camera_projection_transforms
 {
 public:
-    Transform clip_from_node;
+    Transform clip_from_camera;
     Transform clip_from_world;
 };
 
@@ -33,7 +33,7 @@ public:
 
     [[nodiscard]] auto projection           () -> Projection*;
     [[nodiscard]] auto projection           () const -> const Projection*;
-    [[nodiscard]] auto projection_transforms(const Viewport& viewport) const -> Projection_transforms;
+    [[nodiscard]] auto projection_transforms(const Viewport& viewport) const -> Camera_projection_transforms;
     [[nodiscard]] auto get_exposure         () const -> float;
     void set_exposure(const float value);
 

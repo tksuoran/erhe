@@ -4,6 +4,7 @@
 #include "renderers/program_interface.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
+#include "log.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -217,8 +218,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
 }
 
 void Forward_renderer::render_fullscreen(
-    const Render_parameters& parameters,
-    unsigned int             light_index
+    const Render_parameters&  parameters,
+    const erhe::scene::Light* light
 )
 {
     ERHE_PROFILE_FUNCTION
@@ -244,8 +245,20 @@ void Forward_renderer::render_fullscreen(
         m_camera_buffers->update(*camera->projection(), *camera, viewport, camera->get_exposure());
         m_camera_buffers->bind();
     }
-    m_light_buffers->update_control(light_index);
-    m_light_buffers->bind_control_buffer();
+
+    if (light != nullptr)
+    {
+        const auto* light_projection_transforms = parameters.light_projections.get_light_projection_transforms_for_light(light);
+        if (light_projection_transforms != nullptr)
+        {
+            m_light_buffers->update_control(light_projection_transforms->index);
+            m_light_buffers->bind_control_buffer();
+        }
+        else
+        {
+            log_render->warn("Light {} has no light projection transforms", light->name());
+        }
+    }
     if (!lights.empty())
     {
         m_light_buffers->update(lights, parameters.light_projections, parameters.ambient_light);

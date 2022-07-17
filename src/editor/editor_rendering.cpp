@@ -16,6 +16,7 @@
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_renderer.hpp"
 #endif
+#include "rendertarget_imgui_viewport.hpp"
 
 #include "erhe/application/application.hpp"
 #include "erhe/application/configuration.hpp"
@@ -387,6 +388,24 @@ void Editor_rendering::post_initialize()
     m_viewport_windows       = get<Viewport_windows>();
 }
 
+[[nodiscard]] auto Editor_rendering::create_rendertarget_viewport(
+    const int    width,
+    const int    height,
+    const double dots_per_meter
+) -> std::shared_ptr<Rendertarget_viewport>
+{
+    std::unique_lock<std::mutex> lock(m_rendertarget_viewports_mutex);
+
+    auto rendertarget_viewport = std::make_shared<Rendertarget_viewport>(
+        *m_components,
+        width,
+        height,
+        dots_per_meter
+    );
+    m_rendertarget_viewports.push_back(rendertarget_viewport);
+    return rendertarget_viewport;
+}
+
 void Editor_rendering::trigger_capture()
 {
     m_trigger_capture = true;
@@ -444,6 +463,19 @@ void Editor_rendering::clear()
     gl::clear        (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 }
 
+void Editor_rendering::render_rendertarget_viewports(
+    const Render_context& context
+)
+{
+    for (const auto& rendertarget_viewport : m_rendertarget_viewports)
+    {
+        rendertarget_viewport->render_mesh_layer(
+            *m_forward_renderer.get(),
+            context
+        );
+    }
+}
+
 void Editor_rendering::render()
 {
     ERHE_PROFILE_FUNCTION
@@ -475,8 +507,8 @@ void Editor_rendering::render()
         if (camera != nullptr)
         {
             m_shadow_renderer->render(
-                {
-                    .view_camera          = *camera,
+                Shadow_renderer::Render_parameters{
+                    .view_camera          = camera,
                     .view_camera_viewport = (window != nullptr)
                         ? window->viewport()
                         : erhe::scene::Viewport{0, 0, 1920, 1080},

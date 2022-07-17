@@ -92,7 +92,8 @@ public:
     class Shadow_renderer
     {
     public:
-        bool enabled{true};
+        bool enabled                   {true};
+        bool tight_frustum_fit         {true};
         int  shadow_map_resolution     {2048};
         int  shadow_map_max_light_count{8};
     };
