@@ -1,6 +1,6 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
-#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
+#include "erhe/graphics/gpu_timer.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/toolkit/profile.hpp"
 

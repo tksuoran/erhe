@@ -1,11 +1,12 @@
 #include "parsers/gltf.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "scene/helpers.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe/geometry/geometry.hpp"
+#include "erhe/log/log_glm.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/projection.hpp"
 #include "erhe/scene/mesh.hpp"

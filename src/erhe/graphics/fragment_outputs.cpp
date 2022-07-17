@@ -1,6 +1,7 @@
 #include "erhe/graphics/fragment_outputs.hpp"
-#include "erhe/log/log.hpp"
 #include "erhe/toolkit/verify.hpp"
+
+#include <spdlog/spdlog.h>
 
 #include <sstream>
 

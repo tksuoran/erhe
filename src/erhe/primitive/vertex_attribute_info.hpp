@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
 
 #include <cstddef>

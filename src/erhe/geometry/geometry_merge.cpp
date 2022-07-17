@@ -1,4 +1,5 @@
 #include "erhe/geometry/geometry.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 

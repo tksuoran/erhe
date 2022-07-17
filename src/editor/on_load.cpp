@@ -48,7 +48,7 @@
 
 #include "erhe/application/application.hpp"
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/log.hpp"
+#include "erhe/application/application_log.hpp"
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
@@ -65,6 +65,7 @@
 #include "erhe/application/windows/performance_window.hpp"
 #include "erhe/application/windows/pipelines.hpp"
 #include "erhe/application/renderdoc_capture_support.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/pipeline.hpp"

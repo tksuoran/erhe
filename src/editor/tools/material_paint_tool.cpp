@@ -1,5 +1,5 @@
 #include "tools/material_paint_tool.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "editor_rendering.hpp"
 
 #include "scene/scene_root.hpp"

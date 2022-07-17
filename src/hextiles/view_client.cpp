@@ -3,6 +3,7 @@
 #include "tile_renderer.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/imgui_windows.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 
 namespace hextiles

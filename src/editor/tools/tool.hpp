@@ -1,10 +1,5 @@
 #pragma once
 
-#include "erhe/toolkit/view.hpp"
-#include "erhe/toolkit/optional.hpp"
-
-#include <glm/glm.hpp>
-
 namespace editor
 {
 

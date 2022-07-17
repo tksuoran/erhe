@@ -1,13 +1,14 @@
+#include <fmt/core.h>
+#include <fmt/ostream.h>
+
 #include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/log.hpp"
+#include "erhe/application/application_log.hpp"
 #include "erhe/application/window.hpp"
 
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/window.hpp"
-
-#include <fmt/ostream.h>
 
 #include <functional>
 

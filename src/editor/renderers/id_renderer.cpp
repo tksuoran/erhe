@@ -1,23 +1,26 @@
 #include "renderers/id_renderer.hpp"
 
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/program_interface.hpp"
 #include "renderers/programs.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/gl/draw_indirect.hpp"
+#include "erhe/gl/enum_bit_mask_operators.hpp"
+#include "erhe/gl/enum_string_functions.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
+#include "erhe/graphics/gpu_timer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/gl/gl.hpp"
-#include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
@@ -42,6 +45,59 @@ using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 
 using glm::mat4;
+
+
+namespace {
+
+constexpr gl::Buffer_storage_mask storage_mask{
+    gl::Buffer_storage_mask::map_coherent_bit   |
+    gl::Buffer_storage_mask::map_persistent_bit |
+    gl::Buffer_storage_mask::map_read_bit
+};
+
+constexpr gl::Map_buffer_access_mask access_mask{
+    gl::Map_buffer_access_mask::map_coherent_bit   |
+    gl::Map_buffer_access_mask::map_persistent_bit |
+    gl::Map_buffer_access_mask::map_read_bit
+};
+
+}
+
+Id_renderer::Id_frame_resources::Id_frame_resources(const std::size_t slot)
+    : pixel_pack_buffer{
+        gl::Buffer_target::pixel_pack_buffer,
+        s_id_buffer_size,
+        storage_mask,
+        access_mask
+    }
+{
+    pixel_pack_buffer.set_debug_label(fmt::format("ID Pixel Pack {}", slot));
+}
+
+Id_renderer::Id_frame_resources::Id_frame_resources(Id_frame_resources&& other) noexcept
+    : pixel_pack_buffer{std::move(other.pixel_pack_buffer)}
+    , data             {std::move(other.data)}
+    , time             {other.time}
+    , sync             {other.sync}
+    , clip_from_world  {other.clip_from_world}
+    , x_offset         {other.x_offset}
+    , y_offset         {other.y_offset}
+    , state            {other.state}
+{
+}
+
+auto Id_renderer::Id_frame_resources::operator=(Id_frame_resources&& other) noexcept -> Id_frame_resources&
+{
+    pixel_pack_buffer = std::move(other.pixel_pack_buffer);
+    data              = std::move(other.data);
+    time              = other.time;
+    sync              = other.sync;
+    clip_from_world   = other.clip_from_world;
+    x_offset          = other.x_offset;
+    y_offset          = other.y_offset;
+    state             = other.state;
+    return *this;
+}
 
 Id_renderer::Id_renderer()
     : erhe::components::Component{c_label}

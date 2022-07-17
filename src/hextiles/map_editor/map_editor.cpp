@@ -9,6 +9,8 @@
 
 #include <imgui.h>
 
+#include <fmt/format.h>
+
 namespace hextiles
 {
 

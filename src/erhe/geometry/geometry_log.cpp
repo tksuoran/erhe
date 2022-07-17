@@ -1,4 +1,5 @@
-#include "erhe/geometry/log.hpp"
+#include "erhe/geometry/geometry_log.hpp"
+#include "erhe/log/log.hpp"
 
 namespace erhe::geometry
 {

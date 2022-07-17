@@ -1,5 +1,5 @@
 #include "erhe/toolkit/space_mouse.hpp"
-#include "erhe/toolkit/log.hpp"
+#include "erhe/toolkit/toolkit_log.hpp"
 
 #include <array>
 

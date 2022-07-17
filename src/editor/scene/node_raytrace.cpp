@@ -1,5 +1,5 @@
 #include "scene/node_raytrace.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "erhe/scene/mesh.hpp"
 #include "erhe/geometry/geometry.hpp"

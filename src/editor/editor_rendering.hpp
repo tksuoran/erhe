@@ -1,8 +1,6 @@
 #pragma once
 
-#include "tools/pointer_context.hpp"
-#include "renderers/forward_renderer.hpp"
-#include "windows/viewport_window.hpp"
+#include "renderers/renderpass.hpp"
 
 #include "erhe/application/commands/command.hpp"
 #include "erhe/components/components.hpp"
@@ -40,6 +38,7 @@ namespace editor
 {
 
 class Editor_rendering;
+class Forward_renderer;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 class Headset_renderer;
 #endif

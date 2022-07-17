@@ -1,6 +1,6 @@
 #pragma once
 
-#include "scene/node_raytrace.hpp"
+#include "scene/node_raytrace_mask.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/scene/viewport.hpp"
 #include "erhe/toolkit/optional.hpp"

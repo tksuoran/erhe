@@ -54,12 +54,12 @@ erhe_target_sources_grouped(
     igeometry.hpp
     iinstance.hpp
     iscene.hpp
-    log.cpp
-    log.hpp
     mesh_intersect.cpp
     mesh_intersect.hpp
     ray.cpp
     ray.hpp
+    raytrace_log.cpp
+    raytrace_log.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})

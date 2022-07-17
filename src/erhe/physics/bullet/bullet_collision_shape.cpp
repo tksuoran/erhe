@@ -1,6 +1,6 @@
 #include "erhe/physics/bullet/bullet_collision_shape.hpp"
 #include "erhe/physics/bullet/glm_conversions.hpp"
-#include "erhe/physics/log.hpp"
+#include "erhe/physics/physics_log.hpp"
 
 namespace erhe::physics
 {

@@ -65,9 +65,10 @@ add_custom_command(
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    draw_indirect.hpp
+    enum_bit_mask_operators.hpp
     gl.cpp
     gl.hpp
-    strong_gl_enums.hpp
     generate_sources.py
     ${GEN_DEPENDS}
 )

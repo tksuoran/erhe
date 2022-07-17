@@ -1,5 +1,5 @@
 #include "parsers/json_polyhedron.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/toolkit/file.hpp"

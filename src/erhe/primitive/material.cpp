@@ -1,5 +1,5 @@
 #include "erhe/primitive/material.hpp"
-#include "erhe/primitive/log.hpp"
+#include "erhe/primitive/primitive_log.hpp"
 
 namespace erhe::primitive
 {

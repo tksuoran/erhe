@@ -4,11 +4,11 @@ add_library(erhe::components ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    log.cpp
-    log.hpp
     component.cpp
     components.cpp
     components.hpp
+    components_log.cpp
+    components_log.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})

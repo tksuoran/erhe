@@ -1,5 +1,5 @@
 ﻿#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/log.hpp"
+#include "erhe/application/application_log.hpp"
 #include "erhe/application/imgui_viewport.hpp"
 #include "erhe/application/renderers/imgui_renderer.hpp"
 #include "erhe/application/view.hpp"

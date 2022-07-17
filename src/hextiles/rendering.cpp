@@ -6,6 +6,8 @@
 #include "erhe/graphics/texture.hpp"
 #include "erhe/application/renderers/imgui_renderer.hpp"
 
+#include <fmt/format.h>
+
 namespace hextiles {
 
 Rendering::Rendering()

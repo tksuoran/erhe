@@ -1,8 +1,6 @@
 #include "erhe/ui/font.hpp"
 #include "erhe/ui/glyph.hpp"
-#include "erhe/ui/log.hpp"
-#include "erhe/gl/gl.hpp"
-#include "erhe/gl/strong_gl_enums.hpp"
+#include "erhe/ui/ui_log.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/toolkit/profile.hpp"
 

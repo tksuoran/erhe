@@ -1,6 +1,10 @@
 #pragma once
 
-#include "erhe/toolkit/profile.hpp"
+//#include "erhe/toolkit/profile.hpp"
+#ifndef ERHE_PROFILE_FUNCTION
+#   define ERHE_PROFILE_FUNCTION
+#   define ERHE_PROFILE_FUNCTION_DUMMY
+#endif
 
 namespace erhe::geometry
 {
@@ -70,3 +74,8 @@ void Geometry::smooth_average(
 }
 
 } // namespace erhe::geometry
+
+#ifdef ERHE_PROFILE_FUNCTION_DUMMY
+#   undef ERHE_PROFILE_FUNCTION
+#   undef ERHE_PROFILE_FUNCTION_DUMMY
+#endif

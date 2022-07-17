@@ -1,5 +1,5 @@
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/log/log.hpp"
+#include "erhe/gl/gl.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <gsl/assert>
@@ -25,7 +25,7 @@ void Vertex_format::add(
         (attribute.data_type.dimension <= 4)
     );
 
-    const std::size_t stride = attribute.data_type.dimension * size_of_type(attribute.data_type.type);
+    const std::size_t stride = attribute.data_type.dimension * gl::size_of_type(attribute.data_type.type);
 
     // Align attributes to their type
     switch (stride)

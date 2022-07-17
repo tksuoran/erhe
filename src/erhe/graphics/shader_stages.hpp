@@ -158,24 +158,8 @@ public:
 class Shader_stages_tracker
 {
 public:
-    void reset()
-    {
-        gl::use_program(0);
-        m_last = 0;
-    }
-
-    void execute(const Shader_stages* state)
-    {
-        unsigned int name = (state != nullptr)
-            ? state->gl_name()
-            : 0;
-        if (m_last == name)
-        {
-            return;
-        }
-        gl::use_program(name);
-        m_last = name;
-    }
+    void reset  ();
+    void execute(const Shader_stages* state);
 
 private:
     unsigned int m_last{0};

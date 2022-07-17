@@ -1,6 +1,6 @@
 #include "tools/physics_tool.hpp"
 
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"

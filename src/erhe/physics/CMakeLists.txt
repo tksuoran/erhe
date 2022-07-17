@@ -82,8 +82,8 @@ endif ()
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    log.cpp
-    log.hpp
+    physics_log.cpp
+    physics_log.hpp
     icollision_shape.hpp
     iconstraint.hpp
     iconvex_hull_collision_shape.hpp

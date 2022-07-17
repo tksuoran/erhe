@@ -1,6 +1,5 @@
 #pragma once
 
-//#define SPDLOG_EOL ""
 #include <fmt/core.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/base_sink.h>

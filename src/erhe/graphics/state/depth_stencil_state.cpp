@@ -1,8 +1,12 @@
 #include "erhe/graphics/state/depth_stencil_state.hpp"
-#include "erhe/gl/gl.hpp"
+#include "erhe/graphics/configuration.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/gl/enum_base_zero_functions.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #define DISABLE_CACHE 0
+
+#include <functional>
 
 namespace erhe::graphics
 {

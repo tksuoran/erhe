@@ -2,6 +2,7 @@
 #include "graphics/image_transfer.hpp"
 
 #include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/png_loader.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/verify.hpp"

@@ -1,7 +1,7 @@
 #include "erhe/application/commands/mouse_click_binding.hpp"
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/commands/command_context.hpp"
-#include "erhe/application/log.hpp"
+#include "erhe/application/application_log.hpp"
 
 namespace erhe::application {
 

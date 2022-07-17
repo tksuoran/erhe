@@ -1,5 +1,5 @@
 #include "menu_window.hpp"
-#include "log.hpp"
+#include "hextiles_log.hpp"
 #include "map.hpp"
 #include "new_game_window.hpp"
 #include "map_window.hpp"

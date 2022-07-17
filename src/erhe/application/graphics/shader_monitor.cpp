@@ -1,6 +1,6 @@
 #include "erhe/application/graphics/shader_monitor.hpp"
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/log.hpp"
+#include "erhe/application/application_log.hpp"
 
 #include "erhe/toolkit/profile.hpp"
 

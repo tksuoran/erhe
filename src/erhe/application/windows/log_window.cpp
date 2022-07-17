@@ -2,7 +2,7 @@
 
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
-#include "erhe/application/log.hpp"
+#include "erhe/application/application_log.hpp"
 
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/timestamp.hpp"
@@ -44,7 +44,8 @@ void Log_window::declare_required_components()
 void Log_window::initialize_component()
 {
     get<Imgui_windows>()->register_imgui_window(this);
-    m_min_size = glm::vec2{220.0f, 120.0f};
+    m_min_size[0] = 220.0f;
+    m_min_size[1] = 120.0f;
 
     const auto view = get<View>();
     view->register_command   (&m_toggle_pause_command);

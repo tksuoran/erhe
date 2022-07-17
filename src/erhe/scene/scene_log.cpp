@@ -1,4 +1,5 @@
-#include "erhe/scene/log.hpp"
+#include "erhe/scene/scene_log.hpp"
+#include "erhe/log/log.hpp"
 
 namespace erhe::scene
 {

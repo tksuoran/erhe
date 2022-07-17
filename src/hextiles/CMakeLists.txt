@@ -9,9 +9,8 @@ erhe_target_sources_grouped(
     coordinate.hpp
     file_util.cpp
     file_util.hpp
-    log.cpp
-    log.hpp
-    #FastNoiseLite.h
+    hextiles_log.cpp
+    hextiles_log.hpp
     game/game.cpp
     game/game.hpp
     game/game_context.hpp

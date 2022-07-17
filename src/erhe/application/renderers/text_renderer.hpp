@@ -82,18 +82,6 @@ private:
     class Frame_resources
     {
     public:
-        static constexpr gl::Buffer_storage_mask storage_mask{
-            gl::Buffer_storage_mask::map_coherent_bit   |
-            gl::Buffer_storage_mask::map_persistent_bit |
-            gl::Buffer_storage_mask::map_write_bit
-        };
-
-        static constexpr gl::Map_buffer_access_mask access_mask{
-            gl::Map_buffer_access_mask::map_coherent_bit   |
-            gl::Map_buffer_access_mask::map_persistent_bit |
-            gl::Map_buffer_access_mask::map_write_bit
-        };
-
         Frame_resources(
             const std::size_t                         vertex_count,
             erhe::graphics::Shader_stages*            shader_stages,

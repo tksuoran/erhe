@@ -8,10 +8,13 @@
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/scene/viewport.hpp"
 
+#include <fmt/format.h>
 #include <glm/glm.hpp>
 
 #include <memory>
 #include <vector>
+
+typedef struct __GLsync *GLsync;
 
 namespace erhe::graphics
 {
@@ -89,17 +92,6 @@ private:
     class Id_frame_resources
     {
     public:
-        static constexpr gl::Buffer_storage_mask storage_mask{
-            gl::Buffer_storage_mask::map_coherent_bit   |
-            gl::Buffer_storage_mask::map_persistent_bit |
-            gl::Buffer_storage_mask::map_read_bit
-        };
-
-        static constexpr gl::Map_buffer_access_mask access_mask{
-            gl::Map_buffer_access_mask::map_coherent_bit   |
-            gl::Map_buffer_access_mask::map_persistent_bit |
-            gl::Map_buffer_access_mask::map_read_bit
-        };
         enum class State : unsigned int
         {
             Unused = 0,
@@ -107,44 +99,13 @@ private:
             Read_complete
         };
 
-        explicit Id_frame_resources(const std::size_t slot)
-            : pixel_pack_buffer{
-                gl::Buffer_target::pixel_pack_buffer,
-                s_id_buffer_size,
-                storage_mask,
-                access_mask
-            }
-        {
-            pixel_pack_buffer.set_debug_label(fmt::format("ID Pixel Pack {}", slot));
-        }
+        explicit Id_frame_resources(const std::size_t slot);
 
         Id_frame_resources(const Id_frame_resources& other) = delete;
         auto operator=    (const Id_frame_resources&) -> Id_frame_resources& = delete;
 
-        Id_frame_resources(Id_frame_resources&& other) noexcept
-            : pixel_pack_buffer{std::move(other.pixel_pack_buffer)}
-            , data             {std::move(other.data)}
-            , time             {other.time}
-            , sync             {other.sync}
-            , clip_from_world  {other.clip_from_world}
-            , x_offset         {other.x_offset}
-            , y_offset         {other.y_offset}
-            , state            {other.state}
-        {
-        }
-
-        auto operator=(Id_frame_resources&& other) noexcept -> Id_frame_resources&
-        {
-            pixel_pack_buffer = std::move(other.pixel_pack_buffer);
-            data              = std::move(other.data);
-            time              = other.time;
-            sync              = other.sync;
-            clip_from_world   = other.clip_from_world;
-            x_offset          = other.x_offset;
-            y_offset          = other.y_offset;
-            state             = other.state;
-            return *this;
-        }
+        Id_frame_resources(Id_frame_resources&& other) noexcept;
+        auto operator=(Id_frame_resources&& other) noexcept -> Id_frame_resources&;
 
         erhe::graphics::Buffer                pixel_pack_buffer;
         std::array<uint8_t, s_id_buffer_size> data;

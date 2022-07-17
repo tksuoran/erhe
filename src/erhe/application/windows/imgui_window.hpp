@@ -1,7 +1,5 @@
 #pragma once
 
-#include <glm/glm.hpp>
-
 #include <memory>
 #include <string>
 #include <string_view>
@@ -45,9 +43,9 @@ public:
     Imgui_window(const std::string_view title, const std::string_view label);
     virtual ~Imgui_window() noexcept;
 
-    [[nodiscard]] auto is_visible          () const -> bool;
-    [[nodiscard]] auto title               () const -> const std::string_view;
-    [[nodiscard]] auto label               () -> const char*;
+    [[nodiscard]] auto is_visible() const -> bool;
+    [[nodiscard]] auto title     () const -> const std::string_view;
+    [[nodiscard]] auto label     () -> const char*;
     auto begin            () -> bool;
     void end              ();
     void show             ();
@@ -80,8 +78,8 @@ protected:
     bool              m_is_visible{true};
     const std::string m_title;
     const std::string m_label;
-    glm::vec2         m_min_size{120.0f, 120.0f};
-    glm::vec2         m_max_size{99999.0f, 99999.0f};
+    float             m_min_size[2]{120.0f, 120.0f};
+    float             m_max_size[2]{99999.0f, 99999.0f};
 };
 
 //class Rendertarget_imgui_window

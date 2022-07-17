@@ -1,5 +1,5 @@
 #include "erhe/graphics/png_loader_mango_spng.hpp"
-#include "erhe/graphics/log.hpp"
+#include "erhe/graphics/graphics_log.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/filesystem.hpp"

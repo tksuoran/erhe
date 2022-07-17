@@ -1,5 +1,5 @@
 #include "scene/scene_builder.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "task_queue.hpp"
 
 #include "parsers/gltf.hpp"

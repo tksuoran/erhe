@@ -9,8 +9,8 @@ erhe_target_sources_grouped(
     filesystem.hpp
     math_util.cpp
     math_util.hpp
-    log.cpp
-    log.hpp
+    toolkit_log.cpp
+    toolkit_log.hpp
     optional.hpp
     profile.hpp
     sleep.cpp

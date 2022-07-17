@@ -1,6 +1,6 @@
 #include "erhe/application/renderdoc_capture_support.hpp"
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/log.hpp"
+#include "erhe/application/application_log.hpp"
 #include "erhe/toolkit/renderdoc_app.h"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/window.hpp"

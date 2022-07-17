@@ -1,9 +1,13 @@
 #include "erhe/application/renderers/imgui_renderer.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/log.hpp"
+#include "erhe/application/application_log.hpp"
 #include "erhe/application/window.hpp"
 
+#include "erhe/gl/draw_indirect.hpp"
+#include "erhe/gl/enum_bit_mask_operators.hpp"
+#include "erhe/gl/wrapper_enums.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/debug.hpp"
@@ -106,6 +110,18 @@ const std::string_view c_fragment_shader_source =
     "    out_color.rgb       = v_color.rgb * texture_sample.rgb * v_color.a;\n"
     "    out_color.a         = texture_sample.a * v_color.a;\n"
     "}\n";
+
+static constexpr gl::Buffer_storage_mask storage_mask{
+    gl::Buffer_storage_mask::map_coherent_bit   |
+    gl::Buffer_storage_mask::map_persistent_bit |
+    gl::Buffer_storage_mask::map_write_bit
+};
+
+static constexpr gl::Map_buffer_access_mask access_mask{
+    gl::Map_buffer_access_mask::map_coherent_bit   |
+    gl::Map_buffer_access_mask::map_persistent_bit |
+    gl::Map_buffer_access_mask::map_write_bit
+};
 
 } // anonymous namespace
 

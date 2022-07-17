@@ -1,7 +1,7 @@
 #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_OFF
 
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/geometry/log.hpp"
+#include "erhe/geometry/geometry_log.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 

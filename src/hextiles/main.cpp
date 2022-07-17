@@ -1,19 +1,14 @@
 #include "erhe/application/application.hpp"
 #include "erhe/application/renderdoc_capture_support.hpp"
 
-#include "erhe/application/log.hpp"
-#include "erhe/components/log.hpp"
-//#include "erhe/geometry/log.hpp"
+#include "erhe/application/application_log.hpp"
+#include "erhe/components/components_log.hpp"
 #include "erhe/gl/gl.hpp"
-#include "erhe/graphics/log.hpp"
-//#include "erhe/physics/log.hpp"
-//#include "erhe/primitive/log.hpp"
-//#include "erhe/raytrace/log.hpp"
-//#include "erhe/scene/log.hpp"
-#include "erhe/toolkit/log.hpp"
-#include "erhe/ui/log.hpp"
+#include "erhe/graphics/graphics_log.hpp"
+#include "erhe/toolkit/toolkit_log.hpp"
+#include "erhe/ui/ui_log.hpp"
 #include "erhe/log/log.hpp"
-#include "log.hpp"
+#include "hextiles_log.hpp"
 
 
 #if defined(ERHE_PROFILE_LIBRARY_SUPERLUMINAL) && defined(_WIN32)

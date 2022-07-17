@@ -1,6 +1,6 @@
 #include "tools/selection_tool.hpp"
 
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/insert_operation.hpp"

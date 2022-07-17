@@ -1,5 +1,5 @@
 #include "erhe/toolkit/file.hpp"
-#include "erhe/toolkit/log.hpp"
+#include "erhe/toolkit/toolkit_log.hpp"
 #include "erhe/toolkit/filesystem.hpp"
 
 #include <fstream>

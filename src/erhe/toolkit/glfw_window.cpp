@@ -2,7 +2,7 @@
 
 #include "erhe/toolkit/glfw_window.hpp"
 #include "erhe/gl/dynamic_load.hpp"
-#include "erhe/toolkit/log.hpp"
+#include "erhe/toolkit/toolkit_log.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/sleep.hpp"
 #include "erhe/toolkit/verify.hpp"

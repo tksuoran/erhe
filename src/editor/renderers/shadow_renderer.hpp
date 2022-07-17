@@ -8,8 +8,6 @@
 #include "erhe/scene/viewport.hpp"
 #include "erhe/components/components.hpp"
 
-#include "robin_hood.h"
-
 #include <gsl/gsl>
 
 #include <initializer_list>

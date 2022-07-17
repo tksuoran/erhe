@@ -13,8 +13,6 @@
 #include <imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
-//#include <bit>
-
 namespace hextiles
 {
 

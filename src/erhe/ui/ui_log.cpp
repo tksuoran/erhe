@@ -1,4 +1,5 @@
-#include "erhe/ui/log.hpp"
+#include "erhe/ui/ui_log.hpp"
+#include "erhe/log/log.hpp"
 
 namespace erhe::ui
 {

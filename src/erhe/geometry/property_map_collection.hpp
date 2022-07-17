@@ -3,6 +3,7 @@
 #include "erhe/geometry/property_map.hpp"
 
 #include <memory>
+#include <string>
 
 namespace erhe::geometry
 {

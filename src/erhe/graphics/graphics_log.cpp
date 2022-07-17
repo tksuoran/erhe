@@ -1,4 +1,5 @@
-#include "erhe/graphics/log.hpp"
+#include "erhe/graphics/graphics_log.hpp"
+#include "erhe/log/log.hpp"
 
 namespace erhe::graphics
 {

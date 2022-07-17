@@ -2,7 +2,7 @@
 
 #include "renderers/light_buffer.hpp"
 #include "renderers/program_interface.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "erhe/log/log_glm.hpp"
 #include "erhe/scene/light.hpp"

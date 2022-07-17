@@ -1,8 +1,9 @@
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/configuration.hpp"
-#include "erhe/graphics/log.hpp"
+#include "erhe/graphics/graphics_log.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/graphics/vertex_format.hpp"
+#include "erhe/gl/enum_string_functions.hpp"
 
 namespace erhe::graphics
 {

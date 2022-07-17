@@ -1,6 +1,6 @@
 #include "windows/node_properties.hpp"
 
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"

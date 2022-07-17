@@ -1,6 +1,8 @@
 #pragma once
 
-#include "erhe/gl/strong_gl_enums.hpp"
+#include "erhe/gl/wrapper_enums.hpp"
+
+typedef unsigned int GLuint;
 
 namespace erhe::graphics
 {

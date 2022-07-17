@@ -1,9 +1,6 @@
 #pragma once
 
-#include "erhe/gl/strong_gl_enums.hpp"
-#include "erhe/graphics/configuration.hpp"
-
-#include <functional>
+#include "erhe/gl/wrapper_enums.hpp"
 
 namespace erhe::graphics
 {

@@ -1,6 +1,6 @@
 #include "windows/physics_window.hpp"
 
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "scene/debug_draw.hpp"
@@ -70,7 +70,8 @@ void Physics_window::initialize_component()
     //
     //rendertarget->register_imgui_window(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
-    m_min_size = glm::vec2{120.0f, 120.0f};
+    m_min_size[0] = 120.0f;
+    m_min_size[1] = 120.0f;
 }
 
 void Physics_window::post_initialize()

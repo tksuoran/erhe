@@ -1,5 +1,5 @@
 #include "windows/layers_window.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/node_physics.hpp"

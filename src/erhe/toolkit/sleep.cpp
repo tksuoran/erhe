@@ -1,5 +1,5 @@
 #include "erhe/toolkit/sleep.hpp"
-#include "erhe/toolkit/log.hpp"
+#include "erhe/toolkit/toolkit_log.hpp"
 
 #if defined(_WIN32)
 #   include <Windows.h>

@@ -1,5 +1,5 @@
 #include "map_generator/map_generator.hpp"
-#include "log.hpp"
+#include "hextiles_log.hpp"
 #include "map.hpp"
 #include "map_editor/map_editor.hpp"
 #include "tiles.hpp"

@@ -1,21 +1,19 @@
 #pragma once
 
 #include "erhe/graphics/gl_objects.hpp"
-#include "erhe/graphics/log.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
-#include "erhe/gl/gl.hpp"
-#include "erhe/gl/strong_gl_enums.hpp"
+
+#include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/toolkit/optional.hpp"
 
-#include <fmt/ostream.h>
-#include <gsl/gsl>
-
 #include <cstddef>
-#include <deque>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <vector>
+
+typedef int GLsizei;
+typedef int GLint;
 
 namespace erhe::graphics
 {
@@ -83,24 +81,8 @@ private:
 class Vertex_input_state_tracker
 {
 public:
-    void reset()
-    {
-        gl::bind_vertex_array(0);
-        m_last = 0;
-    }
-
-    void execute(const Vertex_input_state* const state)
-    {
-        const unsigned int name = (state != nullptr)
-            ? state->gl_name()
-            : 0;
-        if (m_last == name)
-        {
-            return;
-        }
-        gl::bind_vertex_array(name);
-        m_last = name;
-    }
+    void reset  ();
+    void execute(const Vertex_input_state* const state);
 
 private:
     unsigned int m_last{0};

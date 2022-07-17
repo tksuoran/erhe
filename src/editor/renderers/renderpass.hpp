@@ -1,9 +1,7 @@
 #pragma once
 
 #include "erhe/graphics/pipeline.hpp"
-#include "erhe/primitive/primitive.hpp"
-
-#include <gsl/gsl>
+#include "erhe/primitive/enums.hpp"
 
 #include <functional>
 

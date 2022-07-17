@@ -1,5 +1,5 @@
 #include "erhe/primitive/primitive_geometry.hpp"
-#include "erhe/primitive/log.hpp"
+#include "erhe/primitive/primitive_log.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/raytrace/ibuffer.hpp"
 #include "erhe/toolkit/verify.hpp"

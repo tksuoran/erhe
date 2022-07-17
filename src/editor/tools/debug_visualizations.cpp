@@ -1,6 +1,6 @@
 #include "tools/debug_visualizations.hpp"
 
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/shadow_renderer.hpp"

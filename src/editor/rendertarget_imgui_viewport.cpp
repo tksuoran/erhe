@@ -7,7 +7,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/helpers.hpp"
 #include "tools/pointer_context.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/view.hpp"
@@ -15,6 +15,7 @@
 #include "erhe/application/windows/imgui_window.hpp"
 
 #include "erhe/geometry/shapes/regular_polygon.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"

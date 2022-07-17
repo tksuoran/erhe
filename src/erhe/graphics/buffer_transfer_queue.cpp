@@ -1,6 +1,7 @@
 #include "erhe/graphics/buffer_transfer_queue.hpp"
+#include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/graphics/buffer.hpp"
-#include "erhe/graphics/log.hpp"
+#include "erhe/graphics/graphics_log.hpp"
 #include "erhe/graphics/scoped_buffer_mapping.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"

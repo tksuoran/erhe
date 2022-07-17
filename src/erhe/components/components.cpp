@@ -1,10 +1,11 @@
+#include <fmt/core.h>
+#include <fmt/ostream.h>
+
 #include "erhe/components/components.hpp"
 #include "erhe/concurrency/concurrent_queue.hpp"
-#include "erhe/components/log.hpp"
+#include "erhe/components/components_log.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
-
-#include <fmt/ostream.h>
 
 #include <algorithm>
 #include <sstream>

@@ -1,4 +1,6 @@
 #include "erhe/graphics/shader_stages.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
+
 #include <fmt/format.h>
 #include <sstream>
 
@@ -93,6 +95,25 @@ auto operator==(const Shader_stages& lhs, const Shader_stages& rhs) noexcept -> 
 auto operator!=(const Shader_stages& lhs, const Shader_stages& rhs) noexcept -> bool
 {
     return !(lhs == rhs);
+}
+
+void Shader_stages_tracker::reset()
+{
+    gl::use_program(0);
+    m_last = 0;
+}
+
+void Shader_stages_tracker::execute(const Shader_stages* state)
+{
+    unsigned int name = (state != nullptr)
+        ? state->gl_name()
+        : 0;
+    if (m_last == name)
+    {
+        return;
+    }
+    gl::use_program(name);
+    m_last = name;
 }
 
 } // namespace erhe::graphics

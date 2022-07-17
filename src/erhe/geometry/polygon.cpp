@@ -1,6 +1,6 @@
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/property_map.hpp"
-#include "erhe/geometry/log.hpp"
+#include "erhe/geometry/geometry_log.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 

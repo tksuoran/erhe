@@ -100,8 +100,8 @@ auto Imgui_window::begin() -> bool
     on_begin();
     bool keep_visible{true};
     ImGui::SetNextWindowSizeConstraints(
-        ImVec2{m_min_size},
-        ImVec2{m_max_size}
+        ImVec2{m_min_size[0], m_min_size[1]},
+        ImVec2{m_max_size[0], m_max_size[1]}
     );
     const bool not_collapsed = ImGui::Begin(
         label(),

@@ -3,7 +3,7 @@
 #include "erhe/physics/bullet/bullet_rigid_body.hpp"
 #include "erhe/physics/bullet/glm_conversions.hpp"
 #include "erhe/physics/idebug_draw.hpp"
-#include "erhe/physics/log.hpp"
+#include "erhe/physics/physics_log.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 

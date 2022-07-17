@@ -3,6 +3,7 @@
 #include "erhe/application/renderers/buffer_writer.hpp"
 #include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
+#include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/framebuffer.hpp"
@@ -10,6 +11,8 @@
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
+
+#include <fmt/format.h>
 
 #include <string>
 #include <deque>

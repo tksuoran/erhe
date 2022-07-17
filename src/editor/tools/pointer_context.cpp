@@ -1,10 +1,11 @@
 #include "tools/pointer_context.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "editor_rendering.hpp"
 
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "renderers/id_renderer.hpp"
+#include "windows/viewport_window.hpp"
 
 #include "erhe/application/time.hpp"
 #include "erhe/application/windows/log_window.hpp"

@@ -1,6 +1,6 @@
 #include "windows/viewport_window.hpp"
 
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "renderers/post_processing.hpp"
 #include "renderers/programs.hpp"
@@ -17,6 +17,8 @@
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
+#include "erhe/gl/enum_string_functions.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"

@@ -2,11 +2,13 @@
 #include "texture_util.hpp"
 #include "tiles.hpp"
 #include "tile_shape.hpp"
-#include "log.hpp"
+#include "hextiles_log.hpp"
 
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
 
+#include "erhe/gl/enum_bit_mask_operators.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/scoped_buffer_mapping.hpp"
 #include "erhe/graphics/configuration.hpp"
@@ -19,8 +21,6 @@
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/scene/viewport.hpp"
-#include "erhe/gl/gl.hpp"
-#include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 #include <glm/glm.hpp>
@@ -31,6 +31,22 @@
 
 namespace hextiles
 {
+
+namespace {
+
+static constexpr gl::Buffer_storage_mask storage_mask{
+    gl::Buffer_storage_mask::map_coherent_bit   |
+    gl::Buffer_storage_mask::map_persistent_bit |
+    gl::Buffer_storage_mask::map_write_bit
+};
+
+static constexpr gl::Map_buffer_access_mask access_mask{
+    gl::Map_buffer_access_mask::map_coherent_bit   |
+    gl::Map_buffer_access_mask::map_persistent_bit |
+    gl::Map_buffer_access_mask::map_write_bit
+};
+
+}
 
 using erhe::graphics::Shader_stages;
 
@@ -103,26 +119,24 @@ void Tile_renderer::initialize_component()
 
     m_projection_block = std::make_unique<erhe::graphics::Shader_resource>("projection", 0, erhe::graphics::Shader_resource::Type::uniform_block);
 
-    constexpr gl::Buffer_storage_mask    storage_mask            {gl::Buffer_storage_mask::map_write_bit};
-    constexpr gl::Map_buffer_access_mask access_mask             {gl::Map_buffer_access_mask::map_write_bit};
-    constexpr size_t                     uint32_primitive_restart{0xffffffffu};
-    constexpr size_t                     per_quad_vertex_count   {4}; // corner count
-    constexpr size_t                     per_quad_index_count    {per_quad_vertex_count + 1}; // Plus one for primitive restart
-    constexpr size_t                     max_quad_count          {1'000'000}; // each quad consumes 4 indices
-    constexpr size_t                     index_count             {max_quad_count * per_quad_index_count};
-    constexpr size_t                     index_stride            {4};
+    constexpr size_t uint32_primitive_restart{0xffffffffu};
+    constexpr size_t per_quad_vertex_count   {4}; // corner count
+    constexpr size_t per_quad_index_count    {per_quad_vertex_count + 1}; // Plus one for primitive restart
+    constexpr size_t max_quad_count          {1'000'000}; // each quad consumes 4 indices
+    constexpr size_t index_count             {max_quad_count * per_quad_index_count};
+    constexpr size_t index_stride            {4};
 
     m_index_buffer = std::make_unique<erhe::graphics::Buffer>(
         gl::Buffer_target::element_array_buffer,
         index_stride * index_count,
-        storage_mask
+        gl::Buffer_storage_mask::map_write_bit
     );
 
     erhe::graphics::Scoped_buffer_mapping<uint32_t> index_buffer_map{
         *m_index_buffer.get(),
         0,
         index_count,
-        access_mask
+        gl::Map_buffer_access_mask::map_write_bit
     };
 
     const auto& gpu_index_data = index_buffer_map.span();

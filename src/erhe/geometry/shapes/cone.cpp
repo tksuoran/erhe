@@ -1,9 +1,10 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe/geometry/shapes/cone.hpp"
-#include "erhe/geometry/log.hpp"
+#include "erhe/geometry/geometry_log.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>

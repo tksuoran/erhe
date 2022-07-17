@@ -16,8 +16,6 @@ erhe_target_sources_grouped(
     format_info.hpp
     index_range.cpp
     index_range.hpp
-    log.cpp
-    log.hpp
     material.cpp
     material.hpp
     primitive.cpp
@@ -26,6 +24,8 @@ erhe_target_sources_grouped(
     primitive_builder.hpp
     primitive_geometry.hpp
     primitive_geometry.cpp
+    primitive_log.cpp
+    primitive_log.hpp
     property_maps.hpp
     property_maps.cpp
     vertex_attribute_info.hpp

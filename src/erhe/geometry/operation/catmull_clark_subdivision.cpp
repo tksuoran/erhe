@@ -1,6 +1,6 @@
 #include "erhe/geometry/operation/catmull_clark_subdivision.hpp"
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/geometry/log.hpp"
+#include "erhe/geometry/geometry_log.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <gsl/assert>

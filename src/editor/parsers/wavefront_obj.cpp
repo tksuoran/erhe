@@ -1,9 +1,10 @@
 #include "parsers/wavefront_obj.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <gsl/gsl>
 

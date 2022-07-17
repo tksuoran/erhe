@@ -1,7 +1,7 @@
 #pragma once
 
 #include "erhe/primitive/enums.hpp"
-#include "erhe/gl/strong_gl_enums.hpp"
+#include "erhe/gl/wrapper_enums.hpp"
 
 #include <glm/glm.hpp>
 

@@ -1,5 +1,5 @@
 #include "erhe/graphics/gl_objects.hpp"
-#include "erhe/gl/gl.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 
 #include <gsl/assert>
 

@@ -1,9 +1,57 @@
 #include "erhe/graphics/vertex_attribute.hpp"
-#include "erhe/log/log.hpp"
+#include "erhe/gl/gl.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace erhe::graphics
 {
+
+[[nodiscard]] auto Vertex_attribute::Usage::operator==(const Usage& other) const -> bool
+{
+    // TODO index is not compared. Is this a bug or design?
+    return (type == other.type);
+}
+
+[[nodiscard]] auto Vertex_attribute::Usage::operator!=(const Usage& other) const -> bool
+{
+    return !(*this == other);
+}
+
+[[nodiscard]] auto Vertex_attribute::Data_type::operator==(const Data_type& other) const -> bool
+{
+    return
+        (type       == other.type)       &&
+        (normalized == other.normalized) &&
+        (dimension  == other.dimension);
+}
+
+[[nodiscard]] auto Vertex_attribute::Data_type::operator!=(const Data_type& other) const -> bool
+{
+    return !(*this == other);
+}
+
+[[nodiscard]] auto Vertex_attribute::stride() const -> size_t
+{
+    return data_type.dimension * gl::size_of_type(data_type.type);
+}
+
+[[nodiscard]] auto Vertex_attribute::operator==(
+    const Vertex_attribute& other
+) const -> bool
+{
+    return
+        (usage       == other.usage      ) &&
+        (data_type   == other.data_type  ) &&
+        (shader_type == other.shader_type) &&
+        (offset      == other.offset     ) &&
+        (divisor     == other.divisor);
+}
+
+[[nodiscard]] auto Vertex_attribute::operator!=(
+    const Vertex_attribute& other
+) const -> bool
+{
+    return !(*this == other);
+}
 
 auto Vertex_attribute::desc(
     const Usage_type usage

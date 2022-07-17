@@ -1,7 +1,7 @@
 #include "erhe/raytrace/null/null_scene.hpp"
 #include "erhe/raytrace/null/null_geometry.hpp"
 #include "erhe/raytrace/iinstance.hpp"
-#include "erhe/raytrace/log.hpp"
+#include "erhe/raytrace/raytrace_log.hpp"
 
 namespace erhe::raytrace
 {

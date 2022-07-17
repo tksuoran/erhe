@@ -1,4 +1,5 @@
-#include "erhe/raytrace/log.hpp"
+#include "erhe/raytrace/raytrace_log.hpp"
+#include "erhe/log/log.hpp"
 
 namespace erhe::raytrace
 {

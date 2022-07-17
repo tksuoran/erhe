@@ -1,4 +1,5 @@
-#include "log.hpp"
+#include "hextiles_log.hpp"
+#include "erhe/log/log.hpp"
 
 namespace hextiles {
 

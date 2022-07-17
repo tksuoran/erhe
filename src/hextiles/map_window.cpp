@@ -1,5 +1,5 @@
 #include "map_window.hpp"
-#include "log.hpp"
+#include "hextiles_log.hpp"
 #include "map.hpp"
 #include "menu_window.hpp"
 #include "pixel_lookup.hpp"
@@ -12,10 +12,9 @@
 #include "erhe/application/view.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
-
 #include "erhe/application/renderers/imgui_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
-
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 

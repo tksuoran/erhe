@@ -1,4 +1,5 @@
-#include "erhe/physics/log.hpp"
+#include "erhe/physics/physics_log.hpp"
+#include "erhe/log/log.hpp"
 
 namespace erhe::physics
 {

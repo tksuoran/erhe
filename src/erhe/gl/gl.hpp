@@ -19,13 +19,9 @@
 
 #include "erhe/gl/wrapper_functions.hpp"
 
-#include "erhe/log/log.hpp"
-
 
 namespace gl
 {
-
-extern std::shared_ptr<spdlog::logger> log_gl;
 
 [[nodiscard]] auto size_of_type(const gl::Draw_elements_type type) -> size_t;
 [[nodiscard]] auto size_of_type(const gl::Vertex_attrib_type type) -> size_t;

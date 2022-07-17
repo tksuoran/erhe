@@ -3,8 +3,9 @@
 #include "renderers/draw_indirect_buffer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/program_interface.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
+#include "erhe/gl/draw_indirect.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/mesh.hpp"

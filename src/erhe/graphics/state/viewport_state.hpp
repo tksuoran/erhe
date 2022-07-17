@@ -1,7 +1,5 @@
 #pragma once
 
-#include "erhe/gl/strong_gl_enums.hpp"
-
 #include <functional>
 
 namespace erhe::graphics

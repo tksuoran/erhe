@@ -1,5 +1,5 @@
 #include "erhe/components/components.hpp"
-#include "erhe/components/log.hpp"
+#include "erhe/components/components_log.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 

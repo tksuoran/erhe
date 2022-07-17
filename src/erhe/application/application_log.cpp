@@ -1,4 +1,5 @@
-#include "log.hpp"
+#include "erhe/application/application_log.hpp"
+#include "erhe/log/log.hpp"
 
 namespace erhe::application {
 

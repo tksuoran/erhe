@@ -1,4 +1,5 @@
-#include "erhe/toolkit/log.hpp"
+#include "erhe/toolkit/toolkit_log.hpp"
+#include "erhe/log/log.hpp"
 
 namespace erhe::toolkit
 {

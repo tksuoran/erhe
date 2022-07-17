@@ -1,7 +1,7 @@
 
 #include "windows/brushes.hpp"
 
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/insert_operation.hpp"
@@ -11,6 +11,7 @@
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/grid_tool.hpp"
+#include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/materials.hpp"

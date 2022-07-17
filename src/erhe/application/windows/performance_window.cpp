@@ -1,7 +1,7 @@
 #include "erhe/application/windows/performance_window.hpp"
 #include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/log.hpp"
-#include "erhe/graphics/debug.hpp"
+#include "erhe/application/application_log.hpp"
+#include "erhe/graphics/gpu_timer.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/timer.hpp"
 

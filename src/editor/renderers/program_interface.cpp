@@ -1,5 +1,5 @@
 #include "renderers/program_interface.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/window.hpp"

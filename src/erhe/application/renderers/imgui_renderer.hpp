@@ -6,6 +6,7 @@
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
+#include "erhe/graphics/gpu_timer.hpp"
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
@@ -42,18 +43,6 @@ public:
     class Frame_resources
     {
     public:
-        static constexpr gl::Buffer_storage_mask storage_mask{
-            gl::Buffer_storage_mask::map_coherent_bit   |
-            gl::Buffer_storage_mask::map_persistent_bit |
-            gl::Buffer_storage_mask::map_write_bit
-        };
-
-        static constexpr gl::Map_buffer_access_mask access_mask{
-            gl::Map_buffer_access_mask::map_coherent_bit   |
-            gl::Map_buffer_access_mask::map_persistent_bit |
-            gl::Map_buffer_access_mask::map_write_bit
-        };
-
         Frame_resources(
             const std::size_t                               slot,
             erhe::graphics::Vertex_attribute_mappings& attribute_mappings,

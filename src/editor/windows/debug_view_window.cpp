@@ -8,6 +8,7 @@
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/imgui_helpers.hpp"
 #include "erhe/application/imgui_windows.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"

@@ -2,7 +2,7 @@
 #include "tools/selection_tool.hpp"
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "erhe/scene/scene.hpp"
 

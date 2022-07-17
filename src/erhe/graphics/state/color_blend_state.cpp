@@ -1,6 +1,6 @@
-#include "erhe/gl/gl.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/gl/enum_base_zero_functions.hpp"
 #include "erhe/graphics/state/color_blend_state.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #define DISABLE_CACHE 0
 
@@ -19,6 +19,20 @@ auto shuffle(
     const std::size_t t = ((x >> shift) ^ x) & m;
     return (x ^ t) ^ (t << shift);
 }
+
+class Blend_state_component_hash
+{
+public:
+    [[nodiscard]] auto operator()(
+        const Blend_state_component& blend_state_component
+    ) const noexcept -> size_t
+    {
+        return
+            (gl::base_zero(blend_state_component.equation_mode     ) << 0u) | // 3 bits
+            (gl::base_zero(blend_state_component.source_factor     ) << 3u) | // 5 bits
+            (gl::base_zero(blend_state_component.destination_factor) << 8u);  // 5 bits
+    }
+};
 
 }
 

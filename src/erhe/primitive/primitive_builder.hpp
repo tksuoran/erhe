@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/property_map.hpp"
 #include "erhe/geometry/property_map_collection.hpp"
@@ -11,12 +10,11 @@
 #include "erhe/primitive/enums.hpp"
 #include "erhe/primitive/build_info.hpp"
 #include "erhe/primitive/index_range.hpp"
-#include "erhe/primitive/log.hpp"
+#include "erhe/primitive/primitive_log.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/primitive/property_maps.hpp"
 #include "erhe/primitive/vertex_attribute_info.hpp"
-#include "erhe/gl/strong_gl_enums.hpp"
 
 #include <glm/glm.hpp>
 

@@ -1,10 +1,10 @@
 #include "scene/frame_controller.hpp"
+#include "editor_log.hpp"
 
 #include "erhe/application/controller.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "log.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>

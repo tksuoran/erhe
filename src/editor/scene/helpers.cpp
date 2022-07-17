@@ -1,7 +1,7 @@
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "erhe/physics/iworld.hpp"
 #include "erhe/raytrace/iscene.hpp"

@@ -1,6 +1,21 @@
 #pragma once
 
-#include "erhe/toolkit/profile.hpp"
+#ifndef ERHE_PROFILE_FUNCTION
+#   define ERHE_PROFILE_FUNCTION
+#   define ERHE_PROFILE_FUNCTION_DUMMY
+#endif
+#ifndef ERHE_VERIFY
+#   define ERHE_VERIFY(condition) assert(condition)
+#   define ERHE_VERIFY_DUMMY
+#endif
+#ifndef ERHE_FATAL
+#   define ERHE_FATAL(format, ...) assert(false)
+#   define ERHE_FATAL_DUMMY
+#endif
+#ifndef SPDLOG_LOGGER_TRACE
+#   define SPDLOG_LOGGER_TRACE(logger, ...) (void)0
+#   define SPDLOG_LOGGER_TRACE_DUMMY
+#endif
 
 namespace erhe::geometry
 {
@@ -113,3 +128,20 @@ void Corner::smooth_average(
 }
 
 } // namespace erhe::geometry
+
+#ifdef ERHE_PROFILE_FUNCTION_DUMMY
+#   undef ERHE_PROFILE_FUNCTION
+#   undef ERHE_PROFILE_FUNCTION_DUMMY
+#endif
+#ifdef ERHE_VERIFY_DUMMY
+#   undef ERHE_VERIFY
+#   undef ERHE_VERIFY_DUMMY
+#endif
+#ifdef ERHE_FATAL_DUMMY
+#   undef ERHE_FATAL
+#   undef ERHE_FATAL_DUMMY
+#endif
+#ifdef SPDLOG_LOGGER_TRACE_DUMMY
+#   undef SPDLOG_LOGGER_TRACE
+#   undef SPDLOG_LOGGER_TRACE_DUMMY
+#endif

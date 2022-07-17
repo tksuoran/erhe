@@ -1,9 +1,6 @@
 #pragma once
 
-#include "erhe/gl/enum_base_zero_functions.hpp"
-
-#include <glm/glm.hpp>
-#include <glm/gtx/hash.hpp>
+#include "erhe/gl/wrapper_enums.hpp"
 
 namespace erhe::graphics
 {
@@ -14,20 +11,6 @@ public:
     gl::Blend_equation_mode equation_mode     {gl::Blend_equation_mode::func_add};
     gl::Blending_factor     source_factor     {gl::Blending_factor::one};
     gl::Blending_factor     destination_factor{gl::Blending_factor::zero};
-};
-
-class Blend_state_component_hash
-{
-public:
-    [[nodiscard]] auto operator()(
-        const Blend_state_component& blend_state_component
-    ) const noexcept -> size_t
-    {
-        return
-            (gl::base_zero(blend_state_component.equation_mode     ) << 0u) | // 3 bits
-            (gl::base_zero(blend_state_component.source_factor     ) << 3u) | // 5 bits
-            (gl::base_zero(blend_state_component.destination_factor) << 8u);  // 5 bits
-    }
 };
 
 [[nodiscard]] auto operator==(

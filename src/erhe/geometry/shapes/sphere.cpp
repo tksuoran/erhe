@@ -1,7 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe/geometry/shapes/sphere.hpp"
-#include "erhe/geometry/log.hpp"
+#include "erhe/geometry/geometry_log.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>

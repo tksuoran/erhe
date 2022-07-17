@@ -1,5 +1,5 @@
 #include "erhe/scene/node.hpp"
-#include "erhe/scene/log.hpp"
+#include "erhe/scene/scene_log.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 

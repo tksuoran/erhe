@@ -1,5 +1,5 @@
 #include "renderers/programs.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "renderers/program_interface.hpp"
 #include "renderers/material_buffer.hpp"

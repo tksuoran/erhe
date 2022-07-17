@@ -13,8 +13,8 @@ erhe_target_sources_grouped(
     geometry_weld.cpp
     geometry.hpp
     geometry.inl
-    log.cpp
-    log.hpp
+    geometry_log.cpp
+    geometry_log.hpp
     operation/ambo.cpp
     operation/ambo.hpp
     operation/catmull_clark_subdivision.cpp

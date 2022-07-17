@@ -20,8 +20,10 @@ erhe_target_sources_grouped(
     framebuffer.hpp
     gl_objects.cpp
     gl_objects.hpp
-    log.cpp
-    log.hpp
+    gpu_timer.cpp
+    gpu_timer.hpp
+    graphics_log.cpp
+    graphics_log.hpp
     opengl_state_tracker.cpp
     opengl_state_tracker.hpp
     pipeline.cpp

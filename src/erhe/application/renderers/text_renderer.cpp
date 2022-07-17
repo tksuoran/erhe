@@ -1,8 +1,10 @@
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/log.hpp"
+#include "erhe/application/application_log.hpp"
 
+#include "erhe/gl/enum_bit_mask_operators.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/scoped_buffer_mapping.hpp"
 #include "erhe/graphics/configuration.hpp"
@@ -14,8 +16,6 @@
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/viewport.hpp"
-#include "erhe/gl/gl.hpp"
-#include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/ui/font.hpp"
@@ -34,6 +34,22 @@ using erhe::graphics::Shader_stages;
 using glm::mat4;
 using glm::vec3;
 using glm::vec4;
+
+namespace {
+
+static constexpr gl::Buffer_storage_mask storage_mask{
+    gl::Buffer_storage_mask::map_coherent_bit   |
+    gl::Buffer_storage_mask::map_persistent_bit |
+    gl::Buffer_storage_mask::map_write_bit
+};
+
+static constexpr gl::Map_buffer_access_mask access_mask{
+    gl::Map_buffer_access_mask::map_coherent_bit   |
+    gl::Map_buffer_access_mask::map_persistent_bit |
+    gl::Map_buffer_access_mask::map_write_bit
+};
+
+}
 
 Text_renderer::Frame_resources::Frame_resources(
     const std::size_t                         vertex_count,
@@ -115,27 +131,25 @@ void Text_renderer::initialize_component()
 
     m_projection_block = std::make_unique<erhe::graphics::Shader_resource>("projection", 0, erhe::graphics::Shader_resource::Type::uniform_block);
 
-    constexpr gl::Buffer_storage_mask    storage_mask            {gl::Buffer_storage_mask::map_write_bit};
-    constexpr gl::Map_buffer_access_mask access_mask             {gl::Map_buffer_access_mask::map_write_bit};
-    constexpr std::size_t                uint16_max              {65535};
-    constexpr std::size_t                uint16_primitive_restart{0xffffu};
-    constexpr std::size_t                per_quad_vertex_count   {4}; // corner count
-    constexpr std::size_t                per_quad_index_count    {per_quad_vertex_count + 1}; // Plus one for primitive restart
-    constexpr std::size_t                max_quad_count          {uint16_max / per_quad_vertex_count}; // each quad consumes 4 indices
-    constexpr std::size_t                index_count             {uint16_max * per_quad_index_count};
-    constexpr std::size_t                index_stride            {2};
+    constexpr std::size_t uint16_max              {65535};
+    constexpr std::size_t uint16_primitive_restart{0xffffu};
+    constexpr std::size_t per_quad_vertex_count   {4}; // corner count
+    constexpr std::size_t per_quad_index_count    {per_quad_vertex_count + 1}; // Plus one for primitive restart
+    constexpr std::size_t max_quad_count          {uint16_max / per_quad_vertex_count}; // each quad consumes 4 indices
+    constexpr std::size_t index_count             {uint16_max * per_quad_index_count};
+    constexpr std::size_t index_stride            {2};
 
     m_index_buffer = std::make_unique<erhe::graphics::Buffer>(
         gl::Buffer_target::element_array_buffer,
         index_stride * index_count,
-        storage_mask
+        gl::Buffer_storage_mask::map_write_bit
     );
 
     erhe::graphics::Scoped_buffer_mapping<uint16_t> index_buffer_map{
         *m_index_buffer.get(),
         0,
         index_count,
-        access_mask
+        gl::Map_buffer_access_mask::map_write_bit
     };
 
     const auto& gpu_index_data = index_buffer_map.span();

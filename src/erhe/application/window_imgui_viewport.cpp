@@ -3,7 +3,7 @@
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui_helpers.hpp"
 #include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/log.hpp"
+#include "erhe/application/application_log.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/window.hpp"

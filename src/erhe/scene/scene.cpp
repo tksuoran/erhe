@@ -1,6 +1,6 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/camera.hpp"
-#include "erhe/scene/log.hpp"
+#include "erhe/scene/scene_log.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"

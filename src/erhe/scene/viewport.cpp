@@ -1,5 +1,5 @@
 #include "erhe/scene/viewport.hpp"
-#include "erhe/scene/log.hpp"
+#include "erhe/scene/scene_log.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 namespace erhe::scene

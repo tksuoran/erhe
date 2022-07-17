@@ -2,7 +2,7 @@
 #include "scene/helpers.hpp"
 
 #include "erhe/physics/iworld.hpp"
-#include "erhe/physics/log.hpp"
+#include "erhe/physics/physics_log.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"

@@ -12,6 +12,8 @@
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/toolkit/profile.hpp"
 
+#include <fmt/format.h>
+
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
 #   include <imgui/misc/cpp/imgui_stdlib.h>

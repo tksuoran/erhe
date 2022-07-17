@@ -1,7 +1,6 @@
 #pragma once
 
-#include "erhe/gl/strong_gl_enums.hpp"
-#include "erhe/gl/gl.hpp"
+#include "erhe/gl/wrapper_enums.hpp"
 
 #include <cstddef>
 #include <type_traits>
@@ -32,16 +31,8 @@ public:
     class Usage
     {
     public:
-        [[nodiscard]] auto operator==(const Usage& other) const -> bool
-        {
-            // TODO index is not compared. Is this a bug or design?
-            return (type == other.type);
-        }
-
-        [[nodiscard]] auto operator!=(const Usage& other) const -> bool
-        {
-            return !(*this == other);
-        }
+        [[nodiscard]] auto operator==(const Usage& other) const -> bool;
+        [[nodiscard]] auto operator!=(const Usage& other) const -> bool;
 
         Usage_type  type {Usage_type::none};
         std::size_t index{0};
@@ -51,18 +42,8 @@ public:
     class Data_type
     {
     public:
-        [[nodiscard]] auto operator==(const Data_type& other) const -> bool
-        {
-            return
-                (type       == other.type)       &&
-                (normalized == other.normalized) &&
-                (dimension  == other.dimension);
-        }
-
-        [[nodiscard]] auto operator!=(const Data_type& other) const -> bool
-        {
-            return !(*this == other);
-        }
+        [[nodiscard]] auto operator==(const Data_type& other) const -> bool;
+        [[nodiscard]] auto operator!=(const Data_type& other) const -> bool;
 
         gl::Vertex_attrib_type type;
         bool                   normalized{false};
@@ -71,29 +52,9 @@ public:
 
     [[nodiscard]] static auto desc(const Usage_type usage) -> const char*;
 
-    [[nodiscard]] auto stride() const -> size_t
-    {
-        return data_type.dimension * gl::size_of_type(data_type.type);
-    }
-
-    [[nodiscard]] auto operator==(
-        const Vertex_attribute& other
-    ) const -> bool
-    {
-        return
-            (usage       == other.usage      ) &&
-            (data_type   == other.data_type  ) &&
-            (shader_type == other.shader_type) &&
-            (offset      == other.offset     ) &&
-            (divisor     == other.divisor);
-    }
-
-    [[nodiscard]] auto operator!=(
-        const Vertex_attribute& other
-    ) const -> bool
-    {
-        return !(*this == other);
-    }
+    [[nodiscard]] auto stride    () const -> size_t;
+    [[nodiscard]] auto operator==(const Vertex_attribute& other) const -> bool;
+    [[nodiscard]] auto operator!=(const Vertex_attribute& other) const -> bool;
 
     Usage              usage;
     gl::Attribute_type shader_type;

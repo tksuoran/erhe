@@ -1,5 +1,5 @@
 #include "hover_tool.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_root.hpp"
@@ -7,6 +7,7 @@
 #include "tools/pointer_context.hpp"
 #include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
+#include "windows/viewport_window.hpp"
 
 #include "erhe/application/view.hpp"
 #include "erhe/application/commands/command_context.hpp"

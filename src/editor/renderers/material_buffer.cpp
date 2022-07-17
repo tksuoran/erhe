@@ -3,7 +3,7 @@
 #include "renderers/material_buffer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/program_interface.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "erhe/graphics/texture.hpp"
 #include "erhe/primitive/material.hpp"

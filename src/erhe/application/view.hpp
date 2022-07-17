@@ -6,6 +6,8 @@
 #include "erhe/toolkit/view.hpp"
 #include "erhe/toolkit/unique_id.hpp"
 
+#include <glm/glm.hpp>
+
 #include <functional>
 #include <mutex>
 

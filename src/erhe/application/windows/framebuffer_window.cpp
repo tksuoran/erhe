@@ -2,6 +2,7 @@
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
@@ -11,7 +12,7 @@
 #include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#include <imgui.h>
+#   include <imgui.h>
 #endif
 
 namespace erhe::application

@@ -1,5 +1,5 @@
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/log.hpp"
+#include "erhe/application/application_log.hpp"
 
 #include "erhe/graphics/state/depth_stencil_state.hpp"
 #include "mini/ini.h"

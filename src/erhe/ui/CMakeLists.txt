@@ -9,8 +9,8 @@ erhe_target_sources_grouped(
     font.hpp
     glyph.cpp
     glyph.hpp
-    log.cpp
-    log.hpp
+    ui_log.cpp
+    ui_log.hpp
     rectangle.hpp
 )
 

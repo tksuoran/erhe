@@ -1,7 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/geometry/log.hpp"
+#include "erhe/geometry/geometry_log.hpp"
 #include "erhe/geometry/remapper.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/toolkit/math_util.hpp"

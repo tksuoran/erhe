@@ -1,5 +1,5 @@
 #include "icon_set.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "renderers/programs.hpp"
 

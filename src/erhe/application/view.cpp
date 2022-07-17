@@ -1,7 +1,7 @@
 #include "erhe/application/view.hpp"
 
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/log.hpp"
+#include "erhe/application/application_log.hpp"
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/window.hpp"
@@ -15,6 +15,8 @@
 #include "erhe/application/commands/mouse_wheel_binding.hpp"
 #include "erhe/application/renderers/imgui_renderer.hpp"
 
+#include "erhe/gl/enum_bit_mask_operators.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/raytrace/mesh_intersect.hpp"

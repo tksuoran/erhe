@@ -1,4 +1,6 @@
 #include "erhe/graphics/sampler.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
+#include <gsl/assert>
 
 namespace erhe::graphics
 {
@@ -72,5 +74,16 @@ auto operator!=(const Sampler& lhs, const Sampler& rhs) noexcept -> bool
 {
     return !(lhs == rhs);
 }
+
+//class Sampler_hash
+//{
+//public:
+//    [[nodiscard]] auto operator()(const Sampler& sampler) const noexcept -> size_t
+//    {
+//        Expects(sampler.gl_name() != 0);
+//
+//        return static_cast<size_t>(sampler.gl_name());
+//    }
+//};
 
 } // namespace erhe::graphics

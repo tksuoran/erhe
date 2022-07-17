@@ -1,5 +1,5 @@
 #include "tiles.hpp"
-#include "log.hpp"
+#include "hextiles_log.hpp"
 #include "file_util.hpp"
 #include "tile_shape.hpp"
 #include "types.hpp"

@@ -1,4 +1,5 @@
-#include "erhe/components/log.hpp"
+#include "erhe/components/components_log.hpp"
+#include "erhe/log/log.hpp"
 
 namespace erhe::components
 {

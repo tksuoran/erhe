@@ -1,4 +1,5 @@
 #include "erhe/graphics/renderbuffer.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 
 namespace erhe::graphics
 {

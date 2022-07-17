@@ -2,7 +2,7 @@
 
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/camera.hpp"
-#include "erhe/scene/log.hpp"
+#include "erhe/scene/scene_log.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"

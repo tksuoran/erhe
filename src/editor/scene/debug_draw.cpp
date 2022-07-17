@@ -1,5 +1,5 @@
 #include "scene/debug_draw.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe/application/renderers/line_renderer.hpp"

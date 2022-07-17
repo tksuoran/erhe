@@ -1,5 +1,5 @@
 #include "erhe/graphics/state/input_assembly_state.hpp"
-#include "erhe/gl/gl.hpp"
+#include "erhe/gl/enum_base_zero_functions.hpp"
 
 // #define DISABLE_CACHE 1
 

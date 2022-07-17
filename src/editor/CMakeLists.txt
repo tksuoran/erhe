@@ -139,8 +139,8 @@ erhe_target_sources_grouped(
 
     editor_rendering.cpp
     editor_rendering.hpp
-    log.cpp
-    log.hpp
+    editor_log.cpp
+    editor_log.hpp
     main.cpp
     on_load.cpp
     rendertarget_imgui_viewport.cpp

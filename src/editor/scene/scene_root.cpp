@@ -1,6 +1,6 @@
 #include "scene/scene_root.hpp"
 
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"

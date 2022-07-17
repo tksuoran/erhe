@@ -1,14 +1,16 @@
+#include <fmt/core.h>
+#include <fmt/ostream.h>
+
 #include "erhe/graphics/state/vertex_input_state.hpp"
-#include "erhe/gl/gl.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
-#include "erhe/graphics/log.hpp"
+#include "erhe/graphics/graphics_log.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
 #include "erhe/graphics/vertex_attribute_mapping.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include <fmt/ostream.h>
 #include <gsl/assert>
 
 #include <bitset>
@@ -298,6 +300,25 @@ auto Vertex_input_state::gl_name() const -> unsigned int
     return m_gl_vertex_array.has_value()
         ? m_gl_vertex_array.value().gl_name()
         : 0;
+}
+
+void Vertex_input_state_tracker::reset()
+{
+    gl::bind_vertex_array(0);
+    m_last = 0;
+}
+
+void Vertex_input_state_tracker::execute(const Vertex_input_state* const state)
+{
+    const unsigned int name = (state != nullptr)
+        ? state->gl_name()
+        : 0;
+    if (m_last == name)
+    {
+        return;
+    }
+    gl::bind_vertex_array(name);
+    m_last = name;
 }
 
 } // namespace erhe::graphics

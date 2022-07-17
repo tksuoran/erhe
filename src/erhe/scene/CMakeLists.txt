@@ -12,12 +12,12 @@ erhe_target_sources_grouped(
     mesh.hpp
     light.cpp
     light.hpp
-    log.cpp
-    log.hpp
     projection.cpp
     projection.hpp
     scene.cpp
     scene.hpp
+    scene_log.cpp
+    scene_log.hpp
     transform.cpp
     transform.hpp
     viewport.cpp

@@ -1,6 +1,8 @@
 #pragma once
 
-#include "erhe/log/log.hpp"
+#include <spdlog/spdlog.h>
+
+#include <memory>
 
 namespace erhe::primitive
 {

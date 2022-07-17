@@ -2,14 +2,13 @@
 
 #include "erhe/application/graphics/gl_context_provider.hpp"
 
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
-#include "erhe/gl/gl.hpp"
-#include "erhe/gl/strong_gl_enums.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>

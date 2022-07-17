@@ -13,6 +13,10 @@
 #include <string_view>
 #include <vector>
 
+namespace spdlog {
+    class logger;
+}
+
 namespace erhe::geometry
 {
 

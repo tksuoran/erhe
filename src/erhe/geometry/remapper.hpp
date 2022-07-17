@@ -1,4 +1,4 @@
-#include "erhe/geometry/log.hpp"
+#include "erhe/geometry/geometry_log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>

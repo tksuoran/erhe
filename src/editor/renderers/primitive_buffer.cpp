@@ -2,7 +2,7 @@
 
 #include "renderers/primitive_buffer.hpp"
 #include "renderers/program_interface.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/material.hpp"

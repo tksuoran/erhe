@@ -2,9 +2,8 @@
 
 #include "erhe/graphics/gl_objects.hpp"
 
-#include <gsl/assert>
-
 #include <array>
+#include <string>
 
 namespace erhe::graphics
 {
@@ -55,18 +54,6 @@ protected:
 private:
     Gl_sampler  m_handle;
     std::string m_debug_label;
-};
-
-class Sampler_hash
-{
-public:
-    [[nodiscard]]
-    auto operator()(const Sampler& sampler) const noexcept -> size_t
-    {
-        Expects(sampler.gl_name() != 0);
-
-        return static_cast<size_t>(sampler.gl_name());
-    }
 };
 
 [[nodiscard]] auto operator==(

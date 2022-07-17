@@ -1,5 +1,7 @@
 #include "renderers/frustum_tiler.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
+
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/scene/camera.hpp"
@@ -465,7 +467,7 @@ auto Frustum_tiler::frustum_tile_intersection(Tile tile) const -> bool
 }
 
 void Frustum_tiler::update(
-    GLint                       texture_z,
+    int                         texture_z,
     const glm::mat4&            clip_from_world,
     const erhe::scene::Camera&  view_camera,
     const erhe::scene::Viewport view_camera_viewport

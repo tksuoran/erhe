@@ -14,6 +14,8 @@
 #include "erhe/geometry/operation/truncate.hpp"
 #include "erhe/geometry/operation/weld.hpp"
 
+#include <fmt/format.h>
+
 namespace editor
 {
 

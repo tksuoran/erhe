@@ -1,7 +1,8 @@
 #include "graphics/image_transfer.hpp"
 
 #include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/gl/gl.hpp"
+#include "erhe/gl/enum_bit_mask_operators.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/verify.hpp"
 

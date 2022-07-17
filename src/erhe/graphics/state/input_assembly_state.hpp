@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/gl/enum_base_zero_functions.hpp"
+#include "erhe/gl/wrapper_enums.hpp"
 
 namespace erhe::graphics
 {

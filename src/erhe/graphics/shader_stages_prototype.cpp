@@ -1,5 +1,7 @@
 #include "erhe/graphics/shader_stages.hpp"
-#include "erhe/graphics/log.hpp"
+#include "erhe/gl/enum_string_functions.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/graphics/graphics_log.hpp"
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/toolkit/verify.hpp"

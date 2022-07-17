@@ -1,5 +1,5 @@
 #include "texture_util.hpp"
-#include "log.hpp"
+#include "hextiles_log.hpp"
 
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/verify.hpp"

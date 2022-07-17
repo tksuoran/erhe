@@ -1,6 +1,6 @@
 #include "tools/fly_camera_tool.hpp"
 
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
 #include "tools/pointer_context.hpp"

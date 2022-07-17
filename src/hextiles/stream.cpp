@@ -1,5 +1,5 @@
 #include "stream.hpp"
-#include "log.hpp"
+#include "hextiles_log.hpp"
 
 namespace hextiles
 {

@@ -1,6 +1,6 @@
 #include "tools/trs_tool.hpp"
 
-#include "log.hpp"
+#include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -14,6 +14,7 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/operations.hpp"
+#include "windows/viewport_window.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/view.hpp"

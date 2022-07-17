@@ -3,8 +3,10 @@
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
 #include "erhe/application/windows/log_window.hpp"
-#include "erhe/application/log.hpp"
+#include "erhe/application/application_log.hpp"
 
+#include "erhe/gl/enum_bit_mask_operators.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/debug.hpp"
@@ -15,8 +17,6 @@
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/viewport.hpp"
-#include "erhe/gl/gl.hpp"
-#include "erhe/gl/strong_gl_enums.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -29,6 +29,22 @@
 
 namespace erhe::application
 {
+
+namespace
+{
+
+static constexpr gl::Buffer_storage_mask storage_mask{
+    gl::Buffer_storage_mask::map_coherent_bit   |
+    gl::Buffer_storage_mask::map_persistent_bit |
+    gl::Buffer_storage_mask::map_write_bit
+};
+static constexpr gl::Map_buffer_access_mask access_mask{
+    gl::Map_buffer_access_mask::map_coherent_bit   |
+    gl::Map_buffer_access_mask::map_persistent_bit |
+    gl::Map_buffer_access_mask::map_write_bit
+};
+
+}
 
 using erhe::graphics::Shader_stages;
 using glm::mat4;

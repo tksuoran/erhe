@@ -1,7 +1,5 @@
 #pragma once
 
-#include "erhe/log/log.hpp"
-
 #include <glm/glm.hpp>
 #include <LinearMath/btVector3.h>
 

@@ -30,6 +30,7 @@ erhe_target_sources_grouped(
     graphics/shader_monitor.cpp
     graphics/shader_monitor.hpp
 
+    renderers/buffer_writer.cpp
     renderers/buffer_writer.hpp
     renderers/line_renderer.cpp
     renderers/line_renderer.hpp
@@ -51,6 +52,8 @@ erhe_target_sources_grouped(
 
     application.cpp
     application.hpp
+    application_log.cpp
+    application_log.hpp
     configuration.cpp
     configuration.hpp
     controller.cpp
@@ -59,8 +62,6 @@ erhe_target_sources_grouped(
     imgui_viewport.hpp
     imgui_windows.cpp
     imgui_windows.hpp
-    log.cpp
-    log.hpp
     renderdoc_capture_support.cpp
     renderdoc_capture_support.hpp
     scoped_imgui_context.cpp

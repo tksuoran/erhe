@@ -1,6 +1,6 @@
 #include "windows/node_tree_window.hpp"
 #include "graphics/icon_set.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
 #include "operations/compound_operation.hpp"
 #include "operations/node_operation.hpp"

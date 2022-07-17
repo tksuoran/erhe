@@ -2,12 +2,15 @@
 
 #include "erhe/application/renderers/buffer_writer.hpp"
 #include "erhe/components/components.hpp"
+#include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/scene/viewport.hpp"
+
+#include <deque>
 
 namespace erhe::graphics
 {

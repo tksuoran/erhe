@@ -3,8 +3,11 @@
 #include "renderers/multi_buffer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/program_interface.hpp"
-#include "log.hpp"
+#include "editor_log.hpp"
 
+#include "erhe/gl/enum_bit_mask_operators.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/graphics/configuration.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 namespace editor

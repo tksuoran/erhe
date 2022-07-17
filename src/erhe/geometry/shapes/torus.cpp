@@ -1,4 +1,5 @@
 #include "erhe/geometry/shapes/torus.hpp"
+#include "erhe/geometry/geometry_log.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>

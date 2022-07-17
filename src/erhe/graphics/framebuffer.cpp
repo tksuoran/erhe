@@ -1,5 +1,7 @@
 #include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/log.hpp"
+#include "erhe/gl/enum_string_functions.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/graphics/graphics_log.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/configuration.hpp"
