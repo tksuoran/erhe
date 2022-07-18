@@ -2,6 +2,8 @@
 
 #include "erhe/gl/wrapper_enums.hpp"
 
+#include <cstddef>
+
 namespace erhe::graphics
 {
 
@@ -25,7 +27,7 @@ public:
     [[nodiscard]]
     auto operator()(
         const Stencil_op_state& stencil_state_component
-    ) const noexcept -> size_t;
+    ) const noexcept -> std::size_t;
 };
 
 [[nodiscard]] auto operator==(

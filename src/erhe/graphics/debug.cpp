@@ -12,6 +12,10 @@
 #include <sstream>
 #include <thread>
 
+#if !defined(WIN32)
+#   include <signal.h>
+#endif
+
 // Comment this out disable timer queries
 #define ERHE_USE_TIME_QUERY 1
 

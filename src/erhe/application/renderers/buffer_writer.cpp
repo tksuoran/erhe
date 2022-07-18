@@ -1,5 +1,3 @@
-#pragma once
-
 #include "erhe/application//renderers/buffer_writer.hpp"
 #include "erhe/graphics/configuration.hpp"
 

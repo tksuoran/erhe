@@ -3,6 +3,7 @@
 #include "erhe/graphics/vertex_attribute.hpp"
 
 #include <cstddef>
+#include <limits>
 #include <memory>
 #include <string>
 
@@ -30,7 +31,7 @@ public:
 
     const erhe::graphics::Vertex_attribute* attribute{nullptr};
     gl::Vertex_attrib_type                  data_type{gl::Vertex_attrib_type::float_};
-    std::size_t                             offset   {std::numeric_limits<size_t>::max()};
+    std::size_t                             offset   {std::numeric_limits<std::size_t>::max()};
     std::size_t                             size     {0};
 };
 

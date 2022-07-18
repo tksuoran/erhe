@@ -58,8 +58,8 @@ class IViewport
 public:
     virtual ~IViewport();
 
-    virtual [[nodiscard]] auto width  () const -> float = 0;
-    virtual [[nodiscard]] auto height () const -> float = 0;
+    [[nodiscard]] virtual auto width  () const -> float = 0;
+    [[nodiscard]] virtual auto height () const -> float = 0;
     //virtual [[nodiscard]] auto try_hit(const glm::vec2 pointer) const -> std::optional<glm::vec2> = 0;
     virtual void begin(erhe::application::Imgui_viewport& imgui_viewport) = 0;
     virtual void end  () = 0;

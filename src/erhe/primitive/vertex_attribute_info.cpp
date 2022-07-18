@@ -2,6 +2,8 @@
 #include "erhe/gl/gl.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 
+#include <cstddef>
+
 namespace erhe::primitive
 {
 
@@ -23,7 +25,7 @@ Vertex_attribute_info::Vertex_attribute_info(
 
 auto Vertex_attribute_info::is_valid() -> bool
 {
-    return (attribute != nullptr) && (offset != std::numeric_limits<size_t>::max()) && (size > 0);
+    return (attribute != nullptr) && (offset != std::numeric_limits<std::size_t>::max()) && (size > 0);
 }
 
 } // namespace erhe::primitive

@@ -2,6 +2,8 @@
 
 #include "erhe/gl/wrapper_enums.hpp"
 
+#include <cstddef>
+
 namespace erhe::graphics
 {
 
@@ -49,7 +51,7 @@ public:
 class Blend_state_hash
 {
 public:
-    auto operator()(const Color_blend_state& state) const noexcept -> size_t;
+    auto operator()(const Color_blend_state& state) const noexcept -> std::size_t;
 };
 
 [[nodiscard]] auto operator==(

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #if defined(_WIN32)
 #   ifndef _CRT_SECURE_NO_WARNINGS
 #       define _CRT_SECURE_NO_WARNINGS
@@ -23,8 +25,8 @@
 namespace gl
 {
 
-[[nodiscard]] auto size_of_type(const gl::Draw_elements_type type) -> size_t;
-[[nodiscard]] auto size_of_type(const gl::Vertex_attrib_type type) -> size_t;
+[[nodiscard]] auto size_of_type(const gl::Draw_elements_type type) -> std::size_t;
+[[nodiscard]] auto size_of_type(const gl::Vertex_attrib_type type) -> std::size_t;
 
 void set_error_checking(const bool enable);
 void check_error       ();

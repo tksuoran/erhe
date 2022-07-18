@@ -6,6 +6,7 @@
 #include "erhe/graphics/state/rasterization_state.hpp"
 
 #include <mutex>
+#include <vector>
 
 namespace erhe::graphics
 {
