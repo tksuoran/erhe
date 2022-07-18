@@ -78,6 +78,8 @@ void Forward_renderer::initialize_component()
     m_camera_buffers        = std::make_unique<Camera_buffer       >(shader_resources.camera_interface);
     m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(m_configuration->renderer.max_draw_count);
     m_primitive_buffers     = std::make_unique<Primitive_buffer    >(shader_resources.primitive_interface);
+
+    m_dummy_texture = erhe::graphics::create_dummy_texture();
 }
 
 void Forward_renderer::post_initialize()
@@ -125,6 +127,10 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 *m_programs->nearest_sampler.get()
             )
         : 0;
+    const uint64_t fallback_texture_handle = erhe::graphics::get_handle(
+        *m_dummy_texture.get(),
+        *m_programs->nearest_sampler.get()
+    );
 
     erhe::graphics::Scoped_debug_group forward_renderer_render{c_forward_renderer_render};
 
@@ -134,6 +140,12 @@ void Forward_renderer::render(const Render_parameters& parameters)
         m_camera_buffers->update(*camera->projection(), *camera, viewport, camera->get_exposure());
         m_camera_buffers->bind();
     }
+
+    if (!erhe::graphics::Instance::info.use_bindless_texture)
+    {
+        erhe::graphics::s_texture_unit_cache.reset(m_programs->base_texture_unit);
+    }
+
     m_material_buffers->update(materials, m_programs);
     m_material_buffers->bind();
 
@@ -143,18 +155,27 @@ void Forward_renderer::render(const Render_parameters& parameters)
         m_light_buffers->bind_light_buffer();
     }
 
-    if (enable_shadows)
+    if (erhe::graphics::Instance::info.use_bindless_texture)
     {
-        if (erhe::graphics::Instance::info.use_bindless_texture)
+        ERHE_PROFILE_SCOPE("make textures resident");
+
+        if (enable_shadows)
         {
-            ERHE_PROFILE_SCOPE("shadow texture resident");
             gl::make_texture_handle_resident_arb(shadow_texture_handle);
         }
-        else
+        for (const uint64_t handle : m_material_buffers->used_handles())
         {
-            gl::bind_sampler     (m_programs->shadow_texture_unit, m_programs->nearest_sampler->gl_name());
-            gl::bind_texture_unit(m_programs->shadow_texture_unit, m_shadow_renderer->texture()->gl_name());
+            gl::make_texture_handle_resident_arb(handle);
         }
+    }
+    else
+    {
+        ERHE_PROFILE_SCOPE("bind texture units");
+
+        gl::bind_texture_unit(m_programs->shadow_texture_unit, m_shadow_renderer->texture()->gl_name());
+        gl::bind_sampler     (m_programs->shadow_texture_unit, m_programs->nearest_sampler->gl_name());
+
+        erhe::graphics::s_texture_unit_cache.bind(fallback_texture_handle);
     }
 
     for (auto& pass : passes)
@@ -210,10 +231,19 @@ void Forward_renderer::render(const Render_parameters& parameters)
         }
     }
 
-    if (enable_shadows && erhe::graphics::Instance::info.use_bindless_texture)
+    if (erhe::graphics::Instance::info.use_bindless_texture)
     {
-        ERHE_PROFILE_SCOPE("shadow texture non resident");
-        gl::make_texture_handle_non_resident_arb(shadow_texture_handle);
+        ERHE_PROFILE_SCOPE("make textures non resident");
+
+        if (enable_shadows)
+        {
+            ERHE_PROFILE_SCOPE("shadow texture non resident");
+            gl::make_texture_handle_non_resident_arb(shadow_texture_handle);
+        }
+        for (const uint64_t handle : m_material_buffers->used_handles())
+        {
+            gl::make_texture_handle_non_resident_arb(handle);
+        }
     }
 }
 

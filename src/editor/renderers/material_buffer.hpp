@@ -4,6 +4,8 @@
 
 #include "erhe/graphics/shader_resource.hpp"
 
+#include <set>
+
 namespace erhe::primitive
 {
     class Material;
@@ -50,8 +52,11 @@ public:
         const std::shared_ptr<Programs>&                                   programs
     ) -> erhe::application::Buffer_range;
 
+    [[nodiscard]] auto used_handles() const -> const std::set<uint64_t>&;
+
 private:
     const Material_interface& m_material_interface;
+    std::set<uint64_t>        m_used_handles;
 };
 
 } // namespace editor

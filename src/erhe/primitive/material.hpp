@@ -8,6 +8,7 @@
 
 namespace erhe::graphics
 {
+    class Sampler;
     class Texture;
 }
 
@@ -35,6 +36,7 @@ public:
     glm::vec4                                base_color  {1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec4                                emissive    {0.0f, 0.0f, 0.0f, 0.0f};
     std::shared_ptr<erhe::graphics::Texture> texture;
+    std::shared_ptr<erhe::graphics::Sampler> sampler;
     bool                                     visible     {true};
 };
 

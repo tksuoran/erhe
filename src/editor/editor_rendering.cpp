@@ -560,10 +560,10 @@ void Editor_rendering::render_viewport(
         ERHE_PROFILE_GPU_SCOPE(c_id_content);
         erhe::graphics::Scoped_gpu_timer timer{*m_content_timer.get()};
 
-        render_content  (context);
-        render_selection(context);
-        ////render_gui  (context);
-        render_brush    (context);
+        render_content               (context);
+        render_selection             (context);
+        //render_rendertarget_viewports(context);
+        render_brush                 (context);
 
         static_cast<void>(has_pointer);
         if (has_pointer)

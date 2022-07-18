@@ -823,8 +823,9 @@ auto create_dummy_texture() -> std::shared_ptr<Texture>
     return texture;
 }
 
-void Texture_unit_cache::reset()
+void Texture_unit_cache::reset(unsigned int base_texture_unit)
 {
+    m_base_texture_unit = base_texture_unit;
     m_texture_units.clear();
 }
 
@@ -835,7 +836,7 @@ auto Texture_unit_cache::allocate_texture_unit(uint64_t handle) -> std::optional
     const GLuint sampler_name = erhe::graphics::get_sampler_from_handle(handle);
 #endif
 
-    for (size_t texture_unit = 0, end = m_texture_units.size(); texture_unit < end; ++texture_unit)
+    for (std::size_t texture_unit = 0, end = m_texture_units.size(); texture_unit < end; ++texture_unit)
     {
         if (m_texture_units[texture_unit] == handle)
         {
@@ -866,6 +867,9 @@ Texture_unit_cache s_texture_unit_cache;
 
 auto Texture_unit_cache::bind(uint64_t fallback_handle) -> size_t
 {
+    const GLuint fallback_texture_name = erhe::graphics::get_texture_from_handle(fallback_handle);
+    const GLuint fallback_sampler_name = erhe::graphics::get_sampler_from_handle(fallback_handle);
+
     GLuint i{};
     GLuint end = std::min(
         static_cast<GLuint>(m_texture_units.size()),
@@ -878,42 +882,69 @@ auto Texture_unit_cache::bind(uint64_t fallback_handle) -> size_t
         const GLuint   texture_name = erhe::graphics::get_texture_from_handle(handle);
         const GLuint   sampler_name = erhe::graphics::get_sampler_from_handle(handle);
 
+        if (handle != 0)
+        {
 #if !defined(NDEBUG)
-        if (gl::is_texture(texture_name) == GL_TRUE)
-        {
-            gl::bind_texture_unit(i, texture_name);
-            SPDLOG_LOGGER_TRACE(
-                log_texture,
-                "texture unit {}: bound texture {}", i, texture_name
-            );
-        }
-        else
-        {
-            log_texture->warn("texture unit {}: {} is not a texture", i, texture_name);
-            gl::bind_texture_unit(i, erhe::graphics::get_texture_from_handle(fallback_handle));
-        }
+            if (gl::is_texture(texture_name) == GL_TRUE)
+            {
+                gl::bind_texture_unit(m_base_texture_unit + i, texture_name);
+                SPDLOG_LOGGER_TRACE(
+                    log_texture,
+                    "texture unit {} + {} = {}: bound texture {}",
+                    m_base_texture_unit,
+                    i,
+                    m_base_texture_unit + i,
+                    texture_name
+                );
+            }
+            else
+            {
+                log_texture->warn(
+                    "texture unit {} + {} = {}: {} is not a texture",
+                    m_base_texture_unit,
+                    i,
+                    m_base_texture_unit + i,
+                    texture_name
+                );
+                gl::bind_texture_unit(i, erhe::graphics::get_texture_from_handle(fallback_handle));
+            }
 
-        if (
-            (sampler_name == 0) ||
-            (gl::is_sampler(sampler_name) == GL_TRUE)
-        )
-        {
-            gl::bind_sampler(i, sampler_name);
-            SPDLOG_LOGGER_TRACE(
-                log_texture,
-                "texture unit {}: bound sampler {}", i, sampler_name
-            );
+            if (
+                (sampler_name == 0) ||
+                (gl::is_sampler(sampler_name) == GL_TRUE)
+            )
+            {
+                gl::bind_sampler(i, sampler_name);
+                SPDLOG_LOGGER_TRACE(
+                    log_texture,
+                    "texture unit {} + {} = {}: bound sampler {}",
+                    m_base_texture_unit,
+                    i,
+                    m_base_texture_unit + i,
+                    sampler_name
+                );
+            }
+            else
+            {
+                gl::bind_sampler(i, erhe::graphics::get_sampler_from_handle(fallback_handle));
+                log_texture->warn(
+                    "texture unit {} + {} = {}: {} is not a sampler",
+                    m_base_texture_unit,
+                    i,
+                    m_base_texture_unit + i,
+                    sampler_name
+                );
+            }
+#else
+            gl::bind_texture_unit(m_base_texture_unit + i, texture_name);
+            gl::bind_sampler     (m_base_texture_unit + i, sampler_name);
+#endif
         }
         else
         {
-            gl::bind_sampler(i, erhe::graphics::get_sampler_from_handle(fallback_handle));
-            log_texture->warn("texture unit {}: {} is not a sampler", i, sampler_name);
+            gl::bind_texture_unit(m_base_texture_unit + i, fallback_texture_name);
+            gl::bind_sampler     (m_base_texture_unit + i, fallback_sampler_name);
         }
-#else
-        static_cast<void>(fallback_handle);
-        gl::bind_texture_unit(i, texture_name);
-        gl::bind_sampler(i, sampler_name);
-#endif
     }
     return m_texture_units.size();
 }

@@ -160,12 +160,13 @@ public:
 class Texture_unit_cache
 {
 public:
-    void reset();
+    void reset(unsigned int base_texture_unit);
     auto allocate_texture_unit(uint64_t handle) -> std::optional<std::size_t>;
 
-    auto bind(uint64_t fallback_handle) -> size_t;
+    auto bind( uint64_t fallback_handle) -> std::size_t;
 
 private:
+    unsigned int          m_base_texture_unit;
     std::vector<uint64_t> m_texture_units;
 };
 

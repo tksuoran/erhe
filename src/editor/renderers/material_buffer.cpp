@@ -63,6 +63,7 @@ auto Material_buffer::update(
     const auto  gpu_data       = buffer.map();
     std::size_t material_index = 0;
     m_writer.begin(buffer.target());
+    m_used_handles.clear();
     for (const auto& material : materials)
     {
         if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count())
@@ -79,15 +80,36 @@ auto Material_buffer::update(
             ?
                 erhe::graphics::get_handle(
                     *material->texture.get(),
-                    *programs->linear_sampler.get()
+                    material->sampler
+                        ? *material->sampler.get()
+                        : *programs->linear_sampler.get()
                 )
             : 0;
+
+        if (handle != 0)
+        {
+            m_used_handles.insert(handle);
+        }
+
         write(gpu_data, m_writer.write_offset + offsets.metallic    , as_span(material->metallic    ));
         write(gpu_data, m_writer.write_offset + offsets.roughness   , as_span(material->roughness   ));
         write(gpu_data, m_writer.write_offset + offsets.transparency, as_span(material->transparency));
         write(gpu_data, m_writer.write_offset + offsets.base_color  , as_span(material->base_color  ));
         write(gpu_data, m_writer.write_offset + offsets.emissive    , as_span(material->emissive    ));
-        write(gpu_data, m_writer.write_offset + offsets.base_texture, as_span(handle                ));
+
+        if (erhe::graphics::Instance::info.use_bindless_texture)
+        {
+            write(gpu_data, m_writer.write_offset + offsets.base_texture, as_span(handle));
+        }
+        else
+        {
+            std::optional<std::size_t> opt_texture_unit = erhe::graphics::s_texture_unit_cache.allocate_texture_unit(handle);
+            const uint64_t texture_unit = static_cast<uint64_t>(opt_texture_unit.has_value() ? opt_texture_unit.value() : 0);
+            const uint64_t magic        = static_cast<uint64_t>(0x7fff'ffff);
+            const uint64_t value        = texture_unit | (magic << 32);
+            write(gpu_data, m_writer.write_offset + offsets.base_texture, as_span(value));
+        }
+
 
         m_writer.write_offset += entry_size;
         ERHE_VERIFY(m_writer.write_offset <= buffer.capacity_byte_count());
@@ -98,6 +120,11 @@ auto Material_buffer::update(
     SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to material buffer", material_index);
 
     return m_writer.range;
+}
+
+[[nodiscard]] auto Material_buffer::used_handles() const -> const std::set<uint64_t>&
+{
+    return m_used_handles;
 }
 
 } // namespace editor

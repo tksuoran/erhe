@@ -33,6 +33,7 @@ namespace erhe::graphics
 {
     class Framebuffer;
     class OpenGL_state_tracker;
+    class Sampler;
     class Texture;
 }
 
@@ -100,11 +101,13 @@ private:
     std::shared_ptr<erhe::application::Imgui_renderer>    m_imgui_renderer;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Pointer_context>                      m_pointer_context;
+    std::shared_ptr<Scene_root>                           m_scene_root;
     erhe::scene::Mesh_layer                               m_mesh_layer;
     double                                                m_dots_per_meter{0.0};
     std::shared_ptr<erhe::scene::Mesh>                    m_gui_mesh;
     std::shared_ptr<Node_raytrace>                        m_node_raytrace;
     std::shared_ptr<erhe::graphics::Texture>              m_texture;
+    std::shared_ptr<erhe::graphics::Sampler>              m_sampler;
     std::unique_ptr<erhe::graphics::Framebuffer>          m_framebuffer;
     Renderpass                                            m_renderpass;
 };

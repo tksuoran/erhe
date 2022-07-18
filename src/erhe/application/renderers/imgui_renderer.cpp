@@ -725,7 +725,7 @@ void Imgui_renderer::render_draw_data()
 
     if (!erhe::graphics::Instance::info.use_bindless_texture)
     {
-        erhe::graphics::s_texture_unit_cache.reset();
+        erhe::graphics::s_texture_unit_cache.reset(0);
     }
 
     for (int n = 0; n < draw_data->CmdListsCount; n++)

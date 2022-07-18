@@ -47,6 +47,7 @@ class Brush;
 class Debug_draw;
 class Mesh_memory;
 class Node_physics;
+class Rendertarget_viewport;
 class Scene_root;
 
 class Scene_builder
@@ -133,11 +134,12 @@ private:
     std::shared_ptr<Scene_root>  m_scene_root;
 
     // Self owned parts
-    std::mutex                          m_brush_mutex;
-    std::unique_ptr<Brush>              m_floor_brush;
-    std::unique_ptr<Brush>              m_table_brush;
-    std::mutex                          m_scene_brushes_mutex;
-    std::vector<std::shared_ptr<Brush>> m_scene_brushes;
+    std::mutex                             m_brush_mutex;
+    std::unique_ptr<Brush>                 m_floor_brush;
+    std::unique_ptr<Brush>                 m_table_brush;
+    std::mutex                             m_scene_brushes_mutex;
+    std::vector<std::shared_ptr<Brush>>    m_scene_brushes;
+    std::shared_ptr<Rendertarget_viewport> m_rendertarget_viewport;
 
     std::vector<std::shared_ptr<erhe::physics::ICollision_shape>> m_collision_shapes;
 };

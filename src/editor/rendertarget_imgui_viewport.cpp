@@ -18,9 +18,11 @@
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/graphics/framebuffer.hpp"
+#include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/window.hpp"
 
 #include <imgui.h>
@@ -43,6 +45,7 @@ Rendertarget_viewport::Rendertarget_viewport(
     : m_imgui_renderer        {components.get<erhe::application::Imgui_renderer   >()}
     , m_pipeline_state_tracker{components.get<erhe::graphics::OpenGL_state_tracker>()}
     , m_pointer_context       {components.get<Pointer_context                     >()}
+    , m_scene_root            {components.get<Scene_root                          >()}
     , m_mesh_layer            {"GUI Layer", erhe::scene::Node_visibility::gui}
     , m_dots_per_meter        {dots_per_meter}
 {
@@ -69,13 +72,18 @@ void Rendertarget_viewport::init_rendertarget(
         }
     );
     m_texture->set_debug_label("ImGui Rendertarget");
-    const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
+    const float clear_value[4] = { 0.0f, 0.5f, 0.5f, 0.5f };
     gl::clear_tex_image(
         m_texture->gl_name(),
         0,
         gl::Pixel_format::rgba,
         gl::Pixel_type::float_,
         &clear_value[0]
+    );
+
+    m_sampler = std::make_shared<erhe::graphics::Sampler>(
+        gl::Texture_min_filter::linear_mipmap_linear,
+        gl::Texture_mag_filter::nearest
     );
 
     Framebuffer::Create_info create_info;
@@ -107,7 +115,7 @@ void Rendertarget_viewport::init_renderpass(
             .shader_stages  = programs.textured.get(),
             .vertex_input   = vertex_input,
             .input_assembly = Input_assembly_state::triangles,
-            .rasterization  = Rasterization_state::cull_mode_none,
+            .rasterization  = Rasterization_state::cull_mode_none, // cull_mode_back_ccw(reverse_depth),
             .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
             .color_blend    = Color_blend_state::color_blend_premultiplied
         };
@@ -124,13 +132,16 @@ void Rendertarget_viewport::add_scene_node(
         "GUI Quad",
         glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
     );
+    gui_material->texture = m_texture;
+    gui_material->sampler = m_sampler;
 
     const auto local_width  = static_cast<double>(m_texture->width ()) / m_dots_per_meter;
     const auto local_height = static_cast<double>(m_texture->height()) / m_dots_per_meter;
 
     auto gui_geometry = erhe::geometry::shapes::make_rectangle(
         local_width,
-        local_height
+        local_height,
+        false
     );
 
     const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
@@ -182,6 +193,9 @@ void Rendertarget_viewport::render_mesh_layer(
     const Render_context& context
 )
 {
+    static constexpr std::string_view c_id_render_mesh_layer{"Rendertarget_viewport::render_mesh_layer"};
+    ERHE_PROFILE_GPU_SCOPE(c_id_render_mesh_layer);
+
     forward_renderer.render(
         Forward_renderer::Render_parameters{
             .viewport          = context.viewport,
@@ -189,11 +203,14 @@ void Rendertarget_viewport::render_mesh_layer(
             .mesh_spans        = { m_mesh_layer.meshes },
             .lights            = { },
             .light_projections = { },
-            .materials         = { },
+            .materials         = { m_scene_root->materials() },
             .passes            = { &m_renderpass },
             .visibility_filter =
             {
-                .require_all_bits_set = (erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::gui)
+                .require_all_bits_set = (
+                    erhe::scene::Node_visibility::visible |
+                    erhe::scene::Node_visibility::gui
+                )
             }
         }
     );

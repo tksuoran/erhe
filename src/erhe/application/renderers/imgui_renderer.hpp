@@ -44,7 +44,7 @@ public:
     {
     public:
         Frame_resources(
-            const std::size_t                               slot,
+            const std::size_t                          slot,
             erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
             erhe::graphics::Vertex_format&             vertex_format,
             erhe::graphics::Shader_stages*             shader_stages,

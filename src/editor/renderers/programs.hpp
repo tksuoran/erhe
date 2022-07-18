@@ -71,12 +71,13 @@ public:
     void declare_required_components() override;
     void initialize_component       () override;
 
+    static constexpr std::size_t s_texture_unit_count = 15; // for non bindless textures
+
     // Public members
     std::unique_ptr<erhe::graphics::Shader_resource> shadow_map_default_uniform_block; // for non-bindless textures
     std::unique_ptr<erhe::graphics::Shader_resource> textured_default_uniform_block;   // for non-bindless textures
-    int                                              base_texture_unit  {0};
-    int                                              shadow_texture_unit{1};
-    int                                              gui_texture_unit   {2};
+    int                                              shadow_texture_unit{0};
+    int                                              base_texture_unit{1};
     std::unique_ptr<erhe::graphics::Sampler>         nearest_sampler;
     std::unique_ptr<erhe::graphics::Sampler>         linear_sampler;
     std::unique_ptr<erhe::graphics::Sampler>         linear_mipmap_linear_sampler;

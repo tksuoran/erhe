@@ -1,5 +1,6 @@
 #include "scene/scene_builder.hpp"
 #include "editor_log.hpp"
+#include "editor_rendering.hpp"
 #include "task_queue.hpp"
 
 #include "parsers/gltf.hpp"
@@ -88,6 +89,7 @@ void Scene_builder::declare_required_components()
 {
     require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
+    require<Editor_rendering>();
     require<Fly_camera_tool >();
     require<Materials       >();
     require<Viewport_windows>();
@@ -107,6 +109,9 @@ void Scene_builder::initialize_component()
     m_scene_root = Component::get<Scene_root>();
 
     setup_scene();
+
+    //const auto& editor_rendering = Component::get<Editor_rendering>();
+    //m_rendertarget_viewport = editor_rendering->create_rendertarget_viewport(1980, 1080, 1000.0);
 }
 
 auto Scene_builder::make_camera(

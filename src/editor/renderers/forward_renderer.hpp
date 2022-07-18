@@ -22,6 +22,7 @@
 namespace erhe::graphics
 {
     class OpenGL_state_tracker;
+    class Texture;
     class Vertex_input_state;
 }
 
@@ -102,11 +103,12 @@ private:
     std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
     std::shared_ptr<Programs>                             m_programs;
 
-    std::unique_ptr<Material_buffer     > m_material_buffers;
-    std::unique_ptr<Light_buffer        > m_light_buffers;
-    std::unique_ptr<Camera_buffer       > m_camera_buffers;
-    std::unique_ptr<Draw_indirect_buffer> m_draw_indirect_buffers;
-    std::unique_ptr<Primitive_buffer    > m_primitive_buffers;
+    std::unique_ptr<Material_buffer     >    m_material_buffers;
+    std::unique_ptr<Light_buffer        >    m_light_buffers;
+    std::unique_ptr<Camera_buffer       >    m_camera_buffers;
+    std::unique_ptr<Draw_indirect_buffer>    m_draw_indirect_buffers;
+    std::unique_ptr<Primitive_buffer    >    m_primitive_buffers;
+    std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
 };
 
 } // namespace editor

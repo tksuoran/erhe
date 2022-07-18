@@ -79,7 +79,8 @@ void Programs::initialize_component()
         textured_default_uniform_block->add_sampler(
             "s_texture",
             gl::Uniform_type::sampler_2d,
-            base_texture_unit
+            base_texture_unit,
+            s_texture_unit_count
         );
     }
     const auto* shadow_default_uniform_block = erhe::graphics::Instance::info.use_bindless_texture

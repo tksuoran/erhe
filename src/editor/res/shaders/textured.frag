@@ -27,8 +27,9 @@ void main()
 {
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_texture = sampler2D(v_texture);
-#endif
-
-    //out_color = srgb_to_linear(texture(s_texture, v_texcoord));
     out_color = texture(s_texture, v_texcoord);
+#else
+    out_color = texture(s_texture[v_texture.x], v_texcoord);
+#endif
+    out_color = vec4(1.0, 0.0, 1.0, 1.0);
 }
