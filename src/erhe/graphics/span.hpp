@@ -58,4 +58,14 @@ inline void write(
     memcpy(write_dst, source_bytes.data(), source_bytes.size_bytes());
 }
 
+template <typename T>
+inline void write(
+    const gsl::span<T>& dst,
+    const std::size_t   write_byte_offset,
+    const T&            value
+)
+{
+    write(dst, write_byte_offset, as_span(value));
+}
+
 } // namespace erhe::graphics

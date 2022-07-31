@@ -152,9 +152,34 @@ auto kernel_binom_linear(const Kernel& discrete_data) -> Kernel
 }
 #endif
 
+Post_processing::Offsets::Offsets(
+    erhe::graphics::Shader_resource& block,
+    const std::size_t                source_texture_count
+)
+    : texel_scale   {block.add_float("texel_scale"                         )->offset_in_parent()}
+    , texture_count {block.add_uint ("texture_count"                       )->offset_in_parent()}
+    , reserved0     {block.add_float("reserved0"                           )->offset_in_parent()}
+    , reserved1     {block.add_float("reserved1"                           )->offset_in_parent()}
+    , source_texture{block.add_uvec2("source_texture", source_texture_count)->offset_in_parent()}
+{
+}
+
 Post_processing::Post_processing()
     : Component   {c_label}
     , Imgui_window{c_title, c_label}
+    , m_parameter_block{
+        "post_processing",
+        0,
+        erhe::graphics::Shader_resource::Type::uniform_block
+    }
+    , m_offsets{m_parameter_block, m_source_texture_count}
+    , m_fragment_outputs{
+        erhe::graphics::Fragment_output{
+            .name     = "out_color",
+            .type     = gl::Fragment_shader_output_type::float_vec4,
+            .location = 0
+        }
+    }
 {
 }
 
@@ -177,24 +202,7 @@ void Post_processing::initialize_component()
         Component::get<erhe::application::Gl_context_provider>()
     };
 
-    m_fragment_outputs.add(
-        "out_color",
-        gl::Fragment_shader_output_type::float_vec4,
-        0
-    );
-
     m_empty_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>();
-
-    m_parameter_block = std::make_unique<erhe::graphics::Shader_resource>(
-        "post_processing",
-        0,
-        erhe::graphics::Shader_resource::Type::uniform_block
-    );
-    m_texel_scale_offset    = m_parameter_block->add_float("texel_scale"                           )->offset_in_parent();
-    m_texture_count_offset  = m_parameter_block->add_uint ("texture_count"                         )->offset_in_parent();
-    m_reserved0_offset      = m_parameter_block->add_float("reserved0"                             )->offset_in_parent();
-    m_reserved1_offset      = m_parameter_block->add_float("reserver1"                             )->offset_in_parent();
-    m_source_texture_offset = m_parameter_block->add_uvec2("source_texture", m_source_texture_count)->offset_in_parent();
 
     {
         ERHE_PROFILE_SCOPE("shader");
@@ -204,17 +212,33 @@ void Post_processing::initialize_component()
         const fs::path x_fs_path       = shader_path / fs::path("downsample_x.frag");
         const fs::path y_fs_path       = shader_path / fs::path("downsample_y.frag");
         const fs::path compose_fs_path = shader_path / fs::path("compose.frag");
+
         Shader_stages::Create_info x_create_info{
             .name             = "downsample_x",
+            .interface_blocks = { &m_parameter_block },
             .fragment_outputs = &m_fragment_outputs,
+            .shaders          = {
+                { gl::Shader_type::vertex_shader,   vs_path   },
+                { gl::Shader_type::fragment_shader, x_fs_path }
+            }
         };
         Shader_stages::Create_info y_create_info{
             .name             = "downsample_y",
+            .interface_blocks = { &m_parameter_block },
             .fragment_outputs = &m_fragment_outputs,
+            .shaders          = {
+                { gl::Shader_type::vertex_shader,   vs_path   },
+                { gl::Shader_type::fragment_shader, y_fs_path }
+            }
         };
         Shader_stages::Create_info compose_create_info{
             .name             = "compose",
+            .interface_blocks = { &m_parameter_block },
             .fragment_outputs = &m_fragment_outputs,
+            .shaders          = {
+                { gl::Shader_type::vertex_shader,   vs_path         },
+                { gl::Shader_type::fragment_shader, compose_fs_path }
+            }
         };
 
         if (erhe::graphics::Instance::info.use_bindless_texture)
@@ -250,17 +274,6 @@ void Post_processing::initialize_component()
             y_create_info.default_uniform_block       = &m_downsample_default_uniform_block;
             compose_create_info.default_uniform_block = &m_compose_default_uniform_block;
         }
-
-        // GL_ARB_gpu_shader_int64
-        x_create_info      .shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
-        y_create_info      .shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
-        compose_create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
-        x_create_info      .shaders.emplace_back(gl::Shader_type::fragment_shader, x_fs_path);
-        y_create_info      .shaders.emplace_back(gl::Shader_type::fragment_shader, y_fs_path);
-        compose_create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, compose_fs_path);
-        x_create_info      .add_interface_block(m_parameter_block.get());
-        y_create_info      .add_interface_block(m_parameter_block.get());
-        compose_create_info.add_interface_block(m_parameter_block.get());
 
         Shader_stages::Prototype x_prototype      {x_create_info};
         Shader_stages::Prototype y_prototype      {y_create_info};
@@ -389,7 +402,7 @@ void Post_processing::create_frame_resources()
     for (size_t slot = 0; slot < s_frame_resources_count; ++slot)
     {
         m_frame_resources.emplace_back(
-            m_parameter_block->size_bytes(),
+            m_parameter_block.size_bytes(),
             100,
             slot
         );
@@ -609,14 +622,13 @@ void Post_processing::downsample(
         *m_programs->linear_sampler.get()
     );
 
-    std::size_t word_offset = 0;
-    gpu_float_data[word_offset++] = 1.0f / source_texture->width();
-    gpu_uint_data [word_offset++] = 1;
-    gpu_float_data[word_offset++] = 0.0f;
-    gpu_float_data[word_offset++] = 0.0f;
-    gpu_uint_data [word_offset++] = (handle & 0xffffffffu);
-    gpu_uint_data [word_offset++] = handle >> 32u;
-    m_parameter_writer.write_offset += m_parameter_block->size_bytes();
+    gpu_float_data[m_parameter_writer.write_offset + m_offsets.texel_scale       ] = 1.0f / source_texture->width();
+    gpu_uint_data [m_parameter_writer.write_offset + m_offsets.texture_count     ] = 1;
+    gpu_float_data[m_parameter_writer.write_offset + m_offsets.reserved0         ] = 0.0f;
+    gpu_float_data[m_parameter_writer.write_offset + m_offsets.reserved1         ] = 0.0f;
+    gpu_uint_data [m_parameter_writer.write_offset + m_offsets.source_texture    ] = (handle & 0xffffffffu);
+    gpu_uint_data [m_parameter_writer.write_offset + m_offsets.source_texture + 1] = handle >> 32u;
+    m_parameter_writer.write_offset += m_parameter_block.size_bytes();
     m_parameter_writer.end();
 
     rendertarget.bind_framebuffer();
@@ -628,7 +640,7 @@ void Post_processing::downsample(
 
         gl::bind_buffer_range(
             parameter_buffer.target(),
-            static_cast<GLuint>    (m_parameter_block->binding_point()),
+            static_cast<GLuint>    (m_parameter_block.binding_point()),
             static_cast<GLuint>    (parameter_buffer.gl_name()),
             static_cast<GLintptr>  (m_parameter_writer.range.first_byte_offset),
             static_cast<GLsizeiptr>(m_parameter_writer.range.byte_count)
@@ -676,17 +688,21 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
 
     m_parameter_writer.begin(parameter_buffer.target());
 
-    std::byte* const          start      = parameter_gpu_data.data() + m_parameter_writer.write_offset;
+    std::byte* const          start      = parameter_gpu_data.data();
     const std::size_t         byte_count = parameter_gpu_data.size_bytes();
     const std::size_t         word_count = byte_count / sizeof(float);
     const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
     const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
-    std::size_t word_offset = 0;
-    gpu_float_data[word_offset++] = 0.0f;
-    gpu_uint_data [word_offset++] = static_cast<uint32_t>(m_rendertargets.size());
-    gpu_float_data[word_offset++] = 0.0f;
-    gpu_float_data[word_offset++] = 0.0f;
+    using erhe::graphics::write;
+    //const uint32_t texture_count = static_cast<uint32_t>(m_rendertargets.size());
+
+    write(gpu_float_data, m_parameter_writer.write_offset + m_offsets.texel_scale,   0.0f);
+    write(gpu_uint_data,  m_parameter_writer.write_offset + m_offsets.texture_count, static_cast<uint32_t>(m_rendertargets.size()));
+    write(gpu_float_data, m_parameter_writer.write_offset + m_offsets.reserved0,     0.0f);
+    write(gpu_float_data, m_parameter_writer.write_offset + m_offsets.reserved1,     0.0f);
+
+    constexpr std::size_t uvec4_size = 4 * sizeof(uint32_t);
 
     {
         ERHE_PROFILE_SCOPE("make textures resident");
@@ -695,6 +711,13 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
                 *source_texture,
                 *m_programs->linear_sampler.get()
             );
+
+            const uint32_t texture_handle[2] =
+            {
+                static_cast<uint32_t>((handle & 0xffffffffu)),
+                static_cast<uint32_t>(handle >> 32u)
+            };
+            const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
 
             if (erhe::graphics::Instance::info.use_bindless_texture)
             {
@@ -706,10 +729,9 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
                 gl::bind_sampler     (0, m_programs->nearest_sampler->gl_name()); // check if this is good
             }
 
-            gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
-            gpu_uint_data[word_offset++] = handle >> 32u;
-            gpu_uint_data[word_offset++] = 0; // padding in uvec2 array in uniform buffer (std140)
-            gpu_uint_data[word_offset++] = 0;
+            write<uint32_t>(gpu_uint_data, m_parameter_writer.write_offset + m_offsets.source_texture    , texture_handle_cpu_data);
+            write<uint32_t>(gpu_uint_data, m_parameter_writer.write_offset + m_offsets.source_texture + 2, 0);
+            write<uint32_t>(gpu_uint_data, m_parameter_writer.write_offset + m_offsets.source_texture + 3, 0);
         }
 
         const auto end = std::min(m_rendertargets.size(), m_source_texture_count);
@@ -721,6 +743,13 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
                 *m_programs->linear_sampler.get()
             );
 
+            const uint32_t texture_handle[2] =
+            {
+                static_cast<uint32_t>((handle & 0xffffffffu)),
+                static_cast<uint32_t>(handle >> 32u)
+            };
+            const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
+
             if (erhe::graphics::Instance::info.use_bindless_texture)
             {
                 gl::make_texture_handle_resident_arb(handle);
@@ -731,10 +760,9 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
                 gl::bind_sampler     (static_cast<GLuint>(i), m_programs->linear_sampler->gl_name());
             }
 
-            gpu_uint_data[word_offset++] = (handle & 0xffffffffu);
-            gpu_uint_data[word_offset++] = handle >> 32u;
-            gpu_uint_data[word_offset++] = 0; // padding in uvec2 array in uniform buffer (std140)
-            gpu_uint_data[word_offset++] = 0;
+            write<uint32_t>(gpu_uint_data, m_parameter_writer.write_offset + (i * uvec4_size) + m_offsets.source_texture    , texture_handle_cpu_data);
+            write<uint32_t>(gpu_uint_data, m_parameter_writer.write_offset + (i * uvec4_size) + m_offsets.source_texture + 2, 0);
+            write<uint32_t>(gpu_uint_data, m_parameter_writer.write_offset + (i * uvec4_size) + m_offsets.source_texture + 3, 0);
         }
         if (!erhe::graphics::Instance::info.use_bindless_texture)
         {
@@ -746,7 +774,7 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
         }
 
     }
-    m_parameter_writer.write_offset += m_parameter_block->size_bytes();
+    m_parameter_writer.write_offset += m_parameter_block.size_bytes();
     m_parameter_writer.end();
 
     const auto& configuration = get<erhe::application::Configuration>();
@@ -772,7 +800,7 @@ void Post_processing::compose(const erhe::graphics::Texture* source_texture)
         ERHE_PROFILE_SCOPE("bind parameter buffer");
         gl::bind_buffer_range(
             parameter_buffer.target(),
-            static_cast<GLuint>    (m_parameter_block->binding_point()),
+            static_cast<GLuint>    (m_parameter_block.binding_point()),
             static_cast<GLuint>    (parameter_buffer.gl_name()),
             static_cast<GLintptr>  (m_parameter_writer.range.first_byte_offset),
             static_cast<GLsizeiptr>(m_parameter_writer.range.byte_count)

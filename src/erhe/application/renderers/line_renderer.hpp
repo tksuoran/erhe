@@ -63,17 +63,11 @@ public:
     glm::vec4 p1;
 };
 
-//class Color_line
-//{
-//public:
-//    glm::vec4 color0;
-//    glm::vec3 p0;
-//    glm::vec4 color1;
-//    glm::vec3 p1;
-//};
 class Line_renderer_pipeline
 {
 public:
+    Line_renderer_pipeline();
+
     void initialize(Shader_monitor* shader_monitor);
 
     bool                                             reverse_depth{false};
@@ -173,11 +167,6 @@ public:
         const float     radius
     );
 
-    //void add_lines(
-    //    const glm::mat4                         transform,
-    //    const std::initializer_list<Color_line> color_lines,
-    //    const float                             thickness = 2.0f
-    //);
 private:
     static constexpr std::size_t s_frame_resources_count = 4;
 

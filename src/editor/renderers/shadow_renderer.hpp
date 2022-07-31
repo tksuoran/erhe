@@ -4,9 +4,10 @@
 #include "renderers/draw_indirect_buffer.hpp"
 #include "renderers/primitive_buffer.hpp"
 
+#include "erhe/application/render_graph_node.hpp"
+#include "erhe/components/components.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/scene/viewport.hpp"
-#include "erhe/components/components.hpp"
 
 #include <gsl/gsl>
 
@@ -38,6 +39,25 @@ namespace editor
 {
 
 class Mesh_memory;
+class Scene_root;
+class Shadow_renderer;
+class Viewport_window;
+
+class Shadow_render_node
+    : public erhe::application::Render_graph_node
+{
+public:
+    Shadow_render_node(
+        Shadow_renderer&                        shadow_renderer,
+        const std::shared_ptr<Viewport_window>& viewport_window
+    );
+
+    void execute_render_graph_node() override;
+
+private:
+    Shadow_renderer&                 m_shadow_renderer;
+    std::shared_ptr<Viewport_window> m_viewport_window;
+};
 
 class Shadow_renderer
     : public erhe::components::Component
@@ -59,6 +79,7 @@ public:
     class Render_parameters
     {
     public:
+        Scene_root*                                                scene_root;
         const erhe::scene::Camera*                                 view_camera;
         const erhe::scene::Viewport                                view_camera_viewport;
         const std::initializer_list<
@@ -69,14 +90,13 @@ public:
         const gsl::span<const std::shared_ptr<erhe::scene::Light>> lights;
     };
 
-    auto light_projections() const -> const Light_projections&;
-
-    auto render(const Render_parameters& parameters) -> const Light_projections&;
-
+    auto render    (const Render_parameters& parameters) -> const Light_projections&;
     void next_frame();
 
-    [[nodiscard]] auto texture () const -> erhe::graphics::Texture*;
-    [[nodiscard]] auto viewport() const -> erhe::scene::Viewport;
+    [[nodiscard]] auto light_projections() const -> const Light_projections&;
+    [[nodiscard]] auto scene_root       () const -> Scene_root*;
+    [[nodiscard]] auto texture          () const -> erhe::graphics::Texture*;
+    [[nodiscard]] auto viewport         () const -> erhe::scene::Viewport;
 
 private:
     // Component dependencies
@@ -91,6 +111,7 @@ private:
     std::vector<std::unique_ptr<erhe::graphics::Framebuffer>> m_framebuffers;
     erhe::scene::Viewport                                     m_viewport{0, 0, 0, 0, true};
 
+    Scene_root*                                               m_shadow_scene{nullptr};
     Light_projections                                         m_light_projections;
 
     std::unique_ptr<Light_buffer        > m_light_buffers;

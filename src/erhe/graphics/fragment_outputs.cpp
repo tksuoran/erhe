@@ -1,8 +1,6 @@
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include <spdlog/spdlog.h>
-
 #include <sstream>
 
 namespace erhe::graphics
@@ -38,18 +36,12 @@ static auto gl_fragment_output_type_name(
     }
 }
 
-void Fragment_outputs::clear()
-{
-    m_outputs.clear();
-}
 
-void Fragment_outputs::add(
-    const std::string&              name,
-    gl::Fragment_shader_output_type type,
-    unsigned int                    location
+Fragment_outputs::Fragment_outputs(
+    std::initializer_list<Fragment_output> outputs
 )
+    : m_outputs{outputs}
 {
-    m_outputs.emplace_back(name, type, location);
 }
 
 auto Fragment_outputs::source() const -> std::string
@@ -58,10 +50,10 @@ auto Fragment_outputs::source() const -> std::string
 
     for (const auto& output : m_outputs)
     {
-        ss << "layout(location = " << output.location() << ") ";
+        ss << "layout(location = " << output.location << ") ";
         ss << "out ";
-        ss << gl_fragment_output_type_name(output.type()) << " ";
-        ss << output.name() << ";\n";
+        ss << gl_fragment_output_type_name(output.type) << " ";
+        ss << output.name << ";\n";
     }
 
     return ss.str();

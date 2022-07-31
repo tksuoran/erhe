@@ -21,8 +21,8 @@ namespace erhe::scene
 namespace editor
 {
 
+class Editor_scenes;
 class Icon_set;
-class Scene_root;
 class Selection_tool;
 
 class Layers_window
@@ -48,7 +48,7 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Scene_root>     m_scene_root;
+    std::shared_ptr<Editor_scenes>  m_editor_scenes;
     std::shared_ptr<Selection_tool> m_selection_tool;
     std::shared_ptr<Icon_set>       m_icon_set;
 

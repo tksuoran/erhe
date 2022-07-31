@@ -25,9 +25,7 @@ Draw_indirect_buffer::Draw_indirect_buffer(std::size_t max_draw_count)
 {
     Multi_buffer::allocate(
         gl::Buffer_target::draw_indirect_buffer,
-        0,
-        sizeof(gl::Draw_elements_indirect_command) * max_draw_count,
-        m_name
+        sizeof(gl::Draw_elements_indirect_command) * max_draw_count
     );
 }
 

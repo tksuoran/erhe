@@ -1,341 +1,62 @@
-﻿#include "rendertarget_imgui_viewport.hpp"
-#include "renderers/forward_renderer.hpp"
-#include "renderers/mesh_memory.hpp"
-#include "renderers/programs.hpp"
-#include "renderers/render_context.hpp"
-#include "scene/node_raytrace.hpp"
-#include "scene/scene_root.hpp"
-#include "scene/helpers.hpp"
-#include "tools/pointer_context.hpp"
-#include "editor_log.hpp"
+﻿// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "erhe/application/configuration.hpp"
+#include "rendertarget_imgui_viewport.hpp"
+#include "editor_log.hpp"
+#include "rendertarget_node.hpp"
+#include "windows/viewport_window.hpp"
+
+#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/scoped_imgui_context.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/renderers/imgui_renderer.hpp"
 #include "erhe/application/windows/imgui_window.hpp"
-
-#include "erhe/geometry/shapes/regular_polygon.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/texture.hpp"
-#include "erhe/graphics/opengl_state_tracker.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/window.hpp"
-
-#include <imgui.h>
 
 #include <GLFW/glfw3.h> // TODO Fix dependency ?
+
+#include <imgui.h>
+#include <imgui_internal.h>
 
 namespace editor
 {
 
-IViewport::~IViewport()
-{
-}
-
-Rendertarget_viewport::Rendertarget_viewport(
-    const erhe::components::Components& components,
-    const int                           width,
-    const int                           height,
-    const double                        dots_per_meter
-)
-    : m_imgui_renderer        {components.get<erhe::application::Imgui_renderer   >()}
-    , m_pipeline_state_tracker{components.get<erhe::graphics::OpenGL_state_tracker>()}
-    , m_pointer_context       {components.get<Pointer_context                     >()}
-    , m_scene_root            {components.get<Scene_root                          >()}
-    , m_mesh_layer            {"GUI Layer", erhe::scene::Node_visibility::gui}
-    , m_dots_per_meter        {dots_per_meter}
-{
-    init_rendertarget(width, height);
-    init_renderpass  (components);
-    add_scene_node   (components);
-}
-
-void Rendertarget_viewport::init_rendertarget(
-    const int width,
-    const int height
-)
-{
-    using Texture     = erhe::graphics::Texture;
-    using Framebuffer = erhe::graphics::Framebuffer;
-
-    m_texture = std::make_shared<Texture>(
-        Texture::Create_info{
-            .target          = gl::Texture_target::texture_2d,
-            .internal_format = gl::Internal_format::rgba8,
-            .sample_count    = 0,
-            .width           = width,
-            .height          = height
-        }
-    );
-    m_texture->set_debug_label("ImGui Rendertarget");
-    const float clear_value[4] = { 0.0f, 0.5f, 0.5f, 0.5f };
-    gl::clear_tex_image(
-        m_texture->gl_name(),
-        0,
-        gl::Pixel_format::rgba,
-        gl::Pixel_type::float_,
-        &clear_value[0]
-    );
-
-    m_sampler = std::make_shared<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::linear_mipmap_linear,
-        gl::Texture_mag_filter::nearest
-    );
-
-    Framebuffer::Create_info create_info;
-    create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_texture.get());
-    m_framebuffer = std::make_unique<Framebuffer>(create_info);
-    m_framebuffer->set_debug_label("ImGui Rendertarget");
-}
-
-void Rendertarget_viewport::init_renderpass(
-    const erhe::components::Components& components
-)
-{
-    using erhe::graphics::Vertex_input_state;
-    using erhe::graphics::Input_assembly_state;
-    using erhe::graphics::Rasterization_state;
-    using erhe::graphics::Depth_stencil_state;
-    using erhe::graphics::Color_blend_state;
-
-    const auto& configuration = *components.get<erhe::application::Configuration>().get();
-    const auto& programs      = *components.get<Programs   >().get();
-    const auto& mesh_memory   = *components.get<Mesh_memory>().get();
-    auto* vertex_input = mesh_memory.vertex_input.get();
-
-    const bool reverse_depth = configuration.graphics.reverse_depth;
-
-    m_renderpass.pipeline.data =
-        {
-            .name           = "GUI",
-            .shader_stages  = programs.textured.get(),
-            .vertex_input   = vertex_input,
-            .input_assembly = Input_assembly_state::triangles,
-            .rasterization  = Rasterization_state::cull_mode_none, // cull_mode_back_ccw(reverse_depth),
-            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-            .color_blend    = Color_blend_state::color_blend_premultiplied
-        };
-}
-
-void Rendertarget_viewport::add_scene_node(
-    const erhe::components::Components& components
-)
-{
-    auto& mesh_memory = *components.get<Mesh_memory>().get();
-    auto& scene_root  = *components.get<Scene_root >().get();
-
-    auto gui_material = scene_root.make_material(
-        "GUI Quad",
-        glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
-    );
-    gui_material->texture = m_texture;
-    gui_material->sampler = m_sampler;
-
-    const auto local_width  = static_cast<double>(m_texture->width ()) / m_dots_per_meter;
-    const auto local_height = static_cast<double>(m_texture->height()) / m_dots_per_meter;
-
-    auto gui_geometry = erhe::geometry::shapes::make_rectangle(
-        local_width,
-        local_height,
-        false
-    );
-
-    const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
-        std::move(gui_geometry)
-    );
-
-    erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
-    auto gui_primitive = erhe::primitive::make_primitive(
-        *shared_geometry.get(),
-        mesh_memory.build_info
-    );
-
-    erhe::primitive::Primitive primitive{
-        .material              = gui_material,
-        .gl_primitive_geometry = gui_primitive
-    };
-    m_gui_mesh = std::make_shared<erhe::scene::Mesh>("GUI Quad", primitive);
-    m_gui_mesh->set_visibility_mask(
-        erhe::scene::Node_visibility::visible |
-        erhe::scene::Node_visibility::id      |
-        erhe::scene::Node_visibility::gui
-    );
-
-    m_node_raytrace = std::make_shared<Node_raytrace>(shared_geometry);
-
-    add_to_raytrace_scene(scene_root.raytrace_scene(), m_node_raytrace);
-    m_gui_mesh->attach(m_node_raytrace);
-
-    scene_root.add( // TODO Remove scene_root.gui_layer()?
-        m_gui_mesh,
-        scene_root.gui_layer()
-    );
-
-    m_mesh_layer.meshes.push_back(m_gui_mesh);
-}
-
-auto Rendertarget_viewport::mesh_node() -> std::shared_ptr<erhe::scene::Mesh>
-{
-    return m_gui_mesh;
-}
-
-auto Rendertarget_viewport::texture() const -> std::shared_ptr<erhe::graphics::Texture>
-{
-    return m_texture;
-}
-
-void Rendertarget_viewport::render_mesh_layer(
-    Forward_renderer&     forward_renderer,
-    const Render_context& context
-)
-{
-    static constexpr std::string_view c_id_render_mesh_layer{"Rendertarget_viewport::render_mesh_layer"};
-    ERHE_PROFILE_GPU_SCOPE(c_id_render_mesh_layer);
-
-    forward_renderer.render(
-        Forward_renderer::Render_parameters{
-            .viewport          = context.viewport,
-            .camera            = context.camera,
-            .mesh_spans        = { m_mesh_layer.meshes },
-            .lights            = { },
-            .light_projections = { },
-            .materials         = { m_scene_root->materials() },
-            .passes            = { &m_renderpass },
-            .visibility_filter =
-            {
-                .require_all_bits_set = (
-                    erhe::scene::Node_visibility::visible |
-                    erhe::scene::Node_visibility::gui
-                )
-            }
-        }
-    );
-}
-
-[[nodiscard]] auto Rendertarget_viewport::width() const -> float
-{
-    return static_cast<float>(m_texture->width());
-}
-
-[[nodiscard]] auto Rendertarget_viewport::height() const -> float
-{
-    return static_cast<float>(m_texture->height());
-}
-
-[[nodiscard]] auto Rendertarget_viewport::get_hover_position() const -> std::optional<glm::vec2>
-{
-    const auto& gui = m_pointer_context->get_hover(Pointer_context::gui_slot);
-    if (
-        gui.valid &&
-        gui.raytrace_node == m_node_raytrace.get() &&
-        gui.position.has_value()
-    )
-    {
-        const auto width    = static_cast<float>(m_texture->width());
-        const auto height   = static_cast<float>(m_texture->height());
-        const auto p_world  = gui.position.value();
-        const auto p_local  = glm::vec3{m_gui_mesh->node_from_world() * glm::vec4{p_world, 1.0f}};
-        const auto p_window = static_cast<float>(m_dots_per_meter) * p_local;
-        return glm::vec2{
-            p_window.x + 0.5f * width,
-            height - (p_window.y + 0.5f * height)
-        };
-    }
-    return {};
-}
-
-void Rendertarget_viewport::begin(erhe::application::Imgui_viewport& imgui_viewport)
-{
-    const auto& gui = m_pointer_context->get_hover(Pointer_context::gui_slot);
-    if (
-        gui.valid &&
-        gui.raytrace_node == m_node_raytrace.get() &&
-        gui.position.has_value()
-    )
-    {
-        const auto width    = static_cast<float>(m_texture->width());
-        const auto height   = static_cast<float>(m_texture->height());
-        const auto p_world  = gui.position.value();
-        const auto p_local  = glm::vec3{m_gui_mesh->node_from_world() * glm::vec4{p_world, 1.0f}};
-        const auto p_window = static_cast<float>(m_dots_per_meter) * p_local;
-        if (!imgui_viewport.has_cursor())
-        {
-            imgui_viewport.on_cursor_enter(1);
-        }
-        imgui_viewport.on_mouse_move(
-            p_window.x + 0.5f * width,
-            height - (p_window.y + 0.5f * height)
-        );
-    }
-    else
-    {
-        if (imgui_viewport.has_cursor())
-        {
-            imgui_viewport.on_cursor_enter(0);
-        }
-        imgui_viewport.on_mouse_move(-FLT_MAX, -FLT_MAX);
-    }
-}
-
-void Rendertarget_viewport::end()
-{
-    m_pipeline_state_tracker->shader_stages.reset();
-    m_pipeline_state_tracker->color_blend.execute(
-        erhe::graphics::Color_blend_state::color_blend_disabled
-    );
-
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
-    gl::viewport        (0, 0, m_texture->width(), m_texture->height());
-    gl::clear_color     (0.0f, 0.2f, 0.0f, 1.0f);
-    gl::clear           (gl::Clear_buffer_mask::color_buffer_bit);
-
-    m_imgui_renderer->render_draw_data();
-    gl::generate_texture_mipmap(m_texture->gl_name());
-}
-
 Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
-    IViewport*                          viewport,
+    Rendertarget_node*                  rendertarget_node,
     const std::string_view              name,
     const erhe::components::Components& components
 )
-    : m_viewport{viewport}
-    , m_view    {components.get<erhe::application::View>()}
-    , m_name    {name}
+    : erhe::application::Imgui_viewport{
+        name,
+        components.get<erhe::application::Imgui_renderer>()->get_font_atlas()
+    }
+    , m_rendertarget_node{rendertarget_node}
+    , m_view             {components.get<erhe::application::View>()}
+    , m_name             {name}
 {
-    IMGUI_CHECKVERSION();
+    m_imgui_renderer = components.get<erhe::application::Imgui_renderer>();
+    m_imgui_windows  = components.get<erhe::application::Imgui_windows>();
 
-    m_renderer = components.get<erhe::application::Imgui_renderer>();
-    auto* font_atlas = m_renderer->get_font_atlas();
-    m_imgui_context = ImGui::CreateContext(font_atlas);
+    m_imgui_ini_path = fmt::format("imgui_{}.ini", name);
 
-    ImGuiIO& io = ImGui::GetIO(m_imgui_context);
-    m_renderer->use_as_backend_renderer_on_context(m_imgui_context);
+    m_imgui_renderer->use_as_backend_renderer_on_context(m_imgui_context);
 
+    ImGuiIO& io = m_imgui_context->IO;
     io.MouseDrawCursor = true;
-    io.IniFilename = nullptr; // TODO
+    io.IniFilename = m_imgui_ini_path.c_str();
 
     IM_ASSERT(io.BackendPlatformUserData == NULL && "Already initialized a platform backend!");
 
     io.BackendPlatformUserData = this;
     io.BackendPlatformName     = "erhe rendertarget";
-    io.DisplaySize             = ImVec2{static_cast<float>(m_viewport->width()), static_cast<float>(m_viewport->height())};
+    io.DisplaySize             = ImVec2{static_cast<float>(m_rendertarget_node->width()), static_cast<float>(m_rendertarget_node->height())};
     io.DisplayFramebufferScale = ImVec2{1.0f, 1.0f};
 
     io.MousePos                = ImVec2{-FLT_MAX, -FLT_MAX};
     io.MouseHoveredViewport    = 0;
-    for (int i = 0; i < IM_ARRAYSIZE(io.MouseDown); i++)
-    {
-        io.MouseDown[i] = false;
-    }
 
-    // io.AddFocusEvent(focus);
-
-    //io.MouseWheelH += (float)xoffset;
-    //io.MouseWheel += (float)yoffset;
+    m_last_mouse_x = -FLT_MAX;
+    m_last_mouse_y = -FLT_MAX;
 
     ImGui::SetCurrentContext(nullptr);
 }
@@ -351,20 +72,85 @@ template <typename T>
     return gsl::span<const T>(&value, 1);
 }
 
-void Rendertarget_imgui_viewport::begin_imgui_frame()
+[[nodiscard]] auto Rendertarget_imgui_viewport::rendertarget_node() -> Rendertarget_node*
 {
-    m_viewport->begin(*this);
+    return m_rendertarget_node;
+}
+
+[[nodiscard]] auto Rendertarget_imgui_viewport::begin_imgui_frame() -> bool
+{
+    SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_viewport::begin_imgui_frame()");
+
+    const auto pointer = m_rendertarget_node->get_pointer();
+    if (pointer.has_value())
+    {
+        if (!has_cursor())
+        {
+            on_cursor_enter(1);
+        }
+        const auto position = pointer.value();
+        if (
+            (m_last_mouse_x != position.x) ||
+            (m_last_mouse_y != position.y)
+        )
+        {
+            m_last_mouse_x = position.x;
+            m_last_mouse_y = position.y;
+            on_mouse_move(position.x, position.y);
+        }
+    }
+    else
+    {
+        if (has_cursor())
+        {
+            on_cursor_enter(0);
+            m_last_mouse_x = -FLT_MAX;
+            m_last_mouse_y = -FLT_MAX;
+            on_mouse_move(-FLT_MAX, -FLT_MAX);
+        }
+    }
+
+    const auto current_time = glfwGetTime();
+    ImGuiIO& io = m_imgui_context->IO;
+    io.DeltaTime = m_time > 0.0
+        ? static_cast<float>(current_time - m_time)
+        : static_cast<float>(1.0 / 60.0);
+    m_time = current_time;
 
     ImGui::NewFrame();
     ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+    ImGui::PushFont(m_imgui_renderer->vr_primary_font());
+
+    // TODO
+    //// ImGui::ShowDemoWindow();
+    //// ImGui::ShowMetricsWindow();
+    //// ImGui::ShowStackToolWindow();
+
+    return true;
 }
 
 void Rendertarget_imgui_viewport::end_imgui_frame()
 {
+    SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_viewport::end_imgui_frame()");
+
+    ImGui::PopFont();
     ImGui::EndFrame();
     ImGui::Render();
+}
 
-    m_viewport->end();
+void Rendertarget_imgui_viewport::execute_render_graph_node()
+{
+    SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_viewport::execute_render_graph_node()");
+
+    erhe::application::Imgui_windows&  imgui_windows  = *m_imgui_windows.get();
+    erhe::application::Imgui_viewport& imgui_viewport = *this;
+
+    erhe::application::Scoped_imgui_context imgui_context(imgui_windows, imgui_viewport);
+
+    m_rendertarget_node->bind();
+    m_rendertarget_node->clear(glm::vec4{0.0f, 0.0f, 0.0f, 0.8f});
+    m_imgui_renderer->render_draw_data();
+    m_rendertarget_node->render_done();
 }
 
 }  // namespace editor

@@ -52,14 +52,16 @@ namespace erhe::application
 namespace editor
 {
 
+class Editor_scenes;
 class Node_physics;
 class Node_raytrace;
+class Materials;
 class Mesh_memory;
 class Operation_stack;
-class Pointer_context;
 class Raytrace_primitive;
-class Scene_root;
+class Tools;
 class Trs_tool;
+class Viewport_windows;
 
 class Trs_tool_drag_command
     : public erhe::application::Command
@@ -243,7 +245,10 @@ private:
         [[nodiscard]] auto get_handle_material  (const Handle handle) -> std::shared_ptr<erhe::primitive::Material>;
         [[nodiscard]] auto get_handle_visibility(const Handle handle) const -> bool;
 
-        void initialize       (Mesh_memory& mesh_memory, Scene_root& scene_root);
+        void initialize(
+            Mesh_memory& mesh_memory,
+            Scene_root&  scene_root
+        );
         void update_visibility(const bool show);
         void update_scale     (const glm::vec3 view_position_in_world);
         void update_transforms(const uint64_t serial);
@@ -265,6 +270,11 @@ private:
         bool      show_rotate   {false};
         bool      hide_inactive {true};
         float     scale         {3.5f}; // 3.5 for normal, 6.6 for debug
+
+        [[nodiscard]] auto make_material(
+            const std::string_view name,
+            glm::vec3              color
+        ) -> std::shared_ptr<erhe::primitive::Material>;
 
         erhe::scene::Node*                         root{nullptr};
         std::shared_ptr<erhe::scene::Node>         tool_node;
@@ -326,12 +336,13 @@ private:
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
+    std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
+    std::shared_ptr<Editor_scenes>                        m_editor_scenes;
     std::shared_ptr<Mesh_memory>                          m_mesh_memory;
     std::shared_ptr<Operation_stack>                      m_operation_stack;
-    std::shared_ptr<Pointer_context>                      m_pointer_context;
-    std::shared_ptr<Scene_root>                           m_scene_root;
     std::shared_ptr<Selection_tool>                       m_selection_tool;
-    std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
+    std::shared_ptr<Tools>                                m_tools;
+    std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
     bool                                          m_local          {true};
     bool                                          m_touched        {false};

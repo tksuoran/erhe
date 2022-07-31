@@ -7,6 +7,9 @@
 #include "renderers/mesh_memory.hpp"
 #include "renderers/program_interface.hpp"
 #include "renderers/programs.hpp"
+#include "scene/scene_root.hpp"
+#include "windows/debug_view_window.hpp"
+#include "windows/viewport_window.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -49,8 +52,44 @@ using erhe::graphics::Rasterization_state;
 using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 
+Shadow_render_node::Shadow_render_node(
+    Shadow_renderer&                        shadow_renderer,
+    const std::shared_ptr<Viewport_window>& viewport_window
+)
+    : erhe::application::Render_graph_node{
+        fmt::format("Shadow render {}", viewport_window->name())
+    }
+    , m_shadow_renderer{shadow_renderer}
+    , m_viewport_window{viewport_window}
+{
+}
+
+void Shadow_render_node::execute_render_graph_node()
+{
+    // Render shadow maps
+    auto*       scene_root = m_viewport_window->scene_root();
+    const auto& layers     = scene_root->layers();
+    if (scene_root->layers().content()->meshes.empty())
+    {
+        return;
+    }
+
+    scene_root->sort_lights();
+
+    const erhe::scene::Camera* camera = m_viewport_window->camera();
+    m_shadow_renderer.render(
+        Shadow_renderer::Render_parameters{
+            .scene_root           = scene_root,
+            .view_camera          = camera,
+            .view_camera_viewport = m_viewport_window->viewport(),
+            .mesh_spans           = { layers.content()->meshes },
+            .lights               = layers.light()->lights
+        }
+    );
+}
+
 Shadow_renderer::Shadow_renderer()
-    : Component    {c_label}
+    : Component{c_label}
 {
 }
 
@@ -201,9 +240,17 @@ auto Shadow_renderer::light_projections() const -> const Light_projections&
     return m_light_projections;
 }
 
+[[nodiscard]] auto Shadow_renderer::scene_root() const -> Scene_root*
+{
+    return m_shadow_scene;
+}
+
 auto Shadow_renderer::render(const Render_parameters& parameters) -> const Light_projections&
 {
-    if (!m_configuration->shadow_renderer.enabled)
+    if (
+        !m_configuration->shadow_renderer.enabled ||
+        !parameters.scene_root
+    )
     {
         return m_light_projections;
     }
@@ -217,6 +264,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> const Light
 
     const auto& mesh_spans = parameters.mesh_spans;
     const auto& lights     = parameters.lights;
+
+    m_shadow_scene = parameters.scene_root;
 
     m_pipeline_state_tracker->execute(m_pipeline);
     gl::viewport(m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);

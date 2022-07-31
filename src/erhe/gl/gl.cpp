@@ -110,4 +110,30 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
     }
 }
 
+[[nodiscard]] auto is_indexed(const gl::Buffer_target type) -> bool
+{
+    switch (type)
+    {
+        case gl::Buffer_target::array_buffer             : return true;
+        case gl::Buffer_target::atomic_counter_buffer    : return true;
+        case gl::Buffer_target::copy_read_buffer         : return false;
+        case gl::Buffer_target::copy_write_buffer        : return false;
+        case gl::Buffer_target::dispatch_indirect_buffer : return false;
+        case gl::Buffer_target::draw_indirect_buffer     : return false;
+        case gl::Buffer_target::element_array_buffer     : return false;
+        case gl::Buffer_target::parameter_buffer         : return false;
+        case gl::Buffer_target::pixel_pack_buffer        : return false;
+        case gl::Buffer_target::pixel_unpack_buffer      : return false;
+        case gl::Buffer_target::query_buffer             : return false;
+        case gl::Buffer_target::shader_storage_buffer    : return true;
+        case gl::Buffer_target::texture_buffer           : return false;
+        case gl::Buffer_target::transform_feedback_buffer: return true;
+        case gl::Buffer_target::uniform_buffer           : return true;
+        default:
+        {
+            ERHE_FATAL("Bad buffer target type");
+        }
+    }
+}
+
 } // namespace gl

@@ -1,4 +1,5 @@
 #include "operations/mesh_operation.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe/geometry/geometry.hpp"
@@ -42,9 +43,12 @@ void Mesh_operation::execute(const Operation_context&)
 {
     for (const auto& entry : m_entries)
     {
-        m_parameters.scene.sanity_check();
+        auto* scene_root = reinterpret_cast<Scene_root*>(entry.mesh->node_data.host);
+        ERHE_VERIFY(scene_root);
+        const auto& scene = scene_root->scene();
+        scene.sanity_check();
         entry.mesh->mesh_data = entry.after;
-        m_parameters.scene.sanity_check();
+        scene.sanity_check();
     }
 }
 
@@ -52,9 +56,12 @@ void Mesh_operation::undo(const Operation_context&)
 {
     for (const auto& entry : m_entries)
     {
-        m_parameters.scene.sanity_check();
+        auto* scene_root = reinterpret_cast<Scene_root*>(entry.mesh->node_data.host);
+        ERHE_VERIFY(scene_root);
+        const auto& scene = scene_root->scene();
+        scene.sanity_check();
         entry.mesh->mesh_data = entry.before;
-        m_parameters.scene.sanity_check();
+        scene.sanity_check();
     }
 }
 
@@ -64,7 +71,15 @@ void Mesh_operation::make_entries(
     > operation
 )
 {
-    m_parameters.scene.sanity_check();
+    const auto& selection = m_parameters.selection_tool->selection();
+    if (selection.empty())
+    {
+        return;
+    }
+    auto* scene_root = reinterpret_cast<Scene_root*>(selection.front()->node_data.host);
+    ERHE_VERIFY(scene_root);
+    const auto& scene = scene_root->scene();
+    scene.sanity_check();
 
     m_selection_tool = m_parameters.selection_tool;
     for (auto& item : m_parameters.selection_tool->selection())
@@ -104,7 +119,7 @@ void Mesh_operation::make_entries(
         add_entry(std::move(entry));
     }
 
-    m_parameters.scene.sanity_check();
+    scene.sanity_check();
 }
 
 void Mesh_operation::add_entry(Entry&& entry)

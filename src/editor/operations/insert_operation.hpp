@@ -34,6 +34,7 @@ namespace editor
 
 class Node_physics;
 class Node_raytrace;
+class Scene_root;
 class Selection_tool;
 
 class Node_transform_operation
@@ -43,9 +44,6 @@ public:
     class Parameters
     {
     public:
-        erhe::scene::Mesh_layer&           layer;
-        erhe::scene::Scene&                scene;
-        erhe::physics::IWorld&             physics_world;
         std::shared_ptr<erhe::scene::Node> node;
         erhe::scene::Transform             parent_from_node_before;
         erhe::scene::Transform             parent_from_node_after;
@@ -96,10 +94,7 @@ public:
     class Parameters
     {
     public:
-        erhe::scene::Scene&                scene;
-        erhe::scene::Mesh_layer&           layer;
-        erhe::physics::IWorld&             physics_world;
-        erhe::raytrace::IScene&            raytrace_scene;
+        Scene_root*                        scene_root;
         std::shared_ptr<erhe::scene::Mesh> mesh;
         std::shared_ptr<Node_physics>      node_physics;
         std::shared_ptr<Node_raytrace>     node_raytrace;
@@ -131,8 +126,7 @@ public:
     class Parameters
     {
     public:
-        erhe::scene::Scene&                 scene;
-        erhe::scene::Light_layer&           layer;
+        Scene_root*                         scene_root;
         std::shared_ptr<erhe::scene::Light> light;
         std::shared_ptr<erhe::scene::Node>  parent;
         Mode                                mode;
@@ -164,7 +158,7 @@ public:
     class Parameters
     {
     public:
-        erhe::scene::Scene&                  scene;
+        Scene_root*                          scene_root;
         std::shared_ptr<erhe::scene::Camera> camera;
         std::shared_ptr<erhe::scene::Node>   parent;
         Mode                                 mode;

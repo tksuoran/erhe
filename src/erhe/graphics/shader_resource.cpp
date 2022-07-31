@@ -402,19 +402,22 @@ Shader_resource::Shader_resource(
     , m_array_size   {array_size}
     , m_binding_point{binding_point}
 {
-    if (type == Type::uniform_block)
-    {
-        ERHE_VERIFY(binding_point < Instance::limits.max_uniform_buffer_bindings);
-    }
-    if (type == Type::shader_storage_block)
-    {
-        ERHE_VERIFY(binding_point < Instance::limits.max_shader_storage_buffer_bindings);
-    }
-    if (type == Type::sampler)
-    {
-        // TODO Which limit to use?
-        ERHE_VERIFY(binding_point < Instance::limits.max_combined_texture_image_units);
-    }
+    //// Would be nice to be able to verify this at the time of construction,
+    //// but Instance might not be ready yet.
+    ////
+    //// if (type == Type::uniform_block)
+    //// {
+    ////     ERHE_VERIFY(binding_point < Instance::limits.max_uniform_buffer_bindings);
+    //// }
+    //// if (type == Type::shader_storage_block)
+    //// {
+    ////     ERHE_VERIFY(binding_point < Instance::limits.max_shader_storage_buffer_bindings);
+    //// }
+    //// if (type == Type::sampler)
+    //// {
+    ////     // TODO Which limit to use?
+    ////     ERHE_VERIFY(binding_point < Instance::limits.max_combined_texture_image_units);
+    //// }
 }
 
 // Basic type

@@ -249,7 +249,9 @@ void main()
     vec3  wg    = normalize(TBN_t * N); // ( should be (0,0,1)^T )
 
     float N_dot_V = clamped_dot(N, V);
-    float f0_ior  = 0.04; // The default index of refraction of 1.5 yields a dielectric normal incidence reflectance of 0.04.
+
+    // TODO Figure out a way to deal with f0_ior
+    float f0_ior  = 0.0001; // The default index of refraction of 1.5 yields a dielectric normal incidence reflectance of 0.04.
     vec3  f0_met  = vec3(f0_ior); // Achromatic f0 based on IOR.
 
     Material material = material.materials[v_material_index];

@@ -98,9 +98,8 @@ auto Shader_stages::Create_info::interface_blocks_source() const -> std::string
     if (interface_blocks.size() > 0)
     {
         sb << "// Blocks\n";
-        for (const auto& i : interface_blocks)
+        for (const auto* block : interface_blocks)
         {
-            auto block = i.second;
             sb << block->source();
             sb << "\n";
         }
@@ -142,9 +141,9 @@ auto Shader_stages::Create_info::final_source(
         sb << "// Extensions\n";
         for (const auto& i : extensions)
         {
-            if (i.first == shader.type)
+            if (i.shader_stage == shader.type)
             {
-                sb << "#extension " << i.second << " : require\n";
+                sb << "#extension " << i.extension << " : require\n";
             }
         }
         sb << "\n";
@@ -227,10 +226,7 @@ void Shader_stages::Create_info::add_interface_block(
     gsl::not_null<const Shader_resource*> interface_block
 )
 {
-    // No idea why cppcheck this interface_blocks is not used
-
-    // cppcheck-suppress unreadVariable
-    interface_blocks.emplace(interface_block->name() + "_block", interface_block);
+    interface_blocks.push_back(interface_block);
 }
 
 } // namespace erhe::graphics

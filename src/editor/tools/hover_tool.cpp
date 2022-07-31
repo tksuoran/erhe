@@ -1,19 +1,22 @@
 #include "hover_tool.hpp"
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
+#include "editor_scenes.hpp"
 #include "renderers/render_context.hpp"
+#include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/hover_tool.hpp"
-#include "tools/pointer_context.hpp"
 #include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
 #include "windows/viewport_window.hpp"
+#include "windows/viewport_windows.hpp"
 
 #include "erhe/application/view.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/application/imgui_windows.hpp"
+#include "erhe/log/log_glm.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -69,7 +72,7 @@ auto Hover_tool::description() -> const char*
 
 void Hover_tool::declare_required_components()
 {
-    m_scene_root = require<Scene_root>();
+    m_editor_scenes = require<Editor_scenes>();
     require<Tools>();
     require<erhe::application::View>();
     require<erhe::application::Imgui_windows>();
@@ -77,7 +80,10 @@ void Hover_tool::declare_required_components()
 
 void Hover_tool::initialize_component()
 {
-    m_hover_material = m_scene_root->make_material("hover");
+    const auto& tools            = get<Tools>();
+    auto*       tools_scene_root = tools->get_tool_scene_root();
+    const auto& material_library = tools_scene_root->material_library();
+    m_hover_material = material_library->make_material("hover");
     m_hover_material->visible = false;
     get<Tools>()->register_background_tool(this);
 
@@ -89,8 +95,8 @@ void Hover_tool::initialize_component()
 void Hover_tool::post_initialize()
 {
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_pointer_context   = get<Pointer_context                     >();
     m_text_renderer     = get<erhe::application::Text_renderer    >();
+    m_viewport_windows  = get<Viewport_windows                    >();
 }
 
 void Hover_tool::on_inactive()
@@ -104,8 +110,14 @@ void Hover_tool::on_inactive()
 
 auto Hover_tool::try_call() -> bool
 {
-    const auto& content = m_pointer_context->get_hover(Pointer_context::content_slot);
-    const auto& tool    = m_pointer_context->get_hover(Pointer_context::tool_slot);
+    Viewport_window* viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window == nullptr)
+    {
+        return false;
+    }
+
+    const auto& content = viewport_window->get_hover(Hover_entry::content_slot);
+    const auto& tool    = viewport_window->get_hover(Hover_entry::tool_slot);
     m_hover_content        = content.valid && content.mesh;
     m_hover_tool           = tool   .valid && tool   .mesh;
     m_hover_position_world = content.valid ? content.position : nonstd::optional<vec3>{};
@@ -156,21 +168,27 @@ void Hover_tool::tool_render(
             m_hover_position_world.has_value()
         )
         {
-            const auto position_in_viewport = context.window->project_to_viewport(m_hover_position_world.value());
-            const vec3 position_at_fixed_depth{
-                position_in_viewport.x + 50.0f,
-                position_in_viewport.y,
-                -0.5f
-            };
-            const std::string text = fmt::format(
-                "{}",
-                m_hover_mesh->name()
-            );
-            m_text_renderer->print(
-                position_at_fixed_depth,
-                text_color,
-                text
-            );
+            const auto position_in_viewport_opt = context.window->project_to_viewport(m_hover_position_world.value());
+            if (position_in_viewport_opt.has_value())
+            {
+                const auto position_in_viewport = position_in_viewport_opt.value();
+                const vec3 position_at_fixed_depth{
+                    position_in_viewport.x + 50.0f,
+                    position_in_viewport.y,
+                    -0.5f
+                };
+                SPDLOG_LOGGER_TRACE(log_pointer, "P position in world: {}", m_hover_position_world.value());
+                SPDLOG_LOGGER_TRACE(log_pointer, "P position in viewport: {}", position_in_viewport);
+                const std::string text = fmt::format(
+                    "{}",
+                    m_hover_mesh->name()
+                );
+                m_text_renderer->print(
+                    position_at_fixed_depth,
+                    text_color,
+                    text
+                );
+            }
         }
 
         if (
@@ -192,9 +210,10 @@ void Hover_tool::tool_render(
             );
         }
 #if 0
-        if (m_pointer_context->raytrace_hit_position().has_value())
+        Viewport_windows* viewport_window = m_viewport_windows()->hover_window();
+        if (viewport_window->raytrace_hit_position().has_value())
         {
-            const vec3 p0 = m_pointer_context->raytrace_hit_position().value();
+            const vec3 p0 = viewport_window->raytrace_hit_position().value();
             const vec3 neg_x = p0 - vec3{1.0f, 0.0f, 0.0f};
             const vec3 pos_x = p0 + vec3{1.0f, 0.0f, 0.0f};
             const vec3 neg_y = p0 - vec3{0.0f, 1.0f, 0.0f};
@@ -258,7 +277,13 @@ void Hover_tool::select()
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& hover = m_pointer_context->get_hover(Pointer_context::content_slot);
+    Viewport_window* viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window == nullptr)
+    {
+        return;
+    }
+
+    const auto& hover = viewport_window->get_hover(Hover_entry::content_slot);
     if (!hover.valid || !hover.mesh)
     {
         return;

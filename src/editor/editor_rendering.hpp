@@ -44,13 +44,13 @@ class Headset_renderer;
 #endif
 class Id_renderer;
 class Mesh_memory;
-class Pointer_context;
 class Post_processing;
 class Render_context;
-class Rendertarget_viewport;
+class Rendertarget_node;
 class Scene_root;
 class Shadow_renderer;
 class Tools;
+class Viewport_window;
 class Viewport_windows;
 
 class Editor_rendering;
@@ -73,6 +73,7 @@ private:
 
 class Editor_rendering
     : public erhe::components::Component
+    , public erhe::components::IUpdate_once_per_frame
 {
 public:
     static constexpr std::string_view c_label{"Editor_rendering"};
@@ -93,28 +94,25 @@ public:
     void initialize_component       () override;
     void post_initialize            () override;
 
-    // Public API
-    [[nodiscard]] auto create_rendertarget_viewport(
-        const int    width,
-        const int    height,
-        const double dots_per_meter
-    ) -> std::shared_ptr<Rendertarget_viewport>;
+    // Implements IUpdate_once_per_frame
+    void update_once_per_frame(const erhe::components::Time_context&) override;
 
-    void trigger_capture              ();
-    void init_state                   ();
-    void render                       ();
-    void render_viewport              (const Render_context& context, const bool has_pointer);
-    void render_content               (const Render_context& context);
-    void render_selection             (const Render_context& context);
-    void render_tool_meshes           (const Render_context& context);
-    void render_rendertarget_viewports(const Render_context& context);
-    void render_brush                 (const Render_context& context);
-    void render_id                    (const Render_context& context);
-    void bind_default_framebuffer     ();
-    void clear                        ();
+    // Public API
+    void trigger_capture          ();
+    void render                   ();
+    void render_viewport_main     (const Render_context& context, bool has_pointer);
+    void render_viewport_overlay  (const Render_context& context, bool has_pointer);
+    void render_content           (const Render_context& context);
+    void render_selection         (const Render_context& context);
+    void render_tool_meshes       (const Render_context& context);
+    void render_rendertarget_nodes(const Render_context& context);
+    void render_brush             (const Render_context& context);
+    void render_id                (const Render_context& context);
+
+    void begin_frame();
+    void end_frame  ();
 
 private:
-    void begin_frame();
     [[nodiscard]] auto width () const -> int;
     [[nodiscard]] auto height() const -> int;
 
@@ -132,22 +130,17 @@ private:
     // Commands
     Capture_frame_command m_capture_frame_command;
 
-    std::shared_ptr<Tools>                                m_tools;
-    std::shared_ptr<Forward_renderer>                     m_forward_renderer;
+    std::shared_ptr<Tools>                          m_tools;
+    std::shared_ptr<Forward_renderer>               m_forward_renderer;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    std::shared_ptr<Headset_renderer>                     m_headset_renderer;
+    std::shared_ptr<Headset_renderer>               m_headset_renderer;
 #endif
-    std::shared_ptr<Id_renderer>                          m_id_renderer;
-    std::shared_ptr<Pointer_context>                      m_pointer_context;
-    std::shared_ptr<Post_processing>                      m_post_processing;
-    std::shared_ptr<Scene_root>                           m_scene_root;
-    std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
-    std::shared_ptr<Viewport_windows>                     m_viewport_windows;
+    std::shared_ptr<Id_renderer>                    m_id_renderer;
+    std::shared_ptr<Post_processing>                m_post_processing;
+    std::shared_ptr<Shadow_renderer>                m_shadow_renderer;
+    std::shared_ptr<Viewport_windows>               m_viewport_windows;
 
-    std::mutex                                            m_rendertarget_viewports_mutex;
-    std::vector<std::shared_ptr<Rendertarget_viewport>>   m_rendertarget_viewports;
-
-    bool                                                  m_trigger_capture{false};
+    bool                                            m_trigger_capture{false};
 
     Renderpass m_rp_polygon_fill_standard;
     Renderpass m_rp_tool1_hidden_stencil;
@@ -162,6 +155,7 @@ private:
     Renderpass m_rp_edge_lines;
     Renderpass m_rp_corner_points;
     Renderpass m_rp_polygon_centroids;
+    Renderpass m_rp_rendertarget_nodes;
 
     std::unique_ptr<erhe::graphics::Gpu_timer> m_content_timer;
     std::unique_ptr<erhe::graphics::Gpu_timer> m_selection_timer;

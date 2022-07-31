@@ -1,14 +1,17 @@
 #include "windows/physics_window.hpp"
 
 #include "editor_log.hpp"
+#include "editor_scenes.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
+#include "renderers/render_context.hpp"
 #include "scene/debug_draw.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
-#include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
+#include "windows/viewport_window.hpp"
+#include "windows/viewport_windows.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -29,7 +32,6 @@ namespace editor
 
 Physics_window::Physics_window()
     : erhe::components::Component    {c_label}
-//    , Rendertarget_imgui_window  {c_title}
     , erhe::application::Imgui_window{c_title, c_label}
 {
 }
@@ -40,7 +42,7 @@ Physics_window::~Physics_window() noexcept
 
 void Physics_window::declare_required_components()
 {
-    m_scene_root = require<Scene_root>();
+    m_editor_scenes = require<Editor_scenes>();
 
     require<Mesh_memory>();
     require<Programs   >();
@@ -76,7 +78,8 @@ void Physics_window::initialize_component()
 
 void Physics_window::post_initialize()
 {
-    m_selection_tool = get<Selection_tool>();
+    m_selection_tool   = get<Selection_tool  >();
+    m_viewport_windows = get<Viewport_windows>();
 }
 
 auto Physics_window::description() -> const char*
@@ -94,9 +97,22 @@ void Physics_window::imgui()
         return;
     }
 
-    auto& physics_world = m_scene_root->physics_world();
-    const bool physics_enabled = physics_world.is_physics_updates_enabled();
-    bool updated_physics_enabled = physics_enabled;
+    Viewport_window* const viewport_window = m_viewport_windows->last_window();
+    if (viewport_window == nullptr)
+    {
+        return;
+    }
+
+    Scene_root* scene_root = viewport_window->scene_root();
+    if (scene_root == nullptr)
+    {
+        return;
+    }
+
+    auto&      physics_world           = scene_root->physics_world();
+    const bool physics_enabled         = physics_world.is_physics_updates_enabled();
+    bool       updated_physics_enabled = physics_enabled;
+    ImGui::Text("Scene: %s", scene_root->name().c_str());
     ImGui::Checkbox("Physics enabled", &updated_physics_enabled);
     if (updated_physics_enabled != physics_enabled)
     {
@@ -110,7 +126,7 @@ void Physics_window::imgui()
         }
     }
 
-    const auto debug_drawer = get<Debug_draw>();
+    const auto& debug_drawer = get<Debug_draw>();
     if (debug_drawer)
     {
         if (ImGui::CollapsingHeader("Visualizations"))
@@ -215,13 +231,18 @@ auto Physics_window::get_debug_draw_parameters() -> Debug_draw_parameters
 }
 
 void Physics_window::tool_render(
-    const Render_context& /*context*/
+    const Render_context& context
 )
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto debug_drawer = get<Debug_draw>();
-    if (!debug_drawer || !m_debug_draw.enable || !m_scene_root)
+    const auto& scene_root   = context.window->scene_root();
+    const auto& debug_drawer = get<Debug_draw>();
+    if (
+        !debug_drawer ||
+        !m_debug_draw.enable ||
+        !scene_root
+    )
     {
         return;
     }
@@ -239,7 +260,7 @@ void Physics_window::tool_render(
 
     debug_drawer->set_colors(m_debug_draw.colors);
 
-    m_scene_root->physics_world().debug_draw();
+    scene_root->physics_world().debug_draw();
 }
 
 } // namespace editor

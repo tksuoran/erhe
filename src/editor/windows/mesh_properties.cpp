@@ -18,6 +18,8 @@
 #   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 
+#include <fmt/format.h>
+
 namespace editor
 {
 
@@ -51,7 +53,6 @@ void Mesh_properties::initialize_component()
 
 void Mesh_properties::post_initialize()
 {
-    m_scene_root     = get<Scene_root    >();
     m_selection_tool = get<Selection_tool>();
     m_text_renderer  = get<erhe::application::Text_renderer>();
 }

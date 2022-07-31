@@ -10,6 +10,7 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/viewport_config.hpp"
+#include "windows/viewport_window.hpp"
 
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
@@ -53,7 +54,6 @@ void Debug_visualizations::initialize_component()
 void Debug_visualizations::post_initialize()
 {
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_scene_root        = get<Scene_root     >();
     m_selection_tool    = get<Selection_tool >();
     m_viewport_config   = get<Viewport_config>();
 }
@@ -502,14 +502,16 @@ void Debug_visualizations::tool_render(
         }
     }
 
-    for (const auto& light : m_scene_root->light_layer()->lights)
+
+    const Scene_root* scene_root = context.window->scene_root();
+    for (const auto& light : scene_root->layers().light()->lights)
     {
         light_visualization(context, selected_camera, light.get());
     }
 
     if (m_viewport_config->debug_visualizations.camera == Visualization_mode::all)
     {
-        for (const auto& camera : m_scene_root->scene().cameras)
+        for (const auto& camera : scene_root->scene().cameras)
         {
             camera_visualization(context, camera.get());
         }

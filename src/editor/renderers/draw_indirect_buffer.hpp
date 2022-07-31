@@ -1,6 +1,7 @@
 #pragma once
 
-#include "renderers/multi_buffer.hpp"
+#include "erhe/application/renderers/multi_buffer.hpp"
+#include "erhe/primitive/enums.hpp"
 
 namespace erhe::scene
 {
@@ -19,7 +20,7 @@ public:
 };
 
 class Draw_indirect_buffer
-    : public Multi_buffer
+    : public erhe::application::Multi_buffer
 {
 public:
     explicit Draw_indirect_buffer(std::size_t max_draw_count);

@@ -11,6 +11,9 @@ erhe_target_sources_grouped(
     file_util.hpp
     hextiles_log.cpp
     hextiles_log.hpp
+    hextiles_on_load.cpp
+    hextiles_view_client.cpp
+    hextiles_view_client.hpp
     game/game.cpp
     game/game.hpp
     game/game_context.hpp
@@ -28,7 +31,6 @@ erhe_target_sources_grouped(
     menu_window.hpp
     new_game_window.cpp
     new_game_window.hpp
-    on_load.cpp
     pixel_lookup.cpp
     pixel_lookup.hpp
     stream.cpp
@@ -49,8 +51,6 @@ erhe_target_sources_grouped(
     types.hpp
     rendering.cpp
     rendering.hpp
-    view_client.cpp
-    view_client.hpp
     map_editor/map_editor.cpp
     map_editor/map_editor.hpp
     map_editor/map_tool_window.cpp

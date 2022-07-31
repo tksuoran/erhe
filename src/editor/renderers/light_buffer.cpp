@@ -58,15 +58,13 @@ Light_buffer::Light_buffer(const Light_interface& light_interface)
     m_light_buffer.allocate(
         gl::Buffer_target::uniform_buffer,
         m_light_interface.light_block.binding_point(),
-        m_light_interface.light_block.size_bytes(),
-        "light"
+        m_light_interface.light_block.size_bytes()
     );
 
     m_control_buffer.allocate(
         gl::Buffer_target::uniform_buffer,
         m_light_interface.light_control_block.binding_point(),
-        m_light_interface.light_control_block.size_bytes() * 40,
-        "light control"
+        m_light_interface.light_control_block.size_bytes() * 40
     );
 }
 

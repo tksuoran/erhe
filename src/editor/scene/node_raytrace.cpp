@@ -24,12 +24,12 @@ using erhe::scene::INode_attachment;
 auto raytrace_node_mask(erhe::scene::Node& node) -> uint32_t
 {
     uint32_t result{0};
-    if ((node.get_visibility_mask() & erhe::scene::Node_visibility::content    ) != 0) result |= Raytrace_node_mask::content    ;
-    if ((node.get_visibility_mask() & erhe::scene::Node_visibility::shadow_cast) != 0) result |= Raytrace_node_mask::shadow_cast;
-    if ((node.get_visibility_mask() & erhe::scene::Node_visibility::tool       ) != 0) result |= Raytrace_node_mask::tool       ;
-    if ((node.get_visibility_mask() & erhe::scene::Node_visibility::brush      ) != 0) result |= Raytrace_node_mask::brush      ;
-    if ((node.get_visibility_mask() & erhe::scene::Node_visibility::gui        ) != 0) result |= Raytrace_node_mask::gui        ;
-    if ((node.get_visibility_mask() & erhe::scene::Node_visibility::controller ) != 0) result |= Raytrace_node_mask::controller ;
+    if ((node.get_visibility_mask() & erhe::scene::Node_visibility::content     ) != 0) result |= Raytrace_node_mask::content     ;
+    if ((node.get_visibility_mask() & erhe::scene::Node_visibility::shadow_cast ) != 0) result |= Raytrace_node_mask::shadow_cast ;
+    if ((node.get_visibility_mask() & erhe::scene::Node_visibility::tool        ) != 0) result |= Raytrace_node_mask::tool        ;
+    if ((node.get_visibility_mask() & erhe::scene::Node_visibility::brush       ) != 0) result |= Raytrace_node_mask::brush       ;
+    if ((node.get_visibility_mask() & erhe::scene::Node_visibility::rendertarget) != 0) result |= Raytrace_node_mask::rendertarget;
+    if ((node.get_visibility_mask() & erhe::scene::Node_visibility::controller  ) != 0) result |= Raytrace_node_mask::controller  ;
     return result;
 }
 
@@ -38,18 +38,19 @@ Raytrace_primitive::Raytrace_primitive(
 )
 {
     // Just float vec3 position
-    auto vertex_format = std::make_shared<erhe::graphics::Vertex_format>();
-    vertex_format->add(
-        {
-            .usage =
-            {
-                .type      = erhe::graphics::Vertex_attribute::Usage_type::position
-            },
-            .shader_type   = gl::Attribute_type::float_vec3,
-            .data_type =
-            {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 3
+    auto vertex_format = std::make_shared<erhe::graphics::Vertex_format>(
+        std::initializer_list<erhe::graphics::Vertex_attribute>{
+            erhe::graphics::Vertex_attribute{
+                .usage =
+                {
+                    .type      = erhe::graphics::Vertex_attribute::Usage_type::position
+                },
+                .shader_type   = gl::Attribute_type::float_vec3,
+                .data_type =
+                {
+                    .type      = gl::Vertex_attrib_type::float_,
+                    .dimension = 3
+                }
             }
         }
     );

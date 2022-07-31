@@ -1,25 +1,25 @@
 ﻿#include "erhe/application/scoped_imgui_context.hpp"
+#include "erhe/application/imgui_windows.hpp"
 
 #include <imgui/imgui.h>
 
 namespace erhe::application
 {
 
-Scoped_imgui_context::Scoped_imgui_context(::ImGuiContext* context)
+Scoped_imgui_context::Scoped_imgui_context(
+    Imgui_windows&  imgui_windows,
+    Imgui_viewport& imgui_viewport
+)
+    : m_imgui_windows {imgui_windows }
+    , m_imgui_viewport{imgui_viewport}
+    , m_lock          {imgui_windows.get_mutex()}
 {
-    m_old_context = ImGui::GetCurrentContext();
-
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    // TODO Currently messy Expects(m_old_context == nullptr);
-    ImGui::SetCurrentContext(context);
-#endif
+    m_imgui_windows.make_current(&imgui_viewport);
 }
 
-Scoped_imgui_context::~Scoped_imgui_context() noexcept
+Scoped_imgui_context::~Scoped_imgui_context()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ImGui::SetCurrentContext(m_old_context);
-#endif
+    m_imgui_windows.make_current(nullptr);
 }
 
 }  // namespace editor

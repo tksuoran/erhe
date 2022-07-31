@@ -96,6 +96,8 @@ Vertex_input_state::Vertex_input_state()
     const std::lock_guard lock{s_mutex};
 
     s_all_vertex_input_states.push_back(this);
+
+    create();
 }
 
 Vertex_input_state::Vertex_input_state(Vertex_input_state_data&& create_info)
@@ -104,6 +106,8 @@ Vertex_input_state::Vertex_input_state(Vertex_input_state_data&& create_info)
     const std::lock_guard lock{s_mutex};
 
     s_all_vertex_input_states.push_back(this);
+
+    create();
 }
 
 Vertex_input_state::~Vertex_input_state() noexcept

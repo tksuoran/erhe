@@ -2,13 +2,14 @@
 
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
+#include "editor_scenes.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
-#include "tools/pointer_context.hpp"
 #include "tools/tools.hpp"
 #include "windows/operations.hpp"
 #include "windows/viewport_window.hpp"
+#include "windows/viewport_windows.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
@@ -17,6 +18,7 @@
 #include "erhe/physics/iworld.hpp"
 #include "erhe/physics/iconstraint.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -138,13 +140,34 @@ Physics_tool::~Physics_tool() noexcept
 {
     if (m_target_constraint)
     {
-        m_scene_root->physics_world().remove_constraint(m_target_constraint.get());
+        auto* world = physics_world();
+        if (world != nullptr)
+        {
+            world->remove_constraint(m_target_constraint.get());
+        }
     }
+}
+
+[[nodiscard]] auto Physics_tool::physics_world() const -> erhe::physics::IWorld*
+{
+    ERHE_VERIFY(m_editor_scenes);
+
+    if (!m_target_mesh)
+    {
+        return nullptr;
+    }
+
+    auto* scene_root = reinterpret_cast<Scene_root*>(m_target_mesh->node_data.host);
+    if (scene_root == nullptr)
+    {
+        return nullptr;
+    }
+
+    return &scene_root->physics_world();
 }
 
 void Physics_tool::declare_required_components()
 {
-    m_scene_root = require<Scene_root>();
     require<Tools                  >();
     require<erhe::application::View>();
     require<Operations             >();
@@ -168,9 +191,10 @@ void Physics_tool::initialize_component()
 
 void Physics_tool::post_initialize()
 {
-    m_fly_camera        = get<Fly_camera_tool>();
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_pointer_context   = get<Pointer_context>();
+    m_editor_scenes     = get<Editor_scenes>();
+    m_fly_camera        = get<Fly_camera_tool>();
+    m_viewport_windows  = get<Viewport_windows>();
 }
 
 auto Physics_tool::description() -> const char*
@@ -180,17 +204,22 @@ auto Physics_tool::description() -> const char*
 
 auto Physics_tool::acquire_target() -> bool
 {
-    const auto& content = m_pointer_context->get_hover(Pointer_context::content_slot);
+    Viewport_window* viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window == nullptr)
+    {
+        return false;
+    }
+
+    const auto& content = viewport_window->get_hover(Hover_entry::content_slot);
     if (
         !content.valid ||
-        !m_pointer_context->position_in_viewport_window().has_value() ||
         !content.position.has_value()
     )
     {
         return false;
     }
 
-    const auto p0_opt = m_pointer_context->near_position_in_world();
+    const auto p0_opt = viewport_window->near_position_in_world();
     if (!p0_opt.has_value())
     {
         return false;
@@ -206,18 +235,21 @@ auto Physics_tool::acquire_target() -> bool
     );
     m_target_node_physics     = get_physics_node(m_target_mesh.get());
 
-    if (
-        !m_target_node_physics ||
-        (m_target_node_physics->rigid_body()->get_motion_mode() == erhe::physics::Motion_mode::e_static)
-    )
+    if (!m_target_node_physics)
     {
         return false;
     }
 
-    m_original_linear_damping  = m_target_node_physics->rigid_body()->get_linear_damping();
-    m_original_angular_damping = m_target_node_physics->rigid_body()->get_angular_damping();
+    erhe::physics::IRigid_body* rigid_body = m_target_node_physics->rigid_body();
+    if (rigid_body->get_motion_mode() == erhe::physics::Motion_mode::e_static)
+    {
+        return false;
+    }
 
-    m_target_node_physics->rigid_body()->set_damping(
+    m_original_linear_damping  = rigid_body->get_linear_damping();
+    m_original_angular_damping = rigid_body->get_angular_damping();
+
+    rigid_body->set_damping(
         m_linear_damping,
         m_angular_damping
     );
@@ -225,7 +257,12 @@ auto Physics_tool::acquire_target() -> bool
     // TODO Make this happen automatically
     if (m_target_constraint)
     {
-        m_scene_root->physics_world().remove_constraint(m_target_constraint.get());
+        auto* world = physics_world();
+        if (world != nullptr)
+        {
+            world->remove_constraint(m_target_constraint.get());
+        }
+        /// TODO Should we also do this? m_target_constraint.reset();
     }
 
     log_physics->info("Physics_tool: Target acquired");
@@ -242,14 +279,19 @@ void Physics_tool::release_target()
     {
         if (m_target_node_physics)
         {
-            m_target_node_physics->rigid_body()->set_damping(
+            erhe::physics::IRigid_body* rigid_body = m_target_node_physics->rigid_body();
+            rigid_body->set_damping(
                 m_original_linear_damping,
                 m_original_angular_damping
             );
-            m_target_node_physics->rigid_body()->end_move();
+            rigid_body->end_move();
             m_target_node_physics.reset();
         }
-        m_scene_root->physics_world().remove_constraint(m_target_constraint.get());
+        auto* world = physics_world();
+        if (world != nullptr)
+        {
+            world->remove_constraint(m_target_constraint.get());
+        }
         m_target_constraint.reset();
     }
 }
@@ -266,8 +308,11 @@ void Physics_tool::begin_point_to_point_constraint()
     m_target_constraint->set_damping      (m_damping);
     m_target_constraint->set_tau          (m_tau);
     m_target_node_physics->rigid_body()->begin_move();
-    m_scene_root->physics_world().add_constraint(m_target_constraint.get());
-
+    auto* world = physics_world();
+    if (world != nullptr)
+    {
+        world->add_constraint(m_target_constraint.get());
+    }
 }
 
 auto Physics_tool::on_drag_ready() -> bool
@@ -312,20 +357,23 @@ auto Physics_tool::on_drag() -> bool
     {
         return false;
     }
-    auto& physics_world = get<Scene_root>()->physics_world();
-    if (!physics_world.is_physics_updates_enabled())
+    auto* world = physics_world();
+    if (world == nullptr)
+    {
+        return false;
+    }
+    if (!world->is_physics_updates_enabled())
     {
         return false;
     }
 
-    m_last_update_frame_number = m_pointer_context->frame_number();
-
-    if (m_pointer_context->window() == nullptr)
+    Viewport_window* viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window == nullptr)
     {
         return false;
     }
 
-    const auto end = m_pointer_context->position_in_world_distance(m_target_distance);
+    const auto end = viewport_window->position_in_world_distance(m_target_distance);
     if (!end.has_value())
     {
         return false;
@@ -353,21 +401,24 @@ auto Physics_tool::on_force() -> bool
     {
         return false;
     }
-    auto& physics_world = get<Scene_root>()->physics_world();
-    if (!physics_world.is_physics_updates_enabled())
+    auto* world = physics_world();
+    if (world == nullptr)
+    {
+        return false;
+    }
+    if (!world->is_physics_updates_enabled())
     {
         return false;
     }
 
-    m_last_update_frame_number = m_pointer_context->frame_number();
+    Viewport_window* viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window == nullptr)
+    {
+        return false;
+    }
 
-    const auto end = m_pointer_context->near_position_in_world();
+    const auto end = viewport_window->near_position_in_world();
     if (!end.has_value())
-    {
-        return false;
-    }
-
-    if (m_pointer_context->window() == nullptr)
     {
         return false;
     }

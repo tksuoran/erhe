@@ -437,7 +437,7 @@ auto Brush::make_instance(
         ERHE_PROFILE_SCOPE("make brush node physics");
 
         const erhe::physics::IRigid_body_create_info rigid_body_create_info{
-            .world           = instance_create_info.physics_world,
+            .world           = instance_create_info.scene_root->physics_world(),
             .mass            = density * scaled.volume,
             .collision_shape = scaled.collision_shape,
             .local_inertia   = scaled.local_inertia,

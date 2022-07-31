@@ -1,6 +1,6 @@
 #pragma once
 
-#include "renderers/multi_buffer.hpp"
+#include "erhe/application/renderers/multi_buffer.hpp"
 
 #include "erhe/graphics/shader_resource.hpp"
 
@@ -42,7 +42,7 @@ public:
 };
 
 class Camera_buffer
-    : public Multi_buffer
+    : public erhe::application::Multi_buffer
 {
 public:
     explicit Camera_buffer(const Camera_interface& camera_interface);

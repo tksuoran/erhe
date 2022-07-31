@@ -14,7 +14,10 @@
 #   define ERHE_FATAL(format, ...) assert(false)
 #   define ERHE_FATAL_DUMMY
 #endif
-#ifndef SPDLOG_LOGGER_TRACE
+#if defined(SPDLOG_LOGGER_TRACE)
+#   include "geometry_log.hpp"
+#   include "erhe/log/log_glm.hpp"
+#else
 #   define SPDLOG_LOGGER_TRACE(logger, ...) (void)0
 #   define SPDLOG_LOGGER_TRACE_DUMMY
 #endif

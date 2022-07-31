@@ -19,9 +19,9 @@ namespace erhe::scene
 namespace editor
 {
 
+class Editor_scenes;
 class IOperation;
 class Icon_set;
-class Scene_root;
 class Selection_tool;
 
 class Node_tree_window
@@ -67,9 +67,9 @@ private:
     auto drag_and_drop_target (const std::shared_ptr<erhe::scene::Node>& node) -> bool;
 
     // Component dependencies
-    std::shared_ptr<Scene_root>     m_scene_root;
-    std::shared_ptr<Selection_tool> m_selection_tool;
+    std::shared_ptr<Editor_scenes>  m_editor_scenes;
     std::shared_ptr<Icon_set>       m_icon_set;
+    std::shared_ptr<Selection_tool> m_selection_tool;
 
     //nonstd::optional<int> m_range_select_start;
     //nonstd::optional<int> m_range_select_end;

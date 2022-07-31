@@ -67,8 +67,10 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     draw_indirect.hpp
     enum_bit_mask_operators.hpp
-    gl.cpp
-    gl.hpp
+    gl_helpers.cpp
+    gl_helpers.hpp
+    gl_log.cpp
+    gl_log.hpp
     generate_sources.py
     ${GEN_DEPENDS}
 )

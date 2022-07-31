@@ -1,6 +1,7 @@
 #include "scene/scene_builder.hpp"
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
+#include "editor_scenes.hpp"
 #include "task_queue.hpp"
 
 #include "parsers/gltf.hpp"
@@ -8,19 +9,24 @@
 #include "parsers/wavefront_obj.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
+#include "renderers/shadow_renderer.hpp"
 #include "scene/brush.hpp"
 #include "scene/debug_draw.hpp"
 #include "scene/helpers.hpp"
+#include "scene/material_library.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "windows/brushes.hpp"
-#include "windows/materials.hpp"
+#include "windows/debug_view_window.hpp"
 #include "windows/viewport_window.hpp"
+#include "windows/viewport_windows.hpp"
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
 #include "erhe/application/configuration.hpp"
+#include "erhe/application/render_graph.hpp"
+#include "erhe/application/render_graph_node.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/geometry/shapes/box.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
@@ -89,29 +95,34 @@ void Scene_builder::declare_required_components()
 {
     require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
-    require<Editor_rendering>();
-    require<Fly_camera_tool >();
-    require<Materials       >();
-    require<Viewport_windows>();
+    require<erhe::application::Render_graph       >();
+    require<Debug_view_window>();
+    require<Editor_rendering >();
+    require<Editor_scenes    >();
+    require<Fly_camera_tool  >();
+    require<Shadow_renderer  >();
+    require<Viewport_windows >();
     m_brushes     = require<Brushes    >();
     m_mesh_memory = require<Mesh_memory>();
-    m_scene_root  = require<Scene_root >();
 }
 
 void Scene_builder::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
-    };
+    {
+        const erhe::application::Scoped_gl_context gl_context{
+            Component::get<erhe::application::Gl_context_provider>()
+        };
 
-    m_scene_root = Component::get<Scene_root>();
+        m_scene_root = std::make_shared<Scene_root>("Test scene");
+        m_scene_root->material_library()->add_default_materials();
 
-    setup_scene();
+        setup_scene();
+    }
 
-    //const auto& editor_rendering = Component::get<Editor_rendering>();
-    //m_rendertarget_viewport = editor_rendering->create_rendertarget_viewport(1980, 1080, 1000.0);
+    const auto& editor_scenes = get<Editor_scenes>();
+    editor_scenes->register_scene_root(m_scene_root);
 }
 
 auto Scene_builder::make_camera(
@@ -148,16 +159,34 @@ void Scene_builder::setup_cameras()
     camera_a->projection()->z_far = 64.0f;
     camera_a->node_data.wireframe_color = glm::vec4{1.0f, 0.6f, 0.3f, 1.0f};
 
-    const auto& camera_b = make_camera(
-        "Camera B",
-        vec3{-7.0f, 1.0f, 0.0f},
-        vec3{ 0.0f, 0.5f, 0.0f}
-    );
-    camera_b->node_data.wireframe_color = glm::vec4{0.3f, 0.6f, 1.00f, 1.0f};
+    //const auto& camera_b = make_camera(
+    //    "Camera B",
+    //    vec3{-7.0f, 1.0f, 0.0f},
+    //    vec3{ 0.0f, 0.5f, 0.0f}
+    //);
+    //camera_b->node_data.wireframe_color = glm::vec4{0.3f, 0.6f, 1.00f, 1.0f};
 
     const auto& viewport_windows = get<Viewport_windows>();
-    viewport_windows->create_window("Primary Viewport", camera_a.get());
-    //viewport_windows->create_window("Secondary Viewport", camera_b.get());
+    m_primary_viewport_window = viewport_windows->create_window(
+        "Primary Viewport",
+        m_scene_root,
+        camera_a.get()
+    );
+
+    const auto& shadow_renderer = get<Shadow_renderer>();
+    const auto& render_graph    = get<erhe::application::Render_graph>();
+    auto shadow_render_node = std::make_shared<Shadow_render_node>(
+        *shadow_renderer.get(),
+        m_primary_viewport_window
+    );
+    render_graph->register_node(shadow_render_node);
+    m_primary_viewport_window->add_dependency(shadow_render_node.get());
+
+    const auto& debug_view_window = get<Debug_view_window>();
+    auto debug_view_render_node = std::make_shared<Debug_view_render_graph_node>(debug_view_window);
+    debug_view_render_node->add_dependency(shadow_render_node.get());
+    render_graph->register_node(debug_view_render_node);
+    // TODO debug_view_window should also depend on debug_view_render_node
 }
 
 auto Scene_builder::build_info() -> erhe::primitive::Build_info&
@@ -548,7 +577,8 @@ void Scene_builder::make_brushes()
     {
         ERHE_PROFILE_SCOPE("test scene for anisotropic debugging");
 
-        auto        aniso_material    = m_scene_root->make_material("aniso", vec3{1.0f, 1.0f, 1.0f}, glm::vec2{0.8f, 0.2f}, 0.0f);
+        const auto& material_library  = m_scene_root->material_library();
+        auto        aniso_material    = material_library->make_material("aniso", vec3{1.0f, 1.0f, 1.0f}, glm::vec2{0.8f, 0.2f}, 0.0f);
         const float ring_major_radius = 4.0f;
         const float ring_minor_radius = 0.55f; // 0.15f;
         auto        ring_geometry     = make_torus(
@@ -591,8 +621,11 @@ void Scene_builder::make_brushes()
             );
             mesh->set_visibility_mask (Node_visibility::visible | Node_visibility::content);
             mesh->set_parent_from_node(transform);
+
+            const auto& layers = m_scene_root->layers();
+
             m_scene_root->scene().add_to_mesh_layer(
-                *m_scene_root->content_layer(),
+                *layers.content(),
                 mesh
             );
 
@@ -661,7 +694,10 @@ void Scene_builder::add_room()
         return;
     }
 
-    auto floor_material = m_scene_root->make_material(
+    const auto& material_library = m_scene_root->material_library();
+    const auto& layers           = m_scene_root->layers();
+
+    auto floor_material = material_library->make_material(
         "Floor",
         //vec4{0.02f, 0.02f, 0.02f, 1.0f},
         vec4{0.01f, 0.01f, 0.01f, 1.0f},
@@ -679,7 +715,7 @@ void Scene_builder::add_room()
     Instance_create_info floor_brush_instance_create_info
     {
         .node_visibility_flags = Node_visibility::visible | Node_visibility::content | Node_visibility::id,
-        .physics_world         = m_scene_root->physics_world(),
+        .scene_root            = m_scene_root.get(),
         .world_from_node       = erhe::toolkit::create_translation<float>(0.0f, -0.5001f, 0.0f),
         .material              = floor_material,
         .scale                 = 1.0f
@@ -699,7 +735,7 @@ void Scene_builder::add_room()
     //     Node_visibility::id);
 
     m_scene_root->scene().add_to_mesh_layer(
-        *m_scene_root->content_layer(),
+        *layers.content(),
         floor_instance.mesh
     );
 
@@ -834,6 +870,8 @@ void Scene_builder::make_mesh_nodes()
         }
     }
 
+    const auto& material_library = m_scene_root->material_library();
+    const auto& materials        = material_library->materials();
     std::size_t material_index = 0;
     {
         ERHE_PROFILE_SCOPE("make instances");
@@ -843,9 +881,9 @@ void Scene_builder::make_mesh_nodes()
             // TODO this will lock up if there are no visible materials
             do
             {
-                material_index = (material_index + 1) % m_scene_root->materials().size();
+                material_index = (material_index + 1) % materials.size();
             }
-            while (!m_scene_root->materials().at(material_index)->visible);
+            while (!materials.at(material_index)->visible);
 
             auto* brush = entry.brush;
             float x     = static_cast<float>(entry.rectangle.x) / 256.0f;
@@ -866,10 +904,10 @@ void Scene_builder::make_mesh_nodes()
                     erhe::scene::Node_visibility::id      |
                     erhe::scene::Node_visibility::shadow_cast
                 ),
-                .physics_world         = m_scene_root->physics_world(),
-                .world_from_node       = erhe::toolkit::create_translation(x, y, z),
-                .material              = m_scene_root->materials().at(material_index),
-                .scale                 = 1.0f
+                .scene_root      = m_scene_root.get(),
+                .world_from_node = erhe::toolkit::create_translation(x, y, z),
+                .material        = materials.at(material_index),
+                .scale           = 1.0f
             };
             auto instance = brush->make_instance(brush_instance_create_info);
             m_scene_root->add_instance(instance);
@@ -885,7 +923,8 @@ void Scene_builder::make_cube_benchmark()
 
     m_scene_root->scene().sanity_check();
 
-    auto material = m_scene_root->make_material("cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f);
+    const auto& material_library = m_scene_root->material_library();
+    auto material = material_library->make_material("cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f);
     auto cube     = make_cube(0.1f);
     auto cube_pg  = make_primitive(cube, build_info(), Normal_style::polygon_normals);
 
@@ -942,8 +981,9 @@ auto Scene_builder::make_directional_light(
     //light->projection()->z_near          =   5.0f;
     //light->projection()->z_far           =  20.0f;
 
+    const auto& layers = m_scene_root->layers();
     m_scene_root->scene().add_to_light_layer(
-        *m_scene_root->light_layer(),
+        *layers.light(),
         light
     );
 
@@ -973,9 +1013,9 @@ auto Scene_builder::make_spot_light(
     light->range            = 25.0f;
     light->inner_spot_angle = spot_cone_angle[0];
     light->outer_spot_angle = spot_cone_angle[1];
-
+    const auto& layers = m_scene_root->layers();
     m_scene_root->scene().add_to_light_layer(
-        *m_scene_root->light_layer(),
+        *layers.light(),
         light
     );
 
@@ -989,7 +1029,8 @@ void Scene_builder::setup_lights()
 {
     const auto& config = get<erhe::application::Configuration>()->scene;
 
-    m_scene_root->light_layer()->ambient_light = vec4{0.042f, 0.044f, 0.049f, 0.0f};
+    const auto& layers = m_scene_root->layers();
+    layers.light()->ambient_light = vec4{0.042f, 0.044f, 0.049f, 0.0f};
 
     //make_directional_light(
     //    "Key",
@@ -1062,27 +1103,6 @@ void Scene_builder::setup_lights()
     }
 }
 
-void Scene_builder::update_fixed_step(
-    const erhe::components::Time_context& time_context
-)
-{
-    // TODO
-    // Physics should mostly run in a separate thread.
-    m_scene_root->physics_world().update_fixed_step(time_context.dt);
-}
-
-void Scene_builder::update_once_per_frame(
-    const erhe::components::Time_context& time_context
-)
-{
-    ERHE_PROFILE_FUNCTION
-
-    buffer_transfer_queue().flush();
-
-    static_cast<void>(time_context);
-    animate_lights(time_context.time);
-}
-
 void Scene_builder::animate_lights(const double time_d)
 {
     if (time_d >= 0.0)
@@ -1090,7 +1110,8 @@ void Scene_builder::animate_lights(const double time_d)
         return;
     }
     const float time        = static_cast<float>(time_d);
-    const auto& light_layer = *m_scene_root->light_layer();
+    const auto& layers      = m_scene_root->layers();
+    const auto& light_layer = *layers.light();
     const auto& lights      = light_layer.lights;
     const int   n_lights    = static_cast<int>(lights.size());
     int         light_index = 0;
@@ -1142,6 +1163,16 @@ void Scene_builder::setup_scene()
     make_mesh_nodes();
     add_room();
     //make_cube_benchmark();
+}
+
+[[nodiscard]] auto Scene_builder::get_scene_root() const -> std::shared_ptr<Scene_root>
+{
+    return m_scene_root;
+}
+
+[[nodiscard]] auto Scene_builder::get_primary_viewport_window() const -> std::shared_ptr<Viewport_window>
+{
+    return m_primary_viewport_window;
 }
 
 } // namespace editor

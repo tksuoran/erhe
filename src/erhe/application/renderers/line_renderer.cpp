@@ -51,10 +51,68 @@ using glm::mat4;
 using glm::vec3;
 using glm::vec4;
 
+Line_renderer_pipeline::Line_renderer_pipeline()
+    : fragment_outputs{
+        erhe::graphics::Fragment_output{
+            .name     = "out_color",
+            .type     = gl::Fragment_shader_output_type::float_vec4,
+            .location = 0
+        }
+    }
+    , attribute_mappings{
+        erhe::graphics::Vertex_attribute_mapping{
+            .layout_location = 0,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_position",
+            .src_usage =
+            {
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::position
+            },
+        },
+        erhe::graphics::Vertex_attribute_mapping{
+            .layout_location = 1,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_color",
+            .src_usage =
+            {
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::color
+            }
+        }
+    }
+    , vertex_format{
+        erhe::graphics::Vertex_attribute{
+            .usage =
+            {
+                .type      = erhe::graphics::Vertex_attribute::Usage_type::position
+            },
+            .shader_type   = gl::Attribute_type::float_vec4,
+            .data_type =
+            {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 4
+            }
+        },
+        erhe::graphics::Vertex_attribute{
+            .usage =
+            {
+                .type       = erhe::graphics::Vertex_attribute::Usage_type::color,
+            },
+            .shader_type    = gl::Attribute_type::float_vec4,
+            .data_type =
+            {
+                .type       = gl::Vertex_attrib_type::unsigned_byte,
+                .normalized = true,
+                .dimension  = 4
+            }
+        }
+    }
+{
+}
+
 Line_renderer_set::Line_renderer_set()
-    : Component{c_label}
+    : Component{c_label  }
     , visible  {"visible"}
-    , hidden   {"hidden"}
+    , hidden   {"hidden" }
 {
 }
 
@@ -93,61 +151,6 @@ void Line_renderer_set::post_initialize()
 
 void Line_renderer_pipeline::initialize(Shader_monitor* shader_monitor)
 {
-    fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
-
-    attribute_mappings.add(
-        {
-            .layout_location = 0,
-            .shader_type     = gl::Attribute_type::float_vec4,
-            .name            = "a_position",
-            .src_usage =
-            {
-                .type        = erhe::graphics::Vertex_attribute::Usage_type::position
-            },
-        }
-    );
-    attribute_mappings.add(
-        {
-            .layout_location = 1,
-            .shader_type     = gl::Attribute_type::float_vec4,
-            .name            = "a_color",
-            .src_usage =
-            {
-                .type        = erhe::graphics::Vertex_attribute::Usage_type::color
-            }
-        }
-    );
-
-    vertex_format.add(
-        {
-            .usage =
-            {
-                .type      = erhe::graphics::Vertex_attribute::Usage_type::position
-            },
-            .shader_type   = gl::Attribute_type::float_vec4,
-            .data_type =
-            {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 4
-            }
-        }
-    );
-    vertex_format.add(
-        {
-            .usage =
-            {
-                .type       = erhe::graphics::Vertex_attribute::Usage_type::color,
-            },
-            .shader_type    = gl::Attribute_type::float_vec4,
-            .data_type =
-            {
-                .type       = gl::Vertex_attrib_type::unsigned_byte,
-                .normalized = true,
-                .dimension  = 4
-            }
-        }
-    );
-
     view_block = std::make_unique<erhe::graphics::Shader_resource>(
         "view",
         0,
@@ -168,16 +171,20 @@ void Line_renderer_pipeline::initialize(Shader_monitor* shader_monitor)
         const fs::path fs_path = shader_path / fs::path("line.frag");
         Shader_stages::Create_info create_info{
             .name                      = "line",
+            .defines                   = {
+                { "ERHE_LINE_SHADER_SHOW_DEBUG_LINES",        "0"},
+                { "ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES", "0"},
+                { "ERHE_LINE_SHADER_STRIP",                   "1"}
+            },
+            .interface_blocks          = { view_block.get() },
             .vertex_attribute_mappings = &attribute_mappings,
             .fragment_outputs          = &fragment_outputs,
+            .shaders = {
+                { gl::Shader_type::vertex_shader,   vs_path },
+                { gl::Shader_type::geometry_shader, gs_path },
+                { gl::Shader_type::fragment_shader, fs_path }
+            }
         };
-        create_info.defines.push_back({"ERHE_LINE_SHADER_SHOW_DEBUG_LINES",        "0"});
-        create_info.defines.push_back({"ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES", "0"});
-        create_info.defines.push_back({"ERHE_LINE_SHADER_STRIP",                   "1"});
-        create_info.add_interface_block(view_block.get());
-        create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
-        create_info.shaders.emplace_back(gl::Shader_type::geometry_shader, gs_path);
-        create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
 
         Shader_stages::Prototype prototype(create_info);
         shader_stages = std::make_unique<Shader_stages>(std::move(prototype));

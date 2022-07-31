@@ -19,8 +19,8 @@ namespace erhe::scene
 namespace editor
 {
 
+class Editor_scenes;
 class Operation_stack;
-class Scene_root;
 class Selection_tool;
 
 class Node_properties
@@ -90,9 +90,9 @@ private:
     auto drop_node_state(erhe::scene::Node& node);
 
     // Component dependencies
+    std::shared_ptr<Editor_scenes  > m_editor_scenes;
     std::shared_ptr<Operation_stack> m_operation_stack;
-    std::shared_ptr<Scene_root>      m_scene_root;
-    std::shared_ptr<Selection_tool>  m_selection_tool;
+    std::shared_ptr<Selection_tool > m_selection_tool;
 
     std::vector<Node_state> m_node_states;
 };

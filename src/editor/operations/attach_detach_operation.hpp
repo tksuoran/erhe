@@ -39,10 +39,7 @@ public:
     class Parameters
     {
     public:
-        erhe::scene::Scene&      scene;
-        erhe::scene::Mesh_layer& layer;
-        bool                     attach{true};
-
+        bool            attach        {true};
         Selection_tool* selection_tool{nullptr};
     };
 

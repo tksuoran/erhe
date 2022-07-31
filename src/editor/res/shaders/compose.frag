@@ -66,22 +66,39 @@ vec3 tonemap_reinhard(vec3 color)
 
 vec3 tonemap_simple(vec3 x)
 {
-	vec3 a = vec3(
+    vec3 a = vec3(
         pow(x.r, 1.25),
         pow(x.g, 1.25),
         pow(x.b, 1.25)
     );
-	return a / (a + vec3(1.0));
+    return a / (a + vec3(1.0));
 }
 
-vec3 tonemap_ue3(vec3 x) {
-
-	// Used in Unreal Engine 3 up to 4.14. (I think, might be wrong).
-	// They've since moved to ACES for output on a larger variety of devices.
-	// Very simple and intented for use with color-lut afterwards.
-	return x / (x + vec3(0.187)) * vec3(1.035);
+vec3 tonemap_ue3(vec3 x)
+{
+    // Used in Unreal Engine 3 up to 4.14. (I think, might be wrong).
+    // They've since moved to ACES for output on a larger variety of devices.
+    // Very simple and intented for use with color-lut afterwards.
+    return x / (x + vec3(0.187)) * vec3(1.035);
 }
 
+vec3 tonemap_log(vec3 x)
+{
+    float D_max       =  1.0;
+    float D_min       =  0.0;
+    float tau         =  1.0;
+    float small_value =  0.5 / 65536.0; // 1.0e-6
+    float Y_in        =  0.2126 * x.r + 0.7152 * x.g + 0.0722 * x.b; // bt.709
+    float Y_max       =  1.5;
+    float Y_min       =  0.0;
+    float nominator   = log(Y_in  + tau) - log(Y_min + tau);
+    float denominator = log(Y_max + tau) - log(Y_min + tau);
+    float Y_out       = (D_max - D_min) * (nominator / denominator) + D_min;
+    float scale       = Y_out / max(Y_in, small_value);
+
+    return x * scale;
+    //return x * scale + Y_in * 0.03;
+}
 
 void main()
 {
@@ -109,8 +126,10 @@ void main()
     //color.g = max(0.0, color.g);
     //color.b = max(0.0, color.b);
     //out_color.rgb = tonemap(color);
-    out_color.rgb = tonemap_reinhard(color);
+    //out_color.rgb = tonemap_reinhard(color);
     //out_color.rgb = tonemap_simple(color);
     //out_color.rgb = tonemap_ue3(color);
+    out_color.rgb = tonemap_log(color);
+    //out_color.rgb = color;
     out_color.a   = 1.0;
 }

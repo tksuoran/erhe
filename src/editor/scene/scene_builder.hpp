@@ -45,15 +45,14 @@ namespace editor
 
 class Brush;
 class Debug_draw;
+class Materials;
 class Mesh_memory;
 class Node_physics;
-class Rendertarget_viewport;
 class Scene_root;
+class Viewport_window;
 
 class Scene_builder
     : public erhe::components::Component
-    , public erhe::components::IUpdate_fixed_step
-    , public erhe::components::IUpdate_once_per_frame
 {
 public:
     static constexpr std::string_view c_label{"Scene_builder"};
@@ -67,14 +66,9 @@ public:
     void declare_required_components() override;
     void initialize_component       () override;
 
-    // Implements IUpdate_once_per_frame
-    void update_once_per_frame(const erhe::components::Time_context& time_context) override;
-
-    // Implements IUpdate_fixed_step
-    void update_fixed_step(const erhe::components::Time_context& time_context) override;
-
     // Public API
-    void setup_scene();
+    [[nodiscard]] auto get_scene_root             () const -> std::shared_ptr<Scene_root>;
+    [[nodiscard]] auto get_primary_viewport_window() const -> std::shared_ptr<Viewport_window>;
 
     // Can discard return value
     auto make_camera(
@@ -82,6 +76,12 @@ public:
         const glm::vec3        position,
         const glm::vec3        look_at = glm::vec3{0.0f, 0.0f, 0.0f}
     ) -> std::shared_ptr<erhe::scene::Camera>;
+
+    // TODO Something nicer, do not expose here
+    [[nodiscard]] auto buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&;
+
+private:
+    void setup_scene();
 
     auto make_directional_light(
         const std::string_view name,
@@ -116,9 +116,7 @@ public:
         return brush;
     }
 
-private:
     [[nodiscard]] auto build_info           () -> erhe::primitive::Build_info&;
-    [[nodiscard]] auto buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&;
 
     void setup_cameras      ();
     void animate_lights     (const double time_d);
@@ -131,17 +129,19 @@ private:
     // Component dependencies
     std::shared_ptr<Brushes>     m_brushes;
     std::shared_ptr<Mesh_memory> m_mesh_memory;
-    std::shared_ptr<Scene_root>  m_scene_root;
 
     // Self owned parts
-    std::mutex                             m_brush_mutex;
-    std::unique_ptr<Brush>                 m_floor_brush;
-    std::unique_ptr<Brush>                 m_table_brush;
-    std::mutex                             m_scene_brushes_mutex;
-    std::vector<std::shared_ptr<Brush>>    m_scene_brushes;
-    std::shared_ptr<Rendertarget_viewport> m_rendertarget_viewport;
+    std::mutex                          m_brush_mutex;
+    std::unique_ptr<Brush>              m_floor_brush;
+    std::unique_ptr<Brush>              m_table_brush;
+    std::mutex                          m_scene_brushes_mutex;
+    std::vector<std::shared_ptr<Brush>> m_scene_brushes;
 
     std::vector<std::shared_ptr<erhe::physics::ICollision_shape>> m_collision_shapes;
+
+    // Output
+    std::shared_ptr<Viewport_window> m_primary_viewport_window;
+    std::shared_ptr<Scene_root>      m_scene_root;
 };
 
 } // namespace editor

@@ -11,11 +11,13 @@ namespace erhe::graphics
 using std::string;
 using std::string_view;
 
-void Vertex_attribute_mappings::add(
-    const Vertex_attribute_mapping& attribute
-)
+Vertex_attribute_mappings::Vertex_attribute_mappings()
 {
-    mappings.push_back(attribute);
+}
+
+Vertex_attribute_mappings::Vertex_attribute_mappings(std::initializer_list<Vertex_attribute_mapping> mappings)
+    : mappings{mappings}
+{
 }
 
 void Vertex_attribute_mappings::collect_attributes(

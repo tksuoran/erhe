@@ -1,5 +1,6 @@
 #include "windows/layers_window.hpp"
 #include "editor_log.hpp"
+#include "editor_scenes.hpp"
 #include "graphics/icon_set.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/node_physics.hpp"
@@ -47,9 +48,9 @@ void Layers_window::initialize_component()
 
 void Layers_window::post_initialize()
 {
-    m_scene_root     = get<Scene_root>();
+    m_editor_scenes  = get<Editor_scenes >();
     m_selection_tool = get<Selection_tool>();
-    m_icon_set       = get<Icon_set>();
+    m_icon_set       = get<Icon_set      >();
 }
 
 void Layers_window::imgui()
@@ -68,27 +69,35 @@ void Layers_window::imgui()
         ImGuiTreeNodeFlags_Leaf
     };
 
-    const auto& scene = m_scene_root->scene();
-    for (const auto& layer : scene.mesh_layers)
+    const auto& scene_roots = m_editor_scenes->get_scene_roots();
+    for (const auto& scene_root : scene_roots)
     {
-        if (ImGui::TreeNodeEx(layer->name.c_str(), parent_flags))
+        if (ImGui::TreeNodeEx(scene_root->name().c_str(), parent_flags))
         {
-            const auto& meshes = layer->meshes;
-            for (const auto& mesh : meshes)
+            const auto& scene = scene_root->scene();
+            for (const auto& layer : scene.mesh_layers)
             {
-                m_icon_set->icon(*mesh.get());
-                ImGui::TreeNodeEx(
-                    mesh->name().c_str(),
-                    leaf_flags |
-                    (
-                        mesh->is_selected()
-                            ? ImGuiTreeNodeFlags_Selected
-                            : ImGuiTreeNodeFlags_None
-                    )
-                );
-                if (ImGui::IsItemClicked())
+                if (ImGui::TreeNodeEx(layer->name.c_str(), parent_flags))
                 {
-                    m_node_clicked = mesh->shared_from_this();
+                    const auto& meshes = layer->meshes;
+                    for (const auto& mesh : meshes)
+                    {
+                        m_icon_set->icon(*mesh.get());
+                        ImGui::TreeNodeEx(
+                            mesh->name().c_str(),
+                            leaf_flags |
+                            (
+                                mesh->is_selected()
+                                    ? ImGuiTreeNodeFlags_Selected
+                                    : ImGuiTreeNodeFlags_None
+                            )
+                        );
+                        if (ImGui::IsItemClicked())
+                        {
+                            m_node_clicked = mesh->shared_from_this();
+                        }
+                    }
+                    ImGui::TreePop();
                 }
             }
             ImGui::TreePop();

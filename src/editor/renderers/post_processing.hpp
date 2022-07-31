@@ -135,19 +135,30 @@ private:
     erhe::application::Buffer_writer m_parameter_writer;
     [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
 
-    std::unique_ptr<erhe::graphics::Shader_resource>    m_parameter_block;
+    erhe::graphics::Shader_resource                     m_parameter_block;
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_empty_vertex_input;
     std::unique_ptr<erhe::graphics::Shader_stages>      m_downsample_x_shader_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>      m_downsample_y_shader_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>      m_compose_shader_stages;
     std::shared_ptr<erhe::graphics::Texture>            m_dummy_texture;
     std::size_t                                         m_source_texture_count {24};
-    std::size_t                                         m_source_texture_offset{0};
-    std::size_t                                         m_texel_scale_offset   {0};
-    std::size_t                                         m_texture_count_offset {0};
-    std::size_t                                         m_reserved0_offset     {0};
-    std::size_t                                         m_reserved1_offset     {0};
     std::unique_ptr<erhe::graphics::Gpu_timer>          m_gpu_timer;
+
+    class Offsets
+    {
+    public:
+        explicit Offsets(
+            erhe::graphics::Shader_resource& block,
+            std::size_t                      source_texture_count
+        );
+
+        std::size_t texel_scale   {0}; // float
+        std::size_t texture_count {0}; // uint
+        std::size_t reserved0     {0}; // float
+        std::size_t reserved1     {0}; // float
+        std::size_t source_texture{0}; // uvec2[source_texture_count]
+    };
+    Offsets m_offsets;
 
     const erhe::graphics::Shader_resource*              m_downsample_source_texture{nullptr}; // for non bindless textures
     const erhe::graphics::Shader_resource*              m_compose_source_textures{nullptr}; // for non bindless textures

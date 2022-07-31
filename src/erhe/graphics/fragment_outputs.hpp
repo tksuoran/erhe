@@ -7,18 +7,10 @@
 namespace erhe::graphics
 {
 
-class Shader_stages;
-
 class Fragment_outputs
 {
 public:
-    void clear();
-
-    void add(
-        const std::string&                    name,
-        const gl::Fragment_shader_output_type type,
-        const unsigned int                    location
-    );
+    explicit Fragment_outputs(std::initializer_list<Fragment_output> outputs);
 
     [[nodiscard]] auto source() const -> std::string;
 

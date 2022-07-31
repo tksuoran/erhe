@@ -43,13 +43,13 @@ void initialize_logging()
     log_pointer                    = erhe::log::make_logger("editor::pointer"                   , spdlog::level::info, false);
     log_programs                   = erhe::log::make_logger("editor::programs"                  , spdlog::level::info);
     log_raytrace                   = erhe::log::make_logger("editor::raytrace"                  , spdlog::level::warn);
-    log_render                     = erhe::log::make_logger("editor::render"                    , spdlog::level::trace, false);
+    log_render                     = erhe::log::make_logger("editor::render"                    , spdlog::level::info, false);
     log_scene                      = erhe::log::make_logger("editor::scene"                     , spdlog::level::info);
     log_selection                  = erhe::log::make_logger("editor::selection"                 , spdlog::level::info);
     log_svg                        = erhe::log::make_logger("editor::svg"                       , spdlog::level::info);
     log_textures                   = erhe::log::make_logger("editor::textures"                  , spdlog::level::info);
     log_trs_tool                   = erhe::log::make_logger("editor::trs_tool"                  , spdlog::level::info);
-    log_rendertarget_imgui_windows = erhe::log::make_logger("editor::rendertarget_imgui_windows", spdlog::level::info);
+    log_rendertarget_imgui_windows = erhe::log::make_logger("editor::rendertarget_imgui_windows", spdlog::level::info, false);
 }
 
 }

@@ -83,5 +83,5 @@ auto as_mesh(const std::shared_ptr<Node>& node) -> std::shared_ptr<Mesh>
     return std::dynamic_pointer_cast<Mesh>(node);
 }
 
+} // namespace erhe::scene
 
-}

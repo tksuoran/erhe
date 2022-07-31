@@ -1,6 +1,8 @@
 #include "editor_rendering.hpp"
 
 #include "editor_log.hpp"
+#include "rendertarget_node.hpp"
+#include "rendertarget_imgui_viewport.hpp"
 #include "renderers/forward_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/post_processing.hpp"
@@ -8,12 +10,13 @@
 #include "renderers/id_renderer.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/shadow_renderer.hpp"
+#include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
-#include "tools/pointer_context.hpp"
 #include "tools/tools.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/viewport_config.hpp"
 #include "windows/viewport_window.hpp"
+#include "windows/viewport_windows.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_renderer.hpp"
 #endif
@@ -21,15 +24,18 @@
 
 #include "erhe/application/application.hpp"
 #include "erhe/application/configuration.hpp"
+#include "erhe/application/imgui_viewport.hpp"
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/window.hpp"
+#include "erhe/application/window_imgui_viewport.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/gpu_timer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/log/log_glm.hpp"
@@ -90,7 +96,7 @@ void Editor_rendering::initialize_component()
     const bool reverse_depth = m_configuration->graphics.reverse_depth;
 
     m_rp_polygon_fill_standard.pipeline.data = {
-        .name           = "Polygon fill",
+        .name           = "Polygon Fill",
         .shader_stages  = programs.standard.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
@@ -279,7 +285,7 @@ void Editor_rendering::initialize_component()
     };
 
     m_rp_edge_lines.pipeline.data = {
-        .name           = "Edge lines",
+        .name           = "Edge Lines",
         .shader_stages  = programs.wide_lines_draw_color.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::lines,
@@ -360,6 +366,16 @@ void Editor_rendering::initialize_component()
         .color_blend    = Color_blend_state::color_blend_premultiplied
     };
 
+    m_rp_rendertarget_nodes.pipeline.data = {
+        .name           = "Rendertarget Nodes",
+        .shader_stages  = programs.textured.get(),
+        .vertex_input   = vertex_input,
+        .input_assembly = Input_assembly_state::triangles,
+        .rasterization  = Rasterization_state::cull_mode_none,
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+        .color_blend    = Color_blend_state::color_blend_premultiplied
+    };
+
     m_content_timer   = std::make_unique<erhe::graphics::Gpu_timer>("Content");
     //m_selection_timer = std::make_unique<erhe::graphics::Gpu_timer>("Selection");
     //m_gui_timer       = std::make_unique<erhe::graphics::Gpu_timer>("Gui");
@@ -383,43 +399,24 @@ void Editor_rendering::post_initialize()
     m_headset_renderer       = get<Headset_renderer>();
 #endif
     m_id_renderer            = get<Id_renderer     >();
-    m_pointer_context        = get<Pointer_context >();
     m_post_processing        = get<Post_processing >();
-    m_scene_root             = get<Scene_root      >();
     m_shadow_renderer        = get<Shadow_renderer >();
     m_viewport_windows       = get<Viewport_windows>();
 }
 
-[[nodiscard]] auto Editor_rendering::create_rendertarget_viewport(
-    const int    width,
-    const int    height,
-    const double dots_per_meter
-) -> std::shared_ptr<Rendertarget_viewport>
+void Editor_rendering::update_once_per_frame(const erhe::components::Time_context&)
 {
-    std::unique_lock<std::mutex> lock(m_rendertarget_viewports_mutex);
-
-    auto rendertarget_viewport = std::make_shared<Rendertarget_viewport>(
-        *m_components,
-        width,
-        height,
-        dots_per_meter
-    );
-    m_rendertarget_viewports.push_back(rendertarget_viewport);
-    return rendertarget_viewport;
+    if (m_forward_renderer ) m_forward_renderer ->next_frame();
+    if (m_id_renderer      ) m_id_renderer      ->next_frame();
+    if (m_line_renderer_set) m_line_renderer_set->next_frame();
+    if (m_post_processing  ) m_post_processing  ->next_frame();
+    if (m_shadow_renderer  ) m_shadow_renderer  ->next_frame();
+    if (m_text_renderer    ) m_text_renderer    ->next_frame();
 }
 
 void Editor_rendering::trigger_capture()
 {
     m_trigger_capture = true;
-}
-
-void Editor_rendering::init_state()
-{
-    gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
-    gl::disable     (gl::Enable_cap::primitive_restart);
-    gl::enable      (gl::Enable_cap::primitive_restart_fixed_index);
-    gl::enable      (gl::Enable_cap::texture_cube_map_seamless);
-    gl::enable      (gl::Enable_cap::framebuffer_srgb);
 }
 
 auto Editor_rendering::width() const -> int
@@ -436,6 +433,16 @@ void Editor_rendering::begin_frame()
 {
     ERHE_PROFILE_FUNCTION
 
+    if (m_trigger_capture)
+    {
+        get<erhe::application::Window>()->begin_renderdoc_capture();
+    }
+
+    erhe::application::Window_imgui_viewport* imgui_viewport = m_imgui_windows->get_window_viewport().get();
+
+    m_viewport_windows->reset_hover();
+    m_viewport_windows->update_hover(imgui_viewport);
+
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_headset_renderer)
     {
@@ -444,37 +451,24 @@ void Editor_rendering::begin_frame()
 #endif
 }
 
-void Editor_rendering::bind_default_framebuffer()
+void Editor_rendering::end_frame()
 {
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
-    gl::viewport        (0, 0, width(), height());
-}
-
-void Editor_rendering::clear()
-{
-    ERHE_PROFILE_FUNCTION
-
-    Expects(m_pipeline_state_tracker != nullptr);
-
-    // Pipeline state required for NVIDIA driver not to complain about texture
-    // unit state when doing the clear.
-    m_pipeline_state_tracker->shader_stages.reset();
-    m_pipeline_state_tracker->color_blend.execute(Color_blend_state::color_blend_disabled);
-    gl::clear_color  (0.0f, 0.0f, 0.2f, 0.1f);
-    gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
-    gl::clear        (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
-}
-
-void Editor_rendering::render_rendertarget_viewports(
-    const Render_context& context
-)
-{
-    for (const auto& rendertarget_viewport : m_rendertarget_viewports)
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    if (m_headset_renderer)
     {
-        rendertarget_viewport->render_mesh_layer(
-            *m_forward_renderer.get(),
-            context
-        );
+        m_headset_renderer->render();
+    }
+#endif
+
+    if (m_post_processing)
+    {
+        m_post_processing->next_frame();
+    }
+
+    if (m_trigger_capture)
+    {
+        get<erhe::application::Window>()->end_renderdoc_capture();
+        m_trigger_capture = false;
     }
 }
 
@@ -484,70 +478,10 @@ void Editor_rendering::render()
 
     Expects(m_view);
 
-    if (m_trigger_capture)
-    {
-        get<erhe::application::Window>()->begin_renderdoc_capture();
-    }
-
     begin_frame();
-
-    // Render shadow maps
-    if (
-        m_scene_root &&
-        m_shadow_renderer &&
-        !m_scene_root->content_layer()->meshes.empty()
-    )
-    {
-        m_scene_root->sort_lights();
-
-        // TODO Choose viewport camera
-        //
-        const Viewport_window* window = m_pointer_context->window();
-        const erhe::scene::Camera* camera = (window != nullptr)
-            ? window->camera()
-            : m_scene_root->scene().cameras.front().get();
-        if (camera != nullptr)
-        {
-            m_shadow_renderer->render(
-                Shadow_renderer::Render_parameters{
-                    .view_camera          = camera,
-                    .view_camera_viewport = (window != nullptr)
-                        ? window->viewport()
-                        : erhe::scene::Viewport{0, 0, 1920, 1080},
-                    .mesh_spans           = { m_scene_root->content_layer()->meshes },
-                    .lights               = m_scene_root->light_layer()->lights
-                }
-            );
-            get<Debug_view_window>()->render();
-        }
-    }
-
-    //// m_imgui_windows->rendertarget_imgui_windows();
-
-    m_viewport_windows->render();
-
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (m_headset_renderer)
-    {
-        m_headset_renderer->render();
-    }
-#endif
-
-    if (m_forward_renderer ) m_forward_renderer ->next_frame();
-    if (m_id_renderer      ) m_id_renderer      ->next_frame();
-    if (m_line_renderer_set) m_line_renderer_set->next_frame();
-    if (m_post_processing  ) m_post_processing  ->next_frame();
-    if (m_shadow_renderer  ) m_shadow_renderer  ->next_frame();
-    if (m_text_renderer    ) m_text_renderer    ->next_frame();
-
-    if (m_trigger_capture)
-    {
-        get<erhe::application::Window>()->end_renderdoc_capture();
-        m_trigger_capture = false;
-    }
 }
 
-void Editor_rendering::render_viewport(
+void Editor_rendering::render_viewport_main(
     const Render_context& context,
     const bool            has_pointer
 )
@@ -556,14 +490,15 @@ void Editor_rendering::render_viewport(
 
     if (m_forward_renderer)
     {
-        static constexpr std::string_view c_id_content{"render"};
-        ERHE_PROFILE_GPU_SCOPE(c_id_content);
+        static constexpr std::string_view c_id_main{"Main"};
+        ERHE_PROFILE_GPU_SCOPE(c_id_main);
         erhe::graphics::Scoped_gpu_timer timer{*m_content_timer.get()};
+        erhe::graphics::Scoped_debug_group pass_scope{c_id_main};
 
-        render_content               (context);
-        render_selection             (context);
-        //render_rendertarget_viewports(context);
-        render_brush                 (context);
+        render_content           (context);
+        render_selection         (context);
+        render_rendertarget_nodes(context);
+        render_brush             (context);
 
         static_cast<void>(has_pointer);
         if (has_pointer)
@@ -586,32 +521,58 @@ void Editor_rendering::render_viewport(
     }
 }
 
+void Editor_rendering::render_viewport_overlay(
+    const Render_context& context,
+    const bool            has_pointer
+)
+{
+    ERHE_PROFILE_FUNCTION
+
+    static_cast<void>(context);
+    static_cast<void>(has_pointer);
+
+    // TODO move text renderer here when correct framebuffer is bound
+}
+
 void Editor_rendering::render_id(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
     if (
-        (m_id_renderer == nullptr)                      ||
-        (m_pointer_context->window() != context.window) ||
-        !m_pointer_context->pointer_in_content_area()   ||
-        (context.camera == nullptr)                     ||
-        !m_pointer_context->position_in_viewport_window().has_value()
+        (!m_id_renderer)            ||
+        (context.window == nullptr) ||
+        (context.camera == nullptr)
     )
     {
         return;
     }
 
-    const auto pointer = m_pointer_context->position_in_viewport_window().value();
+    const auto* scene_root = context.window->scene_root();
+    if (scene_root == nullptr)
+    {
+        return;
+    }
+
+    const auto position_opt = context.window->position_in_viewport();
+    if (!position_opt.has_value())
+    {
+        return;
+    }
+    const auto position = position_opt.value();
+
+    const auto& layers          = scene_root->layers();
+    auto*       tool_scene_root = m_tools->get_tool_scene_root();
+    const auto& tool_layers     = tool_scene_root->layers();
 
     m_id_renderer->render(
         {
             .viewport           = context.viewport,
             .camera             = context.camera,
-            .content_mesh_spans = { m_scene_root->content_layer()->meshes, m_scene_root->gui_layer()->meshes },
-            .tool_mesh_spans    = { m_scene_root->tool_layer()->meshes },
+            .content_mesh_spans = { layers.content()->meshes, layers.rendertarget()->meshes },
+            .tool_mesh_spans    = { tool_layers.tool()->meshes },
             .time               = m_time->time(),
-            .x                  = static_cast<int>(pointer.x),
-            .y                  = static_cast<int>(pointer.y)
+            .x                  = static_cast<int>(position.x),
+            .y                  = static_cast<int>(position.y)
         }
     );
 }
@@ -620,21 +581,30 @@ void Editor_rendering::render_content(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (!m_forward_renderer)
+    if (
+        (!m_forward_renderer) ||
+        (context.window == nullptr) ||
+        (context.camera == nullptr) ||
+        (context.viewport_config == nullptr)
+    )
     {
         return;
     }
 
-    if (context.camera == nullptr)
+    const auto* scene_root = context.window->scene_root();
+
+    if (scene_root == nullptr)
     {
         return;
     }
-    if (context.viewport_config == nullptr)
-    {
-        return;
-    }
+
+    erhe::graphics::Scoped_debug_group outer_debug_scope{"Viewport content"};
 
     auto& render_style = context.viewport_config->render_style_not_selected;
+
+    const auto& layers           = scene_root->layers();
+    const auto& material_library = scene_root->material_library();
+    const auto& materials        = material_library->materials();
 
     constexpr erhe::scene::Visibility_filter content_not_selected_filter{
         .require_all_bits_set   = erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::content,
@@ -659,13 +629,15 @@ void Editor_rendering::render_content(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_spans        = { m_scene_root->content_layer()->meshes, m_scene_root->controller_layer()->meshes },
-                .lights            = m_scene_root->light_layer()->lights,
-                .light_projections = m_shadow_renderer->light_projections(),
-                .materials         = m_scene_root->materials(),
+                .mesh_spans        = { layers.content()->meshes, layers.controller()->meshes },
+                .lights            = layers.light()->lights,
+                .light_projections = m_shadow_renderer
+                    ? m_shadow_renderer->light_projections()
+                    : Light_projections{},
+                .materials         = materials,
                 .passes            = { &renderpass },
                 .visibility_filter = content_not_selected_filter,
-                .ambient_light     = m_scene_root->light_layer()->ambient_light
+                .ambient_light     = layers.light()->ambient_light
             }
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
@@ -684,10 +656,12 @@ void Editor_rendering::render_content(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_spans        = { m_scene_root->content_layer()->meshes },
-                .lights            = m_scene_root->light_layer()->lights,
-                .light_projections = m_shadow_renderer->light_projections(),
-                .materials         = m_scene_root->materials(),
+                .mesh_spans        = { layers.content()->meshes },
+                .lights            = layers.light()->lights,
+                .light_projections = m_shadow_renderer
+                    ? m_shadow_renderer->light_projections()
+                    : Light_projections{},
+                .materials         = materials,
                 .passes            = { &m_rp_edge_lines },
                 .visibility_filter = content_not_selected_filter
             }
@@ -705,10 +679,12 @@ void Editor_rendering::render_content(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_spans        = { m_scene_root->content_layer()->meshes },
-                .lights            = m_scene_root->light_layer()->lights,
-                .light_projections = m_shadow_renderer->light_projections(),
-                .materials         = m_scene_root->materials(),
+                .mesh_spans        = { layers.content()->meshes },
+                .lights            = layers.light()->lights,
+                .light_projections = m_shadow_renderer
+                    ? m_shadow_renderer->light_projections()
+                    : Light_projections{},
+                .materials         = materials,
                 .passes            = { &m_rp_polygon_centroids },
                 .visibility_filter = content_not_selected_filter
             }
@@ -725,10 +701,12 @@ void Editor_rendering::render_content(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_spans        = { m_scene_root->content_layer()->meshes },
-                .lights            = m_scene_root->light_layer()->lights,
-                .light_projections = m_shadow_renderer->light_projections(),
-                .materials         = m_scene_root->materials(),
+                .mesh_spans        = { layers.content()->meshes },
+                .lights            = layers.light()->lights,
+                .light_projections = m_shadow_renderer
+                    ? m_shadow_renderer->light_projections()
+                    : Light_projections{},
+                .materials         = materials,
                 .passes            = { &m_rp_corner_points },
                 .visibility_filter = content_not_selected_filter
             }
@@ -736,20 +714,82 @@ void Editor_rendering::render_content(const Render_context& context)
     }
 }
 
+void Editor_rendering::render_rendertarget_nodes(
+    const Render_context& context
+)
+{
+    ERHE_PROFILE_FUNCTION
+
+    if (
+        (!m_forward_renderer) ||
+        (context.window == nullptr) ||
+        (context.camera == nullptr) ||
+        (context.viewport_config == nullptr)
+    )
+    {
+        return;
+    }
+
+    const auto* scene_root = context.window->scene_root();
+
+    if (scene_root == nullptr)
+    {
+        return;
+    }
+
+    erhe::graphics::Scoped_debug_group outer_debug_scope{"Viewport rendertarget nodes"};
+
+    const auto& layers           = scene_root->layers();
+    const auto& material_library = scene_root->material_library();
+    const auto& materials        = material_library->materials();
+
+    constexpr erhe::scene::Visibility_filter content_not_selected_filter{
+        .require_all_bits_set   = erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::content,
+        .require_all_bits_clear = erhe::scene::Node_visibility::selected
+    };
+
+    m_forward_renderer->render(
+        Forward_renderer::Render_parameters{
+            .viewport          = context.viewport,
+            .camera            = context.camera,
+            .mesh_spans        = { layers.rendertarget()->meshes },
+            .lights            = { },
+            .light_projections = { },
+            .materials         = { materials },
+            .passes            = { &m_rp_rendertarget_nodes },
+            .visibility_filter =
+            {
+                .require_all_bits_set = (
+                    erhe::scene::Node_visibility::visible |
+                    erhe::scene::Node_visibility::rendertarget
+                )
+            }
+        }
+    );
+}
+
 void Editor_rendering::render_selection(const Render_context& context)
 {
-    if (context.camera == nullptr)
-    {
-        return;
-    }
-    if (context.viewport_config == nullptr)
+    if (
+        (context.camera == nullptr) ||
+        (context.viewport_config == nullptr) ||
+        (context.window == nullptr)
+    )
     {
         return;
     }
 
-    //erhe::graphics::Scoped_gpu_timer timer{*m_selection_timer.get()};
+    auto* scene_root = context.window->scene_root();
+    if (scene_root == nullptr)
+    {
+        return;
+    }
 
     const auto& render_style = context.viewport_config->render_style_selected;
+
+    const auto& layers           = scene_root->layers();
+    const auto& material_library = scene_root->material_library();
+    const auto& materials        = material_library->materials();
 
     constexpr erhe::scene::Visibility_filter content_selected_filter{
         .require_all_bits_set =
@@ -780,13 +820,15 @@ void Editor_rendering::render_selection(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_spans        = { m_scene_root->content_layer()->meshes },
-                .lights            = m_scene_root->light_layer()->lights,
-                .light_projections = m_shadow_renderer->light_projections(),
-                .materials         = m_scene_root->materials(),
+                .mesh_spans        = { layers.content()->meshes },
+                .lights            = layers.light()->lights,
+                .light_projections = m_shadow_renderer
+                    ? m_shadow_renderer->light_projections()
+                    : Light_projections{},
+                .materials         = materials,
                 .passes            = { &renderpass },
                 .visibility_filter = content_selected_filter,
-                .ambient_light     = m_scene_root->light_layer()->ambient_light
+                .ambient_light     = layers.light()->ambient_light
             }
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
@@ -807,10 +849,12 @@ void Editor_rendering::render_selection(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_spans        = { m_scene_root->content_layer()->meshes },
-                .lights            = m_scene_root->light_layer()->lights,
-                .light_projections = m_shadow_renderer->light_projections(),
-                .materials         = m_scene_root->materials(),
+                .mesh_spans        = { layers.content()->meshes },
+                .lights            = layers.light()->lights,
+                .light_projections = m_shadow_renderer
+                    ? m_shadow_renderer->light_projections()
+                    : Light_projections{},
+                .materials         = materials,
                 .passes            = { &m_rp_edge_lines, &m_rp_line_hidden_blend },
                 .visibility_filter = content_selected_filter
             }
@@ -831,10 +875,12 @@ void Editor_rendering::render_selection(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_spans        = { m_scene_root->content_layer()->meshes },
-                .lights            = m_scene_root->light_layer()->lights,
-                .light_projections = m_shadow_renderer->light_projections(),
-                .materials         = m_scene_root->materials(),
+                .mesh_spans        = { layers.content()->meshes },
+                .lights            = layers.light()->lights,
+                .light_projections = m_shadow_renderer
+                    ? m_shadow_renderer->light_projections()
+                    : Light_projections{},
+                .materials         = materials,
                 .passes            = { &m_rp_polygon_centroids },
                 .visibility_filter = content_selected_filter
             }
@@ -852,10 +898,12 @@ void Editor_rendering::render_selection(const Render_context& context)
             {
                 .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_spans        = { m_scene_root->content_layer()->meshes },
-                .lights            = m_scene_root->light_layer()->lights,
-                .light_projections = m_shadow_renderer->light_projections(),
-                .materials         = m_scene_root->materials(),
+                .mesh_spans        = { layers.content()->meshes },
+                .lights            = layers.light()->lights,
+                .light_projections = m_shadow_renderer
+                    ? m_shadow_renderer->light_projections()
+                    : Light_projections{},
+                .materials         = materials,
                 .passes            = { &m_rp_corner_points },
                 .visibility_filter = content_selected_filter
             }
@@ -868,21 +916,39 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (context.camera == nullptr)
+    if (
+        (context.camera == nullptr) ||
+        (context.window == nullptr)
+    )
     {
         return;
     }
 
-    //erhe::graphics::Scoped_gpu_timer timer{*m_tools_timer.get()};
+    auto* scene_root = m_tools->get_tool_scene_root();
+    if (scene_root == nullptr)
+    {
+        return;
+    }
+
+    const auto& layers           = scene_root->layers();
+    const auto& material_library = scene_root->material_library();
+    const auto& materials        = material_library->materials();
+
+    if (layers.tool()->meshes.empty())
+    {
+        return;
+    }
 
     m_forward_renderer->render(
         {
             .viewport          = context.viewport,
             .camera            = context.camera,
-            .mesh_spans        = { m_scene_root->tool_layer()->meshes },
-            .lights            = m_scene_root->light_layer()->lights,
-            .light_projections = m_shadow_renderer->light_projections(),
-            .materials         = m_scene_root->materials(),
+            .mesh_spans        = { layers.tool()->meshes },
+            .lights            = {},
+            .light_projections = m_shadow_renderer
+                ? m_shadow_renderer->light_projections()
+                : Light_projections{},
+            .materials         = materials,
             .passes            =
             {
                 &m_rp_tool1_hidden_stencil,   // tag_depth_hidden_with_stencil
@@ -894,51 +960,54 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
             },
             .visibility_filter =
             {
-                .require_all_bits_set = erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::tool
+                .require_all_bits_set =
+                    erhe::scene::Node_visibility::visible |
+                    erhe::scene::Node_visibility::tool
             }
         }
     );
 }
 
-//// void Editor_rendering::render_gui(const Render_context& context)
-//// {
-////     ERHE_PROFILE_FUNCTION
-////
-////     if (context.camera == nullptr)
-////     {
-////         return;
-////     }
-////
-////     erhe::graphics::Scoped_gpu_timer timer{*m_gui_timer.get()};
-////
-////     m_imgui_windows->render_rendertarget_gui_meshes(context);
-//// }
-
 void Editor_rendering::render_brush(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (context.camera == nullptr)
+    if (
+        (context.camera == nullptr) ||
+        (context.window == nullptr)
+    )
     {
         return;
     }
 
-    //erhe::graphics::Scoped_gpu_timer timer{*m_brush_timer.get()};
+    auto* scene_root = context.window->scene_root();
+    const auto& layers           = scene_root->layers();
+    const auto& material_library = scene_root->material_library();
+    const auto& materials        = material_library->materials();
+
+    if (layers.brush()->meshes.empty())
+    {
+        return;
+    }
 
     m_forward_renderer->render(
         {
             .viewport          = context.viewport,
             .camera            = context.camera,
-            .mesh_spans        = { m_scene_root->brush_layer()->meshes },
-            .lights            = m_scene_root->light_layer()->lights,
-            .light_projections = m_shadow_renderer->light_projections(),
-            .materials         = m_scene_root->materials(),
+            .mesh_spans        = { layers.brush()->meshes },
+            .lights            = layers.light()->lights,
+            .light_projections = m_shadow_renderer
+                ? m_shadow_renderer->light_projections()
+                : Light_projections{},
+            .materials         = materials,
             .passes            = { &m_rp_brush_back, &m_rp_brush_front },
             .visibility_filter =
             {
-                .require_all_bits_set = erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::brush
+                .require_all_bits_set =
+                    erhe::scene::Node_visibility::visible |
+                    erhe::scene::Node_visibility::brush
             },
-            .ambient_light     = m_scene_root->light_layer()->ambient_light
+            .ambient_light     = layers.light()->ambient_light
         }
     );
 }

@@ -44,12 +44,13 @@ namespace editor
 class Brush;
 class Brushes;
 class Editor;
+class Editor_scenes;
 class Grid_tool;
-class Materials;
+class Materials_window;
 class Operation_stack;
-class Pointer_context;
 class Scene_root;
 class Selection_tool;
+class Viewport_windows;
 
 class Brush_tool_preview_command
     : public erhe::application::Command
@@ -89,6 +90,12 @@ class Brush_create_context
 public:
     erhe::primitive::Build_info&  build_info;
     erhe::primitive::Normal_style normal_style{erhe::primitive::Normal_style::corner_normals};
+};
+
+class Brush_context
+{
+public:
+    Scene_root& scene_root;
 };
 
 class Brushes
@@ -165,12 +172,12 @@ private:
     Brush_tool_insert_command  m_insert_command;
 
     // Component dependencies
-    std::shared_ptr<Materials>       m_materials;
-    std::shared_ptr<Operation_stack> m_operation_stack;
-    std::shared_ptr<Pointer_context> m_pointer_context;
-    std::shared_ptr<Scene_root>      m_scene_root;
-    std::shared_ptr<Selection_tool>  m_selection_tool;
-    std::shared_ptr<Grid_tool>       m_grid_tool;
+    std::shared_ptr<Editor_scenes>      m_editor_scenes;
+    std::shared_ptr<Grid_tool>          m_grid_tool;
+    std::shared_ptr<Materials_window>   m_materials_window;
+    std::shared_ptr<Operation_stack>    m_operation_stack;
+    std::shared_ptr<Selection_tool>     m_selection_tool;
+    std::shared_ptr<Viewport_windows>   m_viewport_windows;
 
     std::mutex                          m_brush_mutex;
     std::vector<std::shared_ptr<Brush>> m_brushes;

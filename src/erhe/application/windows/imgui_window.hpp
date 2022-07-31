@@ -23,13 +23,7 @@ namespace erhe::application
 class Imgui_renderer;
 #endif
 class Imgui_viewport;
-class Pointer_context;
 
-class Imgui_window_context
-{
-public:
-    Pointer_context& pointer_context;
-};
 
 class Mouse_input_sink
 {
@@ -59,7 +53,7 @@ public:
     );
 
     auto get_viewport() const -> Imgui_viewport*;
-    void set_viewport(Imgui_viewport* imgui_viewport);
+    virtual void set_viewport(Imgui_viewport* imgui_viewport);
 
     virtual void imgui               () = 0;
     virtual auto get_window_type_hash() const -> uint32_t;
@@ -81,16 +75,5 @@ protected:
     float             m_min_size[2]{120.0f, 120.0f};
     float             m_max_size[2]{99999.0f, 99999.0f};
 };
-
-//class Rendertarget_imgui_window
-//    : public Imgui_window
-//{
-//public:
-//    explicit Rendertarget_imgui_window(const std::string_view title);
-//
-//    auto flags   () -> ImGuiWindowFlags override;
-//    void on_begin()                     override;
-//    void on_end  ()                     override;
-//};
 
 } // namespace erhe::application

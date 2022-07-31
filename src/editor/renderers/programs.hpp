@@ -76,8 +76,8 @@ public:
     // Public members
     std::unique_ptr<erhe::graphics::Shader_resource> shadow_map_default_uniform_block; // for non-bindless textures
     std::unique_ptr<erhe::graphics::Shader_resource> textured_default_uniform_block;   // for non-bindless textures
-    int                                              shadow_texture_unit{0};
-    int                                              base_texture_unit{1};
+    int                                              shadow_texture_unit{15};
+    int                                              base_texture_unit{0};
     std::unique_ptr<erhe::graphics::Sampler>         nearest_sampler;
     std::unique_ptr<erhe::graphics::Sampler>         linear_sampler;
     std::unique_ptr<erhe::graphics::Sampler>         linear_mipmap_linear_sampler;

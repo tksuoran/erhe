@@ -81,7 +81,7 @@ class Instance_create_info final
 {
 public:
     uint64_t                                   node_visibility_flags{0};
-    erhe::physics::IWorld&                     physics_world;
+    Scene_root*                                scene_root;
     glm::mat4                                  world_from_node;
     std::shared_ptr<erhe::primitive::Material> material;
     float                                      scale;

@@ -1,3 +1,5 @@
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "erhe/application/renderers/imgui_renderer.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -16,13 +18,18 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
+#include "erhe/graphics/vertex_format.hpp"
+#include "erhe/graphics/state/vertex_input_state.hpp"
+#include "erhe/log/log_glm.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include <deque>
+#include <sstream>
 
 namespace erhe::application {
 
@@ -34,82 +41,85 @@ using std::make_unique;
 
 namespace {
 
-constexpr std::string_view c_vertex_shader_source =
-    "\n"
-    "out      vec4  v_color;\n"
-    "out      vec2  v_texcoord;\n"
-    "#if defined(ERHE_BINDLESS_TEXTURE)\n"
-    "out flat uvec2 v_texture;\n"
-    "#else\n"
-    "out flat uint v_texture_id;\n"
-    "#endif\n"
-    "\n"
-    "out gl_PerVertex {\n"
-    "    vec4  gl_Position;\n"
-    "    float gl_ClipDistance[4];\n"
-    "};\n"
-    "\n"
-    "float srgb_to_linear(float x)\n"
-    "{\n"
-    "    if (x <= 0.04045)\n"
-    "    {\n"
-    "        return x / 12.92;\n"
-    "    }\n"
-    "    else\n"
-    "    {\n"
-    "        return pow((x + 0.055) / 1.055, 2.4);\n"
-    "    }\n"
-    "}\n"
-    "\n"
-    "vec3 srgb_to_linear(vec3 v)\n"
-    "{\n"
-    "    return vec3(\n"
-    "        srgb_to_linear(v.r),\n"
-    "        srgb_to_linear(v.g),\n"
-    "        srgb_to_linear(v.b)\n"
-    "    );\n"
-    "}\n"
-    "\n"
-    "void main()\n"
-    "{\n"
-    "    vec2 scale         = projection.u_scale;\n"
-    "    vec2 translate     = projection.u_translate;\n"
-    "    vec4 clip_rect     = draw.draw_parameters[gl_DrawID].u_clip_rect;\n"
-    "    gl_Position        = vec4(a_position * scale + translate, 0, 1);\n"
-    "    gl_Position.y      = -gl_Position.y;\n"
-    "    gl_ClipDistance[0] = a_position.x - clip_rect[0];\n"
-    "    gl_ClipDistance[1] = a_position.y - clip_rect[1];\n"
-    "    gl_ClipDistance[2] = clip_rect[2] - a_position.x;\n"
-    "    gl_ClipDistance[3] = clip_rect[3] - a_position.y;\n"
-    "    v_texcoord         = a_texcoord;\n"
-    "#if defined(ERHE_BINDLESS_TEXTURE)\n"
-    "    v_texture          = draw.draw_parameters[gl_DrawID].u_texture;\n"
-    "#else\n"
-    "    v_texture_id       = draw.draw_parameters[gl_DrawID].u_texture_indices[0];\n"
-    "#endif\n"
-    "    v_color            = vec4(srgb_to_linear(a_color.rgb), a_color.a);\n"
-    "}\n";
+constexpr std::string_view c_vertex_shader_source = R"NUL(
+out vec4 v_color;
+out vec2 v_texcoord;
 
-const std::string_view c_fragment_shader_source =
-    "in      vec4  v_color;\n"
-    "in      vec2  v_texcoord;\n"
-    "#if defined(ERHE_BINDLESS_TEXTURE)\n"
-    "in flat uvec2 v_texture;\n"
-    "#else\n"
-    "in flat uint v_texture_id;\n"
-    "#endif\n"
-    "\n"
-    "void main()\n"
-    "{\n"
-    "#if defined(ERHE_BINDLESS_TEXTURE)\n"
-    "    sampler2D s_texture = sampler2D(v_texture);\n"
-    "    vec4 texture_sample = texture(s_texture, v_texcoord.st);\n"
-    "#else\n"
-    "    vec4 texture_sample = texture(s_textures[v_texture_id], v_texcoord.st);\n"
-    "#endif\n"
-    "    out_color.rgb       = v_color.rgb * texture_sample.rgb * v_color.a;\n"
-    "    out_color.a         = texture_sample.a * v_color.a;\n"
-    "}\n";
+#if defined(ERHE_BINDLESS_TEXTURE)
+out flat uvec2 v_texture;
+#else
+out flat uint v_texture_id;
+#endif
+
+out gl_PerVertex {
+    vec4  gl_Position;
+    float gl_ClipDistance[4];
+};
+
+float srgb_to_linear(float x)
+{
+    if (x <= 0.04045)
+    {
+        return x / 12.92;
+    }
+    else
+    {
+        return pow((x + 0.055) / 1.055, 2.4);
+    }
+}
+
+vec3 srgb_to_linear(vec3 v)
+{
+    return vec3(
+        srgb_to_linear(v.r),
+        srgb_to_linear(v.g),
+        srgb_to_linear(v.b)
+    );
+}
+
+void main()
+{
+    vec2 scale         = draw.scale;
+    vec2 translate     = draw.translate;
+    vec4 clip_rect     = draw.draw_parameters[gl_DrawID].clip_rect;
+    gl_Position        = vec4(a_position * scale + translate, 0, 1);
+    gl_Position.y      = -gl_Position.y;
+    gl_ClipDistance[0] = a_position.x - clip_rect[0];
+    gl_ClipDistance[1] = a_position.y - clip_rect[1];
+    gl_ClipDistance[2] = clip_rect[2] - a_position.x;
+    gl_ClipDistance[3] = clip_rect[3] - a_position.y;
+    v_texcoord         = a_texcoord;
+#if defined(ERHE_BINDLESS_TEXTURE)
+    v_texture          = draw.draw_parameters[gl_DrawID].texture;
+#else
+    v_texture_id       = draw.draw_parameters[gl_DrawID].texture_indices[0];
+#endif
+    v_color            = vec4(srgb_to_linear(a_color.rgb), a_color.a);
+}
+)NUL";
+
+const std::string_view c_fragment_shader_source = R"NUL(
+in vec4 v_color;
+in vec2 v_texcoord;
+
+#if defined(ERHE_BINDLESS_TEXTURE)
+in flat uvec2 v_texture;
+#else
+in flat uint v_texture_id;
+#endif
+
+void main()
+{
+#if defined(ERHE_BINDLESS_TEXTURE)
+    sampler2D s_texture = sampler2D(v_texture);
+    vec4 texture_sample = texture(s_texture, v_texcoord.st);
+#else
+    vec4 texture_sample = texture(s_textures[v_texture_id], v_texcoord.st);
+#endif
+    out_color.rgb       = v_color.rgb * texture_sample.rgb * v_color.a;
+    out_color.a         = texture_sample.a * v_color.a;
+}
+)NUL";
 
 static constexpr gl::Buffer_storage_mask storage_mask{
     gl::Buffer_storage_mask::map_coherent_bit   |
@@ -124,65 +134,6 @@ static constexpr gl::Map_buffer_access_mask access_mask{
 };
 
 } // anonymous namespace
-
-Imgui_renderer::Frame_resources::Frame_resources(
-    const std::size_t                          slot,
-    erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
-    erhe::graphics::Vertex_format&             vertex_format,
-    erhe::graphics::Shader_stages*             shader_stages,
-    std::size_t vertex_count, std::size_t vertex_stride,
-    std::size_t index_count,  std::size_t index_stride,
-    std::size_t draw_count,   std::size_t draw_stride
-)
-    : vertex_buffer{
-        gl::Buffer_target::array_buffer,
-        vertex_count * vertex_stride,
-        storage_mask,
-        access_mask
-    }
-    , index_buffer{
-        gl::Buffer_target::element_array_buffer,
-        index_count * index_stride,
-        storage_mask,
-        access_mask
-    }
-    , draw_parameter_buffer{
-        gl::Buffer_target::shader_storage_buffer,
-        draw_count * draw_stride,
-        storage_mask,
-        access_mask
-    }
-    , draw_indirect_buffer{
-        gl::Buffer_target::draw_indirect_buffer,
-        draw_count * sizeof(gl::Draw_elements_indirect_command),
-        storage_mask,
-        access_mask
-    }
-    , vertex_input{
-        erhe::graphics::Vertex_input_state_data::make(
-            attribute_mappings,
-            vertex_format,
-            &vertex_buffer,
-            &index_buffer
-        )
-    }
-    , pipeline {
-        {
-            .name           = "ImGui Renderer",
-            .shader_stages  = shader_stages,
-            .vertex_input   = &vertex_input,
-            .input_assembly = erhe::graphics::Input_assembly_state::triangles,
-            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied
-        }
-    }
-{
-    vertex_buffer        .set_debug_label(fmt::format("ImGui Renderer Vertex {}",         slot));
-    index_buffer         .set_debug_label(fmt::format("ImGui Renderer Index {}",          slot));
-    draw_parameter_buffer.set_debug_label(fmt::format("ImGui Renderer Draw Parameter {}", slot));
-    draw_indirect_buffer .set_debug_label(fmt::format("ImGui Renderer Draw Indirect {}",  slot));
-}
 
 Imgui_renderer::Imgui_renderer()
     : erhe::components::Component{c_label}
@@ -208,79 +159,155 @@ void Imgui_renderer::initialize_component()
 
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 
-    create_attribute_mappings_and_vertex_format();
-    create_blocks                              ();
-    create_shader_stages                       ();
-    create_samplers                            ();
-    create_frame_resources                     ();
-    create_font_texture                        ();
+    m_imgui_program_interface = std::make_unique<Imgui_program_interface>(
+        erhe::graphics::Instance::info.use_bindless_texture
+    );
+
+    create_samplers    ();
+    create_font_texture();
 
     m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Imgui_renderer");
 }
 
-void Imgui_renderer::create_attribute_mappings_and_vertex_format()
+Multi_pipeline::Multi_pipeline(const std::string_view name)
+    : m_name{name}
 {
-    using erhe::graphics::Vertex_attribute;
+}
 
-    m_attribute_mappings.add(
-        {
+void Multi_pipeline::next_frame()
+{
+    m_current_slot = (m_current_slot + 1) % s_frame_resources_count;
+
+    SPDLOG_LOGGER_TRACE(
+        log_multi_buffer,
+        "{} next_frame() - current slot is now {}",
+        m_name,
+        m_current_slot
+    );
+}
+
+void Multi_pipeline::allocate(
+    const erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
+    const erhe::graphics::Vertex_format&             vertex_format,
+    erhe::graphics::Shader_stages*                   shader_stages,
+    erhe::application::Multi_buffer&                 vertex_buffer,
+    erhe::application::Multi_buffer&                 index_buffer
+)
+{
+    std::vector<erhe::graphics::Buffer>& vertex_buffers = vertex_buffer.buffers();
+    std::vector<erhe::graphics::Buffer>& index_buffers  = index_buffer .buffers();
+
+    for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot)
+    {
+        erhe::graphics::Buffer* const a_vertex_buffer = &vertex_buffers.at(slot);
+        erhe::graphics::Buffer* const a_index_buffer  = &index_buffers.at(slot);
+
+        auto vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
+            erhe::graphics::Vertex_input_state_data::make(
+                attribute_mappings,
+                vertex_format,
+                a_vertex_buffer,
+                a_index_buffer
+            )
+        );
+        auto* raw_vertex_input = vertex_input.get();
+        m_vertex_inputs.push_back(std::move(vertex_input));
+        m_pipelines.at(slot).data =
+            erhe::graphics::Pipeline_data{
+                .name           = "ImGui Renderer",
+                .shader_stages  = shader_stages,
+                .vertex_input   = raw_vertex_input,
+                .input_assembly = erhe::graphics::Input_assembly_state::triangles,
+                .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+                .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied
+            };
+        //);
+    }
+}
+
+[[nodiscard]] auto Multi_pipeline::current_pipeline() -> erhe::graphics::Pipeline&
+{
+    return m_pipelines.at(m_current_slot);
+}
+
+Imgui_program_interface::Imgui_program_interface(
+    const bool use_bindless
+)
+    : draw_parameter_block {
+        "draw", // block name
+        0,      // binding point
+        erhe::graphics::Shader_resource::Type::shader_storage_block
+    }
+    , draw_parameter_struct{"Draw_parameters"}
+    , draw_parameter_struct_offsets{
+        .clip_rect       =                 draw_parameter_struct.add_vec4 ("clip_rect"         )->offset_in_parent(),
+        .texture         =  use_bindless ? draw_parameter_struct.add_uvec2("texture"           )->offset_in_parent() : 0, // bindless
+        .extra           =  use_bindless ? draw_parameter_struct.add_uvec2("extra"             )->offset_in_parent() : 0, // bindless
+        .texture_indices = !use_bindless ? draw_parameter_struct.add_uint ("texture_indices", 4)->offset_in_parent() : 0  // non-bindless
+    }
+    , block_offsets{
+        .scale                       = draw_parameter_block.add_vec2  ("scale"    )->offset_in_parent(),
+        .translate                   = draw_parameter_block.add_vec2  ("translate")->offset_in_parent(),
+        .draw_parameter_struct_array = draw_parameter_block.add_struct("draw_parameters", &draw_parameter_struct, 0 /* unsized array*/ )->offset_in_parent()
+    }
+    , fragment_outputs{
+        erhe::graphics::Fragment_output{
+            .name     = "out_color",
+            .type     = gl::Fragment_shader_output_type::float_vec4,
+            .location = 0
+        }
+    }
+    , attribute_mappings{
+        erhe::graphics::Vertex_attribute_mapping{
             .layout_location = 0,
             .shader_type     = gl::Attribute_type::float_vec2,
             .name            = "a_position",
             .src_usage = {
-                .type        = Vertex_attribute::Usage_type::position,
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::position,
             }
-        }
-    );
-    m_attribute_mappings.add(
-        {
+        },
+        erhe::graphics::Vertex_attribute_mapping{
             .layout_location = 1,
             .shader_type     = gl::Attribute_type::float_vec2,
             .name            = "a_texcoord",
             .src_usage = {
-                .type        = Vertex_attribute::Usage_type::tex_coord,
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::tex_coord,
             }
-        }
-    );
-    m_attribute_mappings.add(
-        {
+        },
+        erhe::graphics::Vertex_attribute_mapping{
             .layout_location = 2,
             .shader_type     = gl::Attribute_type::float_vec4,
             .name            = "a_color",
             .src_usage = {
-                .type        = Vertex_attribute::Usage_type::color,
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::color,
             }
         }
-    );
-
-    m_vertex_format.add(
-        {
+    }
+    , vertex_format{
+        erhe::graphics::Vertex_attribute{
             .usage = {
-                .type      = Vertex_attribute::Usage_type::position
+                .type      = erhe::graphics::Vertex_attribute::Usage_type::position
             },
             .shader_type   = gl::Attribute_type::float_vec2,
             .data_type = {
                 .type      = gl::Vertex_attrib_type::float_,
                 .dimension = 2
             }
-        }
-    );
-    m_vertex_format.add(
-        {
+        },
+        erhe::graphics::Vertex_attribute{
             .usage = {
-                .type      = Vertex_attribute::Usage_type::tex_coord
+                .type      = erhe::graphics::Vertex_attribute::Usage_type::tex_coord
             },
             .shader_type   = gl::Attribute_type::float_vec2,
             .data_type = {
                 .type      = gl::Vertex_attrib_type::float_,
                 .dimension = 2
             }
-        }
-    );
-    m_vertex_format.add(
-        {
+        },
+        erhe::graphics::Vertex_attribute{
             .usage = {
-                .type       = Vertex_attribute::Usage_type::color
+                .type       = erhe::graphics::Vertex_attribute::Usage_type::color
             },
             .shader_type    = gl::Attribute_type::float_vec4,
             .data_type = {
@@ -289,64 +316,24 @@ void Imgui_renderer::create_attribute_mappings_and_vertex_format()
                 .dimension  = 4
             }
         }
-    );
-}
-
-void Imgui_renderer::create_blocks()
-{
-    // Draw parameter struct
-    m_u_clip_rect_offset = m_draw_parameter_struct.add_vec4("u_clip_rect")->offset_in_parent();
-    if (erhe::graphics::Instance::info.use_bindless_texture)
-    {
-        m_u_texture_offset = m_draw_parameter_struct.add_uvec2("u_texture")->offset_in_parent();
-        m_u_extra_offset   = m_draw_parameter_struct.add_uvec2("u_extra"  )->offset_in_parent();
     }
-    else
-    {
-        m_u_texture_indices_offset = m_draw_parameter_struct.add_uint("u_texture_indices", 4)->offset_in_parent();
-    }
-
-    // Create uniform block for per draw data
-    m_projection_block = make_unique<erhe::graphics::Shader_resource>(
-        "projection", // block name
-        1,            // binding point
-        erhe::graphics::Shader_resource::Type::uniform_block
-    );
-
-    // Projection block
-    m_u_scale_offset     = m_projection_block->add_vec2("u_scale"    )->offset_in_parent();
-    m_u_translate_offset = m_projection_block->add_vec2("u_translate")->offset_in_parent();
-
-    // Create uniform block for per draw data
-    m_draw_parameter_block = make_unique<erhe::graphics::Shader_resource>(
-        "draw", // block name
-        0,      // binding point
-        erhe::graphics::Shader_resource::Type::shader_storage_block
-    );
-
-    m_draw_parameter_block->add_struct(
-        "draw_parameters",
-        &m_draw_parameter_struct,
-        0 /* unsized */
-    );
-}
-
-void Imgui_renderer::create_shader_stages()
+    , vertex_buffer        {"ImGui Vertex Buffer"}
+    , index_buffer         {"ImGui Index Buffer"}
+    , draw_parameter_buffer{"ImGui Draw Parameter Buffer"}
+    , draw_indirect_buffer {"ImGui Draw Indirect Buffer"}
+    , pipeline             {"ImGui Pipeline"}
 {
-    ERHE_PROFILE_FUNCTION
-
-    m_fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
-
     erhe::graphics::Shader_stages::Create_info create_info{
         .name                      = "ImGui Renderer",
-        .vertex_attribute_mappings = &m_attribute_mappings,
-        .fragment_outputs          = &m_fragment_outputs,
+        .interface_blocks          = { &draw_parameter_block },
+        .struct_types              = { &draw_parameter_struct },
+        .vertex_attribute_mappings = &attribute_mappings,
+        .fragment_outputs          = &fragment_outputs,
+        .shaders = {
+            { gl::Shader_type::vertex_shader,   c_vertex_shader_source },
+            { gl::Shader_type::fragment_shader, c_fragment_shader_source }
+        }
     };
-    create_info.add_interface_block(m_projection_block.get());
-    create_info.add_interface_block(m_draw_parameter_block.get());
-    create_info.struct_types.push_back(&m_draw_parameter_struct);
-    create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   c_vertex_shader_source);
-    create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, c_fragment_shader_source);
 
     if (erhe::graphics::Instance::info.use_bindless_texture)
     {
@@ -355,18 +342,52 @@ void Imgui_renderer::create_shader_stages()
     }
     else
     {
-        m_default_uniform_block.add_sampler(
+        default_uniform_block.add_sampler(
             "s_textures",
             gl::Uniform_type::sampler_2d,
             0,
             s_texture_unit_count
         );
-        create_info.default_uniform_block = &m_default_uniform_block;
+        create_info.default_uniform_block = &default_uniform_block;
     }
 
     erhe::graphics::Shader_stages::Prototype prototype{create_info};
     ERHE_VERIFY(prototype.is_valid());
-    m_shader_stages = make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
+    shader_stages = make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
+
+    vertex_buffer.allocate(
+        gl::Buffer_target::array_buffer,
+        s_max_vertex_count * vertex_format.stride()
+    );
+    index_buffer.allocate(
+        gl::Buffer_target::element_array_buffer,
+        s_max_index_count * sizeof(uint16_t)
+    );
+    draw_parameter_buffer.allocate(
+        gl::Buffer_target::shader_storage_buffer,
+        draw_parameter_block.binding_point(),
+        block_offsets.draw_parameter_struct_array + s_max_draw_count * draw_parameter_struct.size_bytes()
+    );
+    draw_indirect_buffer.allocate(
+        gl::Buffer_target::draw_indirect_buffer,
+        s_max_draw_count * sizeof(gl::Draw_elements_indirect_command)
+    );
+    pipeline.allocate(
+        attribute_mappings,
+        vertex_format,
+        shader_stages.get(),
+        vertex_buffer,
+        index_buffer
+    );
+}
+
+void Imgui_program_interface::next_frame()
+{
+    vertex_buffer        .next_frame();
+    index_buffer         .next_frame();
+    draw_parameter_buffer.next_frame();
+    draw_indirect_buffer .next_frame();
+    pipeline             .next_frame();
 }
 
 void Imgui_renderer::create_samplers()
@@ -399,14 +420,26 @@ auto Imgui_renderer::mono_font() const -> ImFont*
     return m_mono_font;
 }
 
+auto Imgui_renderer::vr_primary_font() const -> ImFont*
+{
+    return m_vr_primary_font;
+}
+
+auto Imgui_renderer::vr_mono_font() const -> ImFont*
+{
+    return m_vr_mono_font;
+}
+
 void Imgui_renderer::create_font_texture()
 {
     ERHE_PROFILE_FUNCTION
 
     const auto& config = get<erhe::application::Configuration>()->imgui;
 
-    m_primary_font = m_font_atlas.AddFontFromFileTTF(config.primary_font.c_str(), config.font_size);
-    m_mono_font    = m_font_atlas.AddFontFromFileTTF(config.mono_font.c_str(), config.font_size);
+    m_primary_font    = m_font_atlas.AddFontFromFileTTF(config.primary_font.c_str(), config.font_size);
+    m_mono_font       = m_font_atlas.AddFontFromFileTTF(config.mono_font   .c_str(), config.font_size);
+    m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(config.primary_font.c_str(), config.font_size * 2.0f);
+    m_vr_mono_font    = m_font_atlas.AddFontFromFileTTF(config.mono_font   .c_str(), config.font_size * 2.0f);
 
     // Build texture atlas
     Texture::Create_info create_info{};
@@ -456,41 +489,40 @@ void Imgui_renderer::create_font_texture()
     m_font_atlas.SetTexID(handle);
 }
 
-void Imgui_renderer::create_frame_resources()
-{
-    ERHE_PROFILE_FUNCTION
-
-    for (size_t slot = 0; slot < frame_resources_count; ++slot)
-    {
-        m_frame_resources.emplace_back(
-            slot,
-            m_attribute_mappings,
-            m_vertex_format,
-            m_shader_stages.get(),
-            s_max_vertex_count, m_vertex_format.stride(),
-            s_max_index_count,  sizeof(uint16_t),
-            s_max_draw_count,   m_draw_parameter_block->size_bytes()
-        );
-    }
-}
-
-auto Imgui_renderer::current_frame_resources() -> Frame_resources&
-{
-    return m_frame_resources[m_current_frame_resource_slot];
-}
-
 void Imgui_renderer::next_frame()
 {
-    m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % frame_resources_count;
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+    std::stringstream ss;
+    for (const auto& used_texture : m_used_textures)
+    {
+        if (used_texture)
+        {
+            ss << fmt::format("{}-{} ", used_texture->gl_name(), used_texture->debug_label());
+        }
+        else
+        {
+            ss << "<> ";
+        }
+    }
+    SPDLOG_LOGGER_TRACE(
+        log_imgui,
+        "clearing {} used textures: {}",
+        m_used_textures.size(),
+        ss.str()
+    );
+#endif
+
     m_used_textures.clear();
     m_used_texture_handles.clear();
+
+    m_imgui_program_interface->next_frame();
 }
 
 static constexpr std::string_view c_imgui_render{"ImGui_ImplErhe_RenderDrawData()"};
 
 void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_context)
 {
-    ImGuiIO& io = ImGui::GetIO(imgui_context);
+    ImGuiIO& io = imgui_context->IO;
 
     IM_ASSERT(io.BackendRendererUserData == NULL && "Already initialized a platform backend renderer");
 
@@ -596,11 +628,27 @@ auto Imgui_renderer::image(
     const bool                                      linear
 ) -> bool
 {
-    SPDLOG_LOGGER_TRACE(log_imgui, "Imgui_renderer::image() texture {}", texture->gl_name());
+    SPDLOG_LOGGER_TRACE(
+        log_imgui,
+        "Imgui_renderer::image(texture {}, width = {}, height = {}, uv0 = {}, uv1 = {}, tint_color = {}, linear = {})",
+        texture->gl_name(),
+        width,
+        height,
+        uv0,
+        uv1,
+        tint_color,
+        linear
+    );
     const auto& sampler = linear ? m_linear_sampler : m_nearest_sampler;
     const uint64_t handle = erhe::graphics::get_handle(
         *texture.get(),
         *sampler.get()
+    );
+    SPDLOG_LOGGER_TRACE(
+        log_imgui,
+        "sampler = {}, handle = {:16x}",
+        sampler->gl_name(),
+        handle
     );
     ImGui::Image(
         handle,
@@ -671,25 +719,27 @@ void Imgui_renderer::render_draw_data()
     erhe::graphics::Scoped_debug_group pass_scope{c_imgui_render};
     erhe::graphics::Scoped_gpu_timer   timer     {*m_gpu_timer.get()};
 
-    const auto& frame_resources       = current_frame_resources();
-    const auto& draw_parameter_buffer = frame_resources.draw_parameter_buffer;
-    const auto& vertex_buffer         = frame_resources.vertex_buffer;
-    const auto& index_buffer          = frame_resources.index_buffer;
-    const auto& draw_indirect_buffer  = frame_resources.draw_indirect_buffer;
-    const auto& pipeline              = frame_resources.pipeline;
+    const auto& program               = m_imgui_program_interface;
+    const auto& draw_parameter_buffer = program->draw_parameter_buffer.current_buffer();
+    const auto& draw_indirect_buffer  = program->draw_indirect_buffer .current_buffer();
+    const auto& vertex_buffer         = program->vertex_buffer        .current_buffer();
+    const auto& index_buffer          = program->index_buffer         .current_buffer();
+    const auto& pipeline              = program->pipeline             .current_pipeline();
+
+    const auto& draw_parameter_struct_offsets = program->draw_parameter_struct_offsets;
+    const auto  draw_parameter_entry_size     = program->draw_parameter_struct.size_bytes();
 
     auto draw_parameter_gpu_data = draw_parameter_buffer.map();
+    auto draw_indirect_gpu_data  = draw_indirect_buffer.map();
     auto vertex_gpu_data         = vertex_buffer.map();
     auto index_gpu_data          = index_buffer.map();
-    auto draw_indirect_gpu_data  = draw_indirect_buffer.map();
 
-    std::size_t draw_parameter_byte_offset{0};
-    std::size_t vertex_byte_offset        {0};
-    std::size_t index_byte_offset         {0};
-    std::size_t draw_indirect_byte_offset {0};
-    std::size_t list_vertex_offset        {0};
-    std::size_t list_index_offset         {0};
-    std::size_t draw_indirect_count       {0};
+    auto& draw_parameter_writer = program->draw_parameter_buffer.writer();
+    auto& draw_indirect_writer  = program->draw_indirect_buffer .writer();
+    auto& vertex_writer         = program->vertex_buffer        .writer();
+    auto& index_writer          = program->index_buffer         .writer();
+
+    std::size_t draw_indirect_count{0};
 
     const float scale[2] = {
         2.0f / draw_data->DisplaySize.x,
@@ -700,25 +750,30 @@ void Imgui_renderer::render_draw_data()
         -1.0f - draw_data->DisplayPos.y * scale[1]
     };
 
-    // Projection block repeats only once
-    const std::size_t start_of_projection_block = draw_parameter_byte_offset;
+    draw_parameter_writer.begin(draw_parameter_buffer.target());
+    draw_indirect_writer .begin(draw_indirect_buffer .target());
+    vertex_writer        .begin(vertex_buffer        .target());
+    index_writer         .begin(index_buffer         .target());
+
+    using erhe::graphics::write;
 
     // Write scale
     const gsl::span<const float> scale_cpu_data{&scale[0], 2};
-    erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, scale_cpu_data);
-    draw_parameter_byte_offset += scale_cpu_data.size_bytes();
+    write(
+        draw_parameter_gpu_data,
+        draw_parameter_writer.write_offset + m_imgui_program_interface->block_offsets.scale,
+        scale_cpu_data
+    );
 
     // Write translate
     const gsl::span<const float> translate_cpu_data{&translate[0], 2};
-    erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, translate_cpu_data);
-    draw_parameter_byte_offset += translate_cpu_data.size_bytes();
+    write(
+        draw_parameter_gpu_data,
+        draw_parameter_writer.write_offset + m_imgui_program_interface->block_offsets.translate,
+        translate_cpu_data
+    );
 
-    while ((draw_parameter_byte_offset % erhe::graphics::Instance::implementation_defined.uniform_buffer_offset_alignment) != 0)
-    {
-        ++draw_parameter_byte_offset;
-    }
-
-    const std::size_t start_of_draw_parameter_block = draw_parameter_byte_offset;
+    draw_parameter_writer.write_offset += m_imgui_program_interface->block_offsets.draw_parameter_struct_array;
 
     const ImVec2 clip_off   = draw_data->DisplayPos;
     const ImVec2 clip_scale = draw_data->FramebufferScale;
@@ -728,6 +783,11 @@ void Imgui_renderer::render_draw_data()
         erhe::graphics::s_texture_unit_cache.reset(0);
     }
 
+    const std::size_t vertex_stride = m_imgui_program_interface->vertex_format.stride();
+    const std::size_t index_stride  = sizeof(uint16_t);
+
+    std::size_t list_vertex_offset{vertex_writer.range.first_byte_offset / vertex_stride};
+    std::size_t list_index_offset {index_writer .range.first_byte_offset / index_stride};
     for (int n = 0; n < draw_data->CmdListsCount; n++)
     {
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
@@ -738,7 +798,7 @@ void Imgui_renderer::render_draw_data()
             static_cast<size_t>(cmd_list->VtxBuffer.size_in_bytes())
         };
 
-        erhe::graphics::write(vertex_gpu_data, vertex_byte_offset, vertex_cpu_data);
+        write(vertex_gpu_data, vertex_writer.write_offset, vertex_cpu_data);
 
         // Upload index buffer
         static_assert(sizeof(uint16_t) == sizeof(ImDrawIdx));
@@ -746,7 +806,7 @@ void Imgui_renderer::render_draw_data()
             cmd_list->IdxBuffer.begin(),
             static_cast<size_t>(cmd_list->IdxBuffer.size())
         };
-        erhe::graphics::write(index_gpu_data, index_byte_offset, index_cpu_data);
+        write(index_gpu_data, index_writer.write_offset, index_cpu_data);
 
         for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++)
         {
@@ -781,14 +841,15 @@ void Imgui_renderer::render_draw_data()
                 {
                     // Write clip rectangle
                     const gsl::span<const float> clip_rect_cpu_data{&clip_rect.x, 4};
-                    erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, clip_rect_cpu_data);
-                    draw_parameter_byte_offset += s_vec4_size;
+                    write(
+                        draw_parameter_gpu_data,
+                        draw_parameter_writer.write_offset + draw_parameter_struct_offsets.clip_rect,
+                        clip_rect_cpu_data
+                    );
 
                     // Write texture indices
                     if (erhe::graphics::Instance::info.use_bindless_texture)
                     {
-                        //const auto texture_unit = m_texture_unit_cache.allocate_texture_unit(pcmd->TextureId);
-                        //ERHE_VERIFY(texture_unit.has_value());
                         const uint64_t handle = pcmd->TextureId;
                         const uint32_t texture_handle[2] =
                         {
@@ -796,8 +857,12 @@ void Imgui_renderer::render_draw_data()
                             static_cast<uint32_t>(handle >> 32u)
                         };
                         const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
-                        erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, texture_handle_cpu_data);
-                        draw_parameter_byte_offset += s_uvec2_size;
+
+                        write(
+                            draw_parameter_gpu_data,
+                            draw_parameter_writer.write_offset + draw_parameter_struct_offsets.texture,
+                            texture_handle_cpu_data
+                        );
 
                         const uint32_t extra[2] =
                         {
@@ -805,8 +870,12 @@ void Imgui_renderer::render_draw_data()
                             0u
                         };
                         const gsl::span<const uint32_t> extra_cpu_data{&extra[0], 2};
-                        erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, extra_cpu_data);
-                        draw_parameter_byte_offset += s_uvec2_size;
+
+                        write(
+                            draw_parameter_gpu_data,
+                            draw_parameter_writer.write_offset + draw_parameter_struct_offsets.extra,
+                            extra_cpu_data
+                        );
                     }
                     else
                     {
@@ -817,17 +886,26 @@ void Imgui_renderer::render_draw_data()
                             const auto texture_unit = texture_unit_opt.value();
                             const uint32_t texture_indices[4] = { static_cast<uint32_t>(texture_unit), 0, 0, 0 };
                             const gsl::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
-                            erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, texture_indices_cpu_data);
-                            draw_parameter_byte_offset += s_uivec4_size;
+
+                            write(
+                                draw_parameter_gpu_data,
+                                draw_parameter_writer.write_offset + draw_parameter_struct_offsets.texture_indices,
+                                texture_indices_cpu_data
+                            );
                         }
                         else
                         {
                             const uint32_t texture_indices[4] = { 0, 0, 0, 0 };
                             const gsl::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
-                            erhe::graphics::write(draw_parameter_gpu_data, draw_parameter_byte_offset, texture_indices_cpu_data);
-                            draw_parameter_byte_offset += s_uivec4_size;
+                            write(
+                                draw_parameter_gpu_data,
+                                draw_parameter_writer.write_offset + draw_parameter_struct_offsets.texture_indices,
+                                texture_indices_cpu_data
+                            );
                         }
                     }
+
+                    draw_parameter_writer.write_offset += draw_parameter_entry_size;
 
                     const auto draw_command = gl::Draw_elements_indirect_command{
                         pcmd->ElemCount,
@@ -837,22 +915,28 @@ void Imgui_renderer::render_draw_data()
                         0
                     };
 
-                    erhe::graphics::write(
+                    write(
                         draw_indirect_gpu_data,
-                        draw_indirect_byte_offset,
+                        draw_indirect_writer.write_offset,
                         erhe::graphics::as_span(draw_command)
                     );
-                    draw_indirect_byte_offset += sizeof(gl::Draw_elements_indirect_command);
+                    draw_indirect_writer.write_offset += sizeof(gl::Draw_elements_indirect_command);
                     ++draw_indirect_count;
                 }
             }
         }
 
-        vertex_byte_offset += vertex_cpu_data.size_bytes();
+        vertex_writer.write_offset += vertex_cpu_data.size_bytes();
+        index_writer.write_offset += index_cpu_data.size_bytes();
+
         list_vertex_offset += cmd_list->VtxBuffer.size();
-        index_byte_offset += index_cpu_data.size_bytes();
         list_index_offset += cmd_list->IdxBuffer.size();
     }
+
+    draw_parameter_writer.end();
+    draw_indirect_writer .end();
+    vertex_writer        .end();
+    index_writer         .end();
 
     if (draw_indirect_count > 0)
     {
@@ -872,6 +956,11 @@ void Imgui_renderer::render_draw_data()
         {
             for (const auto handle : m_used_texture_handles)
             {
+                SPDLOG_LOGGER_TRACE(
+                    log_imgui,
+                    "making texture handle {:16x} resident",
+                    handle
+                );
                 gl::make_texture_handle_resident_arb(handle);
             }
         }
@@ -880,7 +969,12 @@ void Imgui_renderer::render_draw_data()
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
             for (const auto& texture : m_used_textures)
             {
-                SPDLOG_LOGGER_TRACE(log_imgui, ("used texture: {} {}", texture->gl_name(), texture->debug_label());
+                SPDLOG_LOGGER_TRACE(
+                    log_imgui,
+                    "used texture: {} {}",
+                    texture->gl_name(),
+                    texture->debug_label()
+                );
             }
             for (const auto texture_handle : m_used_texture_handles)
             {
@@ -898,29 +992,21 @@ void Imgui_renderer::render_draw_data()
 
             const auto texture_unit_use_count = erhe::graphics::s_texture_unit_cache.bind(dummy_handle);
 
-            for (size_t i = texture_unit_use_count; i < s_texture_unit_count; ++i)
+            for (size_t i = texture_unit_use_count; i < Imgui_program_interface::s_texture_unit_count; ++i)
             {
                 gl::bind_texture_unit(static_cast<GLuint>(i), m_dummy_texture->gl_name());
                 gl::bind_sampler     (static_cast<GLuint>(i), m_nearest_sampler->gl_name());
             }
         }
 
-        ERHE_VERIFY(draw_parameter_byte_offset > 0);
+        ERHE_VERIFY(draw_parameter_writer.range.byte_count > 0);
 
         gl::bind_buffer_range(
-            gl::Buffer_target::uniform_buffer,
-            static_cast<GLuint>    (m_projection_block->binding_point()),
+            draw_parameter_buffer.target(),
+            static_cast<GLuint>    (m_imgui_program_interface->draw_parameter_block.binding_point()),
             static_cast<GLuint>    (draw_parameter_buffer.gl_name()),
-            static_cast<GLintptr>  (start_of_projection_block),
-            static_cast<GLsizeiptr>(draw_parameter_byte_offset)
-        );
-
-        gl::bind_buffer_range(
-            gl::Buffer_target::shader_storage_buffer,
-            static_cast<GLuint>    (m_draw_parameter_block->binding_point()),
-            static_cast<GLuint>    (draw_parameter_buffer.gl_name()),
-            static_cast<GLintptr>  (start_of_draw_parameter_block),
-            static_cast<GLsizeiptr>(draw_parameter_byte_offset)
+            static_cast<GLintptr>  (draw_parameter_writer.range.first_byte_offset),
+            static_cast<GLsizeiptr>(draw_parameter_writer.range.byte_count)
         );
 
         gl::bind_buffer(
@@ -931,7 +1017,7 @@ void Imgui_renderer::render_draw_data()
         gl::multi_draw_elements_indirect(
             pipeline.data.input_assembly.primitive_topology,
             gl::Draw_elements_type::unsigned_short,
-            nullptr,
+            reinterpret_cast<const void *>(draw_indirect_writer.range.first_byte_offset),
             static_cast<GLsizei>(draw_indirect_count),
             static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
         );
@@ -940,11 +1026,16 @@ void Imgui_renderer::render_draw_data()
         {
             for (const auto handle : m_used_texture_handles)
             {
+                SPDLOG_LOGGER_TRACE(
+                    log_imgui,
+                    "making texture handle {:16x} non-resident",
+                    handle
+                );
+
                 gl::make_texture_handle_non_resident_arb(handle);
             }
         }
 
-        next_frame();
         gl::disable(gl::Enable_cap::clip_distance0);
         gl::disable(gl::Enable_cap::clip_distance1);
         gl::disable(gl::Enable_cap::clip_distance2);
@@ -961,15 +1052,5 @@ void ImGui_ImplErhe_assert_user_error(const bool condition, const char* message)
     if (!condition)
     {
         erhe::application::log_imgui->error("{}", message);
-    }
-}
-
-#include "imgui_internal.h"
-
-namespace ImGui
-{
-    ImGuiIO& GetIO(ImGuiContext* context)
-    {
-        return context->IO;
     }
 }

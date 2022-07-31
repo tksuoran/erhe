@@ -41,16 +41,16 @@ protected:
 class Node_visibility
 {
 public:
-    static constexpr uint64_t none        = 0u;
-    static constexpr uint64_t visible     = (1u << 0);
-    static constexpr uint64_t content     = (1u << 1);
-    static constexpr uint64_t shadow_cast = (1u << 2);
-    static constexpr uint64_t id          = (1u << 3);
-    static constexpr uint64_t tool        = (1u << 4);
-    static constexpr uint64_t brush       = (1u << 5);
-    static constexpr uint64_t selected    = (1u << 6);
-    static constexpr uint64_t gui         = (1u << 7);
-    static constexpr uint64_t controller  = (1u << 8);
+    static constexpr uint64_t none         = 0u;
+    static constexpr uint64_t visible      = (1u << 0);
+    static constexpr uint64_t content      = (1u << 1);
+    static constexpr uint64_t shadow_cast  = (1u << 2);
+    static constexpr uint64_t id           = (1u << 3);
+    static constexpr uint64_t tool         = (1u << 4);
+    static constexpr uint64_t brush        = (1u << 5);
+    static constexpr uint64_t selected     = (1u << 6);
+    static constexpr uint64_t rendertarget = (1u << 7);
+    static constexpr uint64_t controller   = (1u << 8);
 };
 
 class Node_flag_bit
@@ -63,7 +63,8 @@ public:
     static constexpr uint64_t is_camera                 = (1u << 3);
     static constexpr uint64_t is_light                  = (1u << 4);
     static constexpr uint64_t is_mesh                   = (1u << 5);
-    static constexpr uint64_t show_debug_visualizations = (1u << 6);
+    static constexpr uint64_t is_rendertarget           = (1u << 6);
+    static constexpr uint64_t show_debug_visualizations = (1u << 7);
 };
 
 class Node_transforms
@@ -78,6 +79,7 @@ class Node_data
 public:
     Node_transforms                                transforms;
     std::uint64_t                                  last_transform_update_serial{0};
+    void*                                          host           {nullptr};
     std::weak_ptr<Node>                            parent         {};
     std::vector<std::shared_ptr<Node>>             children;
     std::vector<std::shared_ptr<INode_attachment>> attachments;

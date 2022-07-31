@@ -10,6 +10,7 @@ namespace erhe::primitive {
 
 namespace editor {
 
+class Materials;
 class Scene_root;
 
 void parse_gltf(

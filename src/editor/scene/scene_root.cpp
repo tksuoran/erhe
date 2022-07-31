@@ -1,8 +1,11 @@
 #include "scene/scene_root.hpp"
 
 #include "editor_log.hpp"
+#include "rendertarget_node.hpp"
 
+#include "scene/debug_draw.hpp"
 #include "scene/helpers.hpp"
+#include "scene/material_library.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "tools/selection_tool.hpp"
@@ -10,6 +13,7 @@
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/graphics/buffer.hpp"
+#include "erhe/graphics/framebuffer.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/raytrace/iscene.hpp"
@@ -55,53 +59,58 @@ Instance::~Instance() noexcept
 {
 }
 
-auto Create_new_camera_command::try_call(
-    erhe::application::Command_context& context
-) -> bool
+Scene_layers::Scene_layers(erhe::scene::Scene& scene)
 {
-    static_cast<void>(context);
+    using std::make_shared;
 
-    return m_scene_root.create_new_camera().operator bool();
+    m_content      = make_shared<Mesh_layer>("content",      Node_visibility::content);
+    m_controller   = make_shared<Mesh_layer>("controller",   Node_visibility::controller);
+    m_tool         = make_shared<Mesh_layer>("tool",         Node_visibility::tool);
+    m_rendertarget = make_shared<Mesh_layer>("rendertarget", Node_visibility::rendertarget);
+    m_brush        = make_shared<Mesh_layer>("brush",        Node_visibility::brush);
+    m_light        = make_shared<Light_layer>("lights");
+
+    scene.mesh_layers .push_back(m_content);
+    scene.mesh_layers .push_back(m_controller);
+    scene.mesh_layers .push_back(m_tool);
+    scene.mesh_layers .push_back(m_brush);
+    scene.light_layers.push_back(m_light);
 }
 
-auto Create_new_empty_node_command::try_call(
-    erhe::application::Command_context& context
-) -> bool
+auto Scene_layers::brush() const -> erhe::scene::Mesh_layer*
 {
-    static_cast<void>(context);
-
-    return m_scene_root.create_new_empty_node().operator bool();
+    return m_brush.get();
 }
 
-auto Create_new_light_command::try_call(
-    erhe::application::Command_context& context
-) -> bool
+auto Scene_layers::content() const -> erhe::scene::Mesh_layer*
 {
-    static_cast<void>(context);
-
-    return m_scene_root.create_new_light().operator bool();
+    return m_content.get();
 }
 
-Scene_root::Scene_root()
-    : Component{c_label}
-    , m_create_new_camera_command    {*this}
-    , m_create_new_empty_node_command{*this}
-    , m_create_new_light_command     {*this}
-
+auto Scene_layers::controller() const -> erhe::scene::Mesh_layer*
 {
+    return m_controller.get();
 }
 
-Scene_root::~Scene_root() noexcept
+auto Scene_layers::tool() const -> erhe::scene::Mesh_layer*
 {
+    return m_tool.get();
 }
 
-void Scene_root::declare_required_components()
+auto Scene_layers::rendertarget() const -> erhe::scene::Mesh_layer*
 {
-    require<erhe::application::Configuration>();
-    require<erhe::application::View>();
+    return m_rendertarget.get();
 }
 
-void Scene_root::initialize_component()
+auto Scene_layers::light() const -> erhe::scene::Light_layer*
+{
+    return m_light.get();
+}
+
+Scene_root::Scene_root(const std::string_view& name)
+    : m_name  {name}
+    , m_scene {std::make_unique<Scene>(this)}
+    , m_layers(*m_scene.get())
 {
     ERHE_PROFILE_FUNCTION
 
@@ -109,53 +118,51 @@ void Scene_root::initialize_component()
     using std::make_shared;
     using std::make_unique;
     using erhe::scene::Node;
-    m_content_layer    = make_shared<Mesh_layer>("content",    Node_visibility::content);
-    m_controller_layer = make_shared<Mesh_layer>("controller", Node_visibility::controller);
-    m_tool_layer       = make_shared<Mesh_layer>("tool",       Node_visibility::tool);
-    m_gui_layer        = make_shared<Mesh_layer>("gui",        Node_visibility::gui);
-    m_brush_layer      = make_shared<Mesh_layer>("brush",      Node_visibility::brush);
-    m_light_layer      = make_shared<Light_layer>("lights");
 
-    m_scene            = std::make_unique<Scene>();
+    m_material_library = std::make_shared<Material_library>();
+    m_physics_world    = erhe::physics::IWorld::create_unique();
+    m_raytrace_scene   = erhe::raytrace::IScene::create_unique("root");
 
-    m_scene->mesh_layers .push_back(m_content_layer);
-    m_scene->mesh_layers .push_back(m_controller_layer);
-    m_scene->mesh_layers .push_back(m_tool_layer);
-    m_scene->mesh_layers .push_back(m_brush_layer);
-    m_scene->light_layers.push_back(m_light_layer);
-
-    m_physics_world  = erhe::physics::IWorld::create_unique();
-    m_raytrace_scene = erhe::raytrace::IScene::create_unique("root");
-
-    if (get<erhe::application::Configuration>()->physics.enabled)
-    {
-        m_physics_world->enable_physics_updates();
-    }
-    else
-    {
-        m_physics_world->disable_physics_updates();
-    }
-
-    auto view = get<erhe::application::View>();
-
-    view->register_command   (&m_create_new_camera_command);
-    view->register_command   (&m_create_new_empty_node_command);
-    view->register_command   (&m_create_new_light_command);
-    view->bind_command_to_key(&m_create_new_camera_command,     erhe::toolkit::Key_f2, true);
-    view->bind_command_to_key(&m_create_new_empty_node_command, erhe::toolkit::Key_f3, true);
-    view->bind_command_to_key(&m_create_new_light_command,      erhe::toolkit::Key_f4, true);
+    ///// TODO Do these where scene is created instead
+    /////
+    ///// const auto& debug_drawer  = components.get<Debug_draw>();
+    ///// const auto& configuration = components.get<erhe::application::Configuration>();
+    ///// m_physics_world->set_debug_drawer(debug_drawer.get());
+    ///// if (configuration->physics.enabled)
+    ///// {
+    /////     m_physics_world->enable_physics_updates();
+    ///// }
+    ///// else
+    ///// {
+    /////     m_physics_world->disable_physics_updates();
+    ///// }
 }
 
-void Scene_root::attach_to_selection(const std::shared_ptr<erhe::scene::Node>& node)
+Scene_root::~Scene_root()
 {
-    auto selection_tool = try_get<Selection_tool>();
-    if (selection_tool && !selection_tool->selection().empty())
-    {
-        const auto& entry = selection_tool->selection().front();
-        entry->attach(node);
-        node->set_parent_from_node(erhe::scene::Transform{});
-    }
 }
+
+//// void Scene_root::attach_to_selection(const std::shared_ptr<erhe::scene::Node>& node)
+//// {
+////     auto selection_tool = try_get<Selection_tool>();
+////     if (selection_tool && !selection_tool->selection().empty())
+////     {
+////         const auto& entry = selection_tool->selection().front();
+////         entry->attach(node);
+////         node->set_parent_from_node(erhe::scene::Transform{});
+////     }
+//// }
+////
+//// void Scene_root::attach_to_selection(const std::shared_ptr<erhe::scene::Node>& node)
+//// {
+////     auto selection_tool = try_get<Selection_tool>();
+////     if (selection_tool && !selection_tool->selection().empty())
+////     {
+////         const auto& entry = selection_tool->selection().front();
+////         entry->attach(node);
+////         node->set_parent_from_node(erhe::scene::Transform{});
+////     }
+//// }
 
 auto Scene_root::create_new_camera() -> std::shared_ptr<erhe::scene::Camera>
 {
@@ -165,7 +172,7 @@ auto Scene_root::create_new_camera() -> std::shared_ptr<erhe::scene::Camera>
     camera->projection()->z_near          = 0.03f;
     camera->projection()->z_far           = 200.0f;
     scene().add(camera);
-    attach_to_selection(camera);
+    //// attach_to_selection(camera);
     return camera;
 }
 
@@ -173,42 +180,50 @@ auto Scene_root::create_new_empty_node() -> std::shared_ptr<erhe::scene::Node>
 {
     auto node = std::make_shared<erhe::scene::Node>("Empty Node");
     scene().add_node(node);
-    attach_to_selection(node);
+    //// attach_to_selection(node);
     return node;
 }
 
 auto Scene_root::create_new_light() -> std::shared_ptr<erhe::scene::Light>
 {
     auto light = std::make_shared<Light>("Light");
-    light->type                          = Light::Type::directional;
-    light->color                         = glm::vec3{1.0, 1.0f, 1.0};
-    light->intensity                     =  1.0f;
-    light->range                         =  0.0f;
-    //light->projection()->projection_type = erhe::scene::Projection::Type::orthogonal;
-    //light->projection()->ortho_left      = -10.0f;
-    //light->projection()->ortho_width     =  20.0f;
-    //light->projection()->ortho_bottom    = -10.0f;
-    //light->projection()->ortho_height    =  20.0f;
-    //light->projection()->z_near          =   5.0f;
-    //light->projection()->z_far           =  20.0f;
-    attach_to_selection(light);
+    light->type      = Light::Type::directional;
+    light->color     = glm::vec3{1.0, 1.0f, 1.0};
+    light->intensity =  1.0f;
+    light->range     =  0.0f;
+    //// attach_to_selection(light);
     scene().add_to_light_layer(
-        *light_layer(),
+        *m_layers.light(),
         light
     );
     return light;
 }
 
 // TODO This is not thread safe
-auto Scene_root::materials() -> std::vector<std::shared_ptr<Material>>&
+//// auto Scene_root::materials() -> std::vector<std::shared_ptr<Material>>&
+//// {
+////     return m_materials;
+//// }
+////
+//// // TODO This is not thread safe
+//// auto Scene_root::materials() const -> const std::vector<std::shared_ptr<Material>>&
+//// {
+////     return m_materials;
+//// }
+
+auto Scene_root::material_library() const -> const std::shared_ptr<Material_library>&
 {
-    return m_materials;
+    return m_material_library;
 }
 
-// TODO This is not thread safe
-auto Scene_root::materials() const -> const std::vector<std::shared_ptr<Material>>&
+[[nodiscard]] auto Scene_root::layers() -> Scene_layers&
 {
-    return m_materials;
+    return m_layers;
+}
+
+[[nodiscard]] auto Scene_root::layers() const -> const Scene_layers&
+{
+    return m_layers;
 }
 
 auto Scene_root::physics_world() -> erhe::physics::IWorld&
@@ -235,12 +250,17 @@ auto Scene_root::scene() const -> const erhe::scene::Scene&
     return *m_scene.get();
 }
 
+[[nodiscard]] auto Scene_root::name() const -> const std::string&
+{
+    return m_name;
+}
+
 void Scene_root::add_instance(const Instance& instance)
 {
     ERHE_PROFILE_FUNCTION
 
     scene().add_to_mesh_layer(
-        *content_layer(),
+        *m_layers.content(),
         instance.mesh
     );
 
@@ -266,43 +286,13 @@ void Scene_root::add(
     Mesh_layer*                               layer
 )
 {
-    const std::lock_guard<std::mutex> lock{m_scene_mutex};
+    const std::lock_guard<std::mutex> lock{m_mutex};
 
     if (layer == nullptr)
     {
-        layer = m_content_layer.get();
+        layer = m_layers.content();
     }
     scene().add_to_mesh_layer(*layer, mesh);
-}
-
-auto Scene_root::brush_layer() const -> erhe::scene::Mesh_layer*
-{
-    return m_brush_layer.get();
-}
-
-auto Scene_root::content_layer() const -> erhe::scene::Mesh_layer*
-{
-    return m_content_layer.get();
-}
-
-auto Scene_root::controller_layer() const -> erhe::scene::Mesh_layer*
-{
-    return m_controller_layer.get();
-}
-
-auto Scene_root::tool_layer() const -> erhe::scene::Mesh_layer*
-{
-    return m_tool_layer.get();
-}
-
-auto Scene_root::gui_layer() const -> erhe::scene::Mesh_layer*
-{
-    return m_gui_layer.get();
-}
-
-auto Scene_root::light_layer() const -> erhe::scene::Light_layer*
-{
-    return m_light_layer.get();
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -347,54 +337,6 @@ auto Scene_root::camera_combo(
     return camera_changed;
 }
 
-auto Scene_root::material_combo(
-    const char*                                 label,
-    std::shared_ptr<erhe::primitive::Material>& selected_material,
-    const bool                                  empty_option
-) const -> bool
-{
-    const std::lock_guard<std::mutex> lock{m_materials_mutex};
-
-    int selection_index = 0;
-    int index = 0;
-    std::vector<const char*> names;
-    std::vector<std::shared_ptr<Material>> materials;
-    const bool empty_entry = empty_option || (selected_material == nullptr);
-    if (empty_entry)
-    {
-        names.push_back("(none)");
-        materials.push_back({});
-        ++index;
-    }
-    for (const auto& material : m_materials)
-    {
-        if (!material->visible)
-        {
-            continue;
-        }
-        names.push_back(material->name.c_str());
-        materials.push_back(material);
-        if (selected_material == material)
-        {
-            selection_index = index;
-        }
-        ++index;
-    }
-
-    const bool selection_changed =
-        ImGui::Combo(
-            label,
-            &selection_index,
-            names.data(),
-            static_cast<int>(names.size())
-        ) &&
-        (selected_material != materials.at(selection_index));
-    if (selection_changed)
-    {
-        selected_material = materials.at(selection_index);
-    }
-    return selection_changed;
-}
 #endif
 
 namespace
@@ -429,10 +371,42 @@ public:
 void Scene_root::sort_lights()
 {
     std::sort(
-        light_layer()->lights.begin(),
-        light_layer()->lights.end(),
+        m_layers.light()->lights.begin(),
+        m_layers.light()->lights.end(),
         Light_comparator()
     );
+}
+
+void Scene_root::update_pointer_for_rendertarget_nodes()
+{
+    std::lock_guard<std::mutex> lock(m_rendertarget_nodes_mutex);
+
+    for (const auto& rendertarget_node : m_rendertarget_nodes)
+    {
+        rendertarget_node->update_pointer();
+    }
+}
+
+[[nodiscard]] auto Scene_root::create_rendertarget_node(
+    const erhe::components::Components& components,
+    Viewport_window&                    host_viewport_window,
+    const int                           width,
+    const int                           height,
+    const double                        dots_per_meter
+) -> std::shared_ptr<Rendertarget_node>
+{
+    std::lock_guard<std::mutex> lock(m_rendertarget_nodes_mutex);
+
+    auto rendertarget_node = std::make_shared<Rendertarget_node>(
+        *this,
+        host_viewport_window,
+        components,
+        width,
+        height,
+        dots_per_meter
+    );
+    m_rendertarget_nodes.push_back(rendertarget_node);
+    return rendertarget_node;
 }
 
 } // namespace editor

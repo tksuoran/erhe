@@ -47,4 +47,4 @@ public:
 [[nodiscard]] auto as_mesh(Node* const node) -> Mesh*;
 [[nodiscard]] auto as_mesh(const std::shared_ptr<Node>& node) -> std::shared_ptr<Mesh>;
 
-}
+} // namespace erhe::scene

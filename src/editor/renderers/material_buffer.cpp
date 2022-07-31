@@ -38,8 +38,7 @@ Material_buffer::Material_buffer(const Material_interface& material_interface)
     Multi_buffer::allocate(
         gl::Buffer_target::uniform_buffer,
         m_material_interface.material_block.binding_point(),
-        m_material_interface.material_block.size_bytes(),
-        m_name
+        m_material_interface.material_block.size_bytes()
     );
 }
 

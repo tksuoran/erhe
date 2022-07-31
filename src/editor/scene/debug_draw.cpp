@@ -26,7 +26,7 @@ void Debug_draw::declare_required_components()
 {
     using IDebug_draw = erhe::physics::IDebug_draw;
 
-    require<Scene_root>();
+    //// TODO restore connection require<Scene_root>();
 
     m_debug_mode =
         IDebug_draw::c_Draw_wireframe           |
@@ -45,11 +45,6 @@ void Debug_draw::declare_required_components()
         IDebug_draw::c_Fast_wireframe           |
         IDebug_draw::c_Draw_normals             |
         IDebug_draw::c_Draw_frames;
-}
-
-void Debug_draw::initialize_component()
-{
-    get<Scene_root>()->physics_world().set_debug_drawer(this);
 }
 
 void Debug_draw::post_initialize()

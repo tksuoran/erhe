@@ -6,7 +6,7 @@
 #include "erhe/application/application_log.hpp"
 #include "erhe/components/components_log.hpp"
 #include "erhe/geometry/geometry_log.hpp"
-#include "erhe/gl/gl.hpp"
+#include "erhe/gl/gl_log.hpp"
 #include "erhe/graphics/graphics_log.hpp"
 #include "erhe/physics/physics_log.hpp"
 #include "erhe/primitive/primitive_log.hpp"

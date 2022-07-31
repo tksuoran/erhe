@@ -1,8 +1,11 @@
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "erhe/application/view.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/application_log.hpp"
 #include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/render_graph.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/window.hpp"
 
@@ -45,6 +48,7 @@ View::~View() noexcept
 void View::declare_required_components()
 {
     m_imgui_windows = require<Imgui_windows>();
+    m_render_graph  = require<Render_graph >();
     m_window        = require<Window       >();
 }
 
@@ -60,8 +64,9 @@ void View::initialize_component()
 
 void View::post_initialize()
 {
-    m_configuration = get<Configuration>();
-    m_time          = get<Time         >();
+    m_configuration  = get<Configuration>();
+    m_imgui_renderer = get<Imgui_renderer>();
+    m_time           = get<Time         >();
 }
 
 void View::set_client(View_client* view_client)
@@ -208,10 +213,7 @@ void View::on_refresh()
         return;
     }
 
-    if (m_view_client != nullptr)
-    {
-        m_view_client->render();
-    }
+    // TODO execute render graph?
     m_window->get_context_window()->swap_buffers();
 }
 
@@ -264,17 +266,6 @@ void View::update()
     if (m_view_client != nullptr)
     {
         m_view_client->update();
-        m_view_client->render();
-
-        if (get<Configuration>()->imgui.enabled)
-        {
-            m_view_client->bind_default_framebuffer();
-            m_view_client->clear();
-            //m_imgui_windows->make_imgui_context_current();
-            m_imgui_windows->imgui_windows();
-            m_imgui_windows->render_imgui_frame();
-            //m_imgui_windows->make_imgui_context_uncurrent();
-        }
     }
 
     if (m_configuration->window.show)
@@ -292,6 +283,11 @@ void View::update()
     m_ready = true;
 }
 
+[[nodiscard]] auto View::view_client() const -> View_client*
+{
+    return m_view_client;
+}
+
 [[nodiscard]] auto View::mouse_input_sink() const -> Imgui_window*
 {
     return m_mouse_input_sink;
@@ -299,10 +295,6 @@ void View::update()
 
 void View::on_enter()
 {
-    if (m_view_client != nullptr)
-    {
-        m_view_client->initial_state();
-    }
     m_time->start_time();
 }
 
@@ -618,6 +610,8 @@ void View::on_mouse_wheel(const double x, const double y)
 void View::on_mouse_move(const double x, const double y)
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    m_imgui_windows->on_mouse_move(x, y);
 
     const bool imgui_capture_mouse  = get_imgui_capture_mouse();
     const bool has_mouse_input_sink = (m_mouse_input_sink != nullptr);

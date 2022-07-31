@@ -132,8 +132,6 @@ void Forward_renderer::render(const Render_parameters& parameters)
         *m_programs->nearest_sampler.get()
     );
 
-    erhe::graphics::Scoped_debug_group forward_renderer_render{c_forward_renderer_render};
-
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     if (camera != nullptr)
     {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "renderers/multi_buffer.hpp"
+#include "erhe/application/renderers/multi_buffer.hpp"
 
 #include "erhe/graphics/shader_resource.hpp"
 
@@ -79,7 +79,7 @@ public:
 };
 
 class Primitive_buffer
-    : public Multi_buffer
+    : public erhe::application::Multi_buffer
 {
 public:
     explicit Primitive_buffer(const Primitive_interface& primitive_interface);

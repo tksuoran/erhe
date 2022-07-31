@@ -52,7 +52,7 @@ public:
 class Scene
 {
 public:
-    Scene();
+    Scene(void* host = nullptr);
 
     void sanity_check          () const;
     void sort_transform_nodes  ();
@@ -108,6 +108,7 @@ public:
         const std::shared_ptr<erhe::scene::Camera>& camera
     );
 
+    void*                                     host{nullptr};
     std::shared_ptr<erhe::scene::Node>        root_node;
     std::vector<std::shared_ptr<Node>>        flat_node_vector;
     std::vector<std::shared_ptr<Mesh_layer>>  mesh_layers;

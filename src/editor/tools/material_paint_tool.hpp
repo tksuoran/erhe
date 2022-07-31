@@ -29,9 +29,10 @@ namespace erhe::primitive
 namespace editor
 {
 
+class Editor_scenes;
 class Material_paint_tool;
-class Pointer_context;
 class Scene_root;
+class Viewport_windows;
 
 class Material_paint_command
     : public erhe::application::Command
@@ -105,8 +106,8 @@ private:
     Material_pick_command  m_pick_command;
 
     // Component dependencies
-    std::shared_ptr<Pointer_context> m_pointer_context;
-    std::shared_ptr<Scene_root>      m_scene_root;
+    std::shared_ptr<Editor_scenes>    m_editor_scenes;
+    std::shared_ptr<Viewport_windows> m_viewport_windows;
 
     static const int c_command_paint{0};
     static const int c_command_pick {1};

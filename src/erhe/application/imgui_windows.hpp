@@ -8,14 +8,14 @@ namespace erhe::application
 class Imgui_renderer;
 class Imgui_viewport;
 class Imgui_window;
+class Imgui_windows;
+class Render_graph;
 class View;
 class Window_imgui_viewport;
 
 /// Maintains set of imgui windows and set of imgui viewports
 ///
 /// Each Imgui_window is shown in exactly one Imgui_viewport.
-/// Currently only one Window_imgui_viewport is used.
-/// Functional rendertarget imgui viewports are in TODO list.
 class Imgui_windows
     : public erhe::components::Component
 {
@@ -40,30 +40,36 @@ public:
     void post_initialize            () override;
 
     // Public API
-    void register_imgui_window(Imgui_window* window);
-    void imgui_windows        ();
-    void render_imgui_frame   ();
-    void window_menu          ();
+    [[nodiscard]] auto get_mutex          () -> std::mutex&;
+    [[nodiscard]] auto get_window_viewport() -> std::shared_ptr<Window_imgui_viewport>;
+    void register_imgui_viewport(const std::shared_ptr<Imgui_viewport>& viewport);
+    void register_imgui_window  (Imgui_window* window);
+    void make_current           (const Imgui_viewport* imgui_viewport);
+    void imgui_windows          ();
+    void window_menu            ();
 
     // NOTE: Same interface as Imgui_viewport
     [[nodiscard]] auto want_capture_mouse() const -> bool;
 
-    void on_key         (const signed int keycode, const uint32_t modifier_mask, const bool pressed);
-    void on_char        (const unsigned int codepoint);
+    void on_key         (signed int keycode, uint32_t modifier_mask, bool pressed);
+    void on_char        (unsigned int codepoint);
     void on_focus       (int focused);
     void on_cursor_enter(int entered);
-    void on_mouse_click (const uint32_t button, const int count);
-    void on_mouse_wheel (const double x, const double y);
+    void on_mouse_move  (double x, double y);
+    void on_mouse_click (uint32_t button, int count);
+    void on_mouse_wheel (double x, double y);
 
 private:
     // Component dependencies
     std::shared_ptr<View>                        m_view;
     std::shared_ptr<Imgui_renderer>              m_imgui_renderer;
+    std::shared_ptr<Render_graph>                m_render_graph;
 
     std::mutex                                   m_mutex;
     std::vector<std::shared_ptr<Imgui_viewport>> m_imgui_viewports;
     std::vector<Imgui_window*>                   m_imgui_windows;
-    Imgui_viewport*                              m_current_viewport{nullptr};
+    const Imgui_viewport*                        m_current_viewport{nullptr}; // current context
+
     std::shared_ptr<Window_imgui_viewport>       m_window_imgui_viewport;
     bool                                         m_show_style_editor{false};
 };

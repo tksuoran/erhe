@@ -1,3 +1,5 @@
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "erhe/graphics/texture.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
@@ -248,7 +250,12 @@ auto Texture::mipmap_dimensions(const gl::Texture_target target) -> int
 
 Texture::~Texture() noexcept
 {
-    log_texture->trace("Deleting texture {} {}", gl_name(), m_debug_label);
+    SPDLOG_LOGGER_TRACE(
+        log_texture,
+        "Deleting texture {} {}",
+        gl_name(),
+        m_debug_label
+    );
 }
 
 Texture::Texture(Texture&& other) noexcept
@@ -398,7 +405,14 @@ Texture::Texture(const Create_info& create_info)
     , m_depth                 {create_info.depth}
     , m_buffer                {create_info.buffer}
 {
-    log_texture->trace("Created texture {} {}x{} {}", gl_name(), m_width, m_height, gl::c_str(m_internal_format));
+    SPDLOG_LOGGER_TRACE(
+        log_texture,
+        "Created texture {} {}x{} {}",
+        gl_name(),
+        m_width,
+        m_height,
+        gl::c_str(m_internal_format)
+    );
 
     const auto dimensions = storage_dimensions(m_target);
 
@@ -709,7 +723,13 @@ void Texture::upload_subimage(
 
 void Texture::set_debug_label(const std::string& value)
 {
-    log_texture->trace("Texture {} name set to {}", gl_name(), value);
+    SPDLOG_LOGGER_TRACE(
+        log_texture,
+        "Texture {} name set to {}",
+        gl_name(),
+        value
+    );
+
     m_debug_label = "(T) " + value;
     gl::object_label(
         gl::Object_identifier::texture,
@@ -906,7 +926,7 @@ auto Texture_unit_cache::bind(uint64_t fallback_handle) -> size_t
                     m_base_texture_unit + i,
                     texture_name
                 );
-                gl::bind_texture_unit(i, erhe::graphics::get_texture_from_handle(fallback_handle));
+                gl::bind_texture_unit(m_base_texture_unit + i, erhe::graphics::get_texture_from_handle(fallback_handle));
             }
 
             if (
@@ -914,7 +934,7 @@ auto Texture_unit_cache::bind(uint64_t fallback_handle) -> size_t
                 (gl::is_sampler(sampler_name) == GL_TRUE)
             )
             {
-                gl::bind_sampler(i, sampler_name);
+                gl::bind_sampler(m_base_texture_unit + i, sampler_name);
                 SPDLOG_LOGGER_TRACE(
                     log_texture,
                     "texture unit {} + {} = {}: bound sampler {}",
@@ -926,7 +946,7 @@ auto Texture_unit_cache::bind(uint64_t fallback_handle) -> size_t
             }
             else
             {
-                gl::bind_sampler(i, erhe::graphics::get_sampler_from_handle(fallback_handle));
+                gl::bind_sampler(m_base_texture_unit + i, erhe::graphics::get_sampler_from_handle(fallback_handle));
                 log_texture->warn(
                     "texture unit {} + {} = {}: {} is not a sampler",
                     m_base_texture_unit,

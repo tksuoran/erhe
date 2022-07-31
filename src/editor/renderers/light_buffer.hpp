@@ -1,6 +1,6 @@
 #pragma once
 
-#include "renderers/multi_buffer.hpp"
+#include "erhe/application/renderers/multi_buffer.hpp"
 
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/scene/camera.hpp"
@@ -102,8 +102,8 @@ public:
 private:
     const Light_interface& m_light_interface;
 
-    Multi_buffer           m_light_buffer;
-    Multi_buffer           m_control_buffer;
+    erhe::application::Multi_buffer m_light_buffer;
+    erhe::application::Multi_buffer m_control_buffer;
 };
 
 } // namespace editor

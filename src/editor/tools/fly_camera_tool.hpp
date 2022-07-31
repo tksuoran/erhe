@@ -21,12 +21,13 @@ namespace erhe::scene
 namespace editor
 {
 
+class Editor_scenes;
 class Fly_camera_tool;
-class Pointer_context;
 class Scene_root;
 class Tools;
 class Trs_tool;
-
+class Viewport_window;
+class Viewport_windows;
 
 #if defined(_WIN32) && 0
 class Fly_camera_space_mouse_listener
@@ -135,7 +136,7 @@ public:
     void rotation   (const int rx, const int ry, const int rz);
 
     // Commands
-    auto try_ready() -> bool;
+    auto try_ready(Viewport_window& viewport_window) -> bool;
     auto try_move(
         const Control                            control,
         const erhe::application::Controller_item item,
@@ -145,7 +146,7 @@ public:
 
 private:
     void update_camera   ();
-    auto can_use_keyboard() const -> bool;
+    //auto can_use_keyboard() const -> bool;
 
     Fly_camera_turn_command           m_turn_command;
     Fly_camera_move_command           m_move_up_active_command;
@@ -165,12 +166,13 @@ private:
     float                             m_rotate_scale_y{1.0f};
 
     // Component dependencies
-    std::shared_ptr<Tools>           m_editor_tools;
-    std::shared_ptr<Pointer_context> m_pointer_context;
-    std::shared_ptr<Scene_root>      m_scene_root;
-    std::shared_ptr<Trs_tool>        m_trs_tool;
+    std::shared_ptr<Tools>             m_editor_tools;
+    std::shared_ptr<Editor_scenes>     m_editor_scenes;
+    std::shared_ptr<Scene_root>        m_scene_root;
+    std::shared_ptr<Trs_tool>          m_trs_tool;
+    std::shared_ptr<Viewport_windows>  m_viewport_windows;
 
-    std::mutex                       m_mutex;
+    std::mutex                         m_mutex;
 
 #if defined(_WIN32) && 0
     Fly_camera_space_mouse_listener       m_space_mouse_listener;

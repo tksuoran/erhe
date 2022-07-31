@@ -9,7 +9,7 @@
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/property_map.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
-#include "erhe/gl/gl.hpp"
+#include "erhe/gl/gl_helpers.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
@@ -45,7 +45,7 @@ using Polygon           = erhe::geometry::Polygon;
 using Edge              = erhe::geometry::Edge;
 using Mesh_info         = erhe::geometry::Mesh_info;
 using erhe::graphics::Vertex_attribute;
-using gl::size_of_type;
+using gl_helpers::size_of_type;
 
 using glm::vec2;
 using glm::vec3;
@@ -86,8 +86,8 @@ void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 
     if (features.position)
     {
-        vf->add(
-            {
+        vf->add_attribute(
+            erhe::graphics::Vertex_attribute{
                 .usage       = { Vertex_attribute::Usage_type::position },
                 .shader_type = gl::Attribute_type::float_vec3,
                 .data_type   = {
@@ -100,8 +100,8 @@ void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 
     if (features.normal)
     {
-        vf->add(
-            {
+        vf->add_attribute(
+            erhe::graphics::Vertex_attribute{
                 .usage = {
                     .type      = Vertex_attribute::Usage_type::normal
                 },
@@ -116,8 +116,8 @@ void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 
     if (features.normal_flat)
     {
-        vf->add(
-            {
+        vf->add_attribute(
+            erhe::graphics::Vertex_attribute{
                 .usage = {
                     .type      = Vertex_attribute::Usage_type::normal,
                     .index     = 1
@@ -133,8 +133,8 @@ void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 
     if (features.normal_smooth)
     {
-        vf->add(
-            {
+        vf->add_attribute(
+            erhe::graphics::Vertex_attribute{
                 .usage = {
                     .type      = Vertex_attribute::Usage_type::normal,
                     .index     = 2
@@ -150,8 +150,8 @@ void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 
     if (features.tangent)
     {
-        vf->add(
-            {
+        vf->add_attribute(
+            erhe::graphics::Vertex_attribute{
                 .usage = {
                     .type      = Vertex_attribute::Usage_type::tangent
                 },
@@ -166,8 +166,8 @@ void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 
     if (features.bitangent)
     {
-        vf->add(
-            {
+        vf->add_attribute(
+            erhe::graphics::Vertex_attribute{
                 .usage = {
                     .type      = Vertex_attribute::Usage_type::bitangent
                 },
@@ -182,8 +182,8 @@ void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 
     if (features.color)
     {
-        vf->add(
-            {
+        vf->add_attribute(
+            erhe::graphics::Vertex_attribute{
                 .usage = {
                     .type      = Vertex_attribute::Usage_type::color
                 },
@@ -198,8 +198,8 @@ void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 
     if (features.id)
     {
-        vf->add(
-            {
+        vf->add_attribute(
+            erhe::graphics::Vertex_attribute{
                 .usage = {
                     .type      = Vertex_attribute::Usage_type::id
                 },
@@ -213,8 +213,8 @@ void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 
         if (erhe::graphics::Instance::info.use_integer_polygon_ids)
         {
-            vf->add(
-                {
+            vf->add_attribute(
+                erhe::graphics::Vertex_attribute{
                     .usage = {
                         .type      = Vertex_attribute::Usage_type::id
                     },
@@ -230,8 +230,8 @@ void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 
     if (features.texcoord)
     {
-        vf->add(
-            {
+        vf->add_attribute(
+            erhe::graphics::Vertex_attribute{
                 .usage = {
                     .type      = Vertex_attribute::Usage_type::tex_coord
                 },
@@ -366,8 +366,8 @@ void Build_context_root::allocate_index_buffer()
 
     Expects(total_index_count > 0);
 
-    const gl::Draw_elements_type index_type = build_info.buffer.index_type;
-    const std::size_t index_type_size{size_of_type(index_type)};
+    const gl::Draw_elements_type index_type     {build_info.buffer.index_type};
+    const std::size_t            index_type_size{size_of_type(index_type)};
 
     log_primitive_builder->trace(
         "allocating index buffer "

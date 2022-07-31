@@ -3,7 +3,7 @@
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/dynamic_load.hpp"
-#include "erhe/gl/gl.hpp"
+#include "erhe/gl/gl_log.hpp"
 
 #include <spdlog/spdlog.h>
 
@@ -13,7 +13,6 @@
 namespace gl {{
 
 extern void check_error();
-extern std::shared_ptr<spdlog::logger> log_gl;
 
 auto glbitfield(const ::GLbitfield value) -> ::GLbitfield
 {{

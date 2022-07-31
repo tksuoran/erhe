@@ -1,4 +1,6 @@
-﻿#include "erhe/application/window_imgui_viewport.hpp"
+﻿// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
+#include "erhe/application/window_imgui_viewport.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui_helpers.hpp"
@@ -7,13 +9,15 @@
 #include "erhe/application/view.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/window.hpp"
-
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/renderers/imgui_renderer.hpp"
+#include "erhe/application/scoped_imgui_context.hpp"
 #include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/application/windows/pipelines.hpp"
+#include "erhe/components/components.hpp"
 
 #include "erhe/geometry/shapes/regular_polygon.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
@@ -25,6 +29,9 @@
 
 #include <gsl/gsl>
 
+#include <imgui.h>
+#include <imgui_internal.h>
+
 namespace erhe::application
 {
 
@@ -32,16 +39,18 @@ using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
 Window_imgui_viewport::Window_imgui_viewport(
-    const std::shared_ptr<Imgui_renderer>& imgui_renderer
+    const std::string_view        name,
+    erhe::components::Components& components
 )
-    : m_imgui_renderer{imgui_renderer}
+    : Imgui_viewport{
+        name,
+        components.get<Imgui_renderer>()->get_font_atlas()
+    }
+    , m_imgui_renderer{components.get<Imgui_renderer>()}
 {
-    auto* font_atlas = m_imgui_renderer->get_font_atlas();
-    m_imgui_context = ImGui::CreateContext(font_atlas);
-
     m_imgui_renderer->use_as_backend_renderer_on_context(m_imgui_context);
 
-    ImGuiIO& io     = ImGui::GetIO(m_imgui_context);
+    ImGuiIO& io     = m_imgui_context->IO;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
@@ -65,17 +74,15 @@ Window_imgui_viewport::Window_imgui_viewport(
 }
 
 void Window_imgui_viewport::post_initialize(
-    Imgui_windows*                 imgui_windows,
-    const std::shared_ptr<View  >& view,
-    const std::shared_ptr<Window>& window
+    erhe::components::Components& components
 )
 {
-    m_imgui_windows = imgui_windows;
-    m_view          = view;
-    m_window        = window;
+    m_imgui_windows = components.get<Imgui_windows>().get();
+    m_view          = components.get<View         >();
+    m_window        = components.get<Window       >();
 }
 
-void Window_imgui_viewport::begin_imgui_frame()
+auto Window_imgui_viewport::begin_imgui_frame() -> bool
 {
     SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_viewport::begin_imgui_frame()");
 
@@ -84,10 +91,22 @@ void Window_imgui_viewport::begin_imgui_frame()
     const auto& context_window = m_window->get_context_window();
     auto*       glfw_window    = context_window->get_glfw_window();
 
-    const auto w = m_view->width();
-    const auto h = m_view->height();
+    const auto w         = m_view->width();
+    const auto h         = m_view->height();
+    const bool visible   = glfwGetWindowAttrib(glfw_window, GLFW_VISIBLE  ) == GLFW_TRUE;
+    const bool iconified = glfwGetWindowAttrib(glfw_window, GLFW_ICONIFIED) == GLFW_TRUE;
 
-    ImGuiIO& io = ImGui::GetIO(m_imgui_context);
+    if (
+        (w < 1) ||
+        (h < 1) ||
+        !visible ||
+        iconified
+    )
+    {
+        return false;
+    }
+
+    ImGuiIO& io = m_imgui_context->IO;
     io.DisplaySize = ImVec2{
         static_cast<float>(w),
         static_cast<float>(h)
@@ -102,15 +121,6 @@ void Window_imgui_viewport::begin_imgui_frame()
 
     // ImGui_ImplGlfw_UpdateMousePosAndButtons();
     io.MousePos = ImVec2{-FLT_MAX, -FLT_MAX};
-    for (int i = 0; i < IM_ARRAYSIZE(io.MouseDown); i++)
-    {
-        io.MouseDown[i] = m_mouse_just_pressed[i] || glfwGetMouseButton(glfw_window, i) != 0;
-        m_mouse_just_pressed[i] = false;
-        ///// for (const auto& rendertarget : m_rendertarget_imgui_windows)
-        ///// {
-        /////     rendertarget->mouse_button(i, io.MouseDown[i]);
-        ///// }
-    }
     if (m_has_cursor)
     {
         double mouse_x;
@@ -131,19 +141,34 @@ void Window_imgui_viewport::begin_imgui_frame()
     ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
     menu();
+
+    return true;
 }
 
 void Window_imgui_viewport::end_imgui_frame()
 {
+    SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_viewport::end_imgui_frame()");
+    ImGui::EndFrame();
+    ImGui::Render();
 }
 
-void Window_imgui_viewport::render_imgui_frame()
+void Window_imgui_viewport::execute_render_graph_node()
 {
-    ERHE_PROFILE_FUNCTION
+    Scoped_imgui_context imgui_context{*m_imgui_windows, *this};
 
-    SPDLOG_LOGGER_TRACE(log_frame, "ImGui::Render()");
-    ImGui::Render();
+    const auto& context_window = m_window->get_context_window();
+    context_window->make_current();
+    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+    gl::viewport        (0, 0, context_window->get_width(), context_window->get_height());
 
+    //// TODO Is this still necessary?
+    ////
+    //// Pipeline state required for NVIDIA driver not to complain about texture
+    //// unit state when doing the clear.
+    //m_pipeline_state_tracker->shader_stages.reset();
+    //m_pipeline_state_tracker->color_blend.execute(Color_blend_state::color_blend_disabled);
+    gl::clear_color  (0.0f, 0.0f, 0.2f, 0.1f);
+    gl::clear        (gl::Clear_buffer_mask::color_buffer_bit);
     m_imgui_renderer->render_draw_data();
 }
 

@@ -1,5 +1,5 @@
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/gl/gl.hpp"
+#include "erhe/gl/gl_helpers.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <gsl/assert>
@@ -10,55 +10,40 @@
 namespace erhe::graphics
 {
 
-void Vertex_format::clear()
+Vertex_format::Vertex_format()
 {
-    m_attributes.clear();
-    m_stride = 0;
 }
 
-void Vertex_format::add(
+Vertex_format::Vertex_format(std::initializer_list<Vertex_attribute> attributes)
+{
+    for (auto& attribute : attributes)
+    {
+        add_attribute(attribute);
+    }
+}
+
+void Vertex_format::align_to(const std::size_t alignment)
+{
+    while ((m_stride % alignment) != 0)
+    {
+        ++m_stride;
+    }
+}
+
+void Vertex_format::add_attribute(
     const Vertex_attribute& attribute
 )
 {
-    Expects(
+    ERHE_VERIFY(
         (attribute.data_type.dimension >= 1) &&
         (attribute.data_type.dimension <= 4)
     );
 
-    const std::size_t stride = attribute.data_type.dimension * gl::size_of_type(attribute.data_type.type);
-
-    // Align attributes to their type
-    switch (stride)
-    {
-        case 1:
-        {
-            break;
-        }
-
-        case 2:
-        {
-            while ((m_stride & 1) != 0)
-            {
-                ++m_stride;
-            }
-            break;
-        }
-
-        default:
-        case 4:
-        {
-            while ((m_stride & 3) != 0)
-            {
-                ++m_stride;
-            }
-            break;
-        }
-    }
-
+    const std::size_t attribute_stride = attribute.data_type.dimension * gl_helpers::size_of_type(attribute.data_type.type);
+    align_to(attribute_stride);
     auto& new_attribute = m_attributes.emplace_back(attribute);
     new_attribute.offset = m_stride;
-    assert(stride == m_attributes.back().stride());
-    m_stride += stride;
+    m_stride += attribute_stride;
 }
 
 auto Vertex_format::match(const Vertex_format& other) const -> bool

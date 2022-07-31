@@ -6,8 +6,6 @@
 
 #include "erhe/application/commands/command.hpp"
 #include "erhe/components/components.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/primitive/buffer_info.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/primitive/enums.hpp"
 #include "erhe/primitive/format_info.hpp"
@@ -64,14 +62,13 @@ namespace erhe::physics
 namespace editor
 {
 
-class Debug_draw;
-class Mesh_memory;
+class Material_library;
 class Node_physics;
 class Node_raytrace;
 class Raytrace_primitive;
+class Rendertarget_node;
 class Scene_root;
-class Brush;
-
+class Viewport_window;
 
 class Instance
 {
@@ -88,110 +85,53 @@ public:
     std::shared_ptr<Node_raytrace>     node_raytrace;
 };
 
-class Create_new_camera_command
-    : public erhe::application::Command
+class Scene_layers
 {
 public:
-    explicit Create_new_camera_command(Scene_root& scene_root)
-        : Command{"Scene_root.create_new_camera"}
-        , m_scene_root{scene_root}
-    {
-    }
+    Scene_layers(erhe::scene::Scene& scene);
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
-
-private:
-    Scene_root& m_scene_root;
-};
-
-class Create_new_empty_node_command
-    : public erhe::application::Command
-{
-public:
-    explicit Create_new_empty_node_command(Scene_root& scene_root)
-        : Command       {"Editor_tools.create_new_empty_node"}
-        , m_scene_root{scene_root}
-    {
-    }
-
-    auto try_call(erhe::application::Command_context& context) -> bool override;
+    [[nodiscard]] auto brush       () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto content     () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto controller  () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto tool        () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto rendertarget() const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto light       () const -> erhe::scene::Light_layer*;
 
 private:
-    Scene_root& m_scene_root;
-};
-
-class Create_new_light_command
-    : public erhe::application::Command
-{
-public:
-    explicit Create_new_light_command(Scene_root& scene_root)
-        : Command     {"Editor_tools.create_new_light"}
-        , m_scene_root{scene_root}
-    {
-    }
-
-    auto try_call(erhe::application::Command_context& context) -> bool override;
-
-private:
-    Scene_root& m_scene_root;
+    std::shared_ptr<erhe::scene::Mesh_layer>  m_content;
+    std::shared_ptr<erhe::scene::Mesh_layer>  m_controller;
+    std::shared_ptr<erhe::scene::Mesh_layer>  m_tool;
+    std::shared_ptr<erhe::scene::Mesh_layer>  m_brush;
+    std::shared_ptr<erhe::scene::Mesh_layer>  m_rendertarget;
+    std::shared_ptr<erhe::scene::Light_layer> m_light;
 };
 
 class Scene_root
-    : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_label{"Scene_root"};
-    static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
-
-    Scene_root ();
-    ~Scene_root() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
+    explicit Scene_root(const std::string_view& name);
+    ~Scene_root() noexcept;
 
     // Public API
     auto create_new_camera    () -> std::shared_ptr<erhe::scene::Camera>;
     auto create_new_empty_node() -> std::shared_ptr<erhe::scene::Node>;
     auto create_new_light     () -> std::shared_ptr<erhe::scene::Light>;
 
-    void attach_to_selection(const std::shared_ptr<erhe::scene::Node>& node);
-
-    template <typename ...Args>
-    auto make_material(
-        const std::string_view name,
-        Args&& ...args
-    ) -> std::shared_ptr<erhe::primitive::Material>
-    {
-        auto material = std::make_shared<erhe::primitive::Material>(
-            name,
-            std::forward<Args>(args)...
-        );
-        const std::lock_guard<std::mutex> lock{m_materials_mutex};
-
-        material->index = m_materials.size();
-        m_materials.push_back(material);
-        return material;
-    }
+    //void attach_to_selection(const std::shared_ptr<erhe::scene::Node>& node);
 
     void add(
         const std::shared_ptr<erhe::scene::Mesh>& mesh,
         erhe::scene::Mesh_layer*                  layer = nullptr
     );
 
-    [[nodiscard]] auto brush_layer     () const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto content_layer   () const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto controller_layer() const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto tool_layer      () const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto gui_layer       () const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto light_layer     () const -> erhe::scene::Light_layer*;
-    [[nodiscard]] auto materials       () -> std::vector<std::shared_ptr<erhe::primitive::Material>>&;
-    [[nodiscard]] auto materials       () const -> const std::vector<std::shared_ptr<erhe::primitive::Material>>&;
+    [[nodiscard]] auto material_library() const -> const std::shared_ptr<Material_library>&;
+    [[nodiscard]] auto layers          () -> Scene_layers&;
+    [[nodiscard]] auto layers          () const -> const Scene_layers&;
     [[nodiscard]] auto physics_world   () -> erhe::physics::IWorld&;
     [[nodiscard]] auto raytrace_scene  () -> erhe::raytrace::IScene&;
     [[nodiscard]] auto scene           () -> erhe::scene::Scene&;
     [[nodiscard]] auto scene           () const -> const erhe::scene::Scene&;
+    [[nodiscard]] auto name            () const -> const std::string&;
 
     void add_instance(const Instance& instance);
 
@@ -201,35 +141,30 @@ public:
         const bool            nullptr_option = false
     ) const -> bool;
 
-    auto material_combo(
-        const char*                                 label,
-        std::shared_ptr<erhe::primitive::Material>& material,
-        const bool                                  empty_option = false
-    ) const -> bool;
-
     void sort_lights();
 
+    [[nodiscard]] auto create_rendertarget_node(
+        const erhe::components::Components& components,
+        Viewport_window&                    host_viewport_window,
+        const int                           width,
+        const int                           height,
+        const double                        dots_per_meter
+    ) -> std::shared_ptr<Rendertarget_node>;
+
+    void update_pointer_for_rendertarget_nodes();
+
 private:
-    // Commands
-    Create_new_camera_command     m_create_new_camera_command;
-    Create_new_empty_node_command m_create_new_empty_node_command;
-    Create_new_light_command      m_create_new_light_command;
-
-    mutable std::mutex                                      m_materials_mutex;
-    mutable std::mutex                                      m_scene_mutex;
-    std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
-
-    std::unique_ptr<erhe::physics::IWorld>    m_physics_world;
-    std::unique_ptr<erhe::raytrace::IScene>   m_raytrace_scene;
-    std::unique_ptr<erhe::scene::Scene>       m_scene;
-    std::shared_ptr<erhe::scene::Mesh_layer>  m_content_layer;
-    std::shared_ptr<erhe::scene::Mesh_layer>  m_controller_layer;
-    std::shared_ptr<erhe::scene::Mesh_layer>  m_tool_layer;
-    std::shared_ptr<erhe::scene::Mesh_layer>  m_brush_layer;
-    std::shared_ptr<erhe::scene::Mesh_layer>  m_gui_layer;
-    std::shared_ptr<erhe::scene::Light_layer> m_light_layer;
-    std::shared_ptr<erhe::scene::Camera>      m_camera;
-    std::shared_ptr<Frame_controller>         m_camera_controls;
+    std::string                                     m_name;
+    mutable std::mutex                              m_mutex;
+    std::unique_ptr<erhe::physics::IWorld>          m_physics_world;
+    std::unique_ptr<erhe::raytrace::IScene>         m_raytrace_scene;
+    std::unique_ptr<erhe::scene::Scene>             m_scene;
+    std::shared_ptr<erhe::scene::Camera>            m_camera;
+    std::shared_ptr<Frame_controller>               m_camera_controls;
+    std::shared_ptr<Material_library>               m_material_library;
+    std::mutex                                      m_rendertarget_nodes_mutex;
+    std::vector<std::shared_ptr<Rendertarget_node>> m_rendertarget_nodes;
+    Scene_layers                                    m_layers;
 };
 
 } // namespace editor

@@ -51,8 +51,8 @@ public:
             std::size_t max_primitive_count
         );
 
-        erhe::graphics::Vertex_attribute_mappings attribute_mappings;
         erhe::graphics::Fragment_outputs          fragment_outputs;
+        erhe::graphics::Vertex_attribute_mappings attribute_mappings;
 
         Camera_interface    camera_interface;
         Light_interface     light_interface;

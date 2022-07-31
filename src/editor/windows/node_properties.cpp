@@ -1,9 +1,11 @@
 #include "windows/node_properties.hpp"
 
 #include "editor_log.hpp"
+#include "editor_scenes.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
+#include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
@@ -65,8 +67,8 @@ void Node_properties::initialize_component()
 
 void Node_properties::post_initialize()
 {
+    m_editor_scenes   = get<Editor_scenes  >();
     m_operation_stack = get<Operation_stack>();
-    m_scene_root      = get<Scene_root     >();
     m_selection_tool  = get<Selection_tool >();
 }
 
@@ -242,11 +244,13 @@ void Node_properties::light_properties(erhe::scene::Light& light) const
         ImGui::SliderFloat("Intensity", &light.intensity, 0.01f, 20000.0f, "%.3f", logarithmic);
         ImGui::ColorEdit3 ("Color",     &light.color.x,   ImGuiColorEditFlags_Float);
 
-        if (m_scene_root != nullptr)
+        auto* scene_root = reinterpret_cast<Scene_root*>(light.node_data.host);
+        if (scene_root != nullptr)
         {
+            const auto& layers = scene_root->layers();
             ImGui::ColorEdit3(
                 "Ambient",
-                &m_scene_root->light_layer()->ambient_light.x,
+                &layers.light()->ambient_light.x,
                 ImGuiColorEditFlags_Float
             );
         }
@@ -259,7 +263,9 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
 {
     ERHE_PROFILE_FUNCTION
 
-    auto& mesh_data = mesh.mesh_data;
+    auto&       mesh_data        = mesh.mesh_data;
+    auto*       scene_root       = reinterpret_cast<Scene_root*>(mesh.node_data.host);
+    const auto& material_library = scene_root->material_library();
 
     ImGui::PushID("##mesh_properties");
     if (
@@ -283,7 +289,7 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
                     )
                 )
                 {
-                    get<Scene_root>()->material_combo("Material", primitive.material);
+                    material_library->material_combo("Material", primitive.material);
                     ImGui::Text("Material Index: %zu", primitive.material->index);
                     int point_count   = geometry->get_point_count();
                     int polygon_count = geometry->get_polygon_count();
@@ -666,9 +672,6 @@ void Node_properties::transform_properties(erhe::scene::Node& node)
             m_operation_stack->push(
                 std::make_shared<Node_transform_operation>(
                     Node_transform_operation::Parameters{
-                        .layer                   = *m_scene_root->content_layer(),
-                        .scene                   = m_scene_root->scene(),
-                        .physics_world           = m_scene_root->physics_world(),
                         .node                    = node.shared_from_this(),
                         .parent_from_node_before = node_state.initial_parent_from_node_transform,
                         .parent_from_node_after  = new_parent_from_node//m_target_node->parent_from_node_transform()

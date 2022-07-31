@@ -15,7 +15,8 @@ public:
 
     Sampler(
         const gl::Texture_min_filter min_filter,
-        const gl::Texture_mag_filter mag_filter
+        const gl::Texture_mag_filter mag_filter,
+        const float                  lod_bias = 0.0f
     );
 
     Sampler(
@@ -43,7 +44,7 @@ public:
     };
     gl::Texture_compare_mode             compare_mode  {gl::Texture_compare_mode::none};
     gl::Texture_compare_func             compare_func  {gl::Texture_compare_func::lequal};
-    float                                lod_bias      {-1000.0f};
+    float                                lod_bias      {    0.0f};
     float                                max_lod       { 1000.0f};
     float                                min_lod       {-1000.0f};
     float                                max_anisotropy{1.0f};

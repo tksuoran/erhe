@@ -1,11 +1,14 @@
 #include "tools/material_paint_tool.hpp"
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
+#include "editor_scenes.hpp"
 
+#include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
-#include "tools/pointer_context.hpp"
 #include "tools/tools.hpp"
 #include "windows/operations.hpp"
+#include "windows/viewport_window.hpp"
+#include "windows/viewport_windows.hpp"
 
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/imgui_windows.hpp"
@@ -129,8 +132,8 @@ void Material_paint_tool::initialize_component()
 
 void Material_paint_tool::post_initialize()
 {
-    m_pointer_context = get<Pointer_context>();
-    m_scene_root      = get<Scene_root>();
+    m_editor_scenes    = get<Editor_scenes   >();
+    m_viewport_windows = get<Viewport_windows>();
 }
 
 auto Material_paint_tool::description() -> const char*
@@ -145,7 +148,12 @@ auto Material_paint_tool::on_paint_ready() -> bool
         return false;
     }
 
-    const auto& hover = m_pointer_context->get_hover(Pointer_context::content_slot);
+    Viewport_window* viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window == nullptr)
+    {
+        return false;
+    }
+    const Hover_entry& hover = viewport_window->get_hover(Hover_entry::content_slot);
     return hover.valid && hover.mesh;
 }
 
@@ -156,7 +164,12 @@ auto Material_paint_tool::on_pick_ready() -> bool
         return false;
     }
 
-    const auto& hover = m_pointer_context->get_hover(Pointer_context::content_slot);
+    Viewport_window* viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window == nullptr)
+    {
+        return false;
+    }
+    const Hover_entry& hover = viewport_window->get_hover(Hover_entry::content_slot);
     return hover.valid && hover.mesh;
 }
 
@@ -167,7 +180,12 @@ auto Material_paint_tool::on_paint() -> bool
         return false;
     }
 
-    const auto& hover = m_pointer_context->get_hover(Pointer_context::content_slot);
+    Viewport_window* viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window == nullptr)
+    {
+        return false;
+    }
+    const Hover_entry& hover = viewport_window->get_hover(Hover_entry::content_slot);
     if (!hover.valid || !hover.mesh)
     {
         return false;
@@ -187,7 +205,12 @@ auto Material_paint_tool::on_pick() -> bool
         return false;
     }
 
-    const auto& hover = m_pointer_context->get_hover(Pointer_context::content_slot);
+    Viewport_window* viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window == nullptr)
+    {
+        return false;
+    }
+    const Hover_entry& hover = viewport_window->get_hover(Hover_entry::content_slot);
     if (!hover.valid || !hover.mesh)
     {
         return false;
@@ -232,6 +255,18 @@ void Material_paint_tool::set_active_command(const int command)
 void Material_paint_tool::tool_properties()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
+    const auto& scene_root = m_editor_scenes->get_scene_root();
+    if (!scene_root)
+    {
+        return;
+    }
+
+    const auto& material_library = scene_root->material_library();
+    if (!material_library)
+    {
+        return;
+    }
+
     int command = m_active_command;
     ImGui::RadioButton("Paint", &command, c_command_paint); ImGui::SameLine();
     ImGui::RadioButton("Pick",  &command, c_command_pick);
@@ -240,7 +275,7 @@ void Material_paint_tool::tool_properties()
         set_active_command(command);
     }
 
-    m_scene_root->material_combo("Material", m_material);
+    material_library->material_combo("Material", m_material);
 #endif
 }
 

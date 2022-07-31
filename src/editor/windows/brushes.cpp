@@ -3,19 +3,22 @@
 
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
+#include "editor_scenes.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/insert_operation.hpp"
 #include "scene/brush.hpp"
 #include "scene/helpers.hpp"
+#include "scene/material_library.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/grid_tool.hpp"
-#include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
-#include "windows/materials.hpp"
+#include "windows/materials_window.hpp"
 #include "windows/operations.hpp"
+#include "windows/viewport_window.hpp"
+#include "windows/viewport_windows.hpp"
 
 #include "erhe/application/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
@@ -75,7 +78,7 @@ void Brush_tool_insert_command::try_ready(
 }
 
 auto Brush_tool_insert_command::try_call(
-    erhe::application::Command_context& context
+    erhe::application::Command_context& command_context
 ) -> bool
 {
     if (state() != erhe::application::State::Ready)
@@ -83,7 +86,7 @@ auto Brush_tool_insert_command::try_call(
         return false;
     }
     const bool consumed = m_brushes.try_insert();
-    set_inactive(context);
+    set_inactive(command_context);
     return consumed;
 }
 
@@ -101,7 +104,6 @@ Brushes::~Brushes() noexcept
 
 void Brushes::declare_required_components()
 {
-    m_scene_root = require<Scene_root>();
     require<erhe::application::Imgui_windows>();
     require<erhe::application::View         >();
     require<Operations                      >();
@@ -126,11 +128,12 @@ void Brushes::initialize_component()
 
 void Brushes::post_initialize()
 {
-    m_grid_tool       = get<Grid_tool>();
-    m_materials       = get<Materials>();
-    m_operation_stack = get<Operation_stack>();
-    m_pointer_context = get<Pointer_context>();
-    m_selection_tool  = get<Selection_tool>();
+    m_editor_scenes    = get<Editor_scenes   >();
+    m_grid_tool        = get<Grid_tool       >();
+    m_materials_window = get<Materials_window>();
+    m_operation_stack  = get<Operation_stack >();
+    m_selection_tool   = get<Selection_tool  >();
+    m_viewport_windows = get<Viewport_windows>();
 }
 
 auto Brushes::allocate_brush(
@@ -220,8 +223,11 @@ void Brushes::remove_brush_mesh()
 {
     if (m_brush_mesh)
     {
+        auto* scene_root = reinterpret_cast<Scene_root*>(m_brush_mesh->node_data.host);
+        ERHE_VERIFY(scene_root != nullptr);
+
         log_brush->trace("removing brush mesh");
-        m_scene_root->scene().remove(
+        scene_root->scene().remove(
             //*m_scene_root->brush_layer(),
             m_brush_mesh
         );
@@ -253,18 +259,19 @@ auto Brushes::try_insert() -> bool
 
 void Brushes::on_enable_state_changed()
 {
-    erhe::application::Command_context context{
-        *get<erhe::application::View>().get()
+    const auto& view = get<erhe::application::View>();
+    erhe::application::Command_context command_context{
+        *view.get()
     };
 
     if (is_enabled())
     {
-        m_preview_command.set_active(context);
+        m_preview_command.set_active(command_context);
         on_motion();
     }
     else
     {
-        m_preview_command.set_inactive(context);
+        m_preview_command.set_inactive(command_context);
         m_hover_content     = false;
         m_hover_tool        = false;
         m_hover_mesh    .reset();
@@ -279,8 +286,14 @@ void Brushes::on_enable_state_changed()
 
 void Brushes::on_motion()
 {
-    const auto& content = m_pointer_context->get_hover(Pointer_context::content_slot);
-    const auto& tool    = m_pointer_context->get_hover(Pointer_context::tool_slot);
+    const Viewport_window* const viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window == nullptr)
+    {
+        return;
+    }
+
+    const auto& content = viewport_window->get_hover(Hover_entry::content_slot);
+    const auto& tool    = viewport_window->get_hover(Hover_entry::tool_slot);
     m_hover_content     = content.valid;
     m_hover_tool        = tool.valid;
     m_hover_mesh        = content.mesh;
@@ -432,22 +445,22 @@ void Brushes::do_insert_operation()
         erhe::scene::Node_visibility::shadow_cast |
         erhe::scene::Node_visibility::id;
 
+    auto* scene_root = reinterpret_cast<Scene_root*>(m_hover_mesh->node_data.host);
+    ERHE_VERIFY(scene_root != nullptr);
+
     const Instance_create_info brush_instance_create_info
     {
         .node_visibility_flags = visibility_flags,
-        .physics_world         = m_scene_root->physics_world(),
+        .scene_root            = scene_root,
         .world_from_node       = m_hover_mesh->world_from_node() * hover_from_brush,
-        .material              = m_materials->selected_material(),
+        .material              = m_materials_window->selected_material(),
         .scale                 = m_transform_scale
     };
     const auto instance = m_brush->make_instance(brush_instance_create_info);
 
     auto op = std::make_shared<Mesh_insert_remove_operation>(
         Mesh_insert_remove_operation::Parameters{
-            .scene          = m_scene_root->scene(),
-            .layer          = *m_scene_root->content_layer(),
-            .physics_world  = m_scene_root->physics_world(),
-            .raytrace_scene = m_scene_root->raytrace_scene(),
+            .scene_root     = scene_root,
             .mesh           = instance.mesh,
             .node_physics   = instance.node_physics,
             .node_raytrace  = instance.node_raytrace,
@@ -462,16 +475,29 @@ void Brushes::add_brush_mesh()
 {
     if (
         (m_brush == nullptr) ||
-        !m_hover_position.has_value()
+        !m_hover_position.has_value() ||
+        !m_hover_mesh
     )
     {
         return;
     }
 
-    const auto material = m_materials->selected_material();
+    auto  material_library = m_materials_window->selected_material_library();
+    auto  material         = m_materials_window->selected_material();
+    auto* scene_root       = reinterpret_cast<Scene_root*>(m_hover_mesh->node_data.host);
+    ERHE_VERIFY(scene_root != nullptr);
+
+    if (material_library != scene_root->material_library())
+    {
+        log_brush->warn("Selected material library mismatch");
+        material_library = scene_root->material_library();
+        material = material_library->materials().front();
+    }
+
     if (!material)
     {
-        return;
+        log_brush->warn("No material selected");
+        material = material_library->materials().front();
     }
 
     const auto& brush_scaled = m_brush->get_scaled(m_transform_scale);
@@ -492,7 +518,8 @@ void Brushes::add_brush_mesh()
         Node_visibility::content |
         Node_visibility::brush
     );
-    m_scene_root->add(m_brush_mesh, m_scene_root->brush_layer());
+
+    scene_root->add(m_brush_mesh, scene_root->layers().brush());
 
     update_mesh_node_transform();
 }

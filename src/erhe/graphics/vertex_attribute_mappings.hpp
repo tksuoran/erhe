@@ -20,9 +20,8 @@ class Vertex_format;
 class Vertex_attribute_mappings final
 {
 public:
-    void add(
-        const Vertex_attribute_mapping& attribute
-    );
+    Vertex_attribute_mappings();
+    explicit Vertex_attribute_mappings(std::initializer_list<Vertex_attribute_mapping>);
 
     void collect_attributes(
         std::vector<Vertex_input_attribute>& attributes,

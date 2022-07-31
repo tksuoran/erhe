@@ -20,6 +20,7 @@ namespace erhe::scene
 namespace erhe::physics
 {
     class IConstraint;
+    class IWorld;
 }
 
 namespace erhe::application
@@ -30,11 +31,12 @@ namespace erhe::application
 namespace editor
 {
 
+class Editor_scenes;
 class Fly_camera_tool;
 class Node_physics;
 class Physics_tool;
-class Pointer_context;
 class Scene_root;
+class Viewport_windows;
 
 class Physics_tool_drag_command
     : public erhe::application::Command
@@ -117,15 +119,17 @@ public:
     auto on_force      () -> bool;
 
 private:
+    [[nodiscard]] auto physics_world() const -> erhe::physics::IWorld*;
+
     // Commands
     Physics_tool_drag_command  m_drag_command;
     Physics_tool_force_command m_force_command;
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Pointer_context>            m_pointer_context;
-    std::shared_ptr<Scene_root>                 m_scene_root;
-    std::shared_ptr<Fly_camera_tool>            m_fly_camera;
+    std::shared_ptr<Editor_scenes>                        m_editor_scenes;
+    std::shared_ptr<Fly_camera_tool>                      m_fly_camera;
+    std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
     static const int c_command_drag {0};
     static const int c_command_force{1};
@@ -140,20 +144,18 @@ private:
     glm::vec3                                   m_target_position_end    {0.0f, 0.0f, 0.0f};
     std::unique_ptr<erhe::physics::IConstraint> m_target_constraint;
 
-    float    m_force_distance          {1.000f};
-    float    m_tau                     {0.001f};
-    float    m_damping                 {1.00f};
-    float    m_impulse_clamp           {1.00f};
-    float    m_linear_damping          {0.99f};
-    float    m_angular_damping         {0.99f};
-    float    m_original_linear_damping {0.00f};
-    float    m_original_angular_damping{0.00f};
-    uint64_t m_last_update_frame_number{0};
+    float m_force_distance          {1.000f};
+    float m_tau                     {0.001f};
+    float m_damping                 {1.00f};
+    float m_impulse_clamp           {1.00f};
+    float m_linear_damping          {0.99f};
+    float m_angular_damping         {0.99f};
+    float m_original_linear_damping {0.00f};
+    float m_original_angular_damping{0.00f};
 
     glm::vec3 m_to_end_direction  {0.0f};
     glm::vec3 m_to_start_direction{0.0f};
     float     m_target_mesh_size  {0.0f};
-
 };
 
 } // namespace editor

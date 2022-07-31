@@ -57,8 +57,6 @@ erhe_target_sources_grouped(
     renderers/material_buffer.hpp
     renderers/mesh_memory.cpp
     renderers/mesh_memory.hpp
-    renderers/multi_buffer.cpp
-    renderers/multi_buffer.hpp
     renderers/post_processing.cpp
     renderers/post_processing.hpp
     renderers/primitive_buffer.cpp
@@ -78,12 +76,16 @@ erhe_target_sources_grouped(
     scene/frame_controller.hpp
     scene/helpers.cpp
     scene/helpers.hpp
+    scene/material_library.cpp
+    scene/material_library.hpp
     scene/node_physics.cpp
     scene/node_physics.hpp
     scene/node_raytrace.cpp
     scene/node_raytrace.hpp
     scene/scene_builder.cpp
     scene/scene_builder.hpp
+    scene/scene_commands.cpp
+    scene/scene_commands.hpp
     scene/scene_root.cpp
     scene/scene_root.hpp
 
@@ -97,8 +99,6 @@ erhe_target_sources_grouped(
     tools/hover_tool.hpp
     tools/material_paint_tool.cpp
     tools/material_paint_tool.hpp
-    tools/pointer_context.cpp
-    tools/pointer_context.hpp
     tools/physics_tool.cpp
     tools/physics_tool.hpp
     tools/selection_tool.cpp
@@ -116,8 +116,8 @@ erhe_target_sources_grouped(
     windows/debug_view_window.hpp
     windows/layers_window.cpp
     windows/layers_window.hpp
-    windows/materials.cpp
-    windows/materials.hpp
+    windows/materials_window.cpp
+    windows/materials_window.hpp
     windows/material_properties.cpp
     windows/material_properties.hpp
     windows/mesh_properties.cpp
@@ -130,25 +130,33 @@ erhe_target_sources_grouped(
     windows/operations.hpp
     windows/physics_window.cpp
     windows/physics_window.hpp
+    windows/render_graph_window.cpp
+    windows/render_graph_window.hpp
     windows/tool_properties_window.cpp
     windows/tool_properties_window.hpp
     windows/viewport_config.cpp
     windows/viewport_config.hpp
     windows/viewport_window.cpp
     windows/viewport_window.hpp
+    windows/viewport_windows.cpp
+    windows/viewport_windows.hpp
 
-    editor_rendering.cpp
-    editor_rendering.hpp
     editor_log.cpp
     editor_log.hpp
+    editor_on_load.cpp
+    editor_rendering.cpp
+    editor_rendering.hpp
+    editor_scenes.cpp
+    editor_scenes.hpp
+    editor_view_client.cpp
+    editor_view_client.hpp
     main.cpp
-    on_load.cpp
+    rendertarget_node.cpp
+    rendertarget_node.hpp
     rendertarget_imgui_viewport.cpp
     rendertarget_imgui_viewport.hpp
     task_queue.cpp
     task_queue.hpp
-    view_client.cpp
-    view_client.hpp
 
     res/icons/camera.svg
     res/icons/directional_light.svg

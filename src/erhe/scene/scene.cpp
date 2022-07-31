@@ -158,8 +158,9 @@ void Scene::update_node_transforms()
     }
 }
 
-Scene::Scene()
-    : root_node{std::make_shared<erhe::scene::Node>("root")}
+Scene::Scene(void* host)
+    : host  {host}
+    , root_node{std::make_shared<erhe::scene::Node>("root")}
 {
 }
 
@@ -179,7 +180,8 @@ void Scene::add_node(
 #endif
     {
         ERHE_PROFILE_SCOPE("push_back");
-
+        ERHE_VERIFY(node->node_data.host == nullptr);
+        node->node_data.host = this->host;
         flat_node_vector.push_back(node);
         nodes_sorted = false;
     }
@@ -299,6 +301,7 @@ void Scene::remove_node(
     }
     else
     {
+        node->node_data.host = nullptr;
         flat_node_vector.erase(i, flat_node_vector.end());
     }
 }

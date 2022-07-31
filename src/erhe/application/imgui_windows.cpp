@@ -2,6 +2,8 @@
 #include "erhe/application/application_log.hpp"
 #include "erhe/application/imgui_viewport.hpp"
 #include "erhe/application/renderers/imgui_renderer.hpp"
+#include "erhe/application/render_graph.hpp"
+#include "erhe/application/scoped_imgui_context.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/window.hpp"
 #include "erhe/application/window_imgui_viewport.hpp"
@@ -22,32 +24,56 @@ Imgui_windows::~Imgui_windows() noexcept
 
 void Imgui_windows::declare_required_components()
 {
-    require<Imgui_renderer>();
+    m_imgui_renderer = require<Imgui_renderer>();
+    m_render_graph   = require<Render_graph>();
 }
 
 void Imgui_windows::initialize_component()
 {
-    m_imgui_renderer = get<Imgui_renderer>();
-
     m_window_imgui_viewport = std::make_shared<Window_imgui_viewport>(
-        m_imgui_renderer
+        "window_imgui_viewport",
+        *m_components
     );
-    m_window_imgui_viewport->make_imgui_context_current();
 
-    m_imgui_viewports.emplace_back(m_window_imgui_viewport);
-
-    m_current_viewport = m_window_imgui_viewport.get();
+    register_imgui_viewport(m_window_imgui_viewport);
 }
 
 void Imgui_windows::post_initialize()
 {
     m_view = get<View>();
 
-    m_window_imgui_viewport->post_initialize(
-        this,
-        m_view,
-        get<Window>()
-    );
+    m_window_imgui_viewport->post_initialize(*m_components);
+}
+
+[[nodiscard]] auto Imgui_windows::get_mutex() -> std::mutex&
+{
+    return m_mutex;
+}
+
+[[nodiscard]] auto Imgui_windows::get_window_viewport() -> std::shared_ptr<Window_imgui_viewport>
+{
+    return m_window_imgui_viewport;
+}
+
+void Imgui_windows::register_imgui_viewport(const std::shared_ptr<Imgui_viewport>& viewport)
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    m_imgui_viewports.emplace_back(viewport);
+
+    m_render_graph->register_node(viewport);
+}
+
+void Imgui_windows::make_current(const Imgui_viewport* imgui_viewport)
+{
+    m_current_viewport = imgui_viewport;
+    if (imgui_viewport != nullptr)
+    {
+        ImGui::SetCurrentContext(imgui_viewport->imgui_context());
+    }
+    else
+    {
+        ImGui::SetCurrentContext(nullptr);
+    }
 }
 
 void Imgui_windows::register_imgui_window(Imgui_window* window)
@@ -78,11 +104,6 @@ void Imgui_windows::register_imgui_window(Imgui_window* window)
     }
 }
 
-void Imgui_windows::render_imgui_frame()
-{
-    m_window_imgui_viewport->render_imgui_frame();
-}
-
 void Imgui_windows::imgui_windows()
 {
     ERHE_PROFILE_FUNCTION
@@ -92,57 +113,65 @@ void Imgui_windows::imgui_windows()
     bool any_mouse_input_sink{false};
     for (const auto& viewport : m_imgui_viewports)
     {
-        viewport->begin_imgui_frame();
+        Scoped_imgui_context imgui_context{*this, *viewport.get()};
 
-        // TODO  menu();
-        std::size_t i = 0;
-        for (auto& imgui_window : m_imgui_windows)
+        if (viewport->begin_imgui_frame())
         {
-            if (imgui_window->get_viewport() != viewport.get())
-            {
-                continue;
-            }
-            if (imgui_window->is_visible())
-            {
-                auto imgui_id = fmt::format("##window-{}", ++i);
-                ImGui::PushID(imgui_id.c_str());
-                if (imgui_window->begin())
-                {
-                    imgui_window->imgui();
-                }
-                if (
-                    imgui_window->consumes_mouse_input() &&
-                    ImGui::IsWindowHovered()
-                )
-                {
-                    any_mouse_input_sink = true;
-                    m_view->set_mouse_input_sink(imgui_window);
-                }
-                imgui_window->end();
-                ImGui::PopID();
-            }
-        }
+            // TODO  menu();
+            //// if (viewport == *m_window_imgui_viewport.get())
+            //// {
+            ////     if (m_show_style_editor)
+            ////     {
+            ////         if (ImGui::Begin("Dear ImGui Style Editor", &m_show_style_editor))
+            ////         {
+            ////             ImGui::ShowStyleEditor();
+            ////         }
+            ////         ImGui::End();
+            ////     }
+            //// }
 
-        viewport->end_imgui_frame();
+            std::size_t i = 0;
+            for (auto& imgui_window : m_imgui_windows)
+            {
+                if (imgui_window->get_viewport() != viewport.get())
+                {
+                    continue;
+                }
+                if (imgui_window->is_visible())
+                {
+                    auto imgui_id = fmt::format("##window-{}", ++i);
+                    ImGui::PushID(imgui_id.c_str());
+                    if (imgui_window->begin())
+                    {
+                        imgui_window->imgui();
+                    }
+                    if (
+                        imgui_window->consumes_mouse_input() &&
+                        ImGui::IsWindowHovered()
+                    )
+                    {
+                        any_mouse_input_sink = true;
+                        m_view->set_mouse_input_sink(imgui_window);
+                    }
+                    imgui_window->end();
+                    ImGui::PopID();
+                }
+            }
+
+            viewport->end_imgui_frame();
+        }
     }
 
     if (!any_mouse_input_sink)
     {
         m_view->set_mouse_input_sink(nullptr);
     }
-
-    if (m_show_style_editor)
-    {
-        if (ImGui::Begin("Dear ImGui Style Editor", &m_show_style_editor))
-        {
-            ImGui::ShowStyleEditor();
-        }
-        ImGui::End();
-    }
 }
 
 void Imgui_windows::window_menu()
 {
+    ERHE_VERIFY(m_current_viewport != nullptr);
+
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
 
     if (ImGui::BeginMenu("Window"))
@@ -187,29 +216,31 @@ void Imgui_windows::window_menu()
 
 [[nodiscard]] auto Imgui_windows::want_capture_mouse() const -> bool
 {
-    if (m_current_viewport == nullptr)
-    {
-        return false;
-    }
-    return m_current_viewport->want_capture_mouse();
+    return m_window_imgui_viewport->want_capture_mouse();
 }
 
 void Imgui_windows::on_focus(int focused)
 {
-    if (m_current_viewport == nullptr)
-    {
-        return;
-    }
-    m_current_viewport->on_focus(focused);
+    Scoped_imgui_context scoped_imgui_context{*this, *m_window_imgui_viewport.get()};
+
+    m_window_imgui_viewport->on_focus(focused);
 }
 
 void Imgui_windows::on_cursor_enter(int entered)
 {
-    if (m_current_viewport == nullptr)
-    {
-        return;
-    }
-    m_current_viewport->on_cursor_enter(entered);
+    Scoped_imgui_context scoped_imgui_context{*this, *m_window_imgui_viewport.get()};
+
+    m_window_imgui_viewport->on_cursor_enter(entered);
+}
+
+void Imgui_windows::on_mouse_move(
+    const double x,
+    const double y
+)
+{
+    Scoped_imgui_context scoped_imgui_context{*this, *m_window_imgui_viewport.get()};
+
+    m_window_imgui_viewport->on_mouse_move(x, y);
 }
 
 void Imgui_windows::on_mouse_click(
@@ -217,11 +248,11 @@ void Imgui_windows::on_mouse_click(
     const int      count
 )
 {
-    if (m_current_viewport == nullptr)
+    for (const auto& viewport : m_imgui_viewports)
     {
-        return;
+        Scoped_imgui_context scoped_imgui_context{*this, *viewport.get()};
+        viewport->on_mouse_click(button, count);
     }
-    m_current_viewport->on_mouse_click(button, count);
 }
 
 void Imgui_windows::on_mouse_wheel(
@@ -229,11 +260,11 @@ void Imgui_windows::on_mouse_wheel(
     const double y
 )
 {
-    if (m_current_viewport == nullptr)
+    for (const auto& viewport : m_imgui_viewports)
     {
-        return;
+        Scoped_imgui_context scoped_imgui_context{*this, *viewport.get()};
+        viewport->on_mouse_wheel(x, y);
     }
-    m_current_viewport->on_mouse_wheel(x, y);
 }
 
 void Imgui_windows::on_key(
@@ -242,22 +273,22 @@ void Imgui_windows::on_key(
     const bool       pressed
 )
 {
-    if (m_current_viewport == nullptr)
+    for (const auto& viewport : m_imgui_viewports)
     {
-        return;
+        Scoped_imgui_context scoped_imgui_context{*this, *viewport.get()};
+        viewport->on_key(keycode, modifier_mask, pressed);
     }
-    m_current_viewport->on_key(keycode, modifier_mask, pressed);
 }
 
 void Imgui_windows::on_char(
     const unsigned int codepoint
 )
 {
-    if (m_current_viewport == nullptr)
+    for (const auto& viewport : m_imgui_viewports)
     {
-        return;
+        Scoped_imgui_context scoped_imgui_context{*this, *viewport.get()};
+        viewport->on_char(codepoint);
     }
-    m_current_viewport->on_char(codepoint);
 }
 
 }  // namespace editor

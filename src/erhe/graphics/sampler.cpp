@@ -9,10 +9,12 @@ Sampler::Sampler() = default;
 
 Sampler::Sampler(
     const gl::Texture_min_filter min_filter,
-    const gl::Texture_mag_filter mag_filter
+    const gl::Texture_mag_filter mag_filter,
+    const float                  lod_bias
 )
     : min_filter{min_filter}
     , mag_filter{mag_filter}
+    , lod_bias  {lod_bias}
 {
     Expects(m_handle.gl_name() != 0);
 

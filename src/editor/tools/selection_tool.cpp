@@ -2,6 +2,7 @@
 
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
+#include "editor_scenes.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -9,10 +10,11 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
-#include "tools/pointer_context.hpp"
 #include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
 #include "windows/viewport_config.hpp"
+#include "windows/viewport_window.hpp"
+#include "windows/viewport_windows.hpp"
 
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
@@ -163,21 +165,19 @@ auto Selection_tool::delete_selection() -> bool
         return false;
     }
 
-    const auto scene_root = get<Scene_root>();
+    //const auto& scene_root = m_editor_scenes->get_scene_root();
     Compound_operation::Parameters compound_parameters;
     for (auto& node : m_selection)
     {
         // TODO Handle all node types
+        auto* scene_root = reinterpret_cast<Scene_root*>(node->node_data.host);
         if (is_mesh(node))
         {
             const auto mesh = as_mesh(node);
             compound_parameters.operations.push_back(
                 std::make_shared<Mesh_insert_remove_operation>(
                     Mesh_insert_remove_operation::Parameters{
-                        .scene          = scene_root->scene(),
-                        .layer          = *scene_root->content_layer(),
-                        .physics_world  = scene_root->physics_world(),
-                        .raytrace_scene = scene_root->raytrace_scene(),
+                        .scene_root     = scene_root,
                         .mesh           = mesh,
                         .node_physics   = get_physics_node(mesh.get()),
                         .node_raytrace  = get_raytrace(mesh.get()),
@@ -193,11 +193,10 @@ auto Selection_tool::delete_selection() -> bool
             compound_parameters.operations.push_back(
                 std::make_shared<Light_insert_remove_operation>(
                     Light_insert_remove_operation::Parameters{
-                        .scene          = scene_root->scene(),
-                        .layer          = *scene_root->light_layer(),
-                        .light          = light,
-                        .parent         = light->parent().lock(),
-                        .mode           = Scene_item_operation::Mode::remove,
+                        .scene_root = scene_root,
+                        .light      = light,
+                        .parent     = light->parent().lock(),
+                        .mode       = Scene_item_operation::Mode::remove,
                     }
                 )
             );
@@ -208,10 +207,10 @@ auto Selection_tool::delete_selection() -> bool
             compound_parameters.operations.push_back(
                 std::make_shared<Camera_insert_remove_operation>(
                     Camera_insert_remove_operation::Parameters{
-                        .scene          = scene_root->scene(),
-                        .camera         = camera,
-                        .parent         = camera->parent().lock(),
-                        .mode           = Scene_item_operation::Mode::remove,
+                        .scene_root = scene_root,
+                        .camera     = camera,
+                        .parent     = camera->parent().lock(),
+                        .mode       = Scene_item_operation::Mode::remove,
                     }
                 )
             );
@@ -265,9 +264,9 @@ void Selection_tool::initialize_component()
 void Selection_tool::post_initialize()
 {
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_pointer_context   = get<Pointer_context  >();
-    m_scene_root        = get<Scene_root       >();
-    m_viewport_config   = get<Viewport_config  >();
+    m_editor_scenes     = get<Editor_scenes   >();
+    m_viewport_config   = get<Viewport_config >();
+    m_viewport_windows  = get<Viewport_windows>();
 }
 
 auto Selection_tool::description() -> const char*
@@ -341,13 +340,14 @@ void Selection_tool::unsubscribe_selection_change_notification(int handle)
 
 auto Selection_tool::mouse_select_try_ready() -> bool
 {
-    if (m_pointer_context->window() == nullptr)
+    Viewport_window* viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window == nullptr)
     {
         return false;
     }
 
-    const auto& content = m_pointer_context->get_hover(Pointer_context::content_slot);
-    const auto& tool    = m_pointer_context->get_hover(Pointer_context::tool_slot);
+    const auto& content = viewport_window->get_hover(Hover_entry::content_slot);
+    const auto& tool    = viewport_window->get_hover(Hover_entry::tool_slot);
     m_hover_mesh    = content.mesh;
     m_hover_content = content.valid;
     m_hover_tool    = tool.valid;
@@ -357,7 +357,7 @@ auto Selection_tool::mouse_select_try_ready() -> bool
 
 auto Selection_tool::on_mouse_select() -> bool
 {
-    if (m_pointer_context->control_key_down())
+    if (m_viewport_windows->control_key_down())
     {
         if (m_hover_content)
         {
@@ -542,21 +542,33 @@ void Selection_tool::update_selection_from_node(
 
 void Selection_tool::sanity_check()
 {
-    const auto& scene = m_scene_root->scene();
     std::size_t error_count{0};
-    for (const auto& node : scene.flat_node_vector)
+
+    const auto& scene_roots = m_editor_scenes->get_scene_roots();
+    for (const auto& scene_root : scene_roots)
     {
-        if (node->is_selected() && !is_in(node, m_selection))
+        const auto& scene = scene_root->scene();
+        for (const auto& node : scene.flat_node_vector)
         {
-            log_selection->error("Node has selection flag set without being in selection");
-            ++error_count;
-        }
-        else if (!node->is_selected() && is_in(node, m_selection))
-        {
-            log_selection->error("Node does not have selection flag set while being in selection");
-            ++error_count;
+            if (
+                node->is_selected() &&
+                !is_in(node, m_selection)
+            )
+            {
+                log_selection->error("Node has selection flag set without being in selection");
+                ++error_count;
+            }
+            else if (
+                !node->is_selected() &&
+                is_in(node, m_selection)
+            )
+            {
+                log_selection->error("Node does not have selection flag set while being in selection");
+                ++error_count;
+            }
         }
     }
+
     if (error_count > 0)
     {
         log_selection->error("Selection errors: {}", error_count);

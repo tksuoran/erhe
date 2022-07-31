@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe/application/imgui_viewport.hpp"
+#include "erhe/application/render_graph_node.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/vertex_format.hpp"
@@ -15,6 +16,11 @@
 #include <gsl/gsl>
 
 struct ImFontAtlas;
+
+namespace erhe::components
+{
+    class Components;
+}
 
 namespace erhe::graphics
 {
@@ -41,20 +47,20 @@ class Window_imgui_viewport
 {
 public:
     Window_imgui_viewport(
-        const std::shared_ptr<Imgui_renderer>& imgui_renderer
+        const std::string_view        name,
+        erhe::components::Components& components
     );
 
     void post_initialize(
-        Imgui_windows*                 imgui_windows,
-        const std::shared_ptr<View  >& view,
-        const std::shared_ptr<Window>& window
+        erhe::components::Components& components
     );
 
-    void render_imgui_frame();
+    // Implements Render_graph_node
+    void execute_render_graph_node() override;
 
     // Implements Imgui_vewport
-    void begin_imgui_frame() override;
-    void end_imgui_frame  () override;
+    [[nodiscard]] auto begin_imgui_frame() -> bool override;
+    void end_imgui_frame() override;
 
 private:
     void menu();

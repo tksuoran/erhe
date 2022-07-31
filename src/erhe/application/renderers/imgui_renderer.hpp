@@ -1,6 +1,8 @@
 #pragma once
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
+#include "erhe/application/renderers/multi_buffer.hpp"
+
 #include "erhe/components/components.hpp"
 
 #include "erhe/graphics/buffer.hpp"
@@ -32,40 +34,98 @@ namespace erhe::graphics {
     class Shader_stages;
     class Texture;
     class Vertex_attribute_mappings;
+    class Vertex_input_state;
 }
 
 namespace erhe::application {
+
+class Imgui_draw_parameter_block_offsets
+{
+public:
+    std::size_t scale                      {0}; // vec2
+    std::size_t translate                  {0}; // vec2
+    std::size_t draw_parameter_struct_array{0}; // struct
+};
+
+// TODO Merge texture and texture_indices
+class Imgui_draw_parameter_struct_offsets
+{
+public:
+    std::size_t clip_rect      {0}; // vec4
+    std::size_t texture        {0}; // uvec2   for bindless textures
+    std::size_t extra          {0}; // uvec2   for bindless textures
+    std::size_t texture_indices{0}; // uint[4] for non bindless textures
+};
+
+class Multi_pipeline
+{
+public:
+    static constexpr std::size_t s_frame_resources_count = 4;
+
+    explicit Multi_pipeline(const std::string_view name);
+
+    void next_frame();
+    void allocate(
+        const erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
+        const erhe::graphics::Vertex_format&             vertex_format,
+        erhe::graphics::Shader_stages*                   shader_stages,
+        erhe::application::Multi_buffer&                 vertex_buffer,
+        erhe::application::Multi_buffer&                 index_buffer
+    );
+
+    [[nodiscard]] auto current_pipeline() -> erhe::graphics::Pipeline&;
+
+protected:
+    std::vector<
+        std::unique_ptr<
+            erhe::graphics::Vertex_input_state
+        >
+    >                            m_vertex_inputs;
+    std::array<
+        erhe::graphics::Pipeline,
+        s_frame_resources_count
+    >                            m_pipelines;
+    std::size_t                  m_current_slot{0};
+    std::string                  m_name;
+};
+
+class Imgui_program_interface
+{
+public:
+    explicit Imgui_program_interface(
+        bool use_bindless
+    );
+
+    void next_frame();
+
+    // scale, translation, clip rectangle, texture indices
+    static constexpr std::size_t s_max_draw_count     =   6'000;
+    static constexpr std::size_t s_max_index_count    = 300'000;
+    static constexpr std::size_t s_max_vertex_count   = 800'000;
+    static constexpr std::size_t s_texture_unit_count = 16; // for non bindless textures
+
+    erhe::graphics::Shader_resource     draw_parameter_block;
+    erhe::graphics::Shader_resource     draw_parameter_struct;
+    Imgui_draw_parameter_struct_offsets draw_parameter_struct_offsets{};
+    Imgui_draw_parameter_block_offsets  block_offsets                {};
+
+    erhe::graphics::Fragment_outputs               fragment_outputs;
+    erhe::graphics::Vertex_attribute_mappings      attribute_mappings;
+    erhe::graphics::Vertex_format                  vertex_format;
+    erhe::graphics::Shader_resource                default_uniform_block; // containing sampler uniforms for non bindless textures
+    std::unique_ptr<erhe::graphics::Shader_stages> shader_stages;
+
+    erhe::application::Multi_buffer vertex_buffer;
+    erhe::application::Multi_buffer index_buffer;
+    erhe::application::Multi_buffer draw_parameter_buffer;
+    erhe::application::Multi_buffer draw_indirect_buffer;
+    Multi_pipeline                  pipeline;
+};
 
 class Imgui_renderer
     : public erhe::components::Component
 {
 public:
-    class Frame_resources
-    {
-    public:
-        Frame_resources(
-            const std::size_t                          slot,
-            erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
-            erhe::graphics::Vertex_format&             vertex_format,
-            erhe::graphics::Shader_stages*             shader_stages,
-            std::size_t vertex_count, std::size_t vertex_stride,
-            std::size_t index_count,  std::size_t index_stride,
-            std::size_t draw_count,   std::size_t draw_stride
-        );
-
-        Frame_resources(const Frame_resources&) = delete;
-        void operator= (const Frame_resources&) = delete;
-        Frame_resources(Frame_resources&&)      = delete;
-        void operator= (Frame_resources&&)      = delete;
-
-        erhe::graphics::Buffer             vertex_buffer;
-        erhe::graphics::Buffer             index_buffer;
-        erhe::graphics::Buffer             draw_parameter_buffer;
-        erhe::graphics::Buffer             draw_indirect_buffer;
-        erhe::graphics::Vertex_input_state vertex_input;
-        erhe::graphics::Pipeline           pipeline;
-    };
-
     static constexpr std::string_view c_label{"Imgui_renderer"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
@@ -79,12 +139,6 @@ public:
     static constexpr std::size_t s_uivec4_size = 4 * sizeof(uint32_t); // for non bindless textures
     static constexpr std::size_t s_uvec2_size  = 2 * sizeof(uint32_t);
     static constexpr std::size_t s_vec4_size   = 4 * sizeof(float);
-
-    // scale, translation, clip rectangle, texture indices
-    static constexpr std::size_t s_max_draw_count     =   6'000;
-    static constexpr std::size_t s_max_index_count    = 300'000;
-    static constexpr std::size_t s_max_vertex_count   = 800'000;
-    static constexpr std::size_t s_texture_unit_count = 16; // for non bindless textures
 
     // Public API
     [[nodiscard]] auto get_font_atlas() -> ImFontAtlas*;
@@ -106,53 +160,37 @@ public:
     );
     void render_draw_data();
 
-    auto primary_font() const -> ImFont*;
-    auto mono_font   () const -> ImFont*;
+    void next_frame      ();
+
+    auto primary_font   () const -> ImFont*;
+    auto mono_font      () const -> ImFont*;
+    auto vr_primary_font() const -> ImFont*;
+    auto vr_mono_font   () const -> ImFont*;
 
 private:
-    void create_attribute_mappings_and_vertex_format();
-    void create_blocks                              ();
-    void create_shader_stages                       ();
-    void create_samplers                            ();
-    void create_font_texture                        ();
-    void create_frame_resources                     ();
-    auto current_frame_resources                    () -> Frame_resources&;
-    void next_frame                                 ();
+    void create_samplers    ();
+    void create_font_texture();
 
-    ImFont*                                               m_primary_font{nullptr};
-    ImFont*                                               m_mono_font   {nullptr};
+    ImFont*                                               m_primary_font   {nullptr};
+    ImFont*                                               m_mono_font      {nullptr};
+    ImFont*                                               m_vr_primary_font{nullptr};
+    ImFont*                                               m_vr_mono_font   {nullptr};
     ImFontAtlas                                           m_font_atlas;
 
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
+    std::unique_ptr<Imgui_program_interface>              m_imgui_program_interface;
 
+    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<erhe::graphics::Texture>           m_dummy_texture;
     std::shared_ptr<erhe::graphics::Texture>           m_font_texture;
     std::unique_ptr<erhe::graphics::Shader_stages>     m_shader_stages;
-    std::unique_ptr<erhe::graphics::Shader_resource>   m_projection_block;
-    std::unique_ptr<erhe::graphics::Shader_resource>   m_draw_parameter_block;
 
-    erhe::graphics::Shader_resource                    m_draw_parameter_struct{"Draw_parameters"};
-    erhe::graphics::Shader_resource                    m_default_uniform_block; // containing sampler uniforms for non bindless textures
-    erhe::graphics::Vertex_attribute_mappings          m_attribute_mappings;
-    erhe::graphics::Vertex_format                      m_vertex_format;
     std::unique_ptr<erhe::graphics::Sampler>           m_nearest_sampler;
     std::unique_ptr<erhe::graphics::Sampler>           m_linear_sampler;
     std::unique_ptr<erhe::graphics::Sampler>           m_linear_mipmap_linear_sampler;
-    std::size_t                                        m_u_scale_offset          {0};
-    std::size_t                                        m_u_translate_offset      {0};
-    std::size_t                                        m_u_clip_rect_offset      {0};
-    std::size_t                                        m_u_texture_offset        {0};
-    std::size_t                                        m_u_extra_offset          {0};
-    std::size_t                                        m_u_texture_indices_offset{0}; // for non bindless textures
-    erhe::graphics::Fragment_outputs                   m_fragment_outputs;
+
     std::set<std::shared_ptr<erhe::graphics::Texture>> m_used_textures;
     std::set<uint64_t>                                 m_used_texture_handles;
     std::unique_ptr<erhe::graphics::Gpu_timer>         m_gpu_timer;
-
-    std::deque<Frame_resources> m_frame_resources;
-    std::size_t                 m_current_frame_resource_slot{0};
-
-    static constexpr std::size_t frame_resources_count = 4;
 };
 
 } // namespace erhe::application

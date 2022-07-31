@@ -44,10 +44,6 @@ public:
     {
     public:
         erhe::primitive::Build_info& build_info;
-        erhe::scene::Mesh_layer&     layer;
-        erhe::scene::Scene&          scene;
-        erhe::physics::IWorld&       physics_world;
-        erhe::raytrace::IScene*      raytrace_scene{nullptr};
         Selection_tool*              selection_tool{nullptr};
     };
 

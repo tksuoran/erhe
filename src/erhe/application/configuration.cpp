@@ -203,6 +203,7 @@ Configuration::Configuration(int argc, char** argv)
             ini_get(section, "physics",              windows.physics             );
             ini_get(section, "physics_tool",         windows.physics_tool        );
             ini_get(section, "post_processing",      windows.post_processing     );
+            ini_get(section, "render_graph",         windows.render_graph        );
             ini_get(section, "tool_properties",      windows.tool_properties     );
             ini_get(section, "trs",                  windows.trs                 );
             ini_get(section, "view",                 windows.view                );

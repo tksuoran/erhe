@@ -14,9 +14,7 @@ namespace erhe::primitive
 namespace editor
 {
 
-class Materials;
-class Scene_root;
-class Selection_tool;
+class Materials_window;
 
 class Material_properties
     : public erhe::components::Component
@@ -41,7 +39,7 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Materials> m_materials;
+    std::shared_ptr<Materials_window> m_materials_window;
 };
 
 } // namespace editor

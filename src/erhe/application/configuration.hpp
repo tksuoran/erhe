@@ -174,6 +174,7 @@ public:
         bool physics             {false};
         bool physics_tool        {false};
         bool post_processing     {false};
+        bool render_graph        {false};
         bool tool_properties     {true};
         bool trs                 {false};
         bool view                {false};
@@ -235,11 +236,6 @@ public:
         float sensitivity       {1.0f};
     };
     Camera_controls camera_controls;
-
-    //class Input
-    //{
-    //};
-    //Input input;
 };
 
 } // namespace erhe::application

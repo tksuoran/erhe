@@ -43,9 +43,6 @@ public:
     {
     public:
         erhe::primitive::Build_info& build_info;
-        erhe::scene::Scene&          scene;
-        erhe::scene::Mesh_layer&     layer;
-        erhe::physics::IWorld&       physics_world;
         Selection_tool*              selection_tool;
     };
 

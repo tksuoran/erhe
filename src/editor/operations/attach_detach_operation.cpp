@@ -2,6 +2,7 @@
 #include "tools/selection_tool.hpp"
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/scene_root.hpp"
 #include "editor_log.hpp"
 
 #include "erhe/scene/scene.hpp"
@@ -103,7 +104,16 @@ void Attach_detach_operation::undo(const Operation_context&)
 
 void Attach_detach_operation::execute(bool attach) const
 {
-    m_parameters.scene.sanity_check();
+    if (m_entries.empty())
+    {
+        return;
+    }
+
+    ERHE_VERIFY(m_entries.front().node);
+    auto* scene_root = reinterpret_cast<Scene_root*>(m_entries.front().node->node_data.host);
+    ERHE_VERIFY(scene_root != nullptr);
+    auto& scene = scene_root->scene();
+    scene.sanity_check();
 
     ERHE_VERIFY(m_parent_node);
 
@@ -119,7 +129,7 @@ void Attach_detach_operation::execute(bool attach) const
         }
     }
 
-    m_parameters.scene.sanity_check();
+    scene.sanity_check();
 }
 
 } // namespace editor

@@ -97,8 +97,82 @@ Text_renderer::Frame_resources::Frame_resources(
 
 Text_renderer::Text_renderer()
     : Component{c_label}
+    , m_fragment_outputs{
+        erhe::graphics::Fragment_output{
+            .name     = "out_color",
+            .type     = gl::Fragment_shader_output_type::float_vec4,
+            .location = 0
+        }
+    }
+    , m_attribute_mappings{
+        erhe::graphics::Vertex_attribute_mapping{
+            .layout_location = 0,
+            .shader_type     = gl::Attribute_type::float_vec3,
+            .name            = "a_position",
+            .src_usage =
+            {
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::position
+            }
+        },
+        erhe::graphics::Vertex_attribute_mapping{
+            .layout_location = 1,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_color",
+            .src_usage =
+            {
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::color
+            }
+        },
+        erhe::graphics::Vertex_attribute_mapping{
+            .layout_location = 2,
+            .shader_type     = gl::Attribute_type::float_vec2,
+            .name            = "a_texcoord",
+            .src_usage =
+            {
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::tex_coord
+            }
+        }
+    }
+    , m_vertex_format{
+        erhe::graphics::Vertex_attribute{
+            .usage =
+            {
+                .type     = erhe::graphics::Vertex_attribute::Usage_type::position
+            },
+            .shader_type   = gl::Attribute_type::float_vec3,
+            .data_type =
+            {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 3
+            }
+        },
+        erhe::graphics::Vertex_attribute{
+            .usage =
+            {
+                .type       = erhe::graphics::Vertex_attribute::Usage_type::color
+            },
+            .shader_type    = gl::Attribute_type::float_vec4,
+            .data_type =
+            {
+                .type       = gl::Vertex_attrib_type::unsigned_byte,
+                .normalized = true,
+                .dimension  = 4
+            }
+        },
+        erhe::graphics::Vertex_attribute{
+            .usage =
+            {
+                .type      = erhe::graphics::Vertex_attribute::Usage_type::tex_coord
+            },
+            .shader_type   = gl::Attribute_type::float_vec2,
+            .data_type =
+            {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 2
+            }
+        }
+    }
 {
-    ERHE_PROFILE_FUNCTION
 }
 
 Text_renderer::~Text_renderer() noexcept
@@ -166,87 +240,6 @@ void Text_renderer::initialize_component()
         offset += 5;
     }
 
-    m_fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
-
-    m_attribute_mappings.add(
-        {
-            .layout_location = 0,
-            .shader_type     = gl::Attribute_type::float_vec3,
-            .name            = "a_position",
-            .src_usage =
-            {
-                .type        = erhe::graphics::Vertex_attribute::Usage_type::position
-            }
-        }
-    );
-    m_attribute_mappings.add(
-        {
-            .layout_location = 1,
-            .shader_type     = gl::Attribute_type::float_vec4,
-            .name            = "a_color",
-            .src_usage =
-            {
-                .type        = erhe::graphics::Vertex_attribute::Usage_type::color
-            }
-        }
-    );
-
-    m_attribute_mappings.add(
-        {
-            .layout_location = 2,
-            .shader_type     = gl::Attribute_type::float_vec2,
-            .name            = "a_texcoord",
-            .src_usage =
-            {
-                .type        = erhe::graphics::Vertex_attribute::Usage_type::tex_coord
-            }
-        }
-    );
-
-    m_vertex_format.add(
-        {
-            .usage =
-            {
-                .type     = erhe::graphics::Vertex_attribute::Usage_type::position
-            },
-            .shader_type   = gl::Attribute_type::float_vec3,
-            .data_type =
-            {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 3
-            }
-        }
-    );
-    m_vertex_format.add(
-        {
-            .usage =
-            {
-                .type       = erhe::graphics::Vertex_attribute::Usage_type::color
-            },
-            .shader_type    = gl::Attribute_type::float_vec4,
-            .data_type =
-            {
-                .type       = gl::Vertex_attrib_type::unsigned_byte,
-                .normalized = true,
-                .dimension  = 4
-            }
-        }
-    );
-    m_vertex_format.add(
-        {
-            .usage =
-            {
-                .type      = erhe::graphics::Vertex_attribute::Usage_type::tex_coord
-            },
-            .shader_type   = gl::Attribute_type::float_vec2,
-            .data_type =
-            {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 2
-            }
-        }
-    );
-
     m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
         gl::Texture_min_filter::nearest,
         gl::Texture_mag_filter::nearest
@@ -269,8 +262,13 @@ void Text_renderer::initialize_component()
         const fs::path fs_path = shader_path / fs::path("text.frag");
         Shader_stages::Create_info create_info{
             .name                      = "text",
+            .interface_blocks          = { m_projection_block.get() },
             .vertex_attribute_mappings = &m_attribute_mappings,
             .fragment_outputs          = &m_fragment_outputs,
+            .shaders = {
+                { gl::Shader_type::vertex_shader,   vs_path },
+                { gl::Shader_type::fragment_shader, fs_path }
+            }
         };
 
         if (erhe::graphics::Instance::info.use_bindless_texture)
@@ -288,9 +286,6 @@ void Text_renderer::initialize_component()
             create_info.default_uniform_block = &m_default_uniform_block;
         }
 
-        create_info.add_interface_block(m_projection_block.get());
-        create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
-        create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
         Shader_stages::Prototype prototype{create_info};
         m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
     }

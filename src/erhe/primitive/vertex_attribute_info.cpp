@@ -1,5 +1,5 @@
 #include "erhe/primitive/vertex_attribute_info.hpp"
-#include "erhe/gl/gl.hpp"
+#include "erhe/gl/gl_helpers.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 
 #include <cstddef>
@@ -19,7 +19,7 @@ Vertex_attribute_info::Vertex_attribute_info(
     : attribute{vertex_format->find_attribute_maybe(semantic, semantic_index)}
     , data_type{(attribute != nullptr) ? attribute->data_type.type : default_data_type}
     , offset   {(attribute != nullptr) ? attribute->offset         : std::numeric_limits<std::size_t>::max()}
-    , size     {gl::size_of_type(data_type) * dimension}
+    , size     {gl_helpers::size_of_type(data_type) * dimension}
 {
 }
 

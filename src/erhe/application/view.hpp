@@ -24,6 +24,7 @@ class Mouse_wheel_binding;
 
 class Configuration;
 class Imgui_windows;
+class Render_graph;
 class Time;
 class View;
 class Window;
@@ -31,12 +32,7 @@ class Window;
 class View_client
 {
 public:
-    virtual void initial_state           () = 0;
-    virtual void update                  () = 0;
-    virtual void render                  () = 0;
-    virtual void bind_default_framebuffer() = 0;
-    virtual void clear                   () = 0;
-    virtual void update_imgui_window(Imgui_window* imgui_window) = 0;
+    virtual void update() = 0;
     virtual void update_keyboard(
         const bool                   pressed,
         const erhe::toolkit::Keycode code,
@@ -44,6 +40,14 @@ public:
     ) = 0;
     virtual void update_mouse(const erhe::toolkit::Mouse_button button, const int count) = 0;
     virtual void update_mouse(const double x, const double y) = 0;
+};
+
+class Render_task
+{
+public:
+    virtual void execute() = 0;
+
+    std::vector<Render_task*> dependencies;
 };
 
 class View
@@ -130,6 +134,7 @@ public:
 
     void command_inactivated(Command* const command);
 
+    [[nodiscard]] auto view_client              () const -> View_client*;
     [[nodiscard]] auto mouse_input_sink         () const -> Imgui_window*;
     [[nodiscard]] auto to_window_bottom_left    (const glm::vec2 position_in_root) const -> glm::vec2;
     [[nodiscard]] auto to_window_top_left       (const glm::vec2 position_in_root) const -> glm::vec2;
@@ -149,10 +154,12 @@ private:
     void update_active_mouse_command(Command* const command);
 
     // Component dependencies
-    std::shared_ptr<Configuration> m_configuration;
-    std::shared_ptr<Imgui_windows> m_imgui_windows;
-    std::shared_ptr<Time>          m_time;
-    std::shared_ptr<Window>        m_window;
+    std::shared_ptr<Configuration>  m_configuration;
+    std::shared_ptr<Imgui_renderer> m_imgui_renderer;
+    std::shared_ptr<Imgui_windows>  m_imgui_windows;
+    std::shared_ptr<Render_graph>   m_render_graph;
+    std::shared_ptr<Time>           m_time;
+    std::shared_ptr<Window>         m_window;
 
     View_client* m_view_client{nullptr};
 

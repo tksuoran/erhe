@@ -3,7 +3,7 @@
 
 #include "erhe/application/application_log.hpp"
 #include "erhe/components/components_log.hpp"
-#include "erhe/gl/gl.hpp"
+#include "erhe/gl/gl_log.hpp"
 #include "erhe/graphics/graphics_log.hpp"
 #include "erhe/toolkit/toolkit_log.hpp"
 #include "erhe/ui/ui_log.hpp"

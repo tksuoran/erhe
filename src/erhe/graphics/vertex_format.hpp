@@ -14,9 +14,10 @@ namespace erhe::graphics
 class Vertex_format final
 {
 public:
-    void clear();
+    Vertex_format();
+    explicit Vertex_format(std::initializer_list<Vertex_attribute> attributes);
 
-    void add(
+    void add_attribute(
         const Vertex_attribute& attribute
     );
 
@@ -43,6 +44,8 @@ public:
     [[nodiscard]] auto match(const Vertex_format& other) const -> bool;
 
 private:
+    void align_to(std::size_t alignment);
+
     std::vector<Vertex_attribute> m_attributes;
     std::size_t                   m_stride{0};
 };

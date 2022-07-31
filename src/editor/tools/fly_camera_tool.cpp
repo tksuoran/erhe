@@ -1,11 +1,12 @@
 #include "tools/fly_camera_tool.hpp"
 
 #include "editor_log.hpp"
+#include "editor_scenes.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
-#include "tools/pointer_context.hpp"
 #include "tools/trs_tool.hpp"
 #include "windows/viewport_window.hpp"
+#include "windows/viewport_windows.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui_windows.hpp"
@@ -73,33 +74,31 @@ void Fly_camera_turn_command::try_ready(
         return;
     }
 
-    const auto& pointer_context = viewport_window->pointer_context();
     if (
-        pointer_context->get_hover(Pointer_context::tool_slot).valid ||
-        pointer_context->get_hover(Pointer_context::gui_slot).valid
+        viewport_window->get_hover(Hover_entry::tool_slot).valid ||
+        viewport_window->get_hover(Hover_entry::rendertarget_slot).valid
     )
     {
         return;
     }
 
-    if (m_fly_camera_tool.try_ready())
+    if (m_fly_camera_tool.try_ready(*viewport_window))
     {
         set_ready(context);
     }
 }
 
-auto Fly_camera_tool::try_ready() -> bool
+auto Fly_camera_tool::try_ready(Viewport_window& viewport_window) -> bool
 {
     // Exclude safe border near viewport edges from mouse interaction
     // to filter out viewport window resizing for example.
-    if (!m_pointer_context->position_in_viewport_window().has_value())
+    if (!viewport_window.position_in_viewport().has_value())
     {
         return false;
     }
     constexpr float   border   = 32.0f;
-    const glm::vec2   position = m_pointer_context->position_in_viewport_window().value();
-    const auto* const window = m_pointer_context->window();
-    const erhe::scene::Viewport viewport = window->viewport();
+    const glm::vec2   position = viewport_window.position_in_viewport().value();
+    const erhe::scene::Viewport viewport = viewport_window.viewport();
     if (
         (position.x <  border) ||
         (position.y <  border) ||
@@ -180,16 +179,10 @@ Fly_camera_tool::~Fly_camera_tool() noexcept
 void Fly_camera_tool::declare_required_components()
 {
     m_editor_tools = require<Tools>();
-    m_scene_root   = require<Scene_root>();
 
     require<erhe::application::Configuration>();
     require<erhe::application::Imgui_windows>();
     require<erhe::application::View>();
-}
-
-auto Fly_camera_tool::can_use_keyboard() const -> bool
-{
-    return m_pointer_context->window() != nullptr;
 }
 
 void Fly_camera_tool::initialize_component()
@@ -233,8 +226,9 @@ void Fly_camera_tool::initialize_component()
 
 void Fly_camera_tool::post_initialize()
 {
-    m_pointer_context = get<Pointer_context>();
-    m_trs_tool        = get<Trs_tool>();
+    m_editor_scenes    = get<Editor_scenes   >();
+    m_trs_tool         = get<Trs_tool        >();
+    m_viewport_windows = get<Viewport_windows>();
 }
 
 void Fly_camera_tool::update_camera()
@@ -244,7 +238,7 @@ void Fly_camera_tool::update_camera()
         return;
     }
 
-    auto* window = m_pointer_context->window();
+    auto* window = m_viewport_windows->hover_window();
     auto* camera = (window != nullptr)
         ? window->camera()
         : nullptr;
@@ -258,7 +252,19 @@ void Fly_camera_tool::set_camera(erhe::scene::Camera* camera)
 {
     // attach() below requires world from node matrix, which
     // might not be valid due to transform hierarchy.
-    m_scene_root->scene().update_node_transforms();
+
+    if (camera != nullptr)
+    {
+        auto* scene_root = reinterpret_cast<Scene_root*>(camera->node_data.host);
+        if (scene_root != nullptr)
+        {
+            scene_root->scene().update_node_transforms();
+        }
+        else
+        {
+            log_fly_camera->warn("camera node does not have scene root");
+        }
+    }
 
     auto* old_host = m_camera_controller->get_node();
     if (old_host != nullptr)
@@ -328,11 +334,11 @@ auto Fly_camera_tool::try_move(
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     if (
-        (m_pointer_context->window() == nullptr) &&
+        (m_viewport_windows->hover_window() == nullptr) &&
         active
     )
     {
-        log_fly_camera->warn("rejected press because no pointer_context window");
+        log_fly_camera->warn("rejected press because no viewport window");
 
         return false;
     }
@@ -396,7 +402,19 @@ void Fly_camera_tool::imgui()
     float speed = m_camera_controller->translate_z.max_delta();
 
     auto* camera = get_camera();
-    if (m_scene_root->camera_combo("Camera", camera) && !m_use_viewport_camera)
+    const auto scene_root = m_editor_scenes->get_scene_root();
+    if (!scene_root)
+    {
+        return;
+    }
+
+    if (
+        m_editor_scenes->get_scene_root()->camera_combo(
+            "Camera",
+            camera
+        ) &&
+        !m_use_viewport_camera
+    )
     {
         set_camera(camera);
     }

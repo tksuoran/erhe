@@ -1,6 +1,7 @@
 #include "operations/insert_operation.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/helpers.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe/scene/scene.hpp"
@@ -77,35 +78,40 @@ void Mesh_insert_remove_operation::execute(
     ERHE_VERIFY(m_parameters.mesh);
     ERHE_VERIFY(m_parameters.mesh);
 
-    m_parameters.scene.sanity_check();
+    auto* scene_root     = m_parameters.scene_root;
+    auto& scene          = scene_root->scene();
+    auto& layer          = *scene_root->layers().content();
+    auto& physics_world  = scene_root->physics_world();
+    auto& raytrace_scene = scene_root->raytrace_scene();
+    scene.sanity_check();
 
     if (mode == Mode::insert)
     {
-        m_parameters.scene.add_to_mesh_layer(m_parameters.layer, m_parameters.mesh);
+        scene.add_to_mesh_layer(layer, m_parameters.mesh);
         if (m_parameters.parent)
         {
             m_parameters.parent->attach(m_parameters.mesh);
         }
         if (m_parameters.node_physics)
         {
-            add_to_physics_world(m_parameters.physics_world, m_parameters.node_physics);
+            add_to_physics_world(physics_world, m_parameters.node_physics);
         }
         if (m_parameters.node_raytrace)
         {
-            add_to_raytrace_scene(m_parameters.raytrace_scene, m_parameters.node_raytrace);
+            add_to_raytrace_scene(raytrace_scene, m_parameters.node_raytrace);
         }
     }
     else
     {
         //m_context.selection_tool->remove_from_selection(m_context.mesh);
-        m_parameters.scene.remove(m_parameters.mesh);
+        scene.remove(m_parameters.mesh);
         if (m_parameters.node_physics)
         {
-            remove_from_physics_world(m_parameters.physics_world, *m_parameters.node_physics.get());
+            remove_from_physics_world(physics_world, *m_parameters.node_physics.get());
         }
         if (m_parameters.node_raytrace)
         {
-            remove_from_raytrace_scene(m_parameters.raytrace_scene, m_parameters.node_raytrace);
+            remove_from_raytrace_scene(raytrace_scene, m_parameters.node_raytrace);
         }
         if (m_parameters.parent)
         {
@@ -118,7 +124,7 @@ void Mesh_insert_remove_operation::execute(
     {
         selection_tool->update_selection_from_node(m_parameters.mesh, mode == Mode::insert);
     }
-    m_parameters.scene.sanity_check();
+    scene.sanity_check();
 }
 
 //
@@ -163,9 +169,15 @@ void Light_insert_remove_operation::execute(
 )
 {
     ERHE_VERIFY(m_parameters.light);
+
+    auto* scene_root = m_parameters.scene_root;
+    auto& scene      = scene_root->scene();
+    auto& layer      = *scene_root->layers().light();
+    scene.sanity_check();
+
     if (mode == Mode::insert)
     {
-        m_parameters.scene.add_to_light_layer(m_parameters.layer, m_parameters.light);
+        scene.add_to_light_layer(layer, m_parameters.light);
         if (m_parameters.parent)
         {
             m_parameters.parent->attach(m_parameters.light);
@@ -173,7 +185,7 @@ void Light_insert_remove_operation::execute(
     }
     else
     {
-        m_parameters.scene.remove(m_parameters.light);
+        scene.remove(m_parameters.light);
         if (m_parameters.parent)
         {
             m_parameters.parent->detach(m_parameters.light.get());
@@ -186,7 +198,7 @@ void Light_insert_remove_operation::execute(
         selection_tool->update_selection_from_node(m_parameters.light, mode == Mode::insert);
     }
 
-    m_parameters.scene.sanity_check();
+    scene.sanity_check();
 }
 
 //
@@ -231,9 +243,14 @@ void Camera_insert_remove_operation::execute(
 ) const
 {
     ERHE_VERIFY(m_parameters.camera);
+
+    auto* scene_root = m_parameters.scene_root;
+    auto& scene      = scene_root->scene();
+    scene.sanity_check();
+
     if (mode == Mode::insert)
     {
-        m_parameters.scene.add(m_parameters.camera);
+        scene.add(m_parameters.camera);
         if (m_parameters.parent)
         {
             m_parameters.parent->attach(m_parameters.camera);
@@ -241,7 +258,7 @@ void Camera_insert_remove_operation::execute(
     }
     else
     {
-        m_parameters.scene.remove(m_parameters.camera);
+        scene.remove(m_parameters.camera);
         if (m_parameters.parent)
         {
             m_parameters.parent->detach(m_parameters.camera.get());
@@ -253,8 +270,9 @@ void Camera_insert_remove_operation::execute(
     {
         selection_tool->update_selection_from_node(m_parameters.camera, mode == Mode::insert);
     }
-    m_parameters.scene.sanity_check();
+    scene.sanity_check();
 }
 
 
-}
+} // namespace editor
+

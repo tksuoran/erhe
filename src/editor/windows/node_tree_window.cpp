@@ -1,6 +1,7 @@
 #include "windows/node_tree_window.hpp"
 #include "graphics/icon_set.hpp"
 #include "editor_log.hpp"
+#include "editor_scenes.hpp"
 
 #include "operations/compound_operation.hpp"
 #include "operations/node_operation.hpp"
@@ -53,8 +54,8 @@ void Node_tree_window::initialize_component()
 
 void Node_tree_window::post_initialize()
 {
-    m_scene_root = get<Scene_root>();
-    m_icon_set   = get<Icon_set  >();
+    m_editor_scenes = get<Editor_scenes>();
+    m_icon_set      = get<Icon_set     >();
 }
 
 void Node_tree_window::clear_selection()
@@ -572,7 +573,6 @@ void Node_tree_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
-    const auto& scene = m_scene_root->scene();
     m_tree_nodes_last_frame = m_tree_nodes;
 
     {
@@ -585,11 +585,18 @@ void Node_tree_window::imgui()
         m_selection_tool->range_selection().begin();
     }
 
+    // TODO Replace with scene combo
+    //      to avoid cross scene drags and drops
+    const auto& scene_roots = m_editor_scenes->get_scene_roots();
+    for (const auto& scene_root : scene_roots)
     {
-        ERHE_PROFILE_SCOPE("nodes");
-        for (const auto& node : scene.root_node->children())
+        const auto& scene = scene_root->scene();
         {
-            imgui_tree_node(node);
+            ERHE_PROFILE_SCOPE("nodes");
+            for (const auto& node : scene.root_node->children())
+            {
+                imgui_tree_node(node);
+            }
         }
     }
 

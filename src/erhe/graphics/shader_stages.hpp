@@ -15,6 +15,13 @@ class Shader_resource;
 class Vertex_attribute_mappings;
 class Gl_shader;
 
+class Shader_stage_extension
+{
+public:
+    gl::Shader_type shader_stage;
+    std::string     extension;
+};
+
 // Shader program
 class Shader_stages
 {
@@ -27,8 +34,10 @@ public:
         class Shader_stage
         {
         public:
+            // user-provided constructors are needed for vector::emplace_back()
+            // Sadly, this disables using designated initializers
             Shader_stage(
-                const gl::Shader_type  type,
+                gl::Shader_type        type,
                 const std::string_view source
             )
                 : type  {type}
@@ -37,8 +46,8 @@ public:
             }
 
             Shader_stage(
-                const gl::Shader_type type,
-                const fs::path        path
+                gl::Shader_type type,
+                const fs::path  path
             )
                 : type{type}
                 , path{path}
@@ -57,29 +66,26 @@ public:
         [[nodiscard]] auto fragment_outputs_source() const -> std::string;
         [[nodiscard]] auto struct_types_source    () const -> std::string;
         [[nodiscard]] auto interface_blocks_source() const -> std::string;
-
         [[nodiscard]] auto interface_source       () const -> std::string;
 
         void add_interface_block(gsl::not_null<const Shader_resource*> uniform_block);
 
-        std::string                                          name;
+        std::string                                      name;
 
-        std::vector<std::string>                             pragmas                       {};
-        std::vector<std::pair<std::string, std::string>>     defines                       {};
-        std::vector<std::pair<gl::Shader_type, std::string>> extensions                    {};
-        // https://stackoverflow.com/questions/35525777/use-of-string-view-for-map-lookup
-        std::map<std::string, gsl::not_null<const Shader_resource*>, std::less<>>
-                                                             interface_blocks              {};
-        std::vector<const Shader_resource*>                  struct_types                  {};
-        const Vertex_attribute_mappings*                     vertex_attribute_mappings     {nullptr};
-        const Fragment_outputs*                              fragment_outputs              {nullptr};
-        const Shader_resource*                               default_uniform_block         {nullptr}; // contains sampler uniforms
-        std::vector<std::string>                             transform_feedback_varyings   {};
-        gl::Transform_feedback_buffer_mode                   transform_feedback_buffer_mode{gl::Transform_feedback_buffer_mode::separate_attribs};
-        std::vector<Shader_stage>                            shaders                       {};
-        bool                                                 dump_reflection               {false};
-        bool                                                 dump_interface                {false};
-        bool                                                 dump_final_source             {false};
+        std::vector<std::string>                         pragmas                       {};
+        std::vector<std::pair<std::string, std::string>> defines                       {};
+        std::vector<Shader_stage_extension>              extensions                    {};
+        std::vector<const Shader_resource*>              interface_blocks              {};
+        std::vector<const Shader_resource*>              struct_types                  {};
+        const Vertex_attribute_mappings*                 vertex_attribute_mappings     {nullptr};
+        const Fragment_outputs*                          fragment_outputs              {nullptr};
+        const Shader_resource*                           default_uniform_block         {nullptr}; // contains sampler uniforms
+        std::vector<std::string>                         transform_feedback_varyings   {};
+        gl::Transform_feedback_buffer_mode               transform_feedback_buffer_mode{gl::Transform_feedback_buffer_mode::separate_attribs};
+        std::vector<Shader_stage>                        shaders                       {};
+        bool                                             dump_reflection               {false};
+        bool                                             dump_interface                {false};
+        bool                                             dump_final_source             {false};
     };
 
     class Prototype final

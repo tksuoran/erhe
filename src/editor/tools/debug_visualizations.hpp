@@ -87,9 +87,8 @@ private:
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Viewport_config>   m_viewport_config;
-    std::shared_ptr<Scene_root>        m_scene_root;
-    std::shared_ptr<Selection_tool>    m_selection_tool;
+    std::shared_ptr<Viewport_config> m_viewport_config;
+    std::shared_ptr<Selection_tool>  m_selection_tool;
 };
 
 } // namespace editor

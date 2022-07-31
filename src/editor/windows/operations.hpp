@@ -11,9 +11,7 @@ namespace editor
 
 class Mesh_memory;
 class Operation_stack;
-class Pointer_context;
 class Selection_tool;
-class Scene_root;
 class Tool;
 
 class Operations
@@ -48,8 +46,6 @@ private:
     // Component dependencies
     std::shared_ptr<Mesh_memory>     m_mesh_memory;
     std::shared_ptr<Operation_stack> m_operation_stack;
-    std::shared_ptr<Pointer_context> m_pointer_context;
-    std::shared_ptr<Scene_root>      m_scene_root;
     std::shared_ptr<Selection_tool>  m_selection_tool;
 
     Tool*              m_current_active_tool{nullptr};

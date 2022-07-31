@@ -50,7 +50,15 @@ void Imgui_window::image(
     static_cast<void>(width);
     static_cast<void>(height);
 #else
-    m_imgui_renderer->image(texture, width, height);
+    m_imgui_renderer->image(
+        texture,
+        width,
+        height,
+        glm::vec2{0.0f, 1.0f},
+        glm::vec2{1.0f, 0.0f},
+        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+        false
+    );
 #endif
 }
 

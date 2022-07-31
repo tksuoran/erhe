@@ -25,7 +25,7 @@ namespace erhe::application
 namespace editor
 {
 
-class Scene_root;
+class Editor_scenes;
 class Selection_tool;
 
 class Mesh_properties
@@ -56,7 +56,6 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Scene_root>                       m_scene_root;
     std::shared_ptr<Selection_tool>                   m_selection_tool;
     std::shared_ptr<erhe::application::Text_renderer> m_text_renderer;
 

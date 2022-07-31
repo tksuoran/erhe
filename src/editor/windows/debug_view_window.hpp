@@ -2,7 +2,9 @@
 
 #include "renderers/renderpass.hpp"
 
+#include "erhe/application/render_graph_node.hpp"
 #include "erhe/application/windows/framebuffer_window.hpp"
+#include "erhe/application/windows/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/vertex_format.hpp"
@@ -21,14 +23,29 @@ namespace erhe::graphics
 namespace editor
 {
 
+class Debug_view_window;
 class Forward_renderer;
 class Programs;
-class Scene_root;
 class Shadow_renderer;
+
+class Debug_view_render_graph_node
+    : public erhe::application::Render_graph_node
+{
+public:
+    Debug_view_render_graph_node(
+        const std::shared_ptr<Debug_view_window>& debug_view_window
+    );
+
+private:
+    // Implements erhe::application::Render_graph_node
+    void execute_render_graph_node() override;
+
+    std::shared_ptr<Debug_view_window> m_debug_view_window;
+};
 
 class Debug_view_window
     : public erhe::components::Component
-    , public erhe::application::Framebuffer_window
+    , public erhe::application::Imgui_window
 {
 public:
     static constexpr std::string_view c_label{"Debug_view_window"};
@@ -50,9 +67,7 @@ public:
     void initialize_component       () override;
     void post_initialize            () override;
 
-    // Implements Framebuffer_window
-    auto get_size(glm::vec2 available_size) const -> glm::vec2 override;
-    void update_framebuffer() override;
+    void update_framebuffer(const glm::vec2 available_size);
 
     // Overrides Framebuffer_window / Imgui_window
     void imgui() override;
@@ -65,15 +80,16 @@ private:
     std::shared_ptr<Forward_renderer>                     m_forward_renderer;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Programs>                             m_programs;
-    std::shared_ptr<Scene_root>                           m_scene_root;
     std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
 
     std::unique_ptr<erhe::graphics::Vertex_input_state>   m_empty_vertex_input;
     Renderpass                                            m_renderpass;
     int                                                   m_light_index{};
-    float                                                 m_width;
-    float                                                 m_height;
+    erhe::scene::Viewport                                 m_viewport{0, 0, 0, 0, true};
 
+    std::unique_ptr<erhe::graphics::Vertex_input_state> m_vertex_input;
+    std::shared_ptr<erhe::graphics::Texture>            m_texture;
+    std::unique_ptr<erhe::graphics::Framebuffer>        m_framebuffer;
 };
 
 } // namespace editor

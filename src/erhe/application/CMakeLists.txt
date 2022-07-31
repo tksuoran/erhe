@@ -34,8 +34,8 @@ erhe_target_sources_grouped(
     renderers/buffer_writer.hpp
     renderers/line_renderer.cpp
     renderers/line_renderer.hpp
-    renderers/quad_renderer.cpp
-    renderers/quad_renderer.hpp
+    renderers/multi_buffer.cpp
+    renderers/multi_buffer.hpp
     renderers/text_renderer.cpp
     renderers/text_renderer.hpp
 
@@ -62,6 +62,10 @@ erhe_target_sources_grouped(
     imgui_viewport.hpp
     imgui_windows.cpp
     imgui_windows.hpp
+    render_graph.cpp
+    render_graph.hpp
+    render_graph_node.cpp
+    render_graph_node.hpp
     renderdoc_capture_support.cpp
     renderdoc_capture_support.hpp
     scoped_imgui_context.cpp

@@ -11,13 +11,13 @@
 namespace editor
 {
 
+class Editor_scenes;
 class Selection_tool;
-class Scene_root;
+class Viewport_windows;
 
 class Physics_window
     : public erhe::components::Component
     , public Tool
-//    , public Rendertarget_imgui_window // Imgui_window
     , public erhe::application::Imgui_window
 {
 public:
@@ -62,8 +62,9 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Selection_tool> m_selection_tool;
-    std::shared_ptr<Scene_root>     m_scene_root;
+    std::shared_ptr<Editor_scenes>    m_editor_scenes;
+    std::shared_ptr<Selection_tool>   m_selection_tool;
+    std::shared_ptr<Viewport_windows> m_viewport_windows;
 
     Debug_draw_parameters m_debug_draw;
 };

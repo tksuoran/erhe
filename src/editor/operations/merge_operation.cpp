@@ -3,6 +3,7 @@
 #include "tools/selection_tool.hpp"
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/scene_root.hpp"
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/physics/icollision_shape.hpp"
@@ -209,7 +210,17 @@ Merge_operation::Merge_operation(Parameters&& parameters)
 
 void Merge_operation::execute(const Operation_context&)
 {
-    m_parameters.scene.sanity_check();
+    if (m_source_entries.empty())
+    {
+        return;
+    }
+
+    auto* scene_root = reinterpret_cast<Scene_root*>(m_source_entries.front().mesh->node_data.host);
+    ERHE_VERIFY(scene_root != nullptr);
+    auto& scene         = scene_root->scene();
+    auto& physics_world = scene_root->physics_world();
+
+    scene.sanity_check();
 
     bool first_entry = true;
     for (const auto& entry : m_source_entries)
@@ -238,21 +249,34 @@ void Merge_operation::execute(const Operation_context&)
             auto node_physics = get_physics_node(mesh.get());
             if (node_physics)
             {
-                remove_from_physics_world(m_parameters.physics_world, *node_physics.get());
+                remove_from_physics_world(physics_world, *node_physics.get());
                 mesh->detach(node_physics.get());
             }
             mesh->unparent();
-            m_parameters.scene.remove(mesh);
+            scene.remove(mesh);
         }
     }
     m_parameters.selection_tool->set_selection(m_state_after.selection);
 
-    m_parameters.scene.sanity_check();
+    scene.sanity_check();
 }
 
 void Merge_operation::undo(const Operation_context&)
 {
-    m_parameters.scene.sanity_check();
+    if (m_source_entries.empty())
+    {
+        return;
+    }
+
+    auto* scene_root = reinterpret_cast<Scene_root*>(m_source_entries.front().mesh->node_data.host);
+    ERHE_VERIFY(scene_root != nullptr);
+    auto& scene         = scene_root->scene();
+    auto& physics_world = scene_root->physics_world();
+
+    ERHE_VERIFY(scene_root->layers().content() != nullptr);
+    auto& layer = *scene_root->layers().content();
+
+    scene.sanity_check();
 
     bool first_entry = true;
     for (const auto& entry : m_source_entries)
@@ -279,20 +303,20 @@ void Merge_operation::undo(const Operation_context&)
             auto node_physics = get_physics_node(mesh.get());
             if (node_physics)
             {
-                add_to_physics_world(m_parameters.physics_world, node_physics);
+                add_to_physics_world(physics_world, node_physics);
                 mesh->attach(node_physics);
             }
             if (m_parent != nullptr)
             {
                 m_parent->attach(mesh);
             }
-            m_parameters.scene.add_to_mesh_layer(m_parameters.layer, mesh);
+            scene.add_to_mesh_layer(layer, mesh);
         }
     }
-    m_parameters.scene.nodes_sorted = false;
+    scene.nodes_sorted = false;
     m_parameters.selection_tool->set_selection(m_state_before.selection);
 
-    m_parameters.scene.sanity_check();
+    scene.sanity_check();
 }
 
 } // namespace editor

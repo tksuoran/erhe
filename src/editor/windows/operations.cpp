@@ -7,7 +7,6 @@
 #include "operations/merge_operation.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/scene_root.hpp"
-#include "tools/pointer_context.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 
@@ -48,8 +47,6 @@ void Operations::post_initialize()
 {
     m_mesh_memory     = get<Mesh_memory    >();
     m_operation_stack = get<Operation_stack>();
-    m_pointer_context = get<Pointer_context>();
-    m_scene_root      = get<Scene_root     >();
     m_selection_tool  = get<Selection_tool >();
 }
 
@@ -115,9 +112,6 @@ void Operations::imgui()
     const auto mesh_context = [this](){
         return Mesh_operation::Parameters{
             .build_info     = m_mesh_memory->build_info,
-            .scene          = m_scene_root->scene(),
-            .layer          = *m_scene_root->content_layer(),
-            .physics_world  = m_scene_root->physics_world(),
             .selection_tool = m_selection_tool.get()
         };
     };
@@ -148,8 +142,6 @@ void Operations::imgui()
         m_operation_stack->push(
             std::make_shared<Attach_detach_operation>(
                 Attach_detach_operation::Parameters{
-                    .scene          = m_scene_root->scene(),
-                    .layer          = *m_scene_root->content_layer(),
                     .attach         = true,
                     .selection_tool = m_selection_tool.get()
                 }
@@ -162,8 +154,6 @@ void Operations::imgui()
         m_operation_stack->push(
             std::make_shared<Attach_detach_operation>(
                 Attach_detach_operation::Parameters{
-                    .scene          = m_scene_root->scene(),
-                    .layer          = *m_scene_root->content_layer(),
                     .attach         = false,
                     .selection_tool = m_selection_tool.get()
                 }
@@ -177,9 +167,6 @@ void Operations::imgui()
             std::make_shared<Merge_operation>(
                 Merge_operation::Parameters{
                     .build_info     = m_mesh_memory->build_info,
-                    .layer          = *m_scene_root->content_layer(),
-                    .scene          = m_scene_root->scene(),
-                    .physics_world  = m_scene_root->physics_world(),
                     .selection_tool = m_selection_tool.get()
                 }
             )

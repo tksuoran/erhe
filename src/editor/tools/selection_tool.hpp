@@ -25,10 +25,11 @@ namespace erhe::application
 namespace editor
 {
 
-class Pointer_context;
+class Editor_scenes;
 class Scene_root;
 class Selection_tool;
 class Viewport_config;
+class Viewport_windows;
 
 class Selection_tool_delete_command
     : public erhe::application::Command
@@ -193,9 +194,9 @@ private:
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Pointer_context>   m_pointer_context;
+    std::shared_ptr<Editor_scenes>     m_editor_scenes;
+    std::shared_ptr<Viewport_windows>  m_viewport_windows;
     std::shared_ptr<Viewport_config>   m_viewport_config;
-    std::shared_ptr<Scene_root>        m_scene_root;
 
     int                                m_next_selection_change_subscription{1};
     Selection                          m_selection;

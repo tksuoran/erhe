@@ -36,8 +36,7 @@ Primitive_buffer::Primitive_buffer(const Primitive_interface& primitive_interfac
     Multi_buffer::allocate(
         gl::Buffer_target::shader_storage_buffer,
         m_primitive_interface.primitive_block.binding_point(),
-        m_primitive_interface.primitive_block.size_bytes(),
-        m_name
+        m_primitive_interface.primitive_block.size_bytes()
     );
 }
 

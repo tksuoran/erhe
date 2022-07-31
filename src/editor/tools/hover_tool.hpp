@@ -30,9 +30,9 @@ namespace erhe::application
 namespace editor
 {
 
+class Editor_scenes;
 class Hover_tool;
-class Pointer_context;
-class Scene_root;
+class Viewport_windows;
 
 class Hover_tool_hover_command
     : public erhe::application::Command
@@ -91,9 +91,9 @@ private:
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Pointer_context>                      m_pointer_context;
-    std::shared_ptr<Scene_root>                           m_scene_root;
+    std::shared_ptr<Editor_scenes>                        m_editor_scenes;
     std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
+    std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
     Hover_tool_hover_command           m_hover_command;
 

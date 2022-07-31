@@ -58,12 +58,6 @@ void Time::update()
         }
     );
 
-    // TODO Move away from here, make IUpdate_once_per_frame
-    ///// if (m_scene_root)
-    ///// {
-    /////     m_scene_root->scene().update_node_transforms();
-    ///// }
-
     ERHE_PROFILE_FRAME_END
 }
 

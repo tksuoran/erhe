@@ -1,5 +1,5 @@
 #include "erhe/graphics/vertex_attribute.hpp"
-#include "erhe/gl/gl.hpp"
+#include "erhe/gl/gl_helpers.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace erhe::graphics
@@ -31,7 +31,7 @@ namespace erhe::graphics
 
 [[nodiscard]] auto Vertex_attribute::stride() const -> size_t
 {
-    return data_type.dimension * gl::size_of_type(data_type.type);
+    return data_type.dimension * gl_helpers::size_of_type(data_type.type);
 }
 
 [[nodiscard]] auto Vertex_attribute::operator==(

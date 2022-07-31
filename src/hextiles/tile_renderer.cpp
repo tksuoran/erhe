@@ -96,6 +96,104 @@ Tile_renderer::Frame_resources::Frame_resources(
 
 Tile_renderer::Tile_renderer()
     : Component{c_label}
+    , m_fragment_outputs{
+        erhe::graphics::Fragment_output{
+            .name     = "out_color",
+            .type     = gl::Fragment_shader_output_type::float_vec4,
+            .location = 0
+        }
+    }
+    , m_attribute_mappings{
+        erhe::graphics::Vertex_attribute_mapping{
+            .layout_location = 0,
+            .shader_type     = gl::Attribute_type::float_vec2,
+            .name            = "a_position",
+            .src_usage =
+            {
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::position
+            }
+        },
+        erhe::graphics::Vertex_attribute_mapping{
+            .layout_location = 1,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_color",
+            .src_usage =
+            {
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::color
+            }
+        },
+        erhe::graphics::Vertex_attribute_mapping{
+#if 1
+            .layout_location = 2,
+            .shader_type     = gl::Attribute_type::float_vec2,
+            .name            = "a_texcoord",
+            .src_usage =
+            {
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::tex_coord
+            }
+#else
+            .layout_location = 2,
+            .shader_type     = gl::Attribute_type::unsigned_int_vec2,
+            .name            = "a_tile_corner",
+            .src_usage =
+            {
+                .type        = erhe::graphics::Vertex_attribute::Usage_type::custom
+            }
+#endif
+        }
+    }
+    , m_vertex_format{
+        erhe::graphics::Vertex_attribute{
+            .usage =
+            {
+                .type     = erhe::graphics::Vertex_attribute::Usage_type::position
+            },
+            .shader_type   = gl::Attribute_type::float_vec2,
+            .data_type =
+            {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 2
+            }
+        },
+        erhe::graphics::Vertex_attribute{
+            .usage =
+            {
+                .type       = erhe::graphics::Vertex_attribute::Usage_type::color
+            },
+            .shader_type    = gl::Attribute_type::float_vec4,
+            .data_type =
+            {
+                .type       = gl::Vertex_attrib_type::unsigned_byte,
+                .normalized = true,
+                .dimension  = 4
+            }
+        },
+        erhe::graphics::Vertex_attribute{
+#if 1
+            .usage =
+            {
+                .type      = erhe::graphics::Vertex_attribute::Usage_type::tex_coord
+            },
+            .shader_type   = gl::Attribute_type::float_vec2,
+            .data_type =
+            {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 2
+            }
+#else
+            .usage =
+            {
+                .type      = erhe::graphics::Vertex_attribute::Usage_type::custom
+            },
+            .shader_type   = gl::Attribute_type::unsigned_int_vec2,
+            .data_type =
+            {
+                .type      = gl::Vertex_attrib_type::unsigned_int,
+                .dimension = 2
+            }
+#endif
+        }
+    }
 {
 }
 
@@ -153,117 +251,6 @@ void Tile_renderer::initialize_component()
         offset += 5;
     }
 
-    m_fragment_outputs.add("out_color", gl::Fragment_shader_output_type::float_vec4, 0);
-
-    m_attribute_mappings.add(
-        {
-            .layout_location = 0,
-            .shader_type     = gl::Attribute_type::float_vec2,
-            .name            = "a_position",
-            .src_usage =
-            {
-                .type        = erhe::graphics::Vertex_attribute::Usage_type::position
-            }
-        }
-    );
-    m_attribute_mappings.add(
-        {
-            .layout_location = 1,
-            .shader_type     = gl::Attribute_type::float_vec4,
-            .name            = "a_color",
-            .src_usage =
-            {
-                .type        = erhe::graphics::Vertex_attribute::Usage_type::color
-            }
-        }
-    );
-#if 1
-    m_attribute_mappings.add(
-        {
-            .layout_location = 2,
-            .shader_type     = gl::Attribute_type::float_vec2,
-            .name            = "a_texcoord",
-            .src_usage =
-            {
-                .type        = erhe::graphics::Vertex_attribute::Usage_type::tex_coord
-            }
-        }
-    );
-#else
-    m_attribute_mappings.add(
-        {
-            .layout_location = 2,
-            .shader_type     = gl::Attribute_type::unsigned_int_vec2,
-            .name            = "a_tile_corner",
-            .src_usage =
-            {
-                .type        = erhe::graphics::Vertex_attribute::Usage_type::custom
-            }
-        }
-    );
-#endif
-
-    m_vertex_format.add(
-        {
-            .usage =
-            {
-                .type     = erhe::graphics::Vertex_attribute::Usage_type::position
-            },
-            .shader_type   = gl::Attribute_type::float_vec2,
-            .data_type =
-            {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 2
-            }
-        }
-    );
-    m_vertex_format.add(
-        {
-            .usage =
-            {
-                .type       = erhe::graphics::Vertex_attribute::Usage_type::color
-            },
-            .shader_type    = gl::Attribute_type::float_vec4,
-            .data_type =
-            {
-                .type       = gl::Vertex_attrib_type::unsigned_byte,
-                .normalized = true,
-                .dimension  = 4
-            }
-        }
-    );
-#if 1
-    m_vertex_format.add(
-        {
-            .usage =
-            {
-                .type      = erhe::graphics::Vertex_attribute::Usage_type::tex_coord
-            },
-            .shader_type   = gl::Attribute_type::float_vec2,
-            .data_type =
-            {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 2
-            }
-        }
-    );
-#else
-    m_vertex_format.add(
-        {
-            .usage =
-            {
-                .type      = erhe::graphics::Vertex_attribute::Usage_type::custom
-            },
-            .shader_type   = gl::Attribute_type::unsigned_int_vec2,
-            .data_type =
-            {
-                .type      = gl::Vertex_attrib_type::unsigned_int,
-                .dimension = 2
-            }
-        }
-    );
-#endif
-
     m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
         gl::Texture_min_filter::nearest,
         gl::Texture_mag_filter::nearest
@@ -281,13 +268,20 @@ void Tile_renderer::initialize_component()
     const fs::path fs_path = shader_path / fs::path("tile.frag");
     Shader_stages::Create_info create_info{
         .name                      = "tile",
+        .extensions                = {
+            {
+                .shader_stage = gl::Shader_type::fragment_shader,
+                .extension    = "GL_ARB_bindless_texture"
+            }
+        },
+        .interface_blocks          = { m_projection_block.get() },
         .vertex_attribute_mappings = &m_attribute_mappings,
         .fragment_outputs          = &m_fragment_outputs,
+        .shaders = {
+            { gl::Shader_type::vertex_shader,   vs_path },
+            { gl::Shader_type::fragment_shader, fs_path }
+        }
     };
-    create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-    create_info.add_interface_block(m_projection_block.get());
-    create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
-    create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
     Shader_stages::Prototype prototype{create_info};
     m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
     get<erhe::application::Shader_monitor>()->add(create_info, m_shader_stages.get());

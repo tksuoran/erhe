@@ -2,6 +2,7 @@
 #include "editor_log.hpp"
 
 #include "scene/helpers.hpp"
+#include "scene/material_library.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 
@@ -360,7 +361,8 @@ private:
             safe_str(material->name)
         );
 
-        auto new_material = m_scene_root->make_material(material->name);
+        const auto& material_library = m_scene_root->material_library();
+        auto new_material = material_library->make_material(material->name);
         m_materials.push_back(new_material);
         if (material->has_pbr_metallic_roughness)
         {
@@ -510,7 +512,7 @@ private:
         new_light->outer_spot_angle = light->spot_outer_cone_angle;
 
         m_scene_root->scene().add_to_light_layer(
-            *m_scene_root->light_layer(),
+            *m_scene_root->layers().light(),
             new_light
         );
         m_nodes[node_index] = new_light;
@@ -1164,7 +1166,7 @@ private:
         );
 
         m_scene_root->scene().add_to_mesh_layer(
-            *m_scene_root->content_layer(),
+            *m_scene_root->layers().content(),
             erhe_mesh
         );
         m_nodes[node_index] = erhe_mesh;
@@ -1261,6 +1263,7 @@ private:
         m_meshes .clear();
     }
 
+    std::shared_ptr<Materials>   m_materials_;
     std::shared_ptr<Scene_root>  m_scene_root;
     erhe::primitive::Build_info& m_build_info;
 
